@@ -8,6 +8,7 @@ import type { CampaignStatus } from "./catalog";
 import { checkDestinationUrl, validateCreative, type CreativeLimits } from "./creative-validation";
 import type { ServingSnapshot } from "./eligibility";
 import { buildServingPayload, type ServingPayload } from "./serving-payload";
+import { baseDomain, chaseRedirects, destinationHeuristics, reputationLookup } from "./url-safety";
 
 /**
  * Server side of the ad platform. Every write that matters is a database
@@ -85,6 +86,7 @@ interface CreativeRow {
   headline: string | null;
   description: string | null;
   validation_status: string;
+  url_approved_url?: string | null;
 }
 
 export interface FormatRow {
@@ -108,7 +110,7 @@ export interface FormatRow {
 export async function validateCampaignCreatives(db: Db, campaignId: string): Promise<{ valid: number; invalid: number }> {
   const { data: rows, error } = await db
     .from("ad_creatives")
-    .select("id, format_code, media_type, mime_type, duration_seconds, file_size_bytes, width, height, destination_url, headline, description, validation_status")
+    .select("id, format_code, media_type, mime_type, duration_seconds, file_size_bytes, width, height, destination_url, headline, description, validation_status, url_approved_url")
     .eq("campaign_id", campaignId)
     .eq("status", "active");
   if (error) throw new Error(`ad_creatives: ${error.message}`);
@@ -146,8 +148,10 @@ export async function validateCampaignCreatives(db: Db, campaignId: string): Pro
           formatLimits(f),
         )
       : ({ status: "invalid", errors: ["format_unknown"] } as const);
-    // syntax AND the admin blocklist - an empty link (not typed yet) is never valid
-    const url = cr.destination_url ? await checkDestination(db, cr.destination_url) : ({ status: "blocked", code: "url_invalid", reason: "missing" } as const);
+    // syntax, Part 8 safety and the admin blocklist, deep (reputation + redirects) - an empty link is never valid
+    let url: DestinationCheck = cr.destination_url ? await checkDestination(db, cr.destination_url, { deep: true }) : { status: "blocked", code: "url_invalid", reason: "missing" };
+    // a person already approved THIS exact link (0206): a review-level doubt does not hold it again
+    if (url.status === "pending" && cr.url_approved_url && cr.url_approved_url === cr.destination_url) url = { status: "valid" };
     const { error: wErr } = await db
       .from("ad_creatives")
       .update({
@@ -155,7 +159,7 @@ export async function validateCampaignCreatives(db: Db, campaignId: string): Pro
         validation_errors: verdict.errors,
         validated_at: at,
         url_validation_status: url.status,
-        url_block_reason: url.status === "blocked" ? url.reason : null,
+        url_block_reason: url.status === "valid" ? null : url.reason,
         url_validated_at: at,
       })
       .eq("id", cr.id);
@@ -184,15 +188,58 @@ export function formatLimits(f: FormatRow): CreativeLimits {
 
 /* ─────────────────────────────── destinations ─────────────────────────────── */
 
-/** Syntactic check, then the admin's blocklist. Never fetches the URL (no SSRF surface at all). */
-export async function checkDestination(db: Db, raw: string): Promise<{ status: "valid" } | { status: "blocked"; code: string; reason: string }> {
-  const syntax = checkDestinationUrl(raw);
-  if (syntax.status !== "valid") return { status: "blocked", code: "url_invalid", reason: syntax.reason };
-  const host = new URL(raw.trim()).hostname.toLowerCase();
+export type DestinationCheck =
+  | { status: "valid" }
+  | { status: "blocked"; code: string; reason: string }
+  /** a person must look (Part 8): held in validating, never served until approved */
+  | { status: "pending"; code: "needs_review"; reason: string };
+
+async function blockedDomain(db: Db, host: string): Promise<string | null> {
   const { data, error } = await db.rpc("ad_domain_blocked", { p_host: host });
   if (error) throw new Error(`ad_domain_blocked: ${error.message}`);
-  if (typeof data === "string" && data) return { status: "blocked", code: "destination_blocked", reason: data };
-  return { status: "valid" };
+  return typeof data === "string" && data ? data : null;
+}
+
+/**
+ * The destination verdict.
+ *
+ *   always  syntax (Part 2) → Part 8 heuristics (redirect parameters, open
+ *           redirectors, file TLDs, lookalike and IDN hosts) → the admin's
+ *           blocklist. No network.
+ *   deep    + reputation (Safe Browsing, when configured) + a restricted probe
+ *           of the redirect chain (url-safety.ts: https and 443 only, private
+ *           addresses refused at DNS, 5 hops, 4 s, no body). Used when a link
+ *           is submitted, edited, and before activation - never on a
+ *           hot path.
+ *
+ * A check that cannot run never makes a link "valid": it is `pending`, and a
+ * person decides (docs/AD_PLATFORM.md, Part 8 safe-failure policy).
+ */
+export async function checkDestination(db: Db, raw: string, opts: { deep?: boolean } = {}): Promise<DestinationCheck> {
+  const syntax = checkDestinationUrl(raw);
+  if (syntax.status !== "valid") return { status: "blocked", code: "url_invalid", reason: syntax.reason };
+  const url = raw.trim();
+  const host = new URL(url).hostname.toLowerCase();
+  const h = destinationHeuristics(url);
+  if (h.verdict === "block") return { status: "blocked", code: "destination_unsafe", reason: h.reason };
+  const listed = await blockedDomain(db, host);
+  if (listed) return { status: "blocked", code: "destination_blocked", reason: listed };
+  let review: string | null = h.verdict === "review" ? h.reason : null;
+  if (opts.deep) {
+    const rep = await reputationLookup(url);
+    if (rep === "unavailable") review ??= "reputation_unavailable";
+    else if (rep && rep.verdict === "block") return { status: "blocked", code: "destination_unsafe", reason: rep.reason };
+    const chase = await chaseRedirects(url, (hh) => blockedDomain(db, hh));
+    if (chase.verdict.verdict === "block") return { status: "blocked", code: "destination_unsafe", reason: chase.verdict.reason };
+    if (chase.verdict.verdict === "review") review ??= chase.verdict.reason;
+    else if (baseDomain(new URL(chase.final).hostname) !== baseDomain(host)) {
+      // lands somewhere else: that place gets the same reputation check, and a person looks
+      const rep2 = await reputationLookup(chase.final);
+      if (rep2 && rep2 !== "unavailable" && rep2.verdict === "block") return { status: "blocked", code: "destination_unsafe", reason: `redirect_${rep2.reason}` };
+      review ??= "redirects_to_other_domain";
+    }
+  }
+  return review ? { status: "pending", code: "needs_review", reason: review } : { status: "valid" };
 }
 
 /* ───────────────────────────── activation ───────────────────────────── */

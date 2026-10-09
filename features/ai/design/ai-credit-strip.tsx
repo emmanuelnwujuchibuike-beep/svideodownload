@@ -149,9 +149,9 @@ export function AiCreditStrip({ base, className }: { base: string; className?: s
         className,
       )}
     >
-      {/* 2026-10-09 (owner): the Frenzsave logo in this tile, not a sparkle */}
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-[0.625rem]">
-        <FrenzLogo size={32} tile alt="" className="h-8 w-8 rounded-[0.625rem]" />
+      {/* owner 2026-10-09: the transparent Frenzsave logo on a BLACK tile (not the navy tile export) */}
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-[0.625rem] bg-black ring-1 ring-inset ring-white/10">
+        <FrenzLogo size={23} alt="" className="h-[23px] w-[23px]" />
       </span>
       {who === "guest" ? (
         <>

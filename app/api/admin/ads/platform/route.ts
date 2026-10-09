@@ -58,9 +58,13 @@ export async function POST(request: Request) {
   const domain = parsed.success ? normalizeBlockedDomain(parsed.data.domain) : null;
   if (!parsed.success || !domain) return NextResponse.json({ error: "Enter a domain like example.com." }, { status: 400 });
   try {
-    await addBlockedDomain(createAdminClient(), gate.user.id, domain, parsed.data.reason ?? "");
-    console.info("[admin/ads/platform] blocked", { by: gate.user.id, domain });
-    return NextResponse.json({ ok: true, domain });
+    const db = createAdminClient();
+    await addBlockedDomain(db, gate.user.id, domain, parsed.data.reason ?? "");
+    // Part 8: a newly blocked domain stops serving NOW - live creatives that link to it are blocked and their campaigns paused
+    const { data: scan, error: scanErr } = await db.rpc("ad_rescan_blocked_destinations");
+    if (scanErr) console.warn("[admin/ads/platform] rescan failed", { error: scanErr.message });
+    console.info("[admin/ads/platform] blocked", { by: gate.user.id, domain, scan });
+    return NextResponse.json({ ok: true, domain, rescan: scan ?? null });
   } catch (e) {
     console.error("[admin/ads/platform] block failed", { error: String(e).slice(0, 200) });
     return NextResponse.json({ error: "Couldn't block that domain." }, { status: 503 });

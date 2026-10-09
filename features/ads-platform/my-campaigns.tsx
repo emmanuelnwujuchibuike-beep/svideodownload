@@ -335,7 +335,7 @@ function Campaigns({ onOpen }: { onOpen: (id: string) => void }) {
         {data === "error" ? <Failed onRetry={() => setAttempt((x) => x + 1)} /> : !data ? <Skeleton /> : data.rows.length === 0 ? (
           search || filter ? <p className="py-8 text-center text-[13.5px] text-muted-foreground">No campaigns match.</p> : <Empty title="No campaigns yet" body="Your campaigns will appear here." />
         ) : (
-          data.rows.map((c) => <CampaignCard key={c.id} c={c} totals={data.stats.get(c.id) ?? { views: 0, clicks: 0, ctr: null, videoPlays: 0, videoCompletes: 0, rewardCompletes: 0, conversions: 0, outbounds: 0 }} onOpen={onOpen} />)
+          data.rows.map((c) => <CampaignCard key={c.id} c={c} totals={data.stats.get(c.id) ?? { views: 0, clicks: 0, ctr: null, videoPlays: 0, videoCompletes: 0, rewardCompletes: 0, conversions: 0, outbounds: 0, filtered: 0 }} onOpen={onOpen} />)
         )}
       </div>
       {pages > 1 ? (

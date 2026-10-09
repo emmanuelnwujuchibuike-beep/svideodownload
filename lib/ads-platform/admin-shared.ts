@@ -47,5 +47,6 @@ export const FLAG_WORDS: Record<string, string> = {
   creative_invalid: "The creative failed its checks",
   destination_not_valid: "The link is unchecked or blocked",
   placement_full: "Every slot in the placement is taken",
+  safety_review: "The content safety check wants a person to look",
 };
 

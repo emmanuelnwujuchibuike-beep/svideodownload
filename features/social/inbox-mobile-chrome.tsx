@@ -68,19 +68,22 @@ export function InboxMobileChrome() {
       // `lg:hidden` — desktop keeps the inbox in the Glass Split pane, untouched.
       className="fixed inset-x-0 top-[var(--frenz-safe-top)] z-30 mx-auto max-w-[1600px] bg-background px-3 pt-3.5 lg:hidden"
     >
-      <div className="mb-3.5 flex items-start justify-between gap-2">
-        <div className="pl-1">
-          <h1 className="flex items-center gap-1.5 text-[24px] font-bold leading-tight min-[360px]:text-[28px] tracking-[-0.03em]">
+      <div className="mb-3.5">
+        <div className="flex items-start justify-between gap-2">
+          <h1 className="flex items-center gap-1.5 pl-1 text-[24px] font-bold leading-tight min-[360px]:text-[28px] tracking-[-0.03em]">
             Messages
             <InboxUnreadDot />
           </h1>
-          {/* your daily streak lives at the top of the messages now (owner, 2026-10-09) — nothing renders without one */}
-          <p className="mt-1 flex items-center gap-2 pl-0.5 text-xs text-muted-foreground">
-            <StreakHeaderChip />
-            <span>Stay connected with the people you care about</span>
-          </p>
+          <InboxHeaderActions />
         </div>
-        <InboxHeaderActions />
+        {/* owner 2026-10-09: the streak sits on the RIGHT, opposite the line of text - never on top of it.
+            Nothing renders without a streak, and the text then has the row to itself. */}
+        <div className="mt-1 flex items-center justify-between gap-3 pl-1.5">
+          <p className="min-w-0 text-xs text-muted-foreground">Stay connected with the people you care about</p>
+          <span className="shrink-0">
+            <StreakHeaderChip />
+          </span>
+        </div>
       </div>
       <InboxStoriesRow />
     </div>

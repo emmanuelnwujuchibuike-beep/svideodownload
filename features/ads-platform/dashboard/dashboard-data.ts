@@ -89,6 +89,9 @@ export interface StatRow {
   reward_completes: number;
   conversions?: number;
   outbounds?: number;
+  /** 0206 (Part 8): events filtered as invalid traffic - counted apart, never in the figures above */
+  invalid_impressions?: number;
+  invalid_clicks?: number;
 }
 
 export interface Totals {
@@ -100,6 +103,8 @@ export interface Totals {
   rewardCompletes: number;
   conversions: number;
   outbounds: number;
+  /** views and clicks filtered as invalid traffic (Part 8) */
+  filtered: number;
 }
 
 export interface PaymentRow {
@@ -171,7 +176,9 @@ export async function loadStats(ids: readonly string[] | null, fromDay: string |
     return q.order("day", { ascending: true }).limit(5000);
   };
   const base = "campaign_id, creative_id, day, impressions, clicks, video_starts, video_completes, reward_starts, reward_completes";
-  // 0201's columns; a database without them yet (the deploy window) answers the old shape instead of nothing
+  // 0206's and 0201's columns; a database without them yet (the deploy window) answers an older shape instead of nothing
+  const with206 = await read(`${base}, conversions, outbounds, invalid_impressions, invalid_clicks`);
+  if (!with206.error) return (with206.data ?? []) as unknown as StatRow[];
   const withNew = await read(`${base}, conversions, outbounds`);
   if (!withNew.error) return (withNew.data ?? []) as unknown as StatRow[];
   const { data } = await read(base);
@@ -180,9 +187,10 @@ export async function loadStats(ids: readonly string[] | null, fromDay: string |
 
 export function totalsOf(rows: readonly StatRow[]): Totals {
   const t = rows.reduce(
-    (a, r) => ({ views: a.views + r.impressions, clicks: a.clicks + r.clicks, videoPlays: a.videoPlays + r.video_starts, videoCompletes: a.videoCompletes + r.video_completes, rewardCompletes: a.rewardCompletes + r.reward_completes, conversions: a.conversions + (r.conversions ?? 0), outbounds: a.outbounds + (r.outbounds ?? 0) }),
-    { views: 0, clicks: 0, videoPlays: 0, videoCompletes: 0, rewardCompletes: 0, conversions: 0, outbounds: 0 },
+    (a, r) => ({ views: a.views + r.impressions, clicks: a.clicks + r.clicks, videoPlays: a.videoPlays + r.video_starts, videoCompletes: a.videoCompletes + r.video_completes, rewardCompletes: a.rewardCompletes + r.reward_completes, conversions: a.conversions + (r.conversions ?? 0), outbounds: a.outbounds + (r.outbounds ?? 0), filtered: a.filtered + (r.invalid_impressions ?? 0) + (r.invalid_clicks ?? 0) }),
+    { views: 0, clicks: 0, videoPlays: 0, videoCompletes: 0, rewardCompletes: 0, conversions: 0, outbounds: 0, filtered: 0 },
   );
+  // CTR = qualifying clicks ÷ qualifying views; "—" with no views (never a made-up 0 %)
   return { ...t, ctr: t.views > 0 ? t.clicks / t.views : null };
 }
 

@@ -29,11 +29,18 @@ export function TapOnceLink({
   className,
   children,
   spinner = true,
+  warmOnIdle = false,
   ...rest
 }: ComponentProps<typeof Link> & {
   href: string;
   /** false for an icon-only circle: the spinner would push the icon off-centre, so its `data-pending` style shows the press instead. */
   spinner?: boolean;
+  /**
+   * Also fetch the route once the page is idle (2026-10-09, owner: the AI History button
+   * "doesn't respond on first tap"). For one important door per page only - each warm is
+   * one server render.
+   */
+  warmOnIdle?: boolean;
 }) {
   const router = useRouter();
   const pending = useRef(false);
@@ -54,6 +61,18 @@ export function TapOnceLink({
       /* prefetch is a hint */
     }
   };
+
+  useEffect(() => {
+    if (!warmOnIdle) return;
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+    if (w.requestIdleCallback) {
+      const id = w.requestIdleCallback(warm, { timeout: 4000 });
+      return () => w.cancelIdleCallback?.(id);
+    }
+    const t = window.setTimeout(warm, 2000);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per door
+  }, [warmOnIdle, href]);
 
   return (
     <Link

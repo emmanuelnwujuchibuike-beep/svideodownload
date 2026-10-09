@@ -91,11 +91,11 @@ describe("§15.4/5 — uploads and links are checked by the server", () => {
     expect(src("lib/ads-platform/campaign-manage.ts")).toContain("const result = await probeAndPublish(db, { id: cr.id as string, storage_path: cr.storage_path as string }, f);");
   });
 
-  it("a new link is checked (syntax + blocklist, never fetched) before the database applies it", () => {
+  it("a new link gets the full check (Part 8: safety, blocklist, reputation, redirects) before the database applies it", () => {
     const m = src("lib/ads-platform/campaign-manage.ts");
-    expect(m).toContain("const verdict = await checkDestination(db, destination);");
-    expect(m).toContain('if (verdict.status !== "valid") refuse(');
-    expect(src("lib/ads-platform/server.ts")).toContain("Never fetches the URL (no SSRF surface at all).");
+    expect(m).toContain("const verdict = await checkDestination(db, destination, { deep: true });");
+    expect(m).toContain('if (verdict.status === "pending") refuse("needs_review", 409');
+    expect(m).toContain('if (verdict.status === "blocked") refuse(');
   });
 
   it("blocked campaigns cannot edit their way out", () => {

@@ -48,18 +48,24 @@ describe("admin can switch a campaign period off", () => {
 });
 
 describe("the promote card is a floating, draggable, lazy side bubble", () => {
-  it("the hero mounts the lazy loader; the bubble is portalled, labelled Ad, draggable and remembered", () => {
+  it("the hero mounts the lazy loader; the bubble is portalled, labelled Promote, draggable, remembered and cached after its first appearance", () => {
     expect(code("features/downloads/downloads-sections.tsx")).toContain("<PromoteBubbleLazy />");
     const b = code("features/downloads/promote-bubble.tsx");
     // Portalled: into its dock beside the credits card by default (the improved
     // reference, 2026-10-09), or to <body> once dragged off to float.
     expect(b).toContain("createPortal(<span className={drag ? \"invisible\" : undefined}>{button(false)}</span>, dock)");
     expect(b).toContain("document.body)");
-    expect(b).toMatch(/>\n\s*Ad\n\s*<\/span>/);
+    // owner 2026-10-09: "change the ad text on the promote button to the promote not ad"
+    expect(b).toMatch(/>\n\s*\{\/\* owner 2026-10-09: the tag reads "Promote", not "Ad" \*\/\}\n\s*Promote\n\s*<\/span>/);
+    expect(b).not.toMatch(/>\n\s*Ad\n\s*<\/span>/);
     expect(b).toContain('const KEY = "frenz:promote-bubble:v1";');
     expect(b).toContain("if (!s.moved && Math.hypot(dx, dy) < 6) return;");
     expect(code("features/downloads/download-page-core.tsx")).toContain('<div id="frenz-promote-dock" className="flex h-10 w-10 shrink-0 items-center justify-center" />');
-    expect(code("features/downloads/promote-bubble-lazy.tsx")).toContain("requestIdleCallback");
+    const lazy = code("features/downloads/promote-bubble-lazy.tsx");
+    expect(lazy).toContain("requestIdleCallback");
+    // owner 2026-10-09: no idle wait again once it has appeared (back swipes, returns)
+    expect(lazy).toContain("if (seenBefore()) {");
+    expect(lazy).toContain('sessionStorage.setItem(SEEN_KEY, "1");');
   });
 });
 

@@ -422,6 +422,13 @@ function Performance({ id }: { id: string }) {
           {t.videoPlays || t.rewardCompletes ? (
             <p className="mt-2 text-center text-[12px] text-muted-foreground">{num(t.videoPlays)} video plays · {num(t.videoCompletes + t.rewardCompletes)} watched to the end</p>
           ) : null}
+          {/* Part 8: filtered traffic is disclosed as a total - never the rules or the evidence */}
+          {t.filtered > 0 ? (
+            <p className="mt-2 text-center text-[12px] text-muted-foreground">
+              {num(t.filtered)} view{t.filtered === 1 ? "" : "s"} and clicks were filtered as invalid traffic and aren&apos;t counted.{" "}
+              <TapOnceLink href="/advertise/rules#traffic-quality" className="font-semibold underline">How we count</TapOnceLink>
+            </p>
+          ) : null}
           <div className="mt-3"><DayChart rows={byDay(rows)} /></div>
         </>
       )}

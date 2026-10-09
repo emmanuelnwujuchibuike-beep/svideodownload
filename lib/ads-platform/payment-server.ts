@@ -139,9 +139,10 @@ export async function createAdCampaignPayment(
   // the creative and the link are re-checked right before money moves
   const { data: creatives } = await db.from("ad_creatives").select("validation_status, url_validation_status, destination_url").eq("campaign_id", applicationId).eq("status", "active");
   const cr = creatives?.[0];
-  if (!cr || cr.validation_status !== "valid" || cr.url_validation_status !== "valid" || !cr.destination_url) return { kind: "refused", code: "creative_not_valid", status: 409 };
+  // a link waiting on a person (Part 8 'pending') may be paid for - it goes live only after approval
+  if (!cr || cr.validation_status !== "valid" || !["valid", "pending"].includes(cr.url_validation_status as string) || !cr.destination_url) return { kind: "refused", code: "creative_not_valid", status: 409 };
   const dest = await checkDestination(db, cr.destination_url as string);
-  if (dest.status !== "valid") return { kind: "refused", code: "destination_blocked", status: 409 };
+  if (dest.status === "blocked") return { kind: "refused", code: "destination_blocked", status: 409 };
 
   const { data: quote } = await db.from("ad_payment_quotes").select("id, total_minor, currency, status, expires_at").eq("id", input.quoteId).eq("application_id", applicationId).maybeSingle();
   if (!quote || quote.status !== "open") return { kind: "refused", code: "quote_invalid", status: 409 };

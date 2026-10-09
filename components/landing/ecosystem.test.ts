@@ -82,9 +82,10 @@ describe("the landing page structure", () => {
     expect(core).not.toContain("promoteCta");
   });
 
-  it("owner 2026-10-08: the full credits strip tops /downloads; only the Earn button tops the landing", () => {
+  it("owner 2026-10-09: the credits strip (with Earn) tops /downloads; the landing has no Earn at the top", () => {
     expect(src("features/downloads/downloads-page.tsx")).toMatch(/<DownloadPageCore\s+topCredits="strip"/);
-    expect(src("components/landing/hero.tsx")).toContain('topCredits="earn"');
+    expect(src("components/landing/hero.tsx")).toContain("topCredits={null}");
+    expect(src("components/landing/hero.tsx")).not.toContain('topCredits="earn"');
     const core = src("features/downloads/download-page-core.tsx");
     // 2026-10-08 (owner): smaller, on the headline's row — it no longer pushes the headline down
     expect(core).toContain('<DownloadsHero trailing={topCredits === "earn" ? <EarnButton size="md" /> : undefined}');

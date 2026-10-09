@@ -95,6 +95,13 @@ export function ErrorFallback({
       <p className="mt-2 max-w-sm text-sm text-muted-foreground">
         {chunkError ? "This tab was open before an update. Refresh to pick it up." : message}
       </p>
+      {/* 2026-10-09: a short code the owner can screenshot - the server digest, or the first words
+          of a browser error - so a production failure can be traced without logs access */}
+      {!chunkError ? (
+        <p className="mt-2 font-mono text-[10.5px] text-muted-foreground/70" aria-label="Error code">
+          {error.digest ? `ref ${error.digest}` : (error.message || error.name || "error").slice(0, 90)}
+        </p>
+      ) : null}
       <div className="mt-6 flex items-center gap-3">
         <button
           type="button"

@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
  * Refined to the improved reference (owner, 2026-10-09: "Ad button: less
  * intrusive, smaller size, no overlap, neutral badge"):
  *
- *   · 40 px, a white disc with a violet megaphone and a quiet grey "Ad" tag —
+ *   · 40 px, a white disc with a violet megaphone and a quiet grey "Promote" tag —
  *     still plainly a promotion, no longer the loudest thing on the page.
  *   · DOCKED by default. A page that wants it inline renders an empty
  *     `#frenz-promote-dock` slot (the download page puts one beside the credits
@@ -168,9 +168,10 @@ export function PromoteBubble() {
       <Megaphone className="h-[18px] w-[18px]" aria-hidden />
       <span
         aria-hidden
-        className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-slate-100 px-1 py-px text-[8px] font-bold uppercase leading-none tracking-wide text-slate-500 ring-1 ring-white dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-900"
+        className="absolute -bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-slate-100 px-1 py-px text-[7.5px] font-bold uppercase leading-none tracking-wide text-slate-500 ring-1 ring-white dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-900"
       >
-        Ad
+        {/* owner 2026-10-09: the tag reads "Promote", not "Ad" */}
+        Promote
       </span>
     </button>
   );

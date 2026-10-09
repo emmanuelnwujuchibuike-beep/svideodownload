@@ -30,6 +30,7 @@ import { AdCampaignPaymentsLazy } from "@/features/admin/ad-campaign-payments-la
 import { AdCampaignsDeskLazy } from "@/features/admin/ad-campaigns-desk-lazy";
 import { AdManager } from "@/features/admin/ad-manager";
 import { AdPlatformControlsLazy } from "@/features/admin/ad-platform-controls-lazy";
+import { AdSafetyCenterLazy } from "@/features/admin/ad-safety-center-lazy";
 import { AdminPanel, AdminShell } from "@/features/admin/admin-shell";
 import { AdminSubsections } from "@/features/admin/section-tabs";
 import { SupportInbox } from "@/features/admin/support-inbox";
@@ -402,6 +403,8 @@ export default async function AdminPage() {
                 { id: "campaigns", label: "Campaigns", content: <AdCampaignsDeskLazy /> },
                 /* Self-serve campaigns paid through Paystack/Bachs (Part 3) - loads when shown. */
                 { id: "campaign-payments", label: "Campaign payments", content: <AdCampaignPaymentsLazy /> },
+                /* Part 8: flags, invalid traffic, unsafe creatives and links, traffic rules. */
+                { id: "traffic-safety", label: "Traffic & safety", content: <AdSafetyCenterLazy /> },
                 /* Part 7: kill switch, advertiser controls, blocked links, prices, promotions. */
                 { id: "self-serve-rules", label: "Self-serve rules", content: <AdPlatformControlsLazy /> },
                 {

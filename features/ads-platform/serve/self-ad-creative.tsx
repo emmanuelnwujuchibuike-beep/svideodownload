@@ -98,6 +98,8 @@ export function SelfAdCreative({
   }, [view]);
 
   const fail = () => {
+    // Part 8: a load failure is reported (batched), so an admin sees a broken creative
+    trackAdEvent(view, "load_failed");
     markCreativeFailed(ad.cr);
     onFail?.();
   };

@@ -75,7 +75,7 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
   const [routing, setRouting] = useState<PaymentRouting>(cfg.wallet.routing);
   const [memberChoice, setMemberChoice] = useState<boolean>(cfg.wallet.memberChoice);
   // 0193: member-to-member credit transfers
-  const [xfer, setXfer] = useState({ enabled: cfg.wallet.transfers.enabled, fee: String(cfg.wallet.transfers.feePercent), min: String(cfg.wallet.transfers.minCredits), max: String(cfg.wallet.transfers.maxCredits), daily: String(cfg.wallet.transfers.dailyMaxCredits) });
+  const [xfer, setXfer] = useState({ enabled: cfg.wallet.transfers.enabled, fee: String(cfg.wallet.transfers.feePercent), depFee: String(cfg.wallet.transfers.depositedFeePercent), min: String(cfg.wallet.transfers.minCredits), max: String(cfg.wallet.transfers.maxCredits), daily: String(cfg.wallet.transfers.dailyMaxCredits) });
   // 0185: one row of rules per paid tool (lib/ai/credits/features.ts); the credit multiplier is credits.featureMultiplier
   const [features, setFeatures] = useState<Record<AiCreditFeatureId, FeatureRow>>(
     Object.fromEntries(
@@ -164,7 +164,7 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
         provider,
         routing,
         memberChoice,
-        transfers: { enabled: xfer.enabled, feePercent: Math.min(50, Math.max(0, Number(xfer.fee) || 0)), minCredits: int(xfer.min, cfg.wallet.transfers.minCredits), maxCredits: int(xfer.max, cfg.wallet.transfers.maxCredits), dailyMaxCredits: int(xfer.daily, cfg.wallet.transfers.dailyMaxCredits) },
+        transfers: { enabled: xfer.enabled, feePercent: Math.min(50, Math.max(0, Number(xfer.fee) || 0)), depositedFeePercent: Math.min(50, Math.max(0, Number(xfer.depFee) || 0)), minCredits: int(xfer.min, cfg.wallet.transfers.minCredits), maxCredits: int(xfer.max, cfg.wallet.transfers.maxCredits), dailyMaxCredits: int(xfer.daily, cfg.wallet.transfers.dailyMaxCredits) },
       },
       features: Object.fromEntries(
         AI_CREDIT_FEATURES.map((id) => {
@@ -497,6 +497,8 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
               />
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <Field id="xfer-fee" label="Fee (%)"><input id="xfer-fee" inputMode="decimal" value={xfer.fee} onChange={(e) => setXfer({ ...xfer, fee: e.target.value })} className={small} /></Field>
+                {/* 0202 (owner, 2026-10-09): the fee on the part of a Credits transfer that came from a deposit */}
+                <Field id="xfer-depfee" label="Fee on deposited credits (%)"><input id="xfer-depfee" inputMode="decimal" value={xfer.depFee} onChange={(e) => setXfer({ ...xfer, depFee: e.target.value })} className={small} /></Field>
                 <Field id="xfer-min" label="Minimum per transfer"><input id="xfer-min" inputMode="numeric" value={xfer.min} onChange={(e) => setXfer({ ...xfer, min: e.target.value })} className={small} /></Field>
                 <Field id="xfer-max" label="Maximum per transfer"><input id="xfer-max" inputMode="numeric" value={xfer.max} onChange={(e) => setXfer({ ...xfer, max: e.target.value })} className={small} /></Field>
                 <Field id="xfer-daily" label="Most per 24 hours"><input id="xfer-daily" inputMode="numeric" value={xfer.daily} onChange={(e) => setXfer({ ...xfer, daily: e.target.value })} className={small} /></Field>

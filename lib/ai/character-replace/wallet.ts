@@ -67,8 +67,15 @@ export async function getCharacterReplaceBalanceCents(userId: string): Promise<n
 }
 
 /** The balance and its withdrawable part (0187), in one read — the rest of the balance is non-withdrawable. Throws on a read fault, like the balance. */
-export async function getCharacterReplaceWallet(userId: string): Promise<{ balance: number; withdrawable: number }> {
-  const { data, error } = await createAdminClient()
+export async function getCharacterReplaceWallet(userId: string): Promise<{ balance: number; withdrawable: number; deposited: number }> {
+  const db = createAdminClient();
+  const first = await db.from("ai_product_balances").select("balance_cents, withdrawable_cents, deposited_cents").eq("user_id", userId).eq("product", PRODUCT).maybeSingle();
+  if (!first.error) {
+    const d = first.data as { balance_cents?: number; withdrawable_cents?: number | null; deposited_cents?: number | null } | null;
+    return { balance: Number(d?.balance_cents ?? 0), withdrawable: Number(d?.withdrawable_cents ?? 0), deposited: Number(d?.deposited_cents ?? 0) };
+  }
+  // a database without 0202 yet: the same read without the deposited part
+  const { data, error } = await db
     .from("ai_product_balances")
     .select("balance_cents, withdrawable_cents")
     .eq("user_id", userId)
@@ -79,7 +86,7 @@ export async function getCharacterReplaceWallet(userId: string): Promise<{ balan
     console.error("[cr/wallet] read failed", { userId, error: error.message });
     throw new Error(error.message);
   }
-  return { balance: Number(data?.balance_cents ?? 0), withdrawable: Number((data as { withdrawable_cents?: number | null } | null)?.withdrawable_cents ?? 0) };
+  return { balance: Number(data?.balance_cents ?? 0), withdrawable: Number((data as { withdrawable_cents?: number | null } | null)?.withdrawable_cents ?? 0), deposited: 0 };
 }
 
 /**

@@ -317,7 +317,8 @@ describe("ONE physical slot → ONE provider (slots addendum)", () => {
     const created = AD_SLOTS.filter((x) => SLOT_DESCRIPTIONS[x.id]!.newInventory);
     expect(created.map((x) => x.id).sort()).toEqual(["ai_hub_card", "ai_save_moment", "stories_between"]);
     for (const x of created) expect(x.networkZone, x.id).toBeNull();
-    for (const x of AD_SLOTS.filter((y) => !SLOT_DESCRIPTIONS[y.id]!.newInventory)) expect(x.networkZone, x.id).not.toBeNull();
+    // an existing slot is a network zone, or (0203) a reward gate the network serves with its rewarded unit
+    for (const x of AD_SLOTS.filter((y) => !SLOT_DESCRIPTIONS[y.id]!.newInventory)) expect(x.networkZone ?? SLOT_DESCRIPTIONS[x.id]!.rewardedUnit ?? null, x.id).not.toBeNull();
     expect(Object.keys(SLOT_DESCRIPTIONS).sort()).toEqual(AD_SLOTS.map((x) => x.id).sort());
   });
 

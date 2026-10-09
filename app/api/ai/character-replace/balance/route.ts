@@ -124,6 +124,8 @@ export async function GET(request: Request) {
         balanceCents: wallet.balance,
         // 0199 (owner, 2026-10-08): the two kinds shown apart on the credits page; the rest of the balance is non-withdrawable
         withdrawableCents: wallet.withdrawable,
+        // 0202: the part of Credits that came from a paid deposit (withdrawn and sent at its own rate)
+        depositedCents: wallet.deposited,
         currency: settings.frenzAiCurrency,
         symbol: aiCurrencySymbol(settings.frenzAiCurrency),
         unit: WALLET_UNIT,

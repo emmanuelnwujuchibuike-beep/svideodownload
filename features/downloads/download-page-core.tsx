@@ -23,6 +23,7 @@ import { useHistory } from "@/features/history/use-history";
 import { AdSurface } from "@/features/monetization/ad-surface";
 import { InstallHeroBanner } from "@/features/pwa/install-button";
 import type { PlatformStatusMap } from "@/lib/platform-status";
+import { RotatingAdStack } from "@/features/monetization/rotating-ad-stack";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -260,9 +261,12 @@ export function DownloadPageCore({
             zone must not be requested until the reader is near it. Both units
             collapse to nothing when unconfigured, which is their default.
           */}
-          <LazyAdSurface zone="landing_under_wallpaper" />
-          <HilltopSlot slot="landing" lazy />
-          <LazyExoClickSlot slot="landing" />
+          {/* 2026-10-09 (owner): one slot that rotates between the networks, never stacked */}
+          <RotatingAdStack>
+            <LazyAdSurface zone="landing_under_wallpaper" />
+            <HilltopSlot slot="landing" lazy />
+            <LazyExoClickSlot slot="landing" />
+          </RotatingAdStack>
         </div>
       ) : null}
 

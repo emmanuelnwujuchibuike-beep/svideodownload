@@ -71,7 +71,9 @@ describe("the landing page structure", () => {
     expect(src("components/landing/hero.tsx")).toMatch(/hideEmptyStats/);
     expect(src("components/landing/hero.tsx")).not.toContain("quickActions");
     const hero = src("features/downloads/downloads-sections.tsx");
-    expect(hero).toContain('<PromoteCard className={headline ? "mt-4" : undefined} />');
+    // 2026-10-09 (owner): the card became a floating side bubble, loaded when the page is idle
+    expect(hero).toContain("<PromoteBubbleLazy />");
+    expect(hero).not.toContain("<PromoteCard");
     const core = src("features/downloads/download-page-core.tsx");
     // later the same day (owner): "remove this fast, secure and private card entirely"
     expect(core).not.toContain("<TrustPills");

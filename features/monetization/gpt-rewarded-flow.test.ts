@@ -59,10 +59,18 @@ describe("rewardedSlotGranted is the only event that grants a reward", () => {
     expect(onClosed).toMatch(/grantedRef\.current \? s : "reward_closed"/);
   });
 
-  it("the flow orchestrator only ever unlocks from gpt.state === \"reward_granted\"", () => {
-    const grantEffect = flow.slice(flow.indexOf('if (gpt.state !== "reward_granted"'));
-    expect(grantEffect).toMatch(/complete\(meta\.type, session\.rewardSessionId\)/);
-    expect(grantEffect).toMatch(/onGranted\(result\.items, session\.rewardSessionId\)/);
+  it("the flow unlocks only through finish(), called from a granted reward: the network's reward_granted, or (0203) a paid reward video watched to the end", () => {
+    const finish = flow.slice(flow.indexOf("const finish = useCallback("), flow.indexOf("const finishRef = useRef(finish);"));
+    expect(finish).toMatch(/if \(grantedHandledRef\.current\) return;/);
+    expect(finish).toMatch(/complete\(meta\.type, session\.rewardSessionId\)/);
+    expect(finish).toMatch(/onGranted\(result\.items, session\.rewardSessionId\)/);
+    // exactly two callers: the network grant, and the paid video's onComplete
+    const callers = [...flow.matchAll(/finish\(\)|finishRef\.current\(\)/g)].map((m) => m[0]);
+    expect(callers.sort()).toEqual(["finish()", "finishRef.current()"]);
+    expect(flow).toContain('if (gpt.state === "reward_granted") finish();');
+    // teeth: a dismissal (closed early) must never reach finish
+    const dismiss = flow.slice(flow.indexOf("() => setPhase((p) => (p === \"paid\" ? \"declined\" : p))"));
+    expect(dismiss.split("\n")[0]).not.toContain("finish");
   });
 });
 

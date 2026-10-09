@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { RewardSurfaceTag, RewardType } from "@/lib/monetization/reward-sessions";
 
+import { requestPaidReward, type PaidRewardPlacement } from "@/lib/ads-platform/paid-reward-event";
+
 import { useGptRewardedAd } from "./use-gpt-rewarded-ad";
 import { RewardSessionClientError, useRewardSession, type RewardSessionItem } from "./use-reward-session";
 
@@ -79,7 +81,13 @@ const CONTEXT_META: Record<
   },
 };
 
-type Phase = "closed" | "prompt" | "requesting" | "unavailable" | "declined" | "completing" | "failed";
+type Phase = "closed" | "prompt" | "requesting" | "paid" | "unavailable" | "declined" | "completing" | "failed";
+
+/** 0203: the paid reward placement for a gate — the same moment the network's rewarded unit serves. */
+const PAID_PLACEMENT: Partial<Record<RewardFlowContext, PaidRewardPlacement>> = {
+  DOWNLOAD_UNLOCK: "hd_download_reward",
+  BATCH_UNLOCK: "batch_download_reward",
+};
 
 export interface RewardConsentSheetProps {
   open: boolean;
@@ -165,8 +173,25 @@ export function useRewardFlow(
       setErrorText(e instanceof RewardSessionClientError ? e.message : "Reward unavailable. Please try again in a moment.");
       setPhase("unavailable");
     });
+    /*
+      0203 (owner, 2026-10-09): a paid sponsor's reward video takes the gate first
+      when one is live and leads the slot's provider order. A full watch completes
+      the SAME reward session below. Closing early is "declined", like the network.
+    */
+    const placement = PAID_PLACEMENT[context];
+    if (
+      placement &&
+      requestPaidReward(
+        placement,
+        () => finishRef.current(),
+        () => setPhase((p) => (p === "paid" ? "declined" : p)),
+      )
+    ) {
+      setPhase("paid");
+      return;
+    }
     gpt.request(adUnitPath?.trim() || DEFAULT_AD_UNIT_PATH);
-  }, [start, meta.type, meta.surface, surfaceTag, gpt, adUnitPath]);
+  }, [start, meta.type, meta.surface, surfaceTag, gpt, adUnitPath, context]);
 
   // GPT slot ready → show it immediately. Consent was already collected at
   // the prompt step; this is not a second opt-in, just the earliest moment
@@ -189,10 +214,11 @@ export function useRewardFlow(
     }
   }, [phase, gpt.state]);
 
-  // The only path that unlocks anything: rewardedSlotGranted, guarded against
-  // firing twice (§5 idempotency).
-  useEffect(() => {
-    if (gpt.state !== "reward_granted" || grantedHandledRef.current) return;
+  // The only path that unlocks anything: a granted reward (the network's
+  // rewardedSlotGranted, or a paid reward video watched to the end — 0203),
+  // guarded against firing twice (§5 idempotency).
+  const finish = useCallback(() => {
+    if (grantedHandledRef.current) return;
     grantedHandledRef.current = true;
     setPhase("completing");
     void (async () => {
@@ -212,13 +238,18 @@ export function useRewardFlow(
       }
     })();
   }, [gpt, complete, meta.type, onGranted]);
+  const finishRef = useRef(finish);
+  finishRef.current = finish;
+  useEffect(() => {
+    if (gpt.state === "reward_granted") finish();
+  }, [gpt.state, finish]);
 
   useEffect(() => cancel, [cancel]);
 
   const busy = phase === "requesting" || phase === "completing";
   // Hidden entirely while Google's own ad UI is on screen — nothing
   // Frenzsave-owned may sit over it (§18/§24).
-  const sheetOpen = phase !== "closed" && gpt.state !== "reward_showing";
+  const sheetOpen = phase !== "closed" && phase !== "paid" && gpt.state !== "reward_showing";
   const isDeadEnd = phase === "unavailable" || phase === "declined" || phase === "failed";
 
   const sheetProps: RewardConsentSheetProps = {

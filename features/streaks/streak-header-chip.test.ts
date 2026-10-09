@@ -47,13 +47,13 @@ const SRC = readFileSync(
 const CALL_SITE = "const { data } = useStreak();";
 
 describe("the route list", () => {
-  it("🔴 is exactly landing, profile and downloads", () => {
+  it("🔴 is exactly the messages page (owner, 2026-10-09)", () => {
     const decl = SRC.match(/const STREAK_ROUTES = new Set\(\[([^\]]*)\]\)/);
     const body = decl?.[1];
     expect(body, "STREAK_ROUTES declaration").toBeTypeOf("string");
 
     const routes = [...(body ?? "").matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();
-    expect(routes).toEqual(["/", "/downloads", "/profile"]);
+    expect(routes).toEqual(["/messages"]);
   });
 
   it("does not reach for a prefix match", () => {

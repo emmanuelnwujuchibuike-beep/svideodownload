@@ -8,7 +8,10 @@ import { VerifiedTick } from "@/components/badges/identity-badges";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { useQuery } from "@/features/data";
 import { usePresence } from "@/features/friends/use-presence";
+import { ChatStreakBadge } from "@/features/social/chat-streak";
+import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
 import { GroupAvatarStack } from "@/features/social/group-avatar-stack";
 import { PresenceBadge } from "@/features/social/presence-badge";
 import { ThreadHeaderMenu } from "@/features/social/thread-header-menu";
@@ -57,6 +60,9 @@ export function ThreadHeader({
   const [members, setMembers] = useState(initialMembers);
   const otherOnline = usePresence().has(other?.id ?? "");
   const [optionsOpen, setOptionsOpen] = useState(false);
+  // the chat streak from the inbox the app already holds (the bottom nav keeps it loaded) — no request of its own
+  const { data: inbox } = useQuery<Inbox>(INBOX_KEY, loadInbox, { revalidateOnFocus: false });
+  const streakDays = inbox?.conversations.find((c) => c.id === conversationId)?.streakDays ?? 0;
   // 2026-10-07 (owner: "remove the voice call and video call buttons since they haven't been implemented — I don't want a coming soon"):
   // the placeholder call buttons are gone, and with them the per-chat /api/block read that only decided whether to hide them.
   // Live theme/wallpaper from the shared ThreadAppearanceProvider (wraps this
@@ -208,6 +214,8 @@ export function ThreadHeader({
             <span className={cn("flex items-center gap-1 text-[15px] font-bold", forceDarkText && "text-neutral-900")}>
               <span className="truncate">{other.displayName}</span>
               {other.isVerified ? <VerifiedTick className="h-3.5 w-3.5" /> : null}
+              {/* the two of you, 2+ days in a row (0200) — both people see it beside the other's name */}
+              <ChatStreakBadge days={streakDays} />
             </span>
             <PresenceBadge userId={other.id} handle={other.handle} forceLight={forceDarkText} />
           </span>

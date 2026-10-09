@@ -25,7 +25,7 @@ describe("discovery analytics", () => {
   it("the doors carry their tags", () => {
     expect(src("features/downloads/frenz-ai-cta.tsx")).toContain('data-track="ai_clicked"');
     expect(src("components/wallpapers/wallpaper-cta.tsx")).toContain('data-track="wallpapers_clicked"');
-    expect(src("features/downloads/promote-card.tsx")).toContain('data-track="advertise_clicked"');
+    expect(src("features/downloads/promote-bubble.tsx")).toContain('data-track="advertise_clicked"');
     const eco = src("components/landing/ecosystem.tsx");
     for (const t of ["ai_clicked", "ai_reels_clicked", "reels_clicked", "wallpapers_clicked", "advertise_clicked"]) expect(eco).toContain(t);
   });

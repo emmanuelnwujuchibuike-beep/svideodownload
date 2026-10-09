@@ -414,6 +414,11 @@ function Performance({ id }: { id: string }) {
             <div><p className="text-[1.2rem] font-bold tabular-nums">{num(t.clicks)}</p><p className="text-[11.5px] text-muted-foreground">Clicks</p></div>
             <div><p className="text-[1.2rem] font-bold tabular-nums">{pct(t.ctr)}</p><p className="text-[11.5px] text-muted-foreground">CTR</p></div>
           </div>
+          {/* 0201: details opened on Frenzsave, and visits after the external-link warning */}
+          <div className="mt-2 grid grid-cols-2 gap-2 text-center">
+            <div><p className="text-[1.05rem] font-bold tabular-nums">{num(t.conversions)}</p><p className="text-[11.5px] text-muted-foreground">Conversions</p></div>
+            <div><p className="text-[1.05rem] font-bold tabular-nums">{num(t.outbounds)}</p><p className="text-[11.5px] text-muted-foreground">Site visits</p></div>
+          </div>
           {t.videoPlays || t.rewardCompletes ? (
             <p className="mt-2 text-center text-[12px] text-muted-foreground">{num(t.videoPlays)} video plays · {num(t.videoCompletes + t.rewardCompletes)} watched to the end</p>
           ) : null}

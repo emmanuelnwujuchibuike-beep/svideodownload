@@ -1,11 +1,12 @@
 "use client";
 
-import { ArrowDownLeft, ArrowUpRight, Copy, Send } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Check, Copy, Send } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { toast } from "@/features/ui/toast";
-import { formatCredits } from "@/lib/ai/credits/units";
+import { formatKind, KIND_NAME, KindSymbol, type WalletKind } from "@/features/ai/wallet/wallet-kinds";
+import { transferFeeFor } from "@/lib/ai/credits/wallet-config";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
@@ -33,14 +34,17 @@ const GlassSheetShell = dynamic(() => import("@/features/ui/glass-sheet-shell").
  */
 export interface TransferRules {
   feePercent: number;
+  /** 0202: the fee on the deposited part of a Credits transfer */
+  depositedFeePercent?: number;
   minCredits: number;
   maxCredits: number;
   dailyMaxCredits: number;
 }
 
-export type TransferKind = "usable" | "withdrawable";
+export type TransferKind = WalletKind;
 
-const KIND_LABEL: Record<TransferKind, string> = { usable: "Non-withdrawable", withdrawable: "Withdrawable" };
+// 2026-10-09 (owner): the send sheet names the kinds Tokens (non-withdrawable) and Credits (withdrawable)
+const KIND_LABEL: Record<TransferKind, string> = { usable: KIND_NAME.usable.title, withdrawable: KIND_NAME.withdrawable.title };
 
 interface TransferRow {
   id: string;
@@ -93,7 +97,7 @@ function writeKept(patch: Partial<NonNullable<typeof kept>>) {
 
 const feeOf = (amount: number, pct: number) => (amount > 0 && pct > 0 ? Math.ceil((Math.floor(amount) * pct) / 100) : 0);
 
-export function TransferPanel({ rules, balance, withdrawable = null, onChanged, className }: { rules: TransferRules | null; balance: number | null; withdrawable?: number | null; onChanged: () => void; className?: string }) {
+export function TransferPanel({ rules, balance, withdrawable = null, deposited = null, onChanged, className }: { rules: TransferRules | null; balance: number | null; withdrawable?: number | null; deposited?: number | null; onChanged: () => void; className?: string }) {
   const [account, setAccount] = useState<string | null>(null);
   const [history, setHistory] = useState<TransferRow[] | null>(null);
   const [showAll, setShowAll] = useState(false);
@@ -148,15 +152,36 @@ export function TransferPanel({ rules, balance, withdrawable = null, onChanged, 
     if (!k?.history || moved || Date.now() - (k?.at ?? 0) > HISTORY_STALE_MS) void loadHistory();
   }, [balance, loadHistory, historyHidden]);
 
+  // 2026-10-09 (owner: "make copy of wallet number show copy successful"): the button itself says Copied, and a toast confirms
+  const [copied, setCopied] = useState(false);
   const copy = async () => {
     if (!account) return;
     haptic("selection");
+    let ok = false;
     try {
       await navigator.clipboard.writeText(account);
-      toast("Wallet number copied.", "success");
+      ok = true;
     } catch {
-      toast("Couldn't copy it.", "error");
+      // some installed iPhone apps refuse the async clipboard; the old selection copy still works there
+      try {
+        const t = document.createElement("textarea");
+        t.value = account;
+        t.setAttribute("readonly", "");
+        t.style.position = "fixed";
+        t.style.opacity = "0";
+        document.body.appendChild(t);
+        t.select();
+        ok = document.execCommand("copy");
+        t.remove();
+      } catch {
+        ok = false;
+      }
     }
+    if (ok) {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+      toast("Copied successfully.", "success");
+    } else toast("Couldn't copy it. Press and hold the number to copy.", "error");
   };
 
   const shown = history ? (showAll ? history : history.slice(0, 5)) : null;
@@ -166,12 +191,12 @@ export function TransferPanel({ rules, balance, withdrawable = null, onChanged, 
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Your wallet number</p>
-          <p className="mt-0.5 font-mono text-[19px] font-bold tabular-nums tracking-[0.06em]">{account ? `${account.slice(0, 3)} ${account.slice(3, 6)} ${account.slice(6)}` : "··· ··· ····"}</p>
+          <p className="mt-0.5 select-all font-mono text-[19px] font-bold tabular-nums tracking-[0.06em]">{account ? `${account.slice(0, 3)} ${account.slice(3, 6)} ${account.slice(6)}` : "··· ··· ····"}</p>
           <p className="text-[11.5px] text-muted-foreground">Share it to receive credits.</p>
         </div>
         <button type="button" onClick={() => void copy()} disabled={!account} className="inline-flex min-h-[2.75rem] shrink-0 items-center gap-1.5 rounded-full bg-secondary px-3.5 text-[13px] font-semibold disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400">
-          <Copy className="h-4 w-4" aria-hidden />
-          Copy
+          {copied ? <Check className="h-4 w-4 text-emerald-600" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}
+          {copied ? "Copied" : "Copy"}
         </button>
       </div>
 
@@ -227,14 +252,13 @@ export function TransferPanel({ rules, balance, withdrawable = null, onChanged, 
                   <p className="truncate text-[13.5px] font-medium">{t.direction === "received" ? `From ${t.with}` : `To ${t.with}`}</p>
                   <p className="truncate text-[11.5px] text-muted-foreground">
                     {new Date(t.at).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
-                    {t.kind === "withdrawable" ? " · withdrawable" : ""}
-                    {t.fee ? ` · ${formatCredits(t.fee)} fee` : ""}
+                    {t.fee ? ` · ${formatKind(t.fee, t.kind ?? "usable")} fee` : ""}
                     {t.note ? ` · ${t.note}` : ""}
                   </p>
                 </div>
                 <span className={cn("shrink-0 text-[14px] font-semibold tabular-nums", t.direction === "received" ? "text-emerald-600" : "text-foreground")}>
                   {t.direction === "received" ? "+" : "−"}
-                  {formatCredits(t.amount)}
+                  {formatKind(t.amount, t.kind ?? "usable")}
                 </span>
               </li>
             ))}
@@ -252,6 +276,7 @@ export function TransferPanel({ rules, balance, withdrawable = null, onChanged, 
           rules={rules}
           balance={balance}
           withdrawable={withdrawable}
+          deposited={deposited}
           onClose={() => setSheetOpen(false)}
           onSent={() => {
             setSheetOpen(false);
@@ -276,6 +301,7 @@ export function SendSheet({
   rules,
   balance,
   withdrawable = null,
+  deposited = null,
   onClose,
   onSent,
   recipient = null,
@@ -284,6 +310,8 @@ export function SendSheet({
   balance: number | null;
   /** The withdrawable part of `balance`; null when unknown (the server still decides). */
   withdrawable?: number | null;
+  /** 0202: the deposited part of `withdrawable` (its own transfer fee) */
+  deposited?: number | null;
   onClose: () => void;
   onSent: () => void;
   recipient?: PresetRecipient | null;
@@ -299,7 +327,11 @@ export function SendSheet({
   const key = useRef(newKey());
 
   const n = Number(amount);
-  const fee = feeOf(n, rules.feePercent);
+  // 0202: Credits from a deposit pay their own fee (earned credits go first) — the same rule the server uses
+  const usesDeposit = kind === "withdrawable" && (deposited ?? 0) > 0 && withdrawable !== null && rules.depositedFeePercent !== undefined && rules.depositedFeePercent !== rules.feePercent;
+  const fee = usesDeposit
+    ? transferFeeFor(Number.isInteger(n) ? n : 0, kind, { withdrawable: withdrawable ?? 0, deposited: deposited ?? 0 }, { feePercent: rules.feePercent, depositedFeePercent: rules.depositedFeePercent ?? rules.feePercent })
+    : feeOf(n, rules.feePercent);
   const total = Number.isInteger(n) && n > 0 ? n + fee : 0;
   const amountOk = Number.isInteger(n) && n >= rules.minCredits && n <= rules.maxCredits;
   // only the chosen kind pays the amount and the fee
@@ -339,7 +371,7 @@ export function SendSheet({
         setError(j.error ?? "Couldn't send that.");
         return;
       }
-      toast(`Sent ${formatCredits(j.amount ?? n)}${kind === "withdrawable" ? " withdrawable" : ""} to ${who.name}.`, "success");
+      toast(`Sent ${formatKind(j.amount ?? n, kind)} to ${who.name}.`, "success");
       key.current = newKey();
       onSent();
     } catch {
@@ -386,8 +418,8 @@ export function SendSheet({
               )}
             </div>
             <fieldset className="mt-4">
-              <legend className="text-[13px] font-semibold">Which credits</legend>
-              <div role="radiogroup" aria-label="Which credits to send" className="mt-1 grid grid-cols-2 gap-2">
+              <legend className="text-[13px] font-semibold">What to send</legend>
+              <div role="radiogroup" aria-label="Send tokens or credits" className="mt-1 grid grid-cols-2 gap-2">
                 {(["usable", "withdrawable"] as const).map((k) => {
                   const have = balance === null ? null : withdrawable === null ? (k === "usable" ? balance : null) : k === "withdrawable" ? withdrawable : Math.max(0, balance - withdrawable);
                   const on = kind === k;
@@ -407,27 +439,30 @@ export function SendSheet({
                         on ? "bg-indigo-500/10 ring-indigo-500" : "bg-background ring-border/70",
                       )}
                     >
-                      <span className={cn("block text-[13px] font-semibold", on ? "text-indigo-700 dark:text-indigo-300" : "")}>{KIND_LABEL[k]}</span>
-                      <span className="block text-[11.5px] tabular-nums text-muted-foreground">{have === null ? "—" : `${formatCredits(have)} available`}</span>
+                      <span className={cn("flex items-center gap-1 text-[13px] font-semibold", on ? "text-indigo-700 dark:text-indigo-300" : "")}>
+                        <KindSymbol kind={k} />
+                        {KIND_LABEL[k]}
+                      </span>
+                      <span className="block text-[11.5px] tabular-nums text-muted-foreground">{have === null ? "—" : `${formatKind(have, k)} available`}</span>
                     </button>
                   );
                 })}
               </div>
             </fieldset>
             <label className="mt-4 block text-[13px] font-semibold">
-              Credits to send
+              Amount
               <input inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ""))} placeholder={`${rules.minCredits}–${rules.maxCredits.toLocaleString("en-US")}`} className={cn(field, "font-bold tabular-nums")} />
             </label>
             <dl className="mt-2 space-y-1 text-[13px]">
-              <div className="flex justify-between"><dt className="text-muted-foreground">Transfer fee ({rules.feePercent}%)</dt><dd className="tabular-nums">{formatCredits(fee)}</dd></div>
-              <div className="flex justify-between font-semibold"><dt>Total ({KIND_LABEL[kind].toLowerCase()})</dt><dd className="tabular-nums">{formatCredits(total)}</dd></div>
-              {available !== null ? <div className="flex justify-between text-muted-foreground"><dt>{KIND_LABEL[kind]} available</dt><dd className="tabular-nums">{formatCredits(available)}</dd></div> : null}
+              <div className="flex justify-between"><dt className="text-muted-foreground">{usesDeposit ? `Transfer fee (${rules.feePercent}% · ${rules.depositedFeePercent}% on deposited)` : `Transfer fee (${rules.feePercent}%)`}</dt><dd className="tabular-nums">{formatKind(fee, kind)}</dd></div>
+              <div className="flex justify-between font-semibold"><dt>Total</dt><dd className="tabular-nums">{formatKind(total, kind)}</dd></div>
+              {available !== null ? <div className="flex justify-between text-muted-foreground"><dt>{KIND_LABEL[kind]} available</dt><dd className="tabular-nums">{formatKind(available, kind)}</dd></div> : null}
             </dl>
             <label className="mt-3 block text-[13px] font-semibold">
               Note <span className="font-normal text-muted-foreground">(optional)</span>
               <input value={note} maxLength={120} onChange={(e) => setNote(e.target.value)} className={field} />
             </label>
-            <p className="mt-2 text-[11.5px] text-muted-foreground">{who.name} receives the full amount as {kind === "withdrawable" ? "withdrawable" : "non-withdrawable"} credits. Transfers can&apos;t be undone.</p>
+            <p className="mt-2 text-[11.5px] text-muted-foreground">{who.name} receives the full amount as {KIND_NAME[kind].many}{kind === "withdrawable" ? " (can be cashed out)" : " (for Frenz AI tools)"}. Transfers can&apos;t be undone.</p>
             <button
               type="button"
               onClick={() => void send()}
@@ -435,10 +470,10 @@ export function SendSheet({
               className="mt-3 inline-flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500 text-[15px] font-bold text-white disabled:opacity-45"
             >
               <Send className="h-4 w-4" aria-hidden />
-              {busy === "send" ? "Sending…" : amountOk ? `Send ${formatCredits(n)}` : "Enter an amount"}
+              {busy === "send" ? "Sending…" : amountOk ? `Send ${formatKind(n, kind)}` : "Enter an amount"}
             </button>
             {amount && !amountOk ? <p className="mt-2 text-[12px] text-muted-foreground">Between {rules.minCredits} and {rules.maxCredits.toLocaleString("en-US")} credits per transfer.</p> : null}
-            {amountOk && !enough ? <p className="mt-2 text-[12px] font-semibold text-rose-600">Not enough {KIND_LABEL[kind].toLowerCase()} credits for this amount plus the fee.</p> : null}
+            {amountOk && !enough ? <p className="mt-2 text-[12px] font-semibold text-rose-600">Not enough {KIND_NAME[kind].many} for this amount plus the fee.</p> : null}
           </>
         )}
         {error ? (

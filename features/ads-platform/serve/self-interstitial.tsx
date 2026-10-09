@@ -8,7 +8,8 @@ import type { EligibleAd } from "@/lib/ads-platform/eligibility";
 import { cn } from "@/lib/utils";
 
 import { trackAdEvent, type AdView } from "../ad-events-client";
-import { destinationHost, SelfAdCreative, trackAdClick } from "./self-ad-creative";
+import { openAdDetail } from "./ad-detail-store";
+import { destinationHost, SelfAdCreative } from "./self-ad-creative";
 
 /**
  * A full-screen paid ad — INTERSTITIAL, DOWNLOAD_COMPLETED_INTERSTITIAL, and
@@ -32,6 +33,8 @@ export function SelfInterstitial({
   placement,
   page,
   reward = false,
+  rewardText,
+  onRewardComplete,
   slot,
   onClose,
 }: {
@@ -41,6 +44,10 @@ export function SelfInterstitial({
   placement: string;
   page: string;
   reward?: boolean;
+  /** 0203: a download reward gate's own line, in place of the AI save's */
+  rewardText?: string;
+  /** 0203: the reward video was watched to the end */
+  onRewardComplete?: () => void;
   onClose: () => void;
 }) {
   const closeBtn = useRef<HTMLButtonElement | null>(null);
@@ -102,7 +109,7 @@ export function SelfInterstitial({
 
         {reward ? (
           <p className="px-4 pb-2 text-[13px] leading-snug text-muted-foreground">
-            Your video is saving. {ended ? "Thanks for watching." : "A short message from our sponsor while it does."}
+            {rewardText ? (ended ? "Unlocked. Thanks for watching." : rewardText) : <>Your video is saving. {ended ? "Thanks for watching." : "A short message from our sponsor while it does."}</>}
           </p>
         ) : null}
 
@@ -120,6 +127,7 @@ export function SelfInterstitial({
           }}
           onEnded={() => {
             if (reward && view.current) trackAdEvent(view.current, "reward_video_complete");
+            if (reward) onRewardComplete?.();
             setEnded(true);
           }}
           onFail={onClose}
@@ -133,7 +141,10 @@ export function SelfInterstitial({
               href={ad.url}
               target="_blank"
               rel="sponsored noopener noreferrer"
-              onClick={() => trackAdClick(view.current)}
+              onClick={(e) => {
+                e.preventDefault();
+                openAdDetail(ad, view.current);
+              }}
               className="inline-flex min-h-[2.75rem] flex-1 items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-4 text-[14px] font-semibold text-white transition active:scale-[0.98] motion-reduce:active:scale-100"
             >
               {host ? `Visit ${host}` : "Learn more"} <ArrowUpRight className="h-4 w-4" aria-hidden />

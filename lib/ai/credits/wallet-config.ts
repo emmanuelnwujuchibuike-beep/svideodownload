@@ -90,7 +90,7 @@ export const AI_WALLET_DEFAULTS: AiWalletConfig = {
     other: { wallet_topup: { primary: "paystack", fallback: null }, ai_subscription: { primary: "paystack", fallback: null }, ad_campaign: { primary: "paystack", fallback: null } },
   },
   memberChoice: true,
-  transfers: { enabled: true, feePercent: 5, minCredits: 10, maxCredits: 5000, dailyMaxCredits: 20000 },
+  transfers: { enabled: true, feePercent: 5, depositedFeePercent: 10, minCredits: 10, maxCredits: 5000, dailyMaxCredits: 20000 },
   provider: "paystack",
 };
 
@@ -98,6 +98,12 @@ export interface CreditTransferConfig {
   enabled: boolean;
   /** 5 = 5 %, charged to the sender on top of the amount, rounded up to a whole credit. */
   feePercent: number;
+  /**
+   * 0202 (owner, 2026-10-09: "deposited credits can be sent to others and withdrawn
+   * but with a certain charge and rate different from others"): the fee on the part
+   * of a Credits transfer that came from a DEPOSIT. The rest pays `feePercent`.
+   */
+  depositedFeePercent: number;
   minCredits: number;
   maxCredits: number;
   /** Most a member can send in a rolling 24 hours (amounts, not counting fees). */
@@ -110,6 +116,21 @@ export function transferFee(amount: number, feePercent: number): number {
   return Math.ceil((Math.floor(amount) * feePercent) / 100);
 }
 
+/**
+ * 0202: the fee on a transfer. Tokens pay `feePercent`. For Credits, the AMOUNT is
+ * taken earned-first: the part of it beyond the earned credits came from a
+ * deposit and pays `depositedFeePercent`, and the rest pays `feePercent`. The fee
+ * itself is then taken from what is left. migration 0202's transfer moves
+ * exactly that deposited share to the recipient.
+ */
+export function transferFeeFor(amount: number, kind: "usable" | "withdrawable", wallet: { withdrawable: number; deposited: number } | null, c: Pick<CreditTransferConfig, "feePercent" | "depositedFeePercent">): number {
+  const a = Math.max(0, Math.floor(amount));
+  if (kind !== "withdrawable" || !wallet || wallet.deposited <= 0) return transferFee(a, c.feePercent);
+  const earned = Math.max(0, Math.floor(wallet.withdrawable) - Math.floor(wallet.deposited));
+  const depositedShare = Math.max(0, a - earned);
+  return transferFee(a - depositedShare, c.feePercent) + transferFee(depositedShare, c.depositedFeePercent);
+}
+
 function normalizeTransfers(raw: unknown): CreditTransferConfig {
   const d = AI_WALLET_DEFAULTS.transfers;
   const r = isRecord(raw) ? raw : {};
@@ -118,6 +139,7 @@ function normalizeTransfers(raw: unknown): CreditTransferConfig {
   return {
     enabled: typeof r.enabled === "boolean" ? r.enabled : d.enabled,
     feePercent: Math.min(50, Math.max(0, typeof r.feePercent === "number" && Number.isFinite(r.feePercent) ? Math.round(r.feePercent * 100) / 100 : d.feePercent)),
+    depositedFeePercent: Math.min(50, Math.max(0, typeof r.depositedFeePercent === "number" && Number.isFinite(r.depositedFeePercent) ? Math.round(r.depositedFeePercent * 100) / 100 : d.depositedFeePercent)),
     minCredits,
     maxCredits,
     dailyMaxCredits: Math.max(maxCredits, int(r.dailyMaxCredits, d.dailyMaxCredits, 1, 100_000_000)),
@@ -234,7 +256,7 @@ export function publicWalletOffer(cfg: AiWalletConfig, centsPerCredit: number) {
     custom: cfg.custom.enabled ? { minCredits: cfg.custom.minCredits, maxCredits: cfg.custom.maxCredits } : null,
     centsPerCredit: cpc,
     // 0193: what the send sheet shows before the server re-decides
-    transfers: cfg.transfers.enabled ? { feePercent: cfg.transfers.feePercent, minCredits: cfg.transfers.minCredits, maxCredits: cfg.transfers.maxCredits, dailyMaxCredits: cfg.transfers.dailyMaxCredits } : null,
+    transfers: cfg.transfers.enabled ? { feePercent: cfg.transfers.feePercent, depositedFeePercent: cfg.transfers.depositedFeePercent, minCredits: cfg.transfers.minCredits, maxCredits: cfg.transfers.maxCredits, dailyMaxCredits: cfg.transfers.dailyMaxCredits } : null,
   };
 }
 export type PublicWalletOffer = ReturnType<typeof publicWalletOffer>;

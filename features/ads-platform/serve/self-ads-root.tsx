@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 
 import { loadSelfAds } from "../serving-client";
+import { AdDetailHost } from "./ad-detail-host";
 import { SelfMoments } from "./self-moments";
 
 /**
@@ -22,6 +23,8 @@ export function SelfAdsRoot() {
   return (
     <>
       <SelfMoments />
+      {/* a tapped ad opens its details on this page (2026-10-09) */}
+      <AdDetailHost />
     </>
   );
 }

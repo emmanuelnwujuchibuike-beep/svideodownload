@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
@@ -37,6 +38,9 @@ import { InboxUnreadDot } from "@/features/social/inbox-unread-dot";
  * var is how the list learns this height, and a ResizeObserver keeps it exact as
  * the Stories row loads).
  */
+// the streak chip shows only on the messages page, and this chrome is in the persistent shell — load it there, not everywhere
+const StreakHeaderChip = dynamic(() => import("@/features/streaks/streak-header-chip").then((m) => m.StreakHeaderChip), { ssr: false });
+
 export function InboxMobileChrome() {
   const pathname = usePathname();
   const inMessages = pathname === "/messages" || pathname.startsWith("/messages/");
@@ -70,7 +74,11 @@ export function InboxMobileChrome() {
             Messages
             <InboxUnreadDot />
           </h1>
-          <p className="mt-1 pl-0.5 text-xs text-muted-foreground">Stay connected with the people you care about</p>
+          {/* your daily streak lives at the top of the messages now (owner, 2026-10-09) — nothing renders without one */}
+          <p className="mt-1 flex items-center gap-2 pl-0.5 text-xs text-muted-foreground">
+            <StreakHeaderChip />
+            <span>Stay connected with the people you care about</span>
+          </p>
         </div>
         <InboxHeaderActions />
       </div>

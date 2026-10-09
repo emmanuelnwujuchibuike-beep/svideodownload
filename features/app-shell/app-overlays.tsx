@@ -30,9 +30,6 @@ export function AppOverlays() {
       <IosInstallPrompt />
       <PushNudge />
       <FloatingDownloadProgress />
-      {/* Small, always-mounted "Switch to Full Bleed" prompt for gated Downloader-
-          mode controls (chat / gallery upload). Rendered here so it's present on
-          every app + profile surface where a gated control lives. */}
     </>
   );
 }

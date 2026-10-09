@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
 import { StreakFireBurst } from "@/features/streaks/streak-fire-burst";
@@ -108,6 +109,15 @@ export function StreakUnlockCelebration({
 }) {
   const marked = useRef(false);
   const dismissed = useRef(false);
+  /*
+    2026-10-09 (owner: "streak celebration from when a user reaches a milestone
+    should be shown in the Download page and message page"). The tracker mounts
+    this on any page; it WAITS — no claim, no sound, nothing drawn — until the
+    member is on the download page or the messages. The check lives here, in
+    this lazily loaded chunk, so the always-loaded shell does not grow.
+  */
+  const pathname = usePathname() ?? "";
+  const here = replay || pathname === "/downloads" || pathname.startsWith("/messages");
 
   /*
     🔴 IT LEAVES ON THE TAP. NO EXIT ANIMATION TO SIT THROUGH.
@@ -143,6 +153,7 @@ export function StreakUnlockCelebration({
   };
 
   useEffect(() => {
+    if (!here) return;
     if (!marked.current) {
       marked.current = true;
       /*
@@ -187,8 +198,9 @@ export function StreakUnlockCelebration({
     // The burst owns its own leaving (a tap, Escape, or by itself after the burst).
     // `streak` and `tier` are fixed for this overlay's whole life — the tracker
     // sets them once and unmounts on done.
-  }, [streak, tier, replay]);
+  }, [streak, tier, replay, here]);
 
   /* 2026-10-09 (owner): no card, no words on screen, no buttons — the flame, large, with fire around it. */
+  if (!here) return null;
   return <StreakFireBurst tier={tier} label={`New flame unlocked: ${tier.label}, ${streak} ${streak === 1 ? "day" : "days"}`} onDone={() => dismiss.current()} />;
 }

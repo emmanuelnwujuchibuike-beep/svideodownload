@@ -32,7 +32,7 @@ export function RewardsPanel({ settings }: { settings: LandingSettings }) {
     Object.fromEntries(REWARD_EVENTS.map((e) => { const r = cfg.events[e]; return [e, { enabled: r.enabled, actor: String(r.actorCredits), referrer: String(r.referrerCredits), repeatable: r.referrerRepeatable, once: r.actorOncePerUser, minSeconds: String(r.minDurationSeconds ?? ""), includeFree: !!r.includeComplimentary }]; })) as Record<RewardEventType, RuleRow>,
   );
   const [q, setQ] = useState({ age: String(cfg.qualification.minAccountAgeDays), eng: String(cfg.qualification.minEngagements), window: String(cfg.attribution.windowDays), extra: (cfg.qualification.extraRequirements ?? []).join("\n") });
-  const [w, setW] = useState({ enabled: cfg.withdrawals.enabled, rate: String(cfg.withdrawals.creditsPerUsd), min: String(cfg.withdrawals.minCredits), max: String(cfg.withdrawals.maxCredits), perDay: String(cfg.withdrawals.maxRequestsPerDay), perMonth: String(cfg.withdrawals.maxCreditsPerMonth), review: String(cfg.withdrawals.manualReviewAboveCredits) });
+  const [w, setW] = useState({ enabled: cfg.withdrawals.enabled, rate: String(cfg.withdrawals.creditsPerUsd), min: String(cfg.withdrawals.minCredits), max: String(cfg.withdrawals.maxCredits), perDay: String(cfg.withdrawals.maxRequestsPerDay), perMonth: String(cfg.withdrawals.maxCreditsPerMonth), review: String(cfg.withdrawals.manualReviewAboveCredits), depRate: String(cfg.withdrawals.deposited.creditsPerUsd), depFee: String(cfg.withdrawals.deposited.feePercent) });
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const n = (v: string, d: number) => (v.trim() === "" || !Number.isFinite(Number(v)) ? d : Math.max(0, Math.floor(Number(v))));
@@ -60,7 +60,7 @@ export function RewardsPanel({ settings }: { settings: LandingSettings }) {
           .filter((x) => x.title.trim())
           .map((x) => ({ id: x.id || questId(x.title), title: x.title.trim(), event: x.event, target: Math.max(1, n(x.target, 1)), credits: Math.max(0, n(x.credits, 0)), period: x.period, enabled: x.enabled })),
       },
-      withdrawals: { enabled: w.enabled, creditsPerUsd: Math.max(1, n(w.rate, 10)), minCredits: Math.max(1, n(w.min, 100)), maxCredits: Math.max(1, n(w.max, 10000)), maxRequestsPerDay: Math.max(1, n(w.perDay, 1)), maxCreditsPerMonth: Math.max(1, n(w.perMonth, 50000)), manualReviewAboveCredits: n(w.review, 0), methods: cfg.withdrawals.methods },
+      withdrawals: { enabled: w.enabled, creditsPerUsd: Math.max(1, n(w.rate, 10)), minCredits: Math.max(1, n(w.min, 100)), maxCredits: Math.max(1, n(w.max, 10000)), maxRequestsPerDay: Math.max(1, n(w.perDay, 1)), maxCreditsPerMonth: Math.max(1, n(w.perMonth, 50000)), manualReviewAboveCredits: n(w.review, 0), methods: cfg.withdrawals.methods, deposited: { creditsPerUsd: Math.max(1, n(w.depRate, 10)), feePercent: Math.min(50, Math.max(0, Number(w.depFee) || 0)) } },
     }),
     [cfg.events, cfg.withdrawals.methods, enabled, q, rules, w, questsOn, questCap, quests],
   );
@@ -180,6 +180,9 @@ export function RewardsPanel({ settings }: { settings: LandingSettings }) {
             <label className="text-xs text-muted-foreground">Requests per day<input inputMode="numeric" value={w.perDay} onChange={(x) => setW({ ...w, perDay: x.target.value })} className={cn(input, "mt-1 block")} /></label>
             <label className="text-xs text-muted-foreground">Credits per 30 days<input inputMode="numeric" value={w.perMonth} onChange={(x) => setW({ ...w, perMonth: x.target.value })} className={cn(input, "mt-1 block")} /></label>
             <label className="text-xs text-muted-foreground">Review above (credits)<input inputMode="numeric" value={w.review} onChange={(x) => setW({ ...w, review: x.target.value })} className={cn(input, "mt-1 block")} /></label>
+            {/* 0202 (owner, 2026-10-09): deposited credits cash out at their own rate, less their own fee */}
+            <label className="text-xs text-muted-foreground">Deposited credits — credits per $1<input inputMode="numeric" value={w.depRate} onChange={(x) => setW({ ...w, depRate: x.target.value })} className={cn(input, "mt-1 block")} /></label>
+            <label className="text-xs text-muted-foreground">Deposited credits — withdrawal fee (%)<input inputMode="decimal" value={w.depFee} onChange={(x) => setW({ ...w, depFee: x.target.value })} className={cn(input, "mt-1 block")} /></label>
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-3">

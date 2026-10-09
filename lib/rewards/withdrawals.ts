@@ -2,7 +2,7 @@ import "server-only";
 
 import { emailMember } from "@/lib/email/member-email";
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
-import { withdrawalUsdCents, type RewardsConfig } from "@/lib/rewards/config";
+import { splitWithdrawalUsdCents, withdrawalUsdCents, type RewardsConfig } from "@/lib/rewards/config";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -52,9 +52,13 @@ export async function requestWithdrawal(input: { userId: string; credits: number
   if (live.filter((r) => r.created_at >= dayAgo).length >= w.maxRequestsPerDay) return { ok: false, status: 429, error: "You've reached today's withdrawal limit." };
   if (live.reduce((a, r) => a + r.credits, 0) + credits > w.maxCreditsPerMonth) return { ok: false, status: 429, error: "That would pass this month's withdrawal limit." };
 
-  const usdCents = withdrawalUsdCents(credits, w.creditsPerUsd);
+  // 0202: the part that came from a deposit is paid at its own rate, less its own fee
+  const { data: bal } = await db.from("ai_product_balances").select("withdrawable_cents, deposited_cents").eq("user_id", input.userId).eq("product", "character_replace").maybeSingle();
+  const b = bal as { withdrawable_cents?: number | null; deposited_cents?: number | null } | null;
+  const split = b && Number(b.deposited_cents ?? 0) > 0 ? splitWithdrawalUsdCents(credits, Number(b.withdrawable_cents ?? 0), Number(b.deposited_cents ?? 0), w) : null;
+  const usdCents = split ? split.usdCents : withdrawalUsdCents(credits, w.creditsPerUsd);
   const status: WithdrawalStatus = credits > w.manualReviewAboveCredits ? "reviewing" : "pending";
-  const { data, error } = await db.rpc("request_withdrawal", { p_user_id: input.userId, p_credits: credits, p_usd_cents: usdCents, p_method: input.method, p_details: details, p_snapshot: { creditsPerUsd: w.creditsPerUsd, version: input.config.version }, p_status: status });
+  const { data, error } = await db.rpc("request_withdrawal", { p_user_id: input.userId, p_credits: credits, p_usd_cents: usdCents, p_method: input.method, p_details: details, p_snapshot: { creditsPerUsd: w.creditsPerUsd, version: input.config.version, depositedPart: split?.depositedPart ?? 0, deposited: w.deposited }, p_status: status });
   if (error) {
     console.error("[rewards/withdraw] request failed", { userId: input.userId, message: error.message });
     return { ok: false, status: 503, error: "Couldn't submit that. Try again in a moment." };

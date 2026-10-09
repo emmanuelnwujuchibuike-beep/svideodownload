@@ -369,6 +369,8 @@ export interface CharacterReplaceBalance {
   balanceCents: number;
   /** 0187/0199: the withdrawable part of balanceCents; the rest is non-withdrawable. Absent in an old snapshot — show the total only. */
   withdrawableCents?: number;
+  /** 0202: the deposited part of withdrawableCents. */
+  depositedCents?: number;
   unit: "CREDIT";
   /** The list-price currency packs are priced in (USD). */
   currency: string;

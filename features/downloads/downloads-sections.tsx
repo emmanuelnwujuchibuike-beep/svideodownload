@@ -26,7 +26,7 @@ import { QUICK_ACTIONS } from "@/features/downloads/quick-actions";
 import { estimateBytes, limitForPlan, totalUsedBytes } from "@/features/history/usage";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { DownloadRecord } from "@/types";
-import { PromoteCard } from "@/features/downloads/promote-card";
+import { PromoteBubbleLazy } from "@/features/downloads/promote-bubble-lazy";
 import type { ReactNode } from "react";
 import { cn, formatBytes, formatCompactNumber } from "@/lib/utils";
 
@@ -157,8 +157,8 @@ export function DownloadsHero({ trailing, headline = true }: { trailing?: ReactN
             promote card, and move the fast secure private downward" — the pill is
             now `TrustPills`, rendered under the paste box (download-page-core).
           */}
-          {/* no headline above it on /downloads ⇒ no top margin: the strip's own gap is enough (owner, 2026-10-08: "too much space between these two cards") */}
-          <PromoteCard className={headline ? "mt-4" : undefined} />
+          {/* 2026-10-09 (owner): the promote card became a floating, draggable side bubble, loaded when the page is idle */}
+          <PromoteBubbleLazy />
         </div>
 
         {/* The reference's cloud illustration, drawn rather than shipped as an

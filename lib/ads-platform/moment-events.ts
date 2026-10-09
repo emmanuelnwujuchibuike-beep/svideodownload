@@ -33,3 +33,4 @@ export function momentClaimed(moment: AdMoment, now: number = Date.now()): boole
 export function __resetMomentClaims(): void {
   for (const k of Object.keys(claims)) delete claims[k as AdMoment];
 }
+

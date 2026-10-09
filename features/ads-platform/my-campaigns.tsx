@@ -201,6 +201,9 @@ function Overview({ onOpen, onTab }: { onOpen: (id: string) => void; onTab: (t: 
           <Stat label="Clicks" value={num(s.clicks)} />
           <Stat label="CTR" value={pct(ctr)} hint="Clicks ÷ views" />
           <Stat label="Spend" value={usd(s.spend_usd_cents)} hint="Verified payments" />
+          {/* 0201 (owner, 2026-10-09): opening the ad's details on Frenzsave is a conversion; the visit after the warning is a site visit */}
+          <Stat label="Conversions" value={num(s.conversions)} hint="Opened your ad's details" />
+          <Stat label="Site visits" value={num(s.outbounds)} hint="Went on to your link" />
         </div>
       </section>
       <section aria-labelledby="ov-camp">
@@ -332,7 +335,7 @@ function Campaigns({ onOpen }: { onOpen: (id: string) => void }) {
         {data === "error" ? <Failed onRetry={() => setAttempt((x) => x + 1)} /> : !data ? <Skeleton /> : data.rows.length === 0 ? (
           search || filter ? <p className="py-8 text-center text-[13.5px] text-muted-foreground">No campaigns match.</p> : <Empty title="No campaigns yet" body="Your campaigns will appear here." />
         ) : (
-          data.rows.map((c) => <CampaignCard key={c.id} c={c} totals={data.stats.get(c.id) ?? { views: 0, clicks: 0, ctr: null, videoPlays: 0, videoCompletes: 0, rewardCompletes: 0 }} onOpen={onOpen} />)
+          data.rows.map((c) => <CampaignCard key={c.id} c={c} totals={data.stats.get(c.id) ?? { views: 0, clicks: 0, ctr: null, videoPlays: 0, videoCompletes: 0, rewardCompletes: 0, conversions: 0, outbounds: 0 }} onOpen={onOpen} />)
         )}
       </div>
       {pages > 1 ? (
@@ -415,6 +418,8 @@ function Analytics({ onOpen }: { onOpen: (id: string) => void }) {
             <Stat label="Clicks" value={num(totals.clicks)} />
             <Stat label="CTR" value={pct(totals.ctr)} />
             <Stat label="Video completions" value={num(totals.videoCompletes + totals.rewardCompletes)} hint={totals.videoPlays ? `${num(totals.videoPlays)} plays` : undefined} />
+            <Stat label="Conversions" value={num(totals.conversions)} hint="Opened your ad's details" />
+            <Stat label="Site visits" value={num(totals.outbounds)} hint="Went on to your link" />
           </div>
           <AiPanel>
             <p className="text-[13px] font-semibold">Views per day</p>
@@ -428,7 +433,7 @@ function Analytics({ onOpen }: { onOpen: (id: string) => void }) {
               <div className="mt-2 overflow-x-auto">
                 <table className="w-full min-w-[440px] text-left text-[13px]">
                   <thead className="text-[11.5px] text-muted-foreground">
-                    <tr><th className="py-1.5 font-semibold">Campaign</th><th className="py-1.5 text-right font-semibold">Views</th><th className="py-1.5 text-right font-semibold">Clicks</th><th className="py-1.5 text-right font-semibold">CTR</th></tr>
+                    <tr><th className="py-1.5 font-semibold">Campaign</th><th className="py-1.5 text-right font-semibold">Views</th><th className="py-1.5 text-right font-semibold">Clicks</th><th className="py-1.5 text-right font-semibold">CTR</th><th className="py-1.5 text-right font-semibold">Conversions</th></tr>
                   </thead>
                   <tbody className="divide-y divide-border/60">
                     {per.map(([id, t]) => (
@@ -437,6 +442,7 @@ function Analytics({ onOpen }: { onOpen: (id: string) => void }) {
                         <td className="py-2 text-right tabular-nums">{num(t.views)}</td>
                         <td className="py-2 text-right tabular-nums">{num(t.clicks)}</td>
                         <td className="py-2 text-right tabular-nums">{pct(t.ctr)}</td>
+                        <td className="py-2 text-right tabular-nums">{num(t.conversions)}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -33,7 +33,7 @@ export async function GET() {
   const [settings, kinds] = await Promise.all([getLandingSettings(), getWalletKinds(user.id).catch(() => null)]);
   const t = settings.frenzAiPlans.wallet.transfers;
   return NextResponse.json(
-    { rules: t.enabled ? { feePercent: t.feePercent, minCredits: t.minCredits, maxCredits: t.maxCredits, dailyMaxCredits: t.dailyMaxCredits } : null, balance: kinds?.balance ?? null, withdrawable: kinds?.withdrawable ?? null },
+    { rules: t.enabled ? { feePercent: t.feePercent, depositedFeePercent: t.depositedFeePercent, minCredits: t.minCredits, maxCredits: t.maxCredits, dailyMaxCredits: t.dailyMaxCredits } : null, balance: kinds?.balance ?? null, withdrawable: kinds?.withdrawable ?? null, deposited: kinds?.deposited ?? null },
     { headers: { "cache-control": "no-store" } },
   );
 }

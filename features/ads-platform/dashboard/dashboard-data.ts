@@ -32,6 +32,10 @@ export interface Summary {
   clicks: number;
   reward_completes: number;
   video_completes: number;
+  /** 0201: members who opened the ad's details on Frenzsave (also counted as clicks) */
+  conversions: number;
+  /** 0201: members who then chose to visit the site after the external-link warning */
+  outbounds: number;
   spend_usd_cents: number;
 }
 
@@ -83,6 +87,8 @@ export interface StatRow {
   video_completes: number;
   reward_starts: number;
   reward_completes: number;
+  conversions?: number;
+  outbounds?: number;
 }
 
 export interface Totals {
@@ -92,6 +98,8 @@ export interface Totals {
   videoPlays: number;
   videoCompletes: number;
   rewardCompletes: number;
+  conversions: number;
+  outbounds: number;
 }
 
 export interface PaymentRow {
@@ -123,7 +131,7 @@ export async function loadSummary(): Promise<Summary | null> {
   if (error || !data) return null;
   const d = data as Record<string, number | string>;
   const n = (k: string) => Number(d[k] ?? 0);
-  return { total: n("total"), live: n("live"), awaiting_payment: n("awaiting_payment"), validating: n("validating"), paused: n("paused"), expired: n("expired"), impressions: n("impressions"), clicks: n("clicks"), reward_completes: n("reward_completes"), video_completes: n("video_completes"), spend_usd_cents: n("spend_usd_cents") };
+  return { total: n("total"), live: n("live"), awaiting_payment: n("awaiting_payment"), validating: n("validating"), paused: n("paused"), expired: n("expired"), impressions: n("impressions"), clicks: n("clicks"), reward_completes: n("reward_completes"), video_completes: n("video_completes"), conversions: n("conversions"), outbounds: n("outbounds"), spend_usd_cents: n("spend_usd_cents") };
 }
 
 export type SortKey = "newest" | "oldest" | "ending" | "name";
@@ -155,18 +163,26 @@ export async function loadCampaign(id: string): Promise<CampaignRow | null> {
 /** Daily aggregate rows for some campaigns (all of mine when `ids` is null), from a day on. */
 export async function loadStats(ids: readonly string[] | null, fromDay: string | null): Promise<StatRow[]> {
   const sb = await getClient();
-  let q = sb.from("ad_campaign_daily_stats").select("campaign_id, creative_id, day, impressions, clicks, video_starts, video_completes, reward_starts, reward_completes");
-  if (ids) {
-    if (ids.length === 0) return [];
-    q = q.in("campaign_id", ids as string[]);
-  }
-  if (fromDay) q = q.gte("day", fromDay);
-  const { data } = await q.order("day", { ascending: true }).limit(5000);
-  return (data ?? []) as StatRow[];
+  if (ids && ids.length === 0) return [];
+  const read = (cols: string) => {
+    let q = sb.from("ad_campaign_daily_stats").select(cols);
+    if (ids) q = q.in("campaign_id", ids as string[]);
+    if (fromDay) q = q.gte("day", fromDay);
+    return q.order("day", { ascending: true }).limit(5000);
+  };
+  const base = "campaign_id, creative_id, day, impressions, clicks, video_starts, video_completes, reward_starts, reward_completes";
+  // 0201's columns; a database without them yet (the deploy window) answers the old shape instead of nothing
+  const withNew = await read(`${base}, conversions, outbounds`);
+  if (!withNew.error) return (withNew.data ?? []) as unknown as StatRow[];
+  const { data } = await read(base);
+  return (data ?? []) as unknown as StatRow[];
 }
 
 export function totalsOf(rows: readonly StatRow[]): Totals {
-  const t = rows.reduce((a, r) => ({ views: a.views + r.impressions, clicks: a.clicks + r.clicks, videoPlays: a.videoPlays + r.video_starts, videoCompletes: a.videoCompletes + r.video_completes, rewardCompletes: a.rewardCompletes + r.reward_completes }), { views: 0, clicks: 0, videoPlays: 0, videoCompletes: 0, rewardCompletes: 0 });
+  const t = rows.reduce(
+    (a, r) => ({ views: a.views + r.impressions, clicks: a.clicks + r.clicks, videoPlays: a.videoPlays + r.video_starts, videoCompletes: a.videoCompletes + r.video_completes, rewardCompletes: a.rewardCompletes + r.reward_completes, conversions: a.conversions + (r.conversions ?? 0), outbounds: a.outbounds + (r.outbounds ?? 0) }),
+    { views: 0, clicks: 0, videoPlays: 0, videoCompletes: 0, rewardCompletes: 0, conversions: 0, outbounds: 0 },
+  );
   return { ...t, ctr: t.views > 0 ? t.clicks / t.views : null };
 }
 

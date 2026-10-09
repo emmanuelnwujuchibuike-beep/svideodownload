@@ -179,6 +179,7 @@ interface BalanceResponse {
   product: "character_replace";
   balanceCents: number;
   withdrawableCents?: number;
+  depositedCents?: number;
   currency: string;
   symbol: string;
   unit: "CREDIT";
@@ -218,6 +219,7 @@ export async function getCharacterReplaceBalance(opts?: { ledger?: number }): Pr
   const balance: CharacterReplaceBalance = {
     balanceCents: res.balanceCents,
     withdrawableCents: typeof res.withdrawableCents === "number" ? res.withdrawableCents : undefined,
+    depositedCents: typeof res.depositedCents === "number" ? res.depositedCents : undefined,
     currency: res.currency,
     symbol: res.symbol,
     unit: "CREDIT",

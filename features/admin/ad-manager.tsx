@@ -15,6 +15,7 @@ import {
 import type { AdRecord } from "@/lib/monetization/ads";
 import { cn } from "@/lib/utils";
 
+import { AdDurationsPanelLazy } from "./ad-durations-panel-lazy";
 import { AdSlotsPanelLazy } from "./ad-slots-panel-lazy";
 
 type Zone = (typeof AD_ZONES)[number];
@@ -242,6 +243,8 @@ export function AdManager({ ads }: { ads: AdRecord[] }) {
 
       {/* Ad Platform Part 6: the canonical slots and who may fill each — above the network rows it decides between. */}
       <AdSlotsPanelLazy />
+      {/* 2026-10-09 (owner): switch a campaign period (daily, weekly, monthly…) off */}
+      <AdDurationsPanelLazy />
       <p className="mb-4 text-sm text-muted-foreground">
         One row per placement, <strong>grouped by network</strong>. Pick the format that matches the
         code your network gave you — a <strong>banner</strong> and a <strong>Social Bar</strong> use

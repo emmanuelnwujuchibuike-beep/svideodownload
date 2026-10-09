@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { isPlayerOpen, onPlayerChange, SAVED_TO_DEVICE_EVENT } from "@/features/downloads/player-store";
 import type { EligibleAd } from "@/lib/ads-platform/eligibility";
 import { AI_VIDEO_SAVE_EVENT } from "@/lib/ads-platform/moment-events";
+import { PAID_REWARD_EVENT, type PaidRewardRequest } from "@/lib/ads-platform/paid-reward-event";
 import { claimMoment, mayShowAgain, nextFromPool, pageForPath, poolFor, recordShown } from "@/lib/ads-platform/serving-state";
 import { MOMENT_SLOTS } from "@/lib/ads-platform/slot-moments";
 import { providerOrder, resolveSlotProvider } from "@/lib/ads-platform/slot-registry";
@@ -44,7 +45,11 @@ interface Showing {
   page: string;
   reward: boolean;
   slot: string | undefined;
+  /** 0203: a download reward GATE — what to say, and who to tell how it ended */
+  gate?: { text: string; onComplete: () => void; onDismiss: () => void; done: boolean };
 }
+
+const REWARD_PLACEMENTS = new Set(["ai_video_save_reward", "hd_download_reward", "batch_download_reward"]);
 
 function noSelfMoment(pathname: string): boolean {
   return pathname.startsWith("/advertise/create") || pathname.startsWith("/advertise/payment") || pathname.startsWith("/studio/ai/character-replace") || pathname.startsWith("/ai/character-replace/create");
@@ -77,13 +82,14 @@ export function SelfMoments() {
     const slot = MOMENT_SLOTS.find((x) => x.paidPlacement === placement);
     if (slot) {
       const inv = peekAdInventory();
-      const network = slot.networkZone ? inv === null || mayServeSlot(inv, slot.networkZone) || inv.vast.length > 0 : false;
+      // a reward gate's network side is the rewarded unit, not a zone: it can always try
+      const network = slot.networkZone ? inv === null || mayServeSlot(inv, slot.networkZone) || inv.vast.length > 0 : slot.order.includes("network");
       if (resolveSlotProvider(providerOrder(slot, payload?.order), { frenzsave: true, network }) !== "frenzsave") return null;
     }
     const ad = nextFromPool(placement, pool.ads);
     if (!ad) return null;
     if (moment) claimMoment(moment);
-    return { ad, placement, page: page ?? "all_pages", reward: placement === "ai_video_save_reward", slot: slot?.id };
+    return { ad, placement, page: page ?? "all_pages", reward: REWARD_PLACEMENTS.has(placement), slot: slot?.id };
   }, []);
 
   const open = useCallback((s: Showing) => {
@@ -91,6 +97,20 @@ export function SelfMoments() {
     recordShown(s.placement, s.ad.cr);
     setShowing(s);
   }, []);
+
+  // 0203: the HD / batch download reward gate asks first; a live campaign that leads the slot takes it
+  useEffect(() => {
+    const onGate = (e: Event) => {
+      const req = (e as CustomEvent<PaidRewardRequest>).detail;
+      if (!req || req.handled) return;
+      const s = pick(req.placement, null);
+      if (!s) return;
+      req.handled = true;
+      open({ ...s, gate: { text: req.placement === "hd_download_reward" ? "Watch to unlock your download." : "Watch to unlock your batch download.", onComplete: req.onComplete, onDismiss: req.onDismiss, done: false } });
+    };
+    window.addEventListener(PAID_REWARD_EVENT, onGate);
+    return () => window.removeEventListener(PAID_REWARD_EVENT, onGate);
+  }, [pick, open]);
 
   // AI video save → the sponsor video, beside the save
   useEffect(() => {
@@ -160,11 +180,40 @@ export function SelfMoments() {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [pick, open]);
 
+  const showingRef = useRef<Showing | null>(null);
+  showingRef.current = showing;
   const close = useCallback(() => {
     busy.current = false;
+    // a gate closed before the end does not unlock — the reward flow shows its "not completed" state
+    const g = showingRef.current?.gate;
+    if (g && !g.done) {
+      g.done = true;
+      g.onDismiss();
+    }
     setShowing(null);
   }, []);
 
   if (!showing) return null;
-  return <SelfInterstitial key={showing.ad.cr} ad={showing.ad} placement={showing.placement} page={showing.page} reward={showing.reward} slot={showing.slot} onClose={close} />;
+  return (
+    <SelfInterstitial
+      key={showing.ad.cr}
+      ad={showing.ad}
+      placement={showing.placement}
+      page={showing.page}
+      reward={showing.reward}
+      rewardText={showing.gate?.text}
+      onRewardComplete={
+        showing.gate
+          ? () => {
+              const g = showing.gate!;
+              if (g.done) return;
+              g.done = true;
+              g.onComplete();
+            }
+          : undefined
+      }
+      slot={showing.slot}
+      onClose={close}
+    />
+  );
 }

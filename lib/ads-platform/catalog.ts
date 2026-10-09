@@ -37,6 +37,9 @@ export const AD_PLACEMENT_CODES = [
   "interstitial",
   "download_completed_interstitial",
   "ai_video_save_reward",
+  // 0203: the HD and batch download reward gates
+  "hd_download_reward",
+  "batch_download_reward",
 ] as const;
 export type AdPlacementCode = (typeof AD_PLACEMENT_CODES)[number];
 
@@ -64,6 +67,9 @@ export const AD_EVENT_TYPES = [
   "interstitial_view",
   "reward_video_start",
   "reward_video_complete",
+  // 0201 (owner, 2026-10-09): the ad's details opened on Frenzsave, and the visit after the external-link warning
+  "conversion",
+  "outbound",
 ] as const;
 export type AdEventType = (typeof AD_EVENT_TYPES)[number];
 

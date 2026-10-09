@@ -6,7 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import type { EligibleAd } from "@/lib/ads-platform/eligibility";
 
 import { trackAdEvent, type AdView } from "../ad-events-client";
-import { destinationHost, SelfAdCreative, trackAdClick } from "./self-ad-creative";
+import { openAdDetail } from "./ad-detail-store";
+import { destinationHost, SelfAdCreative } from "./self-ad-creative";
 
 /** How long an IMAGE card stays before the stories continue on their own. */
 const IMAGE_MS = 5_000;
@@ -85,7 +86,10 @@ export function SelfStoryCard({ ad, onDone }: { ad: EligibleAd; onDone: () => vo
           href={ad.url}
           target="_blank"
           rel="sponsored noopener noreferrer"
-          onClick={() => trackAdClick(view.current)}
+          onClick={(e) => {
+            e.preventDefault();
+            openAdDetail(ad, view.current);
+          }}
           className="flex min-h-[2.75rem] items-center justify-center rounded-full bg-white text-[14px] font-semibold text-black"
         >
           {host ? `Visit ${host}` : "Learn more"}

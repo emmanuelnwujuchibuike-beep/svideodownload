@@ -40,6 +40,7 @@ import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
 import { cn, formatBytes } from "@/lib/utils";
 import type { DownloadRecord, MediaKind } from "@/types";
+import { RotatingAdStack } from "@/features/monetization/rotating-ad-stack";
 
 /**
  * A story ad after every N media (owner: "after 3 media").
@@ -611,9 +612,12 @@ export function MediaGallery({
                       neither, and each collapses to nothing when it has no ad.
                       Filling both is a deliberate choice, not an accident.
                     */}
-                    <AdSurface zone="history_between_periods" maxWidth="max-w-3xl" />
-                    <HilltopSlot slot="historyfeed" instanceKey={g.key} />
-                    <ExoClickSticky slot={adSlot} />
+                    {/* 2026-10-09 (owner): one slot that rotates between the networks, never stacked */}
+                    <RotatingAdStack>
+                      <AdSurface zone="history_between_periods" maxWidth="max-w-3xl" />
+                      <HilltopSlot slot="historyfeed" instanceKey={g.key} />
+                      <ExoClickSticky slot={adSlot} />
+                    </RotatingAdStack>
                   </div>
                 ) : null;
               })()}

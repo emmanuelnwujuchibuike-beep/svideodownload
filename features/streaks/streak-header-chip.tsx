@@ -75,7 +75,9 @@ const StreakTiersSheet = dynamic(
  * Exact matches. `/profile` is the marketing profile doorway; `/u/<handle>` is
  * somebody ELSE’s profile and has no business showing you your own streak.
  */
-const STREAK_ROUTES = new Set(["/", "/profile", "/downloads"]);
+// 🔴 2026-10-09 (owner): "the icon and button should not be on the Download and landing page,
+// only on the message page top" — the inbox header (mobile chrome and desktop pane) mounts it.
+const STREAK_ROUTES = new Set(["/messages"]);
 
 /**
  * The gate is a separate component, so the rule cannot land after the hooks.

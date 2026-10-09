@@ -16,12 +16,19 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
 | One experience | Since 2026-10-09 there is no Full Bleed / Downloader mode. The `frenz_mode` cookie, the switcher and the switch prompt are gone. Members' bottom nav: Home (`/downloads`), Feed (`/home`, the complete feed), History, Chats, Profile. Guests: Home, Earn (`/quests`), History, Support, Profile. Every tab has a label. |
 | Chat streaks | 0200 `conversation_streaks`, kept by a trigger on `messages`. A day counts when BOTH people sent a message (UTC). The flame shows beside a chat from 2 days. The streak left the site and app headers. Every streak celebration is the card-less `StreakFireBurst`. |
 
+| Tokens / Credits | In the credits dashboard and the send sheet, the non-withdrawable part is **Tokens** (hexagon) and the withdrawable part is **Credits** (gem). Same unit. Earn and deposit screens keep the word "credits". |
+| Deposited credits (0202) | A paid deposit now lands as **withdrawable** Credits, tracked in `deposited_cents`, and is spent earned-first. They can be sent (the deposited share stays deposited for the recipient) at `transfers.depositedFeePercent`, and withdrawn at `withdrawals.deposited` (its own rate and fee). Both are admin-editable. Deposits made before 0202 stay Tokens. ⚠️ Card deposits that can be cashed out carry chargeback and laundering risk: withdrawals stay admin-approved (0191) and paid out by hand. |
+| Ads (0201, 0203) | A tapped paid ad opens its details in-page (`click` + `conversion`), and visiting is behind an external-link warning (`outbound`). The advertiser dashboard shows Conversions and Site visits. The HD and batch download gates take a paid reward video first (`hd_download_reward`, `batch_download_reward`), else the network's rewarded unit. Admins switch campaign lengths on or off in Ad placements. Stacked network units under the wallpaper button and between history periods rotate in one slot. |
+
 ### Live probes owed (production)
 
 This container's network policy blocks `frenzsave.com` and `*.supabase.co`, so these
 were not probed live from here. Probe each object after the push:
 
 - **0198:** table `ad_campaign_extensions`; functions `ad_swap_creative`, `ad_edit_creative_details`, `ad_advertiser_pause`, `ad_price_for`, `ad_campaign_quote`, `ad_extension_quote`, `ad_apply_extension`, `ad_my_summary`, `ad_my_payments`; creative status `staged`. The full list is in `docs/AD_PLATFORM.md` (Part 6 files).
+- **0201:** `ad_campaign_daily_stats.conversions` / `outbounds` (`.select("conversions, outbounds").limit(1)`), and `track_ad_events` accepting `conversion`.
+- **0202:** `ai_product_balances.deposited_cents`, the `ai_product_balances_deposited_clamp` trigger, and a test deposit landing as withdrawable + deposited.
+- **0203:** `ad_placements` rows `hd_download_reward` and `batch_download_reward`.
 - **0200:** `conversation_streaks` (`.select("conversation_id").limit(1)`) and the `bump_conversation_streak_trg` trigger. Send a message in a test chat from both sides and read the row back.
 - **0199:** `credit_transfers.credit_class` (`.select("credit_class").limit(1)`). Also call the 7-argument `transfer_credits` through the service role with a bad kind and expect `{ok:false, reason:"invalid"}`.
 

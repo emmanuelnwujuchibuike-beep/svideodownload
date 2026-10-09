@@ -113,6 +113,11 @@ export interface RewardsConfig {
     /** Requests above this many credits start in `reviewing` (0 = every request is reviewed). */
     manualReviewAboveCredits: number;
     methods: string[];
+    /**
+     * 0202 (owner, 2026-10-09): the part of a withdrawal that came from a DEPOSIT
+     * is paid at its own rate, less its own fee. The rest uses `creditsPerUsd`.
+     */
+    deposited: { creditsPerUsd: number; feePercent: number };
   };
   version: number;
   updatedAt: string | null;
@@ -131,7 +136,7 @@ export const REWARDS_DEFAULTS: RewardsConfig = {
   qualification: { minAccountAgeDays: 30, minEngagements: 100, extraRequirements: [] },
   attribution: { windowDays: 7 },
   quests: QUESTS_DEFAULTS,
-  withdrawals: { enabled: false, creditsPerUsd: 10, minCredits: 100, maxCredits: 10_000, maxRequestsPerDay: 1, maxCreditsPerMonth: 50_000, manualReviewAboveCredits: 0, methods: ["bank_transfer"] },
+  withdrawals: { enabled: false, creditsPerUsd: 10, minCredits: 100, maxCredits: 10_000, maxRequestsPerDay: 1, maxCreditsPerMonth: 50_000, manualReviewAboveCredits: 0, methods: ["bank_transfer"], deposited: { creditsPerUsd: 10, feePercent: 10 } },
   version: 1,
   updatedAt: null,
 };
@@ -191,6 +196,11 @@ export function normalizeRewardsConfig(raw: unknown): RewardsConfig {
       maxCreditsPerMonth: int(w.maxCreditsPerMonth, d.withdrawals.maxCreditsPerMonth, 1, 1_000_000_000),
       manualReviewAboveCredits: int(w.manualReviewAboveCredits, d.withdrawals.manualReviewAboveCredits, 0, 100_000_000),
       methods: Array.isArray(w.methods) ? w.methods.filter((m): m is string => typeof m === "string" && /^[a-z_]{2,30}$/.test(m)).slice(0, 6) : [...d.withdrawals.methods],
+      deposited: (() => {
+        const dep = isRecord(w.deposited) ? w.deposited : {};
+        const fee = typeof dep.feePercent === "number" && Number.isFinite(dep.feePercent) ? dep.feePercent : d.withdrawals.deposited.feePercent;
+        return { creditsPerUsd: int(dep.creditsPerUsd, d.withdrawals.deposited.creditsPerUsd, 1, 1_000_000), feePercent: Math.min(50, Math.max(0, Math.round(fee * 100) / 100)) };
+      })(),
     },
     version: int(r.version, d.version, 1, 1_000_000_000),
     updatedAt: typeof r.updatedAt === "string" ? r.updatedAt : null,
@@ -207,6 +217,21 @@ export function versionRewardsConfig(previous: RewardsConfig, next: RewardsConfi
 /** Credits → US cents at the operator's rate (floor — a withdrawal never pays a fraction of a cent it did not earn). */
 export function withdrawalUsdCents(credits: number, creditsPerUsd: number): number {
   return Math.floor((Math.max(0, Math.floor(credits)) * 100) / Math.max(1, creditsPerUsd));
+}
+
+/**
+ * 0202: a withdrawal's payout when part of it came from a deposit. Credits are
+ * spent earned-first, so the deposited part is what is left beyond the earned
+ * credits. That part is paid at the deposited rate, less the deposited fee (floor).
+ */
+export function splitWithdrawalUsdCents(credits: number, withdrawable: number, deposited: number, w: RewardsConfig["withdrawals"]): { usdCents: number; depositedPart: number } {
+  const c = Math.max(0, Math.floor(credits));
+  const earned = Math.max(0, Math.floor(withdrawable) - Math.max(0, Math.floor(deposited)));
+  const depositedPart = Math.max(0, c - earned);
+  const earnedPart = c - depositedPart;
+  const depGross = (depositedPart * 100) / Math.max(1, w.deposited.creditsPerUsd);
+  const usdCents = Math.floor((earnedPart * 100) / Math.max(1, w.creditsPerUsd) + depGross * (1 - w.deposited.feePercent / 100));
+  return { usdCents: Math.max(0, usdCents), depositedPart };
 }
 
 /** What a browser may know: amounts and thresholds, nothing else. */

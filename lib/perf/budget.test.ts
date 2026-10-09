@@ -509,8 +509,19 @@ function landingChunks(): string[] {
  * sheet, AI and credits changes are not in /home. Signed-in route, never a
  * cold visit. The cold-entry landing went DOWN 5.5 kB in the same change (the
  * streak chip left the header), and ENTRY_CEILING is untouched.
+ *
+ * ── 2026-10-09 (later): → 372 kB (/(app)/home measured 379,961) ──────────────
+ *
+ * Built twice in the SAME directory (git stash) and compared chunk by chunk:
+ * every /home chunk is within ±1 byte of the previous commit EXCEPT the webpack
+ * runtime, +102 B. The runtime carries the id → file map of EVERY async chunk
+ * in the app, and this batch added lazily loaded features elsewhere (the
+ * promote bubble, the ad detail sheet, the streak fire burst, the admin
+ * campaign-length panel, the rotating ad stack, the chat streak burst). /home's
+ * own code did not grow. Signed-in route, never a cold visit. ENTRY_CEILING
+ * untouched (landing measured 215,362 of 218 kB).
  */
-const GLOBAL_CEILING = 371 * 1024;
+const GLOBAL_CEILING = 372 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

@@ -1,11 +1,12 @@
 "use client";
 
-import { ArrowRight, Coins, Sparkles } from "lucide-react";
+import { ArrowRight, Coins } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { getCharacterReplaceBalance, readCachedCharacterReplaceBalance } from "@/lib/ai/character-replace/client";
 import type { CharacterReplaceBalance, CharacterReplaceFreeAccess } from "@/lib/ai/character-replace/types";
+import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { formatCredits } from "@/lib/ai/credits/units";
 import { readAiFreeAccessCache, writeAiFreeAccessCache } from "@/lib/ai/free-access-cache";
@@ -121,8 +122,9 @@ export function AiCreditStrip({ base, className }: { base: string; className?: s
       )}
     >
       <div className="flex h-14 items-center gap-3 rounded-[calc(1.25rem-1px)] bg-white/[0.86] px-2.5 text-[13px] shadow-[inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur dark:bg-card/90">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 via-indigo-500 to-violet-500 text-white shadow-[0_6px_12px_-6px_rgba(99,102,241,0.8),inset_0_1px_0_rgba(255,255,255,0.35)]">
-          <Sparkles className="h-4 w-4" aria-hidden />
+        {/* 2026-10-09 (owner): the Frenzsave logo in this tile, not a sparkle */}
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl shadow-[0_6px_12px_-6px_rgba(99,102,241,0.8)]">
+          <FrenzLogo size={36} tile alt="" className="h-9 w-9 rounded-xl" />
         </span>
         {who === "guest" ? (
           <>

@@ -11,6 +11,8 @@ export interface SlotDescription {
   component: string;
   /** true only where no compatible slot existed (shared-slot addendum §7) */
   newInventory: boolean;
+  /** 0203: the network side of this slot is the rewarded unit (lib/monetization/reward-networks.ts), not a zone */
+  rewardedUnit?: string;
 }
 
 export const SLOT_DESCRIPTIONS: Readonly<Record<string, SlotDescription>> = {
@@ -25,6 +27,9 @@ export const SLOT_DESCRIPTIONS: Readonly<Record<string, SlotDescription>> = {
   ai_hub_card: { location: "End of the Frenz AI hub, above the trust row — never inside a creation flow", component: "SelfAdSlot", newInventory: true },
   stories_between: { location: "Between two people's Stories in the Story viewer", component: "StoryViewer → SelfStoryCard", newInventory: true },
   ai_save_moment: { location: "Beside an AI video save (never gates it)", component: "SelfMoments", newInventory: true },
+  // 0203 (owner, 2026-10-09): the existing reward gates — the network serves them with its rewarded unit
+  hd_download_reward: { location: "The HD / top-quality download unlock gate", component: "useRewardFlow → SelfMoments", newInventory: false, rewardedUnit: "hd_download" },
+  batch_download_reward: { location: "The batch download unlock gate", component: "useRewardFlow → SelfMoments", newInventory: false, rewardedUnit: "batch_download" },
 };
 
 /**

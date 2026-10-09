@@ -535,7 +535,6 @@ function NavTab({
   active,
   badge = 0,
   onWarm,
-  guard,
   attract = false,
   prefetch,
 }: {
@@ -554,9 +553,6 @@ function NavTab({
    * someone is already on is noise.
    */
   attract?: boolean;
-  /** When set, intercepts the tap: prevents navigation and runs the guard instead
-   *  (used to offer the Full Bleed switch for a gated Downloader-mode tab). */
-  guard?: () => void;
   /** Passed to the Link; `false` suppresses the viewport prefetch. */
   prefetch?: boolean;
 }) {
@@ -567,15 +563,8 @@ function NavTab({
       prefetch={prefetch}
       aria-label={label}
       aria-current={active ? "page" : undefined}
-      onPointerDown={guard ? undefined : () => onWarm?.(href)}
-      onClick={(e) => {
-        if (guard) {
-          e.preventDefault();
-          haptic("light");
-          playSound("tap");
-          guard();
-          return;
-        }
+      onPointerDown={() => onWarm?.(href)}
+      onClick={() => {
         haptic("light");
         playSound("tap");
       }}
@@ -613,5 +602,5 @@ function NavTab({
 
 /** The tab's description under its glyph (owner, 2026-10-09: "add description to the landing bottom NAVs"). */
 function NavLabel({ active, children }: { active: boolean; children: ReactNode }) {
-  return <span className={cn("text-[10.5px] font-semibold leading-none tracking-[0.01em]", active ? GLYPH_ACTIVE : "text-muted-foreground")}>{children}</span>;
+  return <span className={cn("text-[10.5px] font-semibold leading-none", active ? GLYPH_ACTIVE : "text-muted-foreground")}>{children}</span>;
 }

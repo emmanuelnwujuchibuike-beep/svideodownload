@@ -11,6 +11,7 @@ import { CharacterReplaceRechargeSheet } from "@/features/ai/character-replace/r
 import { AiCreditsCard } from "@/features/ai/credits/ai-credits-card";
 import type { PlanCelebrationProps } from "@/features/ai/credits/plan-celebration";
 import { TransferPanel } from "@/features/ai/wallet/transfer-panel";
+import { formatKind, KIND_NAME, KindSymbol, type WalletKind } from "@/features/ai/wallet/wallet-kinds";
 import { createClient } from "@/lib/supabase/client";
 import { getClientAuthUser } from "@/lib/supabase/client-user";
 import { getAiCredits, takeAiPlanReturn, verifyAiPlanReturn } from "@/lib/ai/credits/client";
@@ -316,8 +317,13 @@ export function FrenzAIUsagePage({
               {/* 0199 (owner, 2026-10-08): the two kinds apart — the total above is what every tool spends from */}
               {typeof balance.withdrawableCents === "number" ? (
                 <dl aria-label="Your credits by kind" className="relative mt-4 grid grid-cols-2 gap-2">
-                  <KindFigure label="Non-withdrawable" hint="For Frenz AI tools" value={hidden ? HIDDEN_AMOUNT : formatCredits(Math.max(0, balance.balanceCents - balance.withdrawableCents))} />
-                  <KindFigure label="Withdrawable" hint="Can be cashed out" value={hidden ? HIDDEN_AMOUNT : formatCredits(balance.withdrawableCents)} />
+                  {/* 2026-10-09 (owner): non-withdrawable = Tokens, withdrawable = Credits — same value, own name and symbol */}
+                  <KindFigure kind="usable" hint="For Frenz AI tools" value={hidden ? HIDDEN_AMOUNT : formatKind(Math.max(0, balance.balanceCents - balance.withdrawableCents), "usable")} />
+                  <KindFigure
+                    kind="withdrawable"
+                    hint={balance.depositedCents && !hidden ? `Can be cashed out · ${formatKind(balance.depositedCents, "withdrawable")} deposited` : "Can be cashed out"}
+                    value={hidden ? HIDDEN_AMOUNT : formatKind(balance.withdrawableCents, "withdrawable")}
+                  />
                 </dl>
               ) : null}
               {notice ? (
@@ -378,7 +384,7 @@ export function FrenzAIUsagePage({
             </TapOnceLink>
 
             {/* 0193 (owner 2026-10-07): send credits to a wallet number, and the transfer history */}
-            <TransferPanel className="mt-4" rules={balance?.offer?.transfers ?? null} balance={balance?.balanceCents ?? null} withdrawable={balance?.withdrawableCents ?? null} onChanged={() => void load()} />
+            <TransferPanel className="mt-4" rules={balance?.offer?.transfers ?? null} balance={balance?.balanceCents ?? null} withdrawable={balance?.withdrawableCents ?? null} deposited={balance?.depositedCents ?? null} onChanged={() => void load()} />
 
             {/* ── three figures, from the statement itself ─────────────────── */}
             {figures ? (
@@ -504,13 +510,16 @@ function UsageSkeleton() {
   );
 }
 
-/** One kind of credit inside the hero (0199) — the label, the figure, what it is for. */
-function KindFigure({ label, hint, value }: { label: string; hint: string; value: string }) {
+/** One kind inside the hero (0199) — its name and symbol (Tokens / Credits), the figure, what it is for. */
+function KindFigure({ kind, hint, value }: { kind: WalletKind; hint: string; value: string }) {
   return (
     <div className="min-w-0 rounded-2xl bg-white/12 px-3 py-2.5 ring-1 ring-inset ring-white/20">
-      <dt className="text-[11.5px] font-semibold leading-tight text-white/75">{label}</dt>
+      <dt className="flex items-center gap-1 text-[11.5px] font-semibold leading-tight text-white/75">
+        <KindSymbol kind={kind} />
+        {KIND_NAME[kind].title}
+      </dt>
       <dd className="mt-0.5 truncate text-[17px] font-bold tabular-nums">{value}</dd>
-      <dd className="truncate text-[11px] text-white/60">{hint}</dd>
+      <dd className="text-[11px] leading-snug text-white/60">{hint}</dd>
     </div>
   );
 }

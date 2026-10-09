@@ -1,6 +1,6 @@
 import "server-only";
 
-import { transferFee, type CreditTransferConfig } from "@/lib/ai/credits/wallet-config";
+import { transferFeeFor, type CreditTransferConfig } from "@/lib/ai/credits/wallet-config";
 import { emailMember } from "@/lib/email/member-email";
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import { SITE_URL } from "@/lib/site";
@@ -52,13 +52,17 @@ export const TRANSFER_KINDS = ["usable", "withdrawable"] as const;
 export type TransferKind = (typeof TRANSFER_KINDS)[number];
 
 /** The balance split the send sheet needs: the total and its withdrawable part (the rest is non-withdrawable). Null when unreadable. */
-export async function getWalletKinds(userId: string): Promise<{ balance: number; withdrawable: number } | null> {
-  const { data, error } = await createAdminClient().from("ai_product_balances").select("balance_cents, withdrawable_cents, currency").eq("user_id", userId).eq("product", "character_replace").maybeSingle();
-  if (error) return null;
-  const row = data as { balance_cents: number; withdrawable_cents: number | null; currency: string } | null;
-  if (!row || row.currency !== "CREDIT") return { balance: 0, withdrawable: 0 };
-  return { balance: Number(row.balance_cents), withdrawable: Number(row.withdrawable_cents ?? 0) };
+export async function getWalletKinds(userId: string): Promise<{ balance: number; withdrawable: number; deposited: number } | null> {
+  const db = createAdminClient();
+  let res = await db.from("ai_product_balances").select("balance_cents, withdrawable_cents, deposited_cents, currency").eq("user_id", userId).eq("product", "character_replace").maybeSingle();
+  // a database without 0202 yet answers without the deposited part
+  if (res.error) res = await db.from("ai_product_balances").select("balance_cents, withdrawable_cents, currency").eq("user_id", userId).eq("product", "character_replace").maybeSingle();
+  if (res.error) return null;
+  const row = res.data as { balance_cents: number; withdrawable_cents: number | null; deposited_cents?: number | null; currency: string } | null;
+  if (!row || row.currency !== "CREDIT") return { balance: 0, withdrawable: 0, deposited: 0 };
+  return { balance: Number(row.balance_cents), withdrawable: Number(row.withdrawable_cents ?? 0), deposited: Number(row.deposited_cents ?? 0) };
 }
+
 
 export type TransferResult =
   | { ok: true; transferId: string; amount: number; fee: number; kind: TransferKind; balanceAfter: number | null; duplicate: boolean }
@@ -81,7 +85,7 @@ export async function sendCredits(input: { senderId: string; accountNumber: stri
   const sent = ((recent ?? []) as { amount: number }[]).reduce((a, r) => a + r.amount, 0);
   if (sent + amount > c.dailyMaxCredits) return { ok: false, status: 429, error: `That would pass the daily limit of ${c.dailyMaxCredits.toLocaleString("en-US")} credits.` };
 
-  const fee = transferFee(amount, c.feePercent);
+  const fee = transferFeeFor(amount, input.kind, input.kind === "withdrawable" ? await getWalletKinds(input.senderId) : null, c);
   const note = input.note ? input.note.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120) || null : null;
   const { data, error } = await db.rpc("transfer_credits", { p_sender: input.senderId, p_account_number: input.accountNumber, p_amount: amount, p_fee: fee, p_idempotency: input.idempotencyKey, p_note: note, p_kind: input.kind });
   if (error) {
@@ -94,7 +98,7 @@ export async function sendCredits(input: { senderId: string; accountNumber: stri
       no_account: [404, "No wallet has that number."],
       self: [400, "That's your own wallet number."],
       restricted: [403, "Transfers are paused on this account."],
-      insufficient: [402, `Not enough ${input.kind === "withdrawable" ? "withdrawable" : "non-withdrawable"} credits — this needs ${Number(out.needed ?? amount + fee).toLocaleString("en-US")} (${amount.toLocaleString("en-US")} + ${fee.toLocaleString("en-US")} fee), you have ${Number(out.available ?? 0).toLocaleString("en-US")}.`],
+      insufficient: [402, `Not enough ${input.kind === "withdrawable" ? "credits" : "tokens"} — this needs ${Number(out.needed ?? amount + fee).toLocaleString("en-US")} (${amount.toLocaleString("en-US")} + ${fee.toLocaleString("en-US")} fee), you have ${Number(out.available ?? 0).toLocaleString("en-US")}.`],
       no_wallet: [409, "That wallet can't receive credits yet."],
     };
     const [status, error] = map[out.reason ?? ""] ?? [400, "That transfer couldn't be made."];
@@ -102,20 +106,21 @@ export async function sendCredits(input: { senderId: string; accountNumber: stri
   }
   if (!out.duplicate && out.recipient_id) {
     const recipientId = out.recipient_id;
-    const what = input.kind === "withdrawable" ? "withdrawable credits" : "AI credits";
+    // 2026-10-09 (owner): in sending, non-withdrawable are Tokens and withdrawable are Credits
+    const what = input.kind === "withdrawable" ? "credits" : "tokens";
     const { data: me } = await db.from("profiles").select("handle, display_name").eq("id", input.senderId).maybeSingle();
     const who = (me as { handle?: string | null; display_name?: string | null } | null)?.display_name || ((me as { handle?: string | null } | null)?.handle ? `@${(me as { handle: string }).handle}` : "A Frenz member");
     await sendSmartPush(
       recipientId,
-      { title: `You received ${amount.toLocaleString("en-US")} credits`, body: `${who} sent you ${amount.toLocaleString("en-US")} ${what}.${note ? ` “${note}”` : ""}`, url: `${SITE_URL}/ai/usage`, genericBody: "You received AI credits.", tag: `transfer-${out.transfer_id}` },
+      { title: `You received ${amount.toLocaleString("en-US")} ${what}`, body: `${who} sent you ${amount.toLocaleString("en-US")} ${what}.${note ? ` “${note}”` : ""}`, url: `${SITE_URL}/ai/usage`, genericBody: `You received ${what}.`, tag: `transfer-${out.transfer_id}` },
       "high",
       "premium",
       { type: "ai_deposit_successful" },
     ).catch(() => {});
     // 2026-10-07 (owner: "let users receive email"): the recipient is emailed too
     await emailMember(recipientId, {
-      subject: `You received ${amount.toLocaleString("en-US")} credits`,
-      heading: `You received ${amount.toLocaleString("en-US")} credits`,
+      subject: `You received ${amount.toLocaleString("en-US")} ${what}`,
+      heading: `You received ${amount.toLocaleString("en-US")} ${what}`,
       intro: `${who} sent you ${amount.toLocaleString("en-US")} ${what} on Frenzsave. They are in your wallet now.`,
       body: note ?? undefined,
       ctaLabel: "Open your wallet",

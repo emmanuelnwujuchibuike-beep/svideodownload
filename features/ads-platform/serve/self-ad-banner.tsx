@@ -7,7 +7,8 @@ import { creativeFailed } from "@/lib/ads-platform/serving-state";
 import { cn } from "@/lib/utils";
 
 import type { AdView } from "../ad-events-client";
-import { SelfAdCreative, trackAdClick } from "./self-ad-creative";
+import { openAdDetail } from "./ad-detail-store";
+import { SelfAdCreative } from "./self-ad-creative";
 
 /**
  * A rotating paid banner — the 32 px top strip and the 320×200 content card.
@@ -101,8 +102,12 @@ export function SelfAdBanner({
       href={current.url}
       target="_blank"
       rel="sponsored noopener noreferrer"
-      onClick={() => trackAdClick(viewRef.current)}
-      aria-label={`Ad from ${current.sponsor}${current.headline ? `: ${current.headline}` : ""} (opens in a new tab)`}
+      // 2026-10-09 (owner): a tap opens the ad's details on this page (click + conversion); the link itself waits behind an external-link warning
+      onClick={(e) => {
+        e.preventDefault();
+        openAdDetail(current, viewRef.current);
+      }}
+      aria-label={`Ad from ${current.sponsor}${current.headline ? `: ${current.headline}` : ""} (opens its details)`}
       className={cn(
         "relative block overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",
         variant === "strip" ? "h-8 w-full" : "aspect-[320/200] w-full rounded-[1.25rem] bg-muted ring-1 ring-inset ring-black/[0.06] dark:ring-white/10",

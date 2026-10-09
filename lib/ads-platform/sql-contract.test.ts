@@ -52,10 +52,11 @@ describe("TS ⇄ SQL: one vocabulary", () => {
     expect(Object.keys(CAMPAIGN_TRANSITIONS)).toHaveLength(CAMPAIGN_STATUSES.length);
   });
 
-  it("event types", () => {
-    const chk = SQL.slice(SQL.indexOf("constraint ad_events_type_chk"), SQL.indexOf("create table if not exists public.ad_campaign_daily_stats"));
+  it("event types (the LATEST constraint and ingest: 0201 added conversion + outbound)", () => {
+    const M201 = readFileSync(join(process.cwd(), "supabase/migrations/0201_ad_detail_conversions.sql"), "utf8");
+    const chk = M201.slice(M201.indexOf("add constraint ad_events_type_chk"), M201.indexOf("alter table public.ad_campaign_daily_stats"));
     expect(quoted(chk).sort()).toEqual([...AD_EVENT_TYPES].sort());
-    const ingest = fn("track_ad_events");
+    const ingest = M201.slice(M201.indexOf("create or replace function public.track_ad_events("), M201.indexOf("$$;", M201.indexOf("create or replace function public.track_ad_events(")));
     for (const t of AD_EVENT_TYPES) expect(ingest, t).toContain(`'${t}'`);
   });
 
@@ -63,7 +64,10 @@ describe("TS ⇄ SQL: one vocabulary", () => {
     const formats = SQL.slice(SQL.indexOf("insert into public.ad_formats"), SQL.indexOf("insert into public.ad_placements"));
     expect([...formats.matchAll(/\('([A-Z_]+)', '/g)].map((m) => m[1])).toEqual([...AD_FORMAT_CODES]);
     const placements = SQL.slice(SQL.indexOf("insert into public.ad_placements"), SQL.indexOf("insert into public.ad_durations"));
-    expect([...placements.matchAll(/\('([a-z_]+)', '/g)].map((m) => m[1])).toEqual([...AD_PLACEMENT_CODES]);
+    // 0203 seeds the HD and batch download reward placements after 0195's ten
+    const M203 = readFileSync(join(process.cwd(), "supabase/migrations/0203_download_reward_placements.sql"), "utf8");
+    const seeded = [...placements.matchAll(/\('([a-z_]+)', '/g), ...M203.matchAll(/\('([a-z_]+)', '/g)].map((m) => m[1]);
+    expect(seeded).toEqual([...AD_PLACEMENT_CODES]);
   });
 });
 

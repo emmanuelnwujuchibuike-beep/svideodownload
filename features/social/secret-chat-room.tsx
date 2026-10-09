@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { startAdaptivePoll, type AdaptivePoll } from "@/features/data/adaptive-poll";
 import { BackToSecretChats } from "@/features/social/secret-chats-panel";
 import { toast } from "@/features/ui/toast";
 import { useAnchoredPanel } from "@/features/ui/use-anchored-panel";
@@ -108,17 +109,18 @@ export function SecretChatRoom({
   // be merged into the existing entry (re-decrypted / re-rendered), not
   // dropped, or a message deleted by the disappearing-messages cron would
   // keep showing its old plaintext in an already-open thread forever.
+  const pollRef = useRef<AdaptivePoll | null>(null);
   useEffect(() => {
     if (!ready) return;
-    const tick = async () => {
-      if (document.hidden) return; // paused while backgrounded — resyncs on visibilitychange below
+    const tick = async (): Promise<boolean> => {
+      if (document.hidden) return false; // paused while backgrounded — resyncs on return
       try {
         const res = await fetch(`/api/messages/${conversationId}?since=${encodeURIComponent(syncedAtRef.current)}`);
         const json = await res.json();
-        if (!res.ok) return;
+        if (!res.ok) return false;
         syncedAtRef.current = json.syncedAt;
         const rows = json.messages as RawMessage[];
-        if (rows.length === 0) return;
+        if (rows.length === 0) return false;
         const newlyArrived = rows.filter((m) => !seen.current.has(m.id));
         for (const m of rows) seen.current.add(m.id);
         const decrypted = await Promise.all(rows.map(decryptOne));
@@ -131,15 +133,19 @@ export function SecretChatRoom({
           haptic("light");
           playSound("tap");
         }
+        return newlyArrived.length > 0;
       } catch {
         /* best-effort — retried on the next tick */
+        return false;
       }
     };
-    const id = setInterval(tick, POLL_MS);
-    document.addEventListener("visibilitychange", tick);
+    // Part 9 (2026-10-09): every 4 s only while the chat is live (a minute after a
+    // message), then every 20 s; nothing while hidden, at once on return.
+    const poll = startAdaptivePoll(tick, { fastMs: POLL_MS, slowMs: 20_000 });
+    pollRef.current = poll;
     return () => {
-      clearInterval(id);
-      document.removeEventListener("visibilitychange", tick);
+      poll.stop();
+      pollRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- otherKeyRef/syncedAtRef are refs, conversationId is stable per mount
   }, [ready]);
@@ -165,6 +171,7 @@ export function SecretChatRoom({
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error();
       setBody("");
+      pollRef.current?.bump(); // a reply is likely soon: poll fast again
       const now = new Date().toISOString();
       seen.current.add(json.id);
       setMessages((prev) => [...prev, { id: json.id, body: enc.body, encryptionIv: enc.iv, createdAt: now, mine: true, deletedAt: null, plaintext: text }]);

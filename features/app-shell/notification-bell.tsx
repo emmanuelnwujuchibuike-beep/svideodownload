@@ -12,13 +12,12 @@ import {
   type FlatNotifications as NotifData,
 } from "@/features/notifications/data";
 import { hrefFor, iconFor, tintFor, timeAgo, verbFor } from "@/features/notifications/meta";
+import { onNotificationInsert } from "@/features/notifications/notif-stream";
 import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { categoryForType } from "@/lib/platform/notifications-registry";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import { getClientAuthUser } from "@/lib/supabase/client-user";
 
 export function NotificationBell() {
   // Cached-first: the bell shows last-known notifications instantly on every page
@@ -51,43 +50,22 @@ export function NotificationBell() {
     }
   }, [unread, inboxUnread]);
 
-  // Realtime subscription scoped to the current user.
-  useEffect(() => {
-    const supabase = createClient();
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-    let cancelled = false;
-
-    getClientAuthUser(supabase).then(({ data: auth }) => {
-      const uid = auth.user?.id;
-      if (!uid || cancelled) return;
-      channel = supabase
-        .channel(`notifications:${uid}`)
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${uid}` },
-          (payload) => {
-            const type = (payload.new as { type?: string }).type;
-            // message/message_reaction don't count toward the bell's own badge
-            // (they have their own dedicated inbox badge — see
-            // lib/social/notifications.ts's listNotifications) — skip the
-            // optimistic bump for those so the count never even flashes up.
-            if (type === "message" || type === "message_reaction") {
-              void revalidate(KEY, loadNotifications, 0).catch(() => {});
-              return;
-            }
-            // Optimistic bump, then pull the real list.
-            mutate<NotifData>(KEY, (prev) => ({ items: prev?.items ?? [], unread: (prev?.unread ?? 0) + 1 }));
-            void revalidate(KEY, loadNotifications, 0).catch(() => {});
-          },
-        )
-        .subscribe();
-    });
-
-    return () => {
-      cancelled = true;
-      if (channel) void supabase.removeChannel(channel);
-    };
-  }, []);
+  // Realtime: the shared notifications stream (one channel app-wide).
+  useEffect(
+    () =>
+      onNotificationInsert(({ type }) => {
+        // message/message_reaction don't count toward the bell's own badge
+        // (they have their own dedicated inbox badge — see
+        // lib/social/notifications.ts's listNotifications) — skip the
+        // optimistic bump for those so the count never even flashes up.
+        if (type !== "message" && type !== "message_reaction") {
+          // Optimistic bump, then pull the real list.
+          mutate<NotifData>(KEY, (prev) => ({ items: prev?.items ?? [], unread: (prev?.unread ?? 0) + 1 }));
+        }
+        void revalidate(KEY, loadNotifications, 0).catch(() => {});
+      }),
+    [],
+  );
 
   const toggle = async () => {
     haptic("light");

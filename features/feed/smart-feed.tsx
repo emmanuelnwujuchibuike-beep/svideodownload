@@ -65,7 +65,6 @@ import {
 } from "@/lib/social/smart-feed";
 import { loadFeedContinuity, saveFeedContinuity } from "@/lib/social/feed-continuity";
 import { getApi } from "@/lib/sdk/browser";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 
@@ -616,28 +615,14 @@ export function SmartFeed({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ── Realtime "new posts" pill ───────────────────────────────────────── */
-  useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel("smart-feed-posts")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "posts" },
-        (payload) => {
-          const row = payload.new as { status?: string; visibility?: string; id?: string };
-          const activeSeen = cacheRef.current?.[sortRef.current]?.seen;
-          if (row.status === "published" && row.visibility === "public" && row.id && !activeSeen?.has(row.id)) {
-            setFreshCount((n) => n + 1);
-          }
-        },
-      )
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, []);
-
+  /* ── "New posts" pill ─────────────────────────────────────────────────
+     Part 9 (2026-10-09): this was a Realtime subscription to EVERY insert on
+     the whole `posts` table, with no filter. Postgres checked RLS for every
+     open feed on every post made anywhere, and each feed kept a socket busy,
+     just to bump a counter. It is now the same quiet page-0 diff the return
+     path already uses (below), run every 5 minutes while the feed is VISIBLE.
+     That is one cheap request per viewer per 5 minutes, and nothing while
+     hidden. */
   /* ── Alive on return: auto-refresh on app-visible / reconnect / re-nav ─── */
   // Realtime lights the "new posts" pill while the tab is CONNECTED — this
   // covers the gap it can't see: posts made while the app was backgrounded
@@ -704,10 +689,15 @@ export function SmartFeed({
       }
     };
     const onOnline = () => revive(Number.MAX_SAFE_INTEGER);
+    // the "new posts" pill while the feed stays open and visible (replaces the table-wide Realtime feed)
+    const pill = window.setInterval(() => {
+      if (document.visibilityState === "visible") void checkQuietly();
+    }, 5 * 60_000);
 
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("online", onOnline);
     return () => {
+      window.clearInterval(pill);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("online", onOnline);
     };

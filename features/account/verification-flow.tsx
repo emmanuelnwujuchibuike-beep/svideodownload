@@ -509,6 +509,11 @@ async function uploadPrivate(slot: Slot, file: Blob, ext: string): Promise<Uploa
   return { path, preview: URL.createObjectURL(file) };
 }
 
+/** Part 9 (2026-10-09): a replaced or removed local preview frees its blob (an ID photo can be several MB). */
+function releasePreview(u: Uploaded | undefined): void {
+  if (u?.preview?.startsWith("blob:")) URL.revokeObjectURL(u.preview);
+}
+
 function DocumentUpload({ slot, value, onChange }: { slot: Slot; value?: Uploaded; onChange: (u: Uploaded | undefined) => void }) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -519,7 +524,9 @@ function DocumentUpload({ slot, value, onChange }: { slot: Slot; value?: Uploade
     setErr(null);
     try {
       const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-      onChange(await uploadPrivate(slot, file, ext));
+      const next = await uploadPrivate(slot, file, ext);
+      releasePreview(value);
+      onChange(next);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Upload failed.");
     } finally {
@@ -546,7 +553,10 @@ function DocumentUpload({ slot, value, onChange }: { slot: Slot; value?: Uploade
           <img src={value.preview} alt="" className="h-40 w-full object-cover" />
           <button
             type="button"
-            onClick={() => onChange(undefined)}
+            onClick={() => {
+              releasePreview(value);
+              onChange(undefined);
+            }}
             aria-label="Remove"
             className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-md transition active:scale-90"
           >
@@ -625,7 +635,9 @@ function SelfieCapture({ value, onChange }: { value?: Uploaded; onChange: (u: Up
       const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", 0.9));
       if (!blob) throw new Error("Couldn't capture the frame.");
       stop();
-      onChange(await uploadPrivate("selfie", blob, "jpg"));
+      const next = await uploadPrivate("selfie", blob, "jpg");
+      releasePreview(value);
+      onChange(next);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Capture failed.");
     } finally {
@@ -640,7 +652,10 @@ function SelfieCapture({ value, onChange }: { value?: Uploaded; onChange: (u: Up
         <img src={value.preview} alt="" className="aspect-[3/4] w-full object-cover" />
         <button
           type="button"
-          onClick={() => onChange(undefined)}
+          onClick={() => {
+            releasePreview(value);
+            onChange(undefined);
+          }}
           className="absolute inset-x-2 bottom-2 inline-flex items-center justify-center gap-1.5 rounded-xl bg-black/60 py-2 text-xs font-bold text-white backdrop-blur-md transition active:scale-95"
         >
           <RotateCcw className="h-3.5 w-3.5" /> Retake

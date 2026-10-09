@@ -32,9 +32,15 @@ export function SelfStoryCard({ ad, onDone }: { ad: EligibleAd; onDone: () => vo
   useEffect(() => {
     if (isVideo) return;
     let raf = 0;
+    let shown = -1;
     const tick = () => {
       const p = Math.min(1, (Date.now() - started) / IMAGE_MS);
-      setPct(p);
+      // Part 9: re-render only per 2 % step (~10 Hz), not every frame
+      const step = p >= 1 ? 1 : Math.floor(p * 50) / 50;
+      if (step !== shown) {
+        shown = step;
+        setPct(step);
+      }
       if (p >= 1) onDone();
       else raf = requestAnimationFrame(tick);
     };

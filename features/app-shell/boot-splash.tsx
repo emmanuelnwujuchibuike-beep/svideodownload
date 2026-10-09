@@ -445,9 +445,10 @@ export function BootSplash() {
     <div id="frenz-boot" aria-hidden="true">
       <div className="frenz-boot__stack">
         <span className="frenz-boot__mark">
+          {/* lazy: stops React auto-preloading it in every browser tab; the layout preloads it for the installed app */}
           {/* eslint-disable-next-line @next/next/no-img-element -- must render
               before the JS bundle (next/image) is available */}
-          <img src="/brand/frenz-logo-splash.png" width={104} height={104} alt="" />
+          <img src="/brand/frenz-logo-splash.png" width={104} height={104} alt="" loading="lazy" />
           <span className="frenz-boot__shine" />
         </span>
         <span className="frenz-boot__word">FrenzSave</span>

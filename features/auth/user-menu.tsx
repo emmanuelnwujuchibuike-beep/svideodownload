@@ -163,8 +163,9 @@ export function UserMenu() {
             <UserCircle className="h-full w-full text-muted-foreground" strokeWidth={1.5} />
           )}
         </span>
-        {/* Diamond Crown overlaps the avatar for premium/business viewers */}
-        <MyDiamondCrownBadge size="xs" className="absolute -bottom-1 -right-1 ring-2 ring-background" />
+        {/* Diamond Crown overlaps the avatar for premium/business viewers. No ring: on the badge's square box it drew a
+            square white outline around the diamond (owner, 2026-10-09: "remove the square line"). */}
+        <MyDiamondCrownBadge size="xs" className="absolute -bottom-1 -right-1" />
       </button>
 
       {open && anchor && Sheet ? (

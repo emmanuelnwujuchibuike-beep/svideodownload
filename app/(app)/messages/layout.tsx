@@ -4,7 +4,6 @@ import { Suspense, type ReactNode } from "react";
 import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
 import { ConversationList } from "@/features/social/conversation-list";
 import { InboxHeaderActions } from "@/features/social/inbox-header-actions";
-import { StreakHeaderChip } from "@/features/streaks/streak-header-chip";
 import { Skeleton, SkeletonAvatar } from "@/features/ui/skeleton";
 import { listIncomingFriendRequests, type FriendRequestItem } from "@/lib/social/friends";
 import { listConversations, type ConversationSummary } from "@/lib/social/messages";
@@ -51,7 +50,6 @@ export default function MessagesLayout({ children }: { children: ReactNode }) {
         <h1 className="flex items-center gap-2 px-4 pb-2 pt-4 text-xl font-bold tracking-[-0.02em]">
           <ModuleIconBadge icon={MessageCircle} className="h-8 w-8" />
           Messages
-          <StreakHeaderChip />
           <InboxHeaderActions />
         </h1>
         <Suspense fallback={<PaneSkeleton />}>

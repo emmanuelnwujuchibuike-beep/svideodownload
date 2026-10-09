@@ -1,6 +1,6 @@
 "use client";
 
-import { Megaphone } from "lucide-react";
+import { Loader2, Megaphone } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -49,6 +49,29 @@ export function PromoteBubble() {
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
   const start = useRef<{ px: number; py: number; x: number; y: number; moved: boolean } | null>(null);
   const [pending, setPending] = useState(false);
+  // A tap is handled on pointer-up; the click that follows it must not run it twice.
+  const tapped = useRef(false);
+
+  /*
+    🔴 THE FIRST TAP MUST VISIBLY RESPOND (owner, 2026-10-09: "the promote button
+    doesn't respond tap instant on first tap, it suppose to respond and spin").
+    The press feedback was `active:scale-95` on the button — but the button's
+    inline `transform` (its position) overrides any transform class, so nothing
+    moved. It now scales an INNER layer, swaps the megaphone for a spinner at
+    once, navigates on pointer-up rather than waiting for the click, and the
+    route is prefetched as soon as the bubble is on screen.
+  */
+  const go = () => {
+    if (pending) return;
+    haptic("light");
+    setPending(true);
+    window.setTimeout(() => setPending(false), 4000);
+    router.push("/advertise");
+  };
+
+  useEffect(() => {
+    router.prefetch("/advertise");
+  }, [router]);
 
   useEffect(() => {
     setSpot((s) => s ?? { ...readSpot(), y: clampY(readSpot().y) });
@@ -86,7 +109,12 @@ export function PromoteBubble() {
         onPointerUp={(e) => {
           const s = start.current;
           start.current = null;
-          if (!s?.moved) return;
+          if (!s) return;
+          if (!s.moved) {
+            tapped.current = true;
+            go();
+            return;
+          }
           const cx = (drag?.x ?? x) + SIZE / 2;
           const next: Spot = { side: cx < window.innerWidth / 2 ? "left" : "right", y: clampY(drag?.y ?? y) };
           setDrag(null);
@@ -110,16 +138,20 @@ export function PromoteBubble() {
             delete el.dataset.dragged;
             return;
           }
-          if (pending) return;
-          haptic("light");
-          setPending(true);
-          window.setTimeout(() => setPending(false), 4000);
-          router.push("/advertise");
+          if (tapped.current) {
+            tapped.current = false; // already handled on pointer-up
+            return;
+          }
+          go(); // keyboard (Enter / Space)
         }}
         style={{ transform: `translate3d(${x}px, ${y}px, 0)`, width: SIZE, height: SIZE, touchAction: "none" }}
-        className={`fixed left-0 top-0 z-[35] flex items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_10px_24px_-10px_rgb(79_70_229/0.8)] ring-2 ring-white/80 active:scale-95 data-[pending]:scale-95 data-[pending]:opacity-80 dark:ring-white/20 motion-reduce:transition-none ${drag ? "" : "transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"}`}
+        aria-busy={pending || undefined}
+        className={`group fixed left-0 top-0 z-[35] flex items-center justify-center rounded-full motion-reduce:transition-none ${drag ? "" : "transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"}`}
       >
-        <Megaphone className="h-5 w-5" aria-hidden />
+        {/* The visible disc. Scaled here, never on the button, whose inline transform is its position. */}
+        <span className="absolute inset-0 flex items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_10px_24px_-10px_rgb(79_70_229/0.8)] ring-2 ring-white/80 transition-transform duration-100 group-active:scale-90 group-data-[pending]:scale-95 dark:ring-white/20 motion-reduce:transition-none">
+          {pending ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <Megaphone className="h-5 w-5" aria-hidden />}
+        </span>
         {/* owner 2026-10-09: the tag reads "Promote", not "Ad" */}
         <span aria-hidden className="absolute -top-1.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-amber-400 px-1.5 py-px text-[8.5px] font-extrabold uppercase leading-none tracking-wide text-amber-950 shadow-sm">
           Promote

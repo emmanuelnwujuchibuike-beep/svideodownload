@@ -101,7 +101,7 @@ export function isShareToken(v: unknown): v is string {
  * The `account_created` reward the engine granted (if the operator set one)
  * is pushed here, after the commit.
  */
-export async function claimReferral(userId: string, token: string, windowDays: number): Promise<{ ok: boolean; reason?: string }> {
+export async function claimReferral(userId: string, token: string, windowDays: number): Promise<{ ok: boolean; reason?: string; referrerId?: string | null }> {
   if (!isShareToken(token)) return { ok: false, reason: "bad_token" };
   const { data, error } = await createAdminClient().rpc("attribute_referral", { p_referred: userId, p_token: token, p_window_days: windowDays });
   if (error) {
@@ -113,5 +113,5 @@ export async function claimReferral(userId: string, token: string, windowDays: n
     console.info("[referrals] attributed", { referred: userId, referrer: out.referrer_id });
     if (Array.isArray(out.rewards) && out.rewards.length) void pushRewards(out.rewards);
   }
-  return { ok: !!out.ok, reason: out.reason };
+  return { ok: !!out.ok, reason: out.reason, referrerId: out.referrer_id ?? null };
 }

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
+import { notifyAdminsOfReferralSignIn } from "@/lib/analytics/referral-alert";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { claimReferral, REF_COOKIE, REF_PENDING_COOKIE } from "@/lib/referrals/server";
 import { createClient } from "@/lib/supabase/server";
@@ -32,5 +33,7 @@ export async function POST() {
   if (!token) return res({ ok: false, reason: "no_link" });
   const settings = await getLandingSettings();
   const out = await claimReferral(user.id, token, settings.frenzRewards.attribution.windowDays);
+  // owner 2026-10-09: push every admin when someone signs in through a referral link — after the response, never delaying it
+  if (out.ok) after(() => notifyAdminsOfReferralSignIn(user.id, out.referrerId ?? null));
   return res({ ok: out.ok, reason: out.reason ?? null });
 }

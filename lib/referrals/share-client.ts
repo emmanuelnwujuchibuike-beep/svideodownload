@@ -31,6 +31,19 @@ export function attributionLink(kind: ShareKind, contentId: string): Promise<str
   return p;
 }
 
+/**
+ * Tell the server a member copied or shared their invite link, so the admins
+ * are pushed (owner, 2026-10-09). Fire-and-forget: it never delays the toast and
+ * a failure is silent. `keepalive` lets it finish if the page is left at once.
+ */
+export function reportReferralShared(how: "copied" | "shared", surface: "rewards" | "banner"): void {
+  try {
+    void fetch("/api/referrals/shared", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ how, surface }), keepalive: true }).catch(() => {});
+  } catch {
+    /* never in the way */
+  }
+}
+
 /** The sheet title for each kind — the brief's own words. */
 export function shareTitle(kind: ShareKind): string {
   return kind === "profile" ? "Share Profile" : kind === "reel" ? "Share Reel" : kind === "ai_video" ? "Share AI Reel" : kind === "ai_audio" ? "Share AI Audio" : kind === "app" ? "Share Frenzsave" : "Share Post";

@@ -8,7 +8,7 @@ import { KindSymbol } from "@/features/ai/wallet/wallet-kinds";
 import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
-import { attributionLink, shareOrCopy } from "@/lib/referrals/share-client";
+import { attributionLink, reportReferralShared, shareOrCopy } from "@/lib/referrals/share-client";
 import type { RewardsSummary } from "@/lib/rewards/summary";
 import { cn } from "@/lib/utils";
 
@@ -355,6 +355,7 @@ function ShareAppButton() {
     haptic("selection");
     const url = (await attributionLink("app", "app")) ?? window.location.origin;
     const out = await shareOrCopy(url, "Join me on Frenzsave");
+    if (out === "copied" || out === "shared") reportReferralShared(out, "rewards"); // owner 2026-10-09: admins are pushed
     if (out === "copied") toast("Your invite link is copied.", "success");
     else if (out === "failed") toast("Couldn't share the link.", "error");
     setBusy(false);

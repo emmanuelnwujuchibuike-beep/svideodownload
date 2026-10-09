@@ -132,8 +132,11 @@ describe("the dashboard", () => {
   it("the credits page shows the panel and listens to its own wallet row only", () => {
     const u = code("features/ai/frenz-ai-usage-page.tsx");
     expect(u).toContain("<TransferPanel");
-    expect(u).toContain("table: \"ai_product_balances\", filter: `user_id=eq.${uid}`");
-    expect(u).toContain("if (channel) void supabase.removeChannel(channel);");
+    // 2026-10-09: the own-row channel moved to the shared wallet hook (one channel for every screen showing the wallet)
+    expect(u).toContain("const wallet = useWallet();");
+    const w = code("features/ai/wallet/use-wallet.ts");
+    expect(w).toContain("table: \"ai_product_balances\", filter: `user_id=eq.${uid}`");
+    expect(w).toContain("return () => void supabase.removeChannel(channel);");
   });
   it("cache-first: re-entry paints the kept copy; history re-read only when the balance moved or it is old", () => {
     const p = code("features/ai/wallet/transfer-panel.tsx");

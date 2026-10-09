@@ -26,6 +26,7 @@ import { PageLoaderWithHeader } from "@/features/ui/page-loader";
 import { RankCrown } from "@/components/badges/rank-crown";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { ProfileSections } from "@/features/profile/profile-sections";
+import { StreakHeaderChip } from "@/features/streaks/streak-header-chip";
 import { AddFriendButton } from "@/features/friends/add-friend-button";
 import { IdentityRing } from "@/features/profile/identity-ring";
 import { viewerCircleIds } from "@/lib/social/graph/store";
@@ -579,6 +580,9 @@ async function ProfileData({
                           <IdentityBadges verified={profile.isVerified} plan={plan} creator accent={heroAccent} />
                         </h1>
                         <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
+                        {/* Your streak, on your own profile only (owner, 2026-10-09: moved here
+                            from the message page). This hero renders only for the owner. */}
+                        <StreakHeaderChip className="mt-2" />
                         {/* What this profile IS (Part 14). A personal profile is
                             the default and says nothing — only a declared purpose
                             earns a chip. */}

@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
@@ -39,7 +38,6 @@ import { InboxUnreadDot } from "@/features/social/inbox-unread-dot";
  * the Stories row loads).
  */
 // the streak chip shows only on the messages page, and this chrome is in the persistent shell — load it there, not everywhere
-const StreakHeaderChip = dynamic(() => import("@/features/streaks/streak-header-chip").then((m) => m.StreakHeaderChip), { ssr: false });
 
 export function InboxMobileChrome() {
   const pathname = usePathname();
@@ -76,14 +74,8 @@ export function InboxMobileChrome() {
           </h1>
           <InboxHeaderActions />
         </div>
-        {/* owner 2026-10-09: the streak sits on the RIGHT, opposite the line of text - never on top of it.
-            Nothing renders without a streak, and the text then has the row to itself. */}
-        <div className="mt-1 flex items-center justify-between gap-3 pl-1.5">
-          <p className="min-w-0 text-xs text-muted-foreground">Stay connected with the people you care about</p>
-          <span className="shrink-0">
-            <StreakHeaderChip />
-          </span>
-        </div>
+        {/* owner 2026-10-09: the streak moved to your own profile page (StreakHeaderChip). */}
+        <p className="mt-1 min-w-0 pl-1.5 text-xs text-muted-foreground">Stay connected with the people you care about</p>
       </div>
       <InboxStoriesRow />
     </div>

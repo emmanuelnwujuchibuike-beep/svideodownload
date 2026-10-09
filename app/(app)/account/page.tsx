@@ -270,7 +270,7 @@ export default async function AccountPage() {
                     {initial}
                   </div>
                 )}
-                <DiamondCrownBadge plan={plan as BillingPlan} size="md" className="absolute -bottom-1 -right-1 ring-2 ring-card" />
+                <DiamondCrownBadge plan={plan as BillingPlan} size="md" className="absolute -bottom-1 -right-1" />
               </div>
               {ownProfile?.handle ? (
                 <Link href={`/u/${ownProfile.handle}`} prefetch className="mb-1 inline-flex items-center rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary">

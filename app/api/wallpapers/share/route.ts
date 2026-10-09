@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { imageSizeOf } from "@/lib/media/image-size";
 import { makeThumbnail } from "@/lib/media/thumbnail";
+import { warmWallpaperImage } from "@/lib/wallpapers-warm";
 import { wallpaperTitle } from "@/lib/wallpaper-title";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -64,6 +65,7 @@ export async function POST(request: Request) {
 
   const db = createAdminClient();
   const created: string[] = [];
+  const warm: string[] = [];
   const failed: string[] = [];
   let index = 0;
 
@@ -137,10 +139,13 @@ export async function POST(request: Request) {
         continue;
       }
       created.push(title);
+      warm.push(pub.publicUrl);
     } catch (e) {
       failed.push(`${file.name}: ${e instanceof Error ? e.message : "failed"}`);
     }
   }
 
+  // 2026-10-09 landing speed test: the newest wallpaper is the landing LCP — warm its optimized variants now, not on a visitor's phone
+  if (warm.length) after(() => Promise.all(warm.map(warmWallpaperImage)));
   return NextResponse.json({ ok: created.length > 0, created: created.length, failed });
 }

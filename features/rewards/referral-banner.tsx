@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
 import { toast } from "@/features/ui/toast";
 import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
 import { haptic } from "@/lib/motion/haptics";
-import { attributionLink, shareOrCopy } from "@/lib/referrals/share-client";
+import { attributionLink, reportReferralShared, shareOrCopy } from "@/lib/referrals/share-client";
 import { referralSentence, type ReferralAmounts } from "@/lib/rewards/referral-copy";
 
 import { markSharedToday } from "./referral-shared-today";
@@ -108,6 +108,7 @@ export function ReferralBanner({ onClose }: { onClose: () => void }) {
     haptic("selection");
     const url = (await attributionLink("app", "app")) ?? window.location.origin;
     const out = await shareOrCopy(url, "Join me on Frenzsave");
+    if (out === "copied" || out === "shared") reportReferralShared(out, "banner"); // owner 2026-10-09: admins are pushed
     if (out === "copied") toast("Your invite link is copied.", "success");
     else if (out === "failed") toast("Couldn't share the link.", "error");
     setBusy(false);

@@ -4,6 +4,7 @@ import { ArrowDownLeft, ArrowLeft, ArrowUpRight, ChevronRight, Eye, EyeOff, Plus
 import dynamic from "next/dynamic";
 import Link from "next/link";
 
+import { refreshWallet, useWallet } from "@/features/ai/wallet/use-wallet";
 import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -12,8 +13,6 @@ import { AiCreditsCard } from "@/features/ai/credits/ai-credits-card";
 import type { PlanCelebrationProps } from "@/features/ai/credits/plan-celebration";
 import { TransferPanel } from "@/features/ai/wallet/transfer-panel";
 import { formatKind, KIND_NAME, KindSymbol, type WalletKind } from "@/features/ai/wallet/wallet-kinds";
-import { createClient } from "@/lib/supabase/client";
-import { getClientAuthUser } from "@/lib/supabase/client-user";
 import { getAiCredits, takeAiPlanReturn, verifyAiPlanReturn } from "@/lib/ai/credits/client";
 import { AI_CREDIT_FEATURES, AI_FEATURE_LABELS } from "@/lib/ai/credits/features";
 import { StatementDetailSheet } from "@/features/ai/statement-detail-sheet";
@@ -23,8 +22,8 @@ import { aiButtonClass } from "@/features/ai/design/ai-button";
 import { AiShowcase } from "@/features/ai/design/ai-showcase";
 import { AiToolTitle } from "@/features/ai/design/ai-surface";
 import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
-import { getCharacterReplaceBalance, takeTopupReturnReference, verifyCharacterReplaceTopup } from "@/lib/ai/character-replace/client";
-import type { CharacterReplaceBalance, CharacterReplaceTransaction } from "@/lib/ai/character-replace/types";
+import { takeTopupReturnReference, verifyCharacterReplaceTopup } from "@/lib/ai/character-replace/client";
+import type { CharacterReplaceTransaction } from "@/lib/ai/character-replace/types";
 import { formatCredits, formatLedgerAmount, WALLET_UNIT } from "@/lib/ai/credits/units";
 import { formatDate, formatTime } from "@/lib/i18n/format";
 import { haptic } from "@/lib/motion/haptics";
@@ -106,12 +105,26 @@ export function FrenzAIUsagePage({
   createHref?: string;
   slides?: ShowcaseSlide[];
 }) {
-  const [balance, setBalance] = useState<CharacterReplaceBalance | null>(null);
   /* 2026-09-20: a tap on the figure hides it (kept per browser); a tap on a line opens it in full */
   const [hidden, toggleHidden] = useBalanceHidden();
   const [openLine, setOpenLine] = useState<LedgerRow | null>(null);
-  const [ledger, setLedger] = useState<LedgerRow[] | null>(null);
-  const [failed, setFailed] = useState(false);
+  /*
+    🔴 NEVER A RELOAD ON ENTRY (owner, 2026-10-09: "the credit page and dashboard
+    reload on every entry … it only supposed to revalidate and update instantly
+    when a balance update. And never reload the page.")
+
+    Balance + statement lived in component state that started at null, so every
+    visit painted the skeleton and refetched. They now live in the shared client
+    cache under one key per member: a return visit paints the last-known wallet
+    in the first frame and does NOT refetch. It changes only when the balance
+    does — the shared wallet-row realtime channel (useWallet), a top-up or plan
+    return, a transfer — each of which forces a re-read of that key. A cold
+    start (nothing cached yet) still loads once.
+  */
+  const wallet = useWallet();
+  const balance = wallet.data?.balance ?? null;
+  const ledger: LedgerRow[] | null = wallet.data?.transactions ?? null;
+  const failed = !wallet.data && !!wallet.error;
   const [notice, setNotice] = useState<string | null>(null);
   // 0167: bumps re-read the AI allowance (after a plan return)
   const [creditsKey, setCreditsKey] = useState(0);
@@ -121,16 +134,10 @@ export function FrenzAIUsagePage({
   const [celebrate, setCelebrate] = useState<Omit<PlanCelebrationProps, "onClose"> | null>(null);
   const closeCelebration = useCallback(() => setCelebrate(null), []);
 
+  const uid = wallet.uid;
   const load = useCallback(async () => {
-    setFailed(false);
-    const wallet = await getCharacterReplaceBalance({ ledger: 100 });
-    if (!wallet.ok) {
-      setFailed(true);
-      return;
-    }
-    setBalance(wallet.balance);
-    setLedger(wallet.transactions);
-  }, []);
+    await refreshWallet(uid);
+  }, [uid]);
 
   useEffect(() => {
     /*
@@ -160,35 +167,14 @@ export function FrenzAIUsagePage({
         const verified = await verifyCharacterReplaceTopup(reference);
         setNotice(verified.ok ? (verified.credited ? "Payment received — your balance has been updated." : verified.pending ? "Your payment is still being confirmed. This will update shortly." : null) : null);
       }
-      await load();
+      // Only a return from a payment is news. A plain entry paints the cached
+      // wallet and fetches nothing (a cold cache is loaded by useQuery itself).
+      if (planReturn || reference || welcome) await load();
     })();
   }, [load]);
 
-  /*
-    0193 (owner 2026-10-07: "when the account gets funded the credit balance
-    updates instantly"): while this page is open it listens to the member's OWN
-    wallet row (RLS: own row only). A received transfer, a top-up the webhook
-    credited, a reward — the balance and statement re-read the moment the row
-    changes. One channel, only on this page, removed when it closes; the topic
-    is unique per mount (a realtime topic is a global key — reusing one throws).
-  */
-  useEffect(() => {
-    const supabase = createClient();
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-    let cancelled = false;
-    void getClientAuthUser(supabase).then(({ data }) => {
-      const uid = data.user?.id;
-      if (!uid || cancelled) return;
-      channel = supabase
-        .channel(`wallet-balance:${uid}:${Math.random().toString(36).slice(2, 10)}`)
-        .on("postgres_changes", { event: "*", schema: "public", table: "ai_product_balances", filter: `user_id=eq.${uid}` }, () => void load())
-        .subscribe();
-    });
-    return () => {
-      cancelled = true;
-      if (channel) void supabase.removeChannel(channel);
-    };
-  }, [load]);
+  // 0193 (owner 2026-10-07: "when the account gets funded the credit balance updates instantly"):
+  // the wallet-row realtime channel now lives in useWallet, shared with every screen showing the wallet.
 
   const openSheet = useCallback((amount: number | null = null) => {
     haptic("selection");

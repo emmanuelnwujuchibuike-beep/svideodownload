@@ -4,7 +4,8 @@ import { ArrowRight, Coins } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { getCharacterReplaceBalance, readCachedCharacterReplaceBalance } from "@/lib/ai/character-replace/client";
+import { useWallet } from "@/features/ai/wallet/use-wallet";
+import { readCachedCharacterReplaceBalance } from "@/lib/ai/character-replace/client";
 import type { CharacterReplaceBalance, CharacterReplaceFreeAccess } from "@/lib/ai/character-replace/types";
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { TapOnceLink } from "@/features/ui/tap-once-link";
@@ -68,35 +69,44 @@ export function EarnButton({ size = "sm", className }: { size?: "sm" | "md" | "l
   );
 }
 
+/*
+  🔴 NO RELOAD ON ENTRY (owner, 2026-10-09: "the credit page and dashboard reload
+  on every entry … it only supposed to revalidate and update instantly when a
+  balance update").
+
+  The strip painted an EMPTY first frame on every entry and filled in the cached
+  figure one frame later — the visible reload — and once anything was cached it
+  never asked again, so a new balance only showed after a reload. Now:
+    · after the app has hydrated once, the first frame reads the device snapshot
+      synchronously (a client navigation has no server HTML to mismatch);
+    · the live figure is the shared wallet (useWallet): one cache key per member,
+      updated the moment the member's wallet row changes, never on entry.
+*/
+let stripHydrated = false;
+
+type Boot = { who: "guest" | "member"; cached: CharacterReplaceBalance | null; free: CharacterReplaceFreeAccess | null };
+function readBoot(): Boot {
+  if (!hasAuthCookie()) return { who: "guest", cached: null, free: null };
+  return { who: "member", cached: readCachedCharacterReplaceBalance(), free: readAiFreeAccessCache() };
+}
+
 export function AiCreditStrip({ base, className }: { base: string; className?: string }) {
-  const [who, setWho] = useState<"unknown" | "guest" | "member">("unknown");
-  const [balance, setBalance] = useState<CharacterReplaceBalance | null>(null);
-  const [free, setFree] = useState<CharacterReplaceFreeAccess | null>(null);
+  const [boot, setBoot] = useState<Boot | null>(() => (stripHydrated ? readBoot() : null));
+  const wallet = useWallet();
 
   useEffect(() => {
-    if (!hasAuthCookie()) {
-      setWho("guest");
-      return;
-    }
-    setWho("member");
-    const cached = readCachedCharacterReplaceBalance();
-    const cachedFree = readAiFreeAccessCache();
-    if (cached) setBalance(cached);
-    if (cachedFree) setFree(cachedFree);
-    if (cached) return;
-    let alive = true;
-    void getCharacterReplaceBalance().then((res) => {
-      if (!alive || !res.ok) return;
-      setBalance(res.balance);
-      if (res.balance.freeAccess) {
-        setFree(res.balance.freeAccess);
-        writeAiFreeAccessCache(res.balance.freeAccess);
-      }
-    });
-    return () => {
-      alive = false;
-    };
+    stripHydrated = true;
+    setBoot((b) => b ?? readBoot());
   }, []);
+
+  const live = wallet.data?.balance ?? null;
+  useEffect(() => {
+    if (live?.freeAccess) writeAiFreeAccessCache(live.freeAccess);
+  }, [live]);
+
+  const who = boot?.who ?? "unknown";
+  const balance = live ?? boot?.cached ?? null;
+  const free = live?.freeAccess ?? boot?.free ?? null;
 
   const freeLeft = free?.enabled && free.remaining !== null && free.remaining > 0 ? free.remaining : null;
 
@@ -123,8 +133,9 @@ export function AiCreditStrip({ base, className }: { base: string; className?: s
     >
       <div className="flex h-14 items-center gap-3 rounded-[calc(1.25rem-1px)] bg-white/[0.86] px-2.5 text-[13px] shadow-[inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur dark:bg-card/90">
         {/* 2026-10-09 (owner): the Frenzsave logo in this tile, not a sparkle */}
-        {/* owner 2026-10-09: the transparent Frenzsave logo on a BLACK tile (not the navy tile export) */}
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-black shadow-[0_6px_12px_-6px_rgba(99,102,241,0.8)] ring-1 ring-inset ring-white/10">
+        {/* owner 2026-10-09 (later): "Remove this black background from this logo" — the transparent
+            Frenzsave logo straight on the card, no tile, no ring, no shadow. */}
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center">
           <FrenzLogo size={26} alt="" className="h-[26px] w-[26px]" />
         </span>
         {who === "guest" ? (

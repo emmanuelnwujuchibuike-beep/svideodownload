@@ -67,32 +67,66 @@ import { cn } from "@/lib/utils";
  */
 export function RotatingWallpaperLayers({ urls, sizes }: { urls: string[]; sizes: string }) {
   const [active, setActive] = useState(0);
-  // The other nine images are added to the DOM only after this flips —
-  // never before mount, so they can never be an LCP candidate.
-  const [revealed, setRevealed] = useState(false);
+  /*
+    🔴 ONE FRAME AHEAD, AND ONLY AFTER THE PAGE HAS LOADED (2026-10-09, owner:
+    the landing's speed test fell to LCP 4.3 s / TTI 9.2 s).
+
+    This used to mount ALL nine other wallpapers 50 ms after hydration. They sit
+    inside the visible card, so `loading="lazy"` does not defer them: on a phone
+    that was ~500 kB of extra images — each a full image-optimizer request, cold
+    for a fresh member upload — racing the LCP image and the page's JavaScript
+    on the same slow connection. Now nothing extra is requested until the page
+    has finished loading and the browser is idle, and then only the NEXT frame:
+    each layer mounts one rotation before it is shown, so it has two seconds to
+    arrive and the network never carries more than one of them at a time.
+  */
+  const [started, setStarted] = useState(false);
+  const [mounted, setMounted] = useState(1);
 
   useEffect(() => {
     if (urls.length < 2) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-    const revealTimer = setTimeout(() => setRevealed(true), 50);
-    const intervalId = setInterval(() => {
-      // Paused, not merely slowed, while backgrounded — a tab nobody is
-      // looking at has no reason to keep decoding new images.
-      if (document.hidden) return;
-      setActive((i) => (i + 1) % urls.length);
-    }, 2000);
+    let cancelled = false;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    let idleId: number | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const start = () => {
+      if (cancelled) return;
+      setStarted(true);
+      intervalId = setInterval(() => {
+        // Paused, not merely slowed, while backgrounded — a tab nobody is
+        // looking at has no reason to keep decoding new images.
+        if (document.hidden) return;
+        setActive((i) => (i + 1) % urls.length);
+      }, 2000);
+    };
+    const whenIdle = () => {
+      if (typeof window.requestIdleCallback === "function") idleId = window.requestIdleCallback(start, { timeout: 3000 });
+      else timeoutId = setTimeout(start, 1500);
+    };
+    if (document.readyState === "complete") whenIdle();
+    else window.addEventListener("load", whenIdle, { once: true });
 
     return () => {
-      clearTimeout(revealTimer);
-      clearInterval(intervalId);
+      cancelled = true;
+      window.removeEventListener("load", whenIdle);
+      if (idleId !== null) window.cancelIdleCallback?.(idleId);
+      if (timeoutId) clearTimeout(timeoutId);
+      if (intervalId) clearInterval(intervalId);
     };
   }, [urls.length]);
+
+  // Keep exactly one frame mounted ahead of the one on screen.
+  useEffect(() => {
+    if (!started) return;
+    setMounted((m) => Math.max(m, Math.min(urls.length, active + 2)));
+  }, [started, active, urls.length]);
 
   return (
     <>
       {urls.map((url, i) => {
-        if (i > 0 && !revealed) return null;
+        if (i >= mounted) return null;
         return (
           <NextImage
             key={url}

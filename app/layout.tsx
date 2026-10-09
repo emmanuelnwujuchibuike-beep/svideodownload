@@ -450,7 +450,9 @@ export default function RootLayout({
         {/* BootSplash (below) renders this as a raw <img> before React/next-image
             ever runs — preload it so the boot logo paints immediately on every
             cold load instead of waiting on a cache-cold fetch. */}
-        <link rel="preload" as="image" href="/brand/frenz-logo-splash.png" fetchPriority="high" />
+        {/* 🔴 Installed app only (2026-10-09 landing speed test): the splash never shows in a browser tab, so a
+            browser tab must not spend its first, most contended moments on this image at HIGH priority. */}
+        <link rel="preload" as="image" href="/brand/frenz-logo-splash.png" fetchPriority="high" media="(display-mode: standalone)" />
         {SPLASH_SCREENS.flatMap(({ file, width, height, ratio }) =>
           (["light", "dark"] as const).map((theme) => (
             <link

@@ -66,9 +66,9 @@ describe("the promote card is a floating, draggable, lazy side bubble", () => {
 });
 
 describe("streak placement", () => {
-  it("the chip only on the messages page; the ceremony plays on downloads and messages", () => {
-    expect(code("features/streaks/streak-header-chip.tsx")).toContain('const STREAK_ROUTES = new Set(["/messages"]);');
-    expect(code("features/social/inbox-mobile-chrome.tsx")).toContain("<StreakHeaderChip />");
+  it("the chip on your own profile (moved from messages, owner 2026-10-09); the ceremony plays on downloads and messages", () => {
+    expect(code("app/u/[handle]/page.tsx")).toContain('<StreakHeaderChip className="mt-2" />');
+    expect(code("features/social/inbox-mobile-chrome.tsx")).not.toContain("<StreakHeaderChip");
     const c = code("features/streaks/streak-unlock-celebration.tsx");
     expect(c).toContain('const here = replay || pathname === "/downloads" || pathname.startsWith("/messages");');
     expect(c).toContain("if (!here) return;");

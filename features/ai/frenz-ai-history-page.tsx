@@ -3,6 +3,8 @@
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
+import { TapOnceLink } from "@/features/ui/tap-once-link";
+
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { aiButtonClass } from "@/features/ai/design/ai-button";
 import { AiShowcase } from "@/features/ai/design/ai-showcase";
@@ -69,10 +71,10 @@ export function FrenzAIHistoryPage({ base = "/ai", slides = [] }: { base?: "/ai"
         <FrenzAIHistory className="mt-4" showHeading={false} groupByDay aiBase={base} />
 
         <div className="mt-8">
-          <Link href={base} prefetch={false} className={aiButtonClass({ variant: "secondary", size: "sm", className: "ai-btn--round" })}>
+          <TapOnceLink href={base} className={aiButtonClass({ variant: "secondary", size: "sm", className: "ai-btn--round" })}>
             <ArrowLeft className="h-4 w-4" aria-hidden />
             Back to Frenz AI
-          </Link>
+          </TapOnceLink>
         </div>
       </div>
     </FrenzAIEnvironment>

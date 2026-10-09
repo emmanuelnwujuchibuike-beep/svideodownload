@@ -81,10 +81,10 @@ export function RewardsPage({ summary }: { summary: Summary }) {
       {/* a quiet wash behind the glass — static, no animation, no blur cost beyond the panels' own */}
       <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[520px] bg-[radial-gradient(60%_50%_at_15%_0%,rgba(99,102,241,0.16),transparent_70%),radial-gradient(50%_45%_at_95%_10%,rgba(139,92,246,0.14),transparent_70%)]" />
       <div className="mx-auto max-w-2xl px-4 pb-16 pt-3">
-        <Link href="/studio/ai/usage" prefetch={false} className="inline-flex min-h-[2.75rem] items-center gap-1.5 text-[13px] font-semibold text-muted-foreground hover:text-foreground">
+        <TapOnceLink href="/studio/ai/usage" className="inline-flex min-h-[2.75rem] items-center gap-1.5 text-[13px] font-semibold text-muted-foreground hover:text-foreground data-[pending]:opacity-70">
           <ArrowLeft className="h-4 w-4" aria-hidden />
           Credit Balance
-        </Link>
+        </TapOnceLink>
         <h1 className="mt-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 bg-clip-text text-[28px] font-bold tracking-[-0.03em] text-transparent">Rewards</h1>
         <p className="mt-1 text-[14px] text-muted-foreground">Earn credits by creating, sharing and inviting friends.</p>
         {/* 2026-10-07 (owner): the daily and weekly quests */}

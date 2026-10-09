@@ -8,12 +8,10 @@ import { FrenzLogo, FrenzWordmark } from "@/components/brand/frenz-logo";
 import { IconTile } from "@/components/icons/icon-tile";
 import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { useAppMode } from "@/features/app-shell/use-app-mode";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
 import { useUser } from "@/features/auth/use-user";
 import { UserMenu } from "@/features/auth/user-menu";
-import { StreakHeaderChip } from "@/features/streaks/streak-header-chip";
 import { InstallButton, InstallCta, InstallHeaderCta } from "@/features/pwa/install-button";
 import { LanguageSelector } from "@/components/i18n/language-selector";
 import { useShowAds } from "@/features/monetization/use-show-ads";
@@ -327,10 +325,9 @@ export function SiteHeader({
 
   const { user, enabled } = useUser();
   const { handle, plan } = useEntitlements();
-  const appMode = useAppMode();
   /*
     🔴 A MEMBER'S HOME IS NOT "/" (2026-10-05, measured on a production build).
-    Middleware 307s a signed-in "/" to /downloads (or /home in Full Bleed). The
+    Middleware 307s a signed-in "/" to /downloads. The
     logo pointed at "/", so the router's viewport PREFETCH of it was redirected
     and the browser followed with a plain GET /downloads — a full HTML server
     render of the downloads page on 36 of 38 pages, every member page view,
@@ -338,7 +335,7 @@ export function SiteHeader({
     While a session cookie exists but the handle is not known yet, the logo
     does not prefetch at all, so the "/" prefetch cannot slip out in between.
   */
-  const homeHref = handle ? (appMode === "full" ? "/home" : "/downloads") : "/";
+  const homeHref = handle ? "/downloads" : "/";
   const homePrefetch = handle || !hasAuthCookie() ? undefined : false;
   const { showAds, ready } = useShowAds();
   const isPremium = ready && !showAds;
@@ -467,7 +464,7 @@ export function SiteHeader({
             It renders nothing without a streak, so a first-time visitor's
             header is unchanged and the row cannot shift.
           */}
-          <StreakHeaderChip />
+          {/* the streak moved to the chat page (owner, 2026-10-09) — see features/social/chat-streak.tsx */}
           {landing ? <InstallHeaderCta /> : <InstallButton />}
           <ThemeToggle />
           <UserMenu />
@@ -525,7 +522,6 @@ export function SiteHeader({
               streak, so a first-time visitor’s header is byte-for-byte
               unchanged and there is no layout shift either way.
             */}
-            <StreakHeaderChip />
             {landing ? <InstallHeaderCta /> : <SearchTriggerIcon />}
             {/* Language selector — the top ~50 languages (owner, replaced the
                 downloads/history icon; History is in the bottom nav). */}

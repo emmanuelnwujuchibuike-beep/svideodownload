@@ -550,7 +550,7 @@ export function SmartFeed({
       setTopbarCenter(null);
       return;
     }
-    setTopbarCenter(<FeedTopbarTabs sort={sort} onSegment={onSegment} showReelsLink={pathname === "/feed"} />);
+    setTopbarCenter(<FeedTopbarTabs sort={sort} onSegment={onSegment} showReelsLink={pathname === "/feed" || pathname === "/home"} />);
     return () => setTopbarCenter(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sort, !!reel, pathname]);

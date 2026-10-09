@@ -496,8 +496,21 @@ function landingChunks(): string[] {
  * The download-delivery code that also grew is lazy (fetch-download loads on
  * the first download) and is not in these chunks. Admin route, never a cold
  * visit; ENTRY_CEILING untouched.
+ *
+ * ── 2026-10-09: → 371 kB (/(app)/home measured 379,862) ───────────────────
+ *
+ * The Full Bleed merge (owner: "only one experience"). /home's JS is +2,774 B
+ * gzipped against the previous commit, built side by side. Raw JS is only
+ * +1.1 kB, and the rest is SPLIT CHURN: deleting the mode modules
+ * (use-app-mode, the switcher, the switch prompt) regrouped the shared shell
+ * into 36 files instead of 33, and each extra file costs its own gzip overhead.
+ * Searching the /home chunks for every new string found only the nav's Feed
+ * and Earn glyphs (chunk 60205, which itself shrank). The chat-streak, chat
+ * sheet, AI and credits changes are not in /home. Signed-in route, never a
+ * cold visit. The cold-entry landing went DOWN 5.5 kB in the same change (the
+ * streak chip left the header), and ENTRY_CEILING is untouched.
  */
-const GLOBAL_CEILING = 370 * 1024;
+const GLOBAL_CEILING = 371 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

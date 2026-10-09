@@ -70,6 +70,12 @@ export function TapOnceLink({
           e.preventDefault();
           return;
         }
+        // something earlier already cancelled this tap (the guest sign-in gate on a
+        // data-ai-members door): nothing is navigating, so nothing is pending
+        if (e.defaultPrevented) {
+          onClick?.(e);
+          return;
+        }
         pending.current = true;
         setBusy(true);
         timer.current = window.setTimeout(() => {

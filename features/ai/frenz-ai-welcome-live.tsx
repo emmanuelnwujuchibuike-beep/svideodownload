@@ -2,6 +2,8 @@
 
 import { ArrowRight, History, Sparkles } from "lucide-react";
 import Link from "next/link";
+
+import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
@@ -149,20 +151,20 @@ export function FrenzAIWelcomeLive({
               ("Create …", measured 2026-10-05). The primary keeps the row; the
               name stays on the link for a screen reader.
             */}
-            <Link
+            <TapOnceLink
               href={historyHref}
-              // Not prefetched: this door is new (2026-10-05) and on /studio/ai
-              // its target is a dynamic route — a viewport prefetch would be a
-              // server render on EVERY welcome visit. The primary door above
-              // keeps its prefetch (owner, 2026-09-14: doors open instantly).
-              prefetch={false}
+              // No viewport prefetch (its target is a dynamic route — a server render on
+              // EVERY welcome visit). It warms on finger-DOWN and presses at once, going
+              // once, like Earn (owner, 2026-10-09: "make the AI history button respond
+              // instantly on tap like the earn and credit button").
+              spinner={false}
               data-ai-members=""
               aria-label="Your creations"
               className={aiButtonClass({ variant: "secondary", size: "lg", className: "ai-btn--round w-[3.375rem] shrink-0 px-0 sm:w-auto sm:px-5" })}
             >
               <History className="h-[18px] w-[18px] shrink-0 text-muted-foreground" aria-hidden />
               <span className="hidden sm:inline">Your creations</span>
-            </Link>
+            </TapOnceLink>
           </div>
         </div>
       ) : null}

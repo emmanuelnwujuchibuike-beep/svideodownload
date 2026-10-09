@@ -91,6 +91,6 @@ describe("nav idle warm-up — a guest warms only public tabs", () => {
     expect(src).toMatch(/const member = !!handle \|\| hasAuthCookie\(\);/);
     expect(src).toMatch(/const routes = member\s*\?\s*\[[^\]]*\]\s*:\s*GUEST_WARM_ROUTES;/);
     // The member list is unchanged — still the owner's eight.
-    expect(src).toMatch(/\["\/home", "\/friends", "\/messages", "\/feed", "\/account", "\/history", "\/studio\/ai\/history", profileHref\]/);
+    expect(src).toMatch(/\["\/home", "\/friends", "\/messages", "\/account", "\/history", "\/studio\/ai\/history", profileHref\]/);
   });
 });

@@ -3,6 +3,8 @@
 import { ArrowDownLeft, ArrowLeft, ArrowUpRight, ChevronRight, Eye, EyeOff, Plus, RotateCcw, ShieldCheck, Sparkles, Wallet } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+
+import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CharacterReplaceRechargeSheet } from "@/features/ai/character-replace/recharge-sheet";
@@ -360,10 +362,10 @@ export function FrenzAIUsagePage({
             <AiCreditsCard className="mt-4" refreshKey={creditsKey} returnTo="/studio/ai/usage" />
 
             {/* 2026-10-07 (owner brief §7, §11): rewards and referrals — AI Credits vs Withdrawable live on /rewards */}
-            <Link
+            <TapOnceLink
               href="/rewards"
-              prefetch={false}
-              className="mt-4 flex items-center gap-3 rounded-2xl bg-card/95 px-4 py-3.5 ring-1 ring-inset ring-black/[0.05] transition hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 dark:ring-white/10"
+              spinner={false}
+              className="mt-4 flex items-center gap-3 rounded-2xl transition-[transform,opacity] active:scale-[0.98] data-[pending]:scale-[0.98] data-[pending]:opacity-80 bg-card/95 px-4 py-3.5 ring-1 ring-inset ring-black/[0.05] transition hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 dark:ring-white/10"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-violet-500 text-white">
                 <Sparkles className="h-4 w-4" aria-hidden />
@@ -373,7 +375,7 @@ export function FrenzAIUsagePage({
                 <span className="block text-[12.5px] text-muted-foreground">Earn credits by creating, sharing and inviting friends.</span>
               </span>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-            </Link>
+            </TapOnceLink>
 
             {/* 0193 (owner 2026-10-07): send credits to a wallet number, and the transfer history */}
             <TransferPanel className="mt-4" rules={balance?.offer?.transfers ?? null} balance={balance?.balanceCents ?? null} withdrawable={balance?.withdrawableCents ?? null} onChanged={() => void load()} />
@@ -457,10 +459,10 @@ export function FrenzAIUsagePage({
         {celebrate ? <PlanCelebration {...celebrate} onClose={closeCelebration} /> : null}
 
         <div className="mt-8">
-          <Link href={aiHref} prefetch={false} className={aiButtonClass({ variant: "secondary", size: "sm", className: "ai-btn--round" })}>
+          <TapOnceLink href={aiHref} className={aiButtonClass({ variant: "secondary", size: "sm", className: "ai-btn--round" })}>
             <ArrowLeft className="h-4 w-4" aria-hidden />
             Back to Frenz AI
-          </Link>
+          </TapOnceLink>
         </div>
       </div>
 

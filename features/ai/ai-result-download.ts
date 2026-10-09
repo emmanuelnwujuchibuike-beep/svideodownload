@@ -1,6 +1,7 @@
 "use client";
 
 import { startDownload } from "@/features/downloads/manager";
+import { historyTitleFor, meaningfulSourceName } from "@/lib/ai/history";
 import { resultFileName, resultSuffixFor } from "@/lib/ai/media";
 import type { AiJobView } from "@/lib/ai/jobs";
 import type { DownloadRecord } from "@/types";
@@ -58,7 +59,8 @@ export function aiJobRecord(job: AiJobView): DownloadRecord {
     aiJobId: job.id,
     platform: "generic",
     platformName: "Frenz AI",
-    title: resultFileName(job.source.name, resultSuffixFor(job.feature)),
+    // a machine file name (a UUID from the phone) reads as the tool, e.g. "Lip Sync Pro video" (2026-10-09)
+    title: meaningfulSourceName(job.source.name) ? resultFileName(job.source.name, resultSuffixFor(job.feature)) : historyTitleFor(job.feature),
     thumbnail: job.result?.hasPoster ? `/api/ai/jobs/${encodeURIComponent(job.id)}/poster` : null,
     formatId: "frenz-ai",
     kind: "video",

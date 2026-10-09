@@ -1,3 +1,4 @@
+import { liveStreakDays } from "@/lib/social/chat-streak";
 import { after } from "next/server";
 
 import {
@@ -1241,7 +1242,14 @@ export interface ConversationSummary {
   muted: boolean;
   archived: boolean;
   pinned: boolean;
+  /**
+   * Chat streak (0200): consecutive days on which BOTH of you sent a message,
+   * alive while its last day is today or yesterday (UTC). 0 for groups, for no
+   * streak, and when the read fails — the inbox never waits on it.
+   */
+  streakDays: number;
 }
+
 
 /**
  * Per-conversation unread counts for the inbox. Direct threads use the exact
@@ -1442,7 +1450,7 @@ export async function listConversations(userId: string): Promise<ConversationSum
       .map((c) => (c.user_low === userId ? c.user_high : c.user_low))
       .filter((id): id is string => !!id);
 
-    const [{ data: profs }, { data: directUnread }, { data: groupUnread }, { data: groupMembers }, friends] = await Promise.all([
+    const [{ data: profs }, { data: directUnread }, { data: groupUnread }, { data: groupMembers }, friends, { data: streakRows }] = await Promise.all([
       directOtherIds.length
         ? db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended, is_hidden").in("id", directOtherIds)
         : Promise.resolve({ data: [] as Record<string, unknown>[] }),
@@ -1475,7 +1483,12 @@ export async function listConversations(userId: string): Promise<ConversationSum
       // trip on the INBOX's critical path — the page the owner watches most.
       // Owner's 2-second page budget: see [[rule-2-second-page-budget]].
       friendIdSet(userId),
+      // 0200: chat streaks, in the same wave (owner, 2026-10-09). A missing table or a fault answers no rows.
+      directConvIds.length
+        ? db.from("conversation_streaks").select("conversation_id, current_days, last_day").in("conversation_id", directConvIds).then((r) => r, () => ({ data: [] }))
+        : Promise.resolve({ data: [] as { conversation_id: string; current_days: number; last_day: string | null }[] }),
     ]);
+    const streakByConv = new Map(((streakRows ?? []) as { conversation_id: string; current_days: number; last_day: string | null }[]).map((r) => [r.conversation_id, r]));
 
     // Group unread cursor: need each group's OWN last_read_at, which isn't in
     // `memberships` above (kept lean for the common direct case) — fetch it
@@ -1563,6 +1576,7 @@ export async function listConversations(userId: string): Promise<ConversationSum
           muted: pref?.muted ?? false,
           archived: pref?.archived ?? false,
           pinned: pref?.pinned ?? false,
+          streakDays: liveStreakDays(streakByConv.get(c.id)),
         });
       } else {
         out.push({
@@ -1582,6 +1596,7 @@ export async function listConversations(userId: string): Promise<ConversationSum
           muted: pref?.muted ?? false,
           archived: pref?.archived ?? false,
           pinned: pref?.pinned ?? false,
+          streakDays: 0,
         });
       }
     }
@@ -1678,6 +1693,7 @@ export async function listSecretConversations(userId: string): Promise<Conversat
         muted: pref?.muted ?? false,
         archived: pref?.archived ?? false,
         pinned: pref?.pinned ?? false,
+        streakDays: 0,
       });
     }
 

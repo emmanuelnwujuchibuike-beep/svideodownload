@@ -5,7 +5,6 @@ import { Pause, Play, RotateCw, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 
-import { useAppMode } from "@/features/app-shell/use-app-mode";
 import type { PlatformStatusMap } from "@/lib/platform-status";
 
 import { DownloadPageCore } from "@/features/downloads/download-page-core";
@@ -136,11 +135,9 @@ export function DownloadsPage({
 
   const [tab, setTab] = useState<Tab>("All");
   const [search, setSearch] = useState("");
-  const mode = useAppMode();
-  // The history section lives on THIS page only in Full Bleed (its nav has no
-  // History tab). In Downloader mode the nav has a dedicated History page, so the
-  // history is hidden here to avoid duplicating it (owner).
-  const showHistory = mode !== "downloader";
+  // The history is never embedded here: every member has the History tab since
+  // the Full Bleed merge (owner, 2026-10-09), and it used to show only in Full Bleed.
+  const showHistory = false;
 
   const active = tasks.filter((t) => t.status !== "completed" && t.status !== "canceled");
 

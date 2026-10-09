@@ -214,6 +214,21 @@ function symbolFor(currency: string | null): string {
   }
 }
 
+/**
+ * The member's file name, when it means something (owner, 2026-10-09: a Lip Sync
+ * item in AI History was titled "1d6ff2b5-e9c1-4b57-818b…"). A phone often hands
+ * over a machine name — a UUID or a long hex string — which says nothing a person
+ * recognises, so those read as no name and the item takes its tool's title instead.
+ */
+export function meaningfulSourceName(name: string | null | undefined): string | null {
+  const n = (name ?? "").trim();
+  if (!n) return null;
+  const stem = n.replace(/\.[a-z0-9]{2,5}$/i, "");
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(stem)) return null;
+  if (/^[0-9a-f_-]{16,}$/i.test(stem) && /[0-9]/.test(stem)) return null;
+  return n;
+}
+
 export function historyTitleFor(feature: AiFeature): string {
   switch (feature) {
     case "ai_character_replace":

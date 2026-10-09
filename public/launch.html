@@ -260,10 +260,8 @@ html,body{height:100%;background:#fff;color:#0f172a}
   stack, or one back-swipe out of the app would land here and be forwarded
   straight back — a trap with no way out.
 
-  Mode is read from the same frenz_mode cookie the edge middleware routes on,
-  with the same default spelled out rather than inferred: absent means
-  Downloader. Two places disagreeing about that default is exactly the
-  2026-08-09 bug where a member signed in and landed in the wrong mode.
+  Every launch opens /downloads: since the Full Bleed merge (owner, 2026-10-09)
+  there is one experience, so there is no mode cookie to read.
 
   ?next= is honoured only when it is a same-origin PATH: it must start with a
   single "/" NOT followed by another "/" or a backslash. "//evil.example" and
@@ -275,10 +273,8 @@ html,body{height:100%;background:#fff;color:#0f172a}
   try {
     var q = new URLSearchParams(location.search).get("next");
     var next = q && /^\/[^/\\]/.test(q) ? q : null;
-    if (!next) {
-      var m = document.cookie.match(/(?:^|;\s*)frenz_mode=([^;]+)/);
-      next = m && decodeURIComponent(m[1]) === "full" ? "/home" : "/downloads";
-    }
+    // one experience since 2026-10-09: every launch opens the download page
+    if (!next) next = "/downloads";
     /*
       🔴 NAVIGATE AFTER THE LOADER HAS PAINTED, NOT BEFORE IT.
 

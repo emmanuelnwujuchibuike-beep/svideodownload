@@ -25,7 +25,6 @@ import { IdentityBadges } from "@/components/badges/identity-badges";
 import { PageLoaderWithHeader } from "@/features/ui/page-loader";
 import { RankCrown } from "@/components/badges/rank-crown";
 import { jsonLd } from "@/lib/seo/json-ld";
-import { AppModeSwitcher } from "@/features/app-shell/app-mode-switcher";
 import { ProfileSections } from "@/features/profile/profile-sections";
 import { AddFriendButton } from "@/features/friends/add-friend-button";
 import { IdentityRing } from "@/features/profile/identity-ring";
@@ -742,12 +741,6 @@ async function ProfileData({
                       ))}
                     </div>
                   </div>
-                </div>
-
-                {/* Downloader ⇄ Full Bleed experience switch (owner) — on your own
-                    profile only. The profile itself is identical in both modes. */}
-                <div className="mt-4 px-4 sm:px-6">
-                  <AppModeSwitcher />
                 </div>
 
                 {/* The daily streak card is a hub section now ("Daily streak"),

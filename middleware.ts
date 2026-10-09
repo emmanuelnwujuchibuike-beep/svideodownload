@@ -107,55 +107,18 @@ export async function middleware(request: NextRequest) {
   // those to /home would swallow every "share into Frenz" from a signed-in
   // user — which is most of them. Keep this in sync with lib/share-target.ts
   // and manifest.ts's share_target.action if the tool ever moves.
-  // A signed-in visitor's `/` goes to their HOME for the mode (owner, 2026-08-02):
-  // the download page in Downloader mode, the app home in Full Bleed. A cheap
-  // cookie read at the edge — no DB, no per-render cost.
-  // Downloader is the DEFAULT (owner, 2026-08-09), so an absent cookie means
-  // downloader and only an explicit "full" opts into Full Bleed. Kept in step
-  // with `normalizeMode` in lib/app-mode.ts — the two must agree, or `/` and
-  // the chrome would disagree about which home a member has.
-  const downloaderMode = request.cookies.get("frenz_mode")?.value !== "full";
-  /*
-    Downloader mode has no feed homepage — so `/home` (a cold entry, a restored
-    tab, or a bookmark) serves the download page, never the Full-Bleed feed.
-
-    🔴 REWRITE, NOT REDIRECT (owner, 2026-08-11: "the pwa takes more time to open
-    than usual").
-
-    `/home` WAS the PWA's `start_url`, and it still is for every app installed
-    before the manifest moved it to `/launch.html` — an installed WebAPK keeps
-    the URL it was built with until Chrome regenerates it. So this branch still
-    runs on a large share of cold launches, and the service worker now forwards
-    those to the loader before they ever reach here (public/sw/routes.js).
-    Downloader is the DEFAULT mode. A redirect costs a second full request: the launch fetched
-    /home, got a 307, and fetched /downloads — one extra round-trip under the
-    splash screen, on a phone, before anything could paint. That is a real and
-    permanent tax on the one interaction that happens most.
-
-    A rewrite serves the download page AT /home in the same response. Zero extra
-    round-trips, identical content, and the auth guard on the page is untouched.
-
-    The visible cost is that the URL reads /home while the download page is
-    shown. Inside the installed PWA there is no URL bar at all, and in a browser
-    tab it is cosmetic — it is why the bottom nav's Home tab now treats /home as
-    an alias for /downloads, so the tab still lights up.
-  */
-  if (downloaderMode && path === "/home") {
-    // A guest would be rewritten to /downloads, rendered, and THEN sent to
-    // /login by the page — send them straight there (the same destination,
-    // minus a thrown-away render). See lib/auth/guest-login-paths.ts.
-    if (!request.cookies.getAll().some((c) => c.name.includes("-auth-token"))) {
-      const redirectUrl = new URL("/login", request.url);
-      redirectUrl.searchParams.set("next", "/downloads");
-      return NextResponse.redirect(redirectUrl);
-    }
-    return NextResponse.rewrite(new URL("/downloads", request.url));
-  }
+  // A signed-in visitor's `/` goes to the download page — the ONE experience
+  // since the Full Bleed merge (owner, 2026-10-09: "let there be only one
+  // experience which is the Download experience"). `/home` is no longer rewritten
+  // to the download page: it is the complete feed, the bottom nav's Feed tab, and
+  // it guards itself. An app installed when `/home` was the start_url still lands
+  // on the download page: the service worker sends a referrer-less `/home` launch
+  // to /launch.html (public/sw/routes.js), which goes to /downloads.
   const isLandingRedirect =
     path === "/" &&
     !request.nextUrl.searchParams.has("url") &&
     !request.nextUrl.searchParams.has("text");
-  const toHome = () => NextResponse.redirect(new URL(downloaderMode ? "/downloads" : "/home", request.url));
+  const toHome = () => NextResponse.redirect(new URL("/downloads", request.url));
 
   // No Supabase auth cookie → the visitor is definitely signed out. Skip the
   // getUser() network round-trip entirely (the biggest latency on a cold entry).

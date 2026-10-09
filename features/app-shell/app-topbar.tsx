@@ -8,10 +8,8 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { PressIcon } from "@/components/motion/press-icon";
 import { IconTile } from "@/components/icons/icon-tile";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { useAppMode } from "@/features/app-shell/use-app-mode";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { InstallHeaderCta } from "@/features/pwa/install-button";
-import { StreakHeaderChip } from "@/features/streaks/streak-header-chip";
 import { setTopbarHidden } from "@/features/app-shell/topbar-visibility";
 import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { useTopbarCenter } from "@/features/app-shell/topbar-slot";
@@ -25,16 +23,10 @@ import { cn } from "@/lib/utils";
 export function AppTopbar() {
   const router = useRouter();
   const pathname = usePathname();
-  const mode = useAppMode();
   /*
-    🔴 `mode` ALONE isn't a reliable "can this visitor post" signal (owner,
-    2026-08-18: the Create button must not show on the guest-accessible /feed
-    page). `mode` is a durable cookie/localStorage PREFERENCE, independent of
-    whether anyone is actually signed in — a genuinely signed-out visitor with
-    a stale "full" mode value from an earlier session on this browser would
-    still read `mode !== "downloader"` as true. `handle` is the real auth
-    signal (mirrors mobile-nav.tsx's `fullBleedActive = mode === "full" &&
-    !!handle` — the same class of bug, fixed the same way there already).
+    `handle` is the "can this visitor post" signal: members get Create, guests
+    do not (owner, 2026-08-18). Since the Full Bleed merge (2026-10-09) there is
+    no mode to consult.
   */
   const { handle } = useEntitlements();
   /*
@@ -247,12 +239,12 @@ export function AppTopbar() {
           used to live in it) is shown — the desktop sidebar has no Create
           entry of its own, so the pre-existing desktop icon further down
           this bar stays as the wide-screen entry point. Mode-gated the same
-          way the old bottom-nav button was: Downloader mode has no
-          Create/Chats, those are Full Bleed features only.
+          way the old bottom-nav button was. Since the Full Bleed merge
+          (2026-10-09) every member has Create; a guest does not.
         */}
         {/* Empty on /feed — Reels lives inline next to For You/Following in the
             center slot now (see FeedTopbarTabs), not off in this corner. */}
-        {!onFeedIndex && mode !== "downloader" && !!handle ? (
+        {!onFeedIndex && !!handle ? (
           <PressIcon className="lg:hidden">
             <button
               type="button"
@@ -354,9 +346,8 @@ export function AppTopbar() {
             `lg` the plain "+" in the far-left cluster is the one Create
             entry (opening the fuller action sheet) — `hidden lg:inline-flex`
             keeps the two from ever showing at the same time on a tablet.
-            Mode-gated the same as its mobile counterpart: Downloader mode
-            has no Create surface at all. */}
-        {!onFeedIndex && mode !== "downloader" && !!handle ? (
+            Members only, the same as its mobile counterpart. */}
+        {!onFeedIndex && !!handle ? (
           <PressIcon className="hidden lg:inline-flex">
             <Link
               href="/create/post"
@@ -423,9 +414,7 @@ export function AppTopbar() {
           thing the page is for. Here it is visible on every route and competing
           with none of them. It renders nothing when there is no streak.
         */}
-        <span className={searchActive ? "hidden" : ""}>
-          {searchActive ? null : <StreakHeaderChip />}
-        </span>
+        {/* 🔴 2026-10-09 (owner): the streak left the headers for the chat page — a flame beside each chat with a 2+ day streak (features/social/chat-streak.tsx). */}
 
         {/*
           ── THE INSTALL CTA, ON /downloads (owner, 2026-09-13) ─────────────────

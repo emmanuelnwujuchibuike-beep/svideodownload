@@ -198,6 +198,8 @@ export const DATA_DOMAINS: DataDomain[] = [
       "message_send_failures",
       "starred_messages",
       "chat_appearance_preferences",
+      // 0200: chat streaks (both people messaged on consecutive days), kept by a trigger
+      "conversation_streaks",
     ],
     storage: ["relational", "object"],
   },

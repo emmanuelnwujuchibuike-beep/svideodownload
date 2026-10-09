@@ -2,7 +2,6 @@
 
 import dynamic from "next/dynamic";
 
-import { SwitchModePrompt } from "./switch-mode-prompt";
 
 /**
  * Heavy, always-mounted overlays — the block Story Studio, the download/HLS
@@ -34,7 +33,6 @@ export function AppOverlays() {
       {/* Small, always-mounted "Switch to Full Bleed" prompt for gated Downloader-
           mode controls (chat / gallery upload). Rendered here so it's present on
           every app + profile surface where a gated control lives. */}
-      <SwitchModePrompt />
     </>
   );
 }

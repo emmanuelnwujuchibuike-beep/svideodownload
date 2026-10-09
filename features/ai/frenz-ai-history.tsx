@@ -32,6 +32,7 @@ import {
   AI_HISTORY_FILTER_LABELS,
   historyChip,
   historyTitleFor,
+  meaningfulSourceName,
   hoursUntilExpiry,
   resultAvailability,
   type AiHistoryTone,
@@ -269,7 +270,18 @@ export function FrenzAIHistory({
       return;
     }
     if (job.feature === "ai_lip_sync") {
-      // Lip Sync Pro (2026-09-21): its own result route, the same rules
+      /*
+        🔴 2026-10-09 (owner, after fd251ec: "the lip sync history video still shows
+        this when I click on it"). A FINISHED clip opens in the same full-screen
+        player as every other AI video — no page change, no workspace (config,
+        quote, upload state) mounted just to show one video, so nothing on that
+        path can fail. A clip still running (or failed) keeps its result route,
+        which tracks and explains it.
+      */
+      if (job.status === "completed") {
+        openPlayer(aiJobRecord(job));
+        return;
+      }
       router.push(`${aiBase}/lip-sync/result/${encodeURIComponent(job.id)}`);
       return;
     }
@@ -582,7 +594,7 @@ function HistoryTile({ job, now, onOpen }: { job: AiJobView; now: number; onOpen
   */
   const opens = playable || job.feature === "ai_character_replace";
   const Tag = opens ? "button" : "div";
-  const title = job.source.name ?? historyTitleFor(job.feature);
+  const title = meaningfulSourceName(job.source.name) ?? historyTitleFor(job.feature);
 
   const kind = historyKind(job.feature);
   const ToolIcon = HISTORY_TOOL_ICON[job.feature] ?? Sparkles;

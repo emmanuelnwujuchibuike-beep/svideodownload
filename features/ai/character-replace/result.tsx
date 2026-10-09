@@ -2,6 +2,8 @@
 
 import { ArrowLeft, Bookmark, BookmarkCheck, Check, ChevronDown, Columns2, Download, History, Loader2, Maximize2, Share2, Smartphone, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
+
+import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { aiResultDownloadHref, startAiResultDownload } from "@/features/ai/ai-result-download";
@@ -406,10 +408,10 @@ export function CharacterReplaceResultScreen({
             Use same photo
           </button>
         ) : null}
-        <Link href={historyHref} prefetch={false} className="btn-lux border border-transparent text-muted-foreground hover:bg-secondary hover:text-foreground">
+        <TapOnceLink href={historyHref} className="btn-lux border border-transparent text-muted-foreground hover:bg-secondary hover:text-foreground">
           <History className="h-4 w-4" aria-hidden />
           View history
-        </Link>
+        </TapOnceLink>
         <button type="button" onClick={() => player.current?.enterFullscreen()} disabled={!src} className="btn-lux border border-transparent text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50">
           <Maximize2 className="h-4 w-4" aria-hidden />
           Fullscreen

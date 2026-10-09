@@ -3,6 +3,8 @@
 import type { LucideIcon } from "lucide-react";
 import { ArrowLeft, Banknote, Bookmark, CalendarDays, Check, Clapperboard, Coins, Crown, Download, Heart, Music4, Send, Sparkles, Sun, UserPlus, Video } from "lucide-react";
 import Link from "next/link";
+
+import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 
 import type { QuestBoard, QuestEvent, QuestView } from "@/lib/rewards/quests";
@@ -131,10 +133,10 @@ export function QuestsPage() {
     <div className="relative min-h-[100dvh]">
       <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[460px] bg-[radial-gradient(55%_50%_at_10%_0%,rgba(59,130,246,0.15),transparent_70%),radial-gradient(50%_45%_at_95%_8%,rgba(139,92,246,0.15),transparent_70%)]" />
       <div className="mx-auto max-w-2xl px-4 pb-16 pt-3">
-        <Link href="/rewards" prefetch={false} className="inline-flex min-h-[2.75rem] items-center gap-1.5 text-[13px] font-semibold text-muted-foreground hover:text-foreground">
+        <TapOnceLink href="/rewards" className="inline-flex min-h-[2.75rem] items-center gap-1.5 text-[13px] font-semibold text-muted-foreground hover:text-foreground data-[pending]:opacity-70">
           <ArrowLeft className="h-4 w-4" aria-hidden />
           Rewards
-        </Link>
+        </TapOnceLink>
         <div className="mt-1 flex items-center gap-3">
           <span className="quest-badge flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 via-orange-400 to-rose-400 text-white shadow-[0_10px_24px_-12px_rgba(249,115,22,0.9)]">
             <Coins className="h-5 w-5" aria-hidden />

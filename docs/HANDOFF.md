@@ -13,12 +13,16 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
 | Frenz AI credits | One wallet in CREDIT units (`ai_product_balances` / `ai_product_ledger`). Ads are **not** paid from credits. The balance has a withdrawable part (`withdrawable_cents`, 0187), and the rest is non-withdrawable. |
 | Credit transfers | 0193 + **0199**: the sender chooses non-withdrawable or withdrawable. The amount and the fee come only from that kind, and the recipient receives the same kind. Cashing out still needs the recipient's own approval (0191). The credits page (`/ai/usage`) shows the two kinds apart. The AI and download credit strip keeps the total. The 6-argument 0193 function is kept for the deploy window. |
 
+| One experience | Since 2026-10-09 there is no Full Bleed / Downloader mode. The `frenz_mode` cookie, the switcher and the switch prompt are gone. Members' bottom nav: Home (`/downloads`), Feed (`/home`, the complete feed), History, Chats, Profile. Guests: Home, Earn (`/quests`), History, Support, Profile. Every tab has a label. |
+| Chat streaks | 0200 `conversation_streaks`, kept by a trigger on `messages`. A day counts when BOTH people sent a message (UTC). The flame shows beside a chat from 2 days. The streak left the site and app headers. Every streak celebration is the card-less `StreakFireBurst`. |
+
 ### Live probes owed (production)
 
 This container's network policy blocks `frenzsave.com` and `*.supabase.co`, so these
 were not probed live from here. Probe each object after the push:
 
 - **0198:** table `ad_campaign_extensions`; functions `ad_swap_creative`, `ad_edit_creative_details`, `ad_advertiser_pause`, `ad_price_for`, `ad_campaign_quote`, `ad_extension_quote`, `ad_apply_extension`, `ad_my_summary`, `ad_my_payments`; creative status `staged`. The full list is in `docs/AD_PLATFORM.md` (Part 6 files).
+- **0200:** `conversation_streaks` (`.select("conversation_id").limit(1)`) and the `bump_conversation_streak_trg` trigger. Send a message in a test chat from both sides and read the row back.
 - **0199:** `credit_transfers.credit_class` (`.select("credit_class").limit(1)`). Also call the 7-argument `transfer_credits` through the service role with a bad kind and expect `{ok:false, reason:"invalid"}`.
 
 ### Ad platform: owner decisions still open

@@ -1,14 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
-import { Portal } from "@/components/ui/portal";
-import { StreakFlameMark } from "@/features/streaks/streak-flame-mark";
-import { LOW_POWER_FX_CLASS, useLowPowerFx } from "@/features/streaks/use-low-power-fx";
+import { StreakFireBurst } from "@/features/streaks/streak-fire-burst";
 import { claimStreakSound, markStreakCelebrated } from "@/features/streaks/use-streak";
 import { hapticPattern } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
-import { previousTier, type StreakTier } from "@/lib/streaks/tiers";
+import type { StreakTier } from "@/lib/streaks/tiers";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -59,15 +57,6 @@ import { previousTier, type StreakTier } from "@/lib/streaks/tiers";
  * button, Escape, and the backdrop.
  */
 
-/** The beats, in ms from mount. The sequence is the feature; it lives in one table. */
-const BEAT = {
-  /** The rank they arrive with, already lit. */
-  from: 260,
-  /** The ring forms and the sweep crosses — the moment of change. */
-  turn: 780,
-  /** The new flame has fully ignited; the words may start. */
-  lit: 1300,
-} as const;
 
 /**
  * Felt, not heard: two short taps and a longer settle, scaled by rank so 365
@@ -92,16 +81,14 @@ const HAPTIC: Record<number, number[]> = {
  * unlock and the FLAME keeps its own colours. The champagne is the light in the
  * room; the flame is the thing being lit.
  */
-const CEREMONY_ACCENT = "#E3B341";
-const CEREMONY_GLOW = "rgb(227 179 65 / 0.5)";
 
 /** Enough to read as atmosphere. More is smoke; this is why it barely scales. */
-const MOTES = Array.from({ length: 12 }, (_, i) => i);
 
 export function StreakUnlockCelebration({
   streak,
   tier,
-  onViewGallery,
+  // kept in the signature for the callers; the card-less burst has no gallery button (2026-10-09)
+  onViewGallery: _onViewGallery,
   onDone,
   replay = false,
 }: {
@@ -119,17 +106,8 @@ export function StreakUnlockCelebration({
    */
   replay?: boolean;
 }) {
-  const lite = useLowPowerFx();
-  /** Drives only the two-flame crossover; everything else is CSS delays. */
-  const [turned, setTurned] = useState(false);
   const marked = useRef(false);
   const dismissed = useRef(false);
-  const panel = useRef<HTMLDivElement | null>(null);
-  const continueBtn = useRef<HTMLButtonElement | null>(null);
-  const restoreTo = useRef<Element | null>(null);
-
-  const from = previousTier(tier);
-  const compact = tier.ceremony <= 1;
 
   /*
     🔴 IT LEAVES ON THE TAP. NO EXIT ANIMATION TO SIT THROUGH.
@@ -206,163 +184,11 @@ export function StreakUnlockCelebration({
       hapticPattern(HAPTIC[tier.ceremony] ?? HAPTIC[4]!);
     }
 
-    restoreTo.current = document.activeElement;
-    // CONTINUE is the escape hatch, so a keyboard or switch user's first
-    // Tab-free action is always "get out".
-    continueBtn.current?.focus();
-
-    /* The ONE piece of state JavaScript still owns: the flame crossover. Every
-       other beat is a CSS `animation-delay`, so the sequence runs on the
-       compositor rather than through six React re-renders of a full-screen
-       overlay during the 2 seconds it is meant to look effortless. */
-    const turn = window.setTimeout(() => setTurned(true), BEAT.turn);
-
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        dismiss.current();
-      }
-    };
-    document.addEventListener("keydown", onKey);
-
-    /* The page behind must not scroll under the ceremony. Restored to whatever
-       it WAS, so this cannot clobber another overlay's lock if the two overlap. */
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      window.clearTimeout(turn);
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
-      if (panel.current?.contains(document.activeElement)) {
-        (restoreTo.current as HTMLElement | null)?.focus?.();
-      }
-    };
+    // The burst owns its own leaving (a tap, Escape, or by itself after the burst).
     // `streak` and `tier` are fixed for this overlay's whole life — the tracker
     // sets them once and unmounts on done.
   }, [streak, tier, replay]);
 
-  return (
-    <Portal>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="streak-unlock-title"
-        onMouseDown={(e) => {
-          if (e.target === e.currentTarget) dismiss.current();
-        }}
-        style={{
-          ["--ms-accent" as string]: CEREMONY_ACCENT,
-          ["--ms-glow" as string]: CEREMONY_GLOW,
-          /* One number the stylesheet scales everything from (§4). */
-          ["--ms-i" as string]: String(tier.ceremony),
-        }}
-        data-ceremony={tier.ceremony}
-        className={`streak-ms ${compact ? "streak-ms-compact" : ""} ${
-          lite ? LOW_POWER_FX_CLASS : ""
-        } fixed inset-0 z-[130] flex flex-col items-center justify-center px-6`}
-      >
-        {/* ── The environment. Layered radial light rather than a flat wash, so
-            the screen has depth before anything else arrives. Static
-            gradients: nothing here animates per frame. */}
-        <span aria-hidden className="streak-ms-env pointer-events-none absolute inset-0" />
-        {!compact ? (
-          <span aria-hidden className="streak-ms-rays pointer-events-none absolute inset-0" />
-        ) : null}
-
-        {/* Fine motes drifting inward. Deliberately near-constant across ranks. */}
-        {!compact ? (
-          <span aria-hidden className="streak-ms-motes pointer-events-none absolute inset-0">
-            {MOTES.map((i) => (
-              <span key={i} className="streak-ms-mote" style={{ ["--i" as string]: i }} />
-            ))}
-          </span>
-        ) : null}
-
-        <div ref={panel} className="streak-ms-panel relative flex flex-col items-center">
-          {/*
-            🔴 THE EYEBROW LEADS (§3). The member has to know WHAT happened
-            before they can read which rank it was — "NEW FLAME UNLOCKED" is the
-            sentence that turns a pretty screen into an achievement.
-          */}
-          <p className="streak-ms-eyebrow">New flame unlocked</p>
-
-          <span aria-hidden className="streak-ms-stage relative flex items-center justify-center">
-            <span className="streak-ms-ring pointer-events-none absolute" />
-            <span className="streak-ms-halo pointer-events-none absolute" />
-
-            {/*
-              ── THE TRANSFORMATION (§3, §8) ──────────────────────────────────
-              The rank they arrived with, brightening as it goes, and the rank
-              they just earned igniting through it. Both are the SAME mark
-              component the chip and the gallery use, so the flame in the
-              ceremony is recognisably the flame they will see tomorrow.
-            */}
-            {from ? (
-              <span className={`streak-ms-prev absolute ${turned ? "is-out" : ""}`}>
-                <StreakFlameMark
-                  tier={from}
-                  effects={false}
-                  className="h-[4.75rem] w-[4.75rem]"
-                  wrapperClassName="h-[6rem] w-[6rem]"
-                />
-              </span>
-            ) : null}
-
-            <span className={`streak-ms-emblem relative ${from && !turned ? "is-waiting" : ""}`}>
-              <StreakFlameMark
-                tier={tier}
-                className="h-[5.5rem] w-[5.5rem]"
-                wrapperClassName="h-[7rem] w-[7rem]"
-              />
-            </span>
-
-            {/* A single light sweep at the crossover. One element, one pass —
-                the "light sweep" §3 asks for, not a shimmer loop. */}
-            <span className="streak-ms-sweep pointer-events-none absolute" />
-          </span>
-
-          {/*
-            🔴 THE RANK IS THE HEADLINE, THE NUMBER SUPPORTS IT. This inverts
-            the old ceremony, which led with a giant numeral: at an UNLOCK the
-            news is which flame you now own, and "7" alone does not say that.
-          */}
-          <h2 id="streak-unlock-title" className="streak-ms-rank">
-            {tier.label}
-          </h2>
-          <p className="streak-ms-days">
-            {streak} {streak === 1 ? "day" : "days"}
-          </p>
-
-          {/*
-            The per-rank line (§4 gives a different one for each), then the
-            constant that names what just happened (§3/§8). Two lines, because
-            the owner's copy has two jobs: congratulate, and explain.
-          */}
-          <p className="streak-ms-line">{tier.unlockLine}</p>
-          <p className="streak-ms-sub">
-            {tier.unlockNote ?? "Your consistency unlocked a new flame."}
-          </p>
-
-          <div className="streak-ms-actions">
-            <button
-              type="button"
-              onClick={() => dismiss.current(onViewGallery)}
-              className="streak-ms-cta"
-            >
-              View flame gallery
-            </button>
-            <button
-              ref={continueBtn}
-              type="button"
-              onClick={() => dismiss.current()}
-              className="streak-ms-continue"
-            >
-              Continue
-            </button>
-          </div>
-        </div>
-      </div>
-    </Portal>
-  );
+  /* 2026-10-09 (owner): no card, no words on screen, no buttons — the flame, large, with fire around it. */
+  return <StreakFireBurst tier={tier} label={`New flame unlocked: ${tier.label}, ${streak} ${streak === 1 ? "day" : "days"}`} onDone={() => dismiss.current()} />;
 }

@@ -215,7 +215,7 @@ self.addEventListener("fetch", (event) => {
     Date.now() - (SWX.__lastBootRedirect || 0) > 10000
   ) {
     SWX.__lastBootRedirect = Date.now();
-    // No `?next=`: launch.html reads the frenz_mode cookie itself and picks the
+    // No `?next=`: launch.html opens /downloads (one experience since 2026-10-09) — the
     // right home. Passing a destination from here would mean the worker and the
     // loader could disagree about the default mode — the 2026-08-09 bug.
     //

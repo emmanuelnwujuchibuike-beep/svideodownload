@@ -1,6 +1,6 @@
 "use client";
 
-import { Headset, History, LayoutGrid } from "lucide-react";
+import { Headset, History } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -11,17 +11,16 @@ import { useEffect, useRef } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
 import {
-  FrenzFriendsOutline,
-  FrenzFriendsSolid,
+  FrenzEarnOutline,
+  FrenzEarnSolid,
+  FrenzFeedOutline,
+  FrenzFeedSolid,
   FrenzHomeOutline,
   FrenzHomeSolid,
   FrenzInboxOutline,
   FrenzInboxSolid,
   FrenzPersonSolid,
-  FrenzReelsOutline,
-  FrenzReelsSolid,
 } from "@/components/icons/frenz-icons";
-import { useAppMode } from "@/features/app-shell/use-app-mode";
 import { GUEST_WARM_ROUTES } from "@/features/app-shell/warm-routes";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useQuery } from "@/features/data";
@@ -106,40 +105,12 @@ const GLYPH_ACTIVE = "text-primary";
 const GLYPH_INACTIVE = "text-muted-foreground";
 
 /**
- * Warms the reels viewer's chunk ahead of the actual tap (owner, 2026-08-16:
- * "reels loads on click, it suppose to warm up and prefetch before it being
- * clicked"). The SAME dynamic import `next/dynamic` uses in
- * features/feed/smart-feed.tsx's `preloadReelsFeed` — dynamic imports are
- * memoized by the runtime, so calling it here too costs nothing extra once
- * it's already resolved. This used to fire from the Reels segmented-control
- * tab in the top feed bar (`onReelsPreload`); when Reels moved to the
- * bottom nav (see the module doc above) that specific warm-up trigger was
- * left behind — mount-idle preloading still ran, but the LAST-MOMENT one
- * right before a tap didn't. `router.prefetch` alone doesn't cover it: that
- * warms the `/reels` ROUTE, not this dynamically-imported chunk.
+ * `marketing` is still accepted from the marketing layout but no longer changes the
+ * tab set: since the Full Bleed merge (owner, 2026-10-09) there is one bar,
+ * chosen only by whether the visitor is signed in.
  */
-function warmReels() {
-  void import("@/features/reels/reels-feed");
-}
-
 export function MobileNav({
-  /*
-    🔴 MARKETING PAGES ALWAYS SHOW FEED, NEVER REELS (owner, 2026-08-18,
-    resolving a direct conflict with the 2026-08-16 "tab set depends only on
-    mode, never on route" rule — surfaced and confirmed via AskUserQuestion
-    before making this change): landing and the SEO downloader pages kept
-    disagreeing about whether this slot showed Reels or Feed, because which
-    branch rendered depended on the VIEWER's own `mode` cookie — a signed-in
-    visitor happening to carry `mode=full` hit the OTHER branch entirely (the
-    Full Bleed 5-tab set below, which has no Feed option at all and always
-    shows Reels). `marketing` forces the simple 4-tab set with Feed in this
-    slot unconditionally, so every marketing-page visitor sees the identical
-    bar regardless of sign-in state or mode — Reels moves to the page's own
-    top header instead (see AppTopbar's `onFeedIndex` handling). The actual
-    signed-in app shell (home/friends/messages/etc.) is untouched — this only
-    ever applies where `MobileAppNav` (the marketing wrapper) renders.
-  */
-  marketing = false,
+  marketing: _marketing = false,
 }: {
   marketing?: boolean;
 }) {
@@ -157,35 +128,7 @@ export function MobileNav({
   /* Whether a real, filled ad bar is docked below — see bottom-ad-bar.ts. */
   const bottomAdBarPresent = useBottomAdBarPresent();
   const router = useRouter();
-  const mode = useAppMode();
   const { handle, avatarUrl } = useEntitlements();
-  /*
-    🔴 `/downloads` ITSELF NEEDS THIS TOO (owner, repeated: "the download page
-    still shows the reels button in the bottom nav" — kept recurring even
-    after the `marketing` fix above shipped). Root cause: `marketing` is only
-    ever passed by `MobileAppNav`, which `(marketing)/layout.tsx` renders —
-    the PUBLIC landing/SEO pages. `/downloads` (the signed-in Downloader home)
-    lives under the `(app)` route group instead, whose layout mounts a bare
-    `<MobileNav />` with no prop at all, so it was STILL falling through to
-    the mode-dependent branch below — a signed-in visitor with `mode=full`
-    hit the always-Reels Full Bleed tab set right here, same as marketing
-    pages did before the fix. `/downloads` is the Downloader product's own
-    home, the same product surface as the marketing pages just for a
-    signed-in visitor, so it gets the identical forced treatment — computed
-    from `pathname` here rather than threading a new prop through
-    `(app)/layout.tsx`, since every OTHER page that layout renders (home,
-    friends, messages, reels itself) must keep the real mode-dependent
-    behavior untouched.
-
-    🔴 `/feed` NEEDS IT TOO, FOR THE SAME REASON (owner: "when i click feed
-    button in the download page, it enters the feed page but then the feed
-    button change back to the reels button"). `/feed` is ALSO under `(app)`,
-    so a signed-in visitor landing there fell straight out of `forceFeedTab`
-    the instant the URL changed — the very tab they just tapped flipped to
-    "Reels" under their thumb. Showing "Reels" while already ON the Feed page
-    never made sense anyway; the whole point of this tab is "you are here".
-  */
-  const forceFeedTab = marketing || pathname === "/downloads" || pathname.startsWith("/feed");
   // Cached-first: shows the last-known unread count instantly, updates live via
   // the realtime inbox subscription (InboxRealtimeTracker). `revalidateOnFocus:
   // false` so an iOS back-swipe / app resume never refetches the inbox just to
@@ -214,22 +157,6 @@ export function MobileNav({
     which is the whole reason this is a named condition and not an inline test.
   */
   const immersive = pathname.startsWith("/reels");
-  /*
-    🔴 Full Bleed requires being SIGNED IN, not just the mode cookie (owner,
-    2026-08-16: "the home button in the landing page is leading to the feed
-    home and requiring a sign in").
-
-    This component used to be mounted only inside the signed-in (app) shell,
-    where reaching a Full-Bleed-mode page already implied a session existed.
-    Now that it's also the marketing nav (see the merge note on `MobileAppNav`
-    above), that assumption breaks: a signed-OUT visitor can still carry
-    `mode=full` in their cookie (set on an earlier visit, or never cleared on
-    sign-out), and `mode === "full"` alone would then render the Full Bleed
-    tab set — Home pointing at `/home`, which requires a session and bounced
-    them to login. Gating on `handle` too means a guest always sees the
-    Downloader set regardless of what the mode cookie says.
-  */
-  const fullBleedActive = !forceFeedTab && mode === "full" && !!handle;
 
   // Warm the primary destinations once so the FIRST tap opens instantly — dynamic
   // routes (Messages/Friends) otherwise fetch on first navigation, which felt like
@@ -272,7 +199,7 @@ export function MobileNav({
     if (isSlowConnection()) return;
     const member = !!handle || hasAuthCookie();
     const routes = member
-      ? ["/home", "/friends", "/messages", "/feed", "/account", "/history", "/studio/ai/history", profileHref]
+      ? ["/home", "/friends", "/messages", "/account", "/history", "/studio/ai/history", profileHref]
       : GUEST_WARM_ROUTES;
     const id = setTimeout(() => {
       for (const r of routes) router.prefetch(r);
@@ -375,7 +302,7 @@ export function MobileNav({
           // Taller + no label row (owner: "mid big") — a bit more top/bottom
           // breathing room than the label version needed, since the icon is
           // now the whole tab rather than sharing the row with text under it.
-          "relative flex items-center justify-around px-2 pb-[max(env(safe-area-inset-bottom),0.85rem)] pt-3.5",
+          "relative flex items-center justify-around px-1 pb-[max(env(safe-area-inset-bottom),0.6rem)] pt-2",
           immersive
             ? [
                 /*
@@ -456,104 +383,49 @@ export function MobileNav({
               "border-t border-border bg-background shadow-[0_-4px_16px_-4px_rgba(2,6,23,0.12)] dark:shadow-[0_-4px_16px_-4px_rgba(0,0,0,0.4)]",
         )}
       >
-        {!fullBleedActive ? (
-          <>
-            {/*
-              🔴 REVERSED (owner, 2026-08-16: "when i click on reels on the
-              feed page it switches the bottom nav to the landing/downloader
-              mode bottom nav, it shouldnt change bottom nav wherever the
-              reels button was clicked").
-
-              This used to be `mode === "downloader" || immersive` —
-              `immersive` (on /reels) forced the Downloader set on EVERY
-              visitor there, including a genuine Full Bleed member, per an
-              earlier, opposite instruction ("the reels from the landing page
-              and signed page suppose to be the same"). That owner has now
-              reversed it: which SET of tabs shows should depend only on the
-              viewer's actual mode, never on which route they're standing on.
-              `immersive` still exists below — it now only changes how the
-              bar LOOKS (floating, dark, white glyphs) while on /reels, not
-              which destinations it offers.
-            */}
-            {/* `/home` is an ALIAS for this page in Downloader mode — middleware
-                rewrites it rather than redirecting, so the PWA's start_url costs
-                no extra round-trip. Without this the Home tab sat dark on the
-                one screen every cold launch lands on.
-
-                🔴 `/downloads` ONLY when signed in (owner, 2026-08-16: "the
-                landing page home button still tries to open the downloader
-                page instead of the landing page"). The old marketing-only
-                nav got this right (`homeHref = signedIn ? "/downloads" :
-                "/"`) and it was lost in the merge — `/downloads` has no auth
-                guard, so it isn't WRONG for a guest, it's just a different
-                page than the marketing landing, and Home on the marketing
-                site has to mean the landing page for a visitor who never
-                signed in. */}
-            <NavTab
-              label="Home"
-              href={handle ? "/downloads" : "/"}
-              /* A member's "/" is a 307 to /downloads, and a followed redirect
-                 is a full HTML render (measured 2026-10-05). Until the handle
-                 is known, a member's Home tab does not prefetch "/" at all —
-                 same guard as the header logo. */
-              prefetch={handle || !hasAuthCookie() ? undefined : false}
-              icon={FrenzHomeOutline}
-              activeIcon={FrenzHomeSolid}
-              active={pathname === "/downloads" || pathname === "/home" || (!handle && pathname === "/")}
-              onWarm={router.prefetch}
-            />
-            {/*
-              🔴 ALWAYS FEED HERE, NEVER A PATHNAME ALLOWLIST (owner,
-              2026-08-18: "when i enter signed in profile page, the feed
-              button turns to the reels button" — the FOURTH page to trip
-              this same bug class after /downloads, /feed itself, and
-              marketing pages). This used to be `!forceFeedTab && handle ?
-              Reels : Feed`, which reads as "genuine full-bleed users keep
-              Reels here" but can never actually do that: this whole branch
-              only renders when `fullBleedActive` is false, and
-              `fullBleedActive` is `!forceFeedTab && mode === "full" &&
-              !!handle` — so `mode === "full"` being true here would already
-              imply `forceFeedTab` is true too (contradicting the `!forceFeedTab`
-              this ternary also required), making the Reels case dead for
-              every ACTUAL full-mode user. The only visitor who ever hit it
-              was a signed-in DOWNLOADER-mode user on any page outside the
-              `forceFeedTab` allowlist — exactly the profile-page report,
-              and every allowlist entry before it. A genuine full-bleed
-              session never reaches this branch at all (see `fullBleedActive`
-              below); it gets its real Reels tab from the OTHER branch,
-              unchanged. So within this branch the answer is simply always
-              Feed — no pathname list to keep extending as new pages surface
-              the same gap.
-            */}
-            {/* The Feed tab pulses to invite a first visit (owner, 2026-08-24) — never
-                while you are already on /feed. */}
-            <NavTab label="Feed" href="/feed" icon={LayoutGrid} activeIcon={LayoutGrid} active={pathname.startsWith("/feed")} attract={!pathname.startsWith("/feed")} onWarm={router.prefetch} />
-            <NavTab label="History" href="/history" icon={History} activeIcon={History} active={pathname.startsWith("/history")} onWarm={router.prefetch} />
-            {/*
-              Signed-in downloader mode: Messages in Support's place (owner,
-              2026-10-08: "replace the support button … with the message
-              button … only in the signed in downloader mode not in the landing
-              page"). A guest — the landing — keeps Support. Same tab, icon and
-              unread badge as the full-mode Chats tab.
-            */}
-            {handle ? (
-              <NavTab label="Chats" href="/messages" icon={FrenzInboxOutline} activeIcon={FrenzInboxSolid} active={pathname.startsWith("/messages")} badge={unread} onWarm={router.prefetch} />
-            ) : (
-              <NavTab label="Support" href="/support" icon={Headset} activeIcon={Headset} active={pathname.startsWith("/support")} onWarm={router.prefetch} />
-            )}
-          </>
+        {/*
+          🔴 ONE EXPERIENCE (owner, 2026-10-09: "remove the full bleed features … let
+          there be only one experience which is the Download experience … the former
+          full bleed bottom NAV should not be used anywhere"). One tab set, chosen only
+          by whether someone is signed in:
+            member  Home (/downloads) · Feed (/home, the complete feed) · History · Chats · Profile
+            guest   Home (/) · Earn (/quests) · History · Support · Profile
+          Every tab carries its label (owner: "add description to the landing bottom NAVs").
+        */}
+        <NavTab
+          label="Home"
+          href={handle ? "/downloads" : "/"}
+          /* A member's "/" is a 307 to /downloads, and a followed redirect
+             is a full HTML render (measured 2026-10-05). Until the handle
+             is known, a member's Home tab does not prefetch "/" at all —
+             same guard as the header logo. */
+          prefetch={handle || !hasAuthCookie() ? undefined : false}
+          icon={FrenzHomeOutline}
+          activeIcon={FrenzHomeSolid}
+          active={pathname === "/downloads" || (!handle && pathname === "/")}
+          onWarm={router.prefetch}
+        />
+        {handle ? (
+          /* The complete feed (posts and videos) lives at /home; the Feed tab is its door. Pulses until first opened. */
+          <NavTab
+            label="Feed"
+            href="/home"
+            icon={FrenzFeedOutline}
+            activeIcon={FrenzFeedSolid}
+            active={pathname === "/home" || pathname.startsWith("/feed") || pathname.startsWith("/reels")}
+            attract={!(pathname === "/home" || pathname.startsWith("/feed"))}
+            onWarm={router.prefetch}
+          />
         ) : (
-          <>
-            <NavTab label="Home" href="/home" icon={FrenzHomeOutline} activeIcon={FrenzHomeSolid} active={pathname === "/home"} onWarm={router.prefetch} />
-            <NavTab label="Friends" href="/friends" icon={FrenzFriendsOutline} activeIcon={FrenzFriendsSolid} active={pathname.startsWith("/friends")} onWarm={router.prefetch} />
-            {/* Reels — takes the middle slot Create used to occupy (owner,
-                2026-08-16: "move the reel button at the top to bottom in full
-                bleed"). It used to be reachable only from the top feed's
-                segmented control (FeedTopbarTabs); that entry is removed in
-                favor of this one, so there is exactly one Reels affordance. */}
-            <NavTab label="Reels" href="/reels" icon={FrenzReelsOutline} activeIcon={FrenzReelsSolid} active={pathname.startsWith("/reels")} onWarm={(href) => { router.prefetch(href); warmReels(); }} />
-            <NavTab label="Chats" href="/messages" icon={FrenzInboxOutline} activeIcon={FrenzInboxSolid} active={pathname.startsWith("/messages")} badge={unread} onWarm={router.prefetch} />
-          </>
+          /* Earn in Feed's place on the landing (owner, 2026-10-09) — the quests; the page itself asks a guest to sign in. */
+          <NavTab label="Earn" href="/quests" icon={FrenzEarnOutline} activeIcon={FrenzEarnSolid} active={pathname.startsWith("/quests")} onWarm={router.prefetch} />
+        )}
+        <NavTab label="History" href="/history" icon={History} activeIcon={History} active={pathname.startsWith("/history")} onWarm={router.prefetch} />
+        {/* Signed in: Chats in Support's place (owner, 2026-10-08). A guest keeps Support. */}
+        {handle ? (
+          <NavTab label="Chats" href="/messages" icon={FrenzInboxOutline} activeIcon={FrenzInboxSolid} active={pathname.startsWith("/messages")} badge={unread} onWarm={router.prefetch} />
+        ) : (
+          <NavTab label="Support" href="/support" icon={Headset} activeIcon={Headset} active={pathname.startsWith("/support")} onWarm={router.prefetch} />
         )}
 
         {/* Profile (avatar-in-circle) — active state is now a colored ring
@@ -572,13 +444,13 @@ export function MobileNav({
             playSound("tap");
           }}
           aria-label="Profile"
-          className="relative flex items-center justify-center px-3 py-1"
+          className="relative flex min-w-[3.5rem] flex-col items-center justify-center gap-0.5 px-1.5 py-0.5"
         >
           <NavLift active={profileActive}>
             <PressIcon active={profileActive}>
               <span
                 className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-full transition",
+                  "flex h-7 w-7 items-center justify-center rounded-full transition",
                   // No avatar → the plain person glyph, no colored tile behind
                   // it (owner, 2026-07-16). It follows the same active/inactive
                   // contrast as every other tab rather than sitting on a blue
@@ -595,11 +467,12 @@ export function MobileNav({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
                 ) : (
-                  <FrenzPersonSolid className={cn("h-7 w-7", profileActive ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
+                  <FrenzPersonSolid className={cn("h-[26px] w-[26px]", profileActive ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
                 )}
               </span>
             </PressIcon>
           </NavLift>
+          <NavLabel active={profileActive}>Profile</NavLabel>
         </Link>
       </nav>
     </div>
@@ -645,7 +518,7 @@ function NavLift({ active, children }: { active: boolean; children: ReactNode })
   return (
     <span
       className={cn(
-        "relative flex h-9 w-9 items-center justify-center transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+        "relative flex h-8 w-8 items-center justify-center transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
         active ? "-translate-y-0.5" : "translate-y-0",
       )}
     >
@@ -706,7 +579,7 @@ function NavTab({
         haptic("light");
         playSound("tap");
       }}
-      className="relative flex items-center justify-center px-3 py-1"
+      className="relative flex min-w-[3.5rem] flex-col items-center justify-center gap-0.5 px-1.5 py-0.5"
     >
       <NavLift active={active}>
         <PressIcon active={active} className="relative">
@@ -725,7 +598,7 @@ function NavTab({
             attract state was added for. The complaint was about the colour
             bleeding onto the bar, and that is what has been removed.
           */}
-          <Glyph strokeWidth={2.1} className={cn("h-7 w-7 transition-colors", active ? GLYPH_ACTIVE : GLYPH_INACTIVE, attract && "attract-loop")} />
+          <Glyph strokeWidth={2.1} className={cn("h-[26px] w-[26px] transition-colors", active ? GLYPH_ACTIVE : GLYPH_INACTIVE, attract && "attract-loop")} />
           {badge > 0 ? (
             <span className="absolute -right-3 -top-2 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-card">
               {badge > 9 ? "9+" : badge}
@@ -733,6 +606,12 @@ function NavTab({
           ) : null}
         </PressIcon>
       </NavLift>
+      <NavLabel active={active}>{label}</NavLabel>
     </Link>
   );
+}
+
+/** The tab's description under its glyph (owner, 2026-10-09: "add description to the landing bottom NAVs"). */
+function NavLabel({ active, children }: { active: boolean; children: ReactNode }) {
+  return <span className={cn("text-[10.5px] font-semibold leading-none tracking-[0.01em]", active ? GLYPH_ACTIVE : "text-muted-foreground")}>{children}</span>;
 }

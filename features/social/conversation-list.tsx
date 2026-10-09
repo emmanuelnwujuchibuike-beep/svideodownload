@@ -38,6 +38,7 @@ import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { springs } from "@/lib/motion/springs";
 import type { FriendRequestItem } from "@/lib/social/friends";
 import type { ConversationSummary } from "@/lib/social/messages";
+import { ChatStreakBadge, ChatStreakCelebrations } from "@/features/social/chat-streak";
 import { cn } from "@/lib/utils";
 
 /** How many threads the inbox pre-loads, in display order. The room's own
@@ -457,6 +458,8 @@ export function ConversationList({
 
   return (
     <div className={cn("frenz-inbox", pane && "flex min-h-0 flex-1 flex-col")}>
+      {/* a chat streak that grew since last time: the card-less fire burst, once (2026-10-09) */}
+      <ChatStreakCelebrations conversations={conversations} />
       {/* Search — the mockup's full-width glass pill, with a trailing filter
           icon that jumps to Archived (the one filter view not already a tab). */}
       <label className={cn("relative block", pane ? "mx-3 mb-2" : "mb-3")}>
@@ -924,6 +927,8 @@ function ConversationRow({
           <div className="flex items-center gap-1.5">
             <span className={cn("truncate text-[15px]", c.unread ? "font-bold" : "font-semibold")}>{name}</span>
             {!isGroup && c.other!.isVerified ? <VerifiedTick className="h-3.5 w-3.5 shrink-0" /> : null}
+            {/* 0200 (owner, 2026-10-09): the streak lives here now — beside anyone you have both talked to on 2+ days in a row */}
+            {!isGroup ? <ChatStreakBadge days={c.streakDays ?? 0} /> : null}
             {c.muted ? <BellOff className="h-3 w-3 shrink-0 text-muted-foreground" /> : null}
           </div>
           {isTyping ? (

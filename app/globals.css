@@ -1020,6 +1020,8 @@
     outline-offset: 2px;
   }
   .ai-btn:active { transform: scale(0.95); }
+  /* a TapOnceLink door on its way (2026-10-09): it stays pressed until the page arrives */
+  .ai-btn[data-pending] { transform: scale(0.95); opacity: 0.85; }
   .ai-btn[aria-disabled="true"], .ai-btn:disabled {
     cursor: not-allowed;
     opacity: 0.5;
@@ -4525,4 +4527,55 @@ html.dark .streak-recover {
 }
 :where(html[data-a11y-motion="reduce"]) :where(button, [role="button"], a.ai-btn, a.ai-strip-cta, summary):active {
   scale: none;
+}
+
+/* ── The card-less streak burst (owner, 2026-10-09) — features/streaks/streak-fire-burst.tsx ──
+   The flame, large and bold, wrapped in a ring of real fire: warm tongues that
+   hug it, point outward and flicker, plus a few embers rising. Transform/opacity
+   only on small layers. No full-screen blur, nothing repaints the page behind. */
+.streak-fb { animation: frenz-ms-in 200ms var(--ease-out) both; background: radial-gradient(circle at 50% 50%, rgb(0 0 0 / 0.22), rgb(0 0 0 / 0.08) 42%, transparent 70%); }
+.streak-fb-glow {
+  width: 20rem; height: 20rem; border-radius: 9999px;
+  background: radial-gradient(circle, rgb(251 191 36 / 0.55), rgb(249 115 22 / 0.28) 38%, transparent 68%);
+  animation: streak-fb-glow 2.6s var(--ease-out) both;
+}
+.streak-fb-stage { width: 14rem; height: 14rem; }
+.streak-fb-emblem {
+  filter: drop-shadow(0 12px 30px rgb(249 115 22 / 0.6)) drop-shadow(0 0 1.5px rgb(0 0 0 / 0.35));
+  animation: streak-fb-pop 700ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.streak-fb-ring { pointer-events: none; }
+.streak-fb-tongue {
+  position: absolute;
+  left: calc(50% + var(--x)); top: calc(50% + var(--y));
+  width: var(--h); height: var(--h);
+  margin: calc(var(--h) * -1) 0 0 calc(var(--h) * -0.5);
+  transform-origin: 50% 100%;
+  opacity: 0;
+  filter: drop-shadow(0 0 6px rgb(249 115 22 / 0.55));
+  animation: streak-fb-tongue 460ms ease-in-out calc(160ms + var(--i) * 45ms) infinite alternate;
+}
+.streak-fb-ember {
+  left: 50%; top: 60%; width: 5px; height: 5px; border-radius: 9999px;
+  background: #fde68a; box-shadow: 0 0 8px #f97316;
+  opacity: 0;
+  animation: streak-fb-ember 1.5s ease-out calc(300ms + var(--i) * 150ms) infinite;
+}
+@keyframes streak-fb-pop { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.14); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes streak-fb-glow { 0% { transform: scale(0.5); opacity: 0; } 35% { opacity: 1; } 100% { transform: scale(1.05); opacity: 0.9; } }
+@keyframes streak-fb-tongue {
+  0% { opacity: 0.75; transform: scale(0.92, 0.8) skewY(-3deg); }
+  100% { opacity: 1; transform: scale(1.04, 1.1) skewY(3deg); }
+}
+@keyframes streak-fb-ember {
+  0% { opacity: 0; transform: translate(calc((var(--i) - 3.5) * 8px), 0) scale(1); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc((var(--i) - 3.5) * 15px), -8rem) scale(0.4); }
+}
+.streak-fx-lite .streak-fb-tongue { animation: none; opacity: 0.9; }
+.streak-fx-lite .streak-fb-ember { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .streak-fb-tongue, .streak-fb-ember, .streak-fb-emblem, .streak-fb-glow { animation: none; }
+  .streak-fb-tongue { opacity: 0.9; }
+  .streak-fb-ember { display: none; }
 }

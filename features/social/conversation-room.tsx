@@ -993,10 +993,24 @@ export function ConversationRoom({
           // No banner fires from this anymore — see the real online/offline
           // tracking above — it just quietly keeps trying.
           firstAttemptFailures += 1;
-          if (!cancelled) {
+          // Part 9 (2026-10-09): bounded. A channel the server keeps refusing (an RLS
+          // denial) retried every 5 s forever, hidden or not. Six tries, never while
+          // hidden; after that the visible/online resync below still refreshes the thread.
+          if (!cancelled && firstAttemptFailures <= 6) {
             const delay = Math.min(1000 * firstAttemptFailures, 5000);
             window.setTimeout(() => {
-              if (!cancelled) channel.subscribe(onSubscribeStatus);
+              if (cancelled) return;
+              if (document.visibilityState !== "visible") {
+                firstAttemptFailures -= 1; // not an attempt: try again when the thread is looked at
+                const retry = () => {
+                  if (document.visibilityState !== "visible") return;
+                  document.removeEventListener("visibilitychange", retry);
+                  if (!cancelled) channel.subscribe(onSubscribeStatus);
+                };
+                document.addEventListener("visibilitychange", retry);
+                return;
+              }
+              channel.subscribe(onSubscribeStatus);
             }, delay);
           }
         }

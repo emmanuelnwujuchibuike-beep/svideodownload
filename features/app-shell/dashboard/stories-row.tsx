@@ -471,10 +471,18 @@ export function StoryViewer({
     if (!story || story.mediaKind === "video" || replying || holding || paidCard || optionsOpen) return;
     const startedAt = performance.now() - elapsedRef.current;
     let raf = 0;
+    // Part 9 (2026-10-09): the whole viewer re-rendered every frame (60 Hz) for the
+    // bar alone. It now re-renders only when the bar moves by 2 % (about 10 Hz);
+    // a short linear CSS transition on the bar keeps it smooth.
+    let shown = -1;
     const tick = (now: number) => {
       elapsedRef.current = now - startedAt;
       const p = Math.min(100, (elapsedRef.current / IMAGE_MS) * 100);
-      setPct(p);
+      const step = p >= 100 ? 100 : Math.floor(p / 2) * 2;
+      if (step !== shown) {
+        shown = step;
+        setPct(step);
+      }
       if (p >= 100) next();
       else raf = requestAnimationFrame(tick);
     };
@@ -723,7 +731,12 @@ export function StoryViewer({
             className="h-[2.5px] flex-1 overflow-hidden rounded-full bg-white/30 shadow-[0_0_1px_rgba(0,0,0,0.45)]"
           >
             <span
-              className={cn("block h-full rounded-full bg-white", idx !== si && "transition-[width] duration-200")}
+              className={cn(
+                "block h-full rounded-full bg-white",
+                idx !== si && "transition-[width] duration-200",
+                // an IMAGE segment moves in 2 % steps (Part 9) - a linear 120 ms glide hides the steps; a video's bar follows timeupdate untransitioned
+                idx === si && story?.mediaKind !== "video" && "transition-[width] duration-[120ms] ease-linear",
+              )}
               style={{ width: `${idx < si ? 100 : idx === si ? pct : 0}%` }}
             />
           </span>

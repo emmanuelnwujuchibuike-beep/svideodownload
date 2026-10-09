@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { loadFlatNotifications } from "@/features/notifications/data";
 import { hrefFor, iconFor, timeAgo, tintFor, verbFor } from "@/features/notifications/meta";
+import { onNotificationInsert } from "@/features/notifications/notif-stream";
 import { loadInbox } from "@/features/social/inbox";
 import { categoryForType } from "@/lib/platform/notifications-registry";
 import type { NotificationItem } from "@/lib/social/notifications";
@@ -44,39 +45,32 @@ export function NotificationLiveToast() {
       hideTimer.current = setTimeout(() => setItem(null), 5200);
     };
 
+    const offNotif = onNotificationInsert((row) => {
+      // Tab hidden → device push / bell badge already cover it.
+      if (document.visibilityState !== "visible") return;
+      // message/message_reaction already have their own richer toast below
+      // (actual message preview, not just "sent you a message") driven by the
+      // conversation_members touch — skip here so a new message doesn't
+      // produce two toasts.
+      if (row.type === "message" || row.type === "message_reaction") return;
+      const rowId = row.id;
+      // The realtime row is bare ids; fetch the enriched item (actor, post).
+      // Its own request, not the bell's cache key: the bell's optimistic bump
+      // would make the shared cache discard an in-flight read (cache.ts).
+      void loadFlatNotifications()
+        .then((d) => {
+          const fresh = (rowId && d.items.find((i) => i.id === rowId)) || d.items[0];
+          if (fresh) show({ kind: "notif", n: fresh });
+        })
+        .catch(() => {});
+    });
+
     getClientAuthUser(supabase).then(({ data: auth }) => {
       const uid = auth.user?.id;
       if (!uid || cancelled) return;
 
-      // Social notifications (likes, follows, friend requests, …).
-      channels.push(
-        supabase
-          // Distinct channel name — the topbar bell owns `notifications:{uid}`.
-          .channel(`notif-toast:${uid}`)
-          .on(
-            "postgres_changes",
-            { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${uid}` },
-            (payload) => {
-              // Tab hidden → device push / bell badge already cover it.
-              if (document.visibilityState !== "visible") return;
-              const row = payload.new as { id?: string; type?: string };
-              // message/message_reaction already have their own richer toast
-              // below (actual message preview, not just "sent you a message")
-              // driven by the conversation_members touch — skip here so a new
-              // message doesn't produce two toasts.
-              if (row.type === "message" || row.type === "message_reaction") return;
-              const rowId = row.id;
-              // The realtime row is bare ids; fetch the enriched item (actor, post).
-              void loadFlatNotifications()
-                .then((d) => {
-                  const fresh = (rowId && d.items.find((i) => i.id === rowId)) || d.items[0];
-                  if (fresh) show({ kind: "notif", n: fresh });
-                })
-                .catch(() => {});
-            },
-          )
-          .subscribe(),
-      );
+      // Social notifications (likes, follows, friend requests, …) arrive on
+      // the shared stream (registered above, outside the auth wait).
 
       // Incoming messages: every active `conversation_members` row you have
       // is touched on every message/edit/delete/rename in that conversation
@@ -121,6 +115,7 @@ export function NotificationLiveToast() {
 
     return () => {
       cancelled = true;
+      offNotif();
       if (hideTimer.current) clearTimeout(hideTimer.current);
       for (const ch of channels) void supabase.removeChannel(ch);
     };

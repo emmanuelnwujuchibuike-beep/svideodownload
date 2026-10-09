@@ -54,10 +54,28 @@ interface SharedTyping {
   isTyping: boolean;
   heartbeatTimer: ReturnType<typeof setInterval> | null;
   clearTimer: ReturnType<typeof setTimeout> | null;
-  staleInterval: ReturnType<typeof setInterval>;
+  /** evicts typers whose heartbeat stopped - run by the ONE shared sweep below */
+  prune: () => void;
 }
 
 const registry = new Map<string, SharedTyping>();
+
+/*
+  Part 9 (2026-10-09): ONE sweep for every typing channel, instead of a 2 s
+  interval per channel (the inbox opens up to 25). It runs only while some
+  channel exists and the page is visible: a hidden page has nobody watching
+  the dots, and the first sweep after return clears anything stale.
+*/
+let sweep: ReturnType<typeof setInterval> | null = null;
+function syncSweep(): void {
+  const want = registry.size > 0 && (typeof document === "undefined" || document.visibilityState === "visible");
+  if (want && !sweep) sweep = setInterval(() => registry.forEach((e) => e.prune()), 2_000);
+  else if (!want && sweep) {
+    clearInterval(sweep);
+    sweep = null;
+  }
+}
+if (typeof document !== "undefined") document.addEventListener("visibilitychange", syncSweep);
 
 function namesFromEntry(entry: SharedTyping): string[] {
   const state = entry.channel.presenceState<TypingPayload>();
@@ -97,7 +115,7 @@ function acquireChannel(topicId: string, viewerId: string): SharedTyping {
     isTyping: false,
     heartbeatTimer: null,
     clearTimer: null,
-    staleInterval: undefined as unknown as ReturnType<typeof setInterval>,
+    prune: () => {},
   };
 
   // Event-driven: sync/join/leave fire when presence state ACTUALLY changes
@@ -174,8 +192,9 @@ function acquireChannel(topicId: string, viewerId: string): SharedTyping {
   // like every other status branch already handles.
   void supabase.auth.getSession().then(joinChannel).catch(joinChannel);
 
-  entry.staleInterval = setInterval(pruneStale, 2_000);
+  entry.prune = pruneStale;
   registry.set(topicId, entry);
+  syncSweep();
   return entry;
 }
 
@@ -184,12 +203,12 @@ function releaseChannel(topicId: string): void {
   if (!entry) return;
   entry.refCount--;
   if (entry.refCount > 0) return;
-  clearInterval(entry.staleInterval);
   if (entry.clearTimer) clearTimeout(entry.clearTimer);
   if (entry.heartbeatTimer) clearInterval(entry.heartbeatTimer);
   const supabase = createClient();
   void supabase.removeChannel(entry.channel);
   registry.delete(topicId);
+  syncSweep();
 }
 
 /**

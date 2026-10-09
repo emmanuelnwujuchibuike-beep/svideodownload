@@ -6,6 +6,17 @@ import { claimPlayback, releasePlayback } from "@/lib/media/video-coordinator";
 import { streamIframeUrl } from "@/lib/media/stream";
 import { cn } from "@/lib/utils";
 
+/** Stable ref callback: on unmount, stop the clip and drop its source so the decoder is released. */
+function releaseOnUnmount(v: HTMLVideoElement | null): (() => void) | undefined {
+  if (!v) return undefined;
+  return () => {
+    v.pause();
+    releasePlayback(v);
+    v.removeAttribute("src");
+    v.load();
+  };
+}
+
 /**
  * One video component for the whole app. If the item has a Cloudflare Stream `uid`,
  * it renders the adaptive-bitrate Stream player (instant start, quality ladder);
@@ -59,6 +70,10 @@ export function SmartVideo({
   return (
     // eslint-disable-next-line jsx-a11y/media-has-caption
     <video
+      // Part 9 (2026-10-09): give the decoder and buffered bytes back when the player
+      // unmounts (iOS can keep them alive after a playing <video> leaves the DOM).
+      // A STABLE (module-level) React 19 ref callback, so its cleanup runs only on unmount.
+      ref={releaseOnUnmount}
       src={src}
       poster={poster ?? undefined}
       autoPlay={autoPlay}

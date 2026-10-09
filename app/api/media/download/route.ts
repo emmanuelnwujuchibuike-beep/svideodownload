@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { isPublicWallpaperUrl, isStorageObjectPath, MEDIA_PROXY_MAX_BYTES } from "@/lib/media/proxy-guard";
+import { clientId, downloadLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -73,22 +75,23 @@ export async function GET(request: Request) {
   const raw = params.get("url");
   if (!raw) return NextResponse.json({ error: "Missing url." }, { status: 400 });
 
+  let target: URL;
+  try {
+    target = new URL(raw);
+  } catch {
+    return NextResponse.json({ error: "Invalid url." }, { status: 400 });
+  }
+  // https only + our own storage hosts only + storage object paths only. Fail closed.
+  if (target.protocol !== "https:" || !allowedHosts().includes(target.host) || !isStorageObjectPath(target, process.env.NEXT_PUBLIC_SUPABASE_URL)) {
+    return NextResponse.json({ error: "Not allowed." }, { status: 403 });
+  }
+
   /*
     Sign-in is required for member media, and NOT for the public wallpaper
-    library.
-
-    The wallpaper library is deliberately open — a signed-out visitor arriving
-    from the landing page can browse and download it, which is the whole point
-    of that surface. Requiring an account here would have made "Save to device"
-    fail for exactly the audience it was built for.
-
-    The exemption is narrow and checked AFTER the host allowlist below: it
-    covers objects in the public `wallpapers` bucket only. Those bytes are
-    already served publicly at the same URL, so proxying them adds no exposure
-    — only egress, which is bounded by the same allowlist as everything else.
+    library (a signed-out visitor may save a wallpaper). The exemption is
+    decided on the parsed URL, never the raw string.
   */
-  const isPublicWallpaper = /\/wallpapers\//i.test(raw);
-  if (!isPublicWallpaper) {
+  if (!isPublicWallpaperUrl(target, process.env.NEXT_PUBLIC_SUPABASE_URL)) {
     const supabase = await createClient();
     const {
       data: { user },
@@ -96,25 +99,24 @@ export async function GET(request: Request) {
     if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   }
 
-  let target: URL;
-  try {
-    target = new URL(raw);
-  } catch {
-    return NextResponse.json({ error: "Invalid url." }, { status: 400 });
-  }
-  // https only + our own storage hosts only. Fail closed.
-  if (target.protocol !== "https:" || !allowedHosts().includes(target.host)) {
-    return NextResponse.json({ error: "Not allowed." }, { status: 403 });
-  }
+  // Every save is an explicit tap; a burst of them is not (Part 9: this route had no limit).
+  const { success } = await downloadLimiter.limit(`media-save:${clientId(request.headers)}`);
+  if (!success) return NextResponse.json({ error: "Too many saves at once. Try again in a minute." }, { status: 429 });
 
   let upstream: Response;
   try {
-    upstream = await fetch(target.toString(), { cache: "no-store" });
+    // never follow a redirect off our storage hosts
+    upstream = await fetch(target.toString(), { cache: "no-store", redirect: "manual" });
   } catch {
     return NextResponse.json({ error: "Couldn't reach that file." }, { status: 502 });
   }
   if (!upstream.ok || !upstream.body) {
     return NextResponse.json({ error: "That file is no longer available." }, { status: upstream.status === 404 ? 404 : 502 });
+  }
+  const length = Number(upstream.headers.get("content-length") ?? NaN);
+  if (!Number.isFinite(length) || length > MEDIA_PROXY_MAX_BYTES) {
+    await upstream.body.cancel().catch(() => {});
+    return NextResponse.json({ error: "That file is too large to save this way." }, { status: 413 });
   }
 
   const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";

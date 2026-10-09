@@ -68,7 +68,32 @@ function ensureStarted(): void {
     subscribeMyPresenceStatus((status) => {
       if (!channel) return;
       if (status === "invisible") void channel.untrack();
-      else void channel.track({ at: Date.now() });
+      else if (document.visibilityState === "visible") void channel.track({ at: Date.now() });
+    });
+
+    /*
+      Part 9 (2026-10-09): a backgrounded app is not "online". Every join and
+      leave on this shared channel is fanned out to every member, so a phone in
+      a pocket kept costing everyone else work. 30 s after the app is hidden it
+      leaves the channel's presence (a quick switch-away does not flicker), and
+      it rejoins the moment it is visible again.
+    */
+    let hiddenTimer: ReturnType<typeof setTimeout> | null = null;
+    document.addEventListener("visibilitychange", () => {
+      if (!channel) return;
+      if (document.visibilityState === "hidden") {
+        hiddenTimer ??= setTimeout(() => {
+          hiddenTimer = null;
+          void channel?.untrack();
+        }, 30_000);
+      } else {
+        if (hiddenTimer) {
+          clearTimeout(hiddenTimer);
+          hiddenTimer = null;
+        } else if (getCachedMyPresenceStatus() !== "invisible") {
+          void channel.track({ at: Date.now() });
+        }
+      }
     });
   });
 }
@@ -129,7 +154,12 @@ function ensureAutoAwayStarted(): void {
     void setStatus("away");
   };
 
+  // Part 9: at most one reaction per 5 s - this ran on every mouse move and scroll frame
+  let lastActivity = 0;
   const onActivity = () => {
+    const now = Date.now();
+    if (!wasAutoAway && now - lastActivity < 5000) return;
+    lastActivity = now;
     if (idleTimer) clearTimeout(idleTimer);
     if (wasAutoAway) {
       wasAutoAway = false;
@@ -142,7 +172,7 @@ function ensureAutoAwayStarted(): void {
     if (document.visibilityState === "visible") onActivity();
   };
 
-  for (const evt of ["mousemove", "keydown", "touchstart", "scroll"] as const) {
+  for (const evt of ["pointerdown", "keydown", "touchstart", "scroll"] as const) {
     window.addEventListener(evt, onActivity, { passive: true });
   }
   document.addEventListener("visibilitychange", onVisible);

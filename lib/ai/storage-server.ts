@@ -1,6 +1,5 @@
 import "server-only";
 
-import { AI_CLEAN_LIMITS } from "@/lib/ai/config";
 import { AiJobError } from "@/lib/ai/errors";
 import type { AiFeature } from "@/lib/ai/jobs";
 import {
@@ -10,7 +9,6 @@ import {
   aiCharacterKey,
   aiPosterKey,
   aiReferenceKey,
-  aiResultKey,
   aiSourceKey,
   aiVoiceKey,
   aiVoiceSampleKey,
@@ -325,68 +323,4 @@ function safeDownloadName(name: string): string {
   return cleaned || "frenz-ai-clean.mp4";
 }
 
-/**
- * Bring the provider's output into our own private bucket.
- *
- * ── 🔴 Why copy it at all ────────────────────────────────────────────────────
- *
- * Replicate's output URL is public to anyone holding it and expires on their
- * schedule, not ours. Storing that URL on the job would mean a member's cleaned
- * video living at a public address we do not control, and a "your video is
- * ready" link that dies without warning. So the file is copied once, into a
- * bucket with no read policy at all, and every later access is a signed URL
- * minted after checking who is asking.
- *
- * ── The size guard is a memory guard ─────────────────────────────────────────
- *
- * The body is buffered to hand it to the storage client, so an unexpectedly
- * enormous output would be an out-of-memory crash in a webhook — which
- * Replicate would then retry, crashing again. `content-length` is checked
- * first when the provider sends one, and the buffered length is checked after
- * when it does not, because a missing header is not permission to buffer
- * anything at all.
- */
-export async function storeResultFromUrl(opts: {
-  userId: string;
-  feature: AiFeature;
-  jobId: string;
-  sourceUrl: string;
-}): Promise<{ path: string; size: number }> {
-  const res = await fetch(opts.sourceUrl);
-  if (!res.ok || !res.body) {
-    throw new AiJobError("PROVIDER_ERROR", `output fetch ${res.status}`);
-  }
-
-  const declared = Number(res.headers.get("content-length") ?? 0);
-  if (declared > AI_CLEAN_LIMITS.maxResultSize) {
-    throw new AiJobError("STORAGE_ERROR", `output declared ${declared} bytes, over the ceiling`);
-  }
-
-  const buffer = Buffer.from(await res.arrayBuffer());
-  if (buffer.byteLength > AI_CLEAN_LIMITS.maxResultSize) {
-    throw new AiJobError("STORAGE_ERROR", `output was ${buffer.byteLength} bytes, over the ceiling`);
-  }
-  if (buffer.byteLength === 0) {
-    throw new AiJobError("PROVIDER_ERROR", "output was empty");
-  }
-
-  const contentType = res.headers.get("content-type")?.split(";")[0]?.trim() || "video/mp4";
-  // The extension follows the URL when it is readable, because a member who
-  // downloads their result should get a file their player opens.
-  const urlExt = /\.([a-z0-9]{2,5})(?:\?|$)/i.exec(opts.sourceUrl)?.[1] ?? "mp4";
-  const path = aiResultKey(opts.userId, opts.feature, opts.jobId, urlExt);
-
-  const admin = createAdminClient();
-  const { error } = await admin.storage.from(AI_RESULT_BUCKET).upload(path, buffer, {
-    contentType,
-    // A retried webhook re-uploads the same object rather than failing on a
-    // duplicate key — the delivery is idempotent, so this has to be too.
-    upsert: true,
-  });
-  if (error) {
-    console.error("[ai/storage] result upload failed", { jobId: opts.jobId, message: error.message });
-    throw new AiJobError("STORAGE_ERROR", error.message);
-  }
-
-  return { path, size: buffer.byteLength };
-}
+/* Part 9 (2026-10-09): storeResultFromUrl (buffered up to the result ceiling in function memory) was removed - it had no callers. Results are copied by the worker or signed in place. */

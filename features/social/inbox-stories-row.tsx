@@ -35,8 +35,8 @@ export function InboxStoriesRow() {
   const { handle, avatarUrl } = useEntitlements();
 
   return (
-    <section aria-label="Stories" className="mb-1">
-      <div className="mb-2 flex items-center justify-between px-2">
+    <section aria-label="Stories">
+      <div className="mb-1.5 flex items-center justify-between px-2">
         <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">
           <CircleDashed className="h-3 w-3" /> Stories
         </span>
@@ -45,7 +45,8 @@ export function InboxStoriesRow() {
           row seeds from the shared client cache and fetches /api/stories itself.
           "Your story" always shows even with nothing to watch — it's the entry
           point for posting one. */}
-      <StoriesRow viewerAvatarUrl={avatarUrl} viewerName={handle ?? undefined} viewerHandle={handle} />
+      {/* `compact` (2026-10-09 reference): 60px rings, so the chats get the room. */}
+      <StoriesRow viewerAvatarUrl={avatarUrl} viewerName={handle ?? undefined} viewerHandle={handle} compact />
     </section>
   );
 }

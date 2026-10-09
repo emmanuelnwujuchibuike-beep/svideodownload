@@ -24,7 +24,7 @@ import { Archive as ArchiveIcon,
 import { VerifiedTick } from "@/components/badges/identity-badges";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { mutate, revalidate, useQuery } from "@/features/data";
@@ -326,11 +326,16 @@ export function ConversationList({
   const archivedCount = useMemo(() => conversations.filter((c) => c.archived).length, [conversations]);
 
   const notArchived = useMemo(() => conversations.filter((c) => !c.archived), [conversations]);
-  const unreadCount = useMemo(() => notArchived.filter((c) => c.unread).length, [notArchived]);
-  const groupCount = useMemo(() => notArchived.filter((c) => c.type === "group").length, [notArchived]);
 
+  /*
+    The filter reads a DEFERRED copy of the query (2026-10-09: "avoid unnecessary
+    rendering while the user types"). Search is local — it filters the cached
+    inbox, no request per keystroke — but every keystroke re-rendered every row;
+    React now keeps the field responsive and re-filters the list when it can.
+  */
+  const deferredQ = useDeferredValue(q);
   const visible = useMemo(() => {
-    const query = q.trim().toLowerCase();
+    const query = deferredQ.trim().toLowerCase();
     // Channels aren't a real feature yet (owner-scoped: coming soon) — no
     // conversation is ever a channel, so this tab always shows the empty
     // state below rather than silently falling through to "All".
@@ -346,7 +351,7 @@ export function ConversationList({
       const handle = c.type === "group" ? "" : c.other!.handle;
       return name.toLowerCase().includes(query) || handle.toLowerCase().includes(query);
     });
-  }, [conversations, q, showArchived, tab]);
+  }, [conversations, deferredQ, showArchived, tab]);
 
   const pinned = useMemo(() => visible.filter((c) => c.pinned), [visible]);
   // Owner mockup: pinned conversations get their OWN compact avatar-strip
@@ -448,8 +453,10 @@ export function ConversationList({
 
   const tabs: { id: InboxTab; label: string; badge: number }[] = [
     { id: "all", label: "All", badge: notArchived.length },
-    { id: "unread", label: "Unread", badge: unreadCount },
-    { id: "groups", label: "Groups", badge: groupCount },
+    // No counts on Unread / Groups (2026-10-09 reference): all five tabs now fit a
+    // 390px phone. The unread rows carry their own counts, and the Chats tab its badge.
+    { id: "unread", label: "Unread", badge: 0 },
+    { id: "groups", label: "Groups", badge: 0 },
     { id: "requests", label: "Requests", badge: requests.length },
     // Owner-scoped: a real tab in the filter row (matching the mockup) backed
     // by a "coming soon" empty state — not a new broadcast-room feature yet.
@@ -460,17 +467,24 @@ export function ConversationList({
     <div className={cn("frenz-inbox", pane && "flex min-h-0 flex-1 flex-col")}>
       {/* a chat streak that grew since last time: the card-less fire burst, once (2026-10-09) */}
       <ChatStreakCelebrations conversations={conversations} />
-      {/* Search — the mockup's full-width glass pill, with a trailing filter
+      {/* Search — the full-width pill, with a trailing filter
           icon that jumps to Archived (the one filter view not already a tab). */}
-      <label className={cn("relative block", pane ? "mx-3 mb-2" : "mb-3")}>
-        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      {/*
+        2026-10-09 reference ("refined search bar"): a plain white pill with a
+        light grey hairline instead of a frosted `glass` field — nothing behind
+        it to blur, so the blur was pure cost. 52px tall; the input is 16px so
+        iOS Safari does not zoom the page when it takes focus.
+      */}
+      <label className={cn("relative block", pane ? "mx-3 mb-2" : "mb-2.5")}>
+        <Search aria-hidden className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground" />
         <input
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search messages, users, groups…"
           aria-label="Search conversations"
-          className="glass w-full rounded-full py-2.5 pl-11 pr-11 text-sm outline-none transition placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-violet-500/30"
+          enterKeyHint="search"
+          className="h-[3.25rem] w-full rounded-full border border-slate-200 bg-white pl-11 pr-12 text-base shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition placeholder:text-[15px] placeholder:text-muted-foreground/70 focus:border-violet-400/60 focus:ring-2 focus:ring-violet-500/20 dark:border-white/10 dark:bg-white/[0.04]"
         />
         <button
           type="button"
@@ -481,11 +495,12 @@ export function ConversationList({
           aria-label={showArchived ? "Show all chats" : "Show archived chats"}
           aria-pressed={showArchived}
           className={cn(
-            "absolute right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full transition",
-            showArchived ? "text-primary" : "text-muted-foreground hover:text-foreground",
+            // a 40px target (was 24px) for the filter control
+            "absolute right-1.5 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+            showArchived ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
           )}
         >
-          <SlidersHorizontal className="h-4 w-4" />
+          <SlidersHorizontal className="h-[18px] w-[18px]" aria-hidden />
         </button>
       </label>
 
@@ -509,7 +524,8 @@ export function ConversationList({
       */}
       <div
         className={cn(
-          "sticky top-0 z-10 mb-2 flex items-center gap-5 border-b border-border/40 bg-background px-1",
+          // Scrolls sideways rather than squeezing on a narrow phone (2026-10-09).
+          "sticky top-0 z-10 mb-1 flex items-center gap-0.5 overflow-x-auto border-b border-border/40 bg-background [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
           pane && "mx-3",
         )}
         role="tablist"
@@ -529,7 +545,8 @@ export function ConversationList({
                 setTab(t.id);
               }}
               className={cn(
-                "relative flex items-center gap-1.5 pb-2 text-sm transition-colors",
+                // 44px tall, padded each side — a real target, not just the word
+                "relative flex h-11 shrink-0 items-center gap-1.5 whitespace-nowrap px-2 text-[15px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
                 active ? "font-bold text-foreground" : "font-medium text-muted-foreground hover:text-foreground",
               )}
             >
@@ -544,7 +561,15 @@ export function ConversationList({
                   {t.badge > 99 ? "99+" : t.badge}
                 </span>
               ) : null}
-              {active ? <span className="absolute -bottom-px left-0 right-0 h-0.5 rounded-full bg-gradient-to-r from-blue-500 to-violet-500" /> : null}
+              {/* The indicator is always present and only scales in (transform + opacity), so
+                  switching tabs is a composited fade rather than an element appearing. */}
+              <span
+                aria-hidden
+                className={cn(
+                  "absolute -bottom-px left-1.5 right-1.5 h-[3px] rounded-full bg-gradient-to-r from-blue-600 to-violet-600 transition-[transform,opacity] duration-200 motion-reduce:transition-none",
+                  active ? "scale-x-100 opacity-100" : "scale-x-50 opacity-0",
+                )}
+              />
             </button>
           );
         })}
@@ -880,7 +905,7 @@ function ConversationRow({
           // rounded-none (2026-07-16): rows are flush WhatsApp-style now, so
           // the tap/active highlight fills the full-width row rectangle instead
           // of a floating rounded card.
-          "frenz-conversation-row -ml-2 flex min-w-0 flex-1 items-center gap-3 rounded-none py-3.5 pl-0 pr-3 transition active:scale-[0.99]",
+          "frenz-conversation-row -ml-2 flex min-w-0 flex-1 items-center gap-3 rounded-none py-4 pl-0 pr-3 transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
           active
             ? "bg-gradient-to-r from-blue-500/[0.10] to-violet-500/[0.10] ring-1 ring-inset ring-violet-500/25"
             : "hover:bg-secondary/40",
@@ -890,10 +915,9 @@ function ConversationRow({
             avatar on every row, distinct from the unread-count badge on the
             right; purple while unread, a quiet gray dot otherwise so read
             rows still align instead of the row visibly shifting. */}
-        <span
-          aria-hidden
-          className={cn("h-1.5 w-1.5 shrink-0 rounded-full", c.unread ? "bg-[hsl(var(--brand-purple))]" : "bg-transparent")}
-        />
+        {/* The unread mark moved to the RIGHT, under the time (2026-10-09 reference:
+            "stronger unread state — unread dot / count"); a spacer keeps the edge. */}
+        <span aria-hidden className="w-1.5 shrink-0" />
         <span className="relative shrink-0">
           {/* Vivid gradient ring (owner mockup) — a padded `bg-brand` wrapper,
               not a thin `ring-*` outline, so every avatar in the list reads as
@@ -903,7 +927,7 @@ function ConversationRow({
             {isGroup ? (
               c.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={c.avatarUrl} alt="" className="h-[52px] w-[52px] rounded-full object-cover ring-2 ring-card" />
+                <img src={c.avatarUrl} alt="" width={52} height={52} loading="lazy" decoding="async" className="h-[52px] w-[52px] rounded-full object-cover ring-2 ring-card" />
               ) : (
                 // The inbox list doesn't fetch per-member avatars (would add a
                 // query per group just for this) — a group without a custom
@@ -915,7 +939,7 @@ function ConversationRow({
               )
             ) : c.other!.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={c.other!.avatarUrl} alt="" className="h-[52px] w-[52px] rounded-full object-cover ring-2 ring-card" />
+              <img src={c.other!.avatarUrl} alt="" width={52} height={52} loading="lazy" decoding="async" className="h-[52px] w-[52px] rounded-full object-cover ring-2 ring-card" />
             ) : (
               <span className="bg-brand flex h-[52px] w-[52px] items-center justify-center rounded-full text-lg font-bold text-white ring-2 ring-card">
                 {name.charAt(0).toUpperCase()}
@@ -925,7 +949,7 @@ function ConversationRow({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className={cn("truncate text-[15px]", c.unread ? "font-bold" : "font-semibold")}>{name}</span>
+            <span className={cn("truncate text-base leading-tight", c.unread ? "font-bold" : "font-semibold")}>{name}</span>
             {!isGroup && c.other!.isVerified ? <VerifiedTick className="h-3.5 w-3.5 shrink-0" /> : null}
             {/* 0200 (owner, 2026-10-09): the streak lives here now — beside anyone you have both talked to on 2+ days in a row */}
             {!isGroup ? <ChatStreakBadge days={c.streakDays ?? 0} /> : null}
@@ -941,7 +965,7 @@ function ConversationRow({
               </span>
             </p>
           ) : (
-            <p className={cn("mt-0.5 flex items-center gap-1 truncate text-sm", c.unread ? "text-foreground" : "text-muted-foreground")}>
+            <p className={cn("mt-1 flex items-center gap-1 truncate text-sm", c.unread ? "font-semibold text-foreground" : "text-muted-foreground")}>
               {c.fromMe ? <LastStatusTicks status={c.lastStatus} /> : null}
               {/* A real icon for what kind of message this was — never an
                   emoji standing in for one (standing app rule). */}
@@ -958,6 +982,12 @@ function ConversationRow({
           {c.unreadCount > 0 && !c.muted ? (
             <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-1.5 text-[10px] font-bold text-white">
               {c.unreadCount > 99 ? "99+" : c.unreadCount}
+              <span className="sr-only"> unread</span>
+            </span>
+          ) : c.unread ? (
+            // unread without a count (or muted): the reference's quiet blue dot
+            <span className="mt-1 h-2.5 w-2.5 rounded-full bg-blue-600 dark:bg-blue-400">
+              <span className="sr-only">Unread</span>
             </span>
           ) : c.pinned ? (
             <Pin className="h-3.5 w-3.5 text-muted-foreground/70" />

@@ -37,17 +37,31 @@ const StoryOptions = dynamic(() => import("@/features/social/story-options").the
 
 const SelfStoryCard = dynamic(() => import("@/features/ads-platform/serve/self-story-card").then((m) => m.SelfStoryCard), { ssr: false });
 
+/*
+  Ring sizes. `compact` is the Messages inbox (2026-10-09 reference: "smaller
+  stories section — reduced height, compact avatar, more space for chats"):
+  60px avatars in 72px columns instead of 68 / 82. /home keeps the full size.
+*/
+const AV = "h-[4.25rem] w-[4.25rem]";
+const AV_COMPACT = "h-[3.75rem] w-[3.75rem]";
+const COL = "w-[5.1rem]";
+const COL_COMPACT = "w-[4.5rem]";
+
 function StoryRing({
   group,
   label,
   unseen,
   onOpen,
+  compact = false,
 }: {
   group: StoryGroup;
   label: string;
   unseen: boolean;
   onOpen: () => void;
+  compact?: boolean;
 }) {
+  const av = compact ? AV_COMPACT : AV;
+  const col = compact ? COL_COMPACT : COL;
   // Show the story's own cover (most recent first) in the circle so it teases
   // the content — not the author's profile picture.
   const cover = group.stories[0];
@@ -57,7 +71,7 @@ function StoryRing({
 
   return (
     <PressIcon className="shrink-0">
-      <button type="button" onClick={onOpen} className="flex w-[5.1rem] flex-col items-center gap-1.5">
+      <button type="button" onClick={onOpen} className={cn("flex flex-col items-center", col, compact ? "gap-1" : "gap-1.5")}>
         <span className={cn("rounded-full p-0.5", unseen ? "bg-brand" : "ring-1 ring-inset ring-border/70")}>
           <span className="block overflow-hidden rounded-full bg-background p-0.5">
             {/* One <Image> for BOTH image stories and video stories (via the
@@ -78,18 +92,18 @@ function StoryRing({
                 width={68}
                 height={68}
                 unoptimized={false}
-                className="h-[4.25rem] w-[4.25rem] rounded-full bg-secondary object-cover"
+                className={cn(av, "rounded-full bg-secondary object-cover")}
               />
             ) : group.avatarUrl ? (
-              <Image src={group.avatarUrl} alt="" width={68} height={68} className="h-[4.25rem] w-[4.25rem] rounded-full bg-secondary object-cover" />
+              <Image src={group.avatarUrl} alt="" width={68} height={68} className={cn(av, "rounded-full bg-secondary object-cover")} />
             ) : (
-              <span className="flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
+              <span className={cn(av, "flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white")}>
                 {group.displayName.charAt(0).toUpperCase()}
               </span>
             )}
           </span>
         </span>
-        <span className={cn("w-[5.1rem] truncate text-center text-[11px]", unseen ? "font-semibold text-foreground" : "font-medium text-muted-foreground")}>
+        <span className={cn(col, "truncate text-center text-[11px]", unseen ? "font-semibold text-foreground" : "font-medium text-muted-foreground")}>
           {label}
         </span>
       </button>
@@ -102,12 +116,16 @@ export function StoriesRow({
   viewerAvatarUrl,
   viewerName,
   viewerHandle,
+  compact = false,
 }: {
   initialGroups?: StoryGroup[];
   viewerAvatarUrl?: string | null;
   viewerName?: string;
   viewerHandle?: string | null;
+  /** The Messages inbox's smaller rings — see AV_COMPACT. */
+  compact?: boolean;
 }) {
+  const av = compact ? AV_COMPACT : AV;
   const router = useRouter();
   // Seeded from the server + cached-first: paints instantly, refreshed in
   // background. `initialGroups` is only present where the row is server-rendered
@@ -164,7 +182,7 @@ export function StoriesRow({
   useEffect(() => setSeen(loadSeenMap()), [data]);
 
   return (
-    <div className="-mx-1 flex gap-4 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className={cn("-mx-1 flex overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", compact ? "gap-2.5" : "gap-4")}>
       {/* Order is the owner's, 2026-07-16: "i want it in the same line with other
           stories but it should be the first" —
             [+ Add story] [Your story] [friends…]
@@ -183,20 +201,20 @@ export function StoriesRow({
           type="button"
           onClick={() => router.push("/create/story")}
           aria-label="Add to your story"
-          className="flex w-[5.1rem] flex-col items-center gap-1.5"
+          className={cn("flex flex-col items-center", compact ? cn(COL_COMPACT, "gap-1") : cn(COL, "gap-1.5"))}
         >
           <span className="relative rounded-full p-0.5 ring-1 ring-inset ring-border/70">
             <span className="block rounded-full bg-background p-0.5">
               {viewerAvatarUrl ? (
-                <Image src={viewerAvatarUrl} alt="" width={68} height={68} className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
+                <Image src={viewerAvatarUrl} alt="" width={68} height={68} className={cn(av, "rounded-full object-cover")} />
               ) : (
-                <span className="flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
+                <span className={cn(av, "flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white")}>
                   {initial}
                 </span>
               )}
             </span>
-            <span className="absolute -bottom-0.5 -right-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white ring-2 ring-background">
-              <Plus className="h-4 w-4" />
+            <span className={cn("absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white ring-2 ring-background", compact ? "h-6 w-6" : "h-7 w-7")}>
+              <Plus className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
             </span>
           </span>
           <span className="text-[11px] font-medium text-muted-foreground">Add story</span>
@@ -207,11 +225,11 @@ export function StoriesRow({
           greying out your own story the moment you watch it back makes a live
           story look expired. */}
       {ownGroup ? (
-        <StoryRing group={ownGroup} label="Your story" unseen onOpen={() => setStart(groups.indexOf(ownGroup))} />
+        <StoryRing group={ownGroup} label="Your story" unseen compact={compact} onOpen={() => setStart(groups.indexOf(ownGroup))} />
       ) : null}
 
       {otherGroups.map((g) => (
-        <StoryRing key={g.handle} group={g} label={g.displayName.split(" ")[0] ?? ""} unseen={!isGroupSeen(g, seen)} onOpen={() => setStart(groups.indexOf(g))} />
+        <StoryRing key={g.handle} group={g} label={g.displayName.split(" ")[0] ?? ""} unseen={!isGroupSeen(g, seen)} compact={compact} onOpen={() => setStart(groups.indexOf(g))} />
       ))}
 
       {start !== null ? (

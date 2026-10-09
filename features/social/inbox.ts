@@ -45,6 +45,9 @@ export async function loadInbox(): Promise<Inbox> {
  * `user_low`/`user_high`, because postgres_changes can't OR across columns
  * — that hack no longer applies now that membership lives in its own table.)
  */
+/** How long a burst of inbox events waits for quiet before the one refetch it becomes. */
+export const INBOX_COALESCE_MS = 350;
+
 export function useInboxRealtime(): void {
   useEffect(() => {
     // A guest has no inbox to listen to — no socket, no 60 kB client chunk.
@@ -64,7 +67,40 @@ export function useInboxRealtime(): void {
     let channel: Parameters<BrowserClient["removeChannel"]>[0] | null = null;
     let cancelled = false;
 
-    const bump = () => void revalidate(INBOX_KEY, loadInbox, 0).catch(() => {});
+    /*
+      🔴 COALESCED (2026-10-09: "avoid refreshing the entire inbox for every
+      incoming message"). Every message touches a `conversation_members` row,
+      and each touch used to refetch the WHOLE inbox at once — a burst of five
+      messages was five full /api/messages loads. The event carries no preview or
+      unread count, so a row cannot be patched in place; instead the burst waits
+      for 350 ms of quiet and becomes ONE refetch. An event that lands while that
+      fetch is in flight is no longer swallowed by it (revalidate() hands back the
+      running promise): it schedules exactly one more pass, so the list always
+      ends on the latest state.
+    */
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let running = false;
+    let again = false;
+    const flush = async () => {
+      timer = null;
+      if (running) {
+        again = true;
+        return;
+      }
+      running = true;
+      try {
+        do {
+          again = false;
+          await revalidate(INBOX_KEY, loadInbox, 0).catch(() => {});
+        } while (again && !cancelled);
+      } finally {
+        running = false;
+      }
+    };
+    const bump = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => void flush(), INBOX_COALESCE_MS);
+    };
 
     void getClient()
       .then(async (client) => {
@@ -106,6 +142,7 @@ export function useInboxRealtime(): void {
 
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
       window.removeEventListener("online", bump);
       if (channel && supabase) void supabase.removeChannel(channel);
     };

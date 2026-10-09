@@ -322,6 +322,19 @@ export const config = {
       Both are public, contain no user data, and have nothing this middleware
       can usefully do to them.
     */
-    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|twitter-image|launch.html|\\.well-known|.*\\.(?:svg|png|jpg|jpeg|gif|webp|apk)$).*)",
+    /*
+      🔴 PART 10 (2026-10-09): the service worker, its modules, the manifest
+      and every other static file type are EXCLUDED too.
+
+      Measured on production logs (46 minutes, 2,492 middleware invocations):
+      1,355 of them — 54% — were `/sw.js` and its eight `/sw/*.js` imports,
+      re-fetched on every update check (`updateViaCache: "none"`), plus 50 for
+      `/manifest.webmanifest`. None of them carries user data or needs a
+      session; each still paid an Edge Middleware invocation and, for a signed-in
+      member with a stale token, a Supabase Auth round trip. Their headers
+      (no-store for the worker, the CSP) come from next.config.ts and apply
+      without this middleware.
+    */
+    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|twitter-image|launch.html|sw\\.js|sw/|manifest\\.webmanifest|\\.well-known|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|apk|js|css|woff|woff2|mp4|webm|mp3)$).*)",
   ],
 };

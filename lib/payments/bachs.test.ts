@@ -8,7 +8,7 @@ vi.mock("server-only", () => ({}));
 
 import { isBachsProductId, normalizeAiPlansConfig } from "@/lib/ai/credits/config";
 import { normalizeAiWalletConfig, normalizePaymentRouting } from "@/lib/ai/credits/wallet-config";
-import { bachsBaseUrl, bachsStatusIsPaid, bachsSubscriptionStatus, decimalToMinor, usdCentsToDecimal, verifyBachsSignature } from "@/lib/payments/bachs";
+import { bachsBaseUrl, bachsCheckoutStatus, bachsStatusIsPaid, bachsSubscriptionStatus, decimalToMinor, usdCentsToDecimal, verifyBachsSignature } from "@/lib/payments/bachs";
 import { offeredProviders, paymentMarket, routePayment } from "@/lib/payments/router";
 
 /**
@@ -140,5 +140,28 @@ describe("the member's pick (2026-10-07) only reorders what the route allows", (
     expect(offeredProviders({ purpose: "ai_subscription", market: "NG", routing, usable: both, memberChoice: false })).toEqual(["bachs"]);
     expect(normalizeAiWalletConfig({ memberChoice: false }).memberChoice).toBe(false);
     expect(normalizeAiWalletConfig({}).memberChoice).toBe(true);
+  });
+});
+
+// 2026-10-09: a real paid checkout, read from Bachs (live), stuck on "Verifying" because of this
+describe("a paid checkout session reads as paid", () => {
+  const paid = {
+    checkout_id: "chk_x",
+    status: "completed",
+    payment_status: "succeeded",
+    reference: "frenz_bachs_ad_x",
+    charge: { status: "succeeded", amount_paid: "1397.49", currency: "NGN", reference: "frenz_bachs_ad_x" },
+  };
+  it("completed + payment succeeded → SUCCEEDED (so every verify fallback settles it)", () => {
+    expect(bachsCheckoutStatus(paid)).toBe("SUCCEEDED");
+    expect(bachsStatusIsPaid(bachsCheckoutStatus(paid))).toBe(true);
+    // the charge alone is enough when payment_status is absent
+    expect(bachsCheckoutStatus({ status: "completed", charge: { status: "succeeded" } })).toBe("SUCCEEDED");
+  });
+  it("teeth: open, expired, failed and refused sessions are NOT paid", () => {
+    expect(bachsCheckoutStatus({ status: "open", payment_status: "unpaid" })).toBe("open");
+    expect(bachsCheckoutStatus({ status: "expired" })).toBe("expired");
+    expect(bachsCheckoutStatus({ status: "completed", payment_status: "failed", charge: { status: "failed" } })).toBe("completed");
+    expect(bachsStatusIsPaid(bachsCheckoutStatus({ status: "completed", payment_status: "failed" }))).toBe(false);
   });
 });

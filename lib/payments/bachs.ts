@@ -155,7 +155,23 @@ export async function createBachsCheckout(opts: { amountUsdCents: number; email:
 /** The session as Bachs holds it now — for verify-on-return. Only a SUCCEEDED status is ever treated as paid. */
 export async function getBachsCheckout(checkoutId: string): Promise<{ status: string; reference: string | null; raw: Record<string, unknown> }> {
   const raw = await bachs<Record<string, unknown>>(`/v1/checkout-sessions/${encodeURIComponent(checkoutId)}`, { method: "GET" });
-  return { status: String(raw.status ?? ""), reference: typeof raw.reference === "string" ? raw.reference : null, raw };
+  return { status: bachsCheckoutStatus(raw), reference: typeof raw.reference === "string" ? raw.reference : null, raw };
+}
+
+/**
+ * 🔴 A PAID checkout session does NOT say "SUCCEEDED" in `status` (verified
+ * live, 2026-10-09, an advertiser's $1 payment stuck on "Verifying"): Bachs
+ * answers `status: "completed"` with `payment_status: "succeeded"` and
+ * `charge.status: "succeeded"`. Only the webhook's `data.status` says
+ * SUCCEEDED — so every verify fallback (ads, wallet top-ups, AI plans) treated
+ * a paid checkout as still pending, and a payment whose webhook did not arrive
+ * was never confirmed. The session is paid when the PAYMENT says so; the
+ * session's own status is kept for "expired" / "canceled".
+ */
+export function bachsCheckoutStatus(raw: Record<string, unknown>): string {
+  const charge = raw.charge && typeof raw.charge === "object" ? (raw.charge as Record<string, unknown>) : null;
+  const paid = [raw.payment_status, charge?.status, raw.status].some((s) => bachsStatusIsPaid(s));
+  return paid ? "SUCCEEDED" : String(raw.status ?? "");
 }
 
 export function bachsStatusIsPaid(status: unknown): boolean {

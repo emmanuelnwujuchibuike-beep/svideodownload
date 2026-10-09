@@ -5,8 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AiButton, AiButtonLink } from "@/features/ai/design/ai-button";
 import { AiPanel } from "@/features/ai/design/ai-surface";
-import { useUser } from "@/features/auth/use-user";
 import { adMessage } from "@/lib/ads-platform/messages";
+import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
 import { formatMoney } from "@/lib/ads-platform/offer";
 import { cn } from "@/lib/utils";
 
@@ -132,7 +132,17 @@ const TONE_CHIP: Record<Tone, string> = {
 };
 
 export function PaymentReturn() {
-  const { user, loading } = useUser();
+  /*
+    🔴 2026-10-09 (owner: "after payment it showed white screen for long … and
+    even after getting email from Bachs for Successful it still loading"). The
+    first check used to WAIT for the browser's own sign-in state — after a
+    round trip to an external checkout that can mean a token refresh first
+    (production logs: the page at 20:57:15, its first check at 20:57:30). The
+    status API authenticates from the session cookie on the server, so the
+    check now starts the moment the reference is read; "sign in" is shown only
+    when the SERVER says the visitor is not signed in.
+  */
+  const [needsSignIn, setNeedsSignIn] = useState(false);
   const [reference, setReference] = useState<string | null | undefined>(undefined);
   useEffect(() => setReference(readReference()), []);
   const [view, setView] = useState<View | null>(null);
@@ -150,6 +160,10 @@ export function PaymentReturn() {
     try {
       const res = await fetch(`/api/ads/payment/${encodeURIComponent(reference)}`, { cache: "no-store", signal: ac.signal });
       const json = (await res.json().catch(() => null)) as (View & { error?: string; message?: string }) | null;
+      if (res.status === 401) {
+        setNeedsSignIn(true);
+        return null;
+      }
       if (!res.ok || !json) {
         setError(json?.message ?? adMessage("server"));
         return null;
@@ -173,23 +187,26 @@ export function PaymentReturn() {
 
   // the bounded backoff: only while the answer is in flight
   useEffect(() => {
-    if (!user || !reference) return;
+    if (!reference) return;
+    // a deploy landing meanwhile must not reload this page out from under a settling payment
+    const release = beginCriticalActivity();
     let i = 0;
     let cancelled = false;
     const step = async () => {
       const v = await check();
       i += 1;
-      if (cancelled || (v && !SETTLING.includes(v.state)) || i >= BACKOFF_MS.length) return;
+      if (cancelled || (v && !SETTLING.includes(v.state)) || i >= BACKOFF_MS.length) return release();
       timer.current = setTimeout(() => void step(), BACKOFF_MS[i]);
     };
     void step();
     return () => {
+      release();
       cancelled = true;
       if (timer.current) clearTimeout(timer.current);
       inflight.current?.abort();
       inflight.current = null;
     };
-  }, [user, reference, check]);
+  }, [reference, check]);
 
   useEffect(() => {
     if (view?.state === "live") {
@@ -201,9 +218,9 @@ export function PaymentReturn() {
     }
   }, [view?.state]);
 
-  if (reference === undefined || (reference && loading)) return <ReturnSkeleton />;
+  if (reference === undefined) return <ReturnSkeleton />;
   if (!reference) return <Notice icon={CircleAlert} tone="rose">{adMessage("payment_not_found")}</Notice>;
-  if (!user) {
+  if (needsSignIn) {
     return (
       <AiPanel className="text-center dark:ring-white/10">
         <p className="text-[15px] font-semibold">Sign in to see your payment</p>

@@ -126,6 +126,15 @@ describe("the advertiser sees the server's truth", () => {
     expect(paymentState("abandoned", [])).toBe("cancelled");
     expect(paymentState("chargeback", ["paused"])).toBe("chargeback");
   });
+  it("2026-10-09: the first check starts at once — never behind the browser's sign-in state — and a deploy cannot reload it away", () => {
+    const page = src("features/ads-platform/payment-return.tsx");
+    expect(page).not.toContain("useUser(");
+    expect(page).toContain("if (!reference) return;\n    // a deploy landing meanwhile");
+    expect(page).toContain("const release = beginCriticalActivity();");
+    expect(page).toContain("if (res.status === 401) {");
+    // the server's checkout read now recognises a paid Bachs session (lib/payments/bachs.ts bachsCheckoutStatus)
+    expect(src("lib/payments/bachs.ts")).toContain("return { status: bachsCheckoutStatus(raw),");
+  });
   it("the return page checks a handful of times on a widening backoff, then stops", () => {
     const page = src("features/ads-platform/payment-return.tsx");
     expect(page).toContain("const BACKOFF_MS = [0, 2_000, 4_000, 8_000, 15_000, 30_000];");

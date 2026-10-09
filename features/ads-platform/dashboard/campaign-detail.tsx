@@ -6,11 +6,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AiPanel } from "@/features/ai/design/ai-surface";
 import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { adMessage } from "@/lib/ads-platform/messages";
+import { specOf } from "@/lib/ads-platform/media-spec";
 import { offeredDurations } from "@/lib/ads-platform/offer";
 import { cn } from "@/lib/utils";
 
 import { Chip, Notice, Row } from "../advertise-ui";
 import { loadAdCatalog } from "../catalog-client";
+import { prepareCreativeFile, waitForProcessing } from "../creative-prep";
 import { DayChart, fromDay, PaymentList, Skeleton } from "../my-campaigns";
 import { mediaTypeOf, posterFromVideo, putWithProgress } from "../upload-client";
 import {
@@ -275,11 +277,24 @@ function EditDetails({ c, done }: { c: CampaignRow; done: Flash }) {
 }
 
 function Replace({ c, done }: { c: CampaignRow; done: Flash }) {
-  const [phase, setPhase] = useState<{ k: "idle" } | { k: "uploading"; p: number } | { k: "checking" } | { k: "error"; messages: string[] }>({ k: "idle" });
+  const [phase, setPhase] = useState<{ k: "idle" } | { k: "optimizing" } | { k: "uploading"; p: number } | { k: "checking" } | { k: "processing" } | { k: "error"; messages: string[] }>({ k: "idle" });
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const pick = async (file: File) => {
-    const kind = mediaTypeOf(file);
+  const alive = useRef(true);
+  useEffect(() => () => {
+    alive.current = false;
+  }, []);
+  const pick = async (picked: File) => {
+    const kind = mediaTypeOf(picked);
     if (!kind) return setPhase({ k: "error", messages: [adMessage("mime_not_allowed")] });
+    // 0208: the same preparation as a new creative — the campaign's own format limits, from the cached catalog
+    const cat = await loadAdCatalog().catch(() => null);
+    const format = cat?.formats.find((x) => x.code === c.ad_placements?.format_code) ?? null;
+    let file = picked;
+    if (format) {
+      const prepared = await prepareCreativeFile(picked, kind, specOf(format), () => setPhase({ k: "optimizing" }));
+      if (!prepared.ok) return setPhase({ k: "error", messages: [adMessage(prepared.code)] });
+      file = prepared.file;
+    }
     const t = await manage<{ creativeId: string; uploadUrl: string; posterUploadUrl: string | null; version: number }>({ action: "replace-ticket", campaignId: c.id, mediaType: kind, mimeType: file.type, sizeBytes: file.size });
     if (!t.ok) return setPhase({ k: "error", messages: [t.message] });
     setPhase({ k: "uploading", p: 0 });
@@ -290,19 +305,36 @@ function Replace({ c, done }: { c: CampaignRow; done: Flash }) {
     const ok = await putWithProgress({ url: t.data.uploadUrl, body: file, contentType: file.type, onProgress: (p) => setPhase({ k: "uploading", p }) });
     if (!ok) return setPhase({ k: "error", messages: [adMessage("upload_missing")] });
     setPhase({ k: "checking" });
-    const f = await manage<{ ok: boolean; swapped: boolean; messages: string[] }>({ action: "replace-finalize", creativeId: t.data.creativeId, version: t.data.version });
+    const f = await manage<{ ok: boolean; swapped: boolean; processing?: boolean; messages: string[] }>({ action: "replace-finalize", creativeId: t.data.creativeId, version: t.data.version });
     if (!f.ok) return setPhase({ k: "error", messages: [f.message] });
+    if (f.data.ok && f.data.processing) {
+      // 0208: an oversized video is being transcoded; the CURRENT ad keeps serving until it is ready and swapped in
+      setPhase({ k: "processing" });
+      const out = await waitForProcessing(t.data.creativeId, () => alive.current);
+      if (out.state === "gone") return;
+      if (out.state === "failed") return setPhase({ k: "error", messages: out.messages.length ? out.messages : [adMessage("processing_failed")] });
+      if (out.state === "waiting") return done({ tone: "emerald", text: "Your new video is still being optimized. Your current ad stays live, and the new one replaces it automatically when it's ready." });
+      return done({ tone: "emerald", text: "Your new video is optimized, passed the checks and is live." });
+    }
     if (!f.data.ok || !f.data.swapped) return setPhase({ k: "error", messages: f.data.messages.length ? f.data.messages : [adMessage("not_ready")] });
     done({ tone: "emerald", text: "Your new creative passed the checks and is live." });
   };
-  const working = phase.k === "uploading" || phase.k === "checking";
+  const working = phase.k === "optimizing" || phase.k === "uploading" || phase.k === "checking" || phase.k === "processing";
   return (
     <div className="mt-4">
       <p className="text-[13px] text-muted-foreground">Your current ad keeps showing while the new file uploads and is checked. It&apos;s replaced only if the new one passes — same campaign, same dates, no extra charge.</p>
       <input ref={inputRef} type="file" accept="image/*,video/mp4,video/webm" className="sr-only" disabled={working} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void pick(f); }} />
       <button type="button" disabled={working} onClick={() => inputRef.current?.click()} className="ai-btn ai-btn--primary mt-3 inline-flex min-h-[2.75rem] items-center gap-1.5 disabled:opacity-70">
         {working ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Upload className="h-4 w-4" aria-hidden />}
-        {phase.k === "uploading" ? `Uploading… ${Math.round(phase.p * 100)}%` : phase.k === "checking" ? "Checking your file…" : "Choose a file"}
+        {phase.k === "uploading"
+          ? `Uploading… ${Math.round(phase.p * 100)}%`
+          : phase.k === "checking"
+            ? "Checking your file…"
+            : phase.k === "optimizing"
+              ? "Optimizing your image…"
+              : phase.k === "processing"
+                ? "Optimizing your video…"
+                : "Choose a file"}
       </button>
       {phase.k === "error" ? (
         <div className="mt-3"><Notice icon={Pause} tone="rose">{phase.messages.join(" ")} Your current ad is still live.</Notice></div>

@@ -159,7 +159,8 @@ export function SelfAdBanner({
         ad={current}
         placement={placement}
         page={page}
-        fit={variant === "strip" ? "contain" : "cover"}
+        // 0208: every variant shows the creative whole (contain) — the card and tile get the soft backdrop
+        fit="contain"
         eager={variant === "strip"}
         className="h-full w-full animate-in fade-in duration-300 motion-reduce:animate-none"
         onView={(v) => {

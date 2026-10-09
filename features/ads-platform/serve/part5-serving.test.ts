@@ -341,12 +341,19 @@ describe("ONE physical slot → ONE provider (slots addendum)", () => {
     expect(resolveSlotProvider(["frenzsave", "network"], { frenzsave: false, network: null })).toBe("network"); // unknown inventory = ask, as before
   });
 
-  it("a creative must fit the physical box", () => {
+  it("0208: any real creative can be shown in any box — whole, never cropped — so the slot shape filters nothing", () => {
     const card = slotById("under_download")!;
     expect(creativeFitsSlot(card, 640, 400)).toBe(true);
-    expect(creativeFitsSlot(card, 1080, 1920)).toBe(false);
-    expect(creativeFitsSlot(slotById("top_banner")!, 640, 64)).toBe(true);
-    expect(creativeFitsSlot(slotById("top_banner")!, 640, 400)).toBe(false);
+    expect(creativeFitsSlot(card, 1080, 1920)).toBe(true); // portrait in a landscape card: letterboxed, not dropped
+    expect(creativeFitsSlot(slotById("top_banner")!, 640, 400)).toBe(true);
+    // teeth: nonsense dimensions are still refused
+    expect(creativeFitsSlot(card, 0, 400)).toBe(false);
+    expect(creativeFitsSlot(card, 640, -1)).toBe(false);
+    // and every paid surface shows it whole, over a soft backdrop of itself
+    const creative = src("features/ads-platform/serve/self-ad-creative.tsx");
+    expect(creative).toContain("fit = FIT_RULE,");
+    expect(creative).toContain('const backdrop = fit === "contain" ? (ad.mediaType === "video" ? ad.thumb : ad.media) : null;');
+    expect(src("features/ads-platform/serve/self-ad-banner.tsx")).not.toMatch(/fit=\{variant === "strip" \? "contain" : "cover"\}/);
   });
 
   it("AdSurface decides the provider first and mounts only that one — no second container", () => {

@@ -19,6 +19,8 @@
  * Pure: the browser and the server both use it.
  */
 
+import { SPEC_DEFAULTS } from "./media-spec";
+
 export type Currency = "CREDIT" | "USD" | "NGN";
 
 export interface CatalogFormat {
@@ -38,6 +40,10 @@ export interface CatalogFormat {
   min_height: number | null;
   aspect_ratio: number | null;
   aspect_tolerance: number;
+  /** 0208 — defaulted by parseCatalog until the migration has run (media-spec SPEC_DEFAULTS) */
+  delivery_long_edge: number;
+  image_quality: number;
+  max_upload_bytes: number | null;
 }
 
 export interface CatalogPlacement {
@@ -109,6 +115,9 @@ export function parseCatalog(raw: unknown): AdCatalog | null {
       max_file_bytes: n(f.max_file_bytes),
       aspect_ratio: f.aspect_ratio === null ? null : n(f.aspect_ratio),
       aspect_tolerance: n(f.aspect_tolerance ?? 0),
+      delivery_long_edge: f.delivery_long_edge == null ? SPEC_DEFAULTS.deliveryLongEdge : n(f.delivery_long_edge),
+      image_quality: f.image_quality == null ? SPEC_DEFAULTS.imageQuality : n(f.image_quality),
+      max_upload_bytes: f.max_upload_bytes == null ? null : n(f.max_upload_bytes),
     })),
     placements: r.placements as CatalogPlacement[],
     durations: (r.durations as CatalogDuration[]).map((d) => ({ ...d, days: n(d.days) })),

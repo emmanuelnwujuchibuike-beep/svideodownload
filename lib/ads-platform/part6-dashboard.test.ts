@@ -88,7 +88,8 @@ describe("§15.2/3/6 — live creative replacement", () => {
 
 describe("§15.4/5 — uploads and links are checked by the server", () => {
   it("the replacement's bytes go through the same probe as a new ad", () => {
-    expect(src("lib/ads-platform/campaign-manage.ts")).toContain("const result = await probeAndPublish(db, { id: cr.id as string, storage_path: cr.storage_path as string }, f);");
+    // 0208: a replacement takes the synchronous path (it swaps into a running ad)
+    expect(src("lib/ads-platform/campaign-manage.ts")).toContain('const result = await probeAndPublish(db, { id: cr.id as string, storage_path: cr.storage_path as string }, f, "replacement");');
   });
 
   it("a new link gets the full check (Part 8: safety, blocklist, reputation, redirects) before the database applies it", () => {

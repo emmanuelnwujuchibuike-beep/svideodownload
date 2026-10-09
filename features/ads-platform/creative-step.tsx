@@ -7,9 +7,11 @@ import { AiButton } from "@/features/ai/design/ai-button";
 import { IMAGE_MIME_TYPES, validateCreative, VIDEO_MIME_TYPES } from "@/lib/ads-platform/creative-validation";
 import { adMessage } from "@/lib/ads-platform/messages";
 import { formatBytes, type CatalogFormat } from "@/lib/ads-platform/offer";
+import { specOf } from "@/lib/ads-platform/media-spec";
 import { cn } from "@/lib/utils";
 
 import { Chip, Notice } from "./advertise-ui";
+import { prepareCreativeFile, waitForProcessing } from "./creative-prep";
 import { mediaTypeOf, posterFromVideo, putWithProgress, readLocalMedia } from "./upload-client";
 
 /**
@@ -35,7 +37,17 @@ export interface UploadedCreative {
   sizeBytes: number | null;
 }
 
-type Phase = { kind: "idle" } | { kind: "checking" } | { kind: "uploading"; progress: number } | { kind: "verifying" } | { kind: "error"; messages: string[] };
+type Phase =
+  | { kind: "idle" }
+  | { kind: "checking" }
+  | { kind: "optimizing" }
+  | { kind: "uploading"; progress: number }
+  | { kind: "verifying" }
+  | { kind: "processing" }
+  | { kind: "error"; messages: string[] };
+
+/** Past the page's wait (creative-prep PROCESSING_WAIT_MS) the transcode keeps going server-side. */
+export const STILL_PROCESSING = "Your video is still being optimized. You can leave this page — it finishes on its own, and you'll see it here when you come back.";
 
 async function post<T>(path: string, body: unknown): Promise<{ ok: true; data: T } | { ok: false; message: string }> {
   try {
@@ -66,8 +78,15 @@ export function CreativeStep({
   const abortRef = useRef<AbortController | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [fileName, setFileName] = useState<string | null>(null);
+  // the file the advertiser just chose, shown at once — the published copy follows a few seconds later
+  const [localSrc, setLocalSrc] = useState<string | null>(null);
 
-  useEffect(() => () => abortRef.current?.abort(), []);
+  const alive = useRef(true);
+  useEffect(() => () => {
+    alive.current = false;
+    abortRef.current?.abort();
+  }, []);
+  const spec = specOf(format);
 
   const accept = [...(format.media_types.includes("image") ? IMAGE_MIME_TYPES : []), ...(format.media_types.includes("video") ? VIDEO_MIME_TYPES : [])].join(",");
   const limits = {
@@ -81,6 +100,9 @@ export function CreativeStep({
     minHeight: format.min_height,
     aspectRatio: format.aspect_ratio,
     aspectTolerance: format.aspect_tolerance,
+    // 0208: a video may be sent larger than it is served when the server can transcode it
+    maxUploadBytes: format.max_upload_bytes,
+    videoProcessing: format.max_upload_bytes != null,
   };
 
   const choose = async (file: File) => {
@@ -89,18 +111,32 @@ export function CreativeStep({
     const kind = mediaTypeOf(file);
     if (file.type === "video/quicktime") return setPhase({ kind: "error", messages: [adMessage("quicktime")] });
     if (!kind) return setPhase({ kind: "error", messages: [adMessage("not_recognised")] });
-    // size first: never decode (or upload) something too large
-    if (file.size > format.max_file_bytes) {
-      return setPhase({ kind: "error", messages: [adMessage("file_too_large", { mediaType: kind, maxFileBytes: format.max_file_bytes })] });
+
+    /*
+      0208 — fitted, never refused for its size or shape:
+        · an image is read from its header (no decode), refused only if it
+          claims an unsafe pixel count, then — if it is larger or heavier than
+          this format serves — resized IN A WORKER to the delivery size, same
+          proportions, WebP (transparency kept). The upload is that copy.
+        · a video is uploaded as made; if it is larger than served, the server
+          has it transcoded (Cloudflare Stream) and this page waits for it.
+    */
+    const prepared = await prepareCreativeFile(file, kind, spec, () => setPhase({ kind: "optimizing" }));
+    if (!prepared.ok) return setPhase({ kind: "error", messages: [adMessage(prepared.code)] });
+    const upload = prepared.file;
+    // size: an image as optimized; a video up to what may be uploaded for transcoding
+    const sizeCap = kind === "video" && limits.videoProcessing ? Math.max(format.max_file_bytes, format.max_upload_bytes ?? 0) : format.max_file_bytes;
+    if (upload.size > sizeCap) {
+      return setPhase({ kind: "error", messages: [adMessage("file_too_large", { mediaType: kind, maxFileBytes: sizeCap })] });
     }
-    const local = await readLocalMedia(file);
+    const local = await readLocalMedia(upload);
     if (!local) return setPhase({ kind: "error", messages: [adMessage("not_recognised")] });
     const verdict = validateCreative(
-      { formatCode: format.code, mediaType: kind, mimeType: file.type, durationSeconds: local.durationSeconds, fileSizeBytes: file.size, width: local.width, height: local.height, destinationUrl: null },
+      { formatCode: format.code, mediaType: kind, mimeType: upload.type, durationSeconds: local.durationSeconds, fileSizeBytes: upload.size, width: local.width, height: local.height, destinationUrl: null },
       limits,
     );
     if (verdict.status === "invalid") {
-      const facts = { ...local, mediaType: kind, fileSizeBytes: file.size, ...limits };
+      const facts = { ...local, mediaType: kind, fileSizeBytes: upload.size, ...limits };
       return setPhase({ kind: "error", messages: verdict.errors.map((c) => adMessage(c, facts)) });
     }
 
@@ -109,21 +145,21 @@ export function CreativeStep({
     const ticket = await post<{ creativeId: string; uploadUrl: string; posterUploadUrl: string | null }>("/api/ads/advertiser/upload", {
       campaignId,
       mediaType: kind,
-      mimeType: file.type,
-      sizeBytes: file.size,
+      mimeType: upload.type,
+      sizeBytes: upload.size,
     });
     if (!ticket.ok) return setPhase({ kind: "error", messages: [ticket.message] });
 
     abortRef.current = new AbortController();
     setPhase({ kind: "uploading", progress: 0 });
     if (kind === "video" && ticket.data.posterUploadUrl) {
-      const poster = await posterFromVideo(file);
+      const poster = await posterFromVideo(upload);
       if (poster) await putWithProgress({ url: ticket.data.posterUploadUrl, body: poster, contentType: poster.type || "image/webp", signal: abortRef.current.signal });
     }
     const ok = await putWithProgress({
       url: ticket.data.uploadUrl,
-      body: file,
-      contentType: file.type,
+      body: upload,
+      contentType: upload.type,
       signal: abortRef.current.signal,
       onProgress: (p) => setPhase({ kind: "uploading", progress: p }),
     });
@@ -131,29 +167,45 @@ export function CreativeStep({
     if (!ok) return setPhase({ kind: "error", messages: [adMessage("upload_missing")] });
 
     setPhase({ kind: "verifying" });
-    const fin = await post<{ ok: boolean; messages: string[]; mediaUrl: string | null; thumbnailUrl: string | null; facts: { width?: number; height?: number; durationSeconds?: number; fileSizeBytes?: number } }>(
+    const fin = await post<{ ok: boolean; processing?: boolean; messages: string[]; mediaUrl: string | null; thumbnailUrl: string | null; facts: { width?: number; height?: number; durationSeconds?: number; fileSizeBytes?: number } }>(
       "/api/ads/advertiser/upload/finalize",
       { creativeId: ticket.data.creativeId },
     );
     if (!fin.ok) return setPhase({ kind: "error", messages: [fin.message] });
-    if (!fin.data.ok || !fin.data.mediaUrl) return setPhase({ kind: "error", messages: fin.data.messages.length ? fin.data.messages : [adMessage("creative_not_valid")] });
+    let mediaUrl = fin.data.mediaUrl;
+    let thumbnailUrl = fin.data.thumbnailUrl;
+    if (fin.data.ok && fin.data.processing) {
+      // the server is having Cloudflare Stream transcode it — wait here, slowly and boundedly
+      setPhase({ kind: "processing" });
+      const out = await waitForProcessing(ticket.data.creativeId, () => alive.current);
+      if (out.state === "gone") return;
+      if (out.state === "failed") return setPhase({ kind: "error", messages: out.messages.length ? out.messages : [adMessage("processing_failed")] });
+      if (out.state === "waiting") return setPhase({ kind: "error", messages: [STILL_PROCESSING] });
+      mediaUrl = out.mediaUrl;
+      thumbnailUrl = out.thumbnailUrl ?? thumbnailUrl;
+    }
+    if (!fin.data.ok || !mediaUrl) return setPhase({ kind: "error", messages: fin.data.messages.length ? fin.data.messages : [adMessage("creative_not_valid")] });
     setPhase({ kind: "idle" });
     onUploaded(
       {
         id: ticket.data.creativeId,
         mediaType: kind,
-        mediaUrl: fin.data.mediaUrl,
-        thumbnailUrl: fin.data.thumbnailUrl,
+        mediaUrl,
+        thumbnailUrl,
         width: fin.data.facts.width ?? null,
         height: fin.data.facts.height ?? null,
         durationSeconds: fin.data.facts.durationSeconds ?? null,
         sizeBytes: fin.data.facts.fileSizeBytes ?? null,
       },
-      { src: URL.createObjectURL(file), mediaType: kind },
+      (() => {
+        const src = URL.createObjectURL(upload);
+        if (kind === "image") setLocalSrc(src);
+        return { src, mediaType: kind };
+      })(),
     );
   };
 
-  const working = phase.kind === "checking" || phase.kind === "uploading" || phase.kind === "verifying";
+  const working = phase.kind === "checking" || phase.kind === "optimizing" || phase.kind === "uploading" || phase.kind === "verifying" || phase.kind === "processing";
   const mediaWord = format.media_types.length === 2 ? "image or video" : format.media_types[0] === "video" ? "video" : "image";
 
   return (
@@ -182,9 +234,9 @@ export function CreativeStep({
       {current && phase.kind === "idle" ? (
         <div className="mt-4 flex items-center gap-3 rounded-[1.4rem] bg-emerald-50/70 p-3.5 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-500/10 dark:ring-emerald-400/25">
           <span className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-card">
-            {current.thumbnailUrl || current.mediaType === "image" ? (
+            {current.thumbnailUrl || current.mediaType === "image" || localSrc ? (
               // eslint-disable-next-line @next/next/no-img-element -- the validated public copy, small
-              <img src={(current.thumbnailUrl ?? current.mediaUrl)!} alt="" className="h-full w-full object-cover" />
+              <img src={(localSrc ?? current.thumbnailUrl ?? current.mediaUrl)!} alt="" className="h-full w-full object-cover" />
             ) : null}
           </span>
           <div className="min-w-0 flex-1">
@@ -229,13 +281,22 @@ export function CreativeStep({
           ) : working ? (
             <>
               <LoaderCircle className="h-7 w-7 animate-spin text-indigo-600" aria-hidden />
-              <p className="mt-2 text-[14px] font-semibold">{phase.kind === "verifying" ? "Checking your file…" : "Reading your file…"}</p>
+              <p className="mt-2 text-[14px] font-semibold">
+                {phase.kind === "verifying" ? "Checking your file…" : phase.kind === "optimizing" ? "Optimizing your image…" : phase.kind === "processing" ? "Optimizing your video…" : "Reading your file…"}
+              </p>
+              {phase.kind === "optimizing" || phase.kind === "processing" ? (
+                <p className="mt-1 max-w-xs text-[12px] text-muted-foreground">
+                  {phase.kind === "processing"
+                    ? "Resizing it for fast playback, keeping its proportions. This can take a few minutes — you can keep editing."
+                    : "Resizing it for fast loading, keeping its proportions."}
+                </p>
+              ) : null}
             </>
           ) : (
             <>
               <ImageUp className="h-7 w-7 text-indigo-600" aria-hidden />
               <p className="mt-2 text-[15px] font-semibold">Choose your {mediaWord}</p>
-              <p className="mt-1 text-[12.5px] text-muted-foreground">We check it before uploading, so you know right away if it fits.</p>
+              <p className="mt-1 text-[12.5px] text-muted-foreground">Any size or shape. We optimize it automatically and show it whole — never stretched or cropped.</p>
             </>
           )}
         </label>

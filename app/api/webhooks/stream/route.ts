@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
+import { advanceVideoProcessing, creativeForStreamUid } from "@/lib/ads-platform/media-processing";
 import { DEFAULT_CAPTION_LANGUAGES, generateStreamCaptionsMulti } from "@/lib/media/stream";
 import { verifyStreamWebhookSignature } from "@/lib/media/stream-webhook";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -46,6 +47,14 @@ export async function POST(request: Request) {
   if (!uid) return NextResponse.json({ ok: true });
 
   const db = createAdminClient();
+
+  // 0208: an ad creative being transcoded — move it forward after acking (the MP4 may need a moment more)
+  const adCreative = await creativeForStreamUid(db, uid).catch(() => null);
+  if (adCreative) {
+    after(() => advanceVideoProcessing(db, adCreative).then(() => undefined));
+    return NextResponse.json({ ok: true });
+  }
+
   const { data: post } = await db
     .from("posts")
     .select("id, caption_languages")

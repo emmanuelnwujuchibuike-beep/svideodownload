@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { hasStream } from "@/lib/media/stream";
 import { cdnBucket } from "@/lib/net/cdn-bucket";
 
 import type { CampaignStatus } from "./catalog";
@@ -100,6 +101,12 @@ export interface FormatRow {
   min_height: number | null;
   aspect_ratio: number | string | null;
   aspect_tolerance: number | string | null;
+  /** 0208 — absent until the migration has run; media-spec defaults them */
+  width?: number | null;
+  height?: number | null;
+  max_upload_bytes?: number | string | null;
+  delivery_long_edge?: number | null;
+  image_quality?: number | null;
 }
 
 /**
@@ -117,7 +124,7 @@ export async function validateCampaignCreatives(db: Db, campaignId: string): Pro
   const creatives = (rows ?? []) as CreativeRow[];
   const codes = [...new Set(creatives.map((c) => c.format_code))];
   const { data: fmts, error: fErr } = codes.length
-    ? await db.from("ad_formats").select("code, media_types, max_duration_seconds, max_file_bytes, max_width, max_height, min_width, min_height, aspect_ratio, aspect_tolerance").in("code", codes)
+    ? await db.from("ad_formats").select("*").in("code", codes)
     : { data: [], error: null };
   if (fErr) throw new Error(`ad_formats: ${fErr.message}`);
   const byCode = new Map(((fmts ?? []) as FormatRow[]).map((f) => [f.code, f]));
@@ -183,6 +190,9 @@ export function formatLimits(f: FormatRow): CreativeLimits {
     minHeight: f.min_height,
     aspectRatio: f.aspect_ratio === null ? null : Number(f.aspect_ratio),
     aspectTolerance: f.aspect_tolerance === null ? null : Number(f.aspect_tolerance),
+    maxUploadBytes: f.max_upload_bytes == null ? null : Number(f.max_upload_bytes),
+    // transcoding needs Stream AND 0208 (its columns): before the migration runs, oversized videos are refused as before
+    videoProcessing: hasStream && f.delivery_long_edge !== undefined,
   };
 }
 

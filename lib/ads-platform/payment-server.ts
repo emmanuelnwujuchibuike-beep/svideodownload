@@ -15,6 +15,7 @@ import { SITE_URL } from "@/lib/site";
 
 import { notifyAdvertiser } from "./ad-notify";
 
+import { advanceCampaignProcessing } from "./media-processing";
 import { activateCampaign, checkDestination } from "./server";
 
 /**
@@ -384,6 +385,8 @@ export async function activatePaidCampaigns(db: Db, campaignIds: readonly string
   for (const id of campaignIds) {
     try {
       log("campaign_activation_started", { campaignId: id });
+      // 0208: a video Stream finished since the upload is published first, so it can go live now
+      await advanceCampaignProcessing(db, id).catch(() => {});
       const r = await activateCampaign(db, id, { id: null, role: "system" });
       if (r.ok) {
         if (!r.already_active) {

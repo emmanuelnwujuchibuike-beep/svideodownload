@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { addBlockedDomain, controlsSchema, loadPlatform, normalizeBlockedDomain, platformSettingsSchema, removeBlockedDomain, saveControls, saveSettings } from "@/lib/ads-platform/admin-platform";
+import { addBlockedDomain, AdminFormatError, controlsSchema, formatPatchSchema, loadPlatform, normalizeBlockedDomain, platformSettingsSchema, removeBlockedDomain, saveControls, saveFormat, saveSettings } from "@/lib/ads-platform/admin-platform";
 import { requireAdminApi } from "@/lib/admin/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -29,21 +29,24 @@ export async function GET() {
   }
 }
 
-const patchSchema = z.object({ settings: platformSettingsSchema.optional(), controls: controlsSchema.optional() }).strict();
+const patchSchema = z.object({ settings: platformSettingsSchema.optional(), controls: controlsSchema.optional(), format: formatPatchSchema.optional() }).strict();
 
 export async function PATCH(request: Request) {
   const gate = await requireAdminApi();
   if (!gate.ok) return gate.response;
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success || (!parsed.data.settings && !parsed.data.controls)) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  if (!parsed.success || (!parsed.data.settings && !parsed.data.controls && !parsed.data.format)) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   const db = createAdminClient();
   try {
     const out: Record<string, unknown> = {};
+    // 0208: one creative format's media limits
+    if (parsed.data.format) out.format = await saveFormat(db, parsed.data.format);
     if (parsed.data.settings && Object.keys(parsed.data.settings).length) out.settings = await saveSettings(db, gate.user.id, parsed.data.settings);
     if (parsed.data.controls && Object.keys(parsed.data.controls).length) out.controls = await saveControls(db, parsed.data.controls);
     console.info("[admin/ads/platform] saved", { by: gate.user.id, settings: Object.keys(parsed.data.settings ?? {}), controls: Object.keys(parsed.data.controls ?? {}) });
     return NextResponse.json({ ok: true, ...out });
   } catch (e) {
+    if (e instanceof AdminFormatError) return NextResponse.json({ error: e.message }, { status: 400 });
     console.error("[admin/ads/platform] save failed", { error: String(e).slice(0, 200) });
     return NextResponse.json({ error: "Couldn't save that. Nothing changed." }, { status: 503 });
   }

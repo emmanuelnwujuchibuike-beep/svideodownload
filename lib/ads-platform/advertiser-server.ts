@@ -2,12 +2,18 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
+import { after } from "next/server";
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { notifyAdvertiser } from "./ad-notify";
 import { sanitizeText, TEXT_LIMITS } from "./application";
 import { moderateCreative, type ModerationStatus } from "./creative-moderation";
 import { IMAGE_MIME_TYPES, validateCreative, VIDEO_MIME_TYPES } from "./creative-validation";
 import { probeMedia, sniff, type MediaFacts } from "./media-probe";
+import { startVideoProcessing } from "./media-processing";
+import { specOf, videoNeedsProcessing } from "./media-spec";
+import { deleteStreamVideo } from "@/lib/media/stream";
 import { maxPlacements, offeredDurations, offeredPlacements, parseCatalog, type AdCatalog } from "./offer";
 import { ADVERTISING_RULES_VERSION } from "./rules";
 import { createQuote } from "./payment-server";
@@ -219,7 +225,8 @@ export async function formatOfCampaign(db: Db, placementId: string): Promise<For
   const { data: pl } = await db.from("ad_placements").select("format_code").eq("id", placementId).maybeSingle();
   const { data: f } = await db
     .from("ad_formats")
-    .select("code, enabled, media_types, max_duration_seconds, max_file_bytes, max_width, max_height, min_width, min_height, aspect_ratio, aspect_tolerance")
+    // "*": 0208's delivery limits arrive when the migration has run, and nothing breaks before it has
+    .select("*")
     .eq("code", pl?.format_code ?? "")
     .maybeSingle();
   if (!f || !f.enabled) return refuse("format_unavailable");
@@ -267,14 +274,17 @@ export async function stageCreative(
   const allowed: readonly string[] = input.mediaType === "video" ? VIDEO_MIME_TYPES : IMAGE_MIME_TYPES;
   if (input.mimeType === "video/quicktime") refuse("quicktime");
   if (!allowed.includes(input.mimeType)) refuse("mime_not_allowed");
-  if (!(input.sizeBytes > 0) || input.sizeBytes > Number(f.max_file_bytes)) {
-    refuse("file_too_large", 400, { mediaType: input.mediaType, fileSizeBytes: input.sizeBytes, maxFileBytes: Number(f.max_file_bytes) });
+  const spec = specOf(f);
+  const cap = input.mediaType === "video" && formatLimits(f).videoProcessing ? spec.maxUploadBytes : spec.maxServedBytes;
+  if (!(input.sizeBytes > 0) || input.sizeBytes > cap) {
+    refuse("file_too_large", 400, { mediaType: input.mediaType, fileSizeBytes: input.sizeBytes, maxFileBytes: cap });
   }
 
   // Abandoned earlier attempts on this application are cleared here, on the
   // hot path - no cron, and staging never accumulates per application.
-  const { data: stale } = await db.from("ad_creatives").select("id, storage_path").eq("campaign_id", campaignId).eq("validation_status", "pending").eq("status", row.status);
+  const { data: stale } = await db.from("ad_creatives").select("id, storage_path, stream_uid").eq("campaign_id", campaignId).eq("validation_status", "pending").eq("status", row.status);
   if (stale?.length) {
+    for (const s of stale) if (s.stream_uid) await deleteStreamVideo(s.stream_uid as string);
     await db.storage.from(STAGING_BUCKET).remove(stale.flatMap((s) => (s.storage_path ? [s.storage_path, posterPath(s.storage_path)] : [])));
     await db.from("ad_creatives").update({ status: "removed" }).in("id", stale.map((s) => s.id));
   }
@@ -308,7 +318,7 @@ export async function stageCreative(
   };
 }
 
-const posterPath = (p: string) => p.replace(/\.[a-z0-9]+$/, "-poster.webp");
+export const posterPath = (p: string) => p.replace(/\.[a-z0-9]+$/, "-poster.webp");
 
 /**
  * A range reader over a staging object through a short-lived signed URL. Reads
@@ -322,7 +332,8 @@ async function stagingReader(db: Db, path: string) {
   let total = 0;
   let contentType: string | null = null;
   const read = async (offset: number, length: number): Promise<Uint8Array> => {
-    const res = await fetch(url, { headers: { Range: `bytes=${offset}-${offset + length - 1}` }, cache: "no-store" });
+    const res = await fetch(url, { headers: { Range: `bytes=${offset}-${offset + length - 1}` }, cache: "no-store", signal: AbortSignal.timeout(8000) }).catch(() => null);
+    if (!res) return new Uint8Array(0);
     if (!res.ok || !res.body) return new Uint8Array(0);
     const range = res.headers.get("content-range");
     if (range) total = Number(range.split("/")[1]) || total;
@@ -362,6 +373,27 @@ export interface FinalizeResult {
   thumbnailUrl: string | null;
   /** Part 8: the content safety outcome when the bytes passed */
   moderation?: ModerationStatus;
+  /** 0208: an oversized video handed to Cloudflare Stream — the creative stays pending until it is ready */
+  processing?: boolean;
+  /** the bytes passed; the content check and the publish finish in the background (draft fast path) */
+  checking?: boolean;
+}
+
+/**
+ * Write a creative's core columns, then — separately — its Part 8 moderation
+ * columns. A database without 0206 refuses an update naming unknown columns
+ * outright, which would have left the core verdict unwritten; split, the
+ * verdict always lands and only the moderation note is lost.
+ */
+async function writeCreative(db: Db, id: string, core: Record<string, unknown>, moderation: Record<string, unknown>): Promise<void> {
+  const { error } = await db.from("ad_creatives").update(core).eq("id", id);
+  if (error) throw new Error(`ad_creatives update: ${error.message}`);
+  await db.from("ad_creatives").update(moderation).eq("id", id);
+}
+
+async function campaignOf(db: Db, creativeId: string): Promise<string | null> {
+  const { data } = await db.from("ad_creatives").select("campaign_id").eq("id", creativeId).maybeSingle();
+  return (data?.campaign_id as string | undefined) ?? null;
 }
 
 /**
@@ -378,9 +410,9 @@ export async function finalizeUpload(db: Db, userId: string, creativeId: string)
   if (app.primary.id !== cr.campaign_id || !cr.storage_path.startsWith(`${userId}/${app.primary.id}/`)) refuse("not_found", 404);
   if (app.primary.status !== "draft") refuse("not_editable", 409);
   const f = await formatOfCampaign(db, app.primary.placement_id);
-  const result = await probeAndPublish(db, cr as { id: string; storage_path: string }, f);
-  // one creative per application: the new one replaces any earlier one
-  if (result.ok) await db.from("ad_creatives").update({ status: "removed" }).eq("campaign_id", cr.campaign_id).neq("id", cr.id).neq("status", "removed");
+  const result = await probeAndPublish(db, cr as { id: string; storage_path: string }, f, "draft");
+  // one creative per application: the new one replaces any earlier one (a processing video does so once it is ready)
+  if (result.ok && !result.processing) await db.from("ad_creatives").update({ status: "removed" }).eq("campaign_id", cr.campaign_id).neq("id", cr.id).neq("status", "removed");
   return result;
 }
 
@@ -402,7 +434,7 @@ export async function finalizeUpload(db: Db, userId: string, creativeId: string)
  *     image or poster by signed URL. A rejection blocks the creative. A
  *     review publishes the bytes but holds activation for a person.
  */
-export async function probeAndPublish(db: Db, cr: { id: string; storage_path: string }, f: FormatRow & { code: string }): Promise<FinalizeResult> {
+export async function probeAndPublish(db: Db, cr: { id: string; storage_path: string }, f: FormatRow & { code: string }, kind: "draft" | "replacement" = "draft"): Promise<FinalizeResult> {
   const limits = formatLimits(f);
   const outLimits = { maxDurationSeconds: limits.maxDurationSeconds, maxFileBytes: limits.maxFileBytes, minWidth: limits.minWidth ?? null, minHeight: limits.minHeight ?? null, maxWidth: limits.maxWidth, maxHeight: limits.maxHeight };
   const staging = db.storage.from(STAGING_BUCKET);
@@ -411,18 +443,24 @@ export async function probeAndPublish(db: Db, cr: { id: string; storage_path: st
   const lockedPoster = `${poster}.checked`;
   const cleanup = () => staging.remove([cr.storage_path, poster, locked, lockedPoster]);
 
+  // 2026-10-09 ("it should check and load in less than 3 seconds"): independent steps run together
   await staging.remove([locked, lockedPoster]);
-  const { error: lockErr } = await staging.copy(cr.storage_path, locked);
+  const [{ error: lockErr }, posterCopy] = await Promise.all([staging.copy(cr.storage_path, locked), staging.copy(poster, lockedPoster)]);
   if (lockErr) return refuse("upload_missing", 409);
-  const hasPoster = !(await staging.copy(poster, lockedPoster)).error;
+  const hasPoster = !posterCopy.error;
 
-  const src = await stagingReader(db, locked);
+  const [src, declaredRow] = await Promise.all([
+    stagingReader(db, locked),
+    db.from("ad_creatives").select("mime_type, headline, description, destination_url").eq("id", cr.id).maybeSingle(),
+  ]);
   if (!src) return refuse("upload_missing", 409);
+  const declared = declaredRow.data;
   const size = src.size();
-  const facts = size > limits.maxFileBytes ? null : await probeMedia(src.read, size);
-  const { data: declared } = await db.from("ad_creatives").select("mime_type, headline, description, destination_url").eq("id", cr.id).maybeSingle();
+  // a video that will be transcoded may be larger than the served limit (0208); nothing larger is even probed
+  const sizeCap = Math.max(limits.maxFileBytes, limits.videoProcessing ? (limits.maxUploadBytes ?? 0) : 0);
+  const facts = size > sizeCap ? null : await probeMedia(src.read, size);
   const errors: string[] = [];
-  if (size > limits.maxFileBytes) errors.push("file_too_large");
+  if (size > sizeCap) errors.push("file_too_large");
   else if (!facts) errors.push("not_recognised");
   else if (facts.mime === "video/quicktime") errors.push("quicktime");
   else {
@@ -446,57 +484,132 @@ export async function probeAndPublish(db: Db, cr: { id: string; storage_path: st
     return { ok: false, errors, facts: factsOut, limits: outLimits, mediaUrl: null, thumbnailUrl: null };
   }
 
-  // the poster, if the browser made one: a small real image, or nothing
-  let posterOk = false;
-  if (facts!.mediaType === "video" && hasPoster) {
-    const p = await stagingReader(db, lockedPoster);
-    if (p && p.size() <= POSTER_MAX_BYTES) {
-      const head = await p.read(0, Math.min(p.size(), 64 * 1024));
-      posterOk = sniff(head)?.mediaType === "image";
+  /*
+    Moderation, then transcode-or-publish (Part 8 + 0208) — the slow, network-
+    bound half. Nothing here runs before the bytes have passed.
+  */
+  const publishAll = async (): Promise<FinalizeResult> => {
+    // the poster, if the browser made one: a small real image, or nothing
+    let posterOk = false;
+    if (facts!.mediaType === "video" && hasPoster) {
+      const p = await stagingReader(db, lockedPoster);
+      if (p && p.size() <= POSTER_MAX_BYTES) {
+        const head = await p.read(0, Math.min(p.size(), 64 * 1024));
+        posterOk = sniff(head)?.mediaType === "image";
+      }
     }
-  }
 
-  // content safety on the LOCKED bytes, by signed URL - never through this server
-  const look = facts!.mediaType === "image" ? locked : posterOk ? lockedPoster : null;
-  const signed = look ? (await staging.createSignedUrl(look, 600)).data?.signedUrl ?? null : null;
-  const destHost = (() => {
-    try {
-      return declared?.destination_url ? new URL(declared.destination_url as string).hostname : null;
-    } catch {
-      return null;
+    // content safety on the LOCKED bytes, by signed URL - never through this server
+    const look = facts!.mediaType === "image" ? locked : posterOk ? lockedPoster : null;
+    const signed = look ? (await staging.createSignedUrl(look, 600)).data?.signedUrl ?? null : null;
+    const destHost = (() => {
+      try {
+        return declared?.destination_url ? new URL(declared.destination_url as string).hostname : null;
+      } catch {
+        return null;
+      }
+    })();
+    const moderation = await moderateCreative({
+      imageUrl: signed,
+      videoWithoutPoster: facts!.mediaType === "video" && !posterOk,
+      texts: [declared?.headline as string | null, declared?.description as string | null],
+      destinationHost: destHost,
+    });
+    if (moderation.status === "rejected") {
+      await cleanup();
+      await writeCreative(db, cr.id, { validation_status: "blocked", validation_errors: ["content_rejected", ...moderation.labels], validated_at: now, ...factCols }, { moderation_status: "rejected", moderation_labels: moderation.labels, moderated_at: now });
+      return { ok: false, errors: ["content_rejected"], facts: factsOut, limits: outLimits, mediaUrl: null, thumbnailUrl: null, moderation: "rejected" };
     }
-  })();
-  const moderation = await moderateCreative({
-    imageUrl: signed,
-    videoWithoutPoster: facts!.mediaType === "video" && !posterOk,
-    texts: [declared?.headline as string | null, declared?.description as string | null],
-    destinationHost: destHost,
-  });
-  if (moderation.status === "rejected") {
+
+    /*
+      0208: an oversized VIDEO is not refused and not served as is — Cloudflare
+      Stream transcodes it from a signed URL of the locked copy (media-processing.ts).
+      The creative stays pending until the processed MP4 is ready; the poster is
+      published now so the advertiser sees their video meanwhile.
+    */
+    if (facts!.mediaType === "video" && videoNeedsProcessing(facts!.width!, facts!.height!, size, specOf(f))) {
+      let posterUrl: string | null = null;
+      if (posterOk) {
+        const { error } = await staging.copy(lockedPoster, poster, { destinationBucket: PUBLIC_BUCKET });
+        if (!error) posterUrl = db.storage.from(PUBLIC_BUCKET).getPublicUrl(poster).data.publicUrl;
+      }
+      const started = limits.videoProcessing
+        ? await startVideoProcessing(db, cr, locked, kind, f.max_duration_seconds, {
+            ...factCols,
+            mime_type: facts!.mime,
+            thumbnail_url: posterUrl,
+            moderation_status: moderation.status,
+            moderation_labels: moderation.labels,
+            moderated_at: now,
+          })
+        : { ok: false as const, error: "video_needs_processing" };
+      if (!started.ok) {
+        await cleanup();
+        await db.from("ad_creatives").update({ validation_status: "invalid", validation_errors: [started.error], validated_at: now, ...factCols }).eq("id", cr.id);
+        return { ok: false, errors: [started.error], facts: factsOut, limits: outLimits, mediaUrl: null, thumbnailUrl: null };
+      }
+      return { ok: true, errors: [], facts: factsOut, limits: outLimits, mediaUrl: null, thumbnailUrl: posterUrl, moderation: moderation.status, processing: true };
+    }
+
+    let thumbnailUrl: string | null = null;
+    if (posterOk) {
+      const { error } = await staging.copy(lockedPoster, poster, { destinationBucket: PUBLIC_BUCKET });
+      if (!error) thumbnailUrl = db.storage.from(PUBLIC_BUCKET).getPublicUrl(poster).data.publicUrl;
+    }
+    const { error: copyErr } = await staging.copy(locked, cr.storage_path, { destinationBucket: PUBLIC_BUCKET });
+    if (copyErr) throw new Error(`publish creative: ${copyErr.message}`);
     await cleanup();
-    await db.from("ad_creatives").update({
-      validation_status: "blocked", validation_errors: ["content_rejected", ...moderation.labels], validated_at: now, ...factCols,
-      moderation_status: "rejected", moderation_labels: moderation.labels, moderated_at: now,
-    }).eq("id", cr.id);
-    return { ok: false, errors: ["content_rejected"], facts: factsOut, limits: outLimits, mediaUrl: null, thumbnailUrl: null, moderation: "rejected" };
-  }
+    const mediaUrl = db.storage.from(PUBLIC_BUCKET).getPublicUrl(cr.storage_path).data.publicUrl;
 
-  let thumbnailUrl: string | null = null;
-  if (posterOk) {
-    const { error } = await staging.copy(lockedPoster, poster, { destinationBucket: PUBLIC_BUCKET });
-    if (!error) thumbnailUrl = db.storage.from(PUBLIC_BUCKET).getPublicUrl(poster).data.publicUrl;
-  }
-  const { error: copyErr } = await staging.copy(locked, cr.storage_path, { destinationBucket: PUBLIC_BUCKET });
-  if (copyErr) throw new Error(`publish creative: ${copyErr.message}`);
-  await cleanup();
-  const mediaUrl = db.storage.from(PUBLIC_BUCKET).getPublicUrl(cr.storage_path).data.publicUrl;
+    await writeCreative(
+        db,
+        cr.id,
+        { media_url: mediaUrl, thumbnail_url: thumbnailUrl, ...factCols, mime_type: facts!.mime, validation_status: "valid", validation_errors: [], validated_at: now },
+        { moderation_status: moderation.status, moderation_labels: moderation.labels, moderated_at: now },
+      );
+    return { ok: true, errors: [], facts: factsOut, limits: outLimits, mediaUrl, thumbnailUrl, moderation: moderation.status };
 
-  await db.from("ad_creatives").update({
-    media_url: mediaUrl, thumbnail_url: thumbnailUrl, ...factCols, mime_type: facts!.mime,
-    validation_status: "valid", validation_errors: [], validated_at: now,
-    moderation_status: moderation.status, moderation_labels: moderation.labels, moderated_at: now,
-  }).eq("id", cr.id);
-  return { ok: true, errors: [], facts: factsOut, limits: outLimits, mediaUrl, thumbnailUrl, moderation: moderation.status };
+  };
+
+  /*
+    🔴 THE FAST PATH (owner, 2026-10-09: "it keeps showing checking your file,
+    it should check and load in less than 3 seconds").
+
+    The advertiser waited for EVERYTHING: ~10 storage round trips plus the AI
+    content check (up to 20 s), one after another, and a stalled read had no
+    timeout at all. Now a DRAFT answers as soon as its BYTES pass (type, size,
+    dimensions, duration — about a second); the content check and the publish
+    run after the response (after()).
+
+    It stays safe because the creative is written as validation "pending" and
+    moderation "review" until that finishes: activate_ad_campaign refuses both,
+    so nothing unchecked can ever go live, and the bytes become public only
+    after the content check passes. If the background step never completes, the
+    creative stays held — it fails closed.
+
+    A live campaign's REPLACEMENT keeps the synchronous path: it swaps into a
+    running ad, so it must be published and checked before it is answered.
+  */
+  if (kind === "draft") {
+    const willProcess = facts!.mediaType === "video" && videoNeedsProcessing(facts!.width!, facts!.height!, size, specOf(f));
+    await writeCreative(db, cr.id, { ...factCols, mime_type: facts!.mime, validation_status: "pending", validation_errors: [], validated_at: now }, { moderation_status: "review", moderation_labels: ["moderation_pending"] });
+    after(async () => {
+      const r = await publishAll().catch(() => null);
+      if (r && !r.ok) await notifyAdvertiser(db, (await campaignOf(db, cr.id)) ?? "", { kind: "creative_rejected" }).catch(() => {});
+    });
+    return {
+      ok: true,
+      errors: [],
+      facts: factsOut,
+      limits: outLimits,
+      // the address it will have once published; the browser shows its own local copy meanwhile
+      mediaUrl: willProcess ? null : db.storage.from(PUBLIC_BUCKET).getPublicUrl(cr.storage_path).data.publicUrl,
+      thumbnailUrl: null,
+      processing: willProcess,
+      checking: true,
+    };
+  }
+  return publishAll();
 }
 
 /* ─────────────────────────────────── submit ─────────────────────────────────── */
@@ -553,7 +666,16 @@ export async function submitApplication(db: Db, userId: string, input: SubmitInp
   const textCheck = await moderateCreative({ texts: [headline, description, businessName, name], destinationHost: new URL(destinationUrl).hostname });
   if (textCheck.status === "rejected") refuse("content_rejected", 400);
 
-  const { data: creatives } = await db.from("ad_creatives").select("*").eq("campaign_id", app.primary.id).eq("status", "active").eq("validation_status", "valid");
+  // the upload fast path finishes its content check in the background (a few seconds): give it a moment
+  let creatives: Record<string, unknown>[] | null = null;
+  for (let tries = 0; tries < 7; tries++) {
+    const { data } = await db.from("ad_creatives").select("*").eq("campaign_id", app.primary.id).eq("status", "active");
+    creatives = (data ?? []).filter((c) => c.validation_status === "valid");
+    const checking = (data ?? []).some((c) => c.validation_status === "pending" && (c.processing_status ?? "none") === "none");
+    if (creatives.length || !checking) break;
+    if (tries === 6) refuse("creative_checking", 409);
+    await new Promise((r) => setTimeout(r, 1000));
+  }
   const creative = creatives?.[0];
   if (!creative) refuse("no_creative");
 

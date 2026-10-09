@@ -89,11 +89,19 @@ export function providerOrder(slot: SlotSpec, configured: Record<string, unknown
   return slot.order;
 }
 
-/** Does a paid creative fit this physical box? (addendum §55) Unknown size = trust the format check. */
-export function creativeFitsSlot(slot: SlotSpec, w: number | null, h: number | null): boolean {
-  if (!slot.aspect || !w || !h) return true;
-  const r = w / h;
-  return Math.abs(r - slot.aspect.ratio) / slot.aspect.ratio <= slot.aspect.tolerance;
+/**
+ * Can a paid creative be shown in this physical box? (addendum §55)
+ *
+ * 🔴 0208 (owner, 2026-10-09): ANY real creative can — it is shown whole
+ * (media-spec FIT_RULE: contain) with soft space around it where the shapes
+ * differ, so a slot's shape no longer drops a creative from its pool. `aspect`
+ * stays the slot's DISPLAY shape (the preview draws it); it is no longer a
+ * filter. Only nonsense dimensions are refused. Unknown size = trust the
+ * format check.
+ */
+export function creativeFitsSlot(_slot: SlotSpec, w: number | null, h: number | null): boolean {
+  if (w == null || h == null) return true;
+  return w > 0 && h > 0;
 }
 
 /**

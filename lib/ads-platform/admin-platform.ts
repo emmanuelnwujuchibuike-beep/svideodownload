@@ -56,19 +56,73 @@ export interface PlatformState {
   settings: Record<string, unknown> | null;
   controls: AdvertiserControls;
   blocked: { domain: string; reason: string; createdAt: string }[];
+  /** 0208: every creative format's media limits, for the admin to tune */
+  formats: Record<string, unknown>[];
 }
 
+/*
+  ── CREATIVE FORMATS (0208, owner 2026-10-09: "Allow authorized admins to
+  configure recommended dimensions, maximum dimensions, file-size limits, video
+  duration, output quality, and supported formats") ──
+  The bounds mirror the database's own checks (0195/0196/0208), so a value the
+  database would refuse is refused here first with a clear message. A change
+  applies to the NEXT upload and the next check — creatives already live are
+  never re-judged by it (validateCampaignCreatives runs only when asked).
+*/
+const MB = 1024 * 1024;
+export const formatPatchSchema = z
+  .object({
+    code: z.string().regex(/^[A-Z][A-Z0-9_]{1,63}$/),
+    width: z.number().int().min(1).max(10000).nullable(),
+    height: z.number().int().min(1).max(10000).nullable(),
+    max_width: z.number().int().min(16).max(8192),
+    max_height: z.number().int().min(16).max(8192),
+    min_width: z.number().int().min(1).max(8192).nullable(),
+    min_height: z.number().int().min(1).max(8192).nullable(),
+    max_file_bytes: z.number().int().min(1024).max(200 * MB),
+    max_upload_bytes: z.number().int().min(1024).max(2048 * MB).nullable(),
+    delivery_long_edge: z.number().int().min(240).max(3840),
+    image_quality: z.number().int().min(40).max(100),
+    max_duration_seconds: z.number().int().min(1).max(600).nullable(),
+    media_types: z.array(z.enum(["image", "video"])).min(1).max(2),
+  })
+  .partial()
+  .required({ code: true })
+  .strict();
+
+export async function loadFormats(db: Db): Promise<Record<string, unknown>[]> {
+  // "*": the 0208 columns appear when the migration has run; the admin sees what exists
+  const { data, error } = await db.from("ad_formats").select("*").order("sort_order", { ascending: true });
+  if (error) throw new Error(`ad formats: ${error.message}`);
+  return (data ?? []) as Record<string, unknown>[];
+}
+
+export async function saveFormat(db: Db, patch: z.infer<typeof formatPatchSchema>): Promise<Record<string, unknown>> {
+  const { code, ...fields } = patch;
+  if (fields.media_types) fields.media_types = [...new Set(fields.media_types)];
+  if (fields.min_width != null && fields.max_width != null && fields.min_width > fields.max_width) throw new AdminFormatError("The minimum width is above the maximum.");
+  if (fields.min_height != null && fields.max_height != null && fields.min_height > fields.max_height) throw new AdminFormatError("The minimum height is above the maximum.");
+  const { data, error } = await db.from("ad_formats").update({ ...fields, updated_at: new Date().toISOString() }).eq("code", code).select("*").maybeSingle();
+  if (error) throw new AdminFormatError(error.message.includes("column") ? "This setting needs migration 0208 — run it, then save again." : "The database refused that value.");
+  if (!data) throw new AdminFormatError("No such format.");
+  return data as Record<string, unknown>;
+}
+
+export class AdminFormatError extends Error {}
+
 export async function loadPlatform(db: Db): Promise<PlatformState> {
-  const [settings, controls, blocked] = await Promise.all([
+  const [settings, controls, blocked, formats] = await Promise.all([
     db.from("ad_platform_settings").select(SETTINGS_COLUMNS).eq("id", true).maybeSingle(),
     loadControls(db),
     db.from("ad_blocked_domains").select("domain, reason, created_at").order("created_at", { ascending: false }).limit(500),
+    loadFormats(db).catch(() => [] as Record<string, unknown>[]),
   ]);
   if (settings.error) throw new Error(`ad settings: ${settings.error.message}`);
   return {
     settings: (settings.data as Record<string, unknown> | null) ?? null,
     controls,
     blocked: ((blocked.data ?? []) as { domain: string; reason: string; created_at: string }[]).map((b) => ({ domain: b.domain, reason: b.reason, createdAt: b.created_at })),
+    formats,
   };
 }
 

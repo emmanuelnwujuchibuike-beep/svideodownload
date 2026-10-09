@@ -889,3 +889,34 @@ The brief's test areas 9–11 (payment races, wrong amount or currency, refunds 
 - `visitor_id` is minted by the browser, so a determined script rotates it. The per-network limits are the backstop.
 - Network-provider ads (Monetag, ExoClick, AdSense, Hilltop, Offerium) report through their own dashboards. Frenzsave does not see their invalid-traffic decisions, and `verifyOfferiumPostback` is still unbuilt.
 - The reward unlock cannot be proven watched without a provider server-to-server callback. The 5 s floor removes instant replays only.
+
+## Creative media fitting (0208, 2026-10-09)
+
+Owner: "the system rejects them because their dimensions do not exactly match the selected ad slot … replace incorrect exact-size rejection with safe, automatic optimization and aspect-ratio-preserving fitting."
+
+**Rule.** A creative is never refused, stretched, squeezed or cropped for its *shape*. Every paid surface shows it whole (`FIT_RULE = "contain"`), over a soft blurred copy of itself where the slot is a different shape (a video uses its poster — never a second decode). The preview the advertiser approves before paying uses the same rule.
+
+**The four sizes** (`lib/ads-platform/media-spec.ts`, one source for upload, preview, server check and serving):
+
+| size | where it lives | what it does |
+| --- | --- | --- |
+| display | `slot-registry.ts` `aspect` | the physical slot's shape — no longer a filter (`creativeFitsSlot` refuses only nonsense dimensions) |
+| recommended | `ad_formats.width/height` | advice shown to the advertiser |
+| upload max | `ad_formats.max_width/max_height` (orientation-agnostic), `max_upload_bytes` | what may be sent at all |
+| delivery | `ad_formats.delivery_long_edge`, `image_quality`, `max_file_bytes` | what is actually served |
+
+**Images** are optimized in the advertiser's browser before upload: the header is read without decoding (pixel-bomb guard, 60 MP), then a Web Worker resizes to the delivery long edge with the same proportions, applies EXIF orientation, drops metadata and encodes WebP (transparency kept). Small, already-efficient files are uploaded exactly as made. The server still reads the real bytes.
+
+**Videos** above the delivery size or the served file size are transcoded by **Cloudflare Stream**, which pulls the private staging copy by a short-lived signed URL — the bytes never pass through Vercel or Railway. The creative stays `pending` (so `activate_ad_campaign` refuses it) until Stream's single-file MP4 is ready; it is then served straight from Stream's CDN. `advanceVideoProcessing` is idempotent and is driven by the Stream webhook, the advertiser's status poll (every 4 s, at most 20 min) and the payment step. Duration is re-checked on the transcoded file against the current limit and never trimmed to fit. A Stream error or an hour without finishing fails it; a failed **replacement** never touches the live creative. Transcoding is used only when Stream is provisioned AND 0208 has run.
+
+**Upload speed.** A draft's finalize answers as soon as its bytes pass (≈1–2 s); the AI content check and the publish run in `after()`. Until they finish the creative is `pending` + moderation `review` — both refused by activation, so it fails closed. Live replacements keep the synchronous path. Every network step has a timeout.
+
+**Admin.** Ad platform → *Creative formats — media limits*: recommended size, upload caps, served size and quality, video upload cap and length, image/video. Changes apply to the next upload.
+
+**Supported**: JPG, PNG, WebP, AVIF in; WebP (or PNG where WebP encoding is unavailable) out. MP4 (H.264/HEVC as Stream accepts) and WebM in; MP4 out when transcoded. MOV is refused with "export as MP4".
+
+**Gap ledger (honest):**
+- An animated WebP/PNG that needs resizing loses its animation (a canvas re-encode is one frame); a small one is uploaded untouched.
+- Stream's MP4 rendition is its highest quality — the output resolution is Stream's choice, not `delivery_long_edge`.
+- An image uploaded straight to the API (not through the app) above the caps is refused rather than resized: the server never decodes images.
+- If the background content check never runs (a crashed function), the creative stays held in review for an admin.

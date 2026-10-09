@@ -38,7 +38,7 @@ function fmt(code: string, over: Partial<CatalogFormat> = {}): CatalogFormat {
   return {
     code, name: code, description: null, recommendation: null, media_types: ["image"], width: null, height: null, rotation_seconds: null,
     max_duration_seconds: null, max_file_bytes: 5_000_000, max_width: 2160, max_height: 3840, min_width: null, min_height: null,
-    aspect_ratio: null, aspect_tolerance: 0.12, ...over,
+    aspect_ratio: null, aspect_tolerance: 0.12, delivery_long_edge: 1280, image_quality: 82, max_upload_bytes: null, ...over,
   };
 }
 
@@ -200,11 +200,28 @@ describe("creative rules (the same function the server runs on the real bytes)",
   const img = (o: object) => validateCreative({ formatCode: "TOP_BANNER", mediaType: "image", mimeType: "image/png", fileSizeBytes: 50_000, width: 1280, height: 128, destinationUrl: null, ...o }, banner);
   const vid = (d: number, o: object = {}) => validateCreative({ formatCode: "REWARD_VIDEO", mediaType: "video", mimeType: "video/mp4", fileSizeBytes: 5_000_000, width: 1080, height: 1920, durationSeconds: d, destinationUrl: null, ...o }, reward);
 
-  it("valid image; invalid image (too small, wrong shape, oversized)", () => {
+  it("valid image; invalid image (too small, oversized) — never refused for its SHAPE (0208)", () => {
     expect(img({}).status).toBe("valid");
     expect(img({ width: 320, height: 32 }).errors).toContain("dimensions_too_small");
-    expect(img({ width: 1280, height: 1280 }).errors).toContain("wrong_shape");
+    // a square image for a 10:1 strip is valid: it is shown whole, with space around it
+    expect(img({ width: 1280, height: 1280 }).status).toBe("valid");
+    expect(img({ width: 1280, height: 1280 }).errors).not.toContain("wrong_shape");
     expect(img({ fileSizeBytes: 6_000_000 }).errors).toContain("file_too_large");
+  });
+  it("upload caps are orientation-agnostic: a 4K landscape video passes a 2160 × 3840 cap", () => {
+    expect(vid(10, { width: 3840, height: 2160 }).errors).not.toContain("dimensions_too_large");
+    expect(vid(10, { width: 1920, height: 1080 }).status).toBe("valid"); // landscape in a portrait format
+    expect(vid(10, { width: 4096, height: 2160 }).errors).toContain("dimensions_too_large"); // past the long edge
+    expect(img({ width: 128, height: 1280 }).errors).not.toContain("dimensions_too_small"); // portrait strip art, rotated min
+  });
+  it("a video that will be transcoded may be uploaded larger than it is served — up to the upload cap", () => {
+    const big = { ...reward, maxUploadBytes: 200 * 1024 * 1024, videoProcessing: true };
+    const v = (bytes: number, lim: typeof reward) => validateCreative({ formatCode: "REWARD_VIDEO", mediaType: "video", mimeType: "video/mp4", fileSizeBytes: bytes, width: 3840, height: 2160, durationSeconds: 10, destinationUrl: null }, lim);
+    expect(v(120 * 1024 * 1024, big).status).toBe("valid");
+    expect(v(120 * 1024 * 1024, reward).errors).toContain("file_too_large"); // no transcoder: the served cap applies
+    expect(v(250 * 1024 * 1024, big).errors).toContain("file_too_large"); // past the upload cap
+    // teeth: duration is never transcoded away
+    expect(validateCreative({ formatCode: "REWARD_VIDEO", mediaType: "video", mimeType: "video/mp4", fileSizeBytes: 1, width: 3840, height: 2160, durationSeconds: 16, destinationUrl: null }, big).errors).toContain("video_too_long");
   });
   it("valid video; oversized video", () => {
     expect(vid(10).status).toBe("valid");
@@ -325,7 +342,9 @@ describe("the server never takes a price, a promotion or a duration from the bro
   it("the locked price comes from the database quote, and the finalize verdict from the stored bytes", () => {
     const adv = readFileSync(join(process.cwd(), "lib/ads-platform/advertiser-server.ts"), "utf8");
     expect(adv).toContain('db.rpc("ad_campaign_quote", { p_campaign: r.id, p_currency: cat.settings.display_currency })');
-    expect(adv).toMatch(/const facts = size > limits\.maxFileBytes \? null : await probeMedia\(src\.read, size\);/);
+    // 0208: nothing above the cap is even probed; the cap grows past the served size only when a transcoder exists
+    expect(adv).toMatch(/const facts = size > sizeCap \? null : await probeMedia\(src\.read, size\);/);
+    expect(adv).toContain("const sizeCap = Math.max(limits.maxFileBytes, limits.videoProcessing ? (limits.maxUploadBytes ?? 0) : 0);");
   });
 });
 

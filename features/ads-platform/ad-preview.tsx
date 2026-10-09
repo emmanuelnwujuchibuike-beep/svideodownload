@@ -53,12 +53,27 @@ export interface PreviewCreative {
   durationSeconds?: number | null;
 }
 
+/**
+ * The creative exactly as it will be served (0208): WHOLE, never cropped or
+ * stretched (media-spec FIT_RULE), over a soft blurred copy of itself where the
+ * slot is a different shape — the same rule SelfAdCreative applies, so what the
+ * advertiser approves before paying is what viewers see.
+ */
 function Media({ c, className }: { c: PreviewCreative; className?: string }) {
-  return c.mediaType === "video" ? (
-    <video src={c.src} poster={c.poster ?? undefined} className={cn("h-full w-full object-cover", className)} muted loop autoPlay playsInline preload="metadata" />
-  ) : (
-    // eslint-disable-next-line @next/next/no-img-element -- a local object URL or a storage URL, shown at its true size
-    <img src={c.src} alt="" className={cn("h-full w-full object-cover", className)} />
+  const backdrop = c.mediaType === "video" ? c.poster : c.src;
+  return (
+    <span className={cn("absolute inset-0 overflow-hidden", c.mediaType === "video" ? "bg-black" : "bg-slate-100", className)}>
+      {backdrop ? (
+        // eslint-disable-next-line @next/next/no-img-element -- the same local/storage file
+        <img src={backdrop} alt="" aria-hidden className="absolute inset-0 h-full w-full scale-110 object-cover opacity-60 blur-xl" />
+      ) : null}
+      {c.mediaType === "video" ? (
+        <video src={c.src} poster={c.poster ?? undefined} className="relative h-full w-full object-contain" muted loop autoPlay playsInline preload="metadata" />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element -- a local object URL or a storage URL, shown at its true size
+        <img src={c.src} alt="" className="relative h-full w-full object-contain" />
+      )}
+    </span>
   );
 }
 

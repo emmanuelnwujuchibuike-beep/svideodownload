@@ -30,6 +30,24 @@ interface Platform {
   settings: Settings | null;
   controls: Controls;
   blocked: { domain: string; reason: string; createdAt: string }[];
+  formats?: FormatRow[];
+}
+/** 0208: a creative format's media limits (columns added by 0208 are absent until it runs) */
+interface FormatRow {
+  code: string;
+  name: string;
+  media_types: string[];
+  width: number | null;
+  height: number | null;
+  max_width: number;
+  max_height: number;
+  min_width: number | null;
+  min_height: number | null;
+  max_file_bytes: number;
+  max_duration_seconds: number | null;
+  max_upload_bytes?: number | null;
+  delivery_long_edge?: number;
+  image_quality?: number;
 }
 interface Pricing {
   placements: { id: string; code: string; name: string; format: string; enabled: boolean }[];
@@ -176,6 +194,7 @@ export function AdPlatformControls() {
         </section>
       ) : null}
 
+      {p?.formats?.length ? <CreativeFormats formats={p.formats} busy={busy} send={send} reload={load} /> : null}
       {p ? <BlockedDomains list={p.blocked} busy={busy} send={send} reload={load} /> : null}
       {pr ? <Prices pr={pr} busy={busy} send={send} reload={load} /> : null}
       {pr ? <Promotions pr={pr} busy={busy} send={send} reload={load} /> : null}
@@ -200,6 +219,70 @@ function NumberField({ label, min, max, value, disabled, onSave }: { label: stri
         </button>
       </span>
     </label>
+  );
+}
+
+/**
+ * Creative formats (0208): the limits every upload, preview and server check
+ * reads — recommended size (advice), upload caps (any orientation), what is
+ * served (long edge, quality, file size), video length, and which media a
+ * format takes. A change applies to the next upload; live creatives are not
+ * re-judged.
+ */
+function CreativeFormats({ formats, busy, send, reload }: { formats: FormatRow[]; busy: boolean; send: Send; reload: () => Promise<void> }) {
+  const MB = 1024 * 1024;
+  const save = async (code: string, patch: Partial<FormatRow>, label: string) => {
+    if (await send("PATCH", "/api/admin/ads/platform", { format: { code, ...patch } }, `Saved: ${label}.`)) await reload();
+  };
+  return (
+    <section className={box}>
+      <h3 className="text-sm font-semibold">Creative formats — media limits</h3>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        Creatives are never refused for their shape: they are shown whole inside the slot. Larger images are resized in the advertiser&apos;s browser; larger videos are
+        transcoded by Cloudflare Stream. These numbers apply to the next upload.
+      </p>
+      <div className="mt-3 space-y-4">
+        {formats.map((f) => {
+          const migrated = f.delivery_long_edge !== undefined;
+          return (
+            <div key={f.code} className="rounded-xl border border-border/60 p-3">
+              <p className="text-sm font-semibold">
+                {f.name} <span className="font-mono text-[11px] text-muted-foreground">{f.code}</span>
+              </p>
+              <div className="mt-2 flex flex-wrap gap-3 text-xs">
+                {(["image", "video"] as const).map((m) => (
+                  <label key={m} className="inline-flex items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={f.media_types.includes(m)}
+                      disabled={busy || (f.media_types.length === 1 && f.media_types.includes(m))}
+                      onChange={(e) => void save(f.code, { media_types: e.target.checked ? [...f.media_types, m] : f.media_types.filter((x) => x !== m) }, `${f.name} media`)}
+                    />
+                    {m === "image" ? "Images" : "Videos"}
+                  </label>
+                ))}
+              </div>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                <NumberField label="Recommended width (px, advice)" min={1} max={10000} value={f.width ?? 0} disabled={busy} onSave={(v) => void save(f.code, { width: v }, `${f.name} recommended width`)} />
+                <NumberField label="Recommended height (px, advice)" min={1} max={10000} value={f.height ?? 0} disabled={busy} onSave={(v) => void save(f.code, { height: v }, `${f.name} recommended height`)} />
+                <NumberField label="Upload cap — short edge (px)" min={16} max={8192} value={Math.min(f.max_width, f.max_height)} disabled={busy} onSave={(v) => void save(f.code, f.max_width <= f.max_height ? { max_width: v } : { max_height: v }, `${f.name} upload cap`)} />
+                <NumberField label="Upload cap — long edge (px)" min={16} max={8192} value={Math.max(f.max_width, f.max_height)} disabled={busy} onSave={(v) => void save(f.code, f.max_width <= f.max_height ? { max_height: v } : { max_width: v }, `${f.name} upload cap`)} />
+                <NumberField label="Served file size (MB)" min={1} max={200} value={Math.round(f.max_file_bytes / MB)} disabled={busy} onSave={(v) => void save(f.code, { max_file_bytes: v * MB }, `${f.name} served size`)} />
+                {f.media_types.includes("video") ? (
+                  <NumberField label="Video length (seconds)" min={1} max={600} value={f.max_duration_seconds ?? 0} disabled={busy} onSave={(v) => void save(f.code, { max_duration_seconds: v }, `${f.name} video length`)} />
+                ) : null}
+                <NumberField label="Served long edge (px)" min={240} max={3840} value={f.delivery_long_edge ?? 1280} disabled={busy || !migrated} onSave={(v) => void save(f.code, { delivery_long_edge: v }, `${f.name} served size`)} />
+                <NumberField label="Image quality (40–100)" min={40} max={100} value={f.image_quality ?? 82} disabled={busy || !migrated} onSave={(v) => void save(f.code, { image_quality: v }, `${f.name} image quality`)} />
+                {f.media_types.includes("video") ? (
+                  <NumberField label="Video upload cap before transcoding (MB)" min={1} max={2048} value={Math.round((f.max_upload_bytes ?? f.max_file_bytes) / MB)} disabled={busy || !migrated} onSave={(v) => void save(f.code, { max_upload_bytes: v * MB }, `${f.name} upload size`)} />
+                ) : null}
+              </div>
+              {!migrated ? <p className="mt-2 text-[11.5px] text-amber-700">Served size, quality and the video upload cap appear after migration 0208 is run.</p> : null}
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

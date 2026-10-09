@@ -16,6 +16,7 @@
  */
 
 import type { AdMediaType } from "./catalog";
+import { withinUploadCaps } from "./media-spec";
 
 export interface CreativeFacts {
   formatCode: string;
@@ -42,6 +43,13 @@ export interface CreativeLimits {
   minHeight?: number | null;
   aspectRatio?: number | null;
   aspectTolerance?: number | null;
+  /**
+   * 0208: a video may be uploaded up to this size when it will be transcoded
+   * (videoProcessing) — the served copy is held to maxFileBytes by the transcode.
+   */
+  maxUploadBytes?: number | null;
+  /** 0208: the server can transcode an oversized video (Cloudflare Stream is provisioned) */
+  videoProcessing?: boolean;
 }
 
 export type CreativeVerdict = { status: "valid"; errors: [] } | { status: "invalid"; errors: string[] };
@@ -68,13 +76,24 @@ export function validateCreative(facts: CreativeFacts, limits: CreativeLimits): 
     const allowed = facts.mediaType === "video" ? VIDEO_MIME : IMAGE_MIME;
     if (!allowed.has(facts.mimeType)) errors.push("mime_not_allowed");
   }
+  // a video that will be transcoded may arrive larger than it is served (0208)
+  const sizeCap = facts.mediaType === "video" && limits.videoProcessing ? Math.max(limits.maxFileBytes, limits.maxUploadBytes ?? 0) : limits.maxFileBytes;
   if (facts.fileSizeBytes == null || !(facts.fileSizeBytes > 0)) errors.push("size_unknown");
-  else if (facts.fileSizeBytes > limits.maxFileBytes) errors.push("file_too_large");
+  else if (facts.fileSizeBytes > sizeCap) errors.push("file_too_large");
   if (facts.width == null || facts.height == null || !(facts.width > 0) || !(facts.height > 0)) errors.push("dimensions_unknown");
   else {
-    if (facts.width > limits.maxWidth || facts.height > limits.maxHeight) errors.push("dimensions_too_large");
-    if ((limits.minWidth && facts.width < limits.minWidth) || (limits.minHeight && facts.height < limits.minHeight)) errors.push("dimensions_too_small");
-    if (!aspectFits(facts.width, facts.height, limits.aspectRatio, limits.aspectTolerance)) errors.push("wrong_shape");
+    /*
+      🔴 0208 (owner, 2026-10-09): a creative is never refused for its SHAPE.
+      It is shown whole inside its slot (media-spec FIT_RULE: contain), so a
+      landscape image in a portrait slot, or a portrait video in a landscape
+      one, is valid. The caps are orientation-agnostic upload limits (a 4K
+      landscape video passes a 2160 × 3840 cap); the minimum stays, as a
+      quality floor, on the shorter and longer edges.
+    */
+    if (!withinUploadCaps(facts.width, facts.height, limits.maxWidth, limits.maxHeight)) errors.push("dimensions_too_large");
+    const minLong = Math.max(limits.minWidth ?? 0, limits.minHeight ?? 0);
+    const minShort = Math.min(limits.minWidth ?? 0, limits.minHeight ?? 0);
+    if ((minLong && Math.max(facts.width, facts.height) < minLong) || (minShort && Math.min(facts.width, facts.height) < minShort)) errors.push("dimensions_too_small");
   }
   if (facts.mediaType === "video") {
     const d = facts.durationSeconds;

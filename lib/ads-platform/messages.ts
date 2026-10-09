@@ -39,9 +39,27 @@ export function adMessage(code: string, f: MessageFacts = {}): string {
         ? `Your file is ${f.width} × ${f.height} px. It needs to be at least ${f.minWidth} × ${f.minHeight} px.`
         : "Your file is too small for this format.";
     case "dimensions_too_large":
-      return f.maxWidth ? `Your file is larger than ${f.maxWidth} × ${f.maxHeight} px. Please export it smaller.` : "Your file's dimensions are too large.";
+      return f.maxWidth
+        ? `Your file is larger than ${Math.max(f.maxWidth, f.maxHeight ?? 0)} px on its longest side, which is more than we can safely process. Export it at ${Math.max(f.maxWidth, f.maxHeight ?? 0)} px or smaller and upload again.`
+        : "Your file's dimensions are too large to process safely.";
+    // 0208: no longer produced — a creative is never refused for its shape; kept for old rows
     case "wrong_shape":
-      return f.width ? `Your file is ${f.width} × ${f.height} px, which is the wrong shape for this format. Use the recommended size.` : "Your file is the wrong shape for this format.";
+      return "Your file's shape differs from the slot. It will be shown whole, with space around it.";
+    case "decode_too_large":
+      return "That image claims more pixels than we can safely open. Export it at a normal size (for example 4000 px on the longest side) and try again.";
+    case "optimize_failed":
+      return "We couldn't optimize that image in your browser. Try exporting it as JPG or PNG and upload again.";
+    case "processing_unavailable":
+    case "video_needs_processing":
+      return "This video is larger than we serve and can't be optimized right now. Please try again in a few minutes, or export it at 1280 px and under the size limit.";
+    case "processing_failed":
+      return "We couldn't optimize that video. Export it again as MP4 (H.264) and upload it.";
+    case "processing_timeout":
+      return "Optimizing that video took too long. Please upload it again, or export a smaller MP4.";
+    case "creative_checking":
+      return "Your creative is still being checked. Give it a few seconds and try again.";
+    case "processing_cancelled":
+      return "That video was replaced before it finished optimizing.";
     case "media_type_not_allowed":
       return f.mediaType === "image" ? "This format takes a video, not an image." : "This format takes an image, not a video.";
     case "mime_not_allowed":

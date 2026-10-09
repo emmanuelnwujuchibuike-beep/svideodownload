@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 
 import type { EligibleAd } from "@/lib/ads-platform/eligibility";
+import { FIT_RULE } from "@/lib/ads-platform/media-spec";
 import { markCreativeFailed } from "@/lib/ads-platform/serving-state";
 import { claimPlayback, releasePlayback } from "@/lib/media/video-coordinator";
 import { cn } from "@/lib/utils";
@@ -29,7 +30,7 @@ export function SelfAdCreative({
   ad,
   placement,
   page,
-  fit = "cover",
+  fit = FIT_RULE,
   loop = true,
   eager = false,
   className,
@@ -105,10 +106,22 @@ export function SelfAdCreative({
   };
 
   const alt = ad.headline ? `${ad.headline} — ad from ${ad.sponsor}` : `Ad from ${ad.sponsor}`;
-  const media = cn("h-full w-full", fit === "cover" ? "object-cover" : "object-contain", mediaClassName);
+  const media = cn("relative h-full w-full", fit === "cover" ? "object-cover" : "object-contain", mediaClassName);
+  /*
+    🔴 0208 (owner, 2026-10-09): every creative is shown WHOLE — never stretched,
+    squeezed or cropped to fill its slot. Where the creative and the slot differ
+    in shape, the space around it is a soft, blurred copy of the creative itself
+    (its poster, for a video — never a second video decode), so the box reads as
+    one picture instead of hard black bars.
+  */
+  const backdrop = fit === "contain" ? (ad.mediaType === "video" ? ad.thumb : ad.media) : null;
 
   return (
-    <div ref={host} className={cn("relative overflow-hidden", className)}>
+    <div ref={host} className={cn("relative overflow-hidden", fit === "contain" && (ad.mediaType === "video" ? "bg-black" : "bg-muted"), className)}>
+      {backdrop ? (
+        // eslint-disable-next-line @next/next/no-img-element -- the same CDN file, already fetched for the creative
+        <img src={backdrop} alt="" aria-hidden loading={eager ? "eager" : "lazy"} decoding="async" className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-60 blur-xl" />
+      ) : null}
       {ad.mediaType === "video" ? (
         <video
           ref={video}

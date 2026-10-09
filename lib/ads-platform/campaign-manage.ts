@@ -129,29 +129,57 @@ export async function finalizeReplacement(db: Db, userId: string, input: { creat
   if (!(cr.storage_path as string).startsWith(`${userId}/${c.id}/`)) refuse("not_found", 404);
   manageable(c);
   const f = await formatOfCampaign(db, c.placement_id);
-  const result = await probeAndPublish(db, { id: cr.id as string, storage_path: cr.storage_path as string }, f);
+  const result = await probeAndPublish(db, { id: cr.id as string, storage_path: cr.storage_path as string }, f, "replacement");
   if (!result.ok) {
     await notifyAdvertiser(db, c.id, { kind: "creative_rejected" });
     return { ...result, swapped: false };
   }
+  // 0208: an oversized video is being transcoded — the LIVE creative keeps serving until it is ready
+  if (result.processing) return { ...result, swapped: false };
+  await swapIn(db, userId, c.id, cr.id as string, cr.destination_url as string, result.moderation ?? null, input.expectedVersion);
+  return { ...result, swapped: true };
+}
+
+/**
+ * The swap itself, shared by an instant replacement and a processed video's
+ * (media-processing.ts). Refuses — leaving the live creative untouched — when
+ * a person must look first or the link is now blocked.
+ */
+async function swapIn(db: Db, userId: string, campaignId: string, creativeId: string, destination: string, moderation: string | null, expectedVersion: number | null): Promise<void> {
   // Part 8: a replacement a person must look at never swaps in by itself; the live creative stays
-  if (result.moderation === "review") {
-    await db.from("ad_creatives").update({ status: "removed" }).eq("id", cr.id);
+  if (moderation === "review") {
+    await db.from("ad_creatives").update({ status: "removed" }).eq("id", creativeId);
     refuse("content_needs_review", 409);
   }
   // the link it carries is the live one — re-checked now, in case the blocklist changed
   // only a hard block stops the swap: this link is the live one, already through its own checks
-  const dest = await checkDestination(db, cr.destination_url as string);
+  const dest = await checkDestination(db, destination);
   if (dest.status === "blocked") {
-    await db.from("ad_creatives").update({ url_validation_status: "blocked", url_block_reason: dest.reason }).eq("id", cr.id);
+    await db.from("ad_creatives").update({ url_validation_status: "blocked", url_block_reason: dest.reason }).eq("id", creativeId);
     refuse("destination_blocked", 409);
   }
-  const { data, error } = await db.rpc("ad_swap_creative", { p_campaign: c.id, p_user: userId, p_new: cr.id, p_expected_version: input.expectedVersion });
+  const { data, error } = await db.rpc("ad_swap_creative", { p_campaign: campaignId, p_user: userId, p_new: creativeId, p_expected_version: expectedVersion });
   if (error) throw new Error(`ad_swap_creative: ${error.message}`);
   const r = data as { ok: boolean; reason?: string };
   if (!r.ok) rpcRefusal(r.reason);
-  await notifyAdvertiser(db, c.id, { kind: "creative_approved" });
-  return { ...result, swapped: true };
+  await notifyAdvertiser(db, campaignId, { kind: "creative_approved" });
+}
+
+/**
+ * A replacement video Cloudflare Stream has finished (0208): swap it in now,
+ * as the advertiser would have had it been small enough to serve as uploaded.
+ * The version check is skipped on purpose — the advertiser is no longer
+ * waiting on a form; edits made meanwhile are words and links, which the
+ * swap keeps from the live row.
+ */
+export async function swapProcessedReplacement(db: Db, campaignId: string, creativeId: string): Promise<void> {
+  const { data } = await db.from("ad_creatives").select("destination_url, moderation_status, status").eq("id", creativeId).maybeSingle();
+  if (!data || data.status !== "staged") return;
+  const { data: camp } = await db.from("ad_campaigns").select("advertisers!inner(user_id)").eq("id", campaignId).maybeSingle();
+  const adv = (camp as { advertisers?: { user_id: string } | { user_id: string }[] } | null)?.advertisers;
+  const userId = Array.isArray(adv) ? adv[0]?.user_id : adv?.user_id;
+  if (!userId) return;
+  await swapIn(db, userId, campaignId, creativeId, data.destination_url as string, (data.moderation_status as string | null) ?? null, null);
 }
 
 /* ─────────────────────────────── words + link ─────────────────────────────── */

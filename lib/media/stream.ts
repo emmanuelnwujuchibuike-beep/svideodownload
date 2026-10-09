@@ -227,3 +227,101 @@ export async function copyToStream(sourceUrl: string, creatorId?: string): Promi
     return null;
   }
 }
+
+/* ─────────────────── ad creatives: transcode by URL (0208) ─────────────────── */
+
+/**
+ * Pull an ad video into Stream by URL (a short-lived signed URL of the private
+ * staging copy). Stream fetches it directly — the bytes never pass through this
+ * server. `meta.adCreativeId` lets the webhook find the creative.
+ */
+export async function copyAdVideoToStream(sourceUrl: string, creativeId: string, maxDurationSeconds: number | null): Promise<string | null> {
+  if (!hasStream) return null;
+  try {
+    const res = await fetch(`${API_BASE}/accounts/${ACCOUNT_ID}/stream/copy`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${API_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: sourceUrl,
+        meta: { name: `ad-creative-${creativeId}`, adCreativeId: creativeId },
+        ...(maxDurationSeconds ? { maxDurationSeconds: Math.ceil(maxDurationSeconds) } : {}),
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { result?: { uid?: string } };
+    return json.result?.uid ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export interface StreamVideoState {
+  ready: boolean;
+  failed: string | null;
+  durationSeconds: number | null;
+  width: number | null;
+  height: number | null;
+}
+
+/** Where Stream is with a video. Null when Stream cannot be asked right now. */
+export async function getStreamVideo(uid: string): Promise<StreamVideoState | null> {
+  if (!hasStream) return null;
+  try {
+    const res = await fetch(`${API_BASE}/accounts/${ACCOUNT_ID}/stream/${encodeURIComponent(uid)}`, {
+      headers: { Authorization: `Bearer ${API_TOKEN}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (res.status === 404) return { ready: false, failed: "not_found", durationSeconds: null, width: null, height: null };
+    if (!res.ok) return null;
+    const r = ((await res.json()) as { result?: { readyToStream?: boolean; duration?: number; input?: { width?: number; height?: number }; status?: { state?: string; errorReasonCode?: string } } }).result;
+    if (!r) return null;
+    const failed = r.status?.state === "error" ? r.status.errorReasonCode || "error" : null;
+    return {
+      ready: !!r.readyToStream,
+      failed,
+      durationSeconds: typeof r.duration === "number" && r.duration > 0 ? r.duration : null,
+      width: r.input?.width && r.input.width > 0 ? r.input.width : null,
+      height: r.input?.height && r.input.height > 0 ? r.input.height : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ask for (or read) the single-file MP4 rendition — what a plain `<video src>`
+ * plays. Idempotent: asking again returns the same download. `url` is set once
+ * `status` is "ready".
+ */
+export async function ensureStreamMp4(uid: string): Promise<{ status: "ready" | "inprogress" | "error"; url: string | null } | null> {
+  if (!hasStream) return null;
+  try {
+    const res = await fetch(`${API_BASE}/accounts/${ACCOUNT_ID}/stream/${encodeURIComponent(uid)}/downloads`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${API_TOKEN}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return null;
+    const d = ((await res.json()) as { result?: { default?: { status?: string; url?: string } } }).result?.default;
+    if (!d) return null;
+    const status = d.status === "ready" ? "ready" : d.status === "error" ? "error" : "inprogress";
+    return { status, url: status === "ready" && d.url ? d.url : null };
+  } catch {
+    return null;
+  }
+}
+
+/** Remove a Stream video (a superseded or failed ad creative). Best-effort. */
+export async function deleteStreamVideo(uid: string): Promise<void> {
+  if (!hasStream) return;
+  try {
+    await fetch(`${API_BASE}/accounts/${ACCOUNT_ID}/stream/${encodeURIComponent(uid)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${API_TOKEN}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    /* an orphan in Stream costs storage, never correctness */
+  }
+}

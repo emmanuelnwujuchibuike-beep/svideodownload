@@ -704,3 +704,188 @@ Not run:
 | A paused campaign's clock keeps running | still **decision needed** (Part 1 ledger). |
 | Bulk actions, an admin email to an advertiser, CSV export | not built (no ask yet) |
 | 0204 applied to production | on push, then a live probe |
+
+---
+
+# Part 8 — analytics, fraud prevention, safety, advertiser quality (2026-10-09)
+
+Brief: `docs/AD_PLATFORM_PART8_BRIEF.md`. Migration: `0206_ad_traffic_quality.sql`.
+
+## Audit (before any change)
+
+| Area | Found | Class | Part 8 |
+|---|---|---|---|
+| Ad event ingest `track_ad_events` | Browser → Supabase RPC, batched (20 / 10 s / page hide), dedupe by event id, granted to anon | **insecure**: public ids + anon key = unlimited fake events counted for paying advertisers. No rate limit, no window check, wrong types accepted | rewritten in place (same cheap path) |
+| Impression rule | ≥50 % visible for 1 s (IntersectionObserver) | implemented, but a hidden tab could still count | also requires a visible tab |
+| CTR | clicks ÷ impressions | could exceed 100 % (a click needed no view) | a click counts only after a view |
+| Viewability / fill rate | none | missing | see metric definitions |
+| Reward completion | client `onEnded`, and `/complete` had no minimum time | insecure by design (documented). It unlocks downloads only, never credits | 5 s server floor and a completion-vs-length check |
+| Fraud and risk | the Upstash limiter (not on ad ingest), a manual reward restriction, a UA regex used only for tagging | incomplete | a risk layer inside the ingest, flags, an admin centre |
+| IP hashing | three schemes in six places, some unsalted | duplicated / insecure | ads use one daily-salted hash (others left for Part 9) |
+| Destination checks | syntax + admin blocklist; never fetched; never re-scanned | incomplete | heuristics, reputation, a restricted redirect probe, rescan |
+| Creative checks | magic bytes + range probe + format rules | implemented. Two problems: unchecked bytes could be published (overwrite race), and there is no content check | lock-then-check, type match, content moderation |
+| Admin and alerts | Part 7 desk. `sendAdminAlertOnce` exists; no fraud alerts | incomplete | Traffic & safety tab + hourly alert digest |
+| Retention | raw events pruned at 35 days on CDN misses | implemented | configurable, plus hash and flag retention, cron |
+| `/api/media/download` proxy | streams any Supabase object; a `/wallpapers/` substring skips sign-in | **insecure** (not ads) | **Part 9** (media paths) |
+
+## Event pipeline
+
+**EVENT → VALIDATION → DEDUP → RISK → QUALIFYING COUNTS → AGGREGATES → ADMIN REVIEW**, all inside the one batched RPC. There is no new service and no per-event function.
+
+**Validation.** An event is refused, and counted only in `ad_invalid_daily`, when:
+- the creative and campaign do not match;
+- the campaign is not paid, not active, outside its window, or its advertiser is inactive (with 15 minutes of grace for an in-flight batch);
+- the event type does not fit the format (for example, a reward completion on a banner);
+- its client time is older than 24 h or more than 10 min in the future.
+
+**Dedup.** By event id, as before.
+
+**Risk.** Any one signal keeps the row as evidence (`qualifying = false`) but does not count it. Thresholds live in `ad_platform_settings.traffic_rules` and are editable.
+
+| Signal | Rule |
+|---|---|
+| Bot | an automation user agent, or none |
+| Internal | an admin |
+| Self | the advertiser's own account |
+| Frequency | more than 20 impressions per visitor per campaign per hour, or more than 200 per network |
+| Click without a view | no view of the same creative by the same visitor within 30 min |
+| Repeat clicks | more than 3 per visitor per campaign per day, or more than 30 per network |
+| Completion | no start, or faster than 0.8 × the video length (by the browser's clock) |
+
+**Ingest rate.** More than 600 events per minute from one network, or more than 240 from one visitor, refuses that batch. Nothing is banned.
+
+**Shared networks.** 30 visitors behind one network all count (PGlite check). A network on its own never filters anyone.
+
+**Escalation.** Each batch checks today's counters for the campaigns it touched and raises one flag per kind, campaign and day (`ad_risk_flags`):
+- `invalid_traffic`: at least 100 events, more than 50 % of them filtered
+- `click_anomaly`: at least 50 filtered clicks
+- `creative_load_failures`
+- `self_traffic` (on the advertiser)
+
+Also raised:
+- `payment_*`, from a trigger on the payment ledger: chargeback, mismatch, verification required, refunds
+- `unsafe_destination`, from the blocklist rescan, which also pauses the campaign
+
+## Metric definitions (advertiser and admin use the same ones)
+
+**Impression (view).** At least 50 % of the ad on screen for one continuous second, in a visible tab, and qualifying. This meets the common display-viewability bar, so **every counted impression is a viewable impression**. No separate viewability rate is shown.
+
+**Click.** The ad's detail opened after a view, qualifying, and capped per visitor per day.
+
+**CTR.** Clicks ÷ impressions, both qualifying. Shown as "—" with no impressions.
+
+**Watched to the end.** `video_complete` / `reward_video_complete`, both qualifying.
+
+**Filtered.** `invalid_impressions + invalid_clicks`. Advertisers see the total; the reasons are admin-only.
+
+**Fill rate.** **Not measured** for self-serve. Measuring it would need an "eligible slot" event per rotation, which the brief forbids for cost. It is not shown anywhere.
+
+**Spend.** From verified payment records (`ad_my_payments` / `ad_my_summary`). Refunds and chargebacks are separate rows. Network-provider metrics are never mixed in.
+
+The public text is `TRAFFIC_QUALITY_POLICY` on `/advertise/rules#traffic-quality`. It says what each figure means, that invalid traffic is filtered, and that nothing is guaranteed. It does not say how detection works.
+
+## Destination safety (`lib/ads-platform/url-safety.ts`, `server.ts` `checkDestination`)
+
+**Always, with no network.** The checks run in this order:
+1. syntax (https, no IP literals, no credentials, port 443 only)
+2. block: redirect parameters carrying a URL, known open redirectors, `.zip` / `.mov` domains, an embedded URL in the path
+3. review: a brand's name in a stranger's domain (look-alike digits normalised), internationalized hosts
+4. the admin blocklist
+
+**Deep.** Runs at submission, link edit and activation:
+- **Reputation:** Google Safe Browsing v4, when `GOOGLE_SAFE_BROWSING_API_KEY` is set. This sends the URL to Google; the page itself is never fetched.
+- **Redirects:** a restricted probe of where the link really goes:
+  - HEAD only, https and port 443 only
+  - DNS answers checked, with private, loopback, link-local, CGNAT and metadata addresses refused, and the socket pinned to the checked address
+  - at most 5 hops in 4 s, with no body read
+  - every hop re-checked
+  - landing on another domain → a person reviews it
+
+**Safe-failure.**
+- A blocked link is refused.
+- A doubt holds the link for a person (`pending`). Pending links never serve.
+- If reputation is configured but unreachable, the link goes to review.
+- If the link is unreachable, it goes to review.
+- An admin approval remembers the exact URL (`url_approved_url`), so later automated passes don't hold it again.
+
+**Live campaigns.**
+- When an admin blocks a domain, `ad_rescan_blocked_destinations` blocks matching creatives and pauses their campaigns. Serving drops them within one 5-minute bucket.
+- The rescan also runs every hour.
+
+## Creative safety (`creative-moderation.ts`, `advertiser-server.ts`)
+
+**Locked before checking.** The upload is copied (inside Supabase) to `*.checked`, a path the browser's signed upload URL cannot write. It is probed and published from there, which closes the audit's overwrite race.
+
+**Type match.** The sniffed type must equal the declared one (`type_mismatch`).
+
+**Content.** This reuses the repo's existing Claude moderation integration (`ANTHROPIC_API_KEY`, `MODERATION_MODEL`, direct fetch):
+- The image, or a video's poster, is passed **by signed storage URL**, so the bytes never pass through Vercel.
+- The headline, description, business name and link host are checked at submit and at edit.
+- A rejection blocks the creative.
+- A review publishes the bytes but holds activation (`safety_review`), and refuses a live edit or replacement. The live creative keeps serving.
+- No key configured means `skipped`, a recorded gap rather than a pass.
+- A failed call means review.
+- A video without a poster means review. Frames beyond the poster are not inspected.
+
+**Payment and safety stay separate.** Payment never makes a creative valid, and a valid creative is never live without verified payment (the 0195 guard is unchanged).
+
+## Admin: Traffic & safety (Admin → Ads)
+
+- **Flags:** severity, evidence counts (never an IP or hash), when first and last seen, hits.
+- **Decisions:** Dismiss or Confirm, each with a required note. Confirming a traffic flag can exclude that day's counts, recorded in the evidence and in `ad_campaign_events`.
+- **Recheck:** reruns every creative and link check on a campaign.
+- **7-day traffic:** counted vs filtered per campaign, and the filtered reasons.
+- **Creatives and links** that failed or wait on a person.
+- **Payment items:** a count, linking to Campaign payments.
+- **Traffic rules:** each edited within bounds.
+
+Pausing, removing and suspending stay in the Campaigns tab (Part 7), with no duplicate. Normal campaigns still activate automatically: only failures and threshold crossings wait.
+
+## Privacy and retention
+
+- The IP is never stored. `ip_hash` = sha256(private salt, UTC day, IP), so it cannot be linked across days, and it is dropped after `ip_hash_retention_days` (default 7).
+- Raw events are deleted after `raw_retention_days` (default 35, editable).
+- Resolved flags are deleted after `flag_retention_days` (default 365).
+- Daily stats are kept: they hold no personal data.
+- Advertisers can read only their own daily stats (0195 RLS). `ad_invalid_daily` and `ad_risk_flags` are admins only, and `ad_private_settings` no client role can read.
+- Ad events respect the analytics opt-out (`frenz_analytics_off`).
+
+## Monitoring and housekeeping
+
+The hourly job `app/api/cron/ad-housekeeping` is clocked by `.github/workflows/cron-ad-housekeeping.yml` and needs the `CRON_SECRET` Actions secret, like the other crons. It runs:
+- retention
+- the blocklist rescan
+- creative file cleanup: removed creatives after 30 days, abandoned *staged* replacements after a day, never an active creative
+- **one** deduped admin email for new high and medium flags (`sendAdminAlertOnce`)
+
+Decisions never wait on the alert.
+
+## Media paths
+
+- Uploads go browser → signed URL → Supabase Storage (private staging).
+- Checks are range reads of at most ~8 MB, and moderation reads by signed URL.
+- Publishing is a storage-to-storage copy.
+- Delivery is a Supabase public CDN URL straight to the `<img>` / `<video>`.
+
+No ad media passes through a Vercel route or Railway. The one route that *could* proxy any public object, `/api/media/download`, is insecure and is fixed in Part 9.
+
+## Verified
+
+- **PGlite:** 0206 ran on the real 0195–0205, applied twice, with 33 checks. The 0204 suite still passes 20/20 against the new copies. Five mutants each failed: no view check, no click cap, no bot rule, no eligibility window, no speed check.
+- **Tests:** `lib/ads-platform/part8-traffic.test.ts` covers the URL heuristics, private addresses, the probe's limits, moderation parsing and its safe failure, the upload lock, the 0206 pins (with teeth), the client fields, advertiser transparency, and the reward floor. Three older tests that encoded "the link is never fetched" were updated to the new design. The full suite is green.
+
+**Not run here.** These need production or secrets:
+- Safe Browsing (no key)
+- Claude moderation calls (no key in this container)
+- the redirect probe against the internet (the network policy blocks outbound requests)
+- a live probe of 0206
+- load testing beyond PGlite
+
+The brief's test areas 9–11 (payment races, wrong amount or currency, refunds and chargebacks) were covered by Part 3's 0197 suite. 0206 adds only the flags.
+
+## Limits (honest)
+
+- Client-reported events can still be forged by someone who mimics a real browser. The rules cut volume, repetition and impossibilities; they cannot prove a human. No fraud system can promise that.
+- `visitor_id` is minted by the browser, so a determined script rotates it. The per-network limits are the backstop.
+- Network-provider ads (Monetag, ExoClick, AdSense, Hilltop, Offerium) report through their own dashboards. Frenzsave does not see their invalid-traffic decisions, and `verifyOfferiumPostback` is still unbuilt.
+- The reward unlock cannot be proven watched without a provider server-to-server callback. The 5 s floor removes instant replays only.

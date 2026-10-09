@@ -1,0 +1,43 @@
+name: Cron - ad housekeeping
+
+# Supplies the clock for app/api/cron/ad-housekeeping/route.ts (Ad Platform Part 8):
+# ad event retention, the blocked-domain rescan, creative file cleanup and one
+# deduped admin alert for open traffic/safety flags. Every step is bounded and
+# idempotent; the fraud and safety DECISIONS happen in the database at ingest,
+# so a missed run delays only cleanup and the email, never protection.
+#
+# Hourly at :35 (off the hour, apart from the other crons). Uses the same
+# CRON_SECRET Actions secret as the others (mint with `npm run cron:token`).
+on:
+  schedule:
+    - cron: "35 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: cron-ad-housekeeping
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/cron/ad-housekeeping
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: |
+          set -euo pipefail
+          url="${SITE_URL:-https://frenzsave.com}/api/cron/ad-housekeeping"
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET repo secret is not set."
+            exit 1
+          fi
+          status=$(curl -sS -o /tmp/response.json -w "%{http_code}" -X POST "$url" \
+            -H "Authorization: Bearer $CRON_SECRET")
+          echo "HTTP $status"
+          cat /tmp/response.json
+          echo
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::Ad housekeeping cron returned HTTP $status"
+            exit 1
+          fi

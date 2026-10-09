@@ -239,15 +239,20 @@ describe("destination URL", () => {
     expect(destinationHost("https://www.acme.com/a?b=1")).toBe("acme.com");
     expect(destinationHost("nonsense")).toBeNull();
   });
-  it("the blocklist runs on the server for every submission and every activation (no fetch of the URL anywhere)", () => {
+  it("the blocklist runs on the server for every submission and every activation; the only link probe is the restricted one", () => {
     const server = readFileSync(join(process.cwd(), "lib/ads-platform/server.ts"), "utf8");
-    expect(server).toMatch(/export async function checkDestination[\s\S]*checkDestinationUrl\(raw\)[\s\S]*rpc\("ad_domain_blocked"/);
-    expect(server).toContain("await checkDestination(db, cr.destination_url)");
+    expect(server).toMatch(/export async function checkDestination[\s\S]*checkDestinationUrl\(raw\)[\s\S]*destinationHeuristics\(url\)[\s\S]*blockedDomain\(db, host\)/);
+    expect(server).toContain("await checkDestination(db, cr.destination_url, { deep: true })");
     const adv = readFileSync(join(process.cwd(), "lib/ads-platform/advertiser-server.ts"), "utf8");
-    expect(adv).toContain("const dest = await checkDestination(db, destinationUrl);");
-    // SSRF: the only fetch in the advertiser server is the signed STAGING url it minted itself
+    expect(adv).toContain("const dest = await checkDestination(db, destinationUrl, { deep: true });");
+    // SSRF: the advertiser server fetches only the STAGING url it minted itself
     expect([...adv.matchAll(/\bfetch\(/g)]).toHaveLength(1);
     expect(adv).toMatch(/createSignedUrl\(path, 120\)[\s\S]*await fetch\(url,/);
+    // Part 8: the advertiser's link is probed ONLY through url-safety's restricted HEAD (no fetch of the page)
+    const safety = readFileSync(join(process.cwd(), "lib/ads-platform/url-safety.ts"), "utf8");
+    expect(safety).toContain('method: "HEAD"');
+    expect(safety).toContain("lookup: safeLookup as never");
+    expect(safety).not.toMatch(/fetch\(\s*(raw|url|current|next)\b/);
   });
 });
 

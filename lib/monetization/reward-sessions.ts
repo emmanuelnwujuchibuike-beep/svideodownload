@@ -123,7 +123,18 @@ interface SessionRow {
   payload: { items: RewardItem[]; surface?: RewardSurfaceTag };
   consumed_indexes: number[];
   expires_at: string;
+  created_at?: string;
 }
+
+/**
+ * Part 8 (2026-10-09): the least time a reward can take. A rewarded video is
+ * several seconds at the very least (paid reward videos are capped at 15 s, and
+ * network rewarded units are longer). A script that calls /complete straight
+ * after /start is refused, and a real viewer never meets this floor. This is
+ * not proof that the ad was watched - nothing on the open web is - but it
+ * removes the instant replay.
+ */
+export const MIN_REWARD_SECONDS = 5;
 
 async function loadOwnedSession(
   db: ReturnType<typeof createAdminClient>,
@@ -245,6 +256,9 @@ export async function completeRewardSession(input: {
   }
   if (new Date(row.expires_at).getTime() < Date.now()) {
     throw new RewardError("REWARD_SESSION_EXPIRED", "This reward session expired. Please try again.");
+  }
+  if (row.created_at && Date.now() - new Date(row.created_at).getTime() < MIN_REWARD_SECONDS * 1000) {
+    throw new RewardError("REWARD_NOT_GRANTED", "Please watch the ad to the end to unlock this.");
   }
 
   const plan = await getUserPlan(input.userId);

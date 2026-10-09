@@ -70,6 +70,8 @@ export const AD_EVENT_TYPES = [
   // 0201 (owner, 2026-10-09): the ad's details opened on Frenzsave, and the visit after the external-link warning
   "conversion",
   "outbound",
+  // 0206 (Part 8): the creative's media failed to load - counted apart, never an impression
+  "load_failed",
 ] as const;
 export type AdEventType = (typeof AD_EVENT_TYPES)[number];
 

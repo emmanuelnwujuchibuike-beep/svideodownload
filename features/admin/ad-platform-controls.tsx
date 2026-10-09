@@ -209,7 +209,7 @@ function BlockedDomains({ list, busy, send, reload }: { list: Platform["blocked"
   return (
     <section className={box}>
       <h3 className="text-sm font-semibold">Blocked destinations</h3>
-      <p className="mt-0.5 text-xs text-muted-foreground">An ad may never link here — the domain and every subdomain. Checked whenever a link is submitted or changed. Blocking does not stop an ad already live — remove it from Campaigns.</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">An ad may never link here — the domain and every subdomain. Checked whenever a link is submitted or changed. Blocking also pauses any live ad that links there (Traffic &amp; safety shows it).</p>
       <form
         className="mt-2 flex flex-wrap gap-1.5"
         onSubmit={async (e) => {

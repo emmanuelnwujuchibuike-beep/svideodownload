@@ -77,6 +77,11 @@ export const NOT_EXPORTED: Record<string, string> = {
   ad_creatives: "The images, videos and links of your campaigns — tied to the campaign, see ad_campaigns.",
   ad_campaign_events: "The status history of your campaigns — tied to the campaign, see ad_campaigns.",
   ad_campaign_daily_stats: "Daily view and click counts of your campaigns — tied to the campaign, see ad_campaigns.",
+  /* Part 8 (0206): traffic-quality internals. None is keyed by a member, and none holds an IP. */
+  ad_invalid_daily: "Counts of filtered ad traffic per campaign and day. Not personal data.",
+  ad_ingest_counters: "Short-lived counters (kept for minutes) that rate-limit ad events. Not personal data.",
+  ad_risk_flags: "Admin review flags about ad campaigns — counts only, about campaigns rather than people.",
+  ad_private_settings: "The platform's private hashing salt. Not personal data.",
   affiliate_offers: "Affiliate catalogue. Not personal data.",
   media_assets: "Shared media records, not owned by one member.",
   asset_usage: "Links assets to places they appear. Not personal data.",

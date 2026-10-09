@@ -19,6 +19,11 @@ import { IMPRESSION_RULE, type AdEventType } from "@/lib/ads-platform/catalog";
  *     the second call locally, so the copy never even leaves the browser.
  *   · A failed batch goes back to the front of the queue for the next flush;
  *     a replay is harmless for the same reason.
+ *
+ * Part 8 (0206): the database decides what COUNTS. Every row carries the
+ * browser's clock (`ts`) so a stale replay is refused and a too-fast video
+ * completion is caught. A visitor who turned analytics off sends nothing.
+ * An impression needs the TAB to be visible as well as the ad.
  */
 
 export interface AdView {
@@ -37,6 +42,8 @@ interface Row {
   t: AdEventType;
   p: string;
   v: string | null;
+  /** the browser's clock (ms) when the event happened */
+  ts: number;
 }
 
 const MAX_BATCH = 20;
@@ -48,6 +55,15 @@ let listening = false;
 
 function uuid(): string {
   return crypto.randomUUID();
+}
+
+/** The analytics opt-out (lib/analytics/client.ts OPT_OUT_KEY) covers ad events too. */
+function optedOut(): boolean {
+  try {
+    return localStorage.getItem("frenz_analytics_off") === "1";
+  } catch {
+    return false;
+  }
 }
 
 function visitorId(): string | null {
@@ -69,7 +85,8 @@ export function trackAdEvent(view: AdView, type: AdEventType): boolean {
   if (view.ids.has(type)) return false;
   const id = uuid();
   view.ids.set(type, id);
-  queue.push({ id, c: view.campaignId, cr: view.creativeId, t: type, p: view.page, v: visitorId() });
+  if (optedOut()) return true;
+  queue.push({ id, c: view.campaignId, cr: view.creativeId, t: type, p: view.page, v: visitorId(), ts: Date.now() });
   listen();
   if (queue.length >= MAX_BATCH) void flushAdEvents();
   else timer ??= setTimeout(() => void flushAdEvents(), FLUSH_AFTER_MS);
@@ -108,10 +125,15 @@ export function observeImpression(el: Element, view: AdView): () => void {
   let hold: ReturnType<typeof setTimeout> | null = null;
   const io = new IntersectionObserver(
     ([entry]) => {
-      const seen = !!entry && entry.isIntersecting && entry.intersectionRatio >= IMPRESSION_RULE.minVisibleRatio;
+      const seen = !!entry && entry.isIntersecting && entry.intersectionRatio >= IMPRESSION_RULE.minVisibleRatio && document.visibilityState === "visible";
       if (seen) {
         trackAdEvent(view, "visible");
         hold ??= setTimeout(() => {
+          // a tab hidden during the second is not a view (Part 8)
+          if (document.visibilityState !== "visible") {
+            hold = null;
+            return;
+          }
           trackAdEvent(view, "impression");
           io.disconnect();
         }, IMPRESSION_RULE.minVisibleMs);

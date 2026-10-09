@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { notifyAdvertiser } from "./ad-notify";
 import { AdApplicationError, formatOfCampaign, probeAndPublish, stageCreative, type FinalizeResult } from "./advertiser-server";
 import { normalizeDestination, sanitizeText, TEXT_LIMITS } from "./application";
+import { moderateCreative } from "./creative-moderation";
 import { checkDestination } from "./server";
 
 /**
@@ -133,9 +134,15 @@ export async function finalizeReplacement(db: Db, userId: string, input: { creat
     await notifyAdvertiser(db, c.id, { kind: "creative_rejected" });
     return { ...result, swapped: false };
   }
+  // Part 8: a replacement a person must look at never swaps in by itself; the live creative stays
+  if (result.moderation === "review") {
+    await db.from("ad_creatives").update({ status: "removed" }).eq("id", cr.id);
+    refuse("content_needs_review", 409);
+  }
   // the link it carries is the live one — re-checked now, in case the blocklist changed
+  // only a hard block stops the swap: this link is the live one, already through its own checks
   const dest = await checkDestination(db, cr.destination_url as string);
-  if (dest.status !== "valid") {
+  if (dest.status === "blocked") {
     await db.from("ad_creatives").update({ url_validation_status: "blocked", url_block_reason: dest.reason }).eq("id", cr.id);
     refuse("destination_blocked", 409);
   }
@@ -166,9 +173,17 @@ export async function editDetails(
   let destination: string | null = null;
   if (has(input.destinationUrl)) {
     destination = normalizeDestination(input.destinationUrl as string);
-    // syntax (https only, no scripts or credentials) and the admin blocklist — the link is never fetched
-    const verdict = await checkDestination(db, destination);
-    if (verdict.status !== "valid") refuse(verdict.code === "destination_blocked" ? "destination_blocked" : "url_invalid", 400, { reason: verdict.reason });
+    // Part 8: a live link changes only after the full check (syntax, safety, blocklist, reputation,
+    // where it really goes). A doubt keeps the old link serving and says a person must look.
+    const verdict = await checkDestination(db, destination, { deep: true });
+    if (verdict.status === "pending") refuse("needs_review", 409, { reason: verdict.reason });
+    if (verdict.status === "blocked") refuse(verdict.code === "url_invalid" ? "url_invalid" : "destination_blocked", 400, { reason: verdict.reason });
+  }
+  // Part 8: new words go live only if they pass the content check; a doubt keeps the old copy serving
+  if (headline !== null || description !== null || destination !== null) {
+    const check = await moderateCreative({ texts: [headline, description], destinationHost: destination ? new URL(destination).hostname : null });
+    if (check.status === "rejected") refuse("content_rejected", 400);
+    if (check.status === "review") refuse("content_needs_review", 409);
   }
   const { data, error } = await db.rpc("ad_edit_creative_details", {
     p_campaign: c.id, p_user: userId, p_expected_version: input.expectedVersion,

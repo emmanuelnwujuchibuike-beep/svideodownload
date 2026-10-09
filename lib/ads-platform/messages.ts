@@ -63,6 +63,17 @@ export function adMessage(code: string, f: MessageFacts = {}): string {
       return f.reason === "link shortener"
         ? "Please use your full website address. Shortened links hide where people will go, so they aren't accepted."
         : "That destination can't be used for advertising on Frenzsave.";
+    // Part 8 (0206): the deeper link and content checks
+    case "destination_unsafe":
+      return "That destination didn't pass our safety checks, so it can't be used for advertising on Frenzsave. Please link to your own website directly.";
+    case "needs_review":
+      return "That link needs a quick check by our team before it can go live. Your current ad keeps running unchanged — contact support if you need it sooner.";
+    case "content_rejected":
+      return "This ad didn't pass our content safety checks. Please read the Advertising Rules and try a different image, video or wording.";
+    case "content_needs_review":
+      return "This change needs a quick check by our team before it can go live. Your current ad keeps running unchanged.";
+    case "type_mismatch":
+      return "That file isn't what its name says it is. Please export it again and upload.";
     case "format_unavailable":
       return "This ad format is currently unavailable.";
     case "placement_unavailable":

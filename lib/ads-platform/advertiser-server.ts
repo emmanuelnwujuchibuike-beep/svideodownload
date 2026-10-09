@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { sanitizeText, TEXT_LIMITS } from "./application";
+import { moderateCreative, type ModerationStatus } from "./creative-moderation";
 import { IMAGE_MIME_TYPES, validateCreative, VIDEO_MIME_TYPES } from "./creative-validation";
 import { probeMedia, sniff, type MediaFacts } from "./media-probe";
 import { maxPlacements, offeredDurations, offeredPlacements, parseCatalog, type AdCatalog } from "./offer";
@@ -359,6 +360,8 @@ export interface FinalizeResult {
   limits: { maxDurationSeconds: number | null; maxFileBytes: number; minWidth: number | null; minHeight: number | null; maxWidth: number; maxHeight: number };
   mediaUrl: string | null;
   thumbnailUrl: string | null;
+  /** Part 8: the content safety outcome when the bytes passed */
+  moderation?: ModerationStatus;
 }
 
 /**
@@ -388,20 +391,42 @@ export async function finalizeUpload(db: Db, userId: string, creativeId: string)
  * marked valid. Invalid ⇒ the staging copy removed and the reasons written
  * down. It never touches any OTHER creative: what happens to those is the
  * caller's decision (a draft drops them; a live campaign swaps atomically).
+ *
+ * Part 8 (0206):
+ *   · the bytes are LOCKED first: copied (inside Supabase) to a path the
+ *     browser's signed upload URL cannot write, then checked and published
+ *     from there. A re-upload between the check and the publish can no longer
+ *     put unchecked bytes in the public bucket (the audit's TOCTOU finding).
+ *   · the sniffed type must match the declared one (`type_mismatch`)
+ *   · content safety (creative-moderation.ts): the model reads the locked
+ *     image or poster by signed URL. A rejection blocks the creative. A
+ *     review publishes the bytes but holds activation for a person.
  */
 export async function probeAndPublish(db: Db, cr: { id: string; storage_path: string }, f: FormatRow & { code: string }): Promise<FinalizeResult> {
   const limits = formatLimits(f);
   const outLimits = { maxDurationSeconds: limits.maxDurationSeconds, maxFileBytes: limits.maxFileBytes, minWidth: limits.minWidth ?? null, minHeight: limits.minHeight ?? null, maxWidth: limits.maxWidth, maxHeight: limits.maxHeight };
+  const staging = db.storage.from(STAGING_BUCKET);
+  const poster = posterPath(cr.storage_path);
+  const locked = `${cr.storage_path}.checked`;
+  const lockedPoster = `${poster}.checked`;
+  const cleanup = () => staging.remove([cr.storage_path, poster, locked, lockedPoster]);
 
-  const src = await stagingReader(db, cr.storage_path);
+  await staging.remove([locked, lockedPoster]);
+  const { error: lockErr } = await staging.copy(cr.storage_path, locked);
+  if (lockErr) return refuse("upload_missing", 409);
+  const hasPoster = !(await staging.copy(poster, lockedPoster)).error;
+
+  const src = await stagingReader(db, locked);
   if (!src) return refuse("upload_missing", 409);
   const size = src.size();
   const facts = size > limits.maxFileBytes ? null : await probeMedia(src.read, size);
+  const { data: declared } = await db.from("ad_creatives").select("mime_type, headline, description, destination_url").eq("id", cr.id).maybeSingle();
   const errors: string[] = [];
   if (size > limits.maxFileBytes) errors.push("file_too_large");
   else if (!facts) errors.push("not_recognised");
   else if (facts.mime === "video/quicktime") errors.push("quicktime");
   else {
+    if (declared?.mime_type && declared.mime_type !== facts.mime) errors.push("type_mismatch");
     const verdict = validateCreative(
       { formatCode: f.code, mediaType: facts.mediaType, mimeType: facts.mime, durationSeconds: facts.durationSeconds, fileSizeBytes: size, width: facts.width, height: facts.height, destinationUrl: null },
       limits,
@@ -410,40 +435,68 @@ export async function probeAndPublish(db: Db, cr: { id: string; storage_path: st
   }
   const now = new Date().toISOString();
   const factsOut = { ...(facts ?? {}), fileSizeBytes: size };
+  const factCols = {
+    file_size_bytes: size || null, width: facts?.width ?? null, height: facts?.height ?? null,
+    duration_seconds: facts?.durationSeconds ?? null, mime_type: facts?.mime ?? null,
+  };
 
   if (errors.length) {
-    await db.storage.from(STAGING_BUCKET).remove([cr.storage_path, posterPath(cr.storage_path)]);
-    await db.from("ad_creatives").update({
-      validation_status: "invalid", validation_errors: errors, validated_at: now, file_size_bytes: size || null,
-      width: facts?.width ?? null, height: facts?.height ?? null, duration_seconds: facts?.durationSeconds ?? null, mime_type: facts?.mime ?? null,
-    }).eq("id", cr.id);
+    await cleanup();
+    await db.from("ad_creatives").update({ validation_status: "invalid", validation_errors: errors, validated_at: now, ...factCols }).eq("id", cr.id);
     return { ok: false, errors, facts: factsOut, limits: outLimits, mediaUrl: null, thumbnailUrl: null };
   }
 
   // the poster, if the browser made one: a small real image, or nothing
-  let thumbnailUrl: string | null = null;
-  if (facts!.mediaType === "video") {
-    const poster = await stagingReader(db, posterPath(cr.storage_path));
-    if (poster && poster.size() <= POSTER_MAX_BYTES) {
-      const head = await poster.read(0, Math.min(poster.size(), 64 * 1024));
-      if (sniff(head)?.mediaType === "image") {
-        const { error } = await db.storage.from(STAGING_BUCKET).copy(posterPath(cr.storage_path), posterPath(cr.storage_path), { destinationBucket: PUBLIC_BUCKET });
-        if (!error) thumbnailUrl = db.storage.from(PUBLIC_BUCKET).getPublicUrl(posterPath(cr.storage_path)).data.publicUrl;
-      }
+  let posterOk = false;
+  if (facts!.mediaType === "video" && hasPoster) {
+    const p = await stagingReader(db, lockedPoster);
+    if (p && p.size() <= POSTER_MAX_BYTES) {
+      const head = await p.read(0, Math.min(p.size(), 64 * 1024));
+      posterOk = sniff(head)?.mediaType === "image";
     }
   }
 
-  const { error: copyErr } = await db.storage.from(STAGING_BUCKET).copy(cr.storage_path, cr.storage_path, { destinationBucket: PUBLIC_BUCKET });
+  // content safety on the LOCKED bytes, by signed URL - never through this server
+  const look = facts!.mediaType === "image" ? locked : posterOk ? lockedPoster : null;
+  const signed = look ? (await staging.createSignedUrl(look, 600)).data?.signedUrl ?? null : null;
+  const destHost = (() => {
+    try {
+      return declared?.destination_url ? new URL(declared.destination_url as string).hostname : null;
+    } catch {
+      return null;
+    }
+  })();
+  const moderation = await moderateCreative({
+    imageUrl: signed,
+    videoWithoutPoster: facts!.mediaType === "video" && !posterOk,
+    texts: [declared?.headline as string | null, declared?.description as string | null],
+    destinationHost: destHost,
+  });
+  if (moderation.status === "rejected") {
+    await cleanup();
+    await db.from("ad_creatives").update({
+      validation_status: "blocked", validation_errors: ["content_rejected", ...moderation.labels], validated_at: now, ...factCols,
+      moderation_status: "rejected", moderation_labels: moderation.labels, moderated_at: now,
+    }).eq("id", cr.id);
+    return { ok: false, errors: ["content_rejected"], facts: factsOut, limits: outLimits, mediaUrl: null, thumbnailUrl: null, moderation: "rejected" };
+  }
+
+  let thumbnailUrl: string | null = null;
+  if (posterOk) {
+    const { error } = await staging.copy(lockedPoster, poster, { destinationBucket: PUBLIC_BUCKET });
+    if (!error) thumbnailUrl = db.storage.from(PUBLIC_BUCKET).getPublicUrl(poster).data.publicUrl;
+  }
+  const { error: copyErr } = await staging.copy(locked, cr.storage_path, { destinationBucket: PUBLIC_BUCKET });
   if (copyErr) throw new Error(`publish creative: ${copyErr.message}`);
-  await db.storage.from(STAGING_BUCKET).remove([cr.storage_path, posterPath(cr.storage_path)]);
+  await cleanup();
   const mediaUrl = db.storage.from(PUBLIC_BUCKET).getPublicUrl(cr.storage_path).data.publicUrl;
 
   await db.from("ad_creatives").update({
-    media_url: mediaUrl, thumbnail_url: thumbnailUrl, mime_type: facts!.mime, file_size_bytes: size,
-    width: facts!.width, height: facts!.height, duration_seconds: facts!.durationSeconds,
+    media_url: mediaUrl, thumbnail_url: thumbnailUrl, ...factCols, mime_type: facts!.mime,
     validation_status: "valid", validation_errors: [], validated_at: now,
+    moderation_status: moderation.status, moderation_labels: moderation.labels, moderated_at: now,
   }).eq("id", cr.id);
-  return { ok: true, errors: [], facts: factsOut, limits: outLimits, mediaUrl, thumbnailUrl };
+  return { ok: true, errors: [], facts: factsOut, limits: outLimits, mediaUrl, thumbnailUrl, moderation: moderation.status };
 }
 
 /* ─────────────────────────────────── submit ─────────────────────────────────── */
@@ -492,8 +545,13 @@ export async function submitApplication(db: Db, userId: string, input: SubmitInp
   const { data: openPay } = await db.from("ai_topup_attempts").select("reference").eq("purpose", "ad_campaign").eq("item_id", app.primary.id).in("status", ["pending", "verification_required"]).limit(1);
   if (openPay?.length) refuse("payment_in_progress", 409);
 
-  const dest = await checkDestination(db, destinationUrl);
+  // Part 8: deep check (reputation + where the link really goes). A doubt is not a refusal:
+  // the campaign is held for a person after payment, and the advertiser is told so.
+  const dest = await checkDestination(db, destinationUrl, { deep: true });
   if (dest.status === "blocked") refuse(dest.code, 400, { reason: dest.reason });
+  // Part 8: the words and the link's host against the Advertising Rules (the image was checked at upload)
+  const textCheck = await moderateCreative({ texts: [headline, description, businessName, name], destinationHost: new URL(destinationUrl).hostname });
+  if (textCheck.status === "rejected") refuse("content_rejected", 400);
 
   const { data: creatives } = await db.from("ad_creatives").select("*").eq("campaign_id", app.primary.id).eq("status", "active").eq("validation_status", "valid");
   const creative = creatives?.[0];
@@ -504,7 +562,11 @@ export async function submitApplication(db: Db, userId: string, input: SubmitInp
 
   // the creative carries the link and the copy - on every campaign of the application
   const now = new Date().toISOString();
-  const copy = { destination_url: destinationUrl, headline, description, url_validation_status: "valid", url_block_reason: null, url_validated_at: now };
+  const copy = {
+    destination_url: destinationUrl, headline, description, url_validation_status: dest.status, url_block_reason: dest.status === "pending" ? dest.reason : null, url_validated_at: now,
+    // a doubt about the words holds activation for a person; it never clears an image-level doubt
+    ...(textCheck.status === "review" ? { moderation_status: "review", moderation_labels: textCheck.labels, moderated_at: now } : {}),
+  };
   await db.from("ad_creatives").update(copy).eq("id", creative!.id);
   for (const s of app.siblings) {
     await db.from("ad_creatives").update({ status: "removed" }).eq("campaign_id", s.id).neq("status", "removed");

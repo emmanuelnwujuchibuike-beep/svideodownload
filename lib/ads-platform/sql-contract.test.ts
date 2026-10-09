@@ -52,11 +52,11 @@ describe("TS ⇄ SQL: one vocabulary", () => {
     expect(Object.keys(CAMPAIGN_TRANSITIONS)).toHaveLength(CAMPAIGN_STATUSES.length);
   });
 
-  it("event types (the LATEST constraint and ingest: 0201 added conversion + outbound)", () => {
-    const M201 = readFileSync(join(process.cwd(), "supabase/migrations/0201_ad_detail_conversions.sql"), "utf8");
-    const chk = M201.slice(M201.indexOf("add constraint ad_events_type_chk"), M201.indexOf("alter table public.ad_campaign_daily_stats"));
+  it("event types (the LATEST constraint and ingest: 0206 added load_failed)", () => {
+    const M206 = readFileSync(join(process.cwd(), "supabase/migrations/0206_ad_traffic_quality.sql"), "utf8");
+    const chk = M206.slice(M206.indexOf("add constraint ad_events_type_chk"), M206.indexOf("create index if not exists ad_events_campaign_visitor_idx"));
     expect(quoted(chk).sort()).toEqual([...AD_EVENT_TYPES].sort());
-    const ingest = M201.slice(M201.indexOf("create or replace function public.track_ad_events("), M201.indexOf("$$;", M201.indexOf("create or replace function public.track_ad_events(")));
+    const ingest = M206.slice(M206.indexOf("create or replace function public.track_ad_events("), M206.indexOf("$$;", M206.indexOf("create or replace function public.track_ad_events(")));
     for (const t of AD_EVENT_TYPES) expect(ingest, t).toContain(`'${t}'`);
   });
 

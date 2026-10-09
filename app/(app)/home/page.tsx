@@ -18,6 +18,7 @@ import { LoadingStripe } from "@/features/ui/page-loader";
 import { Skeleton } from "@/features/ui/skeleton";
 import { friendsCount } from "@/lib/social/friends";
 import { getHomeProfile } from "@/lib/social/home";
+import { FEED_AD_INTERVAL } from "@/lib/feed/ad-slots";
 import { getHomeFeed } from "@/lib/social/home-feed";
 import { getHomePreferences, type HomeModuleKey } from "@/lib/social/home-preferences";
 import { getSuggestedCreators } from "@/lib/social/suggest";
@@ -221,13 +222,15 @@ async function ReelsSection({ viewerId }: { viewerId: string }) {
   // The home rail previews the Reels product — its own format, not feed posts.
   // Genuinely hot (not just newest) — see the `sort: "trending"` doc in
   // lib/social/home-feed.ts for why "recent" was the wrong sort here.
-  const hot = await getHomeFeed({ viewerId, sort: "trending", limit: 15, format: "reel" });
+  const hot = await getHomeFeed({ viewerId, sort: "trending", limit: 15, format: "reel" }).catch(() => null);
+  if (!hot) return null; // a rail that failed is left out, never the page
   const reelItems = hot.items.filter((i) => i.mediaKind === "video").slice(0, 8);
   return <TrendingReels initialItems={reelItems} />;
 }
 
 async function RailSection({ viewerId }: { viewerId: string }) {
-  const suggestions = await getSuggestedCreators(viewerId, 5);
+  const suggestions = await getSuggestedCreators(viewerId, 5).catch(() => null);
+  if (!suggestions) return null; // the side rail is optional; its failure never reaches the error screen
   return <HomeRail suggestions={suggestions} />;
 }
 
@@ -239,9 +242,15 @@ async function SmartFeedSection({ viewerId, quietMode }: { viewerId: string; qui
   // to SmartFeed so its own pagination keeps asking for THIS refresh's
   // arrangement (see rankForYou's note on why page 2 must agree with page 1).
   const seed = randomUUID().slice(0, 8);
+  // 2026-10-09 (owner: "Feed shows Something went wrong"): one failing query must not take
+  // the whole page to the error screen. The feed then starts empty at offset 0 and the
+  // client loads its first page itself (its own retry state); the failure is logged.
   const [page, friends] = await Promise.all([
-    getHomeFeed({ viewerId, sort: "for_you", offset: 0, limit: 8, seed }),
-    friendsCount(viewerId),
+    getHomeFeed({ viewerId, sort: "for_you", offset: 0, limit: 8, seed }).catch((e: unknown) => {
+      console.error("[home] first feed page failed - the client will load it", { error: String(e).slice(0, 300) });
+      return { items: [], nextOffset: 0, adInterval: FEED_AD_INTERVAL };
+    }),
+    friendsCount(viewerId).catch(() => 0),
   ]);
   return (
     <SmartFeed

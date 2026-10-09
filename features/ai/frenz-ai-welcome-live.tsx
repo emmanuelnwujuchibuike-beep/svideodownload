@@ -158,11 +158,14 @@ export function FrenzAIWelcomeLive({
               // once, like Earn (owner, 2026-10-09: "make the AI history button respond
               // instantly on tap like the earn and credit button").
               spinner={false}
+              // owner 2026-10-09: "doesn't respond on first tap" - the route is warmed once the page is
+              // idle (members only: a guest's tap opens the sign-in dialog), and the press shows at once
+              warmOnIdle={hasAuthCookie()}
               data-ai-members=""
               aria-label="Your creations"
-              className={aiButtonClass({ variant: "secondary", size: "lg", className: "ai-btn--round w-[3.375rem] shrink-0 px-0 sm:w-auto sm:px-5" })}
+              className={aiButtonClass({ variant: "secondary", size: "lg", className: "ai-btn--round w-[3.375rem] shrink-0 px-0 sm:w-auto sm:px-5 data-[pending]:scale-95 data-[pending]:bg-secondary" })}
             >
-              <History className="h-[18px] w-[18px] shrink-0 text-muted-foreground" aria-hidden />
+              <History className="h-[18px] w-[18px] shrink-0 text-muted-foreground [[data-pending]>&]:animate-spin [[data-pending]>&]:text-indigo-600 motion-reduce:animate-none" aria-hidden />
               <span className="hidden sm:inline">Your creations</span>
             </TapOnceLink>
           </div>

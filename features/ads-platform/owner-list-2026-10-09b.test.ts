@@ -48,14 +48,20 @@ describe("admin can switch a campaign period off", () => {
 });
 
 describe("the promote card is a floating, draggable, lazy side bubble", () => {
-  it("the hero mounts the lazy loader; the bubble is portalled, labelled Ad, draggable and remembered", () => {
+  it("the hero mounts the lazy loader; the bubble is portalled, labelled Promote, draggable, remembered and cached after its first appearance", () => {
     expect(code("features/downloads/downloads-sections.tsx")).toContain("<PromoteBubbleLazy />");
     const b = code("features/downloads/promote-bubble.tsx");
     expect(b).toContain("<Portal>");
-    expect(b).toContain(">\n          Ad\n");
+    // owner 2026-10-09: "change the ad text on the promote button to the promote not ad"
+    expect(b).toContain(">\n          Promote\n");
+    expect(b).not.toContain(">\n          Ad\n");
     expect(b).toContain('const KEY = "frenz:promote-bubble:v1";');
     expect(b).toContain("if (!s.moved && Math.hypot(dx, dy) < 6) return;");
-    expect(code("features/downloads/promote-bubble-lazy.tsx")).toContain("requestIdleCallback");
+    const lazy = code("features/downloads/promote-bubble-lazy.tsx");
+    expect(lazy).toContain("requestIdleCallback");
+    // owner 2026-10-09: no idle wait again once it has appeared (back swipes, returns)
+    expect(lazy).toContain("if (seenBefore()) {");
+    expect(lazy).toContain('sessionStorage.setItem(SEEN_KEY, "1");');
   });
 });
 

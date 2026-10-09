@@ -13,7 +13,7 @@ import { haptic } from "@/lib/motion/haptics";
  * at the same time show it is for promotion, and it should also lazy load. It
  * should be able to be dragged and moved to anywhere by the side of the screen").
  *
- *   · A 48 px round button that hugs the screen edge, with a small "Ad" tag so it
+ *   · A 48 px round button that hugs the screen edge, with a small "Promote" tag so it
  *     always reads as a promotion. It covers nothing it cannot be dragged off.
  *   · Drag it anywhere. On release it snaps to the nearer side, kept clear of the
  *     header and the bottom nav. Its place is remembered on this device.
@@ -120,8 +120,9 @@ export function PromoteBubble() {
         className={`fixed left-0 top-0 z-[35] flex items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_10px_24px_-10px_rgb(79_70_229/0.8)] ring-2 ring-white/80 active:scale-95 data-[pending]:scale-95 data-[pending]:opacity-80 dark:ring-white/20 motion-reduce:transition-none ${drag ? "" : "transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"}`}
       >
         <Megaphone className="h-5 w-5" aria-hidden />
-        <span aria-hidden className="absolute -top-1.5 left-1/2 -translate-x-1/2 rounded-full bg-amber-400 px-1.5 py-px text-[9px] font-extrabold uppercase leading-none tracking-wide text-amber-950 shadow-sm">
-          Ad
+        {/* owner 2026-10-09: the tag reads "Promote", not "Ad" */}
+        <span aria-hidden className="absolute -top-1.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-amber-400 px-1.5 py-px text-[8.5px] font-extrabold uppercase leading-none tracking-wide text-amber-950 shadow-sm">
+          Promote
         </span>
       </button>
     </Portal>

@@ -98,7 +98,9 @@ export async function Hero() {
         showFrenzAi
         aiPromo={aiPromo}
         hideEmptyStats
-        topCredits="earn"
+        /* owner 2026-10-09: no Earn at the top of the landing - the bottom nav's Earn tab is enough;
+           only /downloads keeps it at the top (inside its credits strip) */
+        topCredits={null}
       />
     </section>
   );

@@ -92,8 +92,19 @@ describe("the top chrome is positioned once, not per element", () => {
 describe("a drag down moves the whole viewer", () => {
   it("applies the transform to the dialog, not to the media element", () => {
     const body = code(PLAYER);
-    expect(body).toMatch(/viewerDragStyle/);
     expect(body).not.toMatch(/mediaDragStyle/);
-    expect(body).toMatch(/zIndex: 2147483646, \.\.\.viewerDragStyle/);
+    expect(body).toMatch(/const el = dialogRef\.current;[\s\S]{0,200}el\.style\.transform = y \?/);
+  });
+
+  // owner, 2026-10-09: "Sliding down a media from history lags"
+  it("never re-renders React per pointer move — one rAF paint per frame", () => {
+    const body = code(PLAYER);
+    expect(body).not.toMatch(/setDragY/);
+    expect(body).toMatch(/dragFrame\.current = requestAnimationFrame\(/);
+    expect(body).toMatch(/if \(dragFrame\.current !== null\) return; \/\/ one paint per frame/);
+    // a render mid-drag must not reset the transform: style names no drag props
+    expect(body).toMatch(/style=\{\{ zIndex: 2147483646 \}\}/);
+    // a quick flick closes too
+    expect(body).toMatch(/const flick = dy > 40 && dy \/ Math\.max\(1, dt\) > 0\.5;/);
   });
 });

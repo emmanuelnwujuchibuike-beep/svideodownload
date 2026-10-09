@@ -4,7 +4,7 @@ import { AlertCircle, Check, ChevronLeft, Download, ExternalLink, Globe2, Heart,
 import { allowWindowOpen } from "@/lib/monetization/popunder-guard";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
 import {
@@ -256,9 +256,8 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
   const [fillFrame, setFillFrame] = useState(false);
   const [progress, setProgress] = useState(0); // 0-100 within the CURRENT item, for the status bar
   // The center play/pause glyph shows briefly then hides for a "clear full screen"
-  // (owner). `dragY` follows a downward swipe so the clip dismisses like a story.
+  // (owner). A downward swipe moves the whole viewer so it dismisses like a story.
   const [controlsVisible, setControlsVisible] = useState(false);
-  const [dragY, setDragY] = useState(0);
   const viewerAvatar = useViewerAvatar();
   /*
     ── DRAG THE BAR TO SEEK (owner, 2026-09-27) ──────────────────────────────
@@ -708,7 +707,6 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
     // any touch on the media brings the pill back and restarts its four seconds
     bumpSave();
     gesture.current = { x: e.clientX, y: e.clientY, t: Date.now() };
-    setDragY(0);
     // A hold that survives 220ms without turning into a drag (cancelled below)
     // clears the screen. Shorter than that and it reads as an ordinary tap —
     // long enough that no real tap ever crosses it by accident.
@@ -731,7 +729,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
       window.clearTimeout(holdTimer.current);
       holdTimer.current = null;
     }
-    if (dy > 0 && Math.abs(dy) > Math.abs(dx)) setDragY(dy); // follow a downward drag only
+    if (dy > 0 && Math.abs(dy) > Math.abs(dx)) dragTo(dy); // follow a downward drag only
   };
   const endGesture = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (holdTimer.current) {
@@ -753,13 +751,14 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
     const dy = e.clientY - g.y;
     const dx = e.clientX - g.x;
     const dt = Date.now() - g.t;
-    if (dy > SWIPE_CLOSE_PX && dy > Math.abs(dx)) {
-      // Swipe down → exit.
+    // Past the threshold, or a quick downward flick of any real length → exit.
+    const flick = dy > 40 && dy / Math.max(1, dt) > 0.5;
+    if ((dy > SWIPE_CLOSE_PX || flick) && dy > Math.abs(dx)) {
       haptic("light");
-      closePlayer();
+      dismissDown();
       return;
     }
-    setDragY(0); // snap back
+    dragTo(0); // snap back
     if (Math.hypot(dx, dy) < 12 && dt < 500) {
       // A near-stationary quick press is a tap; zone by horizontal position.
       const frac = e.clientX / Math.max(1, window.innerWidth);
@@ -862,11 +861,57 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         start showing through until the drag is actually released as a dismiss,
         or an abandoned drag flashes the list underneath.
   */
-  const viewerDragStyle: CSSProperties = {
-    transform: dragY ? `translateY(${dragY}px)` : undefined,
-    transition: dragY ? "none" : "transform 0.22s ease, opacity 0.22s ease",
-    opacity: dragY ? Math.max(0.35, 1 - dragY / 600) : undefined,
+  /*
+    🔴 THE DRAG NEVER GOES THROUGH REACT (owner, 2026-10-09: "Sliding down a
+    media from history lags, it doesn't go down instantly").
+
+    It used to be `setDragY` on every pointermove, which re-rendered this whole
+    player (video, chrome, sheets) once per finger event — the viewer trailed
+    the finger by a frame or more. Now the move only records the distance and
+    ONE requestAnimationFrame writes transform + opacity straight onto the
+    dialog. React never re-renders during a drag, and because `style` below no
+    longer names these properties, a render mid-drag cannot reset them either.
+  */
+  const dragPx = useRef(0);
+  const dragFrame = useRef<number | null>(null);
+  const paintDrag = (animate: boolean) => {
+    const el = dialogRef.current;
+    if (!el) return;
+    const y = dragPx.current;
+    el.style.transition = animate ? "transform 0.22s ease, opacity 0.22s ease" : "none";
+    el.style.transform = y ? `translate3d(0, ${y}px, 0)` : "";
+    el.style.opacity = y ? String(Math.max(0.35, 1 - y / 600)) : "";
+    el.style.willChange = y ? "transform, opacity" : "";
   };
+  const dragTo = (y: number) => {
+    dragPx.current = y;
+    if (y === 0) {
+      if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current);
+      dragFrame.current = null;
+      paintDrag(true); // snap back, animated
+      return;
+    }
+    if (dragFrame.current !== null) return; // one paint per frame
+    dragFrame.current = requestAnimationFrame(() => {
+      dragFrame.current = null;
+      paintDrag(false);
+    });
+  };
+  /** Release as a dismiss: the viewer keeps travelling down and is gone in ~150ms. */
+  const dismissDown = () => {
+    if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current);
+    dragFrame.current = null;
+    const el = dialogRef.current;
+    if (!el || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      closePlayer();
+      return;
+    }
+    el.style.transition = "transform 0.15s ease-in, opacity 0.15s ease-in";
+    el.style.transform = "translate3d(0, 100%, 0)";
+    el.style.opacity = "0";
+    window.setTimeout(closePlayer, 150);
+  };
+  useEffect(() => () => { if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current); }, []);
 
   return (
     /*
@@ -908,7 +953,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         `showModal` fallback path above — in the top layer it is ignored.
       */
       className="fixed inset-0 m-0 flex h-full max-h-none w-full max-w-none flex-col border-0 bg-black/95 p-0 backdrop:bg-black/95"
-      style={{ zIndex: 2147483646, ...viewerDragStyle }}
+      style={{ zIndex: 2147483646 }}
       aria-label={rec.title}
     >
       {/*
@@ -1186,7 +1231,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
               if (holding && rec.kind === "video") void videoRef.current?.play().catch(() => {});
               setHolding(false);
               gesture.current = null;
-              setDragY(0);
+              dragTo(0);
             }}
           />
         ) : null}

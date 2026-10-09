@@ -315,7 +315,7 @@ describe("ONE physical slot → ONE provider (slots addendum)", () => {
 
   it("new inventory only where no network slot existed", () => {
     const created = AD_SLOTS.filter((x) => SLOT_DESCRIPTIONS[x.id]!.newInventory);
-    expect(created.map((x) => x.id).sort()).toEqual(["ai_hub_card", "ai_save_moment", "stories_between"]);
+    expect(created.map((x) => x.id).sort()).toEqual(["ai_hub_card", "ai_save_moment", "history_grid", "stories_between"]);
     for (const x of created) expect(x.networkZone, x.id).toBeNull();
     // an existing slot is a network zone, or (0203) a reward gate the network serves with its rewarded unit
     for (const x of AD_SLOTS.filter((y) => !SLOT_DESCRIPTIONS[y.id]!.newInventory)) expect(x.networkZone ?? SLOT_DESCRIPTIONS[x.id]!.rewardedUnit ?? null, x.id).not.toBeNull();
@@ -373,6 +373,12 @@ describe("ONE physical slot → ONE provider (slots addendum)", () => {
     expect(src("features/reels/reels-feed.tsx")).toContain('adPage={tab === "ai" ? "ai_reels" : "reels"}');
     expect(src("features/ai/frenz-ai-welcome.tsx")).toContain('<SelfAdSlot slot="ai_hub_card" placement="ai_banner" page="ai"');
     expect(src("features/app-shell/dashboard/stories-row.tsx")).toContain('useSelfAdPool("stories_card", "stories")');
+    // History grid: a square paid tile after every 3 downloads, in both grid views
+    const hg = src("features/history/history-grid-self-ads.tsx");
+    expect(hg).toContain('useSlotProvider("history_grid", "history")');
+    expect(hg).toContain("export const HISTORY_GRID_AD_EVERY = 4;");
+    expect(hg).toContain('variant="tile"');
+    expect(src("features/history/media-gallery.tsx").match(/withGridAds\(/g)).toHaveLength(2);
   });
 
   it("a story card only between two people's stories, within the gap", () => {

@@ -64,10 +64,14 @@ describe("TS ⇄ SQL: one vocabulary", () => {
     const formats = SQL.slice(SQL.indexOf("insert into public.ad_formats"), SQL.indexOf("insert into public.ad_placements"));
     expect([...formats.matchAll(/\('([A-Z_]+)', '/g)].map((m) => m[1])).toEqual([...AD_FORMAT_CODES]);
     const placements = SQL.slice(SQL.indexOf("insert into public.ad_placements"), SQL.indexOf("insert into public.ad_durations"));
-    // 0203 seeds the HD and batch download reward placements after 0195's ten
+    // placements seeded after 0195, in migration order: 0203 (HD + batch download rewards), 0206 (history_grid)
     const M203 = readFileSync(join(process.cwd(), "supabase/migrations/0203_download_reward_placements.sql"), "utf8");
-    const seeded = [...placements.matchAll(/\('([a-z_]+)', '/g), ...M203.matchAll(/\('([a-z_]+)', '/g)].map((m) => m[1]);
+    const M206 = readFileSync(join(process.cwd(), "supabase/migrations/0206_ad_history_grid.sql"), "utf8");
+    const rows206 = M206.slice(M206.indexOf("insert into public.ad_placements"));
+    const seeded = [...placements.matchAll(/\('([a-z_]+)', '/g), ...M203.matchAll(/\('([a-z_]+)', '/g), ...rows206.matchAll(/\('([a-z_]+)', '/g)].map((m) => m[1]);
     expect(seeded).toEqual([...AD_PLACEMENT_CODES]);
+    expect(rows206).toMatch(/\('history_grid', 'History grid', '[^']+', 'CONTENT_BANNER', array\['history'\]/);
+    expect(M206).toContain("on conflict (code) do nothing");
   });
 });
 

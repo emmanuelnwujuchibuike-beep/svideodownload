@@ -26,6 +26,7 @@ export const SLOT_DESCRIPTIONS: Readonly<Record<string, SlotDescription>> = {
   idle_interstitial: { location: "Full-screen moment on return to the tab", component: "IdleInterstitial", newInventory: false },
   ai_hub_card: { location: "End of the Frenz AI hub, above the trust row — never inside a creation flow", component: "SelfAdSlot", newInventory: true },
   stories_between: { location: "Between two people's Stories in the Story viewer", component: "StoryViewer → SelfStoryCard", newInventory: true },
+  history_grid: { location: "A square tile in the History grid, every 4th square, the same size as a download", component: "HistoryGridSelfAds → SelfAdBanner (tile)", newInventory: true },
   ai_save_moment: { location: "Beside an AI video save (never gates it)", component: "SelfMoments", newInventory: true },
   // 0203 (owner, 2026-10-09): the existing reward gates — the network serves them with its rewarded unit
   hd_download_reward: { location: "The HD / top-quality download unlock gate", component: "useRewardFlow → SelfMoments", newInventory: false, rewardedUnit: "hd_download" },

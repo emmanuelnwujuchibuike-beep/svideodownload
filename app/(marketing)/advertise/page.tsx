@@ -84,9 +84,16 @@ export default function AdvertisePage() {
             title="Advertise on"
             highlight="Frenzsave"
             stack
-            subtitle="Reach users around the world — people downloading, creating and scrolling on Frenzsave every day. Set up an ad in a few minutes."
             className="mt-4"
           />
+          {/*
+            Upright and darker than the AI pages' italic description (owner,
+            2026-10-09: "use a more clearer and understanding font and not Italic
+            font that are hard to see"). The AI pages keep their italic.
+          */}
+          <p className="mt-3 max-w-md text-[16px] font-medium leading-relaxed text-foreground/80">
+            Reach people around the world who are downloading, creating, scrolling, chatting and posting on Frenzsave. Set up an ad in a few minutes.
+          </p>
           <div className="mt-6 flex flex-wrap items-center gap-2.5">
             <AiButtonLink tapOnce href="/advertise/create" prefetch={false} size="lg" iconEnd={<ArrowRight className="h-4 w-4" />}>
               Start Advertising

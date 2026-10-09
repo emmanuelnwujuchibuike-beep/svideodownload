@@ -60,6 +60,10 @@ export const AD_SLOTS: readonly SlotSpec[] = [
   // ── genuinely new inventory (addendum §7): no compatible slot existed, the
   //    placement is sold in the advertiser catalog, the admin can switch it off
   { id: "ai_hub_card", kind: "box", paidPlacement: "ai_banner", networkZone: null, pages: ["ai"], aspect: { ratio: 1.6, tolerance: 0.2 }, order: ["frenzsave"] },
+  // A square tile inside the History grid, every 4th square (owner, 2026-10-09).
+  // No aspect check: the creative is cover-cropped to the tile exactly as a
+  // download's thumbnail is, so any CONTENT_BANNER creative fits.
+  { id: "history_grid", kind: "box", paidPlacement: "history_grid", networkZone: null, pages: ["history"], aspect: null, order: ["frenzsave"] },
 ];
 
 const byId = new Map(AD_SLOTS.map((s) => [s.id, s]));

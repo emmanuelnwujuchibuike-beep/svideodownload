@@ -25,6 +25,7 @@ import { ExoClickSticky, type ExoClickInsSlot } from "@/features/monetization/ex
 import { HilltopSlot } from "@/features/monetization/hilltop-slot";
 import { isHilltopPlacementOn, type HilltopConfig } from "@/lib/monetization/hilltop-config";
 import { HistoryGridAd } from "./history-grid-ad";
+import { useHistoryGridAds, withGridAds } from "./history-grid-self-ads";
 import { Fragment, type ComponentType, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { SmartThumb } from "@/components/ui/smart-thumb";
@@ -246,6 +247,14 @@ export function MediaGallery({
   /** Multi-select mode: tiles toggle instead of opening the player. */
   selection?: GallerySelection;
 }) {
+  /*
+    Paid tiles in the grid, every 4th square (owner, 2026-10-09). Resolved once
+    for the whole gallery; nothing renders without a live campaign. Left out
+    while selecting, where every square must be something you can pick.
+  */
+  const slotAds = useHistoryGridAds();
+  const gridAds = selection?.active ? ({ status: "pending" } as const) : slotAds;
+
   /*
     The HilltopAds config, for the video cadence only. One cached request, and
     null until it lands — `historyAdEvery` falls back to the existing constant,
@@ -553,18 +562,22 @@ export function MediaGallery({
               </button>
               {collapsed[g.key] ? null : (
                 <div className="grid gap-1.5 sm:gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-                  {g.items.map((item) => (
-                    <GalleryTile
-                      key={item.id}
-                      item={item}
-                      onOpen={() => openAt(sorted.indexOf(item))}
-                      onToggleFavorite={() => onToggleFavorite(item.id)}
-                      onRemove={() => onRemove(item.id)}
-                      onPublishSound={() => setPublishTarget(item)}
-                      onRetry={() => retry.begin(item)}
-                      selection={selection}
-                    />
-                  ))}
+                  {withGridAds(
+                    g.items.map((item) => (
+                      <GalleryTile
+                        key={item.id}
+                        item={item}
+                        onOpen={() => openAt(sorted.indexOf(item))}
+                        onToggleFavorite={() => onToggleFavorite(item.id)}
+                        onRemove={() => onRemove(item.id)}
+                        onPublishSound={() => setPublishTarget(item)}
+                        onRetry={() => retry.begin(item)}
+                        selection={selection}
+                      />
+                    )),
+                    gridAds,
+                    grouped.indexOf(g),
+                  )}
                 </div>
               )}
               </section>
@@ -626,9 +639,12 @@ export function MediaGallery({
         </div>
       ) : view === "grid" ? (
         <div className="grid gap-1.5 sm:gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-          {shown.map((item, i) => (
-            <GalleryTile key={item.id} item={item} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} onRemove={() => onRemove(item.id)} onPublishSound={() => setPublishTarget(item)} onRetry={() => retry.begin(item)} selection={selection} />
-          ))}
+          {withGridAds(
+            shown.map((item, i) => (
+              <GalleryTile key={item.id} item={item} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} onRemove={() => onRemove(item.id)} onPublishSound={() => setPublishTarget(item)} onRetry={() => retry.begin(item)} selection={selection} />
+            )),
+            gridAds,
+          )}
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-border/70 bg-card">

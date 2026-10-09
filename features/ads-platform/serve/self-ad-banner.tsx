@@ -11,7 +11,8 @@ import { openAdDetail } from "./ad-detail-store";
 import { SelfAdCreative } from "./self-ad-creative";
 
 /**
- * A rotating paid banner — the 32 px top strip and the 320×200 content card.
+ * A rotating paid banner — the 32 px top strip, the 320×200 content card and
+ * the square History-grid tile.
  *
  * 🔴 The rotation is LOCAL. The pool (up to the format's slot count, 10 by
  * default) arrived once with the cached payload; every `rotationSeconds` (the
@@ -35,22 +36,27 @@ export function SelfAdBanner({
   placement,
   page,
   variant,
+  startAt = 0,
   className,
 }: {
   ads: readonly EligibleAd[];
   rules: FormatRules | null;
   placement: string;
   page: string;
-  variant: "strip" | "card";
+  /** "tile" = a square History-grid tile, dressed like a download beside it */
+  variant: "strip" | "card" | "tile";
+  /** where in the pool this unit starts, so several tiles on one page differ */
+  startAt?: number;
   className?: string;
 }) {
   const seconds = rules?.rotationSeconds ?? null;
   // Per-show formats start on the ad after the one this placement showed last (persisted across visits).
+  // `startAt` offsets either start, so several History-grid tiles on one page differ.
   const [index, setIndex] = useState(() => {
-    if (seconds && seconds > 0) return 0;
+    if (seconds && seconds > 0) return startAt;
     const pick = nextFromPool(placement, ads.filter((a) => !creativeFailed(a.cr)));
     const at = pick ? ads.filter((a) => !creativeFailed(a.cr)).indexOf(pick) : 0;
-    return at < 0 ? 0 : at;
+    return (at < 0 ? 0 : at) + startAt;
   });
   const [, bump] = useState(0);
   const viewRef = useRef<AdView | null>(null);
@@ -109,12 +115,21 @@ export function SelfAdBanner({
     <span
       className={cn(
         "pointer-events-none absolute z-10 rounded-full bg-black/55 font-semibold uppercase tracking-[0.06em] text-white backdrop-blur-sm",
-        variant === "strip" ? "left-1 top-1/2 -translate-y-1/2 px-1.5 py-px text-[9px]" : "left-2 top-2 px-2 py-0.5 text-[10px]",
+        variant === "strip" ? "left-1 top-1/2 -translate-y-1/2 px-1.5 py-px text-[9px]" : variant === "tile" ? "left-1.5 top-1.5 px-2 py-0.5 text-[10px]" : "left-2 top-2 px-2 py-0.5 text-[10px]",
       )}
     >
       Ad
     </span>
   );
+
+  // The tile's caption sits where a download's title does, over the same scrim.
+  const caption =
+    variant === "tile" ? (
+      <span className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/80 via-black/25 to-transparent px-2 pb-1.5 pt-10">
+        <span className="block text-[10px] font-semibold uppercase tracking-[0.06em] text-white/70">Sponsored · {current.sponsor}</span>
+        {current.headline ? <span className="line-clamp-1 text-left text-[11px] font-medium text-white/95">{current.headline}</span> : null}
+      </span>
+    ) : null;
 
   return (
     <a
@@ -129,11 +144,16 @@ export function SelfAdBanner({
       aria-label={`Ad from ${current.sponsor}${current.headline ? `: ${current.headline}` : ""} (opens its details)`}
       className={cn(
         "relative block overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",
-        variant === "strip" ? "h-8 w-full" : "aspect-[320/200] w-full rounded-[1.25rem] bg-muted ring-1 ring-inset ring-black/[0.06] dark:ring-white/10",
+        variant === "strip"
+          ? "h-8 w-full"
+          : variant === "tile"
+            ? "aspect-square w-full rounded-2xl bg-black/40"
+            : "aspect-[320/200] w-full rounded-[1.25rem] bg-muted ring-1 ring-inset ring-black/[0.06] dark:ring-white/10",
         className,
       )}
     >
       {label}
+      {caption}
       <SelfAdCreative
         key={current.cr}
         ad={current}

@@ -25,7 +25,7 @@ export const AD_FORMAT_CODES = [
 ] as const;
 export type AdFormatCode = (typeof AD_FORMAT_CODES)[number];
 
-/** Placements — where an ad is shown. Seeded by 0195. An admin may add rows, so the payload accepts any code. */
+/** Placements — where an ad is shown. Seeded by 0195 (`history_grid` by 0206). An admin may add rows, so the payload accepts any code. */
 export const AD_PLACEMENT_CODES = [
   "global_top_banner",
   "feed_banner",
@@ -40,11 +40,13 @@ export const AD_PLACEMENT_CODES = [
   // 0203: the HD and batch download reward gates
   "hd_download_reward",
   "batch_download_reward",
+  // 0206: the History grid tile
+  "history_grid",
 ] as const;
 export type AdPlacementCode = (typeof AD_PLACEMENT_CODES)[number];
 
 /** Page / content areas a placement or a campaign can target. `all_pages` matches every page. */
-export const AD_PAGES = ["all_pages", "download", "download_result", "feed", "reels", "ai", "ai_reels", "stories"] as const;
+export const AD_PAGES = ["all_pages", "download", "download_result", "feed", "reels", "ai", "ai_reels", "stories", "history"] as const;
 export type AdPage = (typeof AD_PAGES)[number];
 export type AdPageContext = Exclude<AdPage, "all_pages">;
 

@@ -41,6 +41,9 @@ describe("Messages: search, tabs and rows", () => {
     expect((list.match(/width=\{52\} height=\{52\} loading="lazy" decoding="async"/g) ?? []).length).toBe(2);
     expect(list).toMatch(/\) : c\.unread \? \(\s*<span className="mt-1 h-2\.5 w-2\.5 rounded-full bg-blue-600/);
   });
+  it("stories sit 12px above the search pill — not flush, not a gap (owner, 2026-10-09)", () => {
+    expect(code("features/social/inbox-stories-row.tsx")).toContain('<section aria-label="Stories" className="pb-2">');
+  });
   it("stories render compact on the inbox only", () => {
     expect(code("features/social/inbox-stories-row.tsx")).toContain("viewerHandle={handle} compact />");
     expect(code("app/(app)/home/page.tsx")).not.toMatch(/<StoriesRow[^>]*\bcompact\b/);

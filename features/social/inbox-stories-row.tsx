@@ -35,7 +35,7 @@ export function InboxStoriesRow() {
   const { handle, avatarUrl } = useEntitlements();
 
   return (
-    <section aria-label="Stories">
+    <section aria-label="Stories" className="pb-2">
       <div className="mb-1.5 flex items-center justify-between px-2">
         <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">
           <CircleDashed className="h-3 w-3" /> Stories

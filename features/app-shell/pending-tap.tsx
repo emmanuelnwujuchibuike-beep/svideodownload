@@ -1,3 +1,5 @@
+import { minifyInline } from "@/lib/perf/inline-min";
+
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  *  THE DEAD FIRST TAP — don't make hydration faster, stop LOSING the tap
@@ -336,6 +338,9 @@ const PENDING_TAP_JS = `
  * React attaches. Rendered in `<head>` (app/layout.tsx) so the listener exists
  * before the first button is parsed.
  */
+/** What is actually sent: the same code without its comments (lib/perf/inline-min.ts). */
+const PENDING_TAP_SENT = minifyInline(PENDING_TAP_JS);
+
 export function PendingTapScript() {
-  return <script dangerouslySetInnerHTML={{ __html: PENDING_TAP_JS }} />;
+  return <script dangerouslySetInnerHTML={{ __html: PENDING_TAP_SENT }} />;
 }

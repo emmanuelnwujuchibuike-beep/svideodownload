@@ -67,15 +67,34 @@ describe("the floating glass bottom nav", () => {
 
   it("every surface reserves the same clearance the pill is built from", () => {
     expect(css).toMatch(/--frenz-nav-clearance: calc\(var\(--frenz-nav-height\) \+ var\(--frenz-nav-gap\)\);/);
-    expect(css).toMatch(/--frenz-nav-gap: max\(0\.75rem, calc\(env\(safe-area-inset-bottom\) \+ 0\.25rem\)\);/);
+    // low, but clear of the home indicator (owner: "it shouldn't float much too high")
+    expect(css).toMatch(/--frenz-nav-gap: max\(0\.5rem, calc\(env\(safe-area-inset-bottom\) - 0\.75rem\)\);/);
     expect(code("features/app-shell/app-content.tsx")).toContain("pb-[calc(var(--frenz-nav-clearance)+1.5rem)]");
     expect(code("app/(app)/messages/layout.tsx")).toContain("h-[calc(100dvh-var(--frenz-nav-clearance))]");
     expect(code("app/(marketing)/layout.tsx")).toContain("h-[calc(var(--frenz-nav-clearance)+0.75rem)] lg:hidden");
   });
 
   it("the reel scrubber still sits above the pill (they are a pair)", () => {
-    // nav top = 3.875rem + max(0.75rem, inset + 0.25rem) <= 4.75rem + inset
+    // nav top = 3.875rem + max(0.5rem, inset - 0.75rem) <= 4.75rem + inset
     expect(code("features/feed/reel-viewer.tsx")).toContain('"!bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:!bottom-4"');
     expect(css).toMatch(/--frenz-nav-height: 3\.875rem;/);
+  });
+});
+
+describe("Support lives in the profile menu for members (owner, 2026-10-09)", () => {
+  /** Support sits in the menu's footer row, beside the Dark / Light / System toggle. */
+  function supportBesideTheme(src: string): boolean {
+    const footer = src.slice(src.indexOf("{/* Footer — theme"));
+    return /<ThemeToggle \/>[\s\S]{0,700}?href="\/support"[\s\S]{0,400}?Support\n/.test(footer);
+  }
+  const menu = code("features/profile/profile-menu-panel.tsx");
+  it("the footer carries Support next to the theme toggle", () => {
+    expect(supportBesideTheme(menu)).toBe(true);
+  });
+  it("teeth: Support missing from the footer fails", () => {
+    expect(supportBesideTheme(menu.replace('href="/support"', 'href="/help"'))).toBe(false);
+  });
+  it("members' bottom nav keeps Chats; guests keep Support there", () => {
+    expect(nav).toMatch(/\{handle \? \(\s*<NavTab label="Chats" href="\/messages"[\s\S]*?\) : \(\s*<NavTab label="Support" href="\/support"/);
   });
 });

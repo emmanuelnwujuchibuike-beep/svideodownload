@@ -1,3 +1,5 @@
+import { minifyInline } from "@/lib/perf/inline-min";
+
 /**
  * Boot splash — the real Frenz "F" mark, large and centered, baked into the
  * initial HTML so a genuine cold start or the post-login redirect never
@@ -248,6 +250,9 @@ html.dark .frenz-boot__word{color:#a5b4fc}
 // forever. Caught only by a real-browser test. Keep every new `var` name
 // distinct from the ones already in scope, and re-run the boot verification
 // after any edit.
+/** The splash CSS without its comments (lib/perf/inline-min.ts) — the notes stay in the source. */
+const CSS_SENT = minifyInline(CSS);
+
 const JS = `(function(){var COLD_GAP_MS=1800000;var d=document.documentElement;function dismiss(instant){if(instant){d.classList.add('frenz-boot-off');return}d.classList.add('frenz-boot-out');setTimeout(function(){d.classList.add('frenz-boot-off')},440)}var mark=function(){try{localStorage.setItem('frenz-last-active',String(Date.now()))}catch(e){}};document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')mark()});window.addEventListener('pagehide',mark);var instant=false;var standalone=false;try{standalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true}catch(e){}try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var navType='navigate';try{var nav=performance.getEntriesByType('navigation')[0];if(nav&&nav.type){navType=nav.type}else if(performance.navigation){var t=performance.navigation.type;navType=t===1?'reload':(t===2?'back_forward':'navigate')}}catch(e){}var coldStart=navType==='navigate';var fromLaunch=false;try{fromLaunch=document.referrer.indexOf('/launch.html')!==-1}catch(e){}var p=location.pathname;var bootTarget=(p==='/downloads'||p==='/home');var show=false;if(standalone&&bootTarget){show=justSignedIn||fromLaunch;if(!show&&coldStart){var last=0;try{var lraw=localStorage.getItem('frenz-last-active');if(lraw)last=parseInt(lraw,10)||0}catch(e){}if(!last||Date.now()-last>COLD_GAP_MS)show=true}}if(!show){instant=true}else if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){instant=true}}catch(e){}if(instant){dismiss(true)}else{d.classList.add('frenz-boot-on');var start=Date.now();var faded=false;var fade=function(){if(faded)return;faded=true;var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){dismiss(false)},w)};var shellReady=function(){return !!document.querySelector('main')};if(shellReady()){fade()}else{try{var mo=new MutationObserver(function(){if(shellReady()){mo.disconnect();fade()}});mo.observe(document.documentElement,{childList:true,subtree:true})}catch(e){}document.addEventListener('DOMContentLoaded',fade)}}setTimeout(function(){dismiss(true)},6000);window.addEventListener('pageshow',function(e){if(e.persisted)dismiss(true)})})();`;
 
 // Must run BEFORE the <style> below is evaluated, AND before next-themes'
@@ -369,7 +374,7 @@ export function ThemeBootScript() {
 export function BootHead() {
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: CSS }} />
+      <style dangerouslySetInnerHTML={{ __html: CSS_SENT }} />
       <script dangerouslySetInnerHTML={{ __html: JS }} />
     </>
   );

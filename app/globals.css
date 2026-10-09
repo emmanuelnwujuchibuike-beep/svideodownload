@@ -438,11 +438,14 @@
      the inbox reserve so nothing ends up under the pill. Named once here so the
      nav (mobile-nav.tsx) and the surfaces that clear it can't drift.
 
-     The gap keeps the pill above the home indicator: the safe-area inset plus a
-     hair on notched phones and installed PWAs, 12px everywhere else. */
+     The gap keeps the pill just clear of the home indicator without floating
+     high (owner, 2026-10-09: "it shouldn't float much too high"). The iPhone
+     inset (~34px) reserves far more than the indicator itself — a 5px bar
+     ~8px off the bottom — so the pill sits 12px INSIDE the inset (~22px up,
+     ~9px above the bar), and 8px up on phones with no inset. */
   :root {
     --frenz-nav-height: 3.875rem;
-    --frenz-nav-gap: max(0.75rem, calc(env(safe-area-inset-bottom) + 0.25rem));
+    --frenz-nav-gap: max(0.5rem, calc(env(safe-area-inset-bottom) - 0.75rem));
     --frenz-nav-clearance: calc(var(--frenz-nav-height) + var(--frenz-nav-gap));
   }
   /* Top safe-area inset, used by every top chrome (app topbar, marketing header,

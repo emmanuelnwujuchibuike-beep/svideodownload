@@ -7,6 +7,7 @@ import {
   Crown,
   Download,
   Film,
+  Headset,
   Home,
   LogOut,
   MessageCircle,
@@ -296,10 +297,26 @@ export function ProfileMenuPanel({
         ) : null}
       </div>
 
-      {/* Footer — theme · version · sign out */}
-      <div className="flex items-center justify-between border-t border-border/60 px-5 py-3">
-        <ThemeToggle />
-        <span className="text-[11px] font-medium text-muted-foreground/60">{APP_BUILD ? `v${APP_BUILD.slice(0, 7)}` : "Frenz"}</span>
+      {/* Footer — theme · support · version · sign out */}
+      <div className="flex items-center justify-between gap-2 border-t border-border/60 px-5 py-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <ThemeToggle />
+          {/*
+            Support moved here from the members' bottom nav, where Chats took its
+            place (owner, 2026-10-09: "put the support button in the profile menu,
+            at the bottom where dark, light and system mode are"). Guests keep it in
+            their bottom nav.
+          */}
+          <Link
+            href="/support"
+            onClick={onNavigate}
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border px-3 text-[13px] font-semibold text-foreground transition hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <Headset className="h-4 w-4" aria-hidden />
+            Support
+          </Link>
+        </div>
+        <span className="hidden text-[11px] font-medium text-muted-foreground/60 min-[400px]:inline">{APP_BUILD ? `v${APP_BUILD.slice(0, 7)}` : "Frenz"}</span>
         <button
           type="button"
           onClick={() => void signOut()}

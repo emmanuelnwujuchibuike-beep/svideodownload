@@ -41,9 +41,9 @@ import { cn } from "@/lib/utils";
  * glass floating nav"), on the owner's newer, explicit instruction:
  *
  *   · Centred, `calc(100% - 28px)` wide (14 px of page visible on each side),
- *     capped at 560 px, fixed `--frenz-nav-gap` above the bottom — the safe-area
- *     inset plus a hair on notched phones / installed PWAs, 12 px elsewhere — so
- *     it always clears the home indicator. Centred by `inset-x-0 mx-auto`, not a
+ *     capped at 560 px, fixed `--frenz-nav-gap` above the bottom — low, just
+ *     clear of the home indicator (~22 px up on an iPhone, 8 px with no inset;
+ *     owner: "it shouldn't float much too high"). Centred by `inset-x-0 mx-auto`, not a
  *     transform, so the scroll-away transform below never fights the centring.
  *   · `.frenz-nav-glass` (globals.css): translucent white (dark glass in dark
  *     mode and over reels), a 12 px backdrop blur, a hairline border, one

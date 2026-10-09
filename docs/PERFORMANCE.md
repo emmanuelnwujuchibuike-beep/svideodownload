@@ -123,3 +123,51 @@ The non-negotiables:
 - `npm run analyze` before shipping anything that touches the client bundle.
 - Web Vitals budgets per route (Phase 6) fail CI on regression.
 - Every PR answers the operating-principles questions above.
+
+## Part 9 — application-wide performance pass (2026-10-09)
+
+Brief: `docs/PERFORMANCE_PART9_BRIEF.md`. Scope was everything **outside** the
+landing and Download page UI, which another session owned at the time. Tests:
+`lib/perf/part9-performance.test.ts` (behaviour where it is pure, pinned text
+elsewhere, a failing-mutant case per family; the adaptive-poll single-chain
+mutant was run and fails the suite).
+
+### What was found and fixed
+
+| Area | Bottleneck (evidence: read in code) | Fix |
+|---|---|---|
+| Feed | `smart-feed` subscribed to **every** insert on `posts` (table-wide `postgres_changes`), so each new post anywhere woke every open feed | Subscription removed; a quiet "new posts" check every 5 min while visible |
+| Notifications | Bell, live toast and center each opened their own channel on the same `notifications` filter | One ref-counted stream (`features/notifications/notif-stream.ts`) |
+| Presence | Tracked while hidden; `mousemove` drove auto-away on every pixel | Untrack 30 s after hidden, re-track on return; `pointerdown`, throttled 5 s |
+| Typing | One interval per conversation entry | One shared sweep, only while entries exist and the page is visible |
+| Secret / support chat | Fixed 4 s / 5 s polls forever | `features/data/adaptive-poll.ts`: fast for 60 s after activity, then 20 s / 30 s; never while hidden |
+| AI job watchers | A visible/online event could start a second poll chain | `stop()` before `poll()`; AiJobAlert `inFlight` guard |
+| Conversation room | First-subscribe retry every ≤5 s forever, hidden or not | 6 tries, never while hidden |
+| Stories | Progress `setState` every animation frame | 2 % steps + a CSS width transition |
+| Video | Unmounted `<video>` kept its decoder/buffer | Stable `releaseOnUnmount` ref callback (pause, drop `src`, `load()`) |
+| Verification | Preview blob URLs never revoked | Revoked on replace and remove |
+| Sidebar | Prefetched every route on phones too; `backdrop-blur-xl` over a gradient | Prefetch only ≥1024 px; opaque `bg-card` |
+| `/api/media/download` | Any storage path; followed redirects; unbounded size; un-rate-limited | Parsed-URL guards (`lib/media/proxy-guard.ts`), `redirect: "manual"`, 200 MB cap (413), rate limit |
+| Edge caching | `/api/rewards/public`, `/api/sounds/discovery`, `/api/tools` answered every request from the DB | `s-maxage` + `stale-while-revalidate` (all three are identical for every visitor) |
+| Dead code | `storeResultFromUrl` (65 lines, no callers) | Removed |
+
+### Checked and left as is (with the reason)
+
+- `/api/wallpaper`: views already carry an immutable cache header; `dl=1` is metered per member and must stay dynamic.
+- `ads.txt`: `no-store` is deliberate (the operator's verification must see edits at once; degraded answers must not outlive an outage).
+- Wallpaper share/admin uploads: already capped at 20 MB × 20 files and processed one file at a time.
+- Trending reels: mounts only on desktop and pauses off-screen tiles.
+- AiJobAlert: polls only while a job is active (12 s, 5 rows); overlap with the generation watcher is small.
+
+### Not done here (owned elsewhere or risky)
+
+- **Landing / Download UI** (other session): ~145 script requests and up to ~1 s TBT measured locally on the landing page; `features/downloads` players proxying `/api/download`; `reels-warmup` video cleanup; downloader placeholder rotation.
+- `next.config` `remotePatterns` narrowing: a wrong pattern breaks images site-wide; needs a list of real hosts from production logs first.
+- Announcement marquee and profile-ring infinite CSS animations: compositor-only, low cost; revisit with a device thermal trace.
+
+### Unverified
+
+No production RUM numbers were available in this session. Local LCP stayed under
+1.5 s on the mock harness; the effect of these changes on battery, function
+invocations and Realtime message counts has to be confirmed from production
+dashboards. No statistic above is claimed beyond what the code shows.

@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  * may read (the referral banner after a download shows them to guests too).
  * Amounts and thresholds only. Asked once per browser session (the banner keeps
  * the answer in sessionStorage), only when the banner is about to show.
- * no-store, like every API answer here, so no cache holds a stale amount.
+ * CDN-cached for 5 minutes (Part 9): it is the same for every visitor.
  *
  * 2026-10-07: the referral amounts per event (owner: "sign in 2 credits, top
  * up 10 credits, subscribe 10 credits") so the banner can say each one.
@@ -27,6 +27,8 @@ export async function GET() {
       qualification: rules.qualification,
       withdrawals: rules.withdrawals.enabled ? { creditsPerUsd: rules.withdrawals.creditsPerUsd, minCredits: rules.withdrawals.minCredits } : null,
     },
-    { headers: { "cache-control": "private, no-store" } },
+    // Part 9 (2026-10-09): the same answer for everyone (global settings, the request is
+    // not read), so the CDN serves it for 5 minutes. A changed amount shows within one bucket.
+    { headers: { "cache-control": "public, max-age=0, s-maxage=300, stale-while-revalidate=60" } },
   );
 }

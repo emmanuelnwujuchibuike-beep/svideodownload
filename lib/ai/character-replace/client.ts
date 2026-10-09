@@ -272,6 +272,15 @@ export function readCachedCharacterReplaceBalance(): CharacterReplaceBalance | n
   }
 }
 
+/**
+ * Fired in THIS tab whenever a fresh balance is written, so a strip already on
+ * screen repaints at once instead of waiting for its next mount. Other tabs hear
+ * the same change through the `storage` event on `BALANCE_CACHE_KEY`. No polling:
+ * the figure only moves when a page that already asked the server writes it.
+ */
+export const BALANCE_EVENT = "frenz:ai-balance";
+export const BALANCE_STORAGE_KEY = BALANCE_CACHE_KEY;
+
 export function writeCachedCharacterReplaceBalance(value: CharacterReplaceBalance): void {
   if (typeof window === "undefined") return;
   try {
@@ -279,6 +288,7 @@ export function writeCachedCharacterReplaceBalance(value: CharacterReplaceBalanc
   } catch {
     /* quota, private mode — the next open pays the network again, no more */
   }
+  window.dispatchEvent(new CustomEvent<CharacterReplaceBalance>(BALANCE_EVENT, { detail: value }));
 }
 
 /** Called on sign-out. A balance must not outlive the session that read it. */

@@ -92,6 +92,9 @@ export function AppSidebar({ handle: _handle }: { handle: string | null }) {
   // tap already does. Skipped on data-saver/2G, same as mobile.
   useEffect(() => {
     if (isSlowConnection()) return;
+    // Part 9 (2026-10-09): the sidebar is CSS-hidden below lg, where the mobile nav already
+    // warms its own tabs - warming these too doubled the server renders on every phone app load.
+    if (typeof window !== "undefined" && !window.matchMedia("(min-width: 1024px)").matches) return;
     const id = setTimeout(() => {
       // /reels added (2026-07-11) — was missing, so the sidebar's Reels link
       // paid a real fresh-fetch on first click while every other tab here
@@ -121,7 +124,9 @@ export function AppSidebar({ handle: _handle }: { handle: string | null }) {
           sidebar could end up scrolled to a mid-content position, leaving blank
           space below it instead of reaching the bottom of the screen). Fixed is
           pinned to the viewport unconditionally, so it can never move. */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col overflow-hidden border-r border-border/60 bg-gradient-to-b from-card/70 to-card/30 px-3 py-4 backdrop-blur-xl lg:flex">
+      {/* Part 9 (2026-10-09): opaque bg-card like the topbar - a full-height fixed backdrop-blur-xl
+          made the GPU re-blur the page behind it on every scroll frame */}
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col overflow-hidden border-r border-border/60 bg-card px-3 py-4 lg:flex">
       {/* Brand — the in-app "webapp logo": the dark-tiled app-icon mark, so it
           reads like the installed app icon rather than a bare glyph. */}
       <Link href="/home" className="mb-6 flex shrink-0 items-center px-2">

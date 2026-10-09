@@ -10,13 +10,14 @@ const code = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 // Owner list, 2026-10-09 (before Part 10).
 
 describe("landing speed test (LCP 4.3 s, TTI 9.2 s)", () => {
-  it("the rotator requests nothing extra until the page has loaded, then one frame ahead", () => {
+  it("the rotator requests nothing extra until the page has loaded, and never ticks before its next frame exists", () => {
     const r = code("components/wallpapers/wallpaper-cta-rotator.tsx");
     expect(r).not.toContain("setTimeout(() => setRevealed(true), 50)");
     expect(r).toContain('window.addEventListener("load", whenIdle, { once: true });');
     expect(r).toContain("requestIdleCallback(start");
-    expect(r).toContain("if (i >= mounted) return null;");
-    expect(r).toContain("Math.min(urls.length, active + 2)");
+    expect(r).toContain("const run = started && onScreen && !document.hidden;");
+    // Part 9's three-frame window stays: only the frames around the active one are mounted
+    expect(r).toContain("if (!keep(i)) return null;");
     expect(r).toContain("priority={i === 0}");
   });
 
@@ -54,19 +55,21 @@ describe("credits page and AI dashboard strip: no reload on entry", () => {
     expect(p).not.toContain(".channel(`wallet-balance:");
   });
 
-  it("the strip paints from the snapshot on client navigations and follows the live wallet", () => {
+  it("the strip paints from the snapshot on client navigations, never an empty first frame", () => {
     const s = code("features/ai/design/ai-credit-strip.tsx");
-    expect(s).toContain("useState<Boot | null>(() => (stripHydrated ? readBoot() : null))");
-    expect(s).toContain("const balance = live ?? boot?.cached ?? null;");
-    expect(s).not.toContain("if (cached) return;");
+    expect(s).toContain("let stripHydrated = false;");
+    expect(s).toContain("stripHydrated && hasAuthCookie() ? readCachedCharacterReplaceBalance() : null");
+    expect(s).toContain("    stripHydrated = true;");
+    // live, without polling: the snapshot write announces itself
+    expect(s).toContain("window.addEventListener(BALANCE_EVENT, onBalance);");
   });
 });
 
 describe("small fixes", () => {
   it("the credit strip logo has no black tile", () => {
     const s = code("features/ai/design/ai-credit-strip.tsx");
-    expect(s).toContain('<span className="flex h-9 w-9 shrink-0 items-center justify-center">');
-    expect(s).not.toMatch(/rounded-xl bg-black/);
+    expect(s).toContain('<span className="flex h-8 w-8 shrink-0 items-center justify-center">');
+    expect(s).not.toMatch(/bg-black/);
   });
 
   it("the plan badge has no square ring", () => {
@@ -74,15 +77,26 @@ describe("small fixes", () => {
     expect(code("app/(app)/account/page.tsx")).not.toMatch(/DiamondCrownBadge[^\n]*ring-2/);
   });
 
-  it("Promote responds on the first tap: pressed look on an inner layer, a spinner, navigation on pointer-up", () => {
-    const b = code("features/downloads/promote-bubble.tsx");
-    expect(b).toContain("group-active:scale-90");
-    expect(b).toContain('{pending ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <Megaphone');
-    expect(b).toMatch(/if \(!s\.moved\) \{\s*tapped\.current = true;\s*go\(\);/);
-    expect(b).toContain('router.prefetch("/advertise");\n  }, [router]);');
-    // the button's own class must not carry a transform utility — its inline transform would override it
-    const btn = b.slice(b.indexOf("className={`group fixed"), b.indexOf("`}", b.indexOf("className={`group fixed")));
-    expect(btn).not.toMatch(/scale-/);
+  it("Promote responds on the first tap with a spinner and warms its route", () => {
+    const b = code("features/downloads/promote-button.tsx");
+    expect(b).toContain("warmOnIdle");
+    expect(b).toContain("group-data-[pending]:hidden");
+    expect(b).toContain("group-data-[pending]:inline-block");
+  });
+
+  it("Promote sits in the top bar on /downloads, as on the landing header", () => {
+    expect(code("features/app-shell/app-topbar.tsx")).toContain('{pathname === "/downloads" && !searchActive ? <PromoteButton size="header" /> : null}');
+    const core = code("features/downloads/download-page-core.tsx");
+    expect(core).not.toContain("<PromoteButton");
+    expect(core).toContain('<AiCreditStrip base="/ai" className="mb-3" />');
+  });
+
+  it("Save. Discover. Create. sits under the credits card on /downloads, without the paragraph", () => {
+    const core = code("features/downloads/download-page-core.tsx");
+    expect(core).toContain("subtitle={topCredits !== \"strip\"}");
+    expect(core).not.toContain("headline={topCredits !== \"strip\"}");
+    expect(core.indexOf("<AiCreditStrip")).toBeLessThan(core.indexOf("<DownloadsHero"));
+    expect(code("features/downloads/downloads-sections.tsx")).toContain("{subtitle ? (");
   });
 });
 
@@ -101,5 +115,21 @@ describe("admin pushes for referrals", () => {
     for (const f of ["features/rewards/rewards-page.tsx", "features/rewards/referral-banner.tsx"]) {
       expect(code(f), f).toContain('if (out === "copied" || out === "shared") reportReferralShared(out,');
     }
+  });
+});
+
+// owner, 2026-10-09: "History Medias and the Frenz logo at the top reloads on every page entry"
+describe("no flash on page entry", () => {
+  it("a history tile already seen in this tab paints eager + sync; a new one stays lazy + async", () => {
+    const t = code("components/ui/smart-thumb.tsx");
+    expect(t).toContain('loading={isImageSeen(src) ? "eager" : "lazy"}');
+    expect(t).toContain('decoding={isImageSeen(src) ? "sync" : "async"}');
+    expect(t).toContain("onLoad={(e) => markImageSeen(src, e.currentTarget)}");
+  });
+
+  it("the Frenz logo is eager and decoded synchronously", () => {
+    const l = code("components/brand/frenz-logo.tsx");
+    expect(l).toContain('loading={priority ? undefined : "eager"}');
+    expect(l).toContain('decoding="sync"');
   });
 });

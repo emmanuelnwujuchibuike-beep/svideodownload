@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-import { revalidate } from "@/features/data";
+import { getEntry, mutate, revalidate } from "@/features/data";
 import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
 import type { ConversationSummary } from "@/lib/social/messages";
 import type { BrowserClient } from "@/lib/supabase/client-instance";
@@ -37,6 +37,41 @@ export async function loadInbox(): Promise<Inbox> {
 }
 
 /**
+ * Fold freshly built summaries for `ids` into the cached inbox: those rows are
+ * replaced (or dropped, when the server no longer lists them — left, hidden,
+ * secret), new ones are added, and the order is the server's own — pinned
+ * first, then newest message first. Pure, so it is unit-tested.
+ */
+export function mergeInboxRows(prev: Inbox, ids: string[], fresh: ConversationSummary[]): Inbox {
+  const touched = new Set(ids);
+  const conversations = prev.conversations.filter((c) => !touched.has(c.id)).concat(fresh.filter((c) => touched.has(c.id)));
+  conversations.sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    return new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime();
+  });
+  return { conversations, unread: conversations.filter((c) => c.unread).length };
+}
+
+/** Rebuilds only `ids` on the server and patches them into the cache. False ⇒ the caller does a full reload. */
+async function patchInbox(ids: string[]): Promise<boolean> {
+  if (getEntry<Inbox>(INBOX_KEY).data === undefined) return false;
+  try {
+    const res = await fetch(`/api/messages?ids=${ids.map(encodeURIComponent).join(",")}`);
+    if (!res.ok) return false;
+    const d = (await res.json()) as { conversations?: ConversationSummary[] };
+    if (!Array.isArray(d.conversations)) return false;
+    const fresh = d.conversations;
+    mutate<Inbox>(INBOX_KEY, (prev) => (prev ? mergeInboxRows(prev, ids, fresh) : prev!));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A partial refresh asks for at most this many conversations; a bigger burst reloads the inbox. */
+const MAX_PATCH_IDS = 20;
+
+/**
  * Live inbox: every active `conversation_members` row you have gets its
  * `updated_at` touched whenever a message is sent/edited/deleted in that
  * conversation, or its title/avatar/roster changes — one column, one filter
@@ -45,6 +80,9 @@ export async function loadInbox(): Promise<Inbox> {
  * `user_low`/`user_high`, because postgres_changes can't OR across columns
  * — that hack no longer applies now that membership lives in its own table.)
  */
+/** How long a burst of inbox events waits for quiet before the one refetch it becomes. */
+export const INBOX_COALESCE_MS = 350;
+
 export function useInboxRealtime(): void {
   useEffect(() => {
     // A guest has no inbox to listen to — no socket, no 60 kB client chunk.
@@ -64,7 +102,59 @@ export function useInboxRealtime(): void {
     let channel: Parameters<BrowserClient["removeChannel"]>[0] | null = null;
     let cancelled = false;
 
-    const bump = () => void revalidate(INBOX_KEY, loadInbox, 0).catch(() => {});
+    /*
+      🔴 ONLY THE CONVERSATIONS THAT CHANGED (2026-10-09, owner: "each message
+      triggering full inbox refetch — fix it").
+
+      Every message touches the viewer's `conversation_members` row for that
+      conversation, and each event used to reload the WHOLE inbox — the full
+      `listConversations` (every membership, several hundred message rows).
+      Now each event's `conversation_id` is collected, a burst waits 350 ms of
+      quiet, and ONE request rebuilds just those conversations on the server
+      (`/api/messages?ids=…`, the same function and rules) and patches them into
+      the cached list in place. The other rows are not refetched or rebuilt.
+
+      A full reload remains only where a patch cannot be trusted: the
+      reconnect (`online`, which may have missed anything), an event without a
+      conversation id, a burst over MAX_PATCH_IDS, no cached inbox yet, or a
+      failed patch. An event that lands while a pass is running is not
+      swallowed: it schedules one more pass, so the list ends on the latest state.
+    */
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let running = false;
+    const dirty = new Set<string>();
+    let fullNeeded = false;
+    const flush = async () => {
+      timer = null;
+      if (running) return; // the running pass re-checks `dirty` / `fullNeeded` before it ends
+      running = true;
+      try {
+        while (!cancelled && (fullNeeded || dirty.size > 0)) {
+          const ids = [...dirty];
+          dirty.clear();
+          const full = fullNeeded || ids.length > MAX_PATCH_IDS;
+          fullNeeded = false;
+          const patched = full ? false : await patchInbox(ids);
+          if (!patched) await revalidate(INBOX_KEY, loadInbox, 0).catch(() => {});
+        }
+      } finally {
+        running = false;
+      }
+    };
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => void flush(), INBOX_COALESCE_MS);
+    };
+    const onChange = (payload: { new?: Record<string, unknown>; old?: Record<string, unknown> }) => {
+      const id = payload?.new?.conversation_id ?? payload?.old?.conversation_id;
+      if (typeof id === "string" && id) dirty.add(id);
+      else fullNeeded = true;
+      schedule();
+    };
+    const bump = () => {
+      fullNeeded = true;
+      schedule();
+    };
 
     void getClient()
       .then(async (client) => {
@@ -78,7 +168,7 @@ export function useInboxRealtime(): void {
           .on(
             "postgres_changes",
             { event: "*", schema: "public", table: "conversation_members", filter: `user_id=eq.${uid}` },
-            bump,
+            onChange,
           )
           .subscribe();
         // Unmounted while `getUser()` was in flight — the subscribe above still
@@ -106,6 +196,7 @@ export function useInboxRealtime(): void {
 
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
       window.removeEventListener("online", bump);
       if (channel && supabase) void supabase.removeChannel(channel);
     };

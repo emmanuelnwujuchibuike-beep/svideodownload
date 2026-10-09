@@ -1,7 +1,7 @@
 "use client";
 
 import NextImage from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { BACKDROP_QUALITY } from "@/components/wallpapers/backdrop-quality";
 import { cn } from "@/lib/utils";
@@ -67,66 +67,83 @@ import { cn } from "@/lib/utils";
  */
 export function RotatingWallpaperLayers({ urls, sizes }: { urls: string[]; sizes: string }) {
   const [active, setActive] = useState(0);
+  const [revealed, setRevealed] = useState(false);
+  const root = useRef<HTMLSpanElement | null>(null);
+
   /*
-    🔴 ONE FRAME AHEAD, AND ONLY AFTER THE PAGE HAS LOADED (2026-10-09, owner:
-    the landing's speed test fell to LCP 4.3 s / TTI 9.2 s).
+    🔴 IT ONLY TURNS WHILE SOMEONE CAN SEE IT (Download page refinement,
+    2026-10-09: "pause or suspend nonessential work when the page is hidden …
+    minimal CPU/GPU activity").
 
-    This used to mount ALL nine other wallpapers 50 ms after hydration. They sit
-    inside the visible card, so `loading="lazy"` does not defer them: on a phone
-    that was ~500 kB of extra images — each a full image-optimizer request, cold
-    for a fresh member upload — racing the LCP image and the page's JavaScript
-    on the same slow connection. Now nothing extra is requested until the page
-    has finished loading and the browser is idle, and then only the NEXT frame:
-    each layer mounts one rotation before it is shown, so it has two seconds to
-    arrive and the network never carries more than one of them at a time.
+    The interval used to run from mount to unmount, skipping a tick when the tab
+    was hidden but still waking the page every 2 s — and still crossfading, and
+    decoding the next photo, while the tile was scrolled far out of view. Now the
+    timer exists only while the tile intersects the viewport AND the tab is
+    visible; it is cleared, not skipped, the rest of the time.
   */
-  const [started, setStarted] = useState(false);
-  const [mounted, setMounted] = useState(1);
-
   useEffect(() => {
     if (urls.length < 2) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
-    let cancelled = false;
-    let intervalId: ReturnType<typeof setInterval> | null = null;
+    // 2026-10-09 landing speed test (LCP 4.3 s): no second frame is fetched until the page has
+    // loaded and the browser is idle, and the rotation never ticks before that frame exists.
+    let started = false;
     let idleId: number | null = null;
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let revealTimer: ReturnType<typeof setTimeout> | null = null;
     const start = () => {
-      if (cancelled) return;
-      setStarted(true);
-      intervalId = setInterval(() => {
-        // Paused, not merely slowed, while backgrounded — a tab nobody is
-        // looking at has no reason to keep decoding new images.
-        if (document.hidden) return;
-        setActive((i) => (i + 1) % urls.length);
-      }, 2000);
+      started = true;
+      setRevealed(true);
+      sync();
     };
     const whenIdle = () => {
       if (typeof window.requestIdleCallback === "function") idleId = window.requestIdleCallback(start, { timeout: 3000 });
-      else timeoutId = setTimeout(start, 1500);
+      else revealTimer = setTimeout(start, 1500);
     };
     if (document.readyState === "complete") whenIdle();
     else window.addEventListener("load", whenIdle, { once: true });
-
+    let onScreen = true;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const sync = () => {
+      const run = started && onScreen && !document.hidden;
+      if (run && intervalId === null) intervalId = setInterval(() => setActive((i) => (i + 1) % urls.length), 2000);
+      if (!run && intervalId !== null) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+    const io =
+      typeof IntersectionObserver === "function" && root.current
+        ? new IntersectionObserver(([entry]) => {
+            onScreen = !!entry?.isIntersecting;
+            sync();
+          })
+        : null;
+    if (io && root.current) io.observe(root.current);
+    document.addEventListener("visibilitychange", sync);
+    sync();
     return () => {
-      cancelled = true;
+      started = false;
       window.removeEventListener("load", whenIdle);
       if (idleId !== null) window.cancelIdleCallback?.(idleId);
-      if (timeoutId) clearTimeout(timeoutId);
-      if (intervalId) clearInterval(intervalId);
+      if (revealTimer) clearTimeout(revealTimer);
+      if (intervalId !== null) clearInterval(intervalId);
+      io?.disconnect();
+      document.removeEventListener("visibilitychange", sync);
     };
   }, [urls.length]);
 
-  // Keep exactly one frame mounted ahead of the one on screen.
-  useEffect(() => {
-    if (!started) return;
-    setMounted((m) => Math.max(m, Math.min(urls.length, active + 2)));
-  }, [started, active, urls.length]);
+  /*
+    Only three frames are ever mounted — the one fading out, the one showing and
+    the one coming next (so it is fetched and decoded before its turn). All ten
+    used to stay in the DOM, which kept ten decoded photos in memory for a tile
+    that shows one. A frame that comes round again is in the HTTP cache already.
+  */
+  const n = urls.length;
+  const keep = (i: number) => (revealed ? i === active || i === (active + 1) % n || i === (active - 1 + n) % n : i === 0);
 
   return (
-    <>
+    <span ref={root} aria-hidden className="pointer-events-none absolute inset-0">
       {urls.map((url, i) => {
-        if (i >= mounted) return null;
+        if (!keep(i)) return null;
         return (
           <NextImage
             key={url}
@@ -158,6 +175,6 @@ export function RotatingWallpaperLayers({ urls, sizes }: { urls: string[]; sizes
           />
         );
       })}
-    </>
+    </span>
   );
 }

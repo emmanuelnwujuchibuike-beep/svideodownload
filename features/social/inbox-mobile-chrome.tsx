@@ -64,11 +64,12 @@ export function InboxMobileChrome() {
       // `bg-background` (so the list scrolls UNDER it, never shows through), the
       // same `px-3 pt-3.5` insets, and pinned below the status-bar safe area.
       // `lg:hidden` — desktop keeps the inbox in the Glass Split pane, untouched.
-      className="fixed inset-x-0 top-[var(--frenz-safe-top)] z-30 mx-auto max-w-[1600px] bg-background px-3 pt-3.5 lg:hidden"
+      className="fixed inset-x-0 top-[var(--frenz-safe-top)] z-30 mx-auto max-w-[1600px] bg-background px-3 pt-3 lg:hidden"
     >
-      <div className="mb-3.5">
+      {/* Tighter (2026-10-09 reference: "tighter header … less vertical space"). */}
+      <div className="mb-2.5">
         <div className="flex items-start justify-between gap-2">
-          <h1 className="flex items-center gap-1.5 pl-1 text-[24px] font-bold leading-tight min-[360px]:text-[28px] tracking-[-0.03em]">
+          <h1 className="flex items-center gap-1.5 pl-1 text-[24px] font-bold leading-tight tracking-[-0.03em] min-[360px]:text-[28px]">
             Messages
             <InboxUnreadDot />
           </h1>

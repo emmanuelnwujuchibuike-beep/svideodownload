@@ -76,6 +76,8 @@ export function useBatchWatch(batchId: string | null) {
       }
       if (active.current) {
         attempts.current = 0;
+        // Part 9: an "online" or "visible" event while a poll is pending used to start a second chain
+        stop();
         void poll();
       }
     };

@@ -38,6 +38,16 @@ export function isAvatarReady(url: string | null | undefined): boolean {
   return !!url && decoded.has(url);
 }
 
+/*
+  The same registry, for any image that remounts on navigation and must not
+  flash (owner, 2026-10-09: "History Medias and the Frenz logo at the top
+  reloads on every page entry") — SmartThumb (history tiles) and FrenzLogo.
+*/
+export const isImageSeen = isAvatarReady;
+export function markImageSeen(url: string, img: HTMLImageElement): void {
+  remember(url, img);
+}
+
 /**
  * Decode avatars ahead of time (e.g. every row of an inbox that just arrived,
  * including the ones below the fold) so the first time each is mounted it is
@@ -59,14 +69,33 @@ export function warmAvatars(urls: readonly (string | null | undefined)[]): void 
   }
 }
 
-export function StableAvatar({ src, alt = "", className }: { src: string; alt?: string; className?: string }) {
+export function StableAvatar({
+  src,
+  alt = "",
+  className,
+  width,
+  height,
+  loading,
+}: {
+  src: string;
+  alt?: string;
+  className?: string;
+  width?: number;
+  height?: number;
+  /** "lazy" for long lists (Part 9); ignored once the URL has decoded, which paints at once */
+  loading?: "lazy" | "eager";
+}) {
+  const ready = decoded.has(src);
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={src}
       alt={alt}
+      width={width}
+      height={height}
+      loading={ready ? undefined : loading}
       draggable={false}
-      decoding={decoded.has(src) ? "sync" : "async"}
+      decoding={ready ? "sync" : "async"}
       onLoad={(e) => remember(src, e.currentTarget)}
       className={className}
     />

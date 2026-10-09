@@ -3,7 +3,7 @@
 import type { AiPromo } from "@/lib/ai/promo/config";
 import { Pause, Play, RotateCw, X } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { PlatformStatusMap } from "@/lib/platform-status";
 
@@ -107,7 +107,8 @@ export function DownloadsPage({
   multiLink,
   aiPromo = null,
 }: {
-  wallpapers: Wallpaper[];
+  /** The library, or a promise of it streamed from the server (see app/(app)/downloads/page.tsx). */
+  wallpapers: Wallpaper[] | Promise<Wallpaper[]>;
   ctaWallpaperUrl?: string | null;
   /** Background photo for the Frenz AI tile. Empty ⇒ it draws its own. */
   frenzAiTileImageUrl?: string | null;
@@ -131,7 +132,27 @@ export function DownloadsPage({
     query hits — reusing its first 10 here is the fix, with no extra
     network round-trip.
   */
-  const rotateUrls = useMemo(() => wallpapers.slice(0, 10).map((w) => w.url).filter(Boolean), [wallpapers]);
+  /*
+    The server streams the library as a promise so the page above it never
+    waits for it; until it lands the Wallpaper tile shows its static backdrop
+    and the gallery (code-split, below the fold) is not drawn.
+  */
+  const [walls, setWalls] = useState<Wallpaper[] | null>(() => (Array.isArray(wallpapers) ? wallpapers : null));
+  useEffect(() => {
+    if (Array.isArray(wallpapers)) {
+      setWalls(wallpapers);
+      return;
+    }
+    let alive = true;
+    wallpapers.then(
+      (list) => alive && setWalls(list),
+      () => alive && setWalls([]),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [wallpapers]);
+  const rotateUrls = useMemo(() => (walls ?? []).slice(0, 10).map((w) => w.url).filter(Boolean), [walls]);
 
   const [tab, setTab] = useState<Tab>("All");
   const [search, setSearch] = useState("");
@@ -339,7 +360,7 @@ export function DownloadsPage({
           {/* Wallpapers — the real library; every tile opens the reels viewer. */}
           {/* /downloads is behind a sign-in redirect, so the viewer is always a
               member here — engagement is enabled. */}
-          <WallpaperGallery items={wallpapers} canEngage />
+          {walls ? <WallpaperGallery items={walls} canEngage /> : null}
 
           {/* Admin-managed ad slot below the history list — insert or remove any
               ad for this zone from the dashboard; collapses when empty. */}

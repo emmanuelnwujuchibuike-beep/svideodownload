@@ -10,6 +10,7 @@ import { useScrollDirection } from "@/lib/dom/use-scroll-direction";
 import { useEffect, useRef } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
+import { useAiGlassTier } from "@/features/ai/design/glass-tier";
 import {
   FrenzEarnOutline,
   FrenzEarnSolid,
@@ -32,40 +33,35 @@ import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { cn } from "@/lib/utils";
 
 /**
- * Bottom navigation — a plain, OPAQUE, edge-to-edge bar (owner, 2026-08:
- * "remove the glass feel and transparent look and make it edge to edge, only
- * native apps will have glass floating nav"). Reference: a native-style app's
- * bottom tab bar sits flush with the viewport's full width, pure background
- * color, a hairline top border, no rounding, no blur, no floating margins —
- * the same solid, no-blur treatment `AppTopbar` already uses. The previous
- * `.glass-strong` floating rounded pill (frosted, inset margins, drop shadow)
- * is gone; that "floating glass dock" look is reserved for an eventual real
- * native app shell, not the web/PWA chrome.
+ * Bottom navigation — a FLOATING GLASS PILL (owner, 2026-10-09: "a genuinely
+ * floating Instagram/WhatsApp-inspired glass bottom navigation with visible left
+ * and right margins … do not turn it into a full-width bottom bar").
  *
- * 🔴 ICON-ONLY, no labels (owner, 2026-08-16, against the Facebook/Instagram
- * reference screenshots: "professional simple and clean… 3d and mid big").
- * Every tab used to carry a text label under its glyph; the reference bars
- * carry none, just bigger icons on a taller bar. Inactive tabs are plain,
- * muted outline icons; the ACTIVE tab swaps to its solid glyph in the brand
- * blue (`text-primary`) — a flat inline color change, Facebook/Snapchat
- * style, which is now the ONLY way a tab reads as selected (see `aria-label`
- * on each tab for the accessible name the removed visible label used to be).
- * Only a couple of px of spring-animated lift remain (see NavLift) — never a
- * floating badge. Destinations are this app's real ones. Every tab tap fires
- * the shared haptic + the soft nav "tap" tone.
+ * This reverses the 2026-08 edge-to-edge opaque bar ("only native apps will have
+ * glass floating nav"), on the owner's newer, explicit instruction:
  *
- * The Create "+" that used to live here as a permanently-raised gradient
- * circle is gone from this bar entirely — moved to `AppTopbar`, non-round,
- * next to search (owner: "move the + button to top… don't make the plus
- * button round"). Full Bleed's five tabs are now Home / Friends / Reels /
- * Chats / Profile — Reels, previously only reachable from the top feed
- * segmented control, takes the slot Create vacated.
+ *   · Centred, `calc(100% - 28px)` wide (14 px of page visible on each side),
+ *     capped at 560 px, fixed `--frenz-nav-gap` above the bottom — low, just
+ *     clear of the home indicator (~22 px up on an iPhone, 8 px with no inset;
+ *     owner: "it shouldn't float much too high"). Centred by `inset-x-0 mx-auto`, not a
+ *     transform, so the scroll-away transform below never fights the centring.
+ *   · `.frenz-nav-glass` (globals.css): translucent white (dark glass in dark
+ *     mode and over reels), a 12 px backdrop blur, a hairline border, one
+ *     restrained shadow — with the `.ai-glass` fallback tiers (reduced blur on a
+ *     constrained device, translucent without backdrop-filter support, solid for
+ *     reduced transparency). No full-width backing anywhere behind it.
+ *   · A fixed height (`--frenz-nav-height`) so the room every page reserves,
+ *     `--frenz-nav-clearance`, is exact rather than estimated.
  *
- * Perf: no idle animation anywhere in this bar — only the micro-lift spring
- * and PressIcon's tap spring ever animate, both input-driven. The bar sits
- * flush with the true bottom of the viewport; only the safe-area inset (the
- * home-indicator on notched/installed devices) pads it, never an artificial
- * gap on a plain browser tab.
+ * Labels stay under every glyph (owner, 2026-10-09: "add description to the
+ * landing bottom NAVs"). The ACTIVE tab swaps to its solid glyph in the brand
+ * blue (`text-primary`) with a couple of px of CSS lift — no glow, no halo, no
+ * pulse. Destinations are this app's real ones. Every tab tap fires the shared
+ * haptic + the soft nav "tap" tone.
+ *
+ * Perf: nothing in this bar animates at rest — no blur, shadow or fill ever
+ * transitions, and the old 15 s `attract-loop` pulse on the Feed tab is gone.
+ * Only the tap-driven lift and PressIcon's press scale ever move.
  */
 /*
   ── Bolder 3D (owner, 2026-08-16: "more 3D… more contrast… more darker…
@@ -104,6 +100,14 @@ const GLYPH_ACTIVE = "text-primary";
 // 213) — dropping the class itself would silently un-white the Reels nav.
 const GLYPH_INACTIVE = "text-muted-foreground";
 
+/*
+  Five equal columns across the pill, each the pill's full height — so every tab
+  is a full-height target, not just its glyph — with a visible keyboard focus
+  ring inside the pill's curve.
+*/
+const TAB_CLASS =
+  "relative flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-[1.25rem] px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";
+
 /**
  * `marketing` is still accepted from the marketing layout but no longer changes the
  * tab set: since the Full Bleed merge (owner, 2026-10-09) there is one bar,
@@ -125,6 +129,9 @@ export function MobileNav({
     exactly as before without needing to be listed.
   */
   const scrollDir = useScrollDirection();
+  // Writes html[data-glass="reduced"] on a constrained device, which drops the
+  // nav's blur (see `.frenz-nav-glass`). Once per mount; no timer, no listener.
+  useAiGlassTier();
   /* Whether a real, filled ad bar is docked below — see bottom-ad-bar.ts. */
   const bottomAdBarPresent = useBottomAdBarPresent();
   const router = useRouter();
@@ -217,12 +224,24 @@ export function MobileNav({
     const el = navRef.current;
     const root = document.documentElement;
     if (!el) return;
-    const setH = () => root.style.setProperty("--frenz-bottomnav-h", `${el.offsetHeight}px`);
+    /*
+      The FLOATING nav occupies its own height PLUS the gap under it, so that sum
+      is what is published — a bar docking "above the nav" must clear the pill,
+      not stop inside the gap. 0 when the nav is not displayed (lg and up).
+    */
+    const setH = () => {
+      const h = el.offsetHeight;
+      const gap = Number.parseFloat(getComputedStyle(el.parentElement ?? el).bottom) || 0;
+      root.style.setProperty("--frenz-bottomnav-h", `${h ? Math.round(h + gap) : 0}px`);
+    };
     setH();
     const ro = new ResizeObserver(setH);
     ro.observe(el);
+    // The gap follows the safe-area inset, which changes on rotation.
+    window.addEventListener("orientationchange", setH);
     return () => {
       ro.disconnect();
+      window.removeEventListener("orientationchange", setH);
       root.style.setProperty("--frenz-bottomnav-h", "0px");
     };
   }, []);
@@ -251,136 +270,43 @@ export function MobileNav({
   const hideForScroll = bottomAdBarPresent && scrollDir === "down";
 
   return (
-    // Edge-to-edge, no floating margins — the bar itself owns the safe-area
-    // padding (home-indicator inset on notched/installed devices; zero extra
-    // gap on a plain browser tab) rather than sitting inset inside a wrapper.
+    /*
+      The floating wrapper: inset 14 px from both edges, centred, capped at
+      560 px, `--frenz-nav-gap` above the bottom. `pointer-events-none` on the
+      wrapper and `auto` on the pill, so the strip of page beside and under the
+      pill stays tappable.
+
+      🔴 Hidden by TRANSFORM, never by unmounting or by height — it keeps
+      publishing --frenz-bottomnav-h either way, so the docked ad bar can trade
+      places with it against a stable number. The travel is the pill's own
+      height plus its gap, so it leaves the screen completely.
+    */
     <div
       className={cn(
-        "fixed inset-x-0 bottom-0 z-40 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform lg:hidden motion-reduce:transition-none",
-        // 🔴 Hidden by TRANSFORM, never by unmounting or by height. The bar keeps
-        // publishing --frenz-bottomnav-h either way, so the ad bar below can keep
-        // docking against a stable number and nothing in the page reflows as the
-        // two trade places. That is the difference between this reading as one
-        // designed movement and reading as an ad popping up.
-        hideForScroll && "translate-y-full",
+        "pointer-events-none fixed inset-x-0 bottom-[var(--frenz-nav-gap)] z-40 mx-auto w-[calc(100%-1.75rem)] max-w-[560px] transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] lg:hidden motion-reduce:transition-none",
+        hideForScroll && "translate-y-[calc(100%+var(--frenz-nav-gap)+0.5rem)]",
       )}
     >
       <nav
         ref={navRef}
         aria-label="Primary"
         /*
-          🔴 IMMERSIVE SURFACES GET A FLOATING BAR (owner, 2026-08-10: "i want
-          the reels to go the safe area like tiktok and instagram and doesnt crop
-          any content").
+          🔴 IMMERSIVE SURFACES (/reels) get the same pill in DARK glass whatever
+          the theme, with the inactive glyphs and labels re-tinted white — the
+          video runs to the physical edges and the pill floats over it, the way
+          TikTok and Instagram draw it. Re-pointing `text-muted-foreground` at the
+          descendants (rather than threading an `immersive` prop through every
+          NavTab) keeps the treatment in one place; the ACTIVE tab keeps the
+          brand blue, which reads on dark glass.
 
-          The video was already full-bleed — the deck is `fixed inset-0` and runs
-          to the physical bottom edge. What stopped it LOOKING that way was this
-          bar: `bg-background` is fully opaque, so it painted a solid slab over
-          the bottom of the picture. The reel reached the safe area and then had
-          it covered up.
-
-          That is precisely what TikTok and Instagram do differently. Their video
-          runs to the physical edges and the tab bar FLOATS over it — a dark
-          scrim, no border, white glyphs — so the frame is visible behind the
-          controls instead of being cropped by them.
-
-          So on `/reels` the bar keeps its size, its position and its safe-area
-          padding (the CONTROLS still must not sit in the home-indicator strip —
-          also the owner's instruction) and loses only its opacity: the hairline
-          border goes, and the ground becomes a bottom-weighted gradient rather
-          than a fill, so the glyphs stay legible on any frame while the video
-          shows through.
-
-          Nothing is cropped to achieve this. The picture is not scaled or
-          shifted; it was always there, and this stops hiding it.
-
-          Every other surface is untouched and keeps the native opaque tab bar —
-          a translucent nav over a scrolling document is a legibility problem,
-          which is exactly why it is scoped to the immersive route.
+          The pill sits at most `--frenz-nav-clearance` from the bottom, which is
+          below the reel scrubber (REEL_PROGRESS_BOTTOM in reel-viewer.tsx,
+          4.75rem + the inset) — the two numbers are still a pair; move one and
+          check the other.
         */
         className={cn(
-          // Taller + no label row (owner: "mid big") — a bit more top/bottom
-          // breathing room than the label version needed, since the icon is
-          // now the whole tab rather than sharing the row with text under it.
-          "relative flex items-center justify-around px-1 pb-[max(env(safe-area-inset-bottom),0.6rem)] pt-2",
-          immersive
-            ? [
-                /*
-                  🔴 THE DARK GROUND HAS TO REACH ABOVE THE GLYPHS (owner,
-                  2026-08-10: "the bottom nav didnt cover the icon properly in
-                  the reels, i want the dark section to go upper to cover the
-                  bottom nav icons professionally").
-
-                  The first version put `from-black/85 via-black/55 to-transparent`
-                  on the nav BOX. The box is only ~76px tall and the icons start
-                  10px below its top edge, so the glyphs were sitting in the part
-                  of the gradient that had already faded to nearly nothing —
-                  white icons on raw video, which is the "didn't cover it
-                  properly".
-
-                  Two layers fix it, and they do different jobs:
-
-                   • THE NAV ITSELF is a near-solid dark ground (95%→75%), so
-                     every glyph and label in the bar sits on a surface with
-                     guaranteed contrast rather than on whatever frame is
-                     playing. This is what TikTok and Instagram do — their tab
-                     bar over a reel is effectively black, not a wash.
-
-                   • `before:` EXTENDS 2rem ABOVE the bar and feathers out to
-                     transparent, so the dark ground arrives gradually instead
-                     of as a hard horizontal seam across the picture. That
-                     feather is the difference between "a black slab" and the
-                     professional look asked for.
-
-                  🔴 2rem and not more, deliberately. This wrapper is `z-40` and
-                  the reel deck is `z-30`, so anything painted here is painted
-                  OVER the reel's own chrome. The reel's bottom stack
-                  (REEL_PROGRESS_BOTTOM in reel-viewer.tsx) puts the scrubber at
-                  4.75rem — flush with this bar's own top edge, the closest it
-                  can sit without the bar itself starting to cover it (owner,
-                  2026-08-16, twice: "close to the bottom NAV just like tiktok",
-                  then "should come down more"). That's the feather's actual
-                  job: it exists so content sitting over it stays legible, not
-                  so content stays clear of it entirely. The two numbers are
-                  still a pair; move one and check the other.
-
-                  `before:pointer-events-none` is load-bearing for the same
-                  z-order reason: a pseudo-element is part of its originating
-                  element for hit-testing, so without it this strip would sit
-                  over the video and silently swallow every tap-to-pause and
-                  every swipe that started in it.
-                */
-                /* 🔴 /90 and not /88: this project's Tailwind opacity scale has
-                   no 88, so `via-black/88` compiled to NOTHING and the middle
-                   stop silently vanished (verified in the built CSS — the class
-                   had no rule at all, and the computed gradient came back with
-                   two stops). Same family of silent failure as the `z-60` that
-                   emitted nothing. Check the BUILT CSS, not the source. */
-                "bg-gradient-to-t from-black/95 via-black/90 to-black/75",
-                "before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-8",
-                "before:bg-gradient-to-t before:from-black/75 before:to-transparent",
-                /*
-                  The INACTIVE glyphs and labels turn white here.
-
-                  `text-muted-foreground` is a grey graded for a light page
-                  background; over video it is close to invisible. Re-pointing it
-                  at the descendants rather than threading an `immersive` prop
-                  through every NavTab keeps this entire treatment in one place —
-                  the tabs stay unaware they are on a dark surface, so no future
-                  tab can be added and forget to handle it.
-
-                  The ACTIVE tab keeps `text-primary`: it is the brand blue and it
-                  reads clearly against a dark scrim, so the current destination
-                  stays distinguishable rather than every tab going white.
-                */
-                "[&_.text-muted-foreground]:!text-white/75",
-              ].join(" ")
-            : // Darker lining + a static elevation shadow, matching the
-              // marketing nav's own strengthening — see its comment. Left
-              // OUT of the immersive branch above on purpose: that bar is
-              // already a deliberately near-black gradient over video, where
-              // a border and an upward shadow would have nothing to add.
-              "border-t border-border bg-background shadow-[0_-4px_16px_-4px_rgba(2,6,23,0.12)] dark:shadow-[0_-4px_16px_-4px_rgba(0,0,0,0.4)]",
+          "frenz-nav-glass pointer-events-auto relative flex h-[var(--frenz-nav-height)] items-center justify-around rounded-[1.75rem] px-1.5",
+          immersive && "frenz-nav-glass--immersive [&_.text-muted-foreground]:!text-white/75",
         )}
       >
         {/*
@@ -406,14 +332,13 @@ export function MobileNav({
           onWarm={router.prefetch}
         />
         {handle ? (
-          /* The complete feed (posts and videos) lives at /home; the Feed tab is its door. Pulses until first opened. */
+          /* The complete feed (posts and videos) lives at /home; the Feed tab is its door. */
           <NavTab
             label="Feed"
             href="/home"
             icon={FrenzFeedOutline}
             activeIcon={FrenzFeedSolid}
             active={pathname === "/home" || pathname.startsWith("/feed") || pathname.startsWith("/reels")}
-            attract={!(pathname === "/home" || pathname.startsWith("/feed"))}
             onWarm={router.prefetch}
           />
         ) : (
@@ -444,13 +369,13 @@ export function MobileNav({
             playSound("tap");
           }}
           aria-label="Profile"
-          className="relative flex min-w-[3.5rem] flex-col items-center justify-center gap-0.5 px-1.5 py-0.5"
+          className={TAB_CLASS}
         >
           <NavLift active={profileActive}>
             <PressIcon active={profileActive}>
               <span
                 className={cn(
-                  "flex h-7 w-7 items-center justify-center rounded-full transition",
+                  "flex h-[26px] w-[26px] items-center justify-center overflow-hidden rounded-full transition",
                   // No avatar → the plain person glyph, no colored tile behind
                   // it (owner, 2026-07-16). It follows the same active/inactive
                   // contrast as every other tab rather than sitting on a blue
@@ -467,7 +392,7 @@ export function MobileNav({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
                 ) : (
-                  <FrenzPersonSolid className={cn("h-[26px] w-[26px]", profileActive ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
+                  <FrenzPersonSolid className={cn("h-6 w-6", profileActive ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
                 )}
               </span>
             </PressIcon>
@@ -535,7 +460,6 @@ function NavTab({
   active,
   badge = 0,
   onWarm,
-  attract = false,
   prefetch,
 }: {
   label: string;
@@ -545,14 +469,6 @@ function NavTab({
   active: boolean;
   badge?: number;
   onWarm?: (href: string) => void;
-  /**
-   * Draw attention to this tab with the shared `attract-loop` pulse (owner,
-   * 2026-08-24). Pure CSS — a 15s cycle whose first 2s are a delay and whose
-   * movement occupies about a second, so nothing is scheduled between pulses.
-   * Suppressed while the tab is ACTIVE by the call site: animating the page
-   * someone is already on is noise.
-   */
-  attract?: boolean;
   /** Passed to the Link; `false` suppresses the viewport prefetch. */
   prefetch?: boolean;
 }) {
@@ -568,7 +484,7 @@ function NavTab({
         haptic("light");
         playSound("tap");
       }}
-      className="relative flex min-w-[3.5rem] flex-col items-center justify-center gap-0.5 px-1.5 py-0.5"
+      className={TAB_CLASS}
     >
       <NavLift active={active}>
         <PressIcon active={active} className="relative">
@@ -582,14 +498,13 @@ function NavTab({
             "when the page just opens". Removing the active glyph's drop-shadow
             earlier the same day left this one behind, so the bar still glowed.
 
-            The `attract-loop` pulse on the glyph itself is KEPT: it is a small
-            scale movement, not a glow, and it is the part that does the job the
-            attract state was added for. The complaint was about the colour
-            bleeding onto the bar, and that is what has been removed.
+            The `attract-loop` pulse on the glyph went too (2026-10-09: "avoid
+            … bouncing icons"): a 15 s loop that never stopped while the Feed tab
+            was inactive, on a bar that is on screen on every page.
           */}
-          <Glyph strokeWidth={2.1} className={cn("h-[26px] w-[26px] transition-colors", active ? GLYPH_ACTIVE : GLYPH_INACTIVE, attract && "attract-loop")} />
+          <Glyph strokeWidth={2.1} className={cn("h-6 w-6 transition-colors", active ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
           {badge > 0 ? (
-            <span className="absolute -right-3 -top-2 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-card">
+            <span className="absolute -right-3 -top-2 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-white dark:ring-slate-900">
               {badge > 9 ? "9+" : badge}
             </span>
           ) : null}

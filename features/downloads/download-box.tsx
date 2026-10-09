@@ -2,10 +2,9 @@
 
 import { ClipboardPaste, Loader2, Search, X } from "lucide-react";
 import dynamic from "next/dynamic";
-import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { SupportedPlatforms } from "@/components/landing/supported-platforms";
-import { AdSurface } from "@/features/monetization/ad-surface";
 import { PreparingAd } from "@/features/monetization/preparing-ad";
 import { MultiLinkButton } from "@/features/downloader/multi-link/multi-link-button";
 import { DEFAULT_MULTI_LINK_PUBLIC, type MultiLinkPublicConfig } from "@/lib/downloads/multi-link-config";
@@ -23,10 +22,10 @@ import { pickFormat } from "@/lib/download-hub/context";
 /* `BRAND_ICONS`, `FLAGSHIP_IDS` and `PLATFORMS` are gone with the hand-rolled
    strip above — the shared `SupportedPlatforms` owns the marks now. Only
    `detectPlatform` is still needed, for the live "Detected …" line. */
-import { detectPlatform } from "@/lib/platforms";
+import { detectPlatform, platformLinkPhrase } from "@/lib/platforms";
 import { cn } from "@/lib/utils";
 import { sourceUrlSchema } from "@/lib/validation";
-import type { MediaKind } from "@/types";
+import type { MediaKind, PlatformId } from "@/types";
 
 /*
   🔴 CODE-SPLIT, ALL OF IT (owner, 2026-08-16: "make the download page…
@@ -139,6 +138,13 @@ export function DownloadBox({
 } = {}) {
   const onCard = surface === "card";
   const [url, setUrl] = useState("");
+  /*
+    A platform tile names itself in the placeholder (Download page refinement,
+    2026-10-09: "all icons interactive"). `null` is the default short line.
+  */
+  const [picked, setPicked] = useState<string | null>(null);
+  const [morePlatforms, setMorePlatforms] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const { status, metadata, error, fetchMetadata, reset } = useDownloader();
   const [justQueued, setJustQueued] = useState(false);
@@ -269,6 +275,37 @@ export function DownloadBox({
     reset();
   };
 
+  const pickPlatform = useCallback((id: PlatformId) => {
+    setPicked(platformLinkPhrase(id));
+    inputRef.current?.focus();
+  }, []);
+  const toggleMore = useCallback(() => setMorePlatforms((v) => !v), []);
+
+  /*
+    🔴 NOTHING BELOW THE INPUT RE-RENDERS WHILE SOMEONE TYPES.
+
+    `url` is local state, so every keystroke renders this component — and it
+    used to render the Multi-Link card (with its entitlements hook) and all nine
+    platform tiles with it, and run `detectPlatform` twice. The two blocks are
+    built once per real change of their own inputs instead, and the platform is
+    detected once per URL.
+  */
+  const multiLinkBlock = useMemo(() => <MultiLinkButton config={multiLink} surface={surface} />, [multiLink, surface]);
+  const platformsStrip = useMemo(
+    () => (
+      <SupportedPlatforms
+        surface={onCard ? "light" : "onGradient"}
+        className="mt-4"
+        statuses={platformStatus}
+        onPick={pickPlatform}
+        expanded={morePlatforms}
+        onToggleMore={toggleMore}
+      />
+    ),
+    [onCard, platformStatus, pickPlatform, morePlatforms, toggleMore],
+  );
+  const detected = useMemo(() => (url ? detectPlatform(url) : null), [url]);
+
   return (
     <div className="w-full">
       {/*
@@ -307,8 +344,14 @@ export function DownloadBox({
         rather than its hero. On the landing, ad slots now begin below the hero,
         at the section breaks.
       */}
-      <form onSubmit={onSubmit} className={cn("rounded-2xl p-1.5 ring-1 ring-inset", onCard ? "bg-secondary/40 ring-border/60" : "bg-white/10 ring-white/15 backdrop-blur")}>
-        <div className="flex flex-col gap-2 sm:flex-row">
+      {/*
+        On the card the form draws no box of its own (Download page refinement,
+        2026-10-09: "clean white card, avoid nested containers") — the grey well
+        it used to sit in was a third frame inside the card and the input's own
+        gradient rim. The hero keeps its glass well: there it is the ground.
+      */}
+      <form onSubmit={onSubmit} className={cn(onCard ? "" : "rounded-2xl bg-white/10 p-1.5 ring-1 ring-inset ring-white/15 backdrop-blur")}>
+        <div className={cn("flex flex-col sm:flex-row", onCard ? "gap-3" : "gap-2")}>
           {/*
             🔴 THE PURPLE STRIPE GOES AROUND THE PLACEHOLDER (owner, 2026-08-11:
             "the stripe … is supposed to be around this placeholder and not the
@@ -336,14 +379,28 @@ export function DownloadBox({
             anyone can see, and this is the primary control on the page.
           */}
           <div className="relative flex-1 rounded-[0.9rem] bg-gradient-to-r from-blue-500 via-violet-500 to-purple-500 p-0.5 transition focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-1 focus-within:ring-offset-transparent">
+            {/*
+              The short placeholder (Download page refinement, 2026-10-09): the old
+              line listed four platforms and was cut off mid-word on every phone.
+              The platforms are in the grid below; this only says what to do.
+              `text-base` (16 px) is load-bearing: anything smaller makes iOS
+              Safari zoom the page when the field takes focus. Only the
+              PLACEHOLDER is set at 15 px — that does not trigger the zoom — so
+              the whole line fits beside the Paste button on a 390 px phone.
+            */}
             <input
+              ref={inputRef}
               type="url"
               inputMode="url"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="go"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="Paste any link here (TikTok, Instagram, X, Facebook…)"
-              aria-label="Video URL"
-              className={`h-[3.25rem] w-full rounded-[0.7rem] bg-background px-4 ${url ? "pr-36" : "pr-24"} text-base text-foreground outline-none`}
+              placeholder={picked ? `Paste ${picked}...` : "Paste a video or image link..."}
+              aria-label="Video or image link"
+              className={`h-[3.25rem] w-full rounded-[0.7rem] bg-background px-4 ${url ? "pr-36" : "pr-[6.25rem]"} text-base text-foreground outline-none text-ellipsis placeholder:text-[15px] placeholder:text-slate-400 dark:placeholder:text-white/40`}
             />
             <div className="absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
               {url ? (
@@ -372,17 +429,23 @@ export function DownloadBox({
                   <X className="h-4 w-4" strokeWidth={2.75} />
                 </button>
               ) : null}
-              <button type="button" onClick={handlePaste} className="inline-flex items-center gap-1.5 rounded-lg bg-secondary px-3 py-2 text-sm font-medium text-foreground transition hover:bg-secondary/70">
-                <ClipboardPaste className="h-4 w-4" /> Paste
+              <button
+                type="button"
+                onClick={handlePaste}
+                aria-label="Paste link from clipboard"
+                className="inline-flex h-9 items-center gap-1.5 rounded-[0.6rem] bg-white px-2.5 text-sm font-semibold text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.08)] ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:bg-white/10 dark:text-white dark:ring-white/15 dark:hover:bg-white/15"
+              >
+                <ClipboardPaste className="h-4 w-4" aria-hidden /> Paste
               </button>
             </div>
           </div>
           <button
             type="submit"
             disabled={isBusy}
-            className="inline-flex h-14 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-7 text-base font-semibold text-white shadow-lg transition hover:opacity-95 active:scale-[0.98] disabled:opacity-60"
+            aria-busy={isBusy || undefined}
+            className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-7 text-[17px] font-semibold text-white shadow-[0_10px_22px_-12px_rgba(79,70,229,0.75)] transition hover:opacity-95 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:opacity-60"
           >
-            {isBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />} Save
+            {isBusy ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <Search className="h-5 w-5" aria-hidden />} Save
           </button>
         </div>
       </form>
@@ -412,7 +475,7 @@ export function DownloadBox({
         untouched: this adds a capability beside it, it does not wrap or replace
         it.
       */}
-      <MultiLinkButton config={multiLink} surface={surface} />
+      {multiLinkBlock}
 
       {validationError || error ? (
         <p role="alert" className={cn("mt-2 text-sm font-medium", onCard ? "text-rose-500" : "text-rose-300")}>{validationError ?? error}</p>
@@ -447,21 +510,21 @@ export function DownloadBox({
         the downloads dashboard it sits on a card, in the hero it sits on the
         purple gradient, and the label needs different ink for each.
       */}
-      <SupportedPlatforms surface={onCard ? "light" : "onGradient"} className="mt-4" statuses={platformStatus} />
+      {platformsStrip}
 
       {/* The detected-platform confirmation stays — it is live feedback about the
           URL the visitor just pasted, not part of the static strip, and folding
           it into the shared component would put a downloader concern inside a
           marketing one. */}
-      {url && detectPlatform(url).id !== "generic" ? (
+      {detected && detected.id !== "generic" ? (
         <p className={cn("mt-2 text-xs font-medium", onCard ? "text-foreground" : "text-white/80")}>
-          Detected {detectPlatform(url).name}
+          Detected {detected.name}
         </p>
       ) : null}
       {/* Telegram is genuinely slower (authenticated MTProto, not a plain CDN
           pull) — see the identical note in features/downloader/downloader.tsx,
           the other surface this same warning lives on. */}
-      {url && detectPlatform(url).id === "telegram" ? (
+      {detected?.id === "telegram" ? (
         <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-400">
           Telegram downloads can take up to a minute to prepare — that&apos;s normal.
         </p>

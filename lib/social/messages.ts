@@ -1279,16 +1279,29 @@ export function countUnread(
 }
 
 /** A user's inbox, pinned first then newest. */
-export async function listConversations(userId: string): Promise<ConversationSummary[]> {
+export async function listConversations(
+  userId: string,
+  /**
+   * Only these conversations (2026-10-09: "each message triggering a full inbox
+   * refetch"). The live inbox asks for just the rows a realtime event touched;
+   * every query below is keyed on the membership rows, so this rebuilds those
+   * few summaries with exactly the same rules (visibility, hidden, secret,
+   * receipts, unread) instead of the whole inbox. Membership is still read with
+   * `user_id = userId`, so an id the viewer is not in simply returns nothing.
+   */
+  opts: { onlyIds?: string[] } = {},
+): Promise<ConversationSummary[]> {
   if (!hasSupabase) return [];
+  if (opts.onlyIds && opts.onlyIds.length === 0) return [];
   try {
     const db = createAdminClient();
-    const { data: memberships } = await db
+    let membershipQuery = db
       .from("conversation_members")
       .select("conversation_id, muted, archived, pinned, hidden_at")
       .eq("user_id", userId)
-      .is("left_at", null)
-      .limit(200);
+      .is("left_at", null);
+    if (opts.onlyIds) membershipQuery = membershipQuery.in("conversation_id", opts.onlyIds);
+    const { data: memberships } = await membershipQuery.limit(200);
     const mrows = (memberships ?? []) as { conversation_id: string; muted: boolean; archived: boolean; pinned: boolean; hidden_at: string | null }[];
     if (mrows.length === 0) return [];
     const convIds = mrows.map((m) => m.conversation_id);

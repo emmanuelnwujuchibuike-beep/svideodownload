@@ -136,7 +136,9 @@ describe("the dashboard", () => {
     expect(u).toContain("const wallet = useWallet();");
     const w = code("features/ai/wallet/use-wallet.ts");
     expect(w).toContain("table: \"ai_product_balances\", filter: `user_id=eq.${uid}`");
-    expect(w).toContain("return () => void supabase.removeChannel(channel);");
+    expect(w).toContain("close = () => void supabase.removeChannel(channel);");
+    // the realtime client loads on demand, never on the landing's first load
+    expect(w).toContain('void import("@/lib/supabase/client")');
   });
   it("cache-first: re-entry paints the kept copy; history re-read only when the balance moved or it is old", () => {
     const p = code("features/ai/wallet/transfer-panel.tsx");

@@ -204,12 +204,22 @@ export function AiJobAlert() {
       }, VISIBLE_MS);
     };
 
+    // Part 9 (2026-10-09): one poll chain only. tick() is also called by the
+    // "job started" and "visible again" events; those used to start a SECOND
+    // chain beside a pending timer, and each such event added another.
+    let inFlight = false;
     const tick = async () => {
-      timer.current = null;
-      if (cancelled || document.visibilityState !== "visible") return;
+      if (timer.current) {
+        clearTimeout(timer.current);
+        timer.current = null;
+      }
+      if (cancelled || inFlight || document.visibilityState !== "visible") return;
+      inFlight = true;
 
       // Every tool's jobs: the alert announces a finished job whatever made it.
-      const res = await listAiJobs({ limit: 5 });
+      const res = await listAiJobs({ limit: 5 }).finally(() => {
+        inFlight = false;
+      });
       if (cancelled || !res.ok) {
         // A failed poll is not a finished job. Keep watching if we were.
         if (watching.current.size > 0) schedule();

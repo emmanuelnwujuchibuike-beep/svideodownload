@@ -25,7 +25,7 @@ export const AD_FORMAT_CODES = [
 ] as const;
 export type AdFormatCode = (typeof AD_FORMAT_CODES)[number];
 
-/** Placements — where an ad is shown. Seeded by 0195 (`history_grid` by 0206). An admin may add rows, so the payload accepts any code. */
+/** Placements — where an ad is shown. Seeded by 0195 (`history_grid` by 0207). An admin may add rows, so the payload accepts any code. */
 export const AD_PLACEMENT_CODES = [
   "global_top_banner",
   "feed_banner",
@@ -40,7 +40,7 @@ export const AD_PLACEMENT_CODES = [
   // 0203: the HD and batch download reward gates
   "hd_download_reward",
   "batch_download_reward",
-  // 0206: the History grid tile
+  // 0207: the History grid tile
   "history_grid",
 ] as const;
 export type AdPlacementCode = (typeof AD_PLACEMENT_CODES)[number];
@@ -72,6 +72,8 @@ export const AD_EVENT_TYPES = [
   // 0201 (owner, 2026-10-09): the ad's details opened on Frenzsave, and the visit after the external-link warning
   "conversion",
   "outbound",
+  // 0206 (Part 8): the creative's media failed to load - counted apart, never an impression
+  "load_failed",
 ] as const;
 export type AdEventType = (typeof AD_EVENT_TYPES)[number];
 

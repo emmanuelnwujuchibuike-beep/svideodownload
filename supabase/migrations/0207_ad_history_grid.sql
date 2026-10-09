@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
---  0206 — a paid ad tile in the History grid (2026-10-09)
+--  0207 — a paid ad tile in the History grid (2026-10-09)
 -- ═══════════════════════════════════════════════════════════════════════════
 --
 -- Owner: "Add an ad slot in the history grid, that stays like a history post

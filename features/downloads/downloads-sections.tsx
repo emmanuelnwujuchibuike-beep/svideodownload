@@ -26,7 +26,6 @@ import { QUICK_ACTIONS } from "@/features/downloads/quick-actions";
 import { estimateBytes, limitForPlan, totalUsedBytes } from "@/features/history/usage";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { DownloadRecord } from "@/types";
-import { PromoteBubbleLazy } from "@/features/downloads/promote-bubble-lazy";
 import type { ReactNode } from "react";
 import { cn, formatBytes, formatCompactNumber } from "@/lib/utils";
 
@@ -75,7 +74,7 @@ import { cn, formatBytes, formatCompactNumber } from "@/lib/utils";
  * asked that nothing be removed, and it never rendered on a phone anyway, which
  * is why it is absent from the reference.
  */
-export function DownloadsHero({ trailing, headline = true }: { trailing?: ReactNode; headline?: boolean } = {}) {
+export function DownloadsHero({ trailing, headline = true, subtitle = true }: { trailing?: ReactNode; headline?: boolean; subtitle?: boolean } = {}) {
   return (
     <section className="relative px-1 pt-1">
       {/*
@@ -116,10 +115,13 @@ export function DownloadsHero({ trailing, headline = true }: { trailing?: ReactN
                 {/* inset to the header's right-hand controls above it (owner, 2026-10-08: "shift too far out of the edge") */}
                 {trailing ? <div className="mr-3 shrink-0">{trailing}</div> : null}
               </div>
+              {/* /downloads keeps the line but not this paragraph (owner, 2026-10-08 / 2026-10-09) */}
+              {subtitle ? (
               <p className="mt-2.5 max-w-md text-pretty text-sm leading-relaxed text-slate-600 dark:text-white/70">
                 Save from the platforms you already use, discover what people share, and create with AI — all in{" "}
                 <span className="font-medium text-blue-600 dark:text-blue-300">one super app.</span>
               </p>
+              ) : null}
             </>
           ) : (
             <h1 className="sr-only">Download</h1>
@@ -157,8 +159,9 @@ export function DownloadsHero({ trailing, headline = true }: { trailing?: ReactN
             promote card, and move the fast secure private downward" — the pill is
             now `TrustPills`, rendered under the paste box (download-page-core).
           */}
-          {/* 2026-10-09 (owner): the promote card became a floating, draggable side bubble, loaded when the page is idle */}
-          <PromoteBubbleLazy />
+          {/* The Promote button is no longer here: it is fixed beside the credits card on
+              /downloads and beside "Install Frenz" in the landing header (owner,
+              2026-10-09: "remove the movement") — see promote-button.tsx. */}
         </div>
 
         {/* The reference's cloud illustration, drawn rather than shipped as an

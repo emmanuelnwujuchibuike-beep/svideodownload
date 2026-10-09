@@ -37,7 +37,9 @@ export function AppContent({
         canvas && "frenz-canvas-page",
       )}
     >
-      <main className="min-w-0 flex-1 pb-24 pt-4 lg:pb-6">{children}</main>
+      {/* Clears the floating nav: its height + gap (`--frenz-nav-clearance`) and
+          1.5rem of air, so the last card never sits under the pill. */}
+      <main className="min-w-0 flex-1 pb-[calc(var(--frenz-nav-clearance)+1.5rem)] pt-4 lg:pb-6">{children}</main>
       {rightRail}
     </div>
   );

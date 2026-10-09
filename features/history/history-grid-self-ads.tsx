@@ -14,7 +14,7 @@ const SelfAdBanner = dynamic(() => import("@/features/ads-platform/serve/self-ad
  *
  * Three downloads, then one ad: the ad is the 4th, 8th, 12th… square of each
  * section, a grid cell like any other, so the grid's columns and gaps never
- * change. Slot `history_grid`, placement `history_grid` (migration 0206) — an
+ * change. Slot `history_grid`, placement `history_grid` (migration 0207) — an
  * advertiser picks it in /advertise once an admin has priced it.
  *
  * 🔴 Paid only, and nothing without a live campaign: no empty square, no

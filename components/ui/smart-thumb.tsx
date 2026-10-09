@@ -2,6 +2,7 @@
 
 import { type ReactNode, useState } from "react";
 
+import { isImageSeen, markImageSeen } from "@/components/ui/stable-avatar";
 import { cn } from "@/lib/utils";
 
 /**
@@ -56,6 +57,21 @@ export function SmartThumb({
       grid tile that already fades in.
     */
     // eslint-disable-next-line @next/next/no-img-element -- external CDNs; next/image 403s on this project's media hosts
-    <img src={src} alt={alt} loading="lazy" decoding="async" onError={() => setBroken(true)} className={className} />
+    /*
+      🔴 …BUT NOT FOR A TILE ALREADY SEEN (owner, 2026-10-09: "History Medias …
+      reloads on every page entry"). Re-entering History remounts every tile;
+      lazy + async then made each one wait and decode after first paint, so the
+      grid flashed empty on every visit. A thumbnail that has already decoded in
+      this tab now renders eager + sync and paints in the frame it mounts.
+    */
+    <img
+      src={src}
+      alt={alt}
+      loading={isImageSeen(src) ? "eager" : "lazy"}
+      decoding={isImageSeen(src) ? "sync" : "async"}
+      onLoad={(e) => markImageSeen(src, e.currentTarget)}
+      onError={() => setBroken(true)}
+      className={className}
+    />
   );
 }

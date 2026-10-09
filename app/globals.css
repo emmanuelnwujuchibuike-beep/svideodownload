@@ -433,11 +433,20 @@
   .frenz-inbox-page {
     background-image: radial-gradient(circle at 100% 0%, hsl(var(--brand-blue) / 0.06), transparent 28%);
   }
-  /* The floating mobile nav's own box + bottom offset — the SAME expression the
-     nav itself uses (mobile-nav.tsx) and the messages layout reserves. Named
-     once here so the three can't drift. */
+  /* The floating mobile nav (2026-10-09): its fixed height, the gap under it,
+     and the two added together — the room every page, the messages layout and
+     the inbox reserve so nothing ends up under the pill. Named once here so the
+     nav (mobile-nav.tsx) and the surfaces that clear it can't drift.
+
+     The gap keeps the pill just clear of the home indicator without floating
+     high (owner, 2026-10-09: "it shouldn't float much too high"). The iPhone
+     inset (~34px) reserves far more than the indicator itself — a 5px bar
+     ~8px off the bottom — so the pill sits 12px INSIDE the inset (~22px up,
+     ~9px above the bar), and 8px up on phones with no inset. */
   :root {
-    --frenz-nav-clearance: calc(4.3125rem + max(calc(env(safe-area-inset-bottom) - 10px), 0.375rem));
+    --frenz-nav-height: 3.875rem;
+    --frenz-nav-gap: max(0.5rem, calc(env(safe-area-inset-bottom) - 0.75rem));
+    --frenz-nav-clearance: calc(var(--frenz-nav-height) + var(--frenz-nav-gap));
   }
   /* Top safe-area inset, used by every top chrome (app topbar, marketing header,
      inbox chrome, buttons/icons/logos, reel controls) via var(--frenz-safe-top).
@@ -500,16 +509,20 @@
   .frenz-nav-bleed {
     margin-bottom: calc(-1 * var(--frenz-nav-clearance));
   }
+  /* + 0.75rem of air (2026-10-09): flush against the floating pill, the last
+     row read as tucked under it. */
   .frenz-nav-pad {
-    padding-bottom: var(--frenz-nav-clearance);
+    padding-bottom: calc(var(--frenz-nav-clearance) + 0.75rem);
   }
   @media (min-width: 1024px) {
     .frenz-nav-bleed { margin-bottom: 0; }
     .frenz-nav-pad { padding-bottom: 0; }
   }
+  /* The inbox search pill (2026-10-09 reference): a light grey hairline and one
+     faint contact shadow — no inset gloss, no glass. */
   .frenz-inbox > label input {
-    border: 1px solid hsl(var(--border) / 0.52);
-    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.25), 0 8px 20px -20px hsl(230 30% 12% / 0.3);
+    border: 1px solid hsl(var(--border) / 0.9);
+    box-shadow: 0 1px 2px hsl(230 30% 12% / 0.05);
   }
   /* The inbox header circles (owner, 2026-10-08: "more premium, glassy, bolder a bit,
      but light weight … respond instantly like the earn button"). Pure CSS, with one
@@ -521,8 +534,9 @@
     background:
       linear-gradient(180deg, hsl(0 0% 100% / 0.92), hsl(0 0% 100% / 0.62)) padding-box,
       linear-gradient(180deg, hsl(0 0% 100% / 0.95), hsl(230 30% 70% / 0.35)) border-box;
-    backdrop-filter: blur(10px) saturate(1.4);
-    -webkit-backdrop-filter: blur(10px) saturate(1.4);
+    /* No backdrop-filter (2026-10-09): these sit on the header's solid
+       background, so a blur behind them had nothing to blur and only cost a
+       GPU layer per button. The gradient fill keeps the same look. */
     box-shadow:
       inset 0 1px 0 hsl(0 0% 100% / 0.9),
       0 1px 2px hsl(230 30% 12% / 0.08),
@@ -896,6 +910,56 @@
   .ai-glass--pill { --ai-glass-fill: 0.75; }
   .ai-glass--bar { --ai-glass-fill: 0.8; }
 
+  /* ── The floating glass bottom nav (2026-10-09) ────────────────────────────
+     "A genuinely floating Instagram/WhatsApp-inspired glass bottom navigation
+     with visible left and right margins." One pill, inset from both edges, over
+     the page — never a full-width bar, never a full-width backing behind it.
+
+     It rides the SAME four tiers as `.ai-glass` — its declarations sit inside
+     the tier rules below, beside the AI surfaces' own — with the same rules:
+     equal specificity (`html` inside `:where()`), so the most conservative tier
+     wins by source order; the fill is a variable, never alpha arithmetic.
+
+       1. Full glass      12px blur + saturate, a 72% fill
+       2. Reduced glass   6px blur, 86% fill — reduced motion, or a
+                          constrained device (`data-glass="reduced"`, written
+                          by useAiGlassTier: <= 2 GiB or <= 2 cores)
+       3. Translucent     no backdrop-filter support: 94% fill
+       4. Solid           reduced transparency / more contrast: opaque
+
+     Nothing here animates: no blur radius, shadow or fill ever transitions, so
+     the only per-frame cost is the browser re-sampling a ~360x64 strip of page
+     under the blur while it scrolls. */
+  .frenz-nav-glass {
+    --nav-glass-rgb: 255 255 255;
+    --nav-glass-fill: 0.72;
+    --nav-glass-blur: 12px;
+    background-color: rgb(var(--nav-glass-rgb) / var(--nav-glass-fill));
+    -webkit-backdrop-filter: blur(var(--nav-glass-blur)) saturate(160%);
+    backdrop-filter: blur(var(--nav-glass-blur)) saturate(160%);
+    border: 1px solid rgb(255 255 255 / 0.65);
+    box-shadow:
+      0 10px 30px -12px rgb(15 23 42 / 0.28),
+      0 1px 2px rgb(15 23 42 / 0.06),
+      inset 0 1px 0 rgb(255 255 255 / 0.7);
+  }
+  /* Theme and surface set the COLOUR only, never the fill: these selectors are
+     more specific than the tiers below, so a fill here would defeat them. */
+  .dark .frenz-nav-glass {
+    --nav-glass-rgb: 15 18 32;
+    border-color: rgb(255 255 255 / 0.1);
+    box-shadow:
+      0 12px 32px -12px rgb(0 0 0 / 0.6),
+      inset 0 1px 0 rgb(255 255 255 / 0.06);
+  }
+  /* Over full-bleed video (/reels): dark glass whatever the theme, so the white
+     glyphs read on any frame. */
+  .frenz-nav-glass.frenz-nav-glass--immersive {
+    --nav-glass-rgb: 8 8 12;
+    border-color: rgb(255 255 255 / 0.12);
+    box-shadow: 0 10px 30px -12px rgb(0 0 0 / 0.7);
+  }
+
   /* 2 · Reduced glass — reduced motion (OS unless overridden in-app, or
      in-app), or a low-power device flagged by `data-glass="reduced"`. */
   @media (prefers-reduced-motion: reduce) {
@@ -903,16 +967,27 @@
       --ai-glass-fill: 0.82;
       --ai-glass-blur: 4px;
     }
+    :where(html:not([data-a11y-motion="full"])) .frenz-nav-glass {
+      --nav-glass-fill: 0.86;
+      --nav-glass-blur: 6px;
+    }
   }
   :where(html[data-a11y-motion="reduce"], html[data-glass="reduced"]) .ai-glass {
     --ai-glass-fill: 0.82;
     --ai-glass-blur: 4px;
+  }
+  :where(html[data-a11y-motion="reduce"], html[data-glass="reduced"]) .frenz-nav-glass {
+    --nav-glass-fill: 0.86;
+    --nav-glass-blur: 6px;
   }
 
   /* 3 · Translucent — no backdrop-filter at all. */
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     .ai-glass {
       --ai-glass-fill: 0.9;
+    }
+    .frenz-nav-glass {
+      --nav-glass-fill: 0.94;
     }
   }
 
@@ -923,9 +998,19 @@
       -webkit-backdrop-filter: none;
       backdrop-filter: none;
     }
+    .frenz-nav-glass {
+      --nav-glass-fill: 1;
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
   }
   :where(html[data-a11y-transparency="reduce"], html[data-a11y-contrast="high"]) .ai-glass {
     --ai-glass-fill: 1;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  :where(html[data-a11y-transparency="reduce"], html[data-a11y-contrast="high"]) .frenz-nav-glass {
+    --nav-glass-fill: 1;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
@@ -1145,10 +1230,10 @@
     flex-shrink: 0;
     align-items: center;
     gap: 0.3rem;
-    min-height: 2.25rem;
-    padding: 0 0.85rem;
+    min-height: 2rem;
+    padding: 0 0.8rem;
     border-radius: 9999px;
-    font-size: 12.5px;
+    font-size: 12px;
     font-weight: 600;
     color: #3b4fd8;
     background-image: linear-gradient(100deg, rgba(219, 234, 254, 0.9), rgba(237, 233, 254, 0.95));
@@ -4294,90 +4379,12 @@ html.dark .streak-recover {
   color: hsl(var(--muted-foreground));
 }
 
-  /* ── The Frenz AI tile's ambient field ─────────────────────────
-     Owner, 2026-09-08: "the wallpaper button should be gradient ai ambient
-     background that feels alive and move just like gemini, dont use an image in
-     the ai button."
-
-     🔴 REWRITTEN 2026-09-08 — "and is just static it doesnt move".
-
-     It was NOT static. Measured on production the same day, on a real Pixel 7
-     with no reduced-motion preference:
-
-         t+0.0s   matrix(1.09733, 0, 0, 1.09733, -10.5472, -6.83115)
-         t+2.5s   matrix(1.18418, 0, 0, 1.18418,  11.4938,  8.62492)
-
-     Running, compositing, moving. It was IMPERCEPTIBLE, which for an effect
-     whose entire job is to feel alive is the same thing as broken — the owner
-     is right and the measurement is beside the point.
-
-     Why you could not see it: each blob was 150% of the tile with a very soft
-     `closest-side` falloff, so 22px of travel moved a huge diffuse field by
-     under a tenth of its own radius. A big soft thing nudged slightly looks
-     identical to a big soft thing standing still.
-
-     Three changes, none of which cost a frame more than before:
-
-       · SMALLER blobs (130-135%, was 150%) and BIGGER travel (±18%, was ±8%)
-         with a wider scale swing — so displacement is a large fraction of the
-         blob rather than a rounding error;
-       · FASTER cycles: 13s / 17s / 23s, still co-prime so the trio never
-         visibly repeats, but roughly half the old period;
-       · blob C has THREE stops instead of two, so it travels a circuit rather
-         than sliding back and forth along one line. A two-stop translate always
-         reads as a pendulum; the thing that makes Gemini’s field read as alive
-         is that no element retraces its own path.
-
-     🔴 THE BUDGET IS UNCHANGED, AND IT IS THE HARD PART.
-
-     This sits on the landing page — 1.6s target — and this feature has already
-     made the app unresponsive twice today. So: THREE elements, each animating
-     `transform` and NOTHING else. No filter, no background-position, no
-     box-shadow, no `backdrop-blur` anywhere near it. Transform is composited,
-     so the main thread never sees a frame of this, and the softness comes from
-     the gradient's own falloff, which is painted once. Three composited layers
-     the size of one tile is nothing; three blurred ones would not be. */
-  @keyframes frenz-ai-ambient-a {
-    0%,
-    100% { transform: translate3d(-14%, -10%, 0) scale(1); }
-    50%  { transform: translate3d(16%, 14%, 0) scale(1.35); }
-  }
-
-  @keyframes frenz-ai-ambient-b {
-    0%,
-    100% { transform: translate3d(18%, 12%, 0) scale(1.3); }
-    50%  { transform: translate3d(-16%, -14%, 0) scale(0.95); }
-  }
-
-  /* Three stops: a circuit, not a pendulum. */
-  @keyframes frenz-ai-ambient-c {
-    0%,
-    100% { transform: translate3d(-6%, 18%, 0) scale(1.15); }
-    33%  { transform: translate3d(20%, -14%, 0) scale(0.9); }
-    66%  { transform: translate3d(-18%, -4%, 0) scale(1.3); }
-  }
-
-  .frenz-ai-ambient-a {
-    animation: frenz-ai-ambient-a 13s ease-in-out infinite;
-    animation-play-state: var(--ai-play, running);
-  }
-  .frenz-ai-ambient-b {
-    animation: frenz-ai-ambient-b 17s ease-in-out infinite;
-    animation-play-state: var(--ai-play, running);
-  }
-  .frenz-ai-ambient-c {
-    animation: frenz-ai-ambient-c 23s ease-in-out infinite;
-    animation-play-state: var(--ai-play, running);
-  }
-
-  /* The battery rule, verified in a browser rather than assumed. */
-  @media (prefers-reduced-motion: reduce) {
-    .frenz-ai-ambient-a,
-    .frenz-ai-ambient-b,
-    .frenz-ai-ambient-c {
-      animation: none !important;
-    }
-  }
+  /* ── The Frenz AI tile's ambient field — REMOVED 2026-10-09 ─────────────
+     Three tile-sized radial gradients drifted here on 13/17/23-second infinite
+     loops. The Download page refinement ("avoid large, continuously animated
+     gradients … minimal CPU/GPU activity") replaced them with one still wash
+     painted inline on the tile (features/downloads/frenz-ai-cta.tsx). Do not
+     bring back a never-ending animation on an always-visible tile. */
 
 /* ── Character Replace trim handles ─────────────────────────────────────────
    Two <input type="range"> elements share one track. The inputs themselves

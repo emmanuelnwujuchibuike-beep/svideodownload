@@ -29,5 +29,7 @@ export async function GET(request: Request) {
     filtered ? Promise.resolve([]) : listNewSounds(20),
   ]);
 
-  return NextResponse.json({ trending, fresh }, { headers: { "Cache-Control": "private, max-age=15" } });
+  // Part 9 (2026-10-09): public sounds only (admin read, is_public), keyed only by mood/genre in the
+  // URL - the same for everyone, so the CDN answers it for a minute instead of a function per visit.
+  return NextResponse.json({ trending, fresh }, { headers: { "Cache-Control": "public, max-age=15, s-maxage=60, stale-while-revalidate=300" } });
 }

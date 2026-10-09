@@ -2,7 +2,7 @@ import { ArrowRight, Compass, Wand2 } from "lucide-react";
 import Link from "next/link";
 
 import { AiPromoLoader } from "@/features/downloads/ai-promo-loader";
-import { PROMO_FEATURES, promoStages, type AiPromo } from "@/lib/ai/promo/config";
+import { promoStages, type AiPromo } from "@/lib/ai/promo/config";
 import { cn } from "@/lib/utils";
 
 /**
@@ -29,9 +29,8 @@ import { cn } from "@/lib/utils";
  *
  * ── Cheap, because this is a 1.6-second route ───────────────────────────────
  *
- * A server component: no image, no blur, no JavaScript. The ambient field below
- * is three composited transforms — see the note on it for why that number and
- * those properties are the budget rather than a preference.
+ * A server component: no image, no blur, no JavaScript, and (since 2026-10-09)
+ * no animation at rest — see the note on the still field below.
  */
 export function FrenzAICta({
   className,
@@ -136,59 +135,39 @@ export function FrenzAICta({
       style={{ minHeight: "11rem" }}
     >
       {/*
-        ── 🔴 A LIVING AMBIENT FIELD, NOT A PHOTOGRAPH ─────────────────────────
-
-        Owner, 2026-09-08: "the wallpaper button should be gradient ai ambient
-        background that feels alive and move just like gemini, dont use an image
-        in the ai button", then "the ai button blue is too dark, there should be
-        a touch of white background there. and and is just static it doesnt
-        move."
-
-        Three elements, `transform` ONLY — no filter, no background-position, no
-        `backdrop-blur` anywhere near it. Transform is composited, so the main
-        thread never sees a frame of this; the softness is in each gradient's
-        own falloff, which is painted once. See app/globals.css for why the
-        cycles are 13/17/23s and why one of them has three stops.
-
-        That budget is the reason this tile can be elaborate at all: it sits on
-        a route held to 1.6 seconds, and this feature has already made the app
-        unresponsive twice.
+        ── 🔴 A STILL FIELD, NOT A MOVING ONE (Download page refinement,
+        2026-10-09: "avoid large, continuously animated gradients … minimal
+        CPU/GPU activity") ──────────────────────────────────────────────────
+        This was three oversized radial gradients drifting on 13/17/23-second
+        infinite loops (owner, 2026-09-08: "feels alive … just like gemini").
+        Composited, but never idle: three tile-sized layers re-rasterised every
+        frame for as long as the page was open, which is exactly the background
+        work that warms a phone. The same blue, violet and white are now painted
+        ONCE, where the moving blobs spent most of their time — the reference's
+        soft lavender tile. Nothing on this tile runs at rest.
       */}
-      <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-        {/* A — the gloss. The screenshot's bright diagonal sweep, and the
-            owner's "touch of white", as one moving highlight rather than a
-            static wash. */}
-        <span
-          className="frenz-ai-ambient-a absolute -left-1/3 -top-1/3 h-[130%] w-[130%]"
-          style={{
-            background:
-              "radial-gradient(closest-side, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.55) 45%, rgba(255,255,255,0) 76%)",
-          }}
-        />
-        {/* B — electric blue, sweeping up from the lower left. */}
-        <span
-          className="frenz-ai-ambient-b absolute -bottom-1/3 -left-1/4 h-[135%] w-[135%]"
-          style={{
-            background:
-              "radial-gradient(closest-side, rgba(66,133,244,0.30) 0%, rgba(66,133,244,0.10) 46%, transparent 74%)",
-          }}
-        />
-        {/* C — magenta, on the three-stop circuit, anchored top-right where the
-            screenshot puts it. */}
-        <span
-          className="frenz-ai-ambient-c absolute -right-1/3 -top-1/4 h-[135%] w-[135%]"
-          style={{
-            background:
-              "radial-gradient(closest-side, rgba(168,85,247,0.26) 0%, rgba(217,70,239,0.10) 46%, transparent 74%)",
-          }}
-        />
-      </span>
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 dark:hidden"
+        style={{
+          background:
+            "radial-gradient(120% 90% at 0% 100%, rgba(66,133,244,0.18) 0%, transparent 60%), radial-gradient(110% 90% at 100% 0%, rgba(168,85,247,0.20) 0%, rgba(217,70,239,0.08) 45%, transparent 70%), linear-gradient(160deg, #f5f3ff 0%, #eef2ff 55%, #fdf4ff 100%)",
+        }}
+      />
+      {/* The same wash for the dark theme: the hues at night strength on the dark tile. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 hidden dark:block"
+        style={{
+          background:
+            "radial-gradient(120% 90% at 0% 100%, rgba(66,133,244,0.22) 0%, transparent 60%), radial-gradient(110% 90% at 100% 0%, rgba(168,85,247,0.26) 0%, rgba(217,70,239,0.10) 45%, transparent 70%)",
+        }}
+      />
 
       {/*
-        The scrim. Static, painted once, and the only reason white type is safe
-        over a field with a bright gloss loose in it — a screenshot only ever
-        catches one frame of a 13-second cycle, so legibility cannot be checked
-        by looking once.
+        The scrim. Static, painted once: it keeps the title and subtitle on a
+        calm ground at the foot of the tile, and it is what the promotion's
+        media fade in over.
       */}
       <span
         aria-hidden
@@ -196,33 +175,16 @@ export function FrenzAICta({
       />
 
       {/*
-        ── 🔴 THE NEON RING ────────────────────────────────────────────────────
-
-        The one thing the screenshot has that the old tile did not: the wand
-        sits inside a glowing cyan-to-magenta circle rather than on a filled
-        disc.
-
-        Built as a two-element gradient border — a conic-gradient background
-        with 2px of padding, and an inner rounded-full that covers all but the
-        rim. That is deliberately NOT a `mask` or a `filter`: both would make
-        this a repainted layer, and it sits on the landing page. The bloom is
-        two `box-shadow`s, which are painted once and cost nothing thereafter.
-
-        The interior is translucent, so the ambient field drifts THROUGH the
-        ring exactly as it does in the screenshot, while staying dark enough
-        that the white glyph keeps its contrast at every frame.
+        The wand on a solid brand disc (2026-10-09, the improved reference) —
+        the Save button's own blue → violet, with a white rim and one soft
+        shadow. It replaces a cyan-to-magenta conic "neon ring" whose translucent
+        middle only made sense while the ambient field drifted through it.
       */}
       <span
         aria-hidden
-        className="relative z-[1] flex h-[3.1rem] w-[3.1rem] shrink-0 items-center justify-center rounded-full p-[2px] shadow-[0_6px_18px_-6px_rgba(99,102,241,0.55)]"
-        style={{
-          background:
-            "conic-gradient(from 150deg, #22d3ee 0%, #3b82f6 22%, #a855f7 48%, #f0abfc 68%, #38bdf8 86%, #22d3ee 100%)",
-        }}
+        className="relative z-[1] flex h-[3.1rem] w-[3.1rem] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 shadow-[0_8px_18px_-8px_rgba(79,70,229,0.75)] ring-4 ring-white/80 dark:ring-white/10"
       >
-        <span className="flex h-full w-full items-center justify-center rounded-full bg-white dark:bg-[#141a33]">
-          <Wand2 className="h-[1.35rem] w-[1.35rem] text-indigo-600 dark:text-indigo-300" />
-        </span>
+        <Wand2 className="h-[1.35rem] w-[1.35rem] text-white" />
       </span>
 
       {/*
@@ -247,22 +209,13 @@ export function FrenzAICta({
             Frenz <span className="text-gradient">AI</span>
           </span>
           {/*
-            🔴 THE ROTATING TOOL NAME — CSS ONLY (Brief C §2, 2026-10-06).
-            Every name sits in the SAME grid cell, so the cell is as wide as
-            the longest and nothing around it ever moves (no layout shift).
-            One keyframe, written below for exactly this many names; each name
-            is offset by 3 s. No JavaScript, no timer, no re-render. The old
-            line ("Put yourself into your video.") described Character
-            Replace, which is retired.
+            One still line (Download page refinement, 2026-10-09, to the
+            reference: "Create amazing videos with AI"). It was a CSS rotor
+            cycling the five tool names every 3 s, forever — an animation that
+            never stopped for a line most people read once. The tool names live
+            on /ai, one tap away.
           */}
-          <span className="frenz-ai-rotor mt-1 grid text-xs leading-snug text-slate-500 dark:text-white/70">
-            {PROMO_FEATURES.map((name, i) => (
-              <span key={name} className="col-start-1 row-start-1 truncate" style={{ animationDelay: `${i * 3}s` }}>
-                {name}
-              </span>
-            ))}
-          </span>
-          <style>{rotorCss(PROMO_FEATURES.length)}</style>
+          <span className="mt-1 block text-xs leading-snug text-slate-500 dark:text-white/70">Create amazing videos with AI</span>
         </span>
         <span className="flex h-[2.6rem] w-[2.6rem] shrink-0 items-center justify-center rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200/80 transition group-hover:bg-slate-200 dark:bg-white/10 dark:ring-white/15">
           <ArrowRight className="h-[1.05rem] w-[1.05rem] text-slate-700 transition-transform group-hover:translate-x-0.5 dark:text-white" />
@@ -283,20 +236,6 @@ export function FrenzAICta({
  * `aria-hidden` is on the wrapper, not here: the whole decorative layer is
  * hidden from assistive technology in one place.
  */
-/**
- * The rotor keyframe for `n` names, 3 s each: in over 0.3 s, held, out over
- * 0.3 s, then hidden while the other names take their turn. Opacity and a
- * 3 px translate only (composited). Reduced motion: the first name, still.
- */
-function rotorCss(n: number): string {
-  const total = n * 3;
-  const pct = (s: number) => `${((s / total) * 100).toFixed(3)}%`;
-  return (
-    `@keyframes frenz-ai-rotor{0%{opacity:0;transform:translateY(3px)}${pct(0.3)}{opacity:1;transform:none}${pct(2.7)}{opacity:1;transform:none}${pct(3)},100%{opacity:0;transform:translateY(-3px)}}` +
-    `.frenz-ai-rotor>span{opacity:0;animation:frenz-ai-rotor ${total}s linear infinite both}` +
-    `@media (prefers-reduced-motion:reduce){.frenz-ai-rotor>span{animation:none}.frenz-ai-rotor>span:first-child{opacity:1}}`
-  );
-}
 
 function Spark({ className }: { className?: string }) {
   return (

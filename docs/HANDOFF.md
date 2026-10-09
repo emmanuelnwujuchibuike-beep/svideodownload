@@ -14,6 +14,7 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
 | Credit transfers | 0193 + **0199**: the sender chooses non-withdrawable or withdrawable. The amount and the fee come only from that kind, and the recipient receives the same kind. Cashing out still needs the recipient's own approval (0191). The credits page (`/ai/usage`) shows the two kinds apart. The AI and download credit strip keeps the total. Only the 7-argument function exists (`p_class`). 0202 re-applies its revoke/grant. |
 
 | One experience | Since 2026-10-09 there is no Full Bleed / Downloader mode. The `frenz_mode` cookie, the switcher and the switch prompt are gone. Members' bottom nav: Home (`/downloads`), Feed (`/home`, the complete feed), History, Chats, Profile. Guests: Home, Earn (`/quests`), History, Support, Profile. Every tab has a label. |
+| Download page + nav (2026-10-09) | The download page follows the improved reference (compact credits card counted in K/M, one-row Multi-Link card, 5-column platform grid with "+", static Frenz AI tile, Promote button docked beside the credits card). The bottom nav is a **floating glass pill** everywhere (14px side margins, max 560px, `--frenz-nav-gap` just above the home indicator); every surface reserves `--frenz-nav-clearance`. Members' Support moved into the profile menu footer beside the theme toggle. Measured cold entry (slow 4G, 4x CPU, local server): landing LCP ~1.3s, download page body ~1.2s — real TTFB and /downloads' server reads come on top. Inline layout scripts/styles ship comment-free (`lib/perf/inline-min.ts`). |
 | Chat streaks | 0200 `conversation_streaks`, kept by a trigger on `messages`. A day counts when BOTH people sent a message (UTC). The flame shows beside a chat from 2 days. The streak left the site and app headers. Every streak celebration is the card-less `StreakFireBurst`. |
 
 | Tokens / Credits | In the credits dashboard and the send sheet, the non-withdrawable part is **Tokens** (hexagon) and the withdrawable part is **Credits** (gem). Same unit. Earn and deposit screens keep the word "credits". |
@@ -30,6 +31,7 @@ were not probed live from here. Probe each object after the push:
 - **0202:** `ai_product_balances.deposited_cents`, the `ai_product_balances_deposited_clamp` trigger, and a test deposit landing as withdrawable + deposited.
 - **0203:** `ad_placements` rows `hd_download_reward` and `batch_download_reward`.
 - **0200:** `conversation_streaks` (`.select("conversation_id").limit(1)`) and the `bump_conversation_streak_trg` trigger. Send a message in a test chat from both sides and read the row back.
+- **0206 (Part 8):** tables `ad_risk_flags`, `ad_invalid_daily`, `ad_ingest_counters`, `ad_private_settings` (one row); `ad_events.ip_hash/qualifying/risk_reasons/client_ts`; stats `invalid_impressions/invalid_clicks/invalid_other/load_failures`; `select public.ad_traffic_rules()` as the service role; `track_ad_events` still callable by anon. Then open Admin → Ads → Traffic & safety. Optional env: `GOOGLE_SAFE_BROWSING_API_KEY` (reputation). Content moderation uses the existing `ANTHROPIC_API_KEY`. The hourly cron needs the `CRON_SECRET` Actions secret.
 - **0204:** columns `ad_campaigns.refund_status` / `refund_owed_minor`; functions `admin_moderate_ad_campaign`, `admin_set_ad_refund`, `admin_set_advertiser_status`, `ad_refund_owed`; and the re-created `activate_ad_campaign` (call it with role `advertiser` and expect `not_permitted`). Open Admin → Ads → Campaigns and check that it loads.
 - **0199:** `credit_transfers.credit_class` (`.select("credit_class").limit(1)`). Also call the 7-argument `transfer_credits` through the service role with a bad kind and expect `{ok:false, reason:"invalid"}`.
 
@@ -65,8 +67,11 @@ See "To go live" in `docs/AD_PLATFORM.md`:
 
 ## 2 · How to verify ad-platform SQL without a database
 
-Supabase migrations auto-apply on push (GitHub integration), so a broken
-migration reaches production. Before pushing, execute new SQL in **PGlite**
+The owner RUNS migrations by hand, in order, after a push (corrected
+2026-10-09 - they do not auto-apply). Check which number production is on
+before assuming a feature's table exists: as of 2026-10-09 production is at
+**0199**, and 0200-0206 are on main waiting to be run, in order. A broken
+migration still costs a production fix, so before pushing, execute new SQL in **PGlite**
 (`npm i @electric-sql/pglite` in a scratch folder, not in this repo):
 
 - stub `auth.users`, `auth.uid()` (reading `request.jwt.claim.sub`),

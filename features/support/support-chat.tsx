@@ -4,6 +4,7 @@ import { Headset, Send, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { startAdaptivePoll, type AdaptivePoll } from "@/features/data/adaptive-poll";
 import { clearMyThread, loadMyThread, sendMyMessage } from "@/lib/support/actions";
 import type { SupportMessage } from "@/lib/support/chat";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,7 @@ function timeLabel(iso: string): string {
 export function SupportChat() {
   const [status, setStatus] = useState<"loading" | "guest" | "ready">("loading");
   const [messages, setMessages] = useState<SupportMessage[]>([]);
+  const countRef = useRef(0);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -43,20 +45,29 @@ export function SupportChat() {
     }
     setStatus("ready");
     setMessages(res.thread?.messages ?? []);
+    countRef.current = res.thread?.messages?.length ?? 0;
   }, []);
 
+  // Part 9 (2026-10-09): every 5 s for a minute after a send or a reply, then every 30 s;
+  // nothing while hidden, at once on return (was a flat 5 s for as long as the page stayed open).
+  const pollRef = useRef<AdaptivePoll | null>(null);
   useEffect(() => {
     void refresh();
-    const id = setInterval(() => {
-      if (document.visibilityState === "visible") void refresh();
-    }, POLL_MS);
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void refresh();
-    };
-    document.addEventListener("visibilitychange", onVisible);
+    let lastCount = -1;
+    const poll = startAdaptivePoll(
+      async () => {
+        await refresh();
+        const n = countRef.current;
+        const changed = lastCount >= 0 && n !== lastCount;
+        lastCount = n;
+        return changed;
+      },
+      { fastMs: POLL_MS, slowMs: 30_000 },
+    );
+    pollRef.current = poll;
     return () => {
-      clearInterval(id);
-      document.removeEventListener("visibilitychange", onVisible);
+      poll.stop();
+      pollRef.current = null;
     };
   }, [refresh]);
 
@@ -88,6 +99,7 @@ export function SupportChat() {
       return;
     }
     setMessages((m) => m.map((x) => (x.id === optimistic.id ? res.message : x)));
+    pollRef.current?.bump(); // a reply may come soon: poll fast again
   }, [text, sending]);
 
   const clearChat = useCallback(async () => {

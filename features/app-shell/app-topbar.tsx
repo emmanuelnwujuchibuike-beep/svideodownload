@@ -10,6 +10,7 @@ import { IconTile } from "@/components/icons/icon-tile";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { InstallHeaderCta } from "@/features/pwa/install-button";
+import { PromoteButton } from "@/features/downloads/promote-button";
 import { setTopbarHidden } from "@/features/app-shell/topbar-visibility";
 import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { useTopbarCenter } from "@/features/app-shell/topbar-slot";
@@ -430,6 +431,8 @@ export function AppTopbar() {
           control, and it hides while the search field has the row.
         */}
         {pathname === "/downloads" && !searchActive ? <InstallHeaderCta className="h-9 px-3.5 text-[13px]" /> : null}
+        {/* Promote in the top bar on /downloads, beside Install — as on the landing header (owner, 2026-10-09: "put the promote button in the Download page at the top header like it is in the landing page"). */}
+        {pathname === "/downloads" && !searchActive ? <PromoteButton size="header" /> : null}
 
         <span className={searchActive ? "hidden" : "lg:hidden"}>
           {searchActive ? null : <NotificationBell />}

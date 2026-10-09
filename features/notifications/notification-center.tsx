@@ -13,12 +13,11 @@ import {
   loadGroupedNotifications as loadGrouped,
 } from "@/features/notifications/data";
 import { NotificationCard } from "@/features/notifications/notification-card";
+import { onNotificationInsert } from "@/features/notifications/notif-stream";
 import { PushToggle } from "@/features/notifications/push-toggle";
 import { PullToRefresh } from "@/features/ui/pull-to-refresh";
 import type { GroupedNotificationsResult, NotificationCategory, NotificationGroup } from "@/lib/social/notifications";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import { getClientAuthUser } from "@/lib/supabase/client-user";
 
 type Tab = "all" | "unread" | NotificationCategory;
 
@@ -44,30 +43,8 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
   const [moreOpen, setMoreOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
 
-  // Live: a new notification row for me → refresh the center (and the bell).
-  useEffect(() => {
-    const supabase = createClient();
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-    let cancelled = false;
-    getClientAuthUser(supabase).then(({ data: auth }) => {
-      const uid = auth.user?.id;
-      if (!uid || cancelled) return;
-      channel = supabase
-        .channel(`notif-center:${uid}`)
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${uid}` },
-          () => {
-            void revalidate(KEY, loadGrouped, 0).catch(() => {});
-          },
-        )
-        .subscribe();
-    });
-    return () => {
-      cancelled = true;
-      if (channel) void supabase.removeChannel(channel);
-    };
-  }, []);
+  // Live: a new notification row for me → refresh the center (the bell refreshes itself).
+  useEffect(() => onNotificationInsert(() => void revalidate(KEY, loadGrouped, 0).catch(() => {})), []);
 
   // Tabs shown = All + Unread + whichever categories actually have notifications.
   const tabs = useMemo<Tab[]>(() => {

@@ -1,8 +1,5 @@
 "use client";
 
-import { ArrowRight, Compass } from "lucide-react";
-import Link from "next/link";
-
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { AiCreditStrip, EarnButton } from "@/features/ai/design/ai-credit-strip";
 import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
@@ -147,9 +144,12 @@ export function DownloadPageCore({
 
   return (
     <>
-      {topCredits === "strip" ? <AiCreditStrip base="/ai" className="mb-3" /> : null}
-      {/* /downloads (the strip page) shows no headline — owner, 2026-10-08 */}
-      <DownloadsHero trailing={topCredits === "earn" ? <EarnButton size="md" /> : undefined} headline={topCredits !== "strip"} />
+      {topCredits === "strip" ? (
+        // Promote moved to the top bar on /downloads (owner, 2026-10-09) — see app-topbar.tsx.
+        <AiCreditStrip base="/ai" className="mb-3" />
+      ) : null}
+      {/* /downloads: the "Save. Discover. Create." line sits under the credits card, without the paragraph (owner, 2026-10-09) */}
+      <DownloadsHero trailing={topCredits === "earn" ? <EarnButton size="md" /> : undefined} subtitle={topCredits !== "strip"} />
 
       {/*
         🔴 Install moved BELOW the paste box (owner, 2026-08-25, with a

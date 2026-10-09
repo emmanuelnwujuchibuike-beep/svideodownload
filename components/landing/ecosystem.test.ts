@@ -71,8 +71,8 @@ describe("the landing page structure", () => {
     expect(src("components/landing/hero.tsx")).toMatch(/hideEmptyStats/);
     expect(src("components/landing/hero.tsx")).not.toContain("quickActions");
     const hero = src("features/downloads/downloads-sections.tsx");
-    // 2026-10-09 (owner): the card became a floating side bubble, loaded when the page is idle
-    expect(hero).toContain("<PromoteBubbleLazy />");
+    // 2026-10-09 (owner): the promote button left the hero for fixed homes (promote-button.tsx)
+    expect(hero).not.toContain("PromoteBubble");
     expect(hero).not.toContain("<PromoteCard");
     const core = src("features/downloads/download-page-core.tsx");
     // later the same day (owner): "remove this fast, secure and private card entirely"
@@ -89,8 +89,8 @@ describe("the landing page structure", () => {
     const core = src("features/downloads/download-page-core.tsx");
     // 2026-10-08 (owner): smaller, on the headline's row — it no longer pushes the headline down
     expect(core).toContain('<DownloadsHero trailing={topCredits === "earn" ? <EarnButton size="md" /> : undefined}');
-    // /downloads alone drops the on-screen headline and its line, keeping an sr-only H1 (owner, 2026-10-08)
-    expect(core).toContain('headline={topCredits !== "strip"}');
+    // /downloads drops the paragraph but shows the line under the credits card (owner, 2026-10-08 / 2026-10-09)
+    expect(core).toContain('subtitle={topCredits !== "strip"}');
     expect(src("features/downloads/downloads-sections.tsx")).toContain('<h1 className="sr-only">Download</h1>');
     // one Earn definition, shared by the strip and the landing
     expect(src("features/ai/design/ai-credit-strip.tsx")).toContain("<EarnButton />");

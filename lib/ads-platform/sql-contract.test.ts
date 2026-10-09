@@ -52,11 +52,11 @@ describe("TS ⇄ SQL: one vocabulary", () => {
     expect(Object.keys(CAMPAIGN_TRANSITIONS)).toHaveLength(CAMPAIGN_STATUSES.length);
   });
 
-  it("event types (the LATEST constraint and ingest: 0201 added conversion + outbound)", () => {
-    const M201 = readFileSync(join(process.cwd(), "supabase/migrations/0201_ad_detail_conversions.sql"), "utf8");
-    const chk = M201.slice(M201.indexOf("add constraint ad_events_type_chk"), M201.indexOf("alter table public.ad_campaign_daily_stats"));
+  it("event types (the LATEST constraint and ingest: 0206 added load_failed)", () => {
+    const M206 = readFileSync(join(process.cwd(), "supabase/migrations/0206_ad_traffic_quality.sql"), "utf8");
+    const chk = M206.slice(M206.indexOf("add constraint ad_events_type_chk"), M206.indexOf("create index if not exists ad_events_campaign_visitor_idx"));
     expect(quoted(chk).sort()).toEqual([...AD_EVENT_TYPES].sort());
-    const ingest = M201.slice(M201.indexOf("create or replace function public.track_ad_events("), M201.indexOf("$$;", M201.indexOf("create or replace function public.track_ad_events(")));
+    const ingest = M206.slice(M206.indexOf("create or replace function public.track_ad_events("), M206.indexOf("$$;", M206.indexOf("create or replace function public.track_ad_events(")));
     for (const t of AD_EVENT_TYPES) expect(ingest, t).toContain(`'${t}'`);
   });
 
@@ -64,14 +64,14 @@ describe("TS ⇄ SQL: one vocabulary", () => {
     const formats = SQL.slice(SQL.indexOf("insert into public.ad_formats"), SQL.indexOf("insert into public.ad_placements"));
     expect([...formats.matchAll(/\('([A-Z_]+)', '/g)].map((m) => m[1])).toEqual([...AD_FORMAT_CODES]);
     const placements = SQL.slice(SQL.indexOf("insert into public.ad_placements"), SQL.indexOf("insert into public.ad_durations"));
-    // placements seeded after 0195, in migration order: 0203 (HD + batch download rewards), 0206 (history_grid)
+    // placements seeded after 0195, in migration order: 0203 (HD + batch download rewards), 0207 (history_grid)
     const M203 = readFileSync(join(process.cwd(), "supabase/migrations/0203_download_reward_placements.sql"), "utf8");
-    const M206 = readFileSync(join(process.cwd(), "supabase/migrations/0206_ad_history_grid.sql"), "utf8");
-    const rows206 = M206.slice(M206.indexOf("insert into public.ad_placements"));
-    const seeded = [...placements.matchAll(/\('([a-z_]+)', '/g), ...M203.matchAll(/\('([a-z_]+)', '/g), ...rows206.matchAll(/\('([a-z_]+)', '/g)].map((m) => m[1]);
+    const M207 = readFileSync(join(process.cwd(), "supabase/migrations/0207_ad_history_grid.sql"), "utf8");
+    const rows207 = M207.slice(M207.indexOf("insert into public.ad_placements"));
+    const seeded = [...placements.matchAll(/\('([a-z_]+)', '/g), ...M203.matchAll(/\('([a-z_]+)', '/g), ...rows207.matchAll(/\('([a-z_]+)', '/g)].map((m) => m[1]);
     expect(seeded).toEqual([...AD_PLACEMENT_CODES]);
-    expect(rows206).toMatch(/\('history_grid', 'History grid', '[^']+', 'CONTENT_BANNER', array\['history'\]/);
-    expect(M206).toContain("on conflict (code) do nothing");
+    expect(rows207).toMatch(/\('history_grid', 'History grid', '[^']+', 'CONTENT_BANNER', array\['history'\]/);
+    expect(M207).toContain("on conflict (code) do nothing");
   });
 });
 

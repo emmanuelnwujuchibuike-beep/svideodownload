@@ -53,6 +53,16 @@ export function FrenzLogo({
       width={size}
       height={size}
       priority={priority}
+      /*
+        🔴 Never a flash on page entry (owner, 2026-10-09: "the Frenz logo at the
+        top reloads on every page entry"). Each page renders its own header, so
+        the logo remounts on every navigation; next/image's default lazy load +
+        async decode then painted it a beat after the page. The optimized
+        variant is a few kB, so it is always eager and decoded synchronously —
+        from the memory cache it paints in the frame it mounts.
+      */
+      loading={priority ? undefined : "eager"}
+      decoding="sync"
       className={cn("shrink-0 rounded-[22%]", className)}
     />
   );

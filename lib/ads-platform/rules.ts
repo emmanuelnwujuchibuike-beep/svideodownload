@@ -74,3 +74,21 @@ export const ADVERTISING_RULES: readonly RuleSection[] = [
     items: [],
   },
 ];
+
+/**
+ * How Frenzsave counts (Part 8, 2026-10-09). A POLICY explanation, not a rule an
+ * advertiser accepts - so it does not bump ADVERTISING_RULES_VERSION. It states
+ * what each figure means and that invalid traffic is filtered, without naming
+ * the detection signals or thresholds (that would teach evasion).
+ */
+export const TRAFFIC_QUALITY_POLICY: readonly { term: string; meaning: string }[] = [
+  { term: "View (impression)", meaning: "At least half of your ad was on screen for one continuous second, in a tab the person was looking at. A loaded but unseen ad, a preview, or a failed image or video is not a view." },
+  { term: "Click", meaning: "Someone opened your ad's details after seeing it. Repeated clicks by the same person on the same campaign are capped each day, and a click without a view first does not count." },
+  { term: "CTR", meaning: "Clicks divided by views. Shown as \u201c—\u201d until there is at least one view." },
+  { term: "Watched to the end", meaning: "A video that played its full length, checked against its length and the time it started." },
+  { term: "Site visits", meaning: "People who continued to your website after our external-link warning." },
+  { term: "Spend", meaning: "Payments confirmed by our payment partner. Refunds and chargebacks are shown separately and are never counted as spend." },
+];
+
+export const TRAFFIC_QUALITY_NOTE =
+  "We filter invalid traffic - automated visits, repeated or accidental activity, traffic from inside Frenzsave and your own views - so it is never counted in your figures. Your dashboard shows how many views and clicks were filtered. We cannot promise that every view or click is from a genuine, interested person, and figures may be adjusted when an investigation finds invalid activity. We never share the people behind your views, and we do not publish how our checks work.";

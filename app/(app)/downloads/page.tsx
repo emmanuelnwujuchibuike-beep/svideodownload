@@ -122,9 +122,21 @@ async function DownloadsData() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/downloads");
 
-  const [profile, wallpapers, landing, platformStatus, multiLink, aiPromo] = await Promise.all([
+  /*
+    🔴 THE WALLPAPERS ARE NOT AWAITED (2026-10-09, owner: "landing pages delays
+    to load on cold entry and every entry" — a member's landing IS this page).
+
+    `listWallpapers(user.id)` is the one uncached read here and the slowest: up
+    to 600 rows, then their uploaders, then this member's likes and saves —
+    three database round trips in a row, on every entry. Everything it feeds
+    (the rotating Wallpaper tile's photos, the gallery several screens down)
+    can arrive a moment later, so it is started now and handed to the client
+    as a PROMISE, which React streams in behind the page. The paste box, the
+    credits card and the tiles render as soon as the cached reads below are in.
+  */
+  const wallpapers = listWallpapers(user.id);
+  const [profile, landing, platformStatus, multiLink, aiPromo] = await Promise.all([
     getHomeProfile(user.id),
-    listWallpapers(user.id),
     // The admin-uploaded tile background (admin → Landing page). Resolved HERE
     // because DownloadsPage is a client component and cannot read the DB itself.
     getLandingSettings(),

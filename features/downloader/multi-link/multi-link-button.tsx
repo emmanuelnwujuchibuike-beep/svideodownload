@@ -129,6 +129,7 @@ export function MultiLinkButton({
         open={open}
         onToggle={() => setOpen((v) => !v)}
         sourceLimit={sourceLimit}
+        proLimit={Math.max(config.proSourceLimit, sourceLimit)}
         isPro={isPro}
         surface={surface}
       />

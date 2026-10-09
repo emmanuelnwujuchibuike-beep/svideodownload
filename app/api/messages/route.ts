@@ -13,12 +13,28 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** GET /api/messages — the signed-in user's inbox (powers the live badge + list). */
-export async function GET() {
+/** At most this many conversations per partial refresh — the live inbox batches a burst. */
+const MAX_PARTIAL_IDS = 20;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function GET(request: Request) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ conversations: [] });
+
+  /*
+    `?ids=a,b` — only those conversations, for the live inbox (features/social/
+    inbox.ts) to patch the rows a message touched instead of reloading all of
+    them. Same function, same rules, scoped to the viewer's own memberships.
+  */
+  const idsParam = new URL(request.url).searchParams.get("ids");
+  if (idsParam !== null) {
+    const ids = [...new Set(idsParam.split(",").filter((id) => UUID_RE.test(id)))].slice(0, MAX_PARTIAL_IDS);
+    const conversations = await listConversations(user.id, { onlyIds: ids });
+    return NextResponse.json({ conversations, partial: true });
+  }
 
   const conversations = await listConversations(user.id);
   const unread = conversations.filter((c) => c.unread).length;

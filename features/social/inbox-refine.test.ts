@@ -14,11 +14,13 @@ function searchOk(src: string): boolean {
   return /\bh-\[3\.25rem\]/.test(input) && /\btext-base\b/.test(input) && !/\bglass\b/.test(input) && /deferredQ\.trim\(\)/.test(src);
 }
 
-function coalesced(src: string): boolean {
+function patchesOnly(src: string): boolean {
   return (
+    /\.on\([\s\S]*?onChange,\s*\)/.test(src) &&
+    /const id = payload\?\.new\?\.conversation_id \?\? payload\?\.old\?\.conversation_id;/.test(src) &&
+    /const patched = full \? false : await patchInbox\(ids\);/.test(src) &&
+    /fetch\(`\/api\/messages\?ids=\$\{ids\.map\(encodeURIComponent\)\.join\(","\)\}`\)/.test(src) &&
     /timer = setTimeout\(\(\) => void flush\(\), INBOX_COALESCE_MS\);/.test(src) &&
-    /\.on\([\s\S]*?bump,\s*\)/.test(src) &&
-    !/const bump = \(\) => void revalidate\(/.test(src) &&
     /if \(timer\) clearTimeout\(timer\);\s*window\.removeEventListener\("online", bump\);/.test(src)
   );
 }
@@ -45,11 +47,30 @@ describe("Messages: search, tabs and rows", () => {
   });
 });
 
-describe("Messages: realtime refetches are coalesced", () => {
-  it("a burst of inbox events becomes one refetch, and the timer is cleared on unmount", () => {
-    expect(coalesced(inbox)).toBe(true);
+describe("Messages: a new message patches its own row, not the whole inbox", () => {
+  it("events collect conversation ids and one request rebuilds only those", () => {
+    expect(patchesOnly(inbox)).toBe(true);
   });
-  it("teeth: refetching on every event again fails", () => {
-    expect(coalesced(inbox.replace("const bump = () => {", "const bump = () => void revalidate(INBOX_KEY, loadInbox, 0);\n    const _old = () => {"))).toBe(false);
+  it("teeth: wiring the event straight to a full reload again fails", () => {
+    expect(patchesOnly(inbox.replace("onChange,\n", "bump,\n"))).toBe(false);
+    expect(patchesOnly(inbox.replace("const patched = full ? false : await patchInbox(ids);", "const patched = false;"))).toBe(false);
+  });
+  it("the server rebuilds only the asked-for ids, scoped to the viewer's memberships", () => {
+    const api = code("app/api/messages/route.ts");
+    expect(api).toContain("listConversations(user.id, { onlyIds: ids })");
+    expect(api).toMatch(/UUID_RE\.test\(id\)/);
+    const lib = code("lib/social/messages.ts");
+    expect(lib).toMatch(/\.eq\("user_id", userId\)\s*\.is\("left_at", null\);\s*if \(opts\.onlyIds\) membershipQuery = membershipQuery\.in\("conversation_id", opts\.onlyIds\);/);
+  });
+  it("mergeInboxRows replaces, drops and re-sorts exactly the touched rows", async () => {
+    const { mergeInboxRows } = await import("@/features/social/inbox");
+    const row = (id: string, lastAt: string, extra: Record<string, unknown> = {}) =>
+      ({ id, lastAt, pinned: false, unread: false, ...extra }) as never;
+    const prev = { conversations: [row("a", "2026-10-09T10:00:00Z"), row("b", "2026-10-09T09:00:00Z"), row("p", "2026-10-01T00:00:00Z", { pinned: true }), row("gone", "2026-10-08T00:00:00Z")], unread: 0 };
+    const out = mergeInboxRows(prev, ["b", "gone", "new"], [row("b", "2026-10-09T11:00:00Z", { unread: true }), row("new", "2026-10-09T10:30:00Z", { unread: true })]);
+    expect(out.conversations.map((c: { id: string }) => c.id)).toEqual(["p", "b", "new", "a"]);
+    expect(out.unread).toBe(2);
+    // an untouched row is the same object — nothing else was rebuilt
+    expect(out.conversations.find((c: { id: string }) => c.id === "a")).toBe(prev.conversations[0]);
   });
 });

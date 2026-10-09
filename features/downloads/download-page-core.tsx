@@ -9,6 +9,7 @@ import { HilltopSlot } from "@/features/monetization/hilltop-slot";
 import { LazyAdSurface } from "@/features/monetization/lazy-ad-surface";
 import { LazyExoClickSlot } from "@/features/monetization/lazy-exoclick-slot";
 import { DownloadBox } from "@/features/downloads/download-box";
+import { PromoteButton } from "@/features/downloads/promote-button";
 import type { MultiLinkPublicConfig } from "@/lib/downloads/multi-link-config";
 import {
   CloudStorageCard,
@@ -149,11 +150,12 @@ export function DownloadPageCore({
           The credits card with the promote button docked beside it, as the
           improved reference draws them (2026-10-09). The slot is reserved at its
           full size from the first paint, so the lazily loaded button fills it
-          without moving anything; see promote-bubble.tsx for the dock.
+          The Promote button beside it is fixed here — no dragging, no floating
+          (owner, 2026-10-09); see promote-button.tsx.
         */
         <div className="mb-3 flex items-center gap-2">
           <AiCreditStrip base="/ai" className="min-w-0 flex-1" />
-          <div id="frenz-promote-dock" className="flex h-10 w-10 shrink-0 items-center justify-center" />
+          <PromoteButton size="dock" />
         </div>
       ) : null}
       {/* /downloads (the strip page) shows no headline — owner, 2026-10-08 */}

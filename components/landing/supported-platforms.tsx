@@ -139,8 +139,8 @@ export function SupportedPlatforms({
     ── ONE TILE, EVERY SIZE THE SAME (Download page refinement, 2026-10-09:
     "consistent size & style, even visual weight") ──────────────────────────
     Five columns, so two rows of five hold nine platforms and the "+" — and each
-    tile is a fifth of the width (~47 px on a 320 px phone, capped by the grid's
-    max width on a wide card), which is also a comfortable tap target now that
+    tile is a fifth of the card's width (~47 px on a 320 px phone, ~62 px on a
+    430 px one), which is also a comfortable tap target now that
     the tiles can be tapped. Same radius, same hairline ring, same glyph size on
     every tile; the brand colour is the only thing that differs.
   */
@@ -150,7 +150,7 @@ export function SupportedPlatforms({
     !onGradient && "ring-1 ring-inset ring-slate-200/80 dark:ring-white/10",
   );
   const interactive = "transition-transform duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transition-none";
-  const glyph = "h-[clamp(17px,5.2vw,22px)] w-[clamp(17px,5.2vw,22px)]";
+  const glyph = "h-[clamp(17px,5.6vw,26px)] w-[clamp(17px,5.6vw,26px)]";
   return (
     /*
       ONE line that scrolls, never a wrapping grid.
@@ -240,7 +240,9 @@ export function SupportedPlatforms({
       >
         Supported platforms
       </span>
-      <div className="grid w-full max-w-[22rem] grid-cols-5 gap-2.5">
+      {/* Full width of the card, no cap (owner, 2026-10-09: "much space at the right
+          side") — five equal columns always end where the card ends. */}
+      <div className="grid w-full grid-cols-5 gap-2.5 sm:gap-3">
         {ids.map((id) => {
           const Icon = BRAND_ICONS[id];
           const mark = BRAND_MARKS[id];

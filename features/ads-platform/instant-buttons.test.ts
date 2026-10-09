@@ -33,11 +33,11 @@ describe("every advertising button answers the first tap", () => {
     const wiz = src("features/ads-platform/advertise-wizard.tsx");
     expect(wiz.match(/<Link[\s>]/g) ?? []).toHaveLength(1);
     expect(wiz).toContain('<Link href="/advertise/rules" target="_blank"');
-    // 2026-10-09: the promote door is a draggable bubble — it goes once and stays pressed while the page comes (a drag is never a tap)
-    const bubble = src("features/downloads/promote-bubble.tsx");
-    expect(bubble).toContain('data-pending={pending ? "" : undefined}');
-    expect(bubble).toContain("if (pending) return;");
-    expect(bubble).toContain('router.push("/advertise");');
+    // 2026-10-09: the promote door is a fixed TapOnceLink — it goes once and stays pressed while the page comes
+    const promote = src("features/downloads/promote-button.tsx");
+    expect(promote).toContain("<TapOnceLink");
+    expect(promote).toContain('href="/advertise"');
+    expect(promote).toContain("data-[pending]:scale-95");
   });
 
   it("AiButtonLink's tapOnce is the Earn button's TapOnceLink, with its pending look", () => {

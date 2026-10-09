@@ -47,25 +47,33 @@ describe("admin can switch a campaign period off", () => {
   });
 });
 
-describe("the promote card is a floating, draggable, lazy side bubble", () => {
-  it("the hero mounts the lazy loader; the bubble is portalled, labelled Promote, draggable, remembered and cached after its first appearance", () => {
-    expect(code("features/downloads/downloads-sections.tsx")).toContain("<PromoteBubbleLazy />");
-    const b = code("features/downloads/promote-bubble.tsx");
-    // Portalled: into its dock beside the credits card by default (the improved
-    // reference, 2026-10-09), or to <body> once dragged off to float.
-    expect(b).toContain("createPortal(<span className={drag ? \"invisible\" : undefined}>{button(false)}</span>, dock)");
-    expect(b).toContain("document.body)");
-    // owner 2026-10-09: "change the ad text on the promote button to the promote not ad"
-    expect(b).toMatch(/>\n\s*\{\/\* owner 2026-10-09: the tag reads "Promote", not "Ad" \*\/\}\n\s*Promote\n\s*<\/span>/);
-    expect(b).not.toMatch(/>\n\s*Ad\n\s*<\/span>/);
-    expect(b).toContain('const KEY = "frenz:promote-bubble:v1";');
-    expect(b).toContain("if (!s.moved && Math.hypot(dx, dy) < 6) return;");
-    expect(code("features/downloads/download-page-core.tsx")).toContain('<div id="frenz-promote-dock" className="flex h-10 w-10 shrink-0 items-center justify-center" />');
-    const lazy = code("features/downloads/promote-bubble-lazy.tsx");
-    expect(lazy).toContain("requestIdleCallback");
-    // owner 2026-10-09: no idle wait again once it has appeared (back swipes, returns)
-    expect(lazy).toContain("if (seenBefore()) {");
-    expect(lazy).toContain('sessionStorage.setItem(SEEN_KEY, "1");');
+describe("the promote button has a fixed home — no dragging, no floating (owner, 2026-10-09)", () => {
+  /** Where it lives, as a function of the sources, so the teeth can run it on broken copies. */
+  function fixedHomes(core: string, header: string, button: string): boolean {
+    return (
+      core.includes('<AiCreditStrip base="/ai" className="min-w-0 flex-1" />\n          <PromoteButton size="dock" />') &&
+      (header.match(/\{landing \? <PromoteButton size="header" \/> : null\}/g) ?? []).length === 2 &&
+      !/drag|createPortal|pointermove|position: fixed|\bfixed\b/.test(button) &&
+      /\n\s*Promote\n/.test(button)
+    );
+  }
+  const core = code("features/downloads/download-page-core.tsx");
+  const header = code("components/layout/site-header.tsx");
+  // comments stripped: the file documents the bubble it replaced
+  const button = code("features/downloads/promote-button.tsx").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  it("beside the credits card on /downloads, beside Install in both landing header rows, tagged Promote", () => {
+    expect(fixedHomes(core, header, button)).toBe(true);
+  });
+  it("teeth: a draggable/fixed button, or losing a home, fails", () => {
+    expect(fixedHomes(core, header, button + "\nconst drag = 1;")).toBe(false);
+    expect(fixedHomes(core.replace('<PromoteButton size="dock" />', ""), header, button)).toBe(false);
+    expect(fixedHomes(core, header.replace('{landing ? <PromoteButton size="header" /> : null}', ""), button)).toBe(false);
+  });
+  it("tinted, not pure white, and the floating bubble is gone", () => {
+    expect(button).toMatch(/bg-gradient-to-br from-violet-100 via-indigo-50 to-fuchsia-100/);
+    expect(button).not.toMatch(/\bbg-white\b/);
+    expect(() => code("features/downloads/promote-bubble.tsx")).toThrow();
+    expect(() => code("features/downloads/promote-bubble-lazy.tsx")).toThrow();
   });
 });
 

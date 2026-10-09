@@ -26,7 +26,6 @@ import { QUICK_ACTIONS } from "@/features/downloads/quick-actions";
 import { estimateBytes, limitForPlan, totalUsedBytes } from "@/features/history/usage";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { DownloadRecord } from "@/types";
-import { PromoteBubbleLazy } from "@/features/downloads/promote-bubble-lazy";
 import type { ReactNode } from "react";
 import { cn, formatBytes, formatCompactNumber } from "@/lib/utils";
 
@@ -157,8 +156,9 @@ export function DownloadsHero({ trailing, headline = true }: { trailing?: ReactN
             promote card, and move the fast secure private downward" — the pill is
             now `TrustPills`, rendered under the paste box (download-page-core).
           */}
-          {/* 2026-10-09 (owner): the promote card became a floating, draggable side bubble, loaded when the page is idle */}
-          <PromoteBubbleLazy />
+          {/* The Promote button is no longer here: it is fixed beside the credits card on
+              /downloads and beside "Install Frenz" in the landing header (owner,
+              2026-10-09: "remove the movement") — see promote-button.tsx. */}
         </div>
 
         {/* The reference's cloud illustration, drawn rather than shipped as an

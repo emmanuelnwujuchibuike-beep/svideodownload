@@ -13,6 +13,7 @@ import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
 import { useUser } from "@/features/auth/use-user";
 import { UserMenu } from "@/features/auth/user-menu";
 import { InstallButton, InstallCta, InstallHeaderCta } from "@/features/pwa/install-button";
+import { PromoteButton } from "@/features/downloads/promote-button";
 import { LanguageSelector } from "@/components/i18n/language-selector";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { SearchTrigger, SearchTriggerIcon } from "@/features/navigation/search-trigger";
@@ -466,6 +467,8 @@ export function SiteHeader({
           */}
           {/* the streak moved to the chat page (owner, 2026-10-09) — see features/social/chat-streak.tsx */}
           {landing ? <InstallHeaderCta /> : <InstallButton />}
+          {/* Promote sits right beside Install on the landing (owner, 2026-10-09). */}
+          {landing ? <PromoteButton size="header" /> : null}
           <ThemeToggle />
           <UserMenu />
           {/*
@@ -523,6 +526,9 @@ export function SiteHeader({
               unchanged and there is no layout shift either way.
             */}
             {landing ? <InstallHeaderCta /> : <SearchTriggerIcon />}
+            {/* Promote, fixed beside Install (owner, 2026-10-09: "make it be close to
+                the install button in the landing page"). */}
+            {landing ? <PromoteButton size="header" /> : null}
             {/* Language selector — the top ~50 languages (owner, replaced the
                 downloads/history icon; History is in the bottom nav). */}
             <LanguageSelector />

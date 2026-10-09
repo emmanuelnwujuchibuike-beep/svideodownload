@@ -87,12 +87,12 @@ export async function sendCredits(input: { senderId: string; accountNumber: stri
 
   const fee = transferFeeFor(amount, input.kind, input.kind === "withdrawable" ? await getWalletKinds(input.senderId) : null, c);
   const note = input.note ? input.note.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120) || null : null;
-  const { data, error } = await db.rpc("transfer_credits", { p_sender: input.senderId, p_account_number: input.accountNumber, p_amount: amount, p_fee: fee, p_idempotency: input.idempotencyKey, p_note: note, p_kind: input.kind });
+  const { data, error } = await db.rpc("transfer_credits", { p_sender: input.senderId, p_account_number: input.accountNumber, p_amount: amount, p_fee: fee, p_idempotency: input.idempotencyKey, p_note: note, p_class: input.kind });
   if (error) {
     console.error("[wallet/transfer] failed", { sender: input.senderId, message: error.message });
     return { ok: false, status: 503, error: "Couldn't send that right now. Nothing was taken." };
   }
-  const out = data as { ok: boolean; reason?: string; transfer_id?: string; amount?: number; fee?: number; balance_after?: number; recipient_id?: string; duplicate?: boolean; kind?: TransferKind; available?: number; needed?: number };
+  const out = data as { ok: boolean; reason?: string; transfer_id?: string; amount?: number; fee?: number; balance_after?: number; recipient_id?: string; duplicate?: boolean; credit_class?: TransferKind; available?: number; needed?: number };
   if (!out.ok) {
     const map: Record<string, [number, string]> = {
       no_account: [404, "No wallet has that number."],
@@ -128,5 +128,5 @@ export async function sendCredits(input: { senderId: string; accountNumber: stri
     });
     console.info("[wallet/transfer] sent", { sender: input.senderId, recipient: recipientId, amount, fee, kind: input.kind });
   }
-  return { ok: true, transferId: String(out.transfer_id), amount: Number(out.amount ?? amount), fee: Number(out.fee ?? fee), kind: out.kind ?? input.kind, balanceAfter: out.balance_after ?? null, duplicate: !!out.duplicate };
+  return { ok: true, transferId: String(out.transfer_id), amount: Number(out.amount ?? amount), fee: Number(out.fee ?? fee), kind: out.credit_class ?? input.kind, balanceAfter: out.balance_after ?? null, duplicate: !!out.duplicate };
 }

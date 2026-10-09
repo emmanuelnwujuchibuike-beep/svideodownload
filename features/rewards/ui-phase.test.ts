@@ -57,9 +57,9 @@ describe("🔴 a reward is shown only after the server granted it", () => {
 
 describe("two credit classes, said plainly", () => {
   const page = code("features/rewards/rewards-page.tsx");
-  it("AI Credits and Withdrawable are separate figures", () => {
-    expect(page).toContain('label="AI Credits" value={wallet.usableCredits}');
-    expect(page).toContain('label="Withdrawable" value={wallet.withdrawableCredits}');
+  it("Tokens and Credits are separate figures (renamed 2026-10-09: tokens = non-withdrawable, credits = withdrawable)", () => {
+    expect(page).toContain('label="Tokens" value={wallet.usableCredits}');
+    expect(page).toContain('label="Credits" value={wallet.withdrawableCredits}');
   });
   it("before qualifying: the brief's sentence, and that earlier rewards never become withdrawable", () => {
     expect(page).toContain("Your referral rewards can be used for AI features. Withdrawable rewards unlock after you meet the withdrawal requirements.");

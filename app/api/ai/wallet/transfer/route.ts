@@ -17,8 +17,10 @@ const schema = z
     credits: z.number().int().positive().max(100_000_000),
     idempotencyKey: z.string().max(80),
     note: z.string().max(200).nullable().optional(),
-    // 0199 (owner, 2026-10-08): which credits to send - the recipient receives the same kind
-    kind: z.enum(TRANSFER_KINDS).default("usable"),
+    // 0199 (owner, 2026-10-08): which credits to send - the recipient receives the same kind.
+    // `creditClass` is the same field from the sheet shipped in cc33ad0 (a browser may still run it).
+    kind: z.enum(TRANSFER_KINDS).optional(),
+    creditClass: z.enum(TRANSFER_KINDS).optional(),
   })
   .strict()
   .refine((b) => !!b.accountNumber !== !!b.recipientUserId, { message: "one recipient" });
@@ -70,7 +72,7 @@ export async function POST(request: Request) {
     credits: parsed.data.credits,
     idempotencyKey: parsed.data.idempotencyKey,
     note: parsed.data.note ?? null,
-    kind: parsed.data.kind,
+    kind: parsed.data.kind ?? parsed.data.creditClass ?? "usable",
     config: settings.frenzAiPlans.wallet.transfers,
   });
   if (!out.ok) return NextResponse.json({ error: out.error, reason: out.reason }, { status: out.status });

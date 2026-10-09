@@ -18,9 +18,14 @@
 --                                         keeps deposited within withdrawable, so
 --                                         credits are spent EARNED-FIRST and nothing
 --                                         else needed changing.
---   transfer_credits(…, p_kind)           0199's 7-argument form, copied whole. The
---                                         deposited part of a Credits transfer stays
---                                         deposited for the recipient.
+--   transfer_credits(…, p_class)          0199's 7-argument form (as applied, cc33ad0),
+--                                         copied whole. The deposited part of a Credits
+--                                         transfer stays deposited for the recipient.
+--                                         Its revoke/grant run inside the final DO
+--                                         block: 0199 ran them as plain statements
+--                                         after its $$ body, which the runner has been
+--                                         seen to skip, so this re-closes the function
+--                                         to the browser either way.
 --
 -- The rates and fees are the server's (lib/rewards/config.ts withdrawals.deposited,
 -- lib/ai/credits/wallet-config.ts transfers.depositedFeePercent). Deposits made
@@ -102,7 +107,9 @@ begin
 end;
 $$;
 
-create or replace function public.transfer_credits(p_sender uuid, p_account_number text, p_amount integer, p_fee integer, p_idempotency text, p_note text, p_kind text) returns jsonb
+create or replace function public.transfer_credits(
+  p_sender uuid, p_account_number text, p_amount integer, p_fee integer, p_idempotency text, p_note text, p_class text
+) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
   v_recipient uuid;
@@ -112,24 +119,23 @@ declare
   v_s_cur     text;
   v_r_cur     text;
   v_r_bal     bigint;
-  v_r_wd      bigint;
+  v_total     bigint := p_amount::bigint + p_fee::bigint;
+  v_avail     bigint;
+  v_wd        boolean := p_class = 'withdrawable';
+  v_id        uuid;
+  v_s_after   bigint;
   v_s_dep     bigint;
   v_dep_out   bigint := 0;
   v_dep_in    bigint := 0;
-  v_total     bigint := p_amount::bigint + p_fee::bigint;
-  v_avail     bigint;
-  v_wd        boolean := p_kind = 'withdrawable';
-  v_id        uuid;
-  v_s_after   bigint;
 begin
   if p_sender is null or p_amount is null or p_amount <= 0 or p_fee is null or p_fee < 0 or coalesce(p_idempotency, '') = ''
-     or p_kind is null or p_kind not in ('usable', 'withdrawable') then
+     or p_class is null or p_class not in ('usable', 'withdrawable') then
     return jsonb_build_object('ok', false, 'reason', 'invalid');
   end if;
   -- the same request again answers what it did the first time - never a second transfer
   select id, amount, fee, recipient_id, credit_class into v_existing from public.credit_transfers where sender_id = p_sender and idempotency_key = p_idempotency;
   if v_existing.id is not null then
-    return jsonb_build_object('ok', true, 'duplicate', true, 'transfer_id', v_existing.id, 'amount', v_existing.amount, 'fee', v_existing.fee, 'kind', v_existing.credit_class);
+    return jsonb_build_object('ok', true, 'duplicate', true, 'transfer_id', v_existing.id, 'amount', v_existing.amount, 'fee', v_existing.fee, 'credit_class', v_existing.credit_class);
   end if;
   select user_id into v_recipient from public.wallet_accounts where account_number = p_account_number;
   if v_recipient is null then return jsonb_build_object('ok', false, 'reason', 'no_account'); end if;
@@ -143,17 +149,19 @@ begin
   select balance_cents, withdrawable_cents, deposited_cents, currency into v_s_bal, v_s_wd, v_s_dep, v_s_cur from public.ai_product_balances where user_id = p_sender and product = 'character_replace';
   select balance_cents, currency into v_r_bal, v_r_cur from public.ai_product_balances where user_id = v_recipient and product = 'character_replace';
   if v_s_cur is distinct from 'CREDIT' or v_r_cur is distinct from 'CREDIT' then return jsonb_build_object('ok', false, 'reason', 'no_wallet'); end if;
-  -- only the chosen kind pays: amount AND fee
+  -- only the chosen kind pays: amount and fee
   v_avail := case when v_wd then v_s_wd else v_s_bal - v_s_wd end;
-  if v_avail < v_total then return jsonb_build_object('ok', false, 'reason', 'insufficient', 'kind', p_kind, 'available', v_avail, 'needed', v_total); end if;
+  if v_avail < v_total then
+    return jsonb_build_object('ok', false, 'reason', 'insufficient', 'credit_class', p_class, 'available', v_avail, 'needed', v_total);
+  end if;
 
   insert into public.credit_transfers (sender_id, recipient_id, amount, fee, idempotency_key, note, credit_class)
-  values (p_sender, v_recipient, p_amount, p_fee, p_idempotency, nullif(btrim(coalesce(p_note, '')), ''), p_kind)
+  values (p_sender, v_recipient, p_amount, p_fee, p_idempotency, nullif(btrim(coalesce(p_note, '')), ''), p_class)
   on conflict (sender_id, idempotency_key) do nothing
   returning id into v_id;
   if v_id is null then
     select id, amount, fee, credit_class into v_existing from public.credit_transfers where sender_id = p_sender and idempotency_key = p_idempotency;
-    return jsonb_build_object('ok', true, 'duplicate', true, 'transfer_id', v_existing.id, 'amount', v_existing.amount, 'fee', v_existing.fee, 'kind', v_existing.credit_class);
+    return jsonb_build_object('ok', true, 'duplicate', true, 'transfer_id', v_existing.id, 'amount', v_existing.amount, 'fee', v_existing.fee, 'credit_class', v_existing.credit_class);
   end if;
 
   -- 0202: credits are spent earned-first. The AMOUNT is taken first, so its share beyond the
@@ -164,7 +172,7 @@ begin
     v_dep_in := greatest(0, p_amount::bigint - (v_s_wd - v_s_dep));
   end if;
 
-  -- the sender: the whole total from the chosen part
+  -- the sender: the chosen kind only
   update public.ai_product_balances
      set balance_cents = balance_cents - v_total,
          withdrawable_cents = withdrawable_cents - case when v_wd then v_total else 0 end,
@@ -173,25 +181,27 @@ begin
    where user_id = p_sender and product = 'character_replace' returning balance_cents into v_s_after;
   insert into public.ai_product_ledger (user_id, product, kind, status, delta_cents, balance_after_cents, currency, reference, note, metadata, credit_class, withdrawable_part)
   values (p_sender, 'character_replace', 'transfer_out', 'settled', -p_amount, v_s_after + p_fee, 'CREDIT', 'transfer:' || v_id::text, 'Sent to wallet ' || right(p_account_number, 4),
-          jsonb_build_object('transfer_id', v_id, 'recipient_id', v_recipient, 'kind', p_kind, 'deposited', v_dep_out), p_kind, case when v_wd then p_amount else 0 end);
+          jsonb_build_object('transfer_id', v_id, 'recipient_id', v_recipient, 'credit_class', p_class, 'deposited', v_dep_out), p_class, case when v_wd then p_amount else 0 end);
   if p_fee > 0 then
     insert into public.ai_product_ledger (user_id, product, kind, status, delta_cents, balance_after_cents, currency, reference, note, metadata, credit_class, withdrawable_part)
     values (p_sender, 'character_replace', 'transfer_fee', 'settled', -p_fee, v_s_after, 'CREDIT', 'transfer-fee:' || v_id::text, 'Transfer fee',
-            jsonb_build_object('transfer_id', v_id, 'kind', p_kind), p_kind, case when v_wd then p_fee else 0 end);
+            jsonb_build_object('transfer_id', v_id, 'credit_class', p_class), p_class, case when v_wd then p_fee else 0 end);
   end if;
 
-  -- the recipient: the amount, in the SAME kind
+  -- the recipient: the same kind
   update public.ai_product_balances
      set balance_cents = balance_cents + p_amount,
          withdrawable_cents = withdrawable_cents + case when v_wd then p_amount else 0 end,
          deposited_cents = deposited_cents + v_dep_in,
          updated_at = now()
-   where user_id = v_recipient and product = 'character_replace' returning balance_cents, withdrawable_cents into v_r_bal, v_r_wd;
+   where user_id = v_recipient and product = 'character_replace' returning balance_cents into v_r_bal;
   insert into public.ai_product_ledger (user_id, product, kind, status, delta_cents, balance_after_cents, currency, reference, note, metadata, credit_class, withdrawable_part)
-  values (v_recipient, 'character_replace', 'transfer_in', 'settled', p_amount, v_r_bal, 'CREDIT', 'transfer:' || v_id::text, case when v_wd then 'Received withdrawable credits' else 'Received credits' end,
-          jsonb_build_object('transfer_id', v_id, 'sender_id', p_sender, 'kind', p_kind, 'deposited', v_dep_in), p_kind, case when v_wd then p_amount else 0 end);
+  values (v_recipient, 'character_replace', 'transfer_in', 'settled', p_amount, v_r_bal, 'CREDIT', 'transfer:' || v_id::text,
+          case when v_wd then 'Received withdrawable credits' else 'Received credits' end,
+          jsonb_build_object('transfer_id', v_id, 'sender_id', p_sender, 'credit_class', p_class, 'deposited', v_dep_in), p_class, case when v_wd then p_amount else 0 end);
 
-  return jsonb_build_object('ok', true, 'transfer_id', v_id, 'recipient_id', v_recipient, 'amount', p_amount, 'fee', p_fee, 'kind', p_kind, 'balance_after', v_s_after, 'recipient_balance_after', v_r_bal);
+  return jsonb_build_object('ok', true, 'transfer_id', v_id, 'recipient_id', v_recipient, 'amount', p_amount, 'fee', p_fee, 'credit_class', p_class,
+                            'balance_after', v_s_after, 'recipient_balance_after', v_r_bal);
 end;
 $$;
 

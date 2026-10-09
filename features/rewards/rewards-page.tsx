@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowLeft, Check, Clock, Coins, Gift, Lock, Share2, Sparkles, Wallet } from "lucide-react";
+import { ArrowLeft, Check, Clock, Coins, Gift, Lock, Share2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
+import { KindSymbol } from "@/features/ai/wallet/wallet-kinds";
 import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
@@ -95,8 +96,8 @@ export function RewardsPage({ summary }: { summary: Summary }) {
 
         {/* ── the two classes, side by side ── */}
         <section aria-label="Your credits" className="mt-5 grid grid-cols-2 gap-3">
-          <Figure icon={<Sparkles className="h-4 w-4" aria-hidden />} label="AI Credits" value={wallet.usableCredits} hint="For any Frenz AI tool" />
-          <Figure icon={<Wallet className="h-4 w-4" aria-hidden />} label="Withdrawable" value={wallet.withdrawableCredits} hint="Rewards you can cash out" accent={wallet.withdrawableCredits > 0} />
+          <Figure icon={<KindSymbol kind="usable" className="h-4 w-4" />} label="Tokens" value={wallet.usableCredits} hint="For any Frenz AI tool — not cashable" />
+          <Figure icon={<KindSymbol kind="withdrawable" className="h-4 w-4" />} label="Credits" value={wallet.withdrawableCredits} hint="Rewards you can cash out" accent={wallet.withdrawableCredits > 0} />
         </section>
 
         {q.restricted ? (

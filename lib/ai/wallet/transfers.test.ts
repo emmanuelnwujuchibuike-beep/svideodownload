@@ -80,14 +80,14 @@ function kindRuleHolds(t: string): boolean {
   const recipient = t.slice(t.indexOf("-- the recipient"), t.indexOf("return jsonb_build_object('ok', true, 'transfer_id'"));
   const sender = t.slice(t.indexOf("-- the sender"), t.indexOf("-- the recipient"));
   return (
-    t.includes("p_kind not in ('usable', 'withdrawable')") &&
+    t.includes("p_class not in ('usable', 'withdrawable')") &&
     // only the chosen part pays the amount AND the fee
     t.includes("v_avail := case when v_wd then v_s_wd else v_s_bal - v_s_wd end;") &&
     t.includes("if v_avail < v_total then") &&
     sender.includes("withdrawable_cents = withdrawable_cents - case when v_wd then v_total else 0 end") &&
     // the recipient gains withdrawable credits exactly when withdrawable credits were sent
     recipient.includes("withdrawable_cents = withdrawable_cents + case when v_wd then p_amount else 0 end") &&
-    recipient.includes("p_kind, case when v_wd then p_amount else 0 end);")
+    recipient.includes("p_class, case when v_wd then p_amount else 0 end);")
   );
 }
 
@@ -99,15 +99,15 @@ describe("🔴 0199 — the kind sent is the kind received", () => {
     expect(kindRuleHolds(fn99.replace("v_avail := case when v_wd then v_s_wd else v_s_bal - v_s_wd end;", "v_avail := v_s_bal;"))).toBe(false);
     expect(kindRuleHolds(fn99.replace("withdrawable_cents = withdrawable_cents + case when v_wd then p_amount else 0 end", "withdrawable_cents = withdrawable_cents"))).toBe(false);
   });
-  it("the kind is recorded on the transfer and closed to the browser; the 0193 form stays for the deploy window", () => {
+  it("the kind is recorded on the transfer and closed to the browser; one signature only", () => {
     expect(m99).toContain("check (credit_class in ('usable', 'withdrawable'))");
     expect(fn99).toContain("insert into public.credit_transfers (sender_id, recipient_id, amount, fee, idempotency_key, note, credit_class)");
     expect(m99).toContain("revoke all on function public.transfer_credits(uuid, text, integer, integer, text, text, text) from public, anon, authenticated");
-    expect(m99).not.toMatch(/drop function[^\n]*transfer_credits/);
+    expect(m99).toContain("drop function if exists public.transfer_credits(uuid, text, integer, integer, text, text);");
   });
   it("the server passes the member's choice; the sheet offers both kinds and checks the chosen one", () => {
-    expect(code("lib/ai/wallet/transfers.ts")).toContain("p_note: note, p_kind: input.kind });");
-    expect(code("app/api/ai/wallet/transfer/route.ts")).toContain('kind: z.enum(TRANSFER_KINDS).default("usable"),');
+    expect(code("lib/ai/wallet/transfers.ts")).toContain("p_note: note, p_class: input.kind });");
+    expect(code("app/api/ai/wallet/transfer/route.ts")).toContain('kind: parsed.data.kind ?? parsed.data.creditClass ?? "usable",');
     const p = code("features/ai/wallet/transfer-panel.tsx");
     expect(p).toContain("credits: n, kind, idempotencyKey: key.current");
     expect(p).toContain('{(["usable", "withdrawable"] as const).map((k) => {');

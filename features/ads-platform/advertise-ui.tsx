@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Check, Clapperboard, LayoutTemplate, Maximize2, PanelTop, RectangleHorizontal, Sparkles } from "lucide-react";
+import { Check, Clapperboard, LayoutGrid, LayoutTemplate, Maximize2, PanelTop, RectangleHorizontal, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { AiStepRail } from "@/features/ai/design/ai-step-rail";
@@ -27,6 +27,8 @@ const FORMAT_ICONS: Record<string, LucideIcon> = {
   INTERSTITIAL: Maximize2,
   DOWNLOAD_COMPLETED_INTERSTITIAL: Maximize2,
   REWARD_VIDEO: Clapperboard,
+  // 0211: every slot at once
+  ALL_SLOTS: LayoutGrid,
 };
 export const formatIcon = (code: string): LucideIcon => FORMAT_ICONS[code] ?? Sparkles;
 

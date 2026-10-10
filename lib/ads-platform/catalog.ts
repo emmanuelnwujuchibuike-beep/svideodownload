@@ -22,6 +22,8 @@ export const AD_FORMAT_CODES = [
   "INTERSTITIAL",
   "DOWNLOAD_COMPLETED_INTERSTITIAL",
   "REWARD_VIDEO",
+  // 0211: one campaign in every slot (served through each slot's own format rules)
+  "ALL_SLOTS",
 ] as const;
 export type AdFormatCode = (typeof AD_FORMAT_CODES)[number];
 
@@ -42,8 +44,19 @@ export const AD_PLACEMENT_CODES = [
   "batch_download_reward",
   // 0207: the History grid tile
   "history_grid",
+  // 0211: the "All slots" package — not a physical slot; merged into every slot's rotation
+  "all_slots",
 ] as const;
 export type AdPlacementCode = (typeof AD_PLACEMENT_CODES)[number];
+
+/**
+ * 0211 (owner, 2026-10-09): "advertise on all slot … shows on all available
+ * slots and also rotates when others buy all slots". A campaign on this
+ * placement joins EVERY slot's rotation wherever its media fits that slot's own
+ * format rules (eligibility.ts eligibleForPlacement). A slot's own buyers keep
+ * first place in its pool.
+ */
+export const ALL_SLOTS_PLACEMENT = "all_slots";
 
 /** Page / content areas a placement or a campaign can target. `all_pages` matches every page. */
 export const AD_PAGES = ["all_pages", "download", "download_result", "feed", "reels", "ai", "ai_reels", "stories", "history"] as const;

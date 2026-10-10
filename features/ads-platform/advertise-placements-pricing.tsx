@@ -1,12 +1,13 @@
 "use client";
 
-import { Gift } from "lucide-react";
+import { Gift, LayoutGrid } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { formatMoney, priceFor, type AdCatalog } from "@/lib/ads-platform/offer";
 
 import { Chip } from "./advertise-ui";
 import { loadAdCatalog } from "./catalog-client";
+import { loadReach, reachLabel, type Reach } from "./reach-client";
 
 /**
  * Where ads appear and what they cost, on the public /advertise page (Landing +
@@ -20,8 +21,10 @@ import { loadAdCatalog } from "./catalog-client";
  */
 export function AdvertisePlacementsPricing() {
   const [cat, setCat] = useState<AdCatalog | null | undefined>(undefined);
+  const [reach, setReach] = useState<Reach | null>(null);
   useEffect(() => {
     void loadAdCatalog().then(setCat);
+    void loadReach().then(setReach);
   }, []);
 
   if (cat === undefined) {
@@ -39,7 +42,8 @@ export function AdvertisePlacementsPricing() {
 
   const currency = cat.settings.display_currency;
   const formatName = new Map(cat.formats.map((f) => [f.code, f.name]));
-  const placements = cat.placements.filter((p) => formatName.has(p.format_code));
+  // 0211: "All slots" leads the list — it is the widest reach there is
+  const placements = cat.placements.filter((p) => formatName.has(p.format_code)).sort((a, b) => Number(b.code === "all_slots") - Number(a.code === "all_slots"));
   const now = Date.now();
   const livePromos = cat.promotions.filter((p) => !p.ends_at || Date.parse(p.ends_at) > now);
 
@@ -65,19 +69,42 @@ export function AdvertisePlacementsPricing() {
         <h2 id="placements" className="font-brand text-[1.35rem] font-bold tracking-[-0.03em]">
           Where your ad appears
         </h2>
-        <p className="mt-1.5 text-[14px] text-muted-foreground">Choose one place for your ad. Only places open for booking are shown.</p>
+        <p className="mt-1.5 text-[14px] text-muted-foreground">Choose one place for your ad, or All slots for every place at once. Only places open for booking are shown.</p>
+        {reach?.placements ? (
+          <p className="mt-1 text-[12px] text-muted-foreground">Reach = the share of all visits, over the last {reach.windowDays} days, that were on pages where the slot appears.</p>
+        ) : null}
         <ul className="mt-4 grid gap-3 sm:grid-cols-2">
           {placements.map((p) => {
             const from = placementFrom(p.code);
+            const all = p.code === "all_slots";
+            const reachText = reachLabel(reach, p.code);
             return (
-              <li key={p.code} className="rounded-[1.4rem] bg-card p-4 ring-1 ring-inset ring-black/[0.07] dark:ring-white/10">
+              <li
+                key={p.code}
+                className={
+                  all
+                    ? "rounded-[1.4rem] bg-gradient-to-br from-indigo-50 to-fuchsia-50 p-4 ring-2 ring-inset ring-indigo-300 sm:col-span-2 dark:from-indigo-500/15 dark:to-fuchsia-500/10 dark:ring-indigo-400/40"
+                    : "rounded-[1.4rem] bg-card p-4 ring-1 ring-inset ring-black/[0.07] dark:ring-white/10"
+                }
+              >
+                {all ? (
+                  <p className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-indigo-600 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                    <LayoutGrid className="h-3 w-3" aria-hidden /> Most reach — every slot
+                  </p>
+                ) : null}
                 <div className="flex items-baseline justify-between gap-2">
                   <p className="text-[15px] font-semibold">{p.name}</p>
                   {from !== null ? <span className="whitespace-nowrap text-[12px] font-semibold text-muted-foreground">from {formatMoney(from, currency)}</span> : null}
                 </div>
                 {p.description ? <p className="mt-1 text-[13px] leading-snug text-muted-foreground">{p.description}</p> : null}
+                {all ? (
+                  <p className="mt-1.5 text-[13px] font-medium text-indigo-900 dark:text-indigo-200">
+                    Guaranteed more reach than any single slot: your ad joins the rotation of every ad slot on Frenzsave, alongside the other ads there.
+                  </p>
+                ) : null}
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  <Chip>{formatName.get(p.format_code)}</Chip>
+                  {all ? null : <Chip>{formatName.get(p.format_code)}</Chip>}
+                  {reachText ? <Chip tone="indigo">{reachText}</Chip> : null}
                   {from === null ? <Chip tone="amber">Booking soon</Chip> : null}
                 </div>
               </li>

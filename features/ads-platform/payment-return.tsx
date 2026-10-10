@@ -42,7 +42,7 @@ interface View {
 }
 
 const SETTLING: View["state"][] = ["verifying", "paid", "activating"];
-const FORMAT_LABEL: Record<string, string> = { TOP_BANNER: "Top banner", CONTENT_BANNER: "Content banner", DOWNLOAD_RESULT_BANNER: "Download result banner", INTERSTITIAL: "Interstitial", DOWNLOAD_COMPLETED_INTERSTITIAL: "Download completed interstitial", REWARD_VIDEO: "Reward video" };
+const FORMAT_LABEL: Record<string, string> = { TOP_BANNER: "Top banner", CONTENT_BANNER: "Content banner", DOWNLOAD_RESULT_BANNER: "Download result banner", INTERSTITIAL: "Interstitial", DOWNLOAD_COMPLETED_INTERSTITIAL: "Download completed interstitial", REWARD_VIDEO: "Reward video", ALL_SLOTS: "All slots" };
 const day = (v: string | null) => (v ? new Date(v).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—");
 
 function readReference(): string | null {

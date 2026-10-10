@@ -310,7 +310,9 @@ describe("ONE physical slot → ONE provider (slots addendum)", () => {
     expect([...covered].sort()).toEqual([...zones].sort());
     expect(new Set(covered).size).toBe(covered.length);
     const paid = new Set(AD_SLOTS.map((x) => x.paidPlacement));
-    for (const p of AD_PLACEMENT_CODES) expect(paid.has(p), p).toBe(true);
+    // 0211: "all_slots" is a package, not a physical slot — it is served through every slot's own pool
+    for (const p of AD_PLACEMENT_CODES) if (p !== "all_slots") expect(paid.has(p), p).toBe(true);
+    expect(paid.has("all_slots")).toBe(false);
   });
 
   it("new inventory only where no network slot existed", () => {

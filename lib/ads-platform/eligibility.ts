@@ -23,7 +23,7 @@
  * Pure: imported by the serving route AND by the browser.
  */
 
-import type { AdMediaType, AdPageContext } from "./catalog";
+import { ALL_SLOTS_PLACEMENT, type AdMediaType, type AdPageContext } from "./catalog";
 import { checkDestinationUrl } from "./creative-validation";
 
 /* ─────────────────────────── the snapshot (from SQL) ─────────────────────────── */
@@ -147,9 +147,10 @@ function num(v: number | string | null | undefined): number | null {
 const time = (iso: string | null): number => (iso ? Date.parse(iso) : NaN);
 
 /** Why a creative cannot serve RIGHT NOW under the CURRENT admin config, or null. */
-export function creativeServingProblem(cr: SnapshotCreative, format: SnapshotFormat): string | null {
+export function creativeServingProblem(cr: SnapshotCreative, format: SnapshotFormat, opts: { anyFormat?: boolean } = {}): string | null {
   if (cr.status !== "active") return "creative_inactive";
-  if (cr.format_code !== format.code) return "format_mismatch";
+  // an All-slots creative is judged by the TARGET slot's rules (media type, length), not by its own format code
+  if (!opts.anyFormat && cr.format_code !== format.code) return "format_mismatch";
   if (cr.validation_status !== "valid") return "creative_not_valid";
   if (cr.url_validation_status !== "valid") return "destination_not_valid";
   // belt and braces: a row marked valid that is not even a safe URL never serves
@@ -188,13 +189,17 @@ export function eligibleForPlacement(snapshot: ServingSnapshot, placementCode: s
   const rules = formatRules(format, snapshot.settings.default_slot_count);
 
   const out: EligibleAd[] = [];
+  const shared: EligibleAd[] = [];
   for (const c of snapshot.campaigns) {
-    if (c.placement_code !== placementCode) continue;
+    // 0211: an All-slots campaign joins this slot's rotation when its media fits THIS slot's rules
+    const allSlots = c.placement_code === ALL_SLOTS_PLACEMENT && placementCode !== ALL_SLOTS_PLACEMENT;
+    if (c.placement_code !== placementCode && !allSlots) continue;
     if (campaignServingProblem(c)) continue;
     if (time(c.end_at) <= notBefore) continue;
-    const cr = c.creatives.find((x) => creativeServingProblem(x, format) === null);
+    const cr = c.creatives.find((x) => creativeServingProblem(x, format, { anyFormat: allSlots }) === null);
     if (!cr) continue;
-    out.push({
+    const into = allSlots ? shared : out;
+    into.push({
       c: c.id,
       cr: cr.id,
       slot: c.slot_number,
@@ -214,7 +219,9 @@ export function eligibleForPlacement(snapshot: ServingSnapshot, placementCode: s
     });
   }
   out.sort((a, b) => (a.slot ?? 1e9) - (b.slot ?? 1e9) || time(a.start) - time(b.start));
-  return out.slice(0, rules.slotCount);
+  // the slot's own buyers first, then All-slots campaigns (oldest first) — they rotate together
+  shared.sort((a, b) => time(a.start) - time(b.start));
+  return [...out, ...shared].slice(0, rules.slotCount);
 }
 
 /** Does a page match a scope list? `all_pages` matches every page. */

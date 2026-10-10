@@ -41,6 +41,7 @@ import { cn } from "@/lib/utils";
 import { AdPreview } from "./ad-preview";
 import { AdFlowRail, CampaignSummaryCard, Chip, FIRST_STEP_OF, formatIcon, Notice, OptionCard, phaseOf, Row, runtimeLabel, StepTitle } from "./advertise-ui";
 import { loadAdCatalog } from "./catalog-client";
+import { loadReach, reachLabel, type Reach } from "./reach-client";
 import type { UploadedCreative } from "./creative-step";
 import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { loadMyApplications, type MyApplication } from "./my-applications-client";
@@ -156,6 +157,11 @@ export function AdvertiseWizard() {
   const { user, loading: userLoading } = useUser();
   const [cat, setCat] = useState<AdCatalog | null | undefined>(undefined);
   const [form, setForm] = useState<Form>(EMPTY);
+  // 0211: measured reach per place (one cached request, shared with the /advertise page)
+  const [reach, setReach] = useState<Reach | null>(null);
+  useEffect(() => {
+    void loadReach().then(setReach);
+  }, []);
   const [hydrated, setHydrated] = useState(false);
   const [notes, setNotes] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -528,6 +534,11 @@ export function AdvertiseWizard() {
                   }}
                 >
                   {p.description}
+                  {/* 0211: the measured reach of each place, and what All slots adds — or nothing when there is not enough data */}
+                  {p.code === "all_slots" ? (
+                    <span className="mt-1 block text-[12.5px] font-semibold text-indigo-700 dark:text-indigo-300">Most reach — guaranteed more than any single slot.</span>
+                  ) : null}
+                  {reachLabel(reach, p.code) ? <span className="mt-0.5 block text-[12px] text-muted-foreground">{reachLabel(reach, p.code)}</span> : null}
                 </OptionCard>
               );
             })}

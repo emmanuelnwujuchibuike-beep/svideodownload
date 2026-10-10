@@ -257,3 +257,17 @@ describe("2026-10-09: the x10 sample-data view scales every dashboard figure tog
     expect(d).not.toMatch(/from\("ad_events"\)/);
   });
 });
+
+describe("2026-10-09: x10 for every live campaign at once", () => {
+  it("the bulk switch targets only live campaigns and reuses the audited per-campaign function", () => {
+    const lib = src("lib/ads-platform/admin-campaigns.ts");
+    const fn = lib.slice(lib.indexOf("export async function setStatsBoostAllLive"));
+    expect(fn).toContain(`.eq("status", "active")`);
+    expect(fn).toContain("setStatsBoost(db, adminId");
+    expect(fn).not.toMatch(/\.update\(/);
+    const route = src("app/api/admin/ads/campaigns/route.ts");
+    expect(route).toContain("allLive: z.literal(true)");
+    expect(route).toContain("requireAdminApi");
+    expect(src("features/admin/ad-campaigns-desk.tsx")).toContain("{ allLive: true, statsMultiplier }");
+  });
+});

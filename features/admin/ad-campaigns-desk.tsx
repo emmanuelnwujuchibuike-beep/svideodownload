@@ -173,7 +173,21 @@ export function AdCampaignsDesk() {
   async function setBoost(c: Campaign, statsMultiplier: 1 | 10) {
     const out = await post("/api/admin/ads/campaigns", { id: c.id, statsMultiplier }, `${c.id}:boost`);
     if (!out) return;
-    setNote(out.ok ? { tone: "ok", text: statsMultiplier === 10 ? `Sample-data ×10 ON: “${c.name}” shows ×10 views, clicks and conversions on its dashboard.` : `Sample-data ×10 OFF: “${c.name}” shows real figures.` } : { tone: "bad", text: "That didn't go through. Nothing changed (has migration 0211 been run?)." });
+    setNote(out.ok ? { tone: "ok", text: statsMultiplier === 10 ? `Sample-data ×10 ON: “${c.name}” shows ×10 views, clicks and conversions on its dashboard.` : `Sample-data ×10 OFF: “${c.name}” shows real figures.` } : { tone: "bad", text: "That didn't go through. Nothing changed (has migration 0212 been run?)." });
+    void load();
+  }
+
+  async function setBoostAllLive(statsMultiplier: 1 | 10) {
+    if (!window.confirm(statsMultiplier === 10 ? "Show ×10 sample data on the dashboard of EVERY live campaign? (Display only — stored counts, billing and refunds are untouched.)" : "Show real figures on every live campaign's dashboard?")) return;
+    const out = await post("/api/admin/ads/campaigns", { allLive: true, statsMultiplier }, "boost-all");
+    if (!out) return;
+    const changed = Number(out.changed ?? 0);
+    const failed = Number(out.failed ?? 0);
+    setNote(
+      out.ok
+        ? { tone: "ok", text: changed === 0 ? `Every live campaign already shows ${statsMultiplier === 10 ? "×10 sample data" : "real figures"}.` : `Sample-data ×10 ${statsMultiplier === 10 ? "ON" : "OFF"} for ${changed} live campaign(s).` }
+        : { tone: "bad", text: failed > 0 ? `${changed} changed, ${failed} didn't go through. Try again.` : "That didn't go through. Nothing changed (has migration 0212 been run?)." },
+    );
     void load();
   }
 
@@ -209,6 +223,17 @@ export function AdCampaignsDesk() {
             {t.id !== "advertisers" && counts ? <span className="ml-1 tabular-nums opacity-80">{counts[t.id]}</span> : null}
           </button>
         ))}
+        {tab !== "advertisers" ? (
+          <div className="flex items-center gap-1.5" role="group" aria-label="Sample-data ×10 for all live campaigns">
+            <span className="text-xs text-muted-foreground">All live ×10:</span>
+            <button type="button" disabled={busy !== null} onClick={() => void setBoostAllLive(10)} className="rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-60">
+              {busy === "boost-all" ? "…" : "Turn on"}
+            </button>
+            <button type="button" disabled={busy !== null} onClick={() => void setBoostAllLive(1)} className="rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-semibold disabled:opacity-60">
+              Turn off
+            </button>
+          </div>
+        ) : null}
         <form
           className="ml-auto flex items-center gap-1.5"
           onSubmit={(e) => {

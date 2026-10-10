@@ -324,3 +324,17 @@ export async function setStatsBoost(db: Db, adminId: string, input: { id: string
   if (error) throw new Error(`stats boost: ${error.message}`);
   return data as { ok: boolean; reason?: string; multiplier?: number };
 }
+
+/**
+ * 0212: the same switch for EVERY live campaign at once. Each one still goes
+ * through admin_set_ad_stats_boost, so each gets its own audit event. Display
+ * only - stored counts are untouched. Campaigns already at that multiplier are skipped.
+ */
+export async function setStatsBoostAllLive(db: Db, adminId: string, multiplier: 1 | 10): Promise<{ ok: boolean; changed: number; failed: number }> {
+  const { data, error } = await db.from("ad_campaigns").select("id, stats_multiplier").eq("status", "active").neq("stats_multiplier", multiplier).limit(1000);
+  if (error) throw new Error(`stats boost all: ${error.message}`);
+  const ids = ((data ?? []) as { id: string }[]).map((r) => r.id);
+  const results = await Promise.allSettled(ids.map((id) => setStatsBoost(db, adminId, { id, multiplier })));
+  const changed = results.filter((r) => r.status === "fulfilled" && r.value.ok).length;
+  return { ok: changed === ids.length, changed, failed: ids.length - changed };
+}

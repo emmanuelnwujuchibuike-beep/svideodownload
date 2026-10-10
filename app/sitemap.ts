@@ -41,12 +41,22 @@ import { CATEGORIES } from "@/lib/social/categories";
   same fabrication the Reality Ledger exists to stop, in a file only machines
   read.
 */
+/*
+  ── lastmod: a real date or none (2026-10-09) ─────────────────────────────────
+
+  Every entry used to carry the current time — the moment the sitemap was
+  generated — so all ~125 URLs claimed to have changed on every fetch. Google
+  only uses lastmod when it is "consistently and verifiably accurate"; one that
+  always says "just now" teaches it to ignore the field for the whole site,
+  which also throws away the real dates below. So an entry carries a date only
+  when one exists (a blog post's date, a guide's `updated`) and omits it
+  otherwise. Never reintroduce a build-time date (app/sitemap.test.ts).
+*/
 export default function sitemap(): MetadataRoute.Sitemap {
-  const now = new Date();
 
   const downloaders: MetadataRoute.Sitemap = SEO_SLUGS.map((slug) => ({
     url: `${siteUrl}/${slug}`,
-    lastModified: now,
+
     changeFrequency: "weekly",
     priority: 0.9,
   }));
@@ -62,7 +72,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   */
   const categories: MetadataRoute.Sitemap = CATEGORIES.map((category) => ({
     url: `${siteUrl}/${category}`,
-    lastModified: now,
+
     changeFrequency: "daily",
     priority: 0.8,
   }));
@@ -70,7 +80,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const blog: MetadataRoute.Sitemap = BLOG_SLUGS.map((slug) => ({
     url: `${siteUrl}/blog/${slug}`,
     // the post's own date — a build timestamp says nothing about when it changed
-    lastModified: getPost(slug)?.date ?? now,
+    lastModified: getPost(slug)?.date,
     changeFrequency: "monthly",
     priority: 0.6,
   }));
@@ -80,7 +90,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   // that keyword cluster into topical authority rather than thin duplication.
   const lessons: MetadataRoute.Sitemap = LESSON_SLUGS.map((slug) => ({
     url: `${siteUrl}/learn/${slug}`,
-    lastModified: now,
+
     changeFrequency: "monthly",
     priority: 0.7,
   }));
@@ -97,7 +107,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   */
   const schools: MetadataRoute.Sitemap = teachableSchools().map((school) => ({
     url: `${siteUrl}/academy/${school.slug}`,
-    lastModified: now,
+
     changeFrequency: "monthly",
     priority: 0.7,
   }));
@@ -115,7 +125,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   */
   const support: MetadataRoute.Sitemap = SUPPORT_ARTICLES.map((article) => ({
     url: `${siteUrl}${articleHref(article)}`,
-    lastModified: now,
+
     changeFrequency: "monthly",
     priority: 0.6,
   }));
@@ -132,13 +142,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
   */
   const topics: MetadataRoute.Sitemap = publishableClusters().map((cluster) => ({
     url: `${siteUrl}${topicHref(cluster.topic)}`,
-    lastModified: now,
+
     changeFrequency: "weekly",
     priority: 0.7,
   }));
 
   return [
-    { url: siteUrl, lastModified: now, changeFrequency: "daily", priority: 1 },
+    { url: siteUrl, changeFrequency: "daily", priority: 1 },
     ...downloaders,
     ...categories,
     /*
@@ -150,7 +160,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       deploys, so the page's content really does change on that cadence even
       though this file does not.
     */
-    { url: `${siteUrl}/wallpapers`, lastModified: now, changeFrequency: "daily", priority: 0.8 },
+    { url: `${siteUrl}/wallpapers`, changeFrequency: "daily", priority: 0.8 },
     /*
       ── 🔴 NO FRENZ AI ROUTE APPEARS IN THIS FILE. DELIBERATELY. ────────────
 
@@ -189,23 +199,23 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // the public advertising pages, never listed until now (2026-10-09 audit)
     { url: `${siteUrl}/advertise`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${siteUrl}/advertise/rules`, changeFrequency: "monthly", priority: 0.5 },
-    { url: `${siteUrl}/help`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
-    { url: `${siteUrl}/trust`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
-    { url: `${siteUrl}/glossary`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
+    { url: `${siteUrl}/help`, changeFrequency: "monthly", priority: 0.7 },
+    { url: `${siteUrl}/trust`, changeFrequency: "monthly", priority: 0.7 },
+    { url: `${siteUrl}/glossary`, changeFrequency: "monthly", priority: 0.5 },
     ...support,
-    { url: `${siteUrl}/topics`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
+    { url: `${siteUrl}/topics`, changeFrequency: "weekly", priority: 0.8 },
     ...topics,
-    { url: `${siteUrl}/academy`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
+    { url: `${siteUrl}/academy`, changeFrequency: "weekly", priority: 0.8 },
     ...schools,
-    { url: `${siteUrl}/learn`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
+    { url: `${siteUrl}/learn`, changeFrequency: "weekly", priority: 0.8 },
     ...lessons,
-    { url: `${siteUrl}/blog`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
+    { url: `${siteUrl}/blog`, changeFrequency: "weekly", priority: 0.7 },
     ...blog,
-    { url: `${siteUrl}/about`, lastModified: now, priority: 0.5 },
-    { url: `${siteUrl}/contact`, lastModified: now, priority: 0.4 },
-    { url: `${siteUrl}/terms`, lastModified: now, priority: 0.3 },
-    { url: `${siteUrl}/privacy`, lastModified: now, priority: 0.3 },
-    { url: `${siteUrl}/dmca`, lastModified: now, priority: 0.3 },
+    { url: `${siteUrl}/about`, priority: 0.5 },
+    { url: `${siteUrl}/contact`, priority: 0.4 },
+    { url: `${siteUrl}/terms`, priority: 0.3 },
+    { url: `${siteUrl}/privacy`, priority: 0.3 },
+    { url: `${siteUrl}/dmca`, priority: 0.3 },
     /*
       🔴 Five real, static, canonical, internally-linked pages that were simply
       never added here (2026-08-16 SEO audit) — each has its own unique
@@ -215,10 +225,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
       deliberately rather than left to accidental discovery — see its own
       `robots` fix in app/(app)/explore/page.tsx for the matching half of this.
     */
-    { url: `${siteUrl}/pricing`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
-    { url: `${siteUrl}/features`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
-    { url: `${siteUrl}/developers`, lastModified: now, changeFrequency: "monthly", priority: 0.4 },
-    { url: `${siteUrl}/support`, lastModified: now, changeFrequency: "monthly", priority: 0.4 },
-    { url: `${siteUrl}/explore`, lastModified: now, changeFrequency: "daily", priority: 0.6 },
+    { url: `${siteUrl}/pricing`, changeFrequency: "monthly", priority: 0.6 },
+    { url: `${siteUrl}/features`, changeFrequency: "monthly", priority: 0.6 },
+    { url: `${siteUrl}/developers`, changeFrequency: "monthly", priority: 0.4 },
+    { url: `${siteUrl}/support`, changeFrequency: "monthly", priority: 0.4 },
+    { url: `${siteUrl}/explore`, changeFrequency: "daily", priority: 0.6 },
   ];
 }

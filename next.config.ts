@@ -461,11 +461,26 @@ const nextConfig: NextConfig = {
     answers the query, instead of just discarding it.
   */
   async redirects() {
-    return REMOVED_SEO_PAGES.map(({ from, to }) => ({
-      source: `/${from}`,
-      destination: `/${to}`,
-      permanent: true,
-    }));
+    return [
+      /*
+        www → apex (2026-10-09 indexing audit). www.frenzsave.com answered 200
+        with the full site straight from Vercel, so every page existed at two
+        hosts. The canonical tag already pointed at the apex; a permanent
+        redirect makes it unambiguous and stops crawl budget going to the copy.
+        Matched on the exact host, so preview deployments are untouched.
+      */
+      {
+        source: "/:path*",
+        has: [{ type: "host" as const, value: "www.frenzsave.com" }],
+        destination: "https://frenzsave.com/:path*",
+        permanent: true,
+      },
+      ...REMOVED_SEO_PAGES.map(({ from, to }) => ({
+        source: `/${from}`,
+        destination: `/${to}`,
+        permanent: true,
+      })),
+    ];
   },
 };
 

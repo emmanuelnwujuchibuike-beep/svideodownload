@@ -209,7 +209,7 @@ function ViewerInner({
   };
 
   const toggleFollow = async () => {
-    await toggleFollowShared(item.publisher.id, !following);
+    await toggleFollowShared(item.publisher.id, !following, "feed");
   };
 
   return (

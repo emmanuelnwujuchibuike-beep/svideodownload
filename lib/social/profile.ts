@@ -4,6 +4,7 @@ import { getCached } from "@/lib/cache";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { flagsOf, isAccountVisibleTo, relationTo } from "@/lib/social/account-visibility";
 import type { RequestPolicy } from "@/lib/social/friend-requests/trust";
+import type { FollowPolicy } from "@/lib/social/follow-policy";
 import { friendIdSet } from "@/lib/social/friend-ids";
 import { PROFILE_ACCENTS } from "@/lib/social/profile-moods";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -332,6 +333,8 @@ export interface PrivacySettings {
   muted_comment_keywords: string[];
   /** Migration 0216 (Feature 19 · Part 2) — who may send you a friend request. */
   friend_requests_policy: RequestPolicy;
+  /** Migration 0217 (Feature 19 · Part 3) — who may follow you. */
+  follow_policy: FollowPolicy;
 }
 
 export const DEFAULT_PRIVACY: PrivacySettings = {
@@ -355,6 +358,7 @@ export const DEFAULT_PRIVACY: PrivacySettings = {
   story_screenshot_alerts: true,
   muted_comment_keywords: [],
   friend_requests_policy: "everyone",
+  follow_policy: "everyone",
 };
 
 /* ----------------------------- follow lists ----------------------------- */
@@ -544,6 +548,7 @@ const PRIVACY_NEW_COLS = "show_reputation, show_plan_badge, show_views"; // migr
 const PRIVACY_NEWER_COLS = "muted_comment_keywords"; // migration 0122
 const PRIVACY_NEWEST_COLS = "story_screenshot_alerts"; // migration 0181
 const PRIVACY_0216_COLS = "friend_requests_policy"; // migration 0216
+const PRIVACY_0217_COLS = "follow_policy"; // migration 0217
 
 export async function getPrivacySettings(userId: string): Promise<PrivacySettings> {
   if (!hasSupabase) return DEFAULT_PRIVACY;
@@ -552,7 +557,18 @@ export async function getPrivacySettings(userId: string): Promise<PrivacySetting
   // applied yet must never revert an EARLIER, already-live setting to its
   // default (that would be a real privacy regression), so each tier only
   // drops the columns that are actually missing.
-  // 0216 first, as its own tier: a missing friend_requests_policy column drops ONLY that column
+  // 0217, then 0216, each as its own tier: a missing newer column drops ONLY that column
+  try {
+    const { data, error } = await db
+      .from("privacy_settings")
+      .select(`${PRIVACY_BASE_COLS}, ${PRIVACY_NEW_COLS}, ${PRIVACY_NEWER_COLS}, ${PRIVACY_NEWEST_COLS}, ${PRIVACY_0216_COLS}, ${PRIVACY_0217_COLS}`)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    return { ...DEFAULT_PRIVACY, ...((data ?? {}) as Partial<PrivacySettings>) };
+  } catch {
+    /* 0217 not applied yet */
+  }
   try {
     const { data, error } = await db
       .from("privacy_settings")

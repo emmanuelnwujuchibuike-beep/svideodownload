@@ -422,7 +422,7 @@ function ImageStage({
     });
   }, [item.id]);
 
-  const toggleFollow = () => void toggleFollowShared(item.publisher.id, !following);
+  const toggleFollow = () => void toggleFollowShared(item.publisher.id, !following, "feed");
 
   return (
     <motion.div

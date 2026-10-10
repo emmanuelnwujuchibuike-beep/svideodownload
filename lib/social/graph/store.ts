@@ -47,19 +47,26 @@ export interface CircleRow {
   color: string;
   position: number;
   memberCount: number;
+  /** 0217: "custom", or one of the special circles (close_friends, inner_circle, vip) */
+  kind: string;
+  /** 0217: a CIRCLE_ICONS key */
+  icon: string;
 }
 
 /** A member's circles with their sizes — one query for the list, one for the counts. */
 export async function listCircles(ownerId: string): Promise<CircleRow[]> {
-  const circles = await safe(
-    () =>
-      createAdminClient()
-        .from("social_circles")
-        .select("id, name, color, position")
-        .eq("owner_id", ownerId)
-        .order("position", { ascending: true })
-        .order("created_at", { ascending: true })
-        .limit(MAX_CIRCLES_PER_MEMBER),
+  // 0217 columns first; a database without them answers the original columns, never "no circles"
+  const query = (cols: string) => () =>
+    createAdminClient()
+      .from("social_circles")
+      .select(cols)
+      .eq("owner_id", ownerId)
+      .order("position", { ascending: true })
+      .order("created_at", { ascending: true })
+      .limit(MAX_CIRCLES_PER_MEMBER);
+  const SENTINEL = [{ id: "", name: "", color: "", position: -1, memberCount: 0, kind: "", icon: "" }] as CircleRow[];
+  let circles = await safe(
+    query("id, name, color, position, kind, icon"),
     (rows) =>
       rows
         .map((r) => ({
@@ -68,10 +75,22 @@ export async function listCircles(ownerId: string): Promise<CircleRow[]> {
           color: str(r.color) ?? "blue",
           position: typeof r.position === "number" ? r.position : 0,
           memberCount: 0,
+          kind: str(r.kind) ?? "custom",
+          icon: str(r.icon) ?? "circle",
         }))
         .filter((c) => c.id),
-    [] as CircleRow[],
+    SENTINEL,
   );
+  if (circles === SENTINEL) {
+    circles = await safe(
+      query("id, name, color, position"),
+      (rows) =>
+        rows
+          .map((r) => ({ id: str(r.id) ?? "", name: str(r.name) ?? "Circle", color: str(r.color) ?? "blue", position: typeof r.position === "number" ? r.position : 0, memberCount: 0, kind: "custom", icon: "circle" }))
+          .filter((c) => c.id),
+      [] as CircleRow[],
+    );
+  }
   if (circles.length === 0) return circles;
 
   // Counted in ONE query over the owner's own rows rather than a count per

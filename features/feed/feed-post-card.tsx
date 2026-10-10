@@ -362,7 +362,7 @@ function FeedPostCardImpl({
     setBusy(true);
     try {
       // Shared store updates every card/reel for this creator at once.
-      await toggleFollowShared(item.publisher.id, !following);
+      await toggleFollowShared(item.publisher.id, !following, "feed");
     } finally {
       setBusy(false);
       setMenuOpen(false);

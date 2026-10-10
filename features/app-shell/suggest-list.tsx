@@ -42,7 +42,7 @@ function SuggestRow({ item }: { item: SuggestItem }) {
     setFollowing(next); // optimistic
     setBusy(true);
     try {
-      const res = await fetch(`/api/follow/${item.id}`, { method: next ? "POST" : "DELETE" });
+      const res = await fetch(`/api/follow/${item.id}`, next ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source: "suggestion" }) } : { method: "DELETE" });
       if (!res.ok) setFollowing(!next); // rollback
     } catch {
       setFollowing(!next);

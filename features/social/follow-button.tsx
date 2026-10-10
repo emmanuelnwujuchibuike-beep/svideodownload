@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { promptCreatorNotifications } from "@/features/social/creator-notify-nudge";
-import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
+import type { FollowSource } from "@/lib/social/follow-policy";
+import { toggleFollow as toggleFollowShared, useFollowRequested, useFollowState } from "@/lib/social/follow-store";
 import { cn } from "@/lib/utils";
 
 /**
@@ -25,6 +26,7 @@ export function FollowButton({
   followsYou = false,
   className,
   targetHandle,
+  source = "profile",
 }: {
   targetId: string;
   initialFollowing: boolean;
@@ -40,9 +42,13 @@ export function FollowButton({
    * feature on threading a handle through every list component.
    */
   targetHandle?: string;
+  /** where this button lives (Feature 19 · Part 3 follow sources) */
+  source?: FollowSource;
 }) {
   const router = useRouter();
   const following = useFollowState(targetId, initialFollowing);
+  // Feature 19 · Part 3: asked to follow an account that approves followers — tap again to withdraw
+  const requested = useFollowRequested(targetId);
   const [busy, setBusy] = useState(false);
 
   if (!canFollow) {
@@ -56,9 +62,9 @@ export function FollowButton({
   const toggle = async () => {
     if (busy) return;
     setBusy(true);
-    const wantFollow = !following;
-    const settled = await toggleFollowShared(targetId, wantFollow);
-    if (settled === wantFollow) {
+    const wantFollow = !following && !requested;
+    const settled = await toggleFollowShared(targetId, wantFollow, source);
+    if (settled === wantFollow || (wantFollow && !settled)) {
       router.refresh(); // succeeded
       /*
         Offer that creator's notifications, once, right after a FOLLOW (owner,
@@ -69,7 +75,7 @@ export function FollowButton({
         turn on notifications would be the opposite of reading the room. Also
         only when a handle was supplied, since the prompt names the person.
       */
-      if (wantFollow && targetHandle) {
+      if (wantFollow && settled && targetHandle) {
         promptCreatorNotifications({ userId: targetId, handle: targetHandle, reason: "followed" });
       }
     }
@@ -81,17 +87,17 @@ export function FollowButton({
       type="button"
       onClick={toggle}
       disabled={busy}
-      aria-pressed={following}
-      className={cn("btn-lux", following ? "btn-lux-secondary" : "btn-lux-primary", className)}
+      aria-pressed={following || requested}
+      className={cn("btn-lux", following || requested ? "btn-lux-secondary" : "btn-lux-primary", className)}
     >
       {busy ? (
         <Loader2 className="h-4 w-4 animate-spin" />
-      ) : following ? (
+      ) : following || requested ? (
         <UserCheck className="h-4 w-4" />
       ) : (
         <UserPlus className="h-4 w-4" />
       )}
-      {following ? "Following" : followsYou ? "Follow back" : "Follow"}
+      {following ? "Following" : requested ? "Requested" : followsYou ? "Follow back" : "Follow"}
     </button>
   );
 }

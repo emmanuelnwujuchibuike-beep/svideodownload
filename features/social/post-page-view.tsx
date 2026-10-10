@@ -358,7 +358,7 @@ export async function PostPageView({
             </span>
             <span className="block truncate text-sm text-muted-foreground">@{post.publisher.handle}</span>
           </Link>
-          {post.isOwner ? null : <FollowButton targetId={post.publisher.id} initialFollowing={post.publisher.isFollowing} canFollow={!!me} />}
+          {post.isOwner ? null : <FollowButton targetId={post.publisher.id} initialFollowing={post.publisher.isFollowing} canFollow={!!me} source="feed" />}
         </div>
 
         {/* Poll (vote) — render if one exists; otherwise let the owner add one */}

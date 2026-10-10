@@ -66,7 +66,7 @@ export function FollowPill({
       onClick={async () => {
         if (busy) return;
         setBusy(true);
-        await toggleFollow(targetId, !following);
+        await toggleFollow(targetId, !following, "search");
         setBusy(false);
       }}
       className={cn(

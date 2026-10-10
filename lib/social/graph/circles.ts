@@ -104,7 +104,10 @@ export function liveCirclePermissions(): CirclePermissionSpec[] {
 
 // ── Palette ───────────────────────────────────────────────────────────────
 
-export type CircleColor = "blue" | "violet" | "emerald" | "amber" | "rose" | "sky" | "pink" | "slate";
+export type CircleColor =
+  | "blue" | "violet" | "emerald" | "amber" | "rose" | "sky" | "pink" | "slate"
+  // Feature 19 · Part 4 premium palette (0217 widens the CHECK)
+  | "titanium" | "graphite" | "ocean" | "forest" | "royal" | "crimson" | "pearl" | "glass";
 
 export const CIRCLE_COLORS: readonly CircleColor[] = [
   "blue",
@@ -115,7 +118,18 @@ export const CIRCLE_COLORS: readonly CircleColor[] = [
   "sky",
   "pink",
   "slate",
+  "titanium",
+  "graphite",
+  "ocean",
+  "forest",
+  "royal",
+  "crimson",
+  "pearl",
+  "glass",
 ] as const;
+
+/** The colours a database before 0217 refuses — the API answers "after the update" instead of failing quietly. */
+export const PREMIUM_CIRCLE_COLORS: ReadonlySet<CircleColor> = new Set(["titanium", "graphite", "ocean", "forest", "royal", "crimson", "pearl", "glass"]);
 
 export const DEFAULT_CIRCLE_COLOR: CircleColor = "blue";
 
@@ -150,8 +164,49 @@ export function circleColorClasses(color: string): { chip: string; dot: string; 
       dot: "bg-slate-500",
       ring: "ring-slate-500/30",
     },
+    titanium: { chip: "bg-zinc-400/15 text-zinc-600 dark:text-zinc-300", dot: "bg-gradient-to-br from-zinc-300 to-zinc-500", ring: "ring-zinc-400/40" },
+    graphite: { chip: "bg-neutral-700/10 text-neutral-700 dark:text-neutral-300", dot: "bg-gradient-to-br from-neutral-600 to-neutral-800", ring: "ring-neutral-600/40" },
+    ocean: { chip: "bg-cyan-600/10 text-cyan-700 dark:text-cyan-300", dot: "bg-gradient-to-br from-cyan-400 to-blue-600", ring: "ring-cyan-500/30" },
+    forest: { chip: "bg-green-700/10 text-green-700 dark:text-green-400", dot: "bg-gradient-to-br from-green-500 to-emerald-800", ring: "ring-green-600/30" },
+    royal: { chip: "bg-indigo-600/10 text-indigo-700 dark:text-indigo-300", dot: "bg-gradient-to-br from-indigo-500 to-blue-800", ring: "ring-indigo-500/30" },
+    crimson: { chip: "bg-red-600/10 text-red-700 dark:text-red-400", dot: "bg-gradient-to-br from-red-500 to-rose-800", ring: "ring-red-500/30" },
+    pearl: { chip: "bg-stone-200/60 text-stone-600 dark:bg-stone-200/10 dark:text-stone-300", dot: "bg-gradient-to-br from-white to-stone-300 ring-1 ring-stone-300", ring: "ring-stone-300/50" },
+    glass: { chip: "bg-white/40 text-slate-600 ring-1 ring-white/50 backdrop-blur dark:bg-white/10 dark:text-slate-200", dot: "bg-gradient-to-br from-white/80 to-sky-200/60 ring-1 ring-white/60", ring: "ring-white/50" },
   };
   return map[isCircleColor(color) ? color : DEFAULT_CIRCLE_COLOR];
+}
+
+// ── Icons and kinds (Feature 19 · Part 4) ─────────────────────────────────
+
+/**
+ * No emoji (the brief: "Do NOT use emoji icons"). A fixed set of geometric
+ * symbols — a KEY, like the colour, so the database never holds arbitrary
+ * markup; features/friends/circle-icon.tsx maps each to its glyph.
+ */
+export const CIRCLE_ICONS = ["circle", "diamond", "shield", "compass", "star", "hexagon", "ribbon", "layers", "crown", "briefcase"] as const;
+export type CircleIcon = (typeof CIRCLE_ICONS)[number];
+export const DEFAULT_CIRCLE_ICON: CircleIcon = "circle";
+export function isCircleIcon(v: unknown): v is CircleIcon {
+  return typeof v === "string" && (CIRCLE_ICONS as readonly string[]).includes(v);
+}
+
+/**
+ * The three special circles — one of each per member (0217 unique index):
+ *   Close friends   the people closest to you
+ *   Inner circle    the very few you trust most
+ *   VIP             people who matter for work: clients, mentors, partners
+ * They are ordinary circles underneath — same privacy (owner-only), same
+ * members, same permissions — given a fixed name, icon and colour so every
+ * surface can recognise them.
+ */
+export const CIRCLE_KINDS = {
+  close_friends: { name: "Close friends", icon: "star", color: "royal", blurb: "The people closest to you." },
+  inner_circle: { name: "Inner circle", icon: "diamond", color: "titanium", blurb: "The very few you trust most." },
+  vip: { name: "VIP", icon: "crown", color: "amber", blurb: "Clients, mentors, partners — people who matter for work." },
+} as const satisfies Record<string, { name: string; icon: CircleIcon; color: CircleColor; blurb: string }>;
+export type CircleKind = keyof typeof CIRCLE_KINDS;
+export function isCircleKind(v: unknown): v is CircleKind {
+  return typeof v === "string" && v in CIRCLE_KINDS;
 }
 
 // ── Limits ────────────────────────────────────────────────────────────────

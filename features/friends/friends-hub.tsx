@@ -22,6 +22,7 @@ import { useMemo, useRef, useState } from "react";
 
 import { FriendCelebration } from "@/features/friends/friend-celebration";
 import { FriendOrbit } from "@/features/friends/friend-orbit";
+import { FollowRequestsSection } from "@/features/friends/follow-requests";
 import { RequestCard } from "@/features/friends/request-card";
 import { filterRequests, REQUEST_FILTERS, type RequestFilter } from "@/features/friends/request-logic";
 import { usePresence } from "@/features/friends/use-presence";
@@ -237,6 +238,9 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
       {initial.viewer && favorites.length > 0 ? (
         <FriendOrbit viewer={initial.viewer} favorites={favorites} online={online} />
       ) : null}
+
+      {/* Feature 19 · Part 3 — only when the account approves followers and someone asked */}
+      <FollowRequestsSection />
 
       {incoming.length > 0 ? (
         <section className="mb-6">

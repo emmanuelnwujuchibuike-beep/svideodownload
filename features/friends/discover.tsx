@@ -299,7 +299,7 @@ function FollowChip({ id, name, initial }: { id: string; name: string; initial: 
   return (
     <button
       type="button"
-      onClick={() => void toggleFollow(id, !following)}
+      onClick={() => void toggleFollow(id, !following, "suggestion")}
       aria-pressed={following}
       aria-label={following ? `Following ${name}. Tap to unfollow.` : `Follow ${name}`}
       className={cn(

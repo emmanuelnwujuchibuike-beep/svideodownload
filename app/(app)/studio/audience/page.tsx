@@ -6,6 +6,8 @@ import { EmptyNote, MeterRow, StatCard, StudioCard } from "@/features/studio/stu
 import { ViewingHours } from "@/features/studio/viewing-hours";
 import { getAudienceInsights, MIN_INTEREST_COHORT } from "@/lib/creator/audience";
 import { getCreatorLounge } from "@/lib/social/creator-lounge";
+import { FOLLOW_SOURCE_LABELS } from "@/lib/social/follow-policy";
+import { followerInsights } from "@/lib/social/follower-insights";
 import { createClient } from "@/lib/supabase/server";
 import { formatCompactNumber } from "@/lib/utils";
 
@@ -31,7 +33,7 @@ export default async function StudioAudiencePage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/studio/audience");
 
-  const [audience, lounge] = await Promise.all([getAudienceInsights(user.id), getCreatorLounge(user.id, 60)]);
+  const [audience, lounge, flow] = await Promise.all([getAudienceInsights(user.id), getCreatorLounge(user.id, 60), followerInsights(user.id)]);
 
   const followerTrend = audience.trends.find((t) => t.metric === "followers");
   const totalViewers = audience.returningViewers + audience.oneTimeViewers;
@@ -54,6 +56,35 @@ export default async function StudioAudiencePage() {
           hint="Watched on 3+ separate days"
         />
       </div>
+
+      {/* Feature 19 · Part 3 — Audience Intelligence: counts, never who (lib/social/follower-insights.ts) */}
+      <StudioCard title="Follower flow" icon={Users} subtitle="New and lost followers — counted, never named">
+        {!flow.available ? (
+          <EmptyNote>Follower flow starts counting once the latest database update is applied. Nothing before then is estimated.</EmptyNote>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              {([["Last 7 days", flow.week], ["Last 30 days", flow.month]] as const).map(([label, f]) => (
+                <div key={label} className="rounded-2xl bg-secondary/60 p-3">
+                  <p className="text-xs font-medium text-muted-foreground">{label}</p>
+                  <p className="mt-1 text-lg font-bold tabular-nums">{f.net > 0 ? "+" : ""}{formatCompactNumber(f.net)}</p>
+                  <p className="text-[11px] text-muted-foreground tabular-nums">+{formatCompactNumber(f.gained)} new · −{formatCompactNumber(f.lost)} lost</p>
+                </div>
+              ))}
+            </div>
+            {flow.sources.length ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground">Where followers come from</p>
+                {flow.sources.map((s) => (
+                  <MeterRow key={s.source} label={FOLLOW_SOURCE_LABELS[s.source]} value={s.count} max={flow.sources[0]!.count} display={`${Math.round(s.share * 100)}%`} />
+                ))}
+              </div>
+            ) : (
+              <EmptyNote>Sources appear once enough followers arrive from one place to stay anonymous.</EmptyNote>
+            )}
+          </div>
+        )}
+      </StudioCard>
 
       <StudioCard title="Growth" icon={TrendingUp} subtitle="From the daily readings taken since you joined">
         {audience.insufficientHistory ? (

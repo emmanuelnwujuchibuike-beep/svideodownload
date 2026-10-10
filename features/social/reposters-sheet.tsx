@@ -141,7 +141,7 @@ function ReposterRowItem({ r, onNavigate }: { r: Reposter; onNavigate: () => voi
     if (busy) return;
     setBusy(true);
     try {
-      await toggleFollow(r.id, !following);
+      await toggleFollow(r.id, !following, "other");
     } finally {
       setBusy(false);
     }

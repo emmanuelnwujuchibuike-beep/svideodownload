@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 
 import { WowOutline } from "@/components/brand/wow-icon";
 import { SETTINGS_TINTS } from "@/features/account/settings-ui";
+import { FOLLOW_POLICIES, FOLLOW_POLICY_LABELS } from "@/lib/social/follow-policy";
 import type { PrivacySettings } from "@/lib/social/profile";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +30,8 @@ const REQUEST_POLICY: Choice[] = [
   { value: "verified", label: "Verified" },
   { value: "nobody", label: "Nobody" },
 ];
+/** 0217 — who may follow you (lib/social/follow-policy.ts). Six choices: a select, which fits 320 px where a segmented control would not. */
+const FOLLOW_POLICY: Choice[] = FOLLOW_POLICIES.map((value) => ({ value, label: FOLLOW_POLICY_LABELS[value] }));
 const REL_POLICY: Choice[] = [
   { value: "everyone", label: "Everyone" },
   { value: "friends", label: "Friends" },
@@ -77,6 +80,7 @@ export function PrivacyEditor({ settings }: { settings: PrivacySettings }) {
           <SegRow icon={MessageSquare} tint="violet" title="Comments" desc="Who can comment on your posts" value={state.comments_policy} choices={POLICY} onChange={(v) => set("comments_policy", v as PrivacySettings["comments_policy"])} />
           <SegRow icon={MessageSquare} tint="purple" title="Messages" desc="Who can send you direct messages" value={state.messages_policy} choices={POLICY} onChange={(v) => set("messages_policy", v as PrivacySettings["messages_policy"])} />
           <SegRow icon={UserPlus} tint="blue" title="Friend requests" desc="Who can send you one. Mutuals = friends of your friends." value={state.friend_requests_policy} choices={REQUEST_POLICY} onChange={(v) => set("friend_requests_policy", v as PrivacySettings["friend_requests_policy"])} />
+          <SelectRow icon={Users} tint="violet" title="Who can follow you" desc="With approval, new followers ask first. Friends can always follow unless you choose Nobody." value={state.follow_policy} choices={FOLLOW_POLICY} onChange={(v) => set("follow_policy", v as PrivacySettings["follow_policy"])} />
           <ToggleRow icon={Search} tint="slate" title="Search engine indexing" desc="Let Google show your profile" on={state.allow_indexing} onToggle={() => set("allow_indexing", !state.allow_indexing)} />
           <ToggleRow icon={Sparkles} tint="purple" title="Recommendations" desc="Show me in suggestions & trending" on={state.show_in_recommendations} onToggle={() => set("show_in_recommendations", !state.show_in_recommendations)} />
           {/* Public-by-default, hideable (owner). */}
@@ -341,6 +345,49 @@ function SegRow({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function SelectRow({
+  icon: Icon,
+  tint = "slate",
+  title,
+  desc,
+  value,
+  choices,
+  onChange,
+}: {
+  icon: typeof Eye;
+  tint?: keyof typeof SETTINGS_TINTS;
+  title: string;
+  desc: string;
+  value: string;
+  choices: Choice[];
+  onChange: (v: string) => void;
+}) {
+  const id = `privacy-${title.toLowerCase().replace(/[^a-z]+/g, "-")}`;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-3">
+      <span className="flex items-center gap-3">
+        <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset", SETTINGS_TINTS[tint])}>
+          <Icon className="h-[18px] w-[18px]" />
+        </span>
+        <span className="min-w-0">
+          <label htmlFor={id} className="block text-sm font-semibold">{title}</label>
+          <span className="block text-xs text-muted-foreground">{desc}</span>
+        </span>
+      </span>
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="min-h-[2.5rem] rounded-lg bg-secondary px-2.5 text-xs font-medium ring-1 ring-inset ring-border focus:outline-none focus:ring-2 focus:ring-primary"
+      >
+        {choices.map((c) => (
+          <option key={c.value} value={c.value}>{c.label}</option>
+        ))}
+      </select>
     </div>
   );
 }

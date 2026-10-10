@@ -87,6 +87,8 @@ export const DATA_DOMAINS: DataDomain[] = [
       "friendships",
       "friend_requests",
       "friend_request_ignores",
+      "follow_requests",
+      "follower_daily",
       "friend_favorites",
       "blocks",
       "muted_creators",

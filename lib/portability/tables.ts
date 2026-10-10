@@ -267,6 +267,8 @@ export const OWNER_COLUMN: Record<string, string> = {
   // follower_id = accounts you chose to follow. The other side is exported
   // separately as `followers`, see FOLLOW_MIRROR.
   follows: "follower_id",
+  follow_requests: "requester_id", // 0217: the requester's own action, like friend_requests
+  follower_daily: "user_id", // 0217: your own gained/lost counts — numbers, never who
   blocks: "blocker_id",
   muted_creators: "muter_id",
 

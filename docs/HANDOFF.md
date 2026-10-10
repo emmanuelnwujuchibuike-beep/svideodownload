@@ -72,9 +72,12 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
    uploaded; anything else still gets "try again". Reels already keep playing
    their MP4 without a Stream copy. Freeing Stream storage is still the owner's
    call in the Cloudflare dashboard.
-4. **Migrations 0214 and 0215** not yet run in production. 0215 raises the
-   public `ad-creatives` bucket to 200 MB (PGlite-tested twice + a mutant).
-   Code works before and after each.
+4. **Migrations 0214, 0215, 0216, 0217** not yet run in production, in that
+   order. 0215 raises the public `ad-creatives` bucket to 200 MB; 0216 is Friend
+   Requests (ignores, request privacy, source); 0217 is the follow platform and
+   circles (follow policy + requests, follower_daily, circle kinds/icons/palette,
+   and a NEW follows insert policy that enforces approval in the database).
+   Each PGlite-tested twice + a mutant; code works before and after each.
 5. **Verify on the owner's iPhone:** the bottom nav after minimising
    (`lib/pwa/resume-viewport.ts`) and chat avatars instant on entry (SW v26) —
    neither can be reproduced in desktop Chromium. History's top half painting
@@ -86,6 +89,14 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
    only defaults to `cover` and keeps the original height) — fixed with
    `resize=contain`. The top strip asks for an image 32–40 px tall and has no
    description field.
+7. **Feature 19 (Friends, Followers, Social Graph) — Parts 1–4 done.** The
+   governing doc is `docs/FEATURE_19_SOCIAL_GRAPH.md` (architecture, decisions and
+   a Gap Ledger per part). Part 1 already existed as Feature 18 Part 17. Planned,
+   with reasons in the doc: paid creator memberships, close-friends-only stories
+   and posts, favourite/VIP feed priority, contact sync, admin spam review.
+8. **History crash fixed 2026-10-10:** the grid mounted a <video> per ad tile
+   (19 at once with 60 items); tiles now hold media only near the viewport. One
+   full-screen dialog at a time (`lib/ui/modal-open.ts`).
 
 Rules learned 2026-10-10: **no www → apex redirect** (sign-in cookies live on
 the host where sign-in began; the redirect bounced admin login — removed in

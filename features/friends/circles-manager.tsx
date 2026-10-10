@@ -1,14 +1,20 @@
 "use client";
 
-import { Check, Loader2, Plus, Trash2, Users } from "lucide-react";
+import { Check, Loader2, Plus, Sparkles, Trash2, Users } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 
+import { CircleGlyph } from "@/features/friends/circle-icon";
 import type { FriendProfile } from "@/lib/social/friends";
+import { circleSuggestions, type CircleSuggestion } from "@/lib/social/graph/circle-suggestions";
 import {
   CIRCLE_COLORS,
+  CIRCLE_ICONS,
+  CIRCLE_KINDS,
   circleColorClasses,
+  type CircleIcon,
+  type CircleKind,
   MAX_CIRCLES_PER_MEMBER,
   SUGGESTED_CIRCLES,
   validateCircleName,
@@ -48,6 +54,7 @@ export function CirclesManager({ circles: initialCircles, connections, initialMe
   const [creating, setCreating] = useState(initialCircles.length === 0);
   const [name, setName] = useState("");
   const [color, setColor] = useState<CircleColor>("blue");
+  const [icon, setIcon] = useState<CircleIcon>("circle");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<Set<string>>(new Set());
@@ -56,14 +63,14 @@ export function CirclesManager({ circles: initialCircles, connections, initialMe
   const active = circles.find((c) => c.id === activeId) ?? null;
 
   const create = useCallback(
-    async (rawName: string, rawColor: CircleColor) => {
+    async (rawName: string, rawColor: CircleColor, opts: { icon?: CircleIcon; kind?: CircleKind } = {}): Promise<CircleRow | null> => {
       const check = validateCircleName(
         rawName,
         circles.map((c) => c.name),
       );
       if (!check.ok) {
         setError(check.error);
-        return;
+        return null;
       }
       setBusy(true);
       setError(null);
@@ -71,25 +78,73 @@ export function CirclesManager({ circles: initialCircles, connections, initialMe
         const res = await fetch("/api/graph/circles", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: check.value, color: rawColor }),
+          body: JSON.stringify({ name: check.value, color: rawColor, ...(opts.icon ? { icon: opts.icon } : {}), ...(opts.kind ? { kind: opts.kind } : {}) }),
         });
         const json = (await res.json()) as { circle?: CircleRow; error?: string };
         if (!res.ok || !json.circle) {
           setError(json.error ?? "Couldn't create that circle.");
-          return;
+          return null;
         }
         setCircles((cs) => [...cs, json.circle!]);
         setActiveId(json.circle.id);
         setCreating(false);
         setName("");
+        return json.circle;
       } catch {
         setError("Network error.");
+        return null;
       } finally {
         setBusy(false);
       }
     },
     [circles],
   );
+
+  /*
+    Smart Circle suggestions (Feature 19 · Part 4) — transparent rules over the
+    member's own favourites, labels and strength bands; applied only on a tap.
+  */
+  const suggestions = useMemo(
+    () =>
+      circleSuggestions(
+        connections.map((c) => ({ id: c.user.id, band: c.band, favorite: c.favorite, label: c.label, circleIds: membership[c.user.id] ?? c.circleIds })),
+        circles,
+      ),
+    [connections, circles, membership],
+  );
+  const [applying, setApplying] = useState<string | null>(null);
+  const applySuggestion = useCallback(
+    async (sg: CircleSuggestion) => {
+      setApplying(sg.key);
+      setError(null);
+      try {
+        const t = sg.target;
+        let target = "kind" in t ? circles.find((c) => c.kind === t.kind) : circles.find((c) => c.name.toLowerCase() === t.name.toLowerCase());
+        if (!target) {
+          const created = "kind" in t
+            ? await create(CIRCLE_KINDS[t.kind].name, CIRCLE_KINDS[t.kind].color, { icon: CIRCLE_KINDS[t.kind].icon, kind: t.kind })
+            : await create(t.name, "rose", { icon: "shield" });
+          target = created ?? undefined;
+        }
+        if (!target) return;
+        const circleId = target.id;
+        let added = 0;
+        for (const memberId of sg.memberIds) {
+          const res = await fetch(`/api/graph/circles/${circleId}/members`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ memberId }) });
+          if (!res.ok) continue;
+          added += 1;
+          setMembership((m) => ({ ...m, [memberId]: [...new Set([...(m[memberId] ?? []), circleId])] }));
+        }
+        setCircles((cs) => cs.map((c) => (c.id === circleId ? { ...c, memberCount: c.memberCount + added } : c)));
+        setActiveId(circleId);
+        if (added < sg.memberIds.length) setError(`Added ${added} of ${sg.memberIds.length}.`);
+      } finally {
+        setApplying(null);
+      }
+    },
+    [circles, create],
+  );
+  const missingKinds = (Object.keys(CIRCLE_KINDS) as CircleKind[]).filter((k) => !circles.some((c) => c.kind === k));
 
   const remove = useCallback(async (id: string) => {
     setBusy(true);
@@ -195,7 +250,7 @@ export function CirclesManager({ circles: initialCircles, connections, initialMe
                   isActive ? `${cls.chip} ${cls.ring}` : "bg-secondary/50 text-muted-foreground ring-transparent hover:text-foreground",
                 )}
               >
-                <span className={cn("h-2 w-2 rounded-full", cls.dot)} />
+                <CircleGlyph icon={c.icon ?? "circle"} className="h-3.5 w-3.5" />
                 {c.name}
                 <span className="tabular-nums opacity-60">{c.memberCount}</span>
               </button>
@@ -242,11 +297,28 @@ export function CirclesManager({ circles: initialCircles, connections, initialMe
                 />
               ))}
             </div>
+            <div className="mt-3 flex flex-wrap items-center gap-1" role="group" aria-label="Circle icon">
+              {CIRCLE_ICONS.map((ic) => (
+                <button
+                  key={ic}
+                  type="button"
+                  onClick={() => setIcon(ic)}
+                  aria-label={`${ic} icon`}
+                  aria-pressed={icon === ic}
+                  className={cn(
+                    "flex h-9 w-9 items-center justify-center rounded-xl ring-1 ring-inset transition",
+                    icon === ic ? `${circleColorClasses(color).chip} ${circleColorClasses(color).ring}` : "text-muted-foreground ring-border hover:text-foreground",
+                  )}
+                >
+                  <CircleGlyph icon={ic} className="h-4 w-4" />
+                </button>
+              ))}
+            </div>
             <div className="mt-3 flex items-center gap-2">
               <button
                 type="button"
                 disabled={busy || !name.trim()}
-                onClick={() => void create(name, color)}
+                onClick={() => void create(name, color, { icon })}
                 className="btn-lux btn-lux-primary !py-2 !text-xs"
               >
                 {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
@@ -288,6 +360,53 @@ export function CirclesManager({ circles: initialCircles, connections, initialMe
         ) : null}
 
         {error ? <p className="mt-2 text-xs font-medium text-rose-500">{error}</p> : null}
+
+        {/* Feature 19 · Part 4 — the special circles, one tap each, one of each */}
+        {missingKinds.length ? (
+          <div className="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Add a special circle">
+            {missingKinds.map((k) => {
+              const spec = CIRCLE_KINDS[k];
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  disabled={busy}
+                  title={spec.blurb}
+                  onClick={() => void create(spec.name, spec.color, { icon: spec.icon, kind: k })}
+                  className={cn("inline-flex min-h-[2.25rem] items-center gap-1.5 rounded-full px-3 text-xs font-semibold ring-1 ring-inset transition disabled:opacity-50", circleColorClasses(spec.color).chip, circleColorClasses(spec.color).ring)}
+                >
+                  <CircleGlyph icon={spec.icon} className="h-3.5 w-3.5" />
+                  <Plus className="h-3 w-3" aria-hidden />
+                  {spec.name}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {suggestions.length ? (
+          <div className="mt-3 space-y-2 rounded-2xl border border-border/70 bg-card p-3">
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+              <Sparkles className="h-3.5 w-3.5" aria-hidden /> Suggestions
+            </p>
+            {suggestions.map((sg) => (
+              <div key={sg.key} className="flex items-center justify-between gap-3">
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold">{sg.title}</span>
+                  <span className="block text-xs text-muted-foreground">{sg.reason}</span>
+                </span>
+                <button
+                  type="button"
+                  disabled={!!applying || busy}
+                  onClick={() => void applySuggestion(sg)}
+                  className="inline-flex min-h-[2.5rem] shrink-0 items-center gap-1.5 rounded-xl bg-foreground px-3 text-xs font-semibold text-background disabled:opacity-50"
+                >
+                  {applying === sg.key ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Add
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       {/* ── Members ───────────────────────────────────────────────── */}

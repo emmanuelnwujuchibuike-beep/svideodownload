@@ -1477,7 +1477,7 @@ function ReelCard({
       return;
     }
     // Shared store keeps this in sync with the feed card + every other reel.
-    await toggleFollowShared(item.publisher.id, !following);
+    await toggleFollowShared(item.publisher.id, !following, "reels");
   };
 
   const unmute = () => {

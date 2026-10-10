@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { isPlayerOpen, onPlayerChange, SAVED_TO_DEVICE_EVENT } from "@/features/downloads/player-store";
 import { DOWNLOAD_COMPLETED_EVENT } from "@/lib/downloads/completion-event";
 import { sharedToday } from "@/features/rewards/referral-shared-today";
+import { anotherModalOpen } from "@/lib/ui/modal-open";
 
 const ReferralBanner = dynamic(() => import("@/features/rewards/referral-banner").then((m) => m.ReferralBanner), { ssr: false });
 
@@ -53,7 +54,8 @@ export function ReferralBannerTrigger() {
     let lastShown = 0;
     let waitTimer: number | null = null;
     // the network ad's dialog, or a paid campaign's (Ad Platform Part 5)
-    const adOpen = () => !!document.querySelector('[role="dialog"][aria-label="Advertisement"], [role="dialog"][data-paid-ad]');
+    // ANY full-screen dialog (an ad, a sheet) — never stack on it (lib/ui/modal-open.ts)
+    const adOpen = () => anotherModalOpen();
     const onCompleted = () => {
       let count = 0;
       try {
@@ -67,8 +69,9 @@ export function ReferralBannerTrigger() {
       const started = Date.now();
       // give the ad a moment to open first, then wait for it to close
       const tryShow = () => {
-        if (adOpen() && Date.now() - started < 60_000) {
-          waitTimer = window.setTimeout(tryShow, 1000);
+        if (adOpen()) {
+          // still blocked after a minute: skip this time rather than open on top of it
+          if (Date.now() - started < 60_000) waitTimer = window.setTimeout(tryShow, 1000);
           return;
         }
         if (isPlayerOpen()) {
@@ -86,7 +89,7 @@ export function ReferralBannerTrigger() {
       const done = () => {
         stopWaiting?.();
         stopWaiting = null;
-        if (!sharedToday()) setShow(true);
+        if (!sharedToday() && !anotherModalOpen()) setShow(true);
       };
       const offPlayer = onPlayerChange(() => {
         if (!isPlayerOpen()) done();

@@ -28,7 +28,8 @@ describe("the referral banner after a download", () => {
     expect(code("features/app-shell/deferred-shell.tsx")).toContain("<ReferralBannerTrigger />");
   });
   it("never on top of the download-complete ad — it waits for the ad to close", () => {
-    expect(trigger).toContain(`document.querySelector('[role="dialog"][aria-label="Advertisement"], [role="dialog"][data-paid-ad]')`);
+    // 2026-10-10: widened to ANY visible full-screen dialog (lib/ui/modal-open.ts), and it never falls through on top
+    expect(trigger).toContain("const adOpen = () => anotherModalOpen();");
   });
   it("costs the page nothing until it shows: the banner is a dynamic import", () => {
     expect(trigger).toContain('dynamic(() => import("@/features/rewards/referral-banner")');

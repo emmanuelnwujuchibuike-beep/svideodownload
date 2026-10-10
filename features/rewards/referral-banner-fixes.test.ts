@@ -42,7 +42,7 @@ describe("shared once → quiet until tomorrow", () => {
     expect(src("features/rewards/referral-banner.tsx")).toMatch(/if \(out === "shared" \|\| out === "copied"\) \{\s*markSharedToday\(\);/);
     const t = src("features/rewards/referral-banner-trigger.tsx");
     expect(t).toContain("|| sharedToday()) return;");
-    expect(t).toContain("if (!sharedToday()) setShow(true);");
+    expect(t).toContain("if (!sharedToday() && !anotherModalOpen()) setShow(true);");
   });
 });
 

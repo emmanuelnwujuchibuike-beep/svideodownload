@@ -12,6 +12,7 @@ import { MOMENT_SLOTS } from "@/lib/ads-platform/slot-moments";
 import { providerOrder, resolveSlotProvider } from "@/lib/ads-platform/slot-registry";
 import { DOWNLOAD_COMPLETED_EVENT } from "@/lib/downloads/completion-event";
 import { mayServeSlot } from "@/lib/monetization/ad-inventory-shape";
+import { anotherModalOpen } from "@/lib/ui/modal-open";
 import { peekAdInventory } from "@/features/monetization/ad-inventory-client";
 
 import { peekSelfAds } from "../serving-client";
@@ -92,7 +93,8 @@ export function SelfMoments() {
 
   /** Pick and claim. Returns what to show, or null — all synchronous. */
   const pick = useCallback((placement: string, moment: "download-complete" | "return" | null): Showing | null => {
-    if (busy.current) return null;
+    // never on top of another full-screen dialog (the referral promo, a sheet…) — the moment is simply skipped
+    if (busy.current || anotherModalOpen()) return null;
     const e = eligible(placement);
     if (!e) return null;
     // Part 10: the ad whose image was fetched ahead, when it may still serve

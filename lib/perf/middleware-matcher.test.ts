@@ -25,8 +25,12 @@ describe("middleware matcher", () => {
   });
 
   it("teeth: still runs on every page and API that needs a session or a guard", () => {
-    for (const p of ["/", "/downloads", "/admin", "/admin/login", "/account", "/ai/character-replace", "/studio", "/messages", "/api/me", "/api/v1/app/me", "/history"]) {
+    for (const p of ["/", "/downloads", "/admin", "/admin/login", "/account", "/ai/character-replace", "/studio", "/messages", "/api/me", "/api/v1/app/me", "/history", "/ai", "/ai/text-to-video", "/frenz-aix", "/advertise/create"]) {
       expect(matches(p), p).toBe(true);
     }
+  });
+
+  it("SEO: skips the static /frenz-ai guides — that segment only", () => {
+    for (const p of ["/frenz-ai", "/frenz-ai/", "/frenz-ai/kling-ai", "/frenz-ai/text-to-video"]) expect(matches(p), p).toBe(false);
   });
 });

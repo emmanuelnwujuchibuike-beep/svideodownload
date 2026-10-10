@@ -39,6 +39,7 @@ import {
   type Totals,
 } from "./dashboard/dashboard-data";
 import { TestModeNote } from "./dashboard/test-mode-note";
+import { patchDash, refreshAdDashboard, useDash } from "./dashboard/use-dash";
 
 // the detail page, fetched only when a campaign is opened
 const CampaignDetail = dynamic(() => import("./dashboard/campaign-detail").then((m) => m.CampaignDetail), { ssr: false, loading: () => <Skeleton /> });
@@ -86,7 +87,7 @@ export function MyCampaigns() {
 
   return (
     <div>
-      <div className="flex items-end justify-between gap-3 border-b border-border/80">
+      <div className="border-b border-border/80">
         <nav className="-mb-px flex min-w-0 gap-5 overflow-x-auto" aria-label="Dashboard sections">
           {TABS.map(({ id, label, icon: Icon }) => (
             <button
@@ -103,13 +104,12 @@ export function MyCampaigns() {
             </button>
           ))}
         </nav>
-        <AiButtonLink tapOnce href="/advertise/create" prefetch={false} size="sm" icon={<Plus className="h-4 w-4" />} className="mb-2 hidden shrink-0 sm:inline-flex">
+      </div>
+      <div className="mt-3">
+        <AiButtonLink tapOnce href="/advertise/create" prefetch={false} size="sm" icon={<Plus className="h-4 w-4" />} className="w-full justify-center sm:w-auto">
           Create Advertisement
         </AiButtonLink>
       </div>
-      <AiButtonLink tapOnce href="/advertise/create" prefetch={false} size="sm" icon={<Plus className="h-4 w-4" />} className="mt-3 w-full justify-center sm:hidden">
-        Create Advertisement
-      </AiButtonLink>
       <div className="mt-5">
         {tab === "overview" ? <Overview onOpen={(id) => go({ c: id })} onTab={(t) => go({ tab: t })} /> : null}
         {tab === "campaigns" ? <Campaigns onOpen={(id) => go({ c: id })} /> : null}
@@ -246,24 +246,19 @@ export function Thumb({ c, size = "md" }: { c: Pick<CampaignRow, "ad_creatives">
 /* ─────────────────────────────── overview ─────────────────────────────── */
 
 function Overview({ onOpen, onTab }: { onOpen: (id: string) => void; onTab: (t: Tab) => void }) {
-  const [s, setS] = useState<Summary | null | "error">(null);
-  const [recent, setRecent] = useState<CampaignRow[] | null>(null);
-  const [recentStats, setRecentStats] = useState<Map<string, Totals>>(new Map());
-  const [n, setN] = useState(0);
-  useEffect(() => {
-    let alive = true;
-    void loadSummary().then((v) => alive && setS(v ?? "error"));
-    void loadCampaigns({ search: "", statuses: null, sort: "newest", page: 0 }).then(async (r) => {
-      const rows = r.rows.slice(0, 4);
-      if (alive) setRecent(rows);
-      const stats = rows.length ? byCampaign(await loadStats(rows.map((x) => x.id), null)) : new Map<string, Totals>();
-      if (alive) setRecentStats(stats);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [n]);
-  if (s === "error") return <Failed onRetry={() => setN((x) => x + 1)} />;
+  const summary = useDash<Summary>("summary", async () => {
+    const v = await loadSummary();
+    if (!v) throw new Error("summary");
+    return v;
+  });
+  const recentQ = useDash("recent", async () => {
+    const r = await loadCampaigns({ search: "", statuses: null, sort: "newest", page: 0 });
+    const rows = r.rows.slice(0, 4);
+    const stats = rows.length ? byCampaign(await loadStats(rows.map((x) => x.id), null)) : new Map<string, Totals>();
+    return { rows, stats };
+  });
+  const s = summary.data;
+  if (!s && summary.error) return <Failed onRetry={refreshAdDashboard} />;
   if (!s) return <Skeleton />;
   if (s.total === 0) return <Empty title="No campaigns yet" body="Create your first ad — choose where it shows, upload it, see the price, and go live after payment." />;
   const ctr = s.impressions > 0 ? s.clicks / s.impressions : null;
@@ -304,7 +299,7 @@ function Overview({ onOpen, onTab }: { onOpen: (id: string) => void; onTab: (t: 
           Recent campaigns
         </SectionTitle>
         <div className="mt-1.5">
-          {recent ? <CampaignList rows={recent} stats={recentStats} onOpen={onOpen} onRemoved={() => setN((x) => x + 1)} /> : <Skeleton />}
+          {recentQ.data ? <CampaignList rows={recentQ.data.rows} stats={recentQ.data.stats} onOpen={onOpen} onRemoved={refreshAdDashboard} /> : <Skeleton />}
         </div>
       </section>
     </div>
@@ -439,8 +434,6 @@ function Campaigns({ onOpen }: { onOpen: (id: string) => void }) {
   const [filter, setFilter] = useState(0);
   const [sort, setSort] = useState<SortKey>("newest");
   const [page, setPage] = useState(0);
-  const [attempt, setAttempt] = useState(0);
-  const [data, setData] = useState<{ rows: CampaignRow[]; total: number; stats: Map<string, Totals> } | null | "error">(null);
 
   // search on a pause in typing — no request per keystroke
   useEffect(() => {
@@ -451,27 +444,18 @@ function Campaigns({ onOpen }: { onOpen: (id: string) => void }) {
     return () => clearTimeout(t);
   }, [typed]);
 
-  useEffect(() => {
-    let alive = true;
-    setData(null);
-    void (async () => {
-      try {
-        const r = await loadCampaigns({ search, statuses: FILTERS[filter]!.statuses, sort, page });
-        const stats = await loadStats(r.rows.map((x) => x.id), null);
-        if (alive) setData({ ...r, stats: byCampaign(stats) });
-      } catch {
-        if (alive) setData("error");
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [search, filter, sort, page, attempt]);
+  type ListData = { rows: CampaignRow[]; total: number; stats: Map<string, Totals> };
+  const q = useDash<ListData>(`list:${filter}:${sort}:${page}:${search}`, async () => {
+    const r = await loadCampaigns({ search, statuses: FILTERS[filter]!.statuses, sort, page });
+    const stats = await loadStats(r.rows.map((x) => x.id), null);
+    return { ...r, stats: byCampaign(stats) };
+  });
+  const data: ListData | null | "error" = q.data ?? (q.error ? "error" : null);
 
-  // a removed row leaves at once; the page is re-read so the count and paging stay true
+  // a removed row leaves at once; every section is then re-read so counts and paging stay true
   const removed = (id: string) => {
-    setData((d) => (d && d !== "error" ? { ...d, rows: d.rows.filter((r) => r.id !== id), total: Math.max(0, d.total - 1) } : d));
-    setAttempt((x) => x + 1);
+    patchDash<ListData>(q.key, (d) => (d ? { ...d, rows: d.rows.filter((r) => r.id !== id), total: Math.max(0, d.total - 1) } : d!));
+    refreshAdDashboard();
   };
 
   const pages = data && data !== "error" ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
@@ -497,7 +481,7 @@ function Campaigns({ onOpen }: { onOpen: (id: string) => void }) {
         </p>
       ) : null}
       <div>
-        {data === "error" ? <Failed onRetry={() => setAttempt((x) => x + 1)} /> : !data ? <Skeleton /> : data.rows.length === 0 ? (
+        {data === "error" ? <Failed onRetry={refreshAdDashboard} /> : !data ? <Skeleton /> : data.rows.length === 0 ? (
           search || filter ? <p className="py-8 text-center text-[13.5px] text-muted-foreground">No campaigns match.</p> : <Empty title="No campaigns yet" body="Your campaigns will appear here." />
         ) : (
           <CampaignList rows={data.rows} stats={data.stats} onOpen={onOpen} onRemoved={removed} />
@@ -560,21 +544,13 @@ export function DayChart({ rows }: { rows: { day: string; views: number; clicks:
 
 function Analytics({ onOpen }: { onOpen: (id: string) => void }) {
   const [range, setRange] = useState("30");
-  const [rows, setRows] = useState<StatRow[] | null>(null);
-  const [names, setNames] = useState<Map<string, string>>(new Map());
-  useEffect(() => {
-    let alive = true;
-    setRows(null);
+  const q = useDash(`analytics:${range}`, async () => {
     const days = RANGES.find((r) => r.id === range)!.days;
-    void Promise.all([loadStats(null, fromDay(days)), loadCampaigns({ search: "", statuses: null, sort: "newest", page: 0 })]).then(([s, c]) => {
-      if (!alive) return;
-      setRows(s);
-      setNames(new Map(c.rows.map((x) => [x.id, x.name])));
-    });
-    return () => {
-      alive = false;
-    };
-  }, [range]);
+    const [s, c] = await Promise.all([loadStats(null, fromDay(days)), loadCampaigns({ search: "", statuses: null, sort: "newest", page: 0 })]);
+    return { rows: s, names: new Map(c.rows.map((x) => [x.id, x.name])) };
+  });
+  const rows: StatRow[] | null = q.data?.rows ?? null;
+  const names = q.data?.names ?? new Map<string, string>();
   const totals = useMemo(() => (rows ? totalsOf(rows) : null), [rows]);
   const per = useMemo(() => (rows ? [...byCampaign(rows)].sort((a, b) => b[1].views - a[1].views) : []), [rows]);
   const rangeLabel = RANGES.find((r) => r.id === range)!.label;
@@ -678,15 +654,7 @@ export function PaymentList({ rows, onOpen }: { rows: PaymentRow[]; onOpen?: (id
 
 function Payments({ onOpen }: { onOpen: (id: string) => void }) {
   const [page, setPage] = useState(0);
-  const [rows, setRows] = useState<PaymentRow[] | null>(null);
-  useEffect(() => {
-    let alive = true;
-    setRows(null);
-    void loadPayments(page).then((r) => alive && setRows(r));
-    return () => {
-      alive = false;
-    };
-  }, [page]);
+  const rows: PaymentRow[] | null = useDash(`payments:${page}`, () => loadPayments(page)).data ?? null;
   return (
     <AiPanel>
       <p className="text-[14px] font-semibold">Payment history</p>

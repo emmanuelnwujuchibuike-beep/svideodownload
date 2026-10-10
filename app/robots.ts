@@ -44,6 +44,11 @@ export default function robots(): MetadataRoute.Robots {
     content to index. This one does need listing precisely because `/ai` served
     real HTML to anonymous visitors by design.
   */
+  /*
+    2026-10-09 (SEO brief): the PUBLIC Frenz AI explainers live at /frenz-ai
+    (lib/seo/guides.ts) and are crawlable — "/ai" is a path prefix and never
+    matches "/frenz-ai". The tools under /ai stay disallowed, as above.
+  */
   const disallow = ["/api/", "/admin/", "/ai", "/ai/"];
   /*
     ── 🔴 ads.txt IS ALWAYS FETCHABLE, AND SAYS SO (2026-09-20) ────────────────

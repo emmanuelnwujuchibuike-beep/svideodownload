@@ -4,7 +4,8 @@ import { teachableSchools } from "@/lib/academy/schools";
 import { publishableClusters, topicHref } from "@/lib/seo/topics";
 import { LESSON_SLUGS } from "@/lib/learning/catalog";
 import { SUPPORT_ARTICLES, articleHref } from "@/lib/support/articles";
-import { BLOG_SLUGS } from "@/lib/seo/blog";
+import { BLOG_SLUGS, getPost } from "@/lib/seo/blog";
+import { GUIDES } from "@/lib/seo/guides";
 import { SEO_SLUGS } from "@/lib/seo/seo-pages";
 import { SITE_URL as siteUrl } from "@/lib/site";
 import { CATEGORIES } from "@/lib/social/categories";
@@ -68,7 +69,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   const blog: MetadataRoute.Sitemap = BLOG_SLUGS.map((slug) => ({
     url: `${siteUrl}/blog/${slug}`,
-    lastModified: now,
+    // the post's own date — a build timestamp says nothing about when it changed
+    lastModified: getPost(slug)?.date ?? now,
     changeFrequency: "monthly",
     priority: 0.6,
   }));
@@ -168,6 +170,25 @@ export default function sitemap(): MetadataRoute.Sitemap {
       to be public, that is a product decision the owner makes explicitly, and
       it changes §1 of the standing rule rather than this file.
     */
+    /*
+      ── 2026-10-09: THE PUBLIC FRENZ AI EXPLAINERS — /frenz-ai, not /ai ──────
+
+      The owner's SEO brief of 2026-10-09 asks for Frenz AI to be discoverable.
+      The note above still holds for the TOOLS: nothing under /ai is listed,
+      and /ai stays disallowed and noindex (lib/ai/ai-pages-not-indexed.test.ts).
+      What is listed is the separate, static, read-only explainer surface at
+      /frenz-ai (lib/seo/guides.ts), plus the advertising guides — each with its
+      content's real last-change date, not the build time.
+    */
+    ...GUIDES.map((g) => ({
+      url: `${siteUrl}${g.path}`,
+      lastModified: g.updated,
+      changeFrequency: "monthly" as const,
+      priority: g.path === "/frenz-ai" ? 0.8 : 0.7,
+    })),
+    // the public advertising pages, never listed until now (2026-10-09 audit)
+    { url: `${siteUrl}/advertise`, changeFrequency: "weekly", priority: 0.8 },
+    { url: `${siteUrl}/advertise/rules`, changeFrequency: "monthly", priority: 0.5 },
     { url: `${siteUrl}/help`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${siteUrl}/trust`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${siteUrl}/glossary`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },

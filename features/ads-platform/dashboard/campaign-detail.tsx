@@ -38,6 +38,7 @@ import {
   type StatRow,
 } from "./dashboard-data";
 import { TestModeNote } from "./test-mode-note";
+import { refreshAdDashboard, useDash } from "./use-dash";
 
 /**
  * One campaign: its creative, link and settings, its performance, its
@@ -72,16 +73,10 @@ const HISTORY_TEXT: Record<string, string> = {
 };
 
 export function CampaignDetail({ id, onBack }: { id: string; onBack: () => void }) {
-  const [c, setC] = useState<CampaignRow | null | "missing">(null);
-  const [n, setN] = useState(0);
-  const reload = useCallback(() => setN((x) => x + 1), []);
-  useEffect(() => {
-    let alive = true;
-    void loadCampaign(id).then((r) => alive && setC(r ?? "missing"));
-    return () => {
-      alive = false;
-    };
-  }, [id, n]);
+  // cached like the rest of the dashboard: a back-swipe or a second visit paints at once (use-dash.ts)
+  const c: CampaignRow | null | "missing" = useDash<CampaignRow | "missing">(`campaign:${id}`, async () => (await loadCampaign(id)) ?? "missing").data ?? null;
+  // after the advertiser changes something, every section — this one included — is re-read
+  const reload = useCallback(() => refreshAdDashboard(), []);
 
   return (
     <div>
@@ -420,15 +415,7 @@ function Extend({ c }: { c: CampaignRow }) {
 
 function Performance({ id }: { id: string }) {
   const [range, setRange] = useState<number | null>(30);
-  const [rows, setRows] = useState<StatRow[] | null>(null);
-  useEffect(() => {
-    let alive = true;
-    setRows(null);
-    void loadStats([id], fromDay(range)).then((r) => alive && setRows(r));
-    return () => {
-      alive = false;
-    };
-  }, [id, range]);
+  const rows: StatRow[] | null = useDash(`perf:${id}:${range ?? "all"}`, () => loadStats([id], fromDay(range))).data ?? null;
   const t = useMemo(() => (rows ? totalsOf(rows) : null), [rows]);
   return (
     <AiPanel>
@@ -477,19 +464,12 @@ function Performance({ id }: { id: string }) {
 }
 
 function Money({ id }: { id: string }) {
-  const [rows, setRows] = useState<PaymentRow[] | null>(null);
-  const [ext, setExt] = useState<ExtensionRow[]>([]);
-  useEffect(() => {
-    let alive = true;
-    void Promise.all([loadPayments(0, 100), loadExtensions(id)]).then(([p, e]) => {
-      if (!alive) return;
-      setRows(p.filter((x) => x.campaign_id === id));
-      setExt(e);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [id]);
+  const money = useDash(`money:${id}`, async () => {
+    const [p, e] = await Promise.all([loadPayments(0, 100), loadExtensions(id)]);
+    return { rows: p.filter((x) => x.campaign_id === id), ext: e };
+  }).data;
+  const rows: PaymentRow[] | null = money?.rows ?? null;
+  const ext: ExtensionRow[] = money?.ext ?? [];
   return (
     <AiPanel>
       <p className="text-[14px] font-semibold">Payments</p>
@@ -512,14 +492,7 @@ function Money({ id }: { id: string }) {
 }
 
 function History({ id }: { id: string }) {
-  const [rows, setRows] = useState<CampaignEvent[] | null>(null);
-  useEffect(() => {
-    let alive = true;
-    void loadHistory(id).then((r) => alive && setRows(r));
-    return () => {
-      alive = false;
-    };
-  }, [id]);
+  const rows: CampaignEvent[] | null = useDash(`history:${id}`, () => loadHistory(id)).data ?? null;
   if (!rows?.length) return null;
   return (
     <AiPanel>

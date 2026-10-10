@@ -147,6 +147,8 @@ export function SiteFooter({ locale = DEFAULT_LOCALE }: { locale?: LocaleCode } 
           title="Business"
           links={[
             ["Advertise on Frenzsave", "/advertise"],
+            ["Ad prices", "/advertise/pricing"],
+            ["Campaign guide", "/advertise/campaign-guide"],
             ["Advertising Rules", "/advertise/rules"],
           ]}
         />
@@ -168,6 +170,8 @@ export function SiteFooter({ locale = DEFAULT_LOCALE }: { locale?: LocaleCode } 
           title={t("footer.learn")}
           links={[
             ["Academy", "/academy"],
+            // the public Frenz AI explainers (2026-10-09) — the tools stay at /ai
+            ["Frenz AI guides", "/frenz-ai"],
             ["Topics", "/topics"],
             ["Guides", "/learn"],
             ["Glossary", "/glossary"],

@@ -299,8 +299,33 @@ describe("2026-10-09: advertisers remove drafts and finished campaigns from thei
   });
   it("the Sample data label is hidden only from admins; any other viewer still sees it", () => {
     const n = src("features/ads-platform/dashboard/test-mode-note.tsx");
-    expect(n).toContain(`rpc("is_admin")`);
+    expect(n).toContain(`"/api/ads/advertiser/viewer"`);
+    expect(src("app/api/ads/advertiser/viewer/route.ts")).toContain("getAdminUser()");
     expect(n).toContain("setOn(!admin)");
     expect(n).toContain("Sample data");
+  });
+});
+
+describe("2026-10-09: the dashboard is cached like the AI balance — no reload on entry or back-swipe", () => {
+  const mc = src("features/ads-platform/my-campaigns.tsx");
+  const cd = src("features/ads-platform/dashboard/campaign-detail.tsx");
+  const hook = src("features/ads-platform/dashboard/use-dash.ts");
+  it("every section reads through the shared cache, never a fresh fetch into blank state", () => {
+    for (const k of ['"summary"', '"recent"', "`list:", "`analytics:", "`payments:"]) expect(mc, k).toContain(`useDash${k.startsWith("`") ? "" : ""}`);
+    for (const k of ["`campaign:", "`perf:", "`money:", "`history:"]) expect(cd, k).toContain(k);
+    // the old pattern blanked the section and refetched on every mount
+    expect(mc).not.toMatch(/setData\(null\)|setRows\(null\)|setS\(/);
+    expect(cd).not.toMatch(/setRows\(null\)|setC\(/);
+  });
+  it("focus and back-swipe never re-read; fresh data is reused for a minute; keys are per user", () => {
+    expect(hook).toContain("revalidateOnFocus: false");
+    expect(hook).toContain("export const DASH_FRESH_MS = 60_000");
+    expect(hook).toContain("`ads:dash:${user?.id");
+    // an action re-reads at once
+    expect(cd).toContain("refreshAdDashboard()");
+  });
+  it("one Create Advertisement button (owner: remove the top-right one)", () => {
+    expect(mc.match(/>\s*Create Advertisement\s*</g)?.length).toBe(2); // the button + the empty state
+    expect(mc).not.toContain("hidden shrink-0 sm:inline-flex");
   });
 });

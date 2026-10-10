@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-import { getClient } from "@/lib/supabase/client-lazy";
-
 import { loadBoosts } from "./dashboard-data";
 
 /**
@@ -13,8 +11,8 @@ import { loadBoosts } from "./dashboard-data";
  * 2026-10-09 (owner): an admin looking at their own dashboard doesn't need the
  * label — they switched the ×10 on themselves. Every other viewer still sees
  * it: boosted figures shown to a paying advertiser without it would be a
- * fabricated statistic (AGENTS.md, the truth rule). If the admin check fails,
- * the label shows.
+ * fabricated statistic (AGENTS.md, the truth rule). The answer is the server's
+ * own admin check (/api/ads/advertiser/viewer); if it fails, the label shows.
  */
 export function TestModeNote({ campaignId }: { campaignId?: string }) {
   const [on, setOn] = useState(false);
@@ -38,12 +36,12 @@ export function TestModeNote({ campaignId }: { campaignId?: string }) {
   );
 }
 
-async function viewerIsAdmin(): Promise<boolean> {
-  try {
-    const sb = await getClient();
-    const { data, error } = await sb.rpc("is_admin");
-    return !error && data === true;
-  } catch {
-    return false;
-  }
+/** One request per page life, and only when a boosted campaign is on screen. Fails closed: no answer → the label shows. */
+let adminAnswer: Promise<boolean> | null = null;
+function viewerIsAdmin(): Promise<boolean> {
+  adminAnswer ??= fetch("/api/ads/advertiser/viewer", { cache: "no-store" })
+    .then((r) => (r.ok ? (r.json() as Promise<{ admin?: boolean }>) : null))
+    .then((j) => j?.admin === true)
+    .catch(() => false);
+  return adminAnswer;
 }

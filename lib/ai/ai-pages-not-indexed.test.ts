@@ -5,7 +5,9 @@ import { describe, expect, it } from "vitest";
 
 /*
   Part 7 §55 (2026-10-07). Frenz AI is a private utility, never indexed
-  (owner, 2026-09-09; app/robots.ts). Every page under app/(marketing)/ai was
+  (owner, 2026-09-09; app/robots.ts). 2026-10-09: the owner's SEO brief added a
+  SEPARATE public explainer surface at /frenz-ai (lib/seo/guides.ts) — the
+  TOOLS below are unchanged and stay out of the index. Every page under app/(marketing)/ai was
   already noindex — this walks the directory so a page ADDED later cannot
   quietly be the exception.
 */

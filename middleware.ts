@@ -335,6 +335,12 @@ export const config = {
       (no-store for the worker, the CSP) come from next.config.ts and apply
       without this middleware.
     */
-    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|twitter-image|launch.html|sw\\.js|sw/|manifest\\.webmanifest|\\.well-known|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|apk|js|css|woff|woff2|mp4|webm|mp3)$).*)",
+    /*
+      SEO (2026-10-09): `/frenz-ai` and its guides are static explainers that read
+      no session and render nothing per member — every crawler and reader visit
+      was an Edge invocation for nothing. Exact segment only: `/ai/**` (the tools)
+      and everything private still run through the guard (lib/perf/middleware-matcher.test.ts).
+    */
+    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|twitter-image|launch.html|sw\\.js|sw/|manifest\\.webmanifest|frenz-ai(?:/|$)|\\.well-known|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|apk|js|css|woff|woff2|mp4|webm|mp3)$).*)",
   ],
 };

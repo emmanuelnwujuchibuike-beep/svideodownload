@@ -69,8 +69,8 @@ import type { PlatformId } from "@/types";
  * The full list lives one tap away on the downloader pages.
  */
 export const SUPPORTED_PLATFORMS: PlatformId[] = [
-  // The improved reference's order (2026-10-09): two rows of five, the "+"
-  // closing the second.
+  // Order matters: the first seven share the collapsed row with the "+"
+  // (see ROW); the rest open with it.
   "tiktok",
   "instagram",
   "twitter",
@@ -94,6 +94,9 @@ export const SUPPORTED_PLATFORMS: PlatformId[] = [
  * deliberately absent here too, for the AdSense reason above.
  */
 export const MORE_PLATFORMS: PlatformId[] = ["threads", "vimeo"];
+
+/** Tiles in the collapsed single row, the "+" included. */
+const ROW = 8;
 
 export function SupportedPlatforms({
   /**
@@ -121,9 +124,9 @@ export function SupportedPlatforms({
    * stay plain marks, so a caller without a paste box draws exactly what it did.
    */
   onPick,
-  /** Whether the MORE_PLATFORMS row is open. Only meaningful with `onToggleMore`. */
+  /** Whether the hidden platforms are open. Only meaningful with `onToggleMore`. */
   expanded = false,
-  /** Draws the "+" tile, which toggles the MORE_PLATFORMS row. */
+  /** Draws the "+"/"×" tile, which opens and closes the hidden platforms. */
   onToggleMore,
 }: {
   surface?: "light" | "onGradient";
@@ -134,14 +137,28 @@ export function SupportedPlatforms({
   onToggleMore?: () => void;
 }) {
   const onGradient = surface === "onGradient";
-  const ids = onToggleMore && expanded ? [...SUPPORTED_PLATFORMS, ...MORE_PLATFORMS] : SUPPORTED_PLATFORMS;
+  /*
+    ── ONE LINE ON EVERY PHONE (owner, 2026-10-10: "reduce the size … so they
+    can all fit in one line, any phone screen … the plus and X button should
+    expand and decrease it anytime") ───────────────────────────────────────
+    Collapsed, the strip is exactly ONE row of `ROW` columns: the first
+    `ROW - 1` platforms and the "+". Columns are shares of the width, so the
+    row fits any phone (~30 px tiles at 320 px) instead of wrapping. The "+"
+    turns into an "×" and opens the rest (the remaining primary platforms,
+    then MORE_PLATFORMS) on the rows beneath; tapping "×" folds them back.
+    Without a toggle every primary platform shares the single row.
+  */
+  const ids = onToggleMore
+    ? expanded
+      ? [...SUPPORTED_PLATFORMS, ...MORE_PLATFORMS]
+      : SUPPORTED_PLATFORMS.slice(0, ROW - 1)
+    : SUPPORTED_PLATFORMS;
+  const cols = onToggleMore ? "grid-cols-8" : "grid-cols-9";
   /*
     ── ONE TILE, EVERY SIZE THE SAME (Download page refinement, 2026-10-09:
     "consistent size & style, even visual weight") ──────────────────────────
-    Five columns, so two rows of five hold nine platforms and the "+" — and each
-    tile is a fifth of the card's width (~47 px on a 320 px phone, ~62 px on a
-    430 px one), which is also a comfortable tap target now that
-    the tiles can be tapped. Same radius, same hairline ring, same glyph size on
+    Eight columns (see ROW), so each tile is an eighth of the card's width
+    (~30 px on a 320 px phone, ~45 px on a 430 px one). Same radius, same hairline ring, same glyph size on
     every tile; the brand colour is the only thing that differs.
   */
   const tileClass = cn(
@@ -150,7 +167,7 @@ export function SupportedPlatforms({
     !onGradient && "ring-1 ring-inset ring-slate-200/80 dark:ring-white/10",
   );
   const interactive = "transition-transform duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transition-none";
-  const glyph = "h-[clamp(17px,5.6vw,26px)] w-[clamp(17px,5.6vw,26px)]";
+  const glyph = "h-[clamp(14px,4.4vw,22px)] w-[clamp(14px,4.4vw,22px)]";
   return (
     /*
       ONE line that scrolls, never a wrapping grid.
@@ -242,7 +259,7 @@ export function SupportedPlatforms({
       </span>
       {/* Full width of the card, no cap (owner, 2026-10-09: "much space at the right
           side") — five equal columns always end where the card ends. */}
-      <div className="grid w-full grid-cols-5 gap-2.5 sm:gap-3">
+      <div className={cn("grid w-full gap-1.5 sm:gap-2", cols)}>
         {ids.map((id) => {
           const Icon = BRAND_ICONS[id];
           const mark = BRAND_MARKS[id];

@@ -80,8 +80,10 @@ export const SUPPORTED_PLATFORMS: PlatformId[] = [
   // youtube swapped for linkedin 2026-08-25 — AdSense "low value content"
   // rejection, twice; the owner's read is a YouTube-branded downloader is
   // the trigger. See config/seoPages.ts's removal note for the full picture.
-  "linkedin",
+  // telegram before linkedin (owner, 2026-10-10) so Telegram shows on the
+  // collapsed row and LinkedIn opens with the "+".
   "telegram",
+  "linkedin",
   // Reddit joins (2026-10-09): a real extractor (lib/platforms) with its own
   // downloader page. The reference's WhatsApp tile is NOT drawn — nothing here
   // downloads from WhatsApp, and a logo is a claim of support.

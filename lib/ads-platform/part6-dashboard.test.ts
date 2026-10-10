@@ -247,3 +247,13 @@ describe("2026-10-09: the admin campaign list survives a database that has not r
     expect(a).toContain("statsMultiplier: Number(c.stats_multiplier ?? 1),");
   });
 });
+
+describe("2026-10-09: the x10 sample-data view scales every dashboard figure together", () => {
+  it("daily-stat rows (the rollup of ad_events) scale views, clicks, video, reward, conversions, outbounds AND the filtered counts", () => {
+    const d = src("features/ads-platform/dashboard/dashboard-data.ts");
+    for (const f of ["impressions: r.impressions * m", "clicks: r.clicks * m", "conversions: (r.conversions ?? 0) * m", "invalid_impressions: r.invalid_impressions * m", "invalid_clicks: r.invalid_clicks * m"]) expect(d, f).toContain(f);
+    // display only: the stored tables are never written by the dashboard
+    expect(d).not.toMatch(/from\("ad_campaign_daily_stats"\)[\s\S]{0,80}\.(update|insert|upsert)\(/);
+    expect(d).not.toMatch(/from\("ad_events"\)/);
+  });
+});

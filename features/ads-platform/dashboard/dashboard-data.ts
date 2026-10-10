@@ -195,7 +195,15 @@ async function applyBoost(rows: StatRow[]): Promise<StatRow[]> {
   return rows.map((r) => {
     const m = boosts.get(r.campaign_id);
     if (!m) return r;
-    return { ...r, impressions: r.impressions * m, clicks: r.clicks * m, video_starts: r.video_starts * m, video_completes: r.video_completes * m, reward_starts: r.reward_starts * m, reward_completes: r.reward_completes * m, conversions: (r.conversions ?? 0) * m, outbounds: (r.outbounds ?? 0) * m };
+    // every figure the dashboard derives from ad_events (rolled up into these daily rows) scales together —
+    // including the filtered (invalid) counts, so a boosted campaign never shows a mismatched mix
+    return {
+      ...r,
+      impressions: r.impressions * m, clicks: r.clicks * m, video_starts: r.video_starts * m, video_completes: r.video_completes * m,
+      reward_starts: r.reward_starts * m, reward_completes: r.reward_completes * m, conversions: (r.conversions ?? 0) * m, outbounds: (r.outbounds ?? 0) * m,
+      ...(r.invalid_impressions != null ? { invalid_impressions: r.invalid_impressions * m } : {}),
+      ...(r.invalid_clicks != null ? { invalid_clicks: r.invalid_clicks * m } : {}),
+    };
   });
 }
 

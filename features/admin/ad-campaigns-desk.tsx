@@ -29,6 +29,7 @@ interface Creative {
   urlBlockReason: string | null;
 }
 interface Campaign {
+  statsMultiplier: number;
   id: string;
   name: string;
   status: string;
@@ -169,6 +170,13 @@ export function AdCampaignsDesk() {
     void load();
   }
 
+  async function setBoost(c: Campaign, statsMultiplier: 1 | 10) {
+    const out = await post("/api/admin/ads/campaigns", { id: c.id, statsMultiplier }, `${c.id}:boost`);
+    if (!out) return;
+    setNote(out.ok ? { tone: "ok", text: statsMultiplier === 10 ? `Test mode ON: “${c.name}” shows ×10 views, clicks and conversions on its dashboard.` : `Test mode OFF: “${c.name}” shows real figures.` } : { tone: "bad", text: "That didn't go through. Nothing changed (has migration 0211 been run?)." });
+    void load();
+  }
+
   async function decideRefund(c: Campaign, refund: "refunded" | "waived", text: string) {
     const out = await post("/api/admin/ads/campaigns", { id: c.id, refund, note: text || null }, `${c.id}:refund`);
     if (!out) return;
@@ -236,7 +244,7 @@ export function AdCampaignsDesk() {
       ) : (
         <ul className="space-y-3">
           {rows.map((c) => (
-            <CampaignCard key={c.id} c={c} busy={busy} onModerate={(a, r) => void moderate(c, a, r)} onRefund={(s, t) => void decideRefund(c, s, t)} />
+            <CampaignCard key={c.id} c={c} busy={busy} onModerate={(a, r) => void moderate(c, a, r)} onRefund={(s, t) => void decideRefund(c, s, t)} onBoost={(m) => void setBoost(c, m)} />
           ))}
         </ul>
       )}
@@ -244,7 +252,7 @@ export function AdCampaignsDesk() {
   );
 }
 
-function CampaignCard({ c, busy, onModerate, onRefund }: { c: Campaign; busy: string | null; onModerate: (a: ModerationAction, reason: string) => void; onRefund: (s: "refunded" | "waived", note: string) => void }) {
+function CampaignCard({ c, busy, onModerate, onRefund, onBoost }: { c: Campaign; busy: string | null; onBoost: (m: 1 | 10) => void; onModerate: (a: ModerationAction, reason: string) => void; onRefund: (s: "refunded" | "waived", note: string) => void }) {
   const [reason, setReason] = useState("");
   const [refundNote, setRefundNote] = useState("");
   const [events, setEvents] = useState<Event[] | null>(null);
@@ -405,6 +413,20 @@ function CampaignCard({ c, busy, onModerate, onRefund }: { c: Campaign; busy: st
           })}
         </div>
       ) : null}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-muted/50 p-2.5 text-[11.5px]">
+        <span className="font-semibold">Dashboard test mode ×10</span>
+        <span className="text-muted-foreground">Display only: the advertiser sees 10× views, clicks and conversions (labelled “Test mode”). Stored counts and billing stay real.</span>
+        <button
+          type="button"
+          disabled={busy !== null}
+          aria-pressed={c.statsMultiplier === 10}
+          onClick={() => onBoost(c.statsMultiplier === 10 ? 1 : 10)}
+          className={cn("rounded-lg px-2.5 py-1 text-xs font-semibold disabled:opacity-60", c.statsMultiplier === 10 ? "bg-amber-500 text-white" : "border border-border bg-background")}
+        >
+          {busy === `${c.id}:boost` ? "…" : c.statsMultiplier === 10 ? "On · turn off" : "Off · turn on"}
+        </button>
+      </div>
 
       <button type="button" onClick={() => void toggleEvents()} className="mt-2 text-[11px] font-semibold text-muted-foreground underline">
         {showEvents ? "Hide history" : "History"}

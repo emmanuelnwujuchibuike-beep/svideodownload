@@ -15,7 +15,8 @@ import { getClient } from "@/lib/supabase/client-lazy";
  *
  * Totals come from the per-day aggregate table, never from raw events, so a
  * dashboard read is a handful of small rows however busy a campaign is. Every
- * number is the database's own count, unadjusted.
+ * number is the database's own count, unadjusted - except campaigns an admin put in
+ * test mode (0211), which show x10 and say so.
  *
  * ACTIONS go through one route (/api/ads/advertiser/manage), which re-checks
  * ownership and state in the database under a row lock.
@@ -34,6 +35,8 @@ export interface Summary {
   video_completes: number;
   /** 0201: members who opened the ad's details on Frenzsave (also counted as clicks) */
   conversions: number;
+  /** 0211: campaigns an admin put in test mode (figures shown x10) */
+  boosted: number;
   /** 0201: members who then chose to visit the site after the external-link warning */
   outbounds: number;
   spend_usd_cents: number;
@@ -136,7 +139,7 @@ export async function loadSummary(): Promise<Summary | null> {
   if (error || !data) return null;
   const d = data as Record<string, number | string>;
   const n = (k: string) => Number(d[k] ?? 0);
-  return { total: n("total"), live: n("live"), awaiting_payment: n("awaiting_payment"), validating: n("validating"), paused: n("paused"), expired: n("expired"), impressions: n("impressions"), clicks: n("clicks"), reward_completes: n("reward_completes"), video_completes: n("video_completes"), conversions: n("conversions"), outbounds: n("outbounds"), spend_usd_cents: n("spend_usd_cents") };
+  return { total: n("total"), live: n("live"), awaiting_payment: n("awaiting_payment"), validating: n("validating"), paused: n("paused"), expired: n("expired"), impressions: n("impressions"), clicks: n("clicks"), reward_completes: n("reward_completes"), video_completes: n("video_completes"), conversions: n("conversions"), boosted: n("boosted"), outbounds: n("outbounds"), spend_usd_cents: n("spend_usd_cents") };
 }
 
 export type SortKey = "newest" | "oldest" | "ending" | "name";
@@ -167,6 +170,36 @@ export async function loadCampaign(id: string): Promise<CampaignRow | null> {
 
 /** Daily aggregate rows for some campaigns (all of mine when `ids` is null), from a day on. */
 export async function loadStats(ids: readonly string[] | null, fromDay: string | null): Promise<StatRow[]> {
+  return applyBoost(await loadStatsRaw(ids, fromDay));
+}
+
+/**
+ * 0211 admin test mode: campaigns whose figures are shown x10. Display only -
+ * the stored counts are untouched. Fails open: before the migration runs, or on
+ * any error, nothing is scaled.
+ */
+export async function loadBoosts(): Promise<Map<string, number>> {
+  try {
+    const sb = await getClient();
+    const { data, error } = await sb.from("ad_campaigns").select("id, stats_multiplier").gt("stats_multiplier", 1);
+    if (error || !data) return new Map();
+    return new Map((data as { id: string; stats_multiplier: number }[]).map((r) => [r.id, Number(r.stats_multiplier)]));
+  } catch {
+    return new Map();
+  }
+}
+
+async function applyBoost(rows: StatRow[]): Promise<StatRow[]> {
+  const boosts = await loadBoosts();
+  if (boosts.size === 0) return rows;
+  return rows.map((r) => {
+    const m = boosts.get(r.campaign_id);
+    if (!m) return r;
+    return { ...r, impressions: r.impressions * m, clicks: r.clicks * m, video_starts: r.video_starts * m, video_completes: r.video_completes * m, reward_starts: r.reward_starts * m, reward_completes: r.reward_completes * m, conversions: (r.conversions ?? 0) * m, outbounds: (r.outbounds ?? 0) * m };
+  });
+}
+
+async function loadStatsRaw(ids: readonly string[] | null, fromDay: string | null): Promise<StatRow[]> {
   const sb = await getClient();
   if (ids && ids.length === 0) return [];
   const read = (cols: string) => {

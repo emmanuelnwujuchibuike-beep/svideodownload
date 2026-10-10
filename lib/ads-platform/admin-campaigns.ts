@@ -66,6 +66,8 @@ export interface AdminCampaignRow {
   startedAt: string | null;
   flags: string[];
   refund: { status: string; owedMinor: number | null; note: string | null; decidedAt: string | null };
+  /** 0211: dashboard figures multiplier (1 = real, 10 = test mode) */
+  statsMultiplier: number;
   creatives: AdminCreative[];
   impressions: number;
   clicks: number;
@@ -86,7 +88,7 @@ export async function listAdminCampaigns(db: Db, f: AdminCampaignFilters): Promi
   let q = db
     .from("ad_campaigns")
     .select(
-      "id, name, status, status_reason, version, duration_days, extra_days, currency, total_amount_minor, payment_method, payment_reference, payment_verified_at, created_at, start_at, end_at, started_at, review_flags, refund_status, refund_owed_minor, refund_note, refund_decided_at, advertisers(id, business_name, status), ad_placements(code, name, format_code)",
+      "id, name, status, status_reason, version, duration_days, extra_days, currency, total_amount_minor, payment_method, payment_reference, payment_verified_at, created_at, start_at, end_at, started_at, review_flags, refund_status, refund_owed_minor, refund_note, refund_decided_at, stats_multiplier, advertisers(id, business_name, status), ad_placements(code, name, format_code)",
     )
     .order("updated_at", { ascending: false })
     .limit(Math.min(100, Math.max(1, f.limit ?? 50)));
@@ -166,6 +168,7 @@ export async function listAdminCampaigns(db: Db, f: AdminCampaignFilters): Promi
       startedAt: (c.started_at as string | null) ?? null,
       flags: (c.review_flags as string[] | null) ?? [],
       refund: { status: c.refund_status as string, owedMinor: n(c.refund_owed_minor), note: (c.refund_note as string | null) ?? null, decidedAt: (c.refund_decided_at as string | null) ?? null },
+      statsMultiplier: Number(c.stats_multiplier ?? 1),
       creatives: byCampaign.get(id) ?? [],
       impressions: totals.get(id)?.impressions ?? 0,
       clicks: totals.get(id)?.clicks ?? 0,
@@ -308,4 +311,11 @@ export async function setAdvertiserStatus(db: Db, adminId: string, input: { id: 
   const { data, error } = await db.rpc("admin_set_advertiser_status", { p_advertiser: input.id, p_status: input.status, p_admin: adminId, p_reason: input.reason });
   if (error) throw new Error(`advertiser status: ${error.message}`);
   return (data ?? { ok: false, reason: "no_result" }) as RpcResult;
+}
+
+/** 0211: switch a campaign's dashboard figures between real (1) and test mode (10). Display only. */
+export async function setStatsBoost(db: Db, adminId: string, input: { id: string; multiplier: 1 | 10 }): Promise<{ ok: boolean; reason?: string; multiplier?: number }> {
+  const { data, error } = await db.rpc("admin_set_ad_stats_boost", { p_campaign: input.id, p_multiplier: input.multiplier, p_admin: adminId });
+  if (error) throw new Error(`stats boost: ${error.message}`);
+  return data as { ok: boolean; reason?: string; multiplier?: number };
 }

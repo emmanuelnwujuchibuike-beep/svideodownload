@@ -35,6 +35,7 @@ import {
   type Summary,
   type Totals,
 } from "./dashboard/dashboard-data";
+import { TestModeNote } from "./dashboard/test-mode-note";
 
 // the detail page, fetched only when a campaign is opened
 const CampaignDetail = dynamic(() => import("./dashboard/campaign-detail").then((m) => m.CampaignDetail), { ssr: false, loading: () => <Skeleton /> });
@@ -413,6 +414,7 @@ function Analytics({ onOpen }: { onOpen: (id: string) => void }) {
       </div>
       {!rows || !totals ? <Skeleton /> : (
         <>
+          <TestModeNote />
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
             <Stat label="Total views" value={num(totals.views)} />
             <Stat label="Clicks" value={num(totals.clicks)} />

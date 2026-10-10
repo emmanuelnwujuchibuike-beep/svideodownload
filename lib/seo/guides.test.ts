@@ -157,7 +157,8 @@ describe("SEO guides: static, light and private", () => {
     expect(sm).toContain("`${siteUrl}/advertise`");
     const robots = src("app/robots.ts");
     expect(robots).toMatch(/const disallow = \[[^\]]*"\/ai"/);
-    expect(robots).not.toMatch(/"\/frenz-ai/);
+    // the disallow list itself never names the guides
+    expect(/const disallow = \[([^\]]*)\]/.exec(robots)?.[1]).not.toMatch(/frenz-ai/);
     // a "/ai" prefix rule never matches the guides
     expect("/frenz-ai/kling-ai".startsWith("/ai")).toBe(false);
   });

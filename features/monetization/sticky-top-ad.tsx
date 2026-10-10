@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { useSlotProvider } from "@/features/ads-platform/serve/use-slot-provider";
@@ -28,6 +29,7 @@ const SelfTopCreative = dynamic(() => import("@/features/ads-platform/serve/self
 
 export function StickyTopAd() {
   const { showAds, ready } = useShowAds();
+  const pathname = usePathname();
   const [hasAd, setHasAd] = useState<boolean | null>(null);
   /*
     Ad Platform Part 5 — this bar IS the canonical `downloads_top` slot: a
@@ -50,9 +52,10 @@ export function StickyTopAd() {
     >
       <div className="border-b border-border/60 bg-card/95 px-3 py-2 shadow-soft backdrop-blur-sm">
         <div className="mx-auto flex w-full max-w-3xl flex-col items-center">
+          {/* the creative is keyed by the path: a fresh view (and impression) and the next creative per page view — see TopPageBannerAd */}
           <span className="mb-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/60">Sponsored</span>
           {paid ? (
-            <SelfTopCreative ads={paid.ads} rules={paid.rules} page="download" />
+            <SelfTopCreative key={pathname} ads={paid.ads} rules={paid.rules} page="download" />
           ) : network ? (
             <AdSlot
               zone="bottom_banner"

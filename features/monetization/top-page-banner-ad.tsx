@@ -96,8 +96,16 @@ export function TopPageBannerAd() {
       aria-hidden={!visible}
     >
       <div className="mx-auto flex w-full max-w-5xl items-center justify-center px-3 py-2">
+        {/*
+          Keyed by the PATH (owner, 2026-10-10: "it should read one every page
+          view, and all entry"). This bar lives in the persistent layout, so a
+          client navigation never remounted it: one view, one impression and
+          the same creative for the whole visit. A new key per page = a fresh
+          view (its own impression) and the next creative in the no-repeat
+          rotation. A cold entry mounts fresh anyway.
+        */}
         {paid ? (
-          <SelfTopCreative ads={paid.ads} rules={paid.rules} page={pageForPath(pathname) ?? "all_pages"} />
+          <SelfTopCreative key={pathname} ads={paid.ads} rules={paid.rules} page={pageForPath(pathname) ?? "all_pages"} />
         ) : network ? (
           <AdSlot
             zone="top_banner"

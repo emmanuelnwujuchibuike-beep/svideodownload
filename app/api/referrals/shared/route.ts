@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const schema = z.object({ how: z.enum(["copied", "shared"]), surface: z.enum(["rewards", "banner"]) }).strict();
+const schema = z.object({ how: z.enum(["copied", "shared"]), surface: z.enum(["rewards", "banner", "friends"]) }).strict();
 
 /**
  * POST /api/referrals/shared — a member just copied (or shared) their invite
@@ -33,6 +33,6 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   const burst = await shareLimiter.limit(`referral-alert:${user.id}`);
   if (!burst.success) return NextResponse.json({ ok: true, alerted: false });
-  after(() => notifyAdminsOfReferralShare(user.id, parsed.data.how, parsed.data.surface === "rewards" ? "Rewards page" : "referral banner"));
+  after(() => notifyAdminsOfReferralShare(user.id, parsed.data.how, parsed.data.surface === "rewards" ? "Rewards page" : parsed.data.surface === "friends" ? "Add friends page" : "referral banner"));
   return NextResponse.json({ ok: true, alerted: true });
 }

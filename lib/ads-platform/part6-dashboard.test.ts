@@ -174,7 +174,8 @@ describe("§15.12/13 — analytics", () => {
     // test mode is never silent: the dashboards render the note whenever a campaign is boosted
     expect(src("features/ads-platform/dashboard/campaign-detail.tsx")).toContain("TestModeNote");
     expect(src("features/ads-platform/my-campaigns.tsx")).toContain("TestModeNote");
-    expect(src("features/ads-platform/dashboard/test-mode-note.tsx")).toMatch(/Sample data/);
+    // 2026-10-10 (owner, ecca614): the "Sample data" label TEXT was removed for every viewer, and the
+    // owner asked that the tests stop requiring it. The note's mount points and its admin gate stay guarded.
     // display only: the stored aggregates, billing and the 0211 migration never rewrite them
     const m = src("supabase/migrations/0212_ad_stats_test_boost.sql");
     expect(m).not.toMatch(/update\s+public\.ad_campaign_daily_stats|update\s+public\.ad_events|insert\s+into\s+public\.ad_campaign_daily_stats/i);
@@ -297,12 +298,11 @@ describe("2026-10-09: advertisers remove drafts and finished campaigns from thei
     const m = src("supabase/migrations/0213_ad_advertiser_hide.sql");
     expect(m).toContain("add column if not exists advertiser_hidden_at");
   });
-  it("the Sample data label is hidden only from admins; any other viewer still sees it", () => {
+  it("the test-mode note is gated on the server's admin check (label text removed by the owner, ecca614)", () => {
     const n = src("features/ads-platform/dashboard/test-mode-note.tsx");
     expect(n).toContain(`"/api/ads/advertiser/viewer"`);
     expect(src("app/api/ads/advertiser/viewer/route.ts")).toContain("getAdminUser()");
     expect(n).toContain("setOn(!admin)");
-    expect(n).toContain("Sample data");
   });
 });
 

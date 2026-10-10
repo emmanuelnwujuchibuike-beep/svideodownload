@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { ACCEPT_AS, requestContextLine } from "@/features/friends/request-logic";
+import { iconButton, PersonAvatar, primaryPill, quietPill } from "@/features/friends/ui";
 import { timeAgo } from "@/features/notifications/meta";
 import { ReportButton } from "@/features/social/report-button";
 import type { FriendRequestItem } from "@/lib/social/friends";
@@ -22,8 +23,9 @@ import { cn } from "@/lib/utils";
  *   more        follow instead (follow them, set the request aside), block,
  *               report — the honest exits for a request you do not want
  *
- * Every control is a real button with a text label and a 44 px target; nothing
- * depends on colour or motion alone.
+ * Every control is a real button with a text label and a 40–44 px target;
+ * nothing depends on colour or motion alone. Two buttons show (Accept, Decline);
+ * the rest wait under "More" so the row stays light.
  */
 export function RequestCard({
   req,
@@ -42,44 +44,32 @@ export function RequestCard({
   const [moreOpen, setMoreOpen] = useState(false);
   const [confirmBlock, setConfirmBlock] = useState(false);
   const context = requestContextLine(req);
-  const btn = "inline-flex min-h-[2.75rem] items-center gap-1.5 rounded-xl px-4 text-sm font-semibold transition disabled:opacity-60";
 
+  // 2026-10-10 redesign: a ROW in the grouped glass list (features/friends/ui.tsx), not a separate bordered card
   return (
-    <li className="relative overflow-hidden rounded-3xl border border-border/70 bg-card/80 p-4 shadow-sm backdrop-blur">
-      <div aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-gradient-to-br from-blue-500/15 to-violet-500/15 blur-2xl" />
+    <li className="px-3.5 py-3">
       <div className="flex items-start gap-3">
-        {req.user.avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={req.user.avatarUrl} alt="" className="block h-12 w-12 shrink-0 rounded-full object-cover ring-2 ring-violet-500/20" />
-        ) : (
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-base font-bold text-white">
-            {req.user.displayName.charAt(0).toUpperCase()}
-          </span>
-        )}
+        <Link href={`/u/${req.user.handle}`} prefetch={false} aria-label={`${req.user.displayName}'s profile`}>
+          <PersonAvatar user={req.user} size={52} />
+        </Link>
         <div className="min-w-0 flex-1">
-          <p className="flex flex-wrap items-center gap-x-1.5">
-            <Link href={`/u/${req.user.handle}`} className="font-semibold hover:underline">
+          <p className="flex min-w-0 items-center gap-1.5">
+            <Link href={`/u/${req.user.handle}`} prefetch={false} className="truncate text-[15px] font-semibold hover:underline">
               {req.user.displayName}
             </Link>
-            {req.user.isVerified ? <BadgeCheck className="h-4 w-4 text-blue-500" aria-label="Verified" /> : null}
-            <span className="text-xs text-muted-foreground">
-              @{req.user.handle} · {timeAgo(req.createdAt)} ago
-            </span>
+            {req.user.isVerified ? <BadgeCheck className="h-4 w-4 shrink-0 text-blue-500" aria-label="Verified" /> : null}
+            <span className="shrink-0 text-[12px] text-muted-foreground">· {timeAgo(req.createdAt)}</span>
           </p>
-          {context.length ? <p className="mt-0.5 text-xs text-muted-foreground">{context.join(" · ")}</p> : null}
-          {req.note ? (
-            <p className="mt-1.5 rounded-2xl border border-violet-500/20 bg-violet-500/[0.06] px-3 py-2 text-sm leading-relaxed">“{req.note}”</p>
-          ) : null}
-
-          <div className="mt-2.5 flex flex-wrap gap-2">
-            <span className="inline-flex overflow-hidden rounded-xl shadow-md shadow-violet-500/25">
-              <button
-                type="button"
-                onClick={() => onRespond("accept")}
-                disabled={busy}
-                className={cn(btn, "rounded-none bg-gradient-to-r from-blue-600 to-violet-600 text-white hover:opacity-95")}
-              >
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Accept
+          <p className="truncate text-[12.5px] text-muted-foreground">{context.length ? context.join(" · ") : `@${req.user.handle}`}</p>
+          {req.note ? <p className="mt-1.5 rounded-2xl bg-black/[0.035] px-3 py-2 text-[13.5px] leading-relaxed dark:bg-white/[0.05]">“{req.note}”</p> : null}
+        </div>
+      </div>
+      {/* full width under the person, so Accept never clips at 320 px */}
+      <div className="mt-2.5">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex min-w-0 flex-1 overflow-hidden rounded-full">
+              <button type="button" onClick={() => onRespond("accept")} disabled={busy} className={cn(primaryPill, "min-w-0 flex-1 justify-center rounded-none rounded-l-full pr-3 shadow-none")}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Check className="h-4 w-4" aria-hidden />} Accept
               </button>
               <button
                 type="button"
@@ -87,40 +77,25 @@ export function RequestCard({
                 disabled={busy}
                 aria-expanded={asOpen}
                 aria-label="Accept as…"
-                className="inline-flex min-h-[2.75rem] items-center border-l border-white/25 bg-violet-600 px-2.5 text-white transition hover:opacity-95 disabled:opacity-60"
+                className="inline-flex min-h-[2.5rem] items-center border-l border-white/25 bg-primary pl-2 pr-2.5 text-primary-foreground disabled:opacity-60"
               >
-                <ChevronDown className={cn("h-4 w-4 transition-transform motion-reduce:transition-none", asOpen && "rotate-180")} />
+                <ChevronDown className={cn("h-4 w-4 transition-transform motion-reduce:transition-none", asOpen && "rotate-180")} aria-hidden />
               </button>
             </span>
-            <button type="button" onClick={() => onRespond("decline")} disabled={busy} className={cn(btn, "border border-border bg-card text-muted-foreground hover:bg-secondary")}>
-              <X className="h-4 w-4" /> Decline
+            <button type="button" onClick={() => onRespond("decline")} disabled={busy} className={quietPill}>
+              Decline
             </button>
-            <button type="button" onClick={() => onRespond("ignore")} disabled={busy} className={cn(btn, "px-3 text-muted-foreground hover:bg-secondary")}>
-              Ignore
-            </button>
-            <button
-              type="button"
-              onClick={() => setMoreOpen((v) => !v)}
-              aria-expanded={moreOpen}
-              aria-label="More options"
-              className="inline-flex min-h-[2.75rem] min-w-[2.75rem] items-center justify-center rounded-xl text-muted-foreground transition hover:bg-secondary"
-            >
-              <MoreHorizontal className="h-5 w-5" />
+            <button type="button" onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen} aria-label="More options" className={cn(iconButton, "h-10 w-10")}>
+              <MoreHorizontal className="h-5 w-5" aria-hidden />
             </button>
           </div>
 
           {asOpen ? (
             <div className="mt-2.5" role="group" aria-label="Accept as">
-              <p className="mb-1.5 text-xs font-medium text-muted-foreground">Accept as</p>
+              <p className="mb-1.5 text-[12px] font-medium text-muted-foreground">Accept as</p>
               <div className="flex flex-wrap gap-1.5">
                 {ACCEPT_AS.map((a) => (
-                  <button
-                    key={a.key}
-                    type="button"
-                    disabled={busy}
-                    onClick={() => onRespond("accept", a.key)}
-                    className="min-h-[2.5rem] rounded-full border border-violet-500/30 bg-violet-500/[0.06] px-3.5 text-sm font-medium transition hover:bg-violet-500/15 disabled:opacity-60"
-                  >
+                  <button key={a.key} type="button" disabled={busy} onClick={() => onRespond("accept", a.key)} className={cn(quietPill, "min-h-[2.25rem] text-[13px]")}>
                     {a.label}
                   </button>
                 ))}
@@ -129,23 +104,25 @@ export function RequestCard({
           ) : null}
 
           {moreOpen ? (
-            <div className="mt-2.5 flex flex-wrap gap-2">
-              <button type="button" onClick={onFollowInstead} disabled={busy} className={cn(btn, "border border-border px-3 text-muted-foreground hover:bg-secondary")}>
-                <UserPlus className="h-4 w-4" /> Follow instead
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              <button type="button" onClick={() => onRespond("ignore")} disabled={busy} className={cn(quietPill, "min-h-[2.25rem] text-[13px]")}>
+                <X className="h-4 w-4" aria-hidden /> Ignore
+              </button>
+              <button type="button" onClick={onFollowInstead} disabled={busy} className={cn(quietPill, "min-h-[2.25rem] text-[13px]")}>
+                <UserPlus className="h-4 w-4" aria-hidden /> Follow instead
               </button>
               {confirmBlock ? (
-                <button type="button" onClick={onBlock} disabled={busy} className={cn(btn, "bg-rose-600 px-3 text-white hover:bg-rose-700")}>
-                  <ShieldOff className="h-4 w-4" /> Yes, block @{req.user.handle}
+                <button type="button" onClick={onBlock} disabled={busy} className="inline-flex min-h-[2.25rem] items-center gap-1.5 rounded-full bg-rose-600 px-3.5 text-[13px] font-semibold text-white">
+                  <ShieldOff className="h-4 w-4" aria-hidden /> Block @{req.user.handle}
                 </button>
               ) : (
-                <button type="button" onClick={() => setConfirmBlock(true)} className={cn(btn, "border border-border px-3 text-rose-600 hover:bg-rose-500/10")}>
-                  <ShieldOff className="h-4 w-4" /> Block
+                <button type="button" onClick={() => setConfirmBlock(true)} className={cn(quietPill, "min-h-[2.25rem] text-[13px] text-rose-600 dark:text-rose-400")}>
+                  <ShieldOff className="h-4 w-4" aria-hidden /> Block
                 </button>
               )}
               <ReportButton targetType="user" targetId={req.user.id} />
             </div>
           ) : null}
-        </div>
       </div>
     </li>
   );

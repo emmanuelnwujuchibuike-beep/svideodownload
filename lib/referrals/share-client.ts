@@ -36,7 +36,7 @@ export function attributionLink(kind: ShareKind, contentId: string): Promise<str
  * are pushed (owner, 2026-10-09). Fire-and-forget: it never delays the toast and
  * a failure is silent. `keepalive` lets it finish if the page is left at once.
  */
-export function reportReferralShared(how: "copied" | "shared", surface: "rewards" | "banner"): void {
+export function reportReferralShared(how: "copied" | "shared", surface: "rewards" | "banner" | "friends"): void {
   try {
     void fetch("/api/referrals/shared", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ how, surface }), keepalive: true }).catch(() => {});
   } catch {

@@ -57,8 +57,9 @@ export function SelfAdBanner({
   const seconds = rules?.rotationSeconds ?? null;
   // Per-show formats start on the ad after the one this placement showed last (persisted across visits).
   // `startAt` offsets either start, so several History-grid tiles on one page differ.
+  // 2026-10-10: a ROTATING placement also starts after the creative it showed last. It used to start at
+  // the first ad on every mount, so the top banner showed the same creative on every page view and entry.
   const [index, setIndex] = useState(() => {
-    if (seconds && seconds > 0) return startAt;
     const pick = nextFromPool(placement, ads.filter((a) => !creativeFailed(a.cr)));
     const at = pick ? ads.filter((a) => !creativeFailed(a.cr)).indexOf(pick) : 0;
     return (at < 0 ? 0 : at) + startAt;
@@ -100,11 +101,11 @@ export function SelfAdBanner({
   const [playingCr, setPlayingCr] = useState<string | null>(null);
   const waitingForPlay = current?.mediaType === "video" && playingCr !== current.cr;
 
-  // Remember what a per-show placement showed, so the NEXT download starts after it.
+  // Remember what this placement showed, so its NEXT mount (the next download, page view or entry) starts after it.
   useEffect(() => {
-    if (!current || (seconds && seconds > 0)) return;
+    if (!current) return;
     recordShown(placement, current.cr);
-  }, [current, seconds, placement]);
+  }, [current, placement]);
 
   useEffect(() => {
     // an off-screen tile does not rotate (its media is not even mounted)

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { ACCEPT_AS } from "@/features/friends/request-logic";
+import { GlassGroup, PersonAvatar, SectionHeader, primaryPill, quietPill } from "@/features/friends/ui";
 import { timeAgo } from "@/features/notifications/meta";
 import { FOLLOW_SOURCE_LABELS, isFollowSource } from "@/lib/social/follow-policy";
 import type { FollowRequestItem } from "@/lib/social/follows";
@@ -54,14 +55,10 @@ export function FollowRequestsSection() {
   };
 
   if (items.length === 0) return null;
-  const btn = "inline-flex min-h-[2.75rem] items-center gap-1.5 rounded-xl px-4 text-sm font-semibold transition disabled:opacity-60";
   return (
-    <section className="mb-6" aria-labelledby="follow-requests-title">
-      <h2 id="follow-requests-title" className="mb-2.5 text-sm font-semibold text-muted-foreground">
-        Follow requests{" "}
-        <span className="ml-1 rounded-full bg-foreground px-2 py-0.5 text-[11px] font-bold text-background">{items.length}</span>
-      </h2>
-      <ul className="space-y-2.5">
+    <section className="mb-5" aria-labelledby="follow-requests-title">
+      <SectionHeader id="follow-requests-title" title="Follow requests" count={items.length} />
+      <GlassGroup label="Follow requests">
         {items.map((req) => {
           const since = req.user.memberSince ? new Date(req.user.memberSince) : null;
           const context = [
@@ -69,16 +66,11 @@ export function FollowRequestsSection() {
             isFollowSource(req.source) ? `from ${FOLLOW_SOURCE_LABELS[req.source].toLowerCase()}` : null,
           ].filter(Boolean);
           return (
-            <li key={req.id} className="rounded-3xl border border-border/70 bg-card/80 p-4 shadow-sm">
+            <li key={req.id} className="px-3.5 py-3">
               <div className="flex items-start gap-3">
-                {req.user.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={req.user.avatarUrl} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" />
-                ) : (
-                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-secondary text-base font-bold">{req.user.displayName.charAt(0).toUpperCase()}</span>
-                )}
+                <PersonAvatar user={req.user} size={52} />
                 <div className="min-w-0 flex-1">
-                  <p className="flex flex-wrap items-center gap-x-1.5">
+                  <p className="flex min-w-0 flex-wrap items-center gap-x-1.5">
                     <Link href={`/u/${req.user.handle}`} className="font-semibold hover:underline">
                       {req.user.displayName}
                     </Link>
@@ -89,8 +81,8 @@ export function FollowRequestsSection() {
                   </p>
                   {context.length ? <p className="mt-0.5 text-xs text-muted-foreground">{context.join(" · ")}</p> : null}
                   <div className="mt-2.5 flex flex-wrap gap-2">
-                    <span className="inline-flex overflow-hidden rounded-xl">
-                      <button type="button" disabled={busy === req.id} onClick={() => void answer(req, "approve")} className={cn(btn, "rounded-none bg-foreground text-background hover:opacity-90")}>
+                    <span className="inline-flex overflow-hidden rounded-full">
+                      <button type="button" disabled={busy === req.id} onClick={() => void answer(req, "approve")} className={cn(primaryPill, "rounded-none rounded-l-full pr-3 shadow-none")}>
                         {busy === req.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Approve
                       </button>
                       <button
@@ -98,15 +90,15 @@ export function FollowRequestsSection() {
                         aria-label="Approve as…"
                         aria-expanded={asOpen === req.id}
                         onClick={() => setAsOpen((v) => (v === req.id ? null : req.id))}
-                        className="inline-flex min-h-[2.75rem] items-center border-l border-background/20 bg-foreground px-2.5 text-background"
+                        className="inline-flex min-h-[2.5rem] items-center border-l border-white/25 bg-primary pl-2 pr-2.5 text-primary-foreground"
                       >
                         <ChevronDown className="h-4 w-4" />
                       </button>
                     </span>
-                    <button type="button" disabled={busy === req.id} onClick={() => void answer(req, "decline")} className={cn(btn, "border border-border text-muted-foreground hover:bg-secondary")}>
+                    <button type="button" disabled={busy === req.id} onClick={() => void answer(req, "decline")} className={quietPill}>
                       <X className="h-4 w-4" /> Decline
                     </button>
-                    <button type="button" disabled={busy === req.id} onClick={() => void answer(req, "ignore")} className={cn(btn, "px-3 text-muted-foreground hover:bg-secondary")}>
+                    <button type="button" disabled={busy === req.id} onClick={() => void answer(req, "ignore")} className={cn(quietPill, "bg-transparent dark:bg-transparent")}>
                       Ignore
                     </button>
                   </div>
@@ -117,7 +109,7 @@ export function FollowRequestsSection() {
                           key={a.key}
                           type="button"
                           onClick={() => void answer(req, "approve", a.key)}
-                          className="min-h-[2.5rem] rounded-full border border-border px-3.5 text-sm font-medium hover:bg-secondary"
+                          className={cn(quietPill, "min-h-[2.25rem] text-[13px]")}
                         >
                           {a.label}
                         </button>
@@ -129,7 +121,7 @@ export function FollowRequestsSection() {
             </li>
           );
         })}
-      </ul>
+      </GlassGroup>
     </section>
   );
 }

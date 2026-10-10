@@ -134,6 +134,27 @@ describe("TOP_BANNER — 10 ads, 5-second LOCAL rotation", () => {
     for (const l of ["app/(app)/layout.tsx", "app/(marketing)/layout.tsx"]) expect(src(l)).not.toContain("selfbanner");
   });
 
+  it("2026-10-10: every page view is a fresh top-banner view, and the next creative", () => {
+    // The bars live in the persistent layout; only a key that changes with the
+    // path remounts the creative (a new AdView → its own impression).
+    const keyed = /<SelfTopCreative key=\{pathname\}/;
+    for (const file of ["features/monetization/top-page-banner-ad.tsx", "features/monetization/sticky-top-ad.tsx"]) expect(src(file), file).toMatch(keyed);
+    expect("<SelfTopCreative ads={paid.ads}").not.toMatch(keyed); // teeth: an unkeyed mount fails
+    // A ROTATING banner starts after the creative it showed last, not at ad 0 on every mount.
+    const b = code("features/ads-platform/serve/self-ad-banner.tsx");
+    expect(b).not.toContain("if (seconds && seconds > 0) return startAt;");
+    expect(b).not.toContain("if (!current || (seconds && seconds > 0)) return;");
+    // …and that start really moves on: three mounts in a row never repeat the previous creative.
+    const pool = [{ cr: "a" }, { cr: "b" }, { cr: "c" }] as unknown as EligibleAd[];
+    let prev: string | null = null;
+    for (let i = 0; i < 3; i += 1) {
+      const pick = nextFromPool("global_top_banner", pool)!;
+      expect(pick.cr).not.toBe(prev);
+      recordShown("global_top_banner", pick.cr);
+      prev = pick.cr;
+    }
+  });
+
   it("the paid top creative keeps its 10:1 shape (not a 32 px sliver)", () => {
     const t = src("features/ads-platform/serve/self-top-creative.tsx");
     expect(t).toContain("max-w-[728px]");

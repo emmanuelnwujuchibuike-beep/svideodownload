@@ -1,4 +1,3 @@
-import { Sparkles } from "lucide-react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
@@ -23,22 +22,21 @@ export default async function DiscoverPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/friends/discover");
 
-  const suggestions = await getSuggestedCreators(user.id, 24);
+  // In parallel: the handle only feeds the QR-card link, so a miss just hides it.
+  const [suggestions, handle] = await Promise.all([
+    getSuggestedCreators(user.id, 24),
+    supabase
+      .from("profiles")
+      .select("handle")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => (data?.handle as string | undefined) ?? null, () => null),
+  ]);
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-3 pt-4 sm:px-4"
       style={{ paddingBottom: "calc(var(--frenz-bottom-nav) + 1rem)" }}>
-      {/* Matches /explore's heading treatment so the two discovery surfaces
-          read as one product: a heavier, tighter-tracked title with the
-          subtitle pulled up against it, and the same small accent mark. */}
-      <header className="mb-3.5 px-1">
-        <h1 className="flex items-center gap-1.5 text-[clamp(1.75rem,7.5vw,2.25rem)] font-extrabold leading-none tracking-[-0.04em]">
-          Add friends
-          <Sparkles className="h-[18px] w-[18px] shrink-0 text-primary" aria-hidden />
-        </h1>
-        <p className="mt-1.5 text-[13.5px] text-muted-foreground">Search for anyone, or follow someone new below.</p>
-      </header>
-      <FriendsDiscover initialSuggestions={suggestions} />
+      <FriendsDiscover initialSuggestions={suggestions} handle={handle} />
     </div>
   );
 }

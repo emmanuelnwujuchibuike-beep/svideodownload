@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
+import { flushFundingAlerts } from "@/lib/admin/funding-alerts";
 import { reconcilePendingAdPayments } from "@/lib/ads-platform/payment-server";
 import { sweepAiJobs } from "@/lib/ai/recovery";
+import { awardClosedWeek } from "@/lib/ai/weekly-top";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cronAuthorized } from "@/lib/cron/auth";
 
@@ -31,7 +33,12 @@ async function run(request: Request) {
   }
   // 2026-10-09: ad payments whose provider webhook never arrived are confirmed every 10 minutes too
   const [ai, adPayments] = await Promise.all([sweepAiJobs(), reconcilePendingAdPayments(createAdminClient()).catch((e: unknown) => ({ error: String(e).slice(0, 160) }))]);
-  return NextResponse.json({ ...ai, adPayments });
+  // 0218: any payment alert a webhook did not send yet; and the weekly AI prizes once a week has closed
+  const [fundingAlerts, weeklyAwards] = await Promise.all([
+    flushFundingAlerts().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
+    awardClosedWeek(createAdminClient()).catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
+  ]);
+  return NextResponse.json({ ...ai, adPayments, fundingAlerts, weeklyAwards });
 }
 
 export const GET = run;

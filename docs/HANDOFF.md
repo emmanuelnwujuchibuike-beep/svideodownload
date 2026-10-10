@@ -72,8 +72,11 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
    uploaded; anything else still gets "try again". Reels already keep playing
    their MP4 without a Stream copy. Freeing Stream storage is still the owner's
    call in the Cloudflare dashboard.
-4. **Migrations 0214, 0215, 0216, 0217** not yet run in production, in that
-   order. 0215 raises the public `ad-creatives` bucket to 200 MB; 0216 is Friend
+4. **Migrations 0214, 0215, 0216, 0217, 0218** not yet run in production, in that
+   order. 0218 = admin funding alerts (a trigger queues every successful payment;
+   push + email to admins via lib/admin/funding-alerts.ts) and weekly AI prizes
+   (ai_weekly_awards; 50/30/20 credits for the top 3 who spent >500 that week,
+   paid by the 10-minute reconcile cron the day after a week closes). 0215 raises the public `ad-creatives` bucket to 200 MB; 0216 is Friend
    Requests (ignores, request privacy, source); 0217 is the follow platform and
    circles (follow policy + requests, follower_daily, circle kinds/icons/palette,
    and a NEW follows insert policy that enforces approval in the database).

@@ -356,6 +356,8 @@ export async function settleVerified(db: Db, s: SettleInput): Promise<Rpc> {
   if (error) throw new Error(`ad_payment_settle: ${error.message}`);
   const r = data as Rpc;
   if (r.ok) {
+    // 0218: the admins hear about the advertiser payment (lib/admin/funding-alerts.ts)
+    void import("@/lib/admin/funding-alerts").then((m) => m.flushFundingAlertsSoon()).catch(() => {});
     if (!r.already) log("payment_verified", { reference: s.reference, provider: s.provider, via: s.via });
     const ext = r.extension as { ok?: boolean; reason?: string; campaign_id?: string; new_end_at?: string; already?: boolean } | true | undefined;
     if (ext && typeof ext === "object") {

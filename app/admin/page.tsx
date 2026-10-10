@@ -138,6 +138,7 @@ import {
   getShellCapabilities,
 } from "@/lib/platform/workspace-platform";
 import { DigestPanel } from "@/features/admin/digest-panel";
+import { AiCreationsPanel } from "@/features/admin/ai-creations-panel";
 import { RevenueCharts } from "@/features/admin/revenue-charts";
 import { RevenueOverview } from "@/features/admin/revenue-overview";
 import { getRevenueSeries } from "@/lib/monetization/revenue-series";
@@ -191,6 +192,8 @@ import { getAiAdminStats, getCharacterReplaceFreeAccessStats, listCharacterRepla
 import { loadAiMoney } from "@/lib/ai/admin-money";
 import { loadPlanSurveySummary } from "@/lib/ai/credits/plan-survey-admin";
 import { loadAiOperations } from "@/lib/ai/admin-ops";
+import { aiCreationsOverview } from "@/lib/ai/weekly-top";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { aiFeature } from "@/lib/ai/jobs";
 import { LandingEditor } from "@/features/admin/landing-editor";
 import { PlatformStatusEditor } from "@/features/admin/platform-status-editor";
@@ -930,12 +933,14 @@ function klingStateOf(o: { features: { vendor: string; state: "healthy" | "degra
 }
 
 async function FrenzAISection() {
-  const [landing, aiStats, crJobs, aiOps] = await Promise.all([
+  const [landing, aiStats, crJobs, aiOps, aiCreations] = await Promise.all([
     getLandingSettings(),
     getAiAdminStats(),
     listCharacterReplaceAdminJobs(60),
     // Part 8 §7, §35–§39: every tool's jobs, one bounded read (lib/ai/admin-ops.ts)
     loadAiOperations(),
+    // 2026-10-10: creations by kind, top 10 creators, weekly prizes (lib/ai/weekly-top.ts)
+    aiCreationsOverview(createAdminClient()).catch(() => null),
   ]);
   const aiOpsLabels = Object.fromEntries([...new Set(aiOps.jobs.map((j) => j.feature))].map((f) => [f, aiFeature(f)?.label ?? f]));
   // Part 11 §19: the complimentary-creation figures, beside the health panel
@@ -964,6 +969,7 @@ async function FrenzAISection() {
           content: (
             <div className="space-y-6">
               <FrenzAIHealth stats={aiStats} />
+              {aiCreations ? <AiCreationsPanel data={aiCreations} labels={Object.fromEntries([...new Set([...aiCreations.recent.map((r) => r.feature)])].map((f) => [f, aiFeature(f)?.label ?? f]))} /> : null}
               {/* Part 8 §7/§62, §35–§39 (2026-10-07): every tool's jobs, failures grouped and split by owner. */}
               <AiOperationsPanelLazy ops={aiOps} labels={aiOpsLabels} kling={klingStateOf(providerOverview)} currencySymbol={aiCurrencySymbol(landing.frenzAiCurrency)} />
               <AiMoneyPanelLazy money={aiMoney} labels={moneyLabels} survey={planSurvey} />

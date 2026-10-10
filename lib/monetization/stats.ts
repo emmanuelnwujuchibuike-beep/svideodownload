@@ -1,3 +1,4 @@
+import { aggregateCollected, type CollectedRevenue } from "@/lib/monetization/collected-revenue";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { AD_ZONES } from "./ad-schema";
@@ -102,6 +103,29 @@ export interface RevenueStats {
   ads: { impressionsToday: number; clicksToday: number; impr7d: number; clicks7d: number; ctr: number };
   affiliate: { clicksToday: number; clicks7d: number };
   api: { callsToday: number; calls7d: number; activeKeys: number };
+  /** 2026-10-10: money that actually arrived — funding, AI subscriptions, advertisers (lib/monetization/collected-revenue.ts) */
+  collected: CollectedRevenue | null;
+}
+
+/** Successful payments, newest first, in pages — one table every rail settles into. */
+async function loadCollected(s: ReturnType<typeof createAdminClient>, now: number): Promise<CollectedRevenue | null> {
+  try {
+    const rows: { amount_cents: number; currency: string; purpose: string | null; created_at: string }[] = [];
+    for (let from = 0; from < 50_000; from += 1000) {
+      const { data, error } = await s
+        .from("ai_topup_attempts")
+        .select("amount_cents, currency, purpose, created_at")
+        .eq("status", "success")
+        .order("created_at", { ascending: false })
+        .range(from, from + 999);
+      if (error) return null;
+      rows.push(...((data ?? []) as typeof rows));
+      if ((data ?? []).length < 1000) break;
+    }
+    return aggregateCollected(rows, now);
+  } catch {
+    return null;
+  }
 }
 
 /*
@@ -273,6 +297,7 @@ export async function fetchRevenueStats(): Promise<RevenueStats | null> {
       },
       affiliate: { clicksToday: affToday.count ?? 0, clicks7d: aff7d.count ?? 0 },
       api: { callsToday: apiToday.count ?? 0, calls7d: api7d.count ?? 0, activeKeys: keys.count ?? 0 },
+      collected: await loadCollected(s, Date.now()),
     };
   } catch {
     return null;

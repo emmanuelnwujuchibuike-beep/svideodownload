@@ -60,6 +60,11 @@ export async function markTopupAttempt(
     })
     .eq("reference", reference);
   if (error) console.error("[ai/topup] attempt mark failed", { reference, message: error.message });
+  // 0218: the admins hear about every successful payment (lib/admin/funding-alerts.ts)
+  if (!error && outcome.status === "success") {
+    const { flushFundingAlertsSoon } = await import("@/lib/admin/funding-alerts");
+    flushFundingAlertsSoon();
+  }
 }
 
 /**

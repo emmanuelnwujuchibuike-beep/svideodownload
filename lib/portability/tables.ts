@@ -192,6 +192,8 @@ export const OWNER_COLUMN: Record<string, string> = {
     holds no card details (0151).
   */
   ai_topup_attempts: "user_id",
+  ai_weekly_awards: "user_id", // 0218: weekly top-creator prizes you won
+  admin_funding_alerts: "user_id", // 0218: the admin notice of your payment — the same facts as your own ai_topup_attempts rows
   /*
     Every movement of a product wallet (0154): a recharge, the charge for a
     job, its refund, an operator's adjustment — with the pricing snapshot the

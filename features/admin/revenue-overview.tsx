@@ -4,6 +4,7 @@ import { PageViewsChart } from "./page-views-chart";
 
 import { AD_ZONE_META, type AdZoneId } from "@/lib/monetization/ad-schema";
 import { MONETAG_SLOT_LABELS } from "@/lib/monetization/monetag-track";
+import { REVENUE_SOURCE_LABELS, type RevenueSource } from "@/lib/monetization/collected-revenue";
 import type { MonetizationAnalytics, RevenueStats } from "@/lib/monetization/stats";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
@@ -136,8 +137,58 @@ export function RevenueOverview({
   const { subscribers, ads, affiliate, api } = revenue;
   const zones = analytics?.adZones ?? [];
 
+  /*
+    2026-10-10 (owner: "include funding revenue in the total revenue and not just
+    subscribers"): money that actually ARRIVED, per currency and per source —
+    AI credit funding, AI subscriptions, advertisers. Pro/Business subscriptions
+    have no payment ledger, so the total below adds their MRR as an estimate,
+    said in so many words, and only when it is in the same currency.
+  */
+  const collected = revenue.collected ? Object.entries(revenue.collected.currencies) : [];
+  const mrrCode = ({ "$": "USD", "₦": "NGN", "£": "GBP", "€": "EUR" } as Record<string, string>)[revenue.currency.trim()] ?? revenue.currency.trim().toUpperCase();
+  const money = (minor: number, code: string) => `${code} ${(minor / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+
   return (
     <div className="space-y-8">
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold">Collected revenue</h3>
+        {revenue.collected === null ? (
+          <p className="text-sm text-muted-foreground">Payments could not be read.</p>
+        ) : collected.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No successful payments yet.</p>
+        ) : (
+          collected.map(([code, c]) => (
+            <div key={code} className="rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/[0.07] to-transparent p-4">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Total collected, last 30 days · {code}</p>
+                  <p className="mt-1 text-2xl font-bold tabular-nums">{money(c.d30.total, code)}</p>
+                  {mrrCode === code && revenue.mrr > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      With Pro/Business subscriptions (MRR, estimated): <b className="text-foreground">{money(c.d30.total + Math.round(revenue.mrr * 100), code)}</b>
+                    </p>
+                  ) : null}
+                </div>
+                <div className="grid grid-cols-3 gap-4 text-right text-xs">
+                  <span><span className="block text-muted-foreground">Today</span><b className="tabular-nums">{money(c.today.total, code)}</b></span>
+                  <span><span className="block text-muted-foreground">7 days</span><b className="tabular-nums">{money(c.d7.total, code)}</b></span>
+                  <span><span className="block text-muted-foreground">All time</span><b className="tabular-nums">{money(c.all.total, code)}</b></span>
+                </div>
+              </div>
+              <ul className="mt-3 grid gap-1.5 sm:grid-cols-3">
+                {(Object.keys(REVENUE_SOURCE_LABELS) as RevenueSource[]).map((src) => (
+                  <li key={src} className="rounded-xl bg-card/70 px-3 py-2 text-xs">
+                    <span className="block text-muted-foreground">{REVENUE_SOURCE_LABELS[src]} · 30 days</span>
+                    <b className="tabular-nums">{money(c.d30.bySource[src], code)}</b>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-[11px] text-muted-foreground">{c.d30.payments} payment{c.d30.payments === 1 ? "" : "s"} in 30 days. Admin test campaigns are never counted — they have no payment.</p>
+            </div>
+          ))
+        )}
+      </div>
+
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Metric
           icon={TrendingUp}

@@ -520,6 +520,10 @@ function FriendRow({
       </div>
       {open ? (
         <div className="mt-2 flex flex-wrap gap-2 pl-14">
+          {/* Feature 19 Part 7: the friendship's own page (timeline, bucket list, capsules) */}
+          <Link href={`/friends/with/${item.user.handle}`} prefetch={false} className={quietPill}>
+            <Sparkles className="h-4 w-4 text-primary" aria-hidden /> Our story
+          </Link>
           <button type="button" onClick={() => onFavorite(item.user.id, !item.favorite)} aria-pressed={item.favorite} className={quietPill}>
             <Star className={cn("h-4 w-4", item.favorite && "fill-amber-400 text-amber-400")} aria-hidden />
             {item.favorite ? "Unfavourite" : "Favourite"}

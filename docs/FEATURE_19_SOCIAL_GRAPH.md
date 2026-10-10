@@ -310,8 +310,67 @@ is not met and needs a precomputed candidate table (planned).
 
 ---
 
+## Part 7 — Friend Profiles™, Relationship Timeline & Shared Memories
+
+| Layer | File |
+|---|---|
+| Timeline, anniversaries, Friendship Health, insights (pure) | `lib/social/friendship/story.ts` |
+| One friendship, read for the viewer | `lib/social/friendship/server.ts` |
+| API (friends only, re-checked by RLS) | `app/api/friends/[id]/goals`, `capsules`, `timeline-hidden` |
+| UI | `/friends/with/[handle]` (`features/friends/friendship-page.tsx`), from "Our story" in each friend's menu |
+| Schema | `0222` (`friend_goals`, `time_capsules.recipient_id`, `friendship_timeline_hidden`, `are_friends()`) |
+| Tests | `lib/social/friendship/story.test.ts` + 0222 PGlite (16 checks, run twice, 2 mutants that fail) |
+
+The page exists only for two people who are friends right now (404 for
+anyone else). It is `/friends/with/<handle>`, not `/friends/<handle>`, so a
+member whose handle is "discover" or "circles" still has one.
+
+**The timeline stores nothing.** Every moment is a timestamp another table
+already owns, read when the page opens: the friend request and who sent it,
+friends since, follows both ways, the first message and who said hello, the
+100th, 500th and 1,000th message, first likes, comments and reposts each way,
+bucket-list goals ticked off, and the 1-month, 6-month and yearly
+anniversaries (clamped to month ends, UTC). A friend's private SAVE of a post
+is never read, and neither is a hidden comment. Verified on production
+read-only against three real friendships.
+
+**What is remembered is the member's choice:** "Edit what's remembered"
+takes any kind of moment off THEIR view of one friendship (0222, owner-only).
+The friendship itself and its anniversaries always stay.
+
+**Shared between the two friends, by design:** the Bucket List (both read,
+add, tick off and remove, and it closes if the friendship ends) and Time
+Capsules sealed for the friend. The database refuses the recipient's read
+until the capsule opens, and the app sends no message before then, not even
+to its author.
+
+**Private to the viewer:** Friendship Health (recently active, growing,
+long-time, quiet lately, new: chips, never a score), insights (messages,
+busiest month, longest streak, mutual friends), the Memory Vault (messages
+they starred in that chat), and photos and videos shared in their chat.
+
+**Export:** one tap downloads the timeline, insights, bucket list and
+capsules as JSON. A sealed capsule leaves without its message.
+
+**Gap Ledger**
+
+| Brief item | State |
+|---|---|
+| Friend profile page, timeline, anniversaries, milestones (100/500/1,000 messages, first like, comment, repost) | **live** |
+| Friendship Health, insights, mutual friends (privacy-aware), shared chat media, Memory Vault (starred messages) | **live** |
+| Shared Bucket List, Time Capsules for a friend, hide moments, export | **live** (0222) |
+| Quick actions: message, profile, export | **live**. Call, share story, create album or event: planned (no albums or events product) |
+| Shared communities, events, marketplace, collaborations, schools, projects, AI projects, shared downloads | planned — Frenz holds none of that data as something two people share |
+| Memory collections (auto albums by theme), Relationship Map, AI interest matching | planned — needs media classification. The interest profile is private watch history and is not shared between two people |
+| Anniversary reminders (notifications) | planned — the dates are computed. A daily job to send them is not built yet |
+| "Encrypted" vault and capsules | partly — capsules are sealed by database policy, and the platform encrypts data at rest. Not end-to-end encrypted |
+| Relationship search, offline viewing | planned. The page is server-rendered in one pass |
+| Instant loading | partly — a cold read took 1.8–2.4 s from this machine (about 25 small queries in two batches). The page shows a loading stripe meanwhile |
+
+---
+
 ## Migrations to run (in order)
 
-`0214`, `0215`, `0216`, `0217`, `0218`, `0219` (×10 dashboard switch stands for new campaigns), `0220` (Contact Discovery: run after 0217, whose follow-source constraint it widens), `0221` (People You May Know feedback). Each is idempotent and PGlite-tested (run twice,
+`0214`, `0215`, `0216`, `0217`, `0218`, `0219` (×10 dashboard switch stands for new campaigns), `0220` (Contact Discovery: run after 0217, whose follow-source constraint it widens), `0221` (People You May Know feedback), `0222` (Friend Profiles: bucket list, capsules for friends, hidden moments). Each is idempotent and PGlite-tested (run twice,
 plus a mutant that must fail). The code works before and after each: every new
 read falls back to today's behaviour when its column or table is missing.

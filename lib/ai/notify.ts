@@ -9,6 +9,7 @@ import { dispatchAiNotification } from "@/lib/ai/notify-dispatch";
 import { hasWebPush } from "@/lib/push/web-push";
 import { isWalletFundedFeature, type AiFeature } from "@/lib/ai/jobs";
 import { aiNotificationCopy, outcomeForErrorCode } from "@/lib/ai/notification-copy";
+import { emailAiVideoReady } from "@/lib/ai/ready-email";
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import { SITE_URL } from "@/lib/site";
 
@@ -197,6 +198,21 @@ export async function notifyAiJobFinished(opts: {
     console.error("[ai/notify] finished push failed", { jobId: opts.jobId, error: String(e) });
     await recordJobEvent(opts.jobId, "notify.skipped", { outcome: "completed", reason: "send threw", error: String(e).slice(0, 160) });
   }
+
+  /*
+    Owner, 2026-10-10: an AI VIDEO is also announced by email. After the claim
+    above, so exactly once per job, and whatever happened to the push (a member
+    with no subscribed device still hears). Video tools only, and only when
+    their notification switches allow it (lib/ai/ready-email.ts).
+  */
+  const resultUrl = workspaceUrlFor(opts.feature ?? "ai_character_replace", opts.jobId);
+  const emailed = await emailAiVideoReady({
+    userId: opts.userId,
+    feature: opts.feature ?? "ai_character_replace",
+    resultPath: resultUrl.startsWith(SITE_URL) ? resultUrl.slice(SITE_URL.length) : resultUrl,
+    earnedLine: earned ? `You earned ${earned.amount} credit${earned.amount === 1 ? "" : "s"}.` : null,
+  });
+  if (emailed) await recordJobEvent(opts.jobId, "notify.email_sent", { outcome: "completed" });
 }
 
 export async function notifyAiJobFailed(opts: {

@@ -73,6 +73,8 @@ export type AiJobEventKind =
   | "notify.handed_off"
   | "notify.pending"
   | "notify.skipped"
+  /** 2026-10-10: the "your AI video is ready" email went out (lib/ai/ready-email.ts). */
+  | "notify.email_sent"
   | "refund.issued"
   | "reconcile.provider"
   | "reconcile.redispatched"

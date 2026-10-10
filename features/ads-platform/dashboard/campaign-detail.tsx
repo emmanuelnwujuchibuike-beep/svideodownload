@@ -240,7 +240,7 @@ function ActionButton({ icon: Icon, label, active, onClick }: { icon: typeof Upl
   );
 }
 
-const input = "mt-1 h-11 w-full rounded-xl border border-border bg-background px-3 text-[14px]";
+const input = "mt-1 h-11 w-full rounded-xl border border-border bg-background px-3 text-base sm:text-[14px]";
 
 function EditDetails({ c, done }: { c: CampaignRow; done: Flash }) {
   const cr = liveCreative(c);
@@ -435,23 +435,29 @@ function Performance({ id }: { id: string }) {
       <TestModeNote campaignId={id} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[14px] font-semibold">Performance</p>
-        <div className="flex gap-1">
+        <div className="inline-flex gap-0.5 rounded-xl bg-secondary p-1">
           {[{ d: 7, l: "7 days" }, { d: 30, l: "30 days" }, { d: null, l: "Lifetime" }].map((o) => (
-            <button key={o.l} type="button" onClick={() => setRange(o.d)} aria-pressed={range === o.d} className={cn("min-h-[2.25rem] rounded-full px-3 text-[12px] font-semibold", range === o.d ? "bg-foreground text-background" : "bg-secondary text-muted-foreground")}>{o.l}</button>
+            <button key={o.l} type="button" onClick={() => setRange(o.d)} aria-pressed={range === o.d} className={cn("min-h-[2rem] rounded-lg px-2.5 text-[12px] font-semibold transition", range === o.d ? "bg-card text-foreground shadow-sm ring-1 ring-inset ring-border/60" : "text-muted-foreground")}>{o.l}</button>
           ))}
         </div>
       </div>
       {!rows || !t ? <div className="mt-3"><Skeleton /></div> : (
         <>
-          <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-            <div><p className="text-[1.2rem] font-bold tabular-nums">{num(t.views)}</p><p className="text-[11.5px] text-muted-foreground">Views</p></div>
-            <div><p className="text-[1.2rem] font-bold tabular-nums">{num(t.clicks)}</p><p className="text-[11.5px] text-muted-foreground">Clicks</p></div>
-            <div><p className="text-[1.2rem] font-bold tabular-nums">{pct(t.ctr)}</p><p className="text-[11.5px] text-muted-foreground">CTR</p></div>
-          </div>
-          {/* 0201: details opened on Frenzsave, and visits after the external-link warning */}
-          <div className="mt-2 grid grid-cols-2 gap-2 text-center">
-            <div><p className="text-[1.05rem] font-bold tabular-nums">{num(t.conversions)}</p><p className="text-[11.5px] text-muted-foreground">Conversions</p></div>
-            <div><p className="text-[1.05rem] font-bold tabular-nums">{num(t.outbounds)}</p><p className="text-[11.5px] text-muted-foreground">Site visits</p></div>
+          {/* 0201: conversions = details opened on Frenzsave; site visits = after the external-link warning */}
+          <div className="mt-4 grid grid-cols-3 gap-px overflow-hidden rounded-xl bg-border/70 ring-1 ring-inset ring-border/70">
+            {[
+              { l: "Views", v: num(t.views) },
+              { l: "Clicks", v: num(t.clicks) },
+              { l: "CTR", v: pct(t.ctr) },
+              { l: "Conversions", v: num(t.conversions) },
+              { l: "Site visits", v: num(t.outbounds) },
+              { l: "Video ends", v: num(t.videoCompletes + t.rewardCompletes) },
+            ].map((k) => (
+              <div key={k.l} className="min-w-0 bg-card px-3 py-3">
+                <p className="truncate text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{k.l}</p>
+                <p className="mt-1.5 text-[1.2rem] font-semibold leading-none tracking-tight tabular-nums">{k.v}</p>
+              </div>
+            ))}
           </div>
           {t.videoPlays || t.rewardCompletes ? (
             <p className="mt-2 text-center text-[12px] text-muted-foreground">{num(t.videoPlays)} video plays · {num(t.videoCompletes + t.rewardCompletes)} watched to the end</p>

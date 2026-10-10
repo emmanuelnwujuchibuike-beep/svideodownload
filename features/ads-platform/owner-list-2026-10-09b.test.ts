@@ -34,7 +34,7 @@ describe("a tapped ad opens its details on the same page", () => {
     expect(m).toContain("(v_type = 'conversion')::int, (v_type = 'outbound')::int)");
     expect(m).toContain("'conversions', (select conversions from stats), 'outbounds', (select outbounds from stats),");
     expect(code("features/ads-platform/my-campaigns.tsx")).toContain('<Stat label="Conversions" value={num(s.conversions)}');
-    expect(code("features/ads-platform/dashboard/campaign-detail.tsx")).toContain(">Conversions</p>");
+    expect(code("features/ads-platform/dashboard/campaign-detail.tsx")).toContain('{ l: "Conversions", v: num(t.conversions) }');
   });
 });
 

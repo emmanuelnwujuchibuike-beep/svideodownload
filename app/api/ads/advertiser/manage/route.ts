@@ -1,7 +1,7 @@
 import { advertiserRoute, str } from "@/lib/ads-platform/advertiser-route";
 import { AdApplicationError } from "@/lib/ads-platform/advertiser-server";
 import { adMessage } from "@/lib/ads-platform/messages";
-import { editDetails, extensionQuote, finalizeReplacement, replacementTicket, setPaused } from "@/lib/ads-platform/campaign-manage";
+import { editDetails, extensionQuote, finalizeReplacement, removeFromList, replacementTicket, setPaused } from "@/lib/ads-platform/campaign-manage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +32,8 @@ export function POST(request: Request) {
         const facts = { ...r.facts, ...r.limits };
         return { ...r, messages: r.errors.map((code) => adMessage(code, facts)) };
       }
+      case "remove":
+        return removeFromList(db, userId, campaignId);
       case "extend-quote":
         return extensionQuote(db, userId, { campaignId, durationId: str(body.durationId, 64) });
       default:

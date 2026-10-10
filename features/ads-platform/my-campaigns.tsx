@@ -1,9 +1,9 @@
 "use client";
 
-import { BarChart3, CreditCard, HelpCircle, LayoutGrid, Megaphone, Plus, Search } from "lucide-react";
+import { BarChart3, ChevronRight, CreditCard, HelpCircle, LayoutGrid, Loader2, Megaphone, Plus, Search, Trash2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import { AiButtonLink } from "@/features/ai/design/ai-button";
 import { AiPanel } from "@/features/ai/design/ai-surface";
@@ -21,10 +21,12 @@ import {
   loadPayments,
   loadStats,
   loadSummary,
+  manage,
   num,
   PAGE_SIZE,
   pct,
   remaining,
+  REMOVABLE_STATUSES,
   statusLabel,
   totalsOf,
   usd,
@@ -33,6 +35,7 @@ import {
   type SortKey,
   type StatRow,
   type Summary,
+  type Tone,
   type Totals,
 } from "./dashboard/dashboard-data";
 import { TestModeNote } from "./dashboard/test-mode-note";
@@ -83,8 +86,8 @@ export function MyCampaigns() {
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <nav className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1" aria-label="Dashboard sections">
+      <div className="flex items-end justify-between gap-3 border-b border-border/80">
+        <nav className="-mb-px flex min-w-0 gap-5 overflow-x-auto" aria-label="Dashboard sections">
           {TABS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -92,18 +95,21 @@ export function MyCampaigns() {
               onClick={() => go({ tab: id === "overview" ? null : id })}
               aria-current={tab === id ? "page" : undefined}
               className={cn(
-                "inline-flex min-h-[2.5rem] shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold transition",
-                tab === id ? "bg-indigo-600 text-white" : "bg-secondary text-muted-foreground hover:text-foreground",
+                "inline-flex min-h-[2.75rem] shrink-0 items-center gap-1.5 border-b-2 px-0.5 text-[13.5px] font-semibold transition-colors",
+                tab === id ? "border-indigo-600 text-foreground dark:border-indigo-400" : "border-transparent text-muted-foreground hover:text-foreground",
               )}
             >
               <Icon className="h-4 w-4" aria-hidden /> {label}
             </button>
           ))}
         </nav>
-        <AiButtonLink tapOnce href="/advertise/create" prefetch={false} size="sm" icon={<Plus className="h-4 w-4" />}>
+        <AiButtonLink tapOnce href="/advertise/create" prefetch={false} size="sm" icon={<Plus className="h-4 w-4" />} className="mb-2 hidden shrink-0 sm:inline-flex">
           Create Advertisement
         </AiButtonLink>
       </div>
+      <AiButtonLink tapOnce href="/advertise/create" prefetch={false} size="sm" icon={<Plus className="h-4 w-4" />} className="mt-3 w-full justify-center sm:hidden">
+        Create Advertisement
+      </AiButtonLink>
       <div className="mt-5">
         {tab === "overview" ? <Overview onOpen={(id) => go({ c: id })} onTab={(t) => go({ tab: t })} /> : null}
         {tab === "campaigns" ? <Campaigns onOpen={(id) => go({ c: id })} /> : null}
@@ -121,55 +127,117 @@ export function Skeleton() {
   return (
     <div className="space-y-3" aria-busy>
       {[0, 1].map((i) => (
-        <span key={i} className="block h-32 animate-pulse rounded-[1.75rem] bg-muted motion-reduce:animate-none" />
+        <span key={i} className="block h-32 animate-pulse rounded-2xl bg-muted motion-reduce:animate-none" />
       ))}
     </div>
   );
 }
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+/** A section title in the dashboard's one voice: small caps, quiet, with an optional action on the right. */
+function SectionTitle({ id, children, action }: { id?: string; children: ReactNode; action?: ReactNode }) {
   return (
-    <div className="rounded-2xl bg-card p-3.5 ring-1 ring-inset ring-black/[0.06] dark:ring-white/10">
-      <p className="text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 text-[1.35rem] font-bold tabular-nums tracking-tight">{value}</p>
-      {hint ? <p className="mt-0.5 text-[11.5px] text-muted-foreground">{hint}</p> : null}
+    <div className="flex min-h-[2.25rem] items-center justify-between gap-3">
+      <h2 id={id} className="text-[11.5px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
+        {children}
+      </h2>
+      {action}
     </div>
+  );
+}
+
+/** Figures in one panel, split by hairlines — the ledger look of a serious ads console. */
+function KpiGrid({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn("grid gap-px overflow-hidden rounded-2xl bg-border/70 ring-1 ring-inset ring-border/70", className)}>{children}</div>;
+}
+
+function Stat({ label, value, hint, emphasis }: { label: string; value: string; hint?: string; emphasis?: boolean }) {
+  return (
+    <div className="bg-card px-4 py-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+      <p className={cn("mt-2 font-semibold leading-none tracking-tight tabular-nums", emphasis ? "text-[1.75rem]" : "text-[1.45rem]")}>{value}</p>
+      {hint ? <p className="mt-2 text-[11.5px] leading-snug text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
+}
+
+/** A quiet panel: card ground, hairline ring, no wash. */
+function Panel({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn("rounded-2xl bg-card ring-1 ring-inset ring-border/70", className)}>{children}</div>;
+}
+
+/** Segmented control for ranges and filters. */
+function Segmented<T extends string | number>({ items, value, onChange, label }: { items: { id: T; label: string }[]; value: T; onChange: (v: T) => void; label: string }) {
+  return (
+    <div className="-mx-1 overflow-x-auto px-1">
+      <div className="inline-flex gap-0.5 rounded-xl bg-secondary p-1" role="tablist" aria-label={label}>
+        {items.map((it) => (
+          <button
+            key={String(it.id)}
+            type="button"
+            role="tab"
+            aria-selected={value === it.id}
+            onClick={() => onChange(it.id)}
+            className={cn(
+              "min-h-[2.25rem] shrink-0 whitespace-nowrap rounded-lg px-3 text-[12.5px] font-semibold transition",
+              value === it.id ? "bg-card text-foreground shadow-sm ring-1 ring-inset ring-border/60" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {it.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const DOT: Record<Tone, string> = { emerald: "bg-emerald-500", indigo: "bg-indigo-500", amber: "bg-amber-500", rose: "bg-rose-500", slate: "bg-slate-400" };
+
+function StatusText({ c }: { c: CampaignRow }) {
+  const l = statusLabel(c);
+  return (
+    <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+      <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", DOT[l.tone], l.tone === "emerald" && "ring-[3px] ring-emerald-500/20")} aria-hidden />
+      {l.text}
+    </span>
   );
 }
 
 function Empty({ title, body }: { title: string; body: string }) {
   return (
-    <AiPanel className="text-center">
-      <Megaphone className="mx-auto h-6 w-6 text-indigo-600" aria-hidden />
-      <p className="mt-2 text-[15px] font-semibold">{title}</p>
-      <p className="mt-1 text-[13px] text-muted-foreground">{body}</p>
-      <AiButtonLink tapOnce href="/advertise/create" prefetch={false} className="mt-4">
+    <Panel className="px-6 py-10 text-center">
+      <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300" aria-hidden>
+        <Megaphone className="h-5 w-5" />
+      </span>
+      <p className="mt-3 text-[15px] font-semibold">{title}</p>
+      <p className="mx-auto mt-1 max-w-sm text-[13px] text-muted-foreground">{body}</p>
+      <AiButtonLink tapOnce href="/advertise/create" prefetch={false} className="mt-5">
         Create Advertisement
       </AiButtonLink>
-    </AiPanel>
+    </Panel>
   );
 }
 
 function Failed({ onRetry }: { onRetry: () => void }) {
   return (
-    <AiPanel className="text-center">
+    <Panel className="px-6 py-8 text-center">
       <p className="text-[14px] font-semibold">We couldn&apos;t load this right now.</p>
       <button type="button" onClick={onRetry} className="mt-3 min-h-[2.75rem] text-[13px] font-semibold text-indigo-700 dark:text-indigo-300">
         Try again
       </button>
-    </AiPanel>
+    </Panel>
   );
 }
 
-export function Thumb({ c }: { c: Pick<CampaignRow, "ad_creatives"> }) {
+export function Thumb({ c, size = "md" }: { c: Pick<CampaignRow, "ad_creatives">; size?: "sm" | "md" }) {
   const cr = liveCreative(c);
   // an image, or a video's poster — never the video itself in a list
   const src = cr ? (cr.media_type === "image" ? cr.media_url : cr.thumbnail_url) : null;
+  const box = size === "sm" ? "h-12 w-12 rounded-lg" : "h-14 w-14 rounded-xl";
   return src ? (
     // eslint-disable-next-line @next/next/no-img-element -- a CDN creative preview; previews are not ad views and record nothing
-    <img src={src} alt="" loading="lazy" decoding="async" className="h-14 w-14 shrink-0 rounded-xl bg-muted object-cover" />
+    <img src={src} alt="" loading="lazy" decoding="async" className={cn(box, "shrink-0 bg-muted object-cover ring-1 ring-inset ring-black/5")} />
   ) : (
-    <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground" aria-hidden>
+    <span className={cn(box, "flex shrink-0 items-center justify-center bg-muted text-muted-foreground")} aria-hidden>
       <Megaphone className="h-5 w-5" />
     </span>
   );
@@ -180,11 +248,17 @@ export function Thumb({ c }: { c: Pick<CampaignRow, "ad_creatives"> }) {
 function Overview({ onOpen, onTab }: { onOpen: (id: string) => void; onTab: (t: Tab) => void }) {
   const [s, setS] = useState<Summary | null | "error">(null);
   const [recent, setRecent] = useState<CampaignRow[] | null>(null);
+  const [recentStats, setRecentStats] = useState<Map<string, Totals>>(new Map());
   const [n, setN] = useState(0);
   useEffect(() => {
     let alive = true;
     void loadSummary().then((v) => alive && setS(v ?? "error"));
-    void loadCampaigns({ search: "", statuses: null, sort: "newest", page: 0 }).then((r) => alive && setRecent(r.rows.slice(0, 3)));
+    void loadCampaigns({ search: "", statuses: null, sort: "newest", page: 0 }).then(async (r) => {
+      const rows = r.rows.slice(0, 4);
+      if (alive) setRecent(rows);
+      const stats = rows.length ? byCampaign(await loadStats(rows.map((x) => x.id), null)) : new Map<string, Totals>();
+      if (alive) setRecentStats(stats);
+    });
     return () => {
       alive = false;
     };
@@ -194,38 +268,44 @@ function Overview({ onOpen, onTab }: { onOpen: (id: string) => void; onTab: (t: 
   if (s.total === 0) return <Empty title="No campaigns yet" body="Create your first ad — choose where it shows, upload it, see the price, and go live after payment." />;
   const ctr = s.impressions > 0 ? s.clicks / s.impressions : null;
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <section aria-labelledby="ov-perf">
-        <h2 id="ov-perf" className="text-[13px] font-semibold text-muted-foreground">Performance, all time</h2>
-        <div className="mt-2 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-          <Stat label="Total views" value={num(s.impressions)} hint="Seen on screen for at least a second" />
-          <Stat label="Clicks" value={num(s.clicks)} />
-          <Stat label="CTR" value={pct(ctr)} hint="Clicks ÷ views" />
+        <SectionTitle id="ov-perf">Performance · all time</SectionTitle>
+        <KpiGrid className="mt-1.5 grid-cols-2 sm:grid-cols-3">
+          <Stat emphasis label="Views" value={num(s.impressions)} hint="Seen on screen for at least a second" />
+          <Stat emphasis label="Clicks" value={num(s.clicks)} />
+          <Stat emphasis label="CTR" value={pct(ctr)} hint="Clicks ÷ views" />
           <Stat label="Spend" value={usd(s.spend_usd_cents)} hint="Verified payments" />
           {/* 0201 (owner, 2026-10-09): opening the ad's details on Frenzsave is a conversion; the visit after the warning is a site visit */}
           <Stat label="Conversions" value={num(s.conversions)} hint="Opened your ad's details" />
           <Stat label="Site visits" value={num(s.outbounds)} hint="Went on to your link" />
-        </div>
+        </KpiGrid>
       </section>
       <section aria-labelledby="ov-camp">
-        <h2 id="ov-camp" className="text-[13px] font-semibold text-muted-foreground">Campaigns</h2>
-        <div className="mt-2 grid grid-cols-3 gap-2.5 sm:grid-cols-6">
+        <SectionTitle id="ov-camp">Campaigns</SectionTitle>
+        <KpiGrid className="mt-1.5 grid-cols-3 sm:grid-cols-6">
           <Stat label="Total" value={num(s.total)} />
           <Stat label="Live" value={num(s.live)} />
-          <Stat label="Awaiting payment" value={num(s.awaiting_payment)} />
+          <Stat label="To pay" value={num(s.awaiting_payment)} />
           <Stat label="Validating" value={num(s.validating)} />
           <Stat label="Paused" value={num(s.paused)} />
           <Stat label="Expired" value={num(s.expired)} />
-        </div>
+        </KpiGrid>
       </section>
       <section aria-labelledby="ov-recent">
-        <div className="flex items-center justify-between">
-          <h2 id="ov-recent" className="text-[13px] font-semibold text-muted-foreground">Recent</h2>
-          <button type="button" onClick={() => onTab("campaigns")} className="min-h-[2.5rem] text-[13px] font-semibold text-indigo-700 dark:text-indigo-300">
-            All campaigns →
-          </button>
+        <SectionTitle
+          id="ov-recent"
+          action={
+            <button type="button" onClick={() => onTab("campaigns")} className="min-h-[2.25rem] text-[13px] font-semibold text-indigo-700 dark:text-indigo-300">
+              All campaigns →
+            </button>
+          }
+        >
+          Recent campaigns
+        </SectionTitle>
+        <div className="mt-1.5">
+          {recent ? <CampaignList rows={recent} stats={recentStats} onOpen={onOpen} onRemoved={() => setN((x) => x + 1)} /> : <Skeleton />}
         </div>
-        <div className="mt-1 space-y-2">{recent?.map((c) => <CampaignCard key={c.id} c={c} totals={null} onOpen={onOpen} />) ?? <Skeleton />}</div>
       </section>
     </div>
   );
@@ -242,34 +322,113 @@ const FILTERS: { label: string; statuses: string[] | null }[] = [
   { label: "Ended", statuses: ["expired", "rejected", "removed"] },
 ];
 
-function CampaignCard({ c, totals, onOpen }: { c: CampaignRow; totals: Totals | null; onOpen: (id: string) => void }) {
-  const l = statusLabel(c);
-  const left = c.status === "active" || c.status === "paused" ? remaining(c.end_at) : null;
+const NO_TOTALS: Totals = { views: 0, clicks: 0, ctr: null, videoPlays: 0, videoCompletes: 0, rewardCompletes: 0, conversions: 0, outbounds: 0, filtered: 0 };
+
+/** One table-like list: every campaign a row, figures in aligned columns on wide screens. */
+function CampaignList({ rows, stats, onOpen, onRemoved }: { rows: CampaignRow[]; stats: Map<string, Totals> | null; onOpen: (id: string) => void; onRemoved: (id: string) => void }) {
+  const [error, setError] = useState<string | null>(null);
   return (
-    <button type="button" onClick={() => onOpen(c.id)} className="block w-full text-left">
-      <AiPanel className="transition hover:ring-indigo-200 dark:hover:ring-indigo-400/30">
-        <div className="flex gap-3">
-          <Thumb c={c} />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-start justify-between gap-2">
-              <p className="min-w-0 truncate text-[15px] font-semibold">{c.name}</p>
-              <Chip tone={l.tone}>{l.text}</Chip>
-            </div>
-            <p className="mt-0.5 truncate text-[12.5px] text-muted-foreground">
-              {c.ad_placements?.name ?? "—"} · {c.payment_verified_at ? "Paid" : c.status === "payment_processing" ? "Payment processing" : "Not paid"}
-            </p>
-            <p className="mt-0.5 text-[12.5px] text-muted-foreground">
-              {date(c.start_at)} – {date(c.end_at)}
-              {left ? ` · ${left}` : ""}
-            </p>
-            {totals ? (
-              <p className="mt-1 text-[12.5px] tabular-nums">
-                <span className="font-semibold">{num(totals.views)}</span> views · <span className="font-semibold">{num(totals.clicks)}</span> clicks · CTR {pct(totals.ctr)}
-              </p>
-            ) : null}
-          </div>
+    <div>
+      {error ? (
+        <p role="alert" className="mb-2 rounded-xl bg-rose-50 px-3 py-2 text-[12.5px] font-medium text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">
+          {error}
+        </p>
+      ) : null}
+      <Panel className="overflow-hidden">
+        <div className="hidden grid-cols-[minmax(0,1fr)_5.5rem_5rem_4.5rem_2.75rem] items-center gap-3 border-b border-border/70 bg-muted/40 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:grid">
+          <span>Campaign</span>
+          <span className="text-right">Views</span>
+          <span className="text-right">Clicks</span>
+          <span className="text-right">CTR</span>
+          <span />
         </div>
-      </AiPanel>
+        <ul className="divide-y divide-border/60">
+          {rows.map((c) => (
+            <CampaignRowItem key={c.id} c={c} totals={stats ? (stats.get(c.id) ?? NO_TOTALS) : null} onOpen={onOpen} onRemoved={onRemoved} onError={setError} />
+          ))}
+        </ul>
+      </Panel>
+    </div>
+  );
+}
+
+function CampaignRowItem({ c, totals, onOpen, onRemoved, onError }: { c: CampaignRow; totals: Totals | null; onOpen: (id: string) => void; onRemoved: (id: string) => void; onError: (m: string | null) => void }) {
+  const left = c.status === "active" || c.status === "paused" ? remaining(c.end_at) : null;
+  const paid = c.payment_verified_at ? "Paid" : c.status === "payment_processing" ? "Payment processing" : "Not paid";
+  const dates = c.start_at || c.end_at ? `${date(c.start_at)} – ${date(c.end_at)}${left ? ` · ${left}` : ""}` : null;
+  return (
+    <li className="group grid grid-cols-[minmax(0,1fr)_2.75rem] items-center gap-3 px-4 py-3.5 transition-colors hover:bg-muted/40 sm:grid-cols-[minmax(0,1fr)_5.5rem_5rem_4.5rem_2.75rem]">
+      <button type="button" onClick={() => onOpen(c.id)} className="flex min-w-0 items-center gap-3 text-left">
+        <Thumb c={c} size="sm" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[14.5px] font-semibold">{c.name}</span>
+          <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[12px] text-muted-foreground">
+            <StatusText c={c} />
+            <span aria-hidden>·</span>
+            <span className="truncate">{c.ad_placements?.name ?? "—"}</span>
+            <span aria-hidden>·</span>
+            <span>{paid}</span>
+          </span>
+          {dates ? <span className="mt-0.5 block text-[12px] tabular-nums text-muted-foreground">{dates}</span> : null}
+          {totals ? (
+            <span className="mt-1.5 flex gap-4 text-[12px] tabular-nums text-muted-foreground sm:hidden">
+              <span><b className="font-semibold text-foreground">{num(totals.views)}</b> views</span>
+              <span><b className="font-semibold text-foreground">{num(totals.clicks)}</b> clicks</span>
+              <span>CTR <b className="font-semibold text-foreground">{pct(totals.ctr)}</b></span>
+            </span>
+          ) : null}
+        </span>
+      </button>
+      <span className="hidden text-right text-[13.5px] font-semibold tabular-nums sm:block">{totals ? num(totals.views) : "—"}</span>
+      <span className="hidden text-right text-[13.5px] font-semibold tabular-nums sm:block">{totals ? num(totals.clicks) : "—"}</span>
+      <span className="hidden text-right text-[13.5px] tabular-nums text-muted-foreground sm:block">{totals ? pct(totals.ctr) : "—"}</span>
+      <span className="flex justify-end">
+        {REMOVABLE_STATUSES.includes(c.status) ? (
+          <RemoveButton c={c} onRemoved={onRemoved} onError={onError} />
+        ) : (
+          <button type="button" onClick={() => onOpen(c.id)} aria-label={`Open ${c.name}`} className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground">
+            <ChevronRight className="h-4 w-4" aria-hidden />
+          </button>
+        )}
+      </span>
+    </li>
+  );
+}
+
+/**
+ * 0213: take a draft or finished campaign off the list. Two taps — the first
+ * arms, the second removes — so a stray tap never removes anything. Unpaid
+ * drafts are cancelled; finished campaigns are only hidden (their records stay).
+ */
+function RemoveButton({ c, onRemoved, onError }: { c: CampaignRow; onRemoved: (id: string) => void; onError: (m: string | null) => void }) {
+  const [armed, setArmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  async function remove() {
+    if (!armed) {
+      setArmed(true);
+      onError(null);
+      return;
+    }
+    setBusy(true);
+    const r = await manage<{ removed: true }>({ action: "remove", campaignId: c.id });
+    setBusy(false);
+    setArmed(false);
+    if (r.ok) onRemoved(c.id);
+    else onError(r.message);
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => void remove()}
+      onBlur={() => !busy && setArmed(false)}
+      disabled={busy}
+      aria-label={armed ? `Confirm: remove ${c.name} from your list` : `Remove ${c.name} from your list`}
+      className={cn(
+        "flex h-10 items-center justify-center rounded-full text-[12px] font-semibold transition disabled:opacity-60",
+        armed ? "bg-rose-600 px-3 text-white" : "w-10 text-muted-foreground hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/15",
+      )}
+    >
+      {busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : armed ? "Remove" : <Trash2 className="h-4 w-4" aria-hidden />}
     </button>
   );
 }
@@ -309,41 +468,46 @@ function Campaigns({ onOpen }: { onOpen: (id: string) => void }) {
     };
   }, [search, filter, sort, page, attempt]);
 
+  // a removed row leaves at once; the page is re-read so the count and paging stay true
+  const removed = (id: string) => {
+    setData((d) => (d && d !== "error" ? { ...d, rows: d.rows.filter((r) => r.id !== id), total: Math.max(0, d.total - 1) } : d));
+    setAttempt((x) => x + 1);
+  };
+
   const pages = data && data !== "error" ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
   return (
-    <div>
+    <div className="space-y-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <label className="relative flex-1">
           <span className="sr-only">Search campaigns</span>
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-          <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Search by campaign name" className="h-11 w-full rounded-xl border border-border bg-background pl-9 pr-3 text-[14px]" />
+          <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Search by campaign name" className="h-11 w-full rounded-xl border border-border bg-card pl-9 pr-3 text-base outline-none sm:text-[14px] transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
         </label>
-        <select value={sort} onChange={(e) => { setSort(e.target.value as SortKey); setPage(0); }} aria-label="Sort campaigns" className="h-11 rounded-xl border border-border bg-background px-3 text-[13.5px]">
+        <select value={sort} onChange={(e) => { setSort(e.target.value as SortKey); setPage(0); }} aria-label="Sort campaigns" className="h-11 rounded-xl border border-border bg-card px-3 text-base sm:text-[13.5px]">
           <option value="newest">Newest first</option>
           <option value="oldest">Oldest first</option>
           <option value="ending">Ending soonest</option>
           <option value="name">Name A–Z</option>
         </select>
       </div>
-      <div className="-mx-1 mt-2 flex gap-1.5 overflow-x-auto px-1 pb-1" role="tablist" aria-label="Filter by status">
-        {FILTERS.map((f, i) => (
-          <button key={f.label} type="button" role="tab" aria-selected={filter === i} onClick={() => { setFilter(i); setPage(0); }} className={cn("min-h-[2.25rem] shrink-0 rounded-full px-3 text-[12.5px] font-semibold", filter === i ? "bg-foreground text-background" : "bg-secondary text-muted-foreground")}>
-            {f.label}
-          </button>
-        ))}
-      </div>
-      <div className="mt-3 space-y-2">
+      <Segmented label="Filter by status" items={FILTERS.map((f, i) => ({ id: i, label: f.label }))} value={filter} onChange={(i) => { setFilter(i); setPage(0); }} />
+      {data && data !== "error" ? (
+        <p className="text-[12px] tabular-nums text-muted-foreground">
+          {num(data.total)} campaign{data.total === 1 ? "" : "s"}
+        </p>
+      ) : null}
+      <div>
         {data === "error" ? <Failed onRetry={() => setAttempt((x) => x + 1)} /> : !data ? <Skeleton /> : data.rows.length === 0 ? (
           search || filter ? <p className="py-8 text-center text-[13.5px] text-muted-foreground">No campaigns match.</p> : <Empty title="No campaigns yet" body="Your campaigns will appear here." />
         ) : (
-          data.rows.map((c) => <CampaignCard key={c.id} c={c} totals={data.stats.get(c.id) ?? { views: 0, clicks: 0, ctr: null, videoPlays: 0, videoCompletes: 0, rewardCompletes: 0, conversions: 0, outbounds: 0, filtered: 0 }} onOpen={onOpen} />)
+          <CampaignList rows={data.rows} stats={data.stats} onOpen={onOpen} onRemoved={removed} />
         )}
       </div>
       {pages > 1 ? (
-        <div className="mt-4 flex items-center justify-center gap-3 text-[13px]">
-          <button type="button" disabled={page === 0} onClick={() => setPage((p) => p - 1)} className="min-h-[2.5rem] rounded-full bg-secondary px-4 font-semibold disabled:opacity-40">Previous</button>
+        <div className="flex items-center justify-center gap-3 text-[13px]">
+          <button type="button" disabled={page === 0} onClick={() => setPage((p) => p - 1)} className="min-h-[2.5rem] rounded-xl border border-border bg-card px-4 font-semibold disabled:opacity-40">Previous</button>
           <span className="tabular-nums text-muted-foreground">Page {page + 1} of {pages}</span>
-          <button type="button" disabled={page + 1 >= pages} onClick={() => setPage((p) => p + 1)} className="min-h-[2.5rem] rounded-full bg-secondary px-4 font-semibold disabled:opacity-40">Next</button>
+          <button type="button" disabled={page + 1 >= pages} onClick={() => setPage((p) => p + 1)} className="min-h-[2.5rem] rounded-xl border border-border bg-card px-4 font-semibold disabled:opacity-40">Next</button>
         </div>
       ) : null}
     </div>
@@ -364,21 +528,31 @@ export function fromDay(days: number | null): string | null {
   return d.toISOString().slice(0, 10);
 }
 
+const shortDay = (day: string) => new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
+
+/** Views per day: bars on a ruled ground, the scale written on it, bars never wider than a column should be. */
 export function DayChart({ rows }: { rows: { day: string; views: number; clicks: number }[] }) {
+  if (!rows.length) return <p className="py-10 text-center text-[13px] text-muted-foreground">No views in this period yet.</p>;
   const max = Math.max(1, ...rows.map((r) => r.views));
-  if (!rows.length) return <p className="py-8 text-center text-[13px] text-muted-foreground">No views in this period yet.</p>;
   return (
     <div>
-      <div className="flex h-36 items-end gap-[3px]" role="img" aria-label={`Views per day: ${rows.map((r) => `${r.day} ${r.views}`).join(", ")}`}>
-        {rows.map((r) => (
-          <div key={r.day} className="flex h-full flex-1 flex-col justify-end" title={`${r.day}: ${num(r.views)} views, ${num(r.clicks)} clicks`}>
-            <div className="w-full rounded-t-[3px] bg-indigo-500/80" style={{ height: `${Math.max(2, (r.views / max) * 100)}%` }} />
-          </div>
+      <div className="relative h-44">
+        {/* the rules: top = the busiest day, middle = half of it */}
+        {[0, 50, 100].map((p) => (
+          <div key={p} className={cn("absolute inset-x-0 border-t", p === 100 ? "border-border" : "border-dashed border-border/60")} style={{ top: `${p}%` }} aria-hidden />
         ))}
+        <span className="absolute right-0 top-0 -translate-y-full pb-0.5 text-[10.5px] tabular-nums text-muted-foreground" aria-hidden>{num(max)}</span>
+        <div className="absolute inset-0 flex items-end justify-center gap-[3px] px-0.5" role="img" aria-label={`Views per day: ${rows.map((r) => `${r.day} ${r.views}`).join(", ")}`}>
+          {rows.map((r) => (
+            <div key={r.day} className="group/bar flex h-full max-w-[2.25rem] flex-1 flex-col justify-end" title={`${shortDay(r.day)}: ${num(r.views)} views, ${num(r.clicks)} clicks`}>
+              <div className="w-full rounded-t-md bg-gradient-to-t from-indigo-600 to-violet-400 transition-opacity group-hover/bar:opacity-80" style={{ height: `${Math.max(1.5, (r.views / max) * 100)}%` }} />
+            </div>
+          ))}
+        </div>
       </div>
-      <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
-        <span>{rows[0]!.day}</span>
-        <span>{rows[rows.length - 1]!.day}</span>
+      <div className="mt-2 flex justify-between text-[11px] tabular-nums text-muted-foreground">
+        <span>{shortDay(rows[0]!.day)}</span>
+        {rows.length > 1 ? <span>{shortDay(rows[rows.length - 1]!.day)}</span> : null}
       </div>
     </div>
   );
@@ -403,56 +577,65 @@ function Analytics({ onOpen }: { onOpen: (id: string) => void }) {
   }, [range]);
   const totals = useMemo(() => (rows ? totalsOf(rows) : null), [rows]);
   const per = useMemo(() => (rows ? [...byCampaign(rows)].sort((a, b) => b[1].views - a[1].views) : []), [rows]);
+  const rangeLabel = RANGES.find((r) => r.id === range)!.label;
   return (
-    <div className="space-y-4">
-      <div className="flex gap-1.5" role="tablist" aria-label="Time range">
-        {RANGES.map((r) => (
-          <button key={r.id} type="button" role="tab" aria-selected={range === r.id} onClick={() => setRange(r.id)} className={cn("min-h-[2.25rem] rounded-full px-3 text-[12.5px] font-semibold", range === r.id ? "bg-foreground text-background" : "bg-secondary text-muted-foreground")}>
-            {r.label}
-          </button>
-        ))}
-      </div>
+    <div className="space-y-5">
+      <Segmented label="Time range" items={RANGES.map((r) => ({ id: r.id, label: r.label }))} value={range} onChange={setRange} />
       {!rows || !totals ? <Skeleton /> : (
         <>
           <TestModeNote />
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-            <Stat label="Total views" value={num(totals.views)} />
-            <Stat label="Clicks" value={num(totals.clicks)} />
-            <Stat label="CTR" value={pct(totals.ctr)} />
-            <Stat label="Video completions" value={num(totals.videoCompletes + totals.rewardCompletes)} hint={totals.videoPlays ? `${num(totals.videoPlays)} plays` : undefined} />
+          <KpiGrid className="grid-cols-2 sm:grid-cols-3">
+            <Stat emphasis label="Views" value={num(totals.views)} />
+            <Stat emphasis label="Clicks" value={num(totals.clicks)} />
+            <Stat emphasis label="CTR" value={pct(totals.ctr)} hint="Clicks ÷ views" />
+            <Stat label="Video completions" value={num(totals.videoCompletes + totals.rewardCompletes)} hint={totals.videoPlays ? `${num(totals.videoPlays)} plays` : "Watched to the end"} />
             <Stat label="Conversions" value={num(totals.conversions)} hint="Opened your ad's details" />
             <Stat label="Site visits" value={num(totals.outbounds)} hint="Went on to your link" />
-          </div>
-          <AiPanel>
-            <p className="text-[13px] font-semibold">Views per day</p>
-            <div className="mt-3">
+          </KpiGrid>
+          <Panel className="p-4 sm:p-5">
+            <div className="flex items-baseline justify-between gap-3">
+              <div>
+                <p className="text-[14px] font-semibold">Views per day</p>
+                <p className="mt-0.5 text-[12px] text-muted-foreground">{rangeLabel} · UTC</p>
+              </div>
+              <p className="text-[1.25rem] font-semibold tabular-nums tracking-tight">{num(totals.views)}</p>
+            </div>
+            <div className="mt-6">
               <DayChart rows={byDay(rows)} />
             </div>
-          </AiPanel>
-          <AiPanel>
-            <p className="text-[13px] font-semibold">By campaign</p>
-            {per.length === 0 ? <p className="mt-2 text-[13px] text-muted-foreground">Nothing yet in this period.</p> : (
-              <div className="mt-2 overflow-x-auto">
-                <table className="w-full min-w-[440px] text-left text-[13px]">
-                  <thead className="text-[11.5px] text-muted-foreground">
-                    <tr><th className="py-1.5 font-semibold">Campaign</th><th className="py-1.5 text-right font-semibold">Views</th><th className="py-1.5 text-right font-semibold">Clicks</th><th className="py-1.5 text-right font-semibold">CTR</th><th className="py-1.5 text-right font-semibold">Conversions</th></tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {per.map(([id, t]) => (
-                      <tr key={id}>
-                        <td className="py-2"><button type="button" onClick={() => onOpen(id)} className="max-w-[14rem] truncate text-left font-semibold text-indigo-700 dark:text-indigo-300">{names.get(id) ?? "Campaign"}</button></td>
-                        <td className="py-2 text-right tabular-nums">{num(t.views)}</td>
-                        <td className="py-2 text-right tabular-nums">{num(t.clicks)}</td>
-                        <td className="py-2 text-right tabular-nums">{pct(t.ctr)}</td>
-                        <td className="py-2 text-right tabular-nums">{num(t.conversions)}</td>
+          </Panel>
+          <section aria-labelledby="an-by">
+            <SectionTitle id="an-by">By campaign</SectionTitle>
+            <Panel className="mt-1.5 overflow-hidden">
+              {per.length === 0 ? <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">Nothing yet in this period.</p> : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[440px] text-left text-[13px]">
+                    <thead className="border-b border-border/70 bg-muted/40 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                      <tr>
+                        <th className="px-4 py-2 font-semibold">Campaign</th>
+                        <th className="px-3 py-2 text-right font-semibold">Views</th>
+                        <th className="px-3 py-2 text-right font-semibold">Clicks</th>
+                        <th className="px-3 py-2 text-right font-semibold">CTR</th>
+                        <th className="px-4 py-2 text-right font-semibold">Conv.</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </AiPanel>
-          <p className="text-[12px] text-muted-foreground">A view counts once, when at least half of your ad stays on screen for a full second. Clicks open your link. Figures update as people see your ad; days are in UTC.</p>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {per.map(([id, t]) => (
+                        <tr key={id} className="transition-colors hover:bg-muted/40">
+                          <td className="px-4 py-2.5"><button type="button" onClick={() => onOpen(id)} className="max-w-[14rem] truncate text-left font-semibold text-foreground hover:text-indigo-700 dark:hover:text-indigo-300">{names.get(id) ?? "Campaign"}</button></td>
+                          <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{num(t.views)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{num(t.clicks)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{pct(t.ctr)}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums">{num(t.conversions)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Panel>
+          </section>
+          <p className="text-[12px] leading-relaxed text-muted-foreground">A view counts once, when at least half of your ad stays on screen for a full second. Clicks open your link. Figures update as people see your ad; days are in UTC.</p>
         </>
       )}
     </div>

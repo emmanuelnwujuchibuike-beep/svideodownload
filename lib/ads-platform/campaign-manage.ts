@@ -6,7 +6,7 @@ import { notifyAdvertiser } from "./ad-notify";
 import { AdApplicationError, formatOfCampaign, probeAndPublish, stageCreative, type FinalizeResult } from "./advertiser-server";
 import { normalizeDestination, sanitizeText, TEXT_LIMITS } from "./application";
 import { moderateCreative } from "./creative-moderation";
-import { checkDestination } from "./server";
+import { checkDestination, transitionCampaign } from "./server";
 
 /**
  * Part 6 — managing a campaign that is already paid for (live, paused, or
@@ -273,4 +273,36 @@ export async function extensionQuote(db: Db, userId: string, input: { campaignId
     quoteId: r.quoteId!, extensionId: r.extensionId!, expiresAt: r.expiresAt!, currency: r.currency!, total: Number(r.total), list: Number(r.list),
     discountPercent: Number(r.discountPercent), days: Number(r.days), extraDays: Number(r.extraDays), currentEndAt: r.currentEndAt!, newEndAt: r.newEndAt!,
   };
+}
+
+/* ─────────────────────────── remove from my list ─────────────────────────── */
+
+/** unpaid: cancelled (0195 allows it). Payment in flight: never touched. */
+const CANCELLABLE = ["draft", "awaiting_payment"];
+/** finished: hidden from the advertiser only — the records stay (0213) */
+const HIDEABLE = ["expired", "rejected", "cancelled", "removed"];
+
+/**
+ * 0213: the advertiser removes a draft or finished campaign from their list.
+ * Nothing that ran or was paid for is deleted: payments, audit trail and
+ * counters stay for the admin, refunds and fraud checks. A live, paused or
+ * paying campaign cannot be removed.
+ */
+export async function removeFromList(db: Db, userId: string, campaignId: string): Promise<{ removed: true; status: string }> {
+  if (!UUID.test(campaignId)) return refuse("not_found", 404);
+  const { data } = await db.from("ad_campaigns").select("id, status, advertisers!inner(user_id)").eq("id", campaignId).maybeSingle();
+  const row = data as { id: string; status: string; advertisers: { user_id: string } | { user_id: string }[] } | null;
+  const adv = Array.isArray(row?.advertisers) ? row?.advertisers[0] : row?.advertisers;
+  if (!row || adv?.user_id !== userId) return refuse("not_found", 404);
+  if (CANCELLABLE.includes(row.status)) {
+    const r = await transitionCampaign(db, { campaignId: row.id, to: "cancelled", expectedVersion: null, actorId: userId, actorRole: "advertiser", reason: "removed by advertiser" });
+    if (!r.ok) refuse("not_removable", 409);
+    return { removed: true, status: "cancelled" };
+  }
+  if (!HIDEABLE.includes(row.status)) return refuse("not_removable", 409);
+  const { error } = await db.from("ad_campaigns").update({ advertiser_hidden_at: new Date().toISOString() }).eq("id", row.id).in("status", HIDEABLE);
+  // before 0213 runs the column does not exist: say so, change nothing
+  if (error) return refuse("remove_unavailable", 503);
+  await db.from("ad_campaign_events").insert({ campaign_id: row.id, kind: "hidden_by_advertiser", actor_id: userId, actor_role: "advertiser", reason: "removed from list" });
+  return { removed: true, status: row.status };
 }

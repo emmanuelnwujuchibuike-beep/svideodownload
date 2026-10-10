@@ -147,8 +147,16 @@ export const PAGE_SIZE = 10;
 
 /** One page of the advertiser's campaigns — search, status filter, sort, paginate, all in the database. */
 export async function loadCampaigns(opts: { search: string; statuses: string[] | null; sort: SortKey; page: number }): Promise<{ rows: CampaignRow[]; total: number }> {
+  // 0213: campaigns the advertiser removed are left out. Before that migration
+  // runs the column does not exist - the list is read without the filter.
+  const hidden = await pageOf(opts, true);
+  return hidden ?? (await pageOf(opts, false)) ?? { rows: [], total: 0 };
+}
+
+async function pageOf(opts: { search: string; statuses: string[] | null; sort: SortKey; page: number }, skipHidden: boolean): Promise<{ rows: CampaignRow[]; total: number } | null> {
   const sb = await getClient();
   let q = sb.from("ad_campaigns").select(CAMPAIGN_COLUMNS, { count: "exact" }).neq("status", "cancelled");
+  if (skipHidden) q = q.is("advertiser_hidden_at", null);
   const term = opts.search.trim().replace(/[%_,()]/g, " ").slice(0, 80);
   if (term) q = q.ilike("name", `%${term}%`);
   if (opts.statuses?.length) q = q.in("status", opts.statuses);
@@ -158,7 +166,8 @@ export async function loadCampaigns(opts: { search: string; statuses: string[] |
     : opts.sort === "name" ? q.order("name", { ascending: true })
     : q.order("created_at", { ascending: false });
   const from = Math.max(0, opts.page) * PAGE_SIZE;
-  const { data, count } = await q.range(from, from + PAGE_SIZE - 1);
+  const { data, count, error } = await q.range(from, from + PAGE_SIZE - 1);
+  if (error) return null;
   return { rows: (data ?? []) as unknown as CampaignRow[], total: count ?? 0 };
 }
 
@@ -301,6 +310,9 @@ export async function manage<T>(body: Record<string, unknown>): Promise<{ ok: tr
     return { ok: false, message: "You appear to be offline. Please check your connection and try again." };
   }
 }
+
+/** 0213: what the advertiser may take off their list — unpaid drafts (cancelled) and finished campaigns (hidden). */
+export const REMOVABLE_STATUSES: readonly string[] = ["draft", "awaiting_payment", "expired", "rejected", "removed"];
 
 /* ─────────────────────────────── display ─────────────────────────────── */
 

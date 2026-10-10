@@ -271,3 +271,36 @@ describe("2026-10-09: x10 for every live campaign at once", () => {
     expect(src("features/admin/ad-campaigns-desk.tsx")).toContain("{ allLive: true, statsMultiplier }");
   });
 });
+
+describe("2026-10-09: advertisers remove drafts and finished campaigns from their list (0213)", () => {
+  const lib = src("lib/ads-platform/campaign-manage.ts");
+  const fn = lib.slice(lib.indexOf("export async function removeFromList"));
+  it("drafts are cancelled through the audited transition; finished ones are only hidden, never deleted", () => {
+    expect(lib).toContain(`const CANCELLABLE = ["draft", "awaiting_payment"]`);
+    expect(lib).toContain(`const HIDEABLE = ["expired", "rejected", "cancelled", "removed"]`);
+    expect(fn).toContain(`to: "cancelled"`);
+    expect(fn).toContain("advertiser_hidden_at");
+    expect(fn).not.toMatch(/\.delete\(/);
+    // ownership is checked before anything changes
+    expect(fn.indexOf("adv?.user_id !== userId")).toBeLessThan(fn.indexOf("transitionCampaign"));
+  });
+  it("teeth: live, paused and paying campaigns are not removable", () => {
+    for (const s of ["active", "paused", "payment_processing", "paid", "validating"]) {
+      expect(lib.match(/const CANCELLABLE = \[[^\]]*\]/)![0]).not.toContain(`"${s}"`);
+      expect(lib.match(/const HIDEABLE = \[[^\]]*\]/)![0]).not.toContain(`"${s}"`);
+    }
+  });
+  it("the list leaves hidden campaigns out, and still reads before the migration runs", () => {
+    const d = src("features/ads-platform/dashboard/dashboard-data.ts");
+    expect(d).toContain(`q.is("advertiser_hidden_at", null)`);
+    expect(d).toContain("(await pageOf(opts, false))");
+    const m = src("supabase/migrations/0213_ad_advertiser_hide.sql");
+    expect(m).toContain("add column if not exists advertiser_hidden_at");
+  });
+  it("the Sample data label is hidden only from admins; any other viewer still sees it", () => {
+    const n = src("features/ads-platform/dashboard/test-mode-note.tsx");
+    expect(n).toContain(`rpc("is_admin")`);
+    expect(n).toContain("setOn(!admin)");
+    expect(n).toContain("Sample data");
+  });
+});

@@ -7,7 +7,7 @@ import { isPlayerOpen, onPlayerChange, SAVED_TO_DEVICE_EVENT } from "@/features/
 import type { EligibleAd } from "@/lib/ads-platform/eligibility";
 import { AI_VIDEO_SAVE_EVENT } from "@/lib/ads-platform/moment-events";
 import { PAID_REWARD_EVENT, type PaidRewardRequest } from "@/lib/ads-platform/paid-reward-event";
-import { claimMoment, mayShowAgain, nextFromPool, pageForPath, poolFor, recordShown } from "@/lib/ads-platform/serving-state";
+import { claimMoment, lastShownCr, mayShowAgain, nextFromPool, pageForPath, poolFor, recordShown } from "@/lib/ads-platform/serving-state";
 import { MOMENT_SLOTS } from "@/lib/ads-platform/slot-moments";
 import { providerOrder, resolveSlotProvider } from "@/lib/ads-platform/slot-registry";
 import { DOWNLOAD_COMPLETED_EVENT } from "@/lib/downloads/completion-event";
@@ -15,6 +15,7 @@ import { mayServeSlot } from "@/lib/monetization/ad-inventory-shape";
 import { peekAdInventory } from "@/features/monetization/ad-inventory-client";
 
 import { peekSelfAds } from "../serving-client";
+import { isWarmed, mayWarm, takeWarmed, warm } from "./moment-warm";
 import { SelfInterstitial } from "./self-interstitial";
 
 /**
@@ -65,10 +66,10 @@ export function SelfMoments() {
   const lastMomentAt = useRef(0);
   const aiSaveAt = useRef(0);
 
-  /** Pick and claim. Returns what to show, or null — all synchronous. */
-  const pick = useCallback((placement: string, moment: "download-complete" | "return" | null): Showing | null => {
+  /** May a paid ad take this placement here, now? Its pool and slot, or null — synchronous, no request. */
+  const eligible = useCallback((placement: string) => {
     const { pathname: p, tab: t } = where.current;
-    if (busy.current || noSelfMoment(p)) return null;
+    if (noSelfMoment(p)) return null;
     const page = pageForPath(p, t);
     const payload = peekSelfAds();
     const pool = poolFor(payload, placement, page);
@@ -86,11 +87,43 @@ export function SelfMoments() {
       const network = slot.networkZone ? inv === null || mayServeSlot(inv, slot.networkZone) || inv.vast.length > 0 : slot.order.includes("network");
       if (resolveSlotProvider(providerOrder(slot, payload?.order), { frenzsave: true, network }) !== "frenzsave") return null;
     }
-    const ad = nextFromPool(placement, pool.ads);
+    return { pool, slot, page };
+  }, []);
+
+  /** Pick and claim. Returns what to show, or null — all synchronous. */
+  const pick = useCallback((placement: string, moment: "download-complete" | "return" | null): Showing | null => {
+    if (busy.current) return null;
+    const e = eligible(placement);
+    if (!e) return null;
+    // Part 10: the ad whose image was fetched ahead, when it may still serve
+    const ad = takeWarmed(placement, e.pool.ads, lastShownCr(placement)) ?? nextFromPool(placement, e.pool.ads);
     if (!ad) return null;
     if (moment) claimMoment(moment);
-    return { ad, placement, page: page ?? "all_pages", reward: REWARD_PLACEMENTS.has(placement), slot: slot?.id };
-  }, []);
+    return { ad, placement, page: e.page ?? "all_pages", reward: REWARD_PLACEMENTS.has(placement), slot: e.slot?.id };
+  }, [eligible]);
+
+  /** Part 10: choose this placement's next ad now and fetch its still image — once, from memory, never a video. */
+  const warmFor = useCallback((placement: string) => {
+    if (isWarmed(placement) || !mayWarm()) return;
+    const e = eligible(placement);
+    const ad = e ? nextFromPool(placement, e.pool.ads) : null;
+    if (ad) warm(placement, ad);
+  }, [eligible]);
+
+  // Part 10: the moments this page can have, warmed when the browser is idle.
+  // poolFor already leaves out a placement whose pages don't include this one.
+  useEffect(() => {
+    const run = () => {
+      for (const placement of ["download_completed_interstitial", "hd_download_reward", "batch_download_reward", "ai_video_save_reward"]) warmFor(placement);
+    };
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+    if (w.requestIdleCallback) {
+      const id = w.requestIdleCallback(run, { timeout: 4_000 });
+      return () => w.cancelIdleCallback?.(id);
+    }
+    const t = window.setTimeout(run, 2_000);
+    return () => window.clearTimeout(t);
+  }, [pathname, tab, warmFor]);
 
   const open = useCallback((s: Showing) => {
     busy.current = true;
@@ -168,6 +201,8 @@ export function SelfMoments() {
     const onVis = () => {
       if (document.visibilityState === "hidden") {
         hiddenAt = Date.now();
+        // the return moment is only possible from here: warm its ad while the member is away
+        warmFor("interstitial");
         return;
       }
       const away = hiddenAt === null ? 0 : Date.now() - hiddenAt;
@@ -178,7 +213,7 @@ export function SelfMoments() {
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, [pick, open]);
+  }, [pick, open, warmFor]);
 
   const showingRef = useRef<Showing | null>(null);
   showingRef.current = showing;

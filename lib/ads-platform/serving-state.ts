@@ -143,6 +143,11 @@ export function nextFromPool(placement: string, pool: readonly EligibleAd[], ran
   return pickNextNoRepeat(pool, lastFor(placement)?.cr ?? null, random);
 }
 
+/** The creative this placement showed last (Part 10: a warmed ad never repeats it). */
+export function lastShownCr(placement: string): string | null {
+  return lastFor(placement)?.cr ?? null;
+}
+
 /** The format's frequency gap: may this placement show again yet? */
 export function mayShowAgain(placement: string, rules: FormatRules | null, now: number = Date.now()): boolean {
   const gap = rules?.minGapSeconds ?? 0;

@@ -131,7 +131,12 @@ export function PinLockGate() {
     };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", markActive);
-    const interval = setInterval(markActive, 30_000);
+    // Part 10 audit: only while the member can see the app. A hidden desktop tab
+    // still runs timers, so an unconditional tick kept stamping "active" and the
+    // idle check on return never found the app idle — the auto-lock never fired.
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") markActive();
+    }, 30_000);
     return () => {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", markActive);

@@ -125,6 +125,10 @@ export function adMessage(code: string, f: MessageFacts = {}): string {
       return "We couldn't find that ad. It may have been discarded.";
     case "not_editable":
       return "This ad can no longer be changed.";
+    case "not_removable":
+      return "Only drafts and finished campaigns can be removed. Pause a live campaign instead.";
+    case "remove_unavailable":
+      return "Removing finished campaigns isn't available yet. Please try again later.";
     case "sign_in":
       return "Please sign in to continue.";
     case "rate_limited":

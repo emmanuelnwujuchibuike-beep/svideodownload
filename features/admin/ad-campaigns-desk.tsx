@@ -235,13 +235,13 @@ export function AdCampaignsDesk() {
           </div>
         ) : null}
         <form
-          className="ml-auto flex items-center gap-1.5"
+          className="flex w-full items-center gap-1.5 sm:ml-auto sm:w-auto"
           onSubmit={(e) => {
             e.preventDefault();
             void load(tab, q);
           }}
         >
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tab === "advertisers" ? "Business name" : "Campaign name"} className="w-40 rounded-lg border border-border bg-background px-2 py-1 text-xs" aria-label="Search" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tab === "advertisers" ? "Business name" : "Campaign name"} className="min-w-0 flex-1 sm:w-40 sm:flex-none rounded-lg border border-border bg-background px-2 py-1.5 text-base sm:py-1 sm:text-xs" aria-label="Search" />
           <button type="submit" disabled={busy !== null} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold disabled:opacity-60">
             {busy === "load" ? "Loading…" : "Refresh"}
           </button>
@@ -294,11 +294,11 @@ function CampaignCard({ c, busy, onModerate, onRefund, onBoost }: { c: Campaign;
   }
 
   return (
-    <li className="rounded-2xl border border-border/70 bg-card p-4">
+    <li className="min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-card p-3.5 sm:p-4">
       <div className="flex flex-wrap items-start gap-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{c.name}</p>
-          <p className="text-[11.5px] text-muted-foreground">
+          <p className="break-words text-[11.5px] text-muted-foreground">
             {c.advertiser ? (
               <>
                 {c.advertiser.name}
@@ -313,7 +313,7 @@ function CampaignCard({ c, busy, onModerate, onRefund, onBoost }: { c: Campaign;
         <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", TONE[c.status] ?? "bg-slate-100 text-slate-700")}>{c.status}</span>
       </div>
 
-      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[11.5px] sm:grid-cols-4">
+      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[11.5px] sm:grid-cols-4 [&>div]:min-w-0">
         <div>
           <dt className="text-muted-foreground">Paid</dt>
           <dd className="font-medium tabular-nums">
@@ -350,10 +350,10 @@ function CampaignCard({ c, busy, onModerate, onRefund, onBoost }: { c: Campaign;
       ) : null}
 
       {c.creatives.length ? (
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {c.creatives.map((cr) => (
-            <div key={cr.id} className="flex gap-3 rounded-xl bg-muted/40 p-2">
-              <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-muted">
+            <div key={cr.id} className="flex min-w-0 gap-3 rounded-xl bg-muted/40 p-2">
+              <div className="h-16 w-16 shrink-0 sm:h-20 sm:w-20 overflow-hidden rounded-lg bg-muted">
                 {cr.mediaType === "video" && cr.mediaUrl ? (
                   // eslint-disable-next-line jsx-a11y/media-has-caption -- an advertiser's ad, previewed silently by an admin
                   <video src={cr.mediaUrl} poster={cr.thumbnailUrl ?? undefined} preload="none" controls muted playsInline className="h-full w-full object-cover" />
@@ -366,7 +366,7 @@ function CampaignCard({ c, busy, onModerate, onRefund, onBoost }: { c: Campaign;
               </div>
               <div className="min-w-0 flex-1 text-[11.5px]">
                 <p className="truncate font-semibold">{cr.headline ?? "No headline"}</p>
-                {cr.description ? <p className="line-clamp-2 text-muted-foreground">{cr.description}</p> : null}
+                {cr.description ? <p className="line-clamp-2 break-words text-muted-foreground">{cr.description}</p> : null}
                 {cr.destinationUrl ? (
                   <a href={cr.destinationUrl} target="_blank" rel="noopener noreferrer nofollow" className="block truncate text-primary underline">
                     {cr.destinationUrl}
@@ -374,7 +374,7 @@ function CampaignCard({ c, busy, onModerate, onRefund, onBoost }: { c: Campaign;
                 ) : (
                   <p className="text-rose-600">No link</p>
                 )}
-                <p className="mt-0.5 text-muted-foreground">
+                <p className="mt-0.5 break-words text-muted-foreground">
                   Media: <strong className={cr.validationStatus === "valid" ? "text-emerald-700" : "text-amber-700"}>{cr.validationStatus}</strong> · Link:{" "}
                   <strong className={cr.urlStatus === "valid" ? "text-emerald-700" : "text-amber-700"}>{cr.urlStatus}</strong>
                   {cr.urlBlockReason ? ` (${cr.urlBlockReason})` : ""}
@@ -397,7 +397,7 @@ function CampaignCard({ c, busy, onModerate, onRefund, onBoost }: { c: Campaign;
             <>
               <p className="mt-1 opacity-80">Send it from the {c.paymentMethod ?? "payment"} dashboard (reference above), then mark it here. The provider&apos;s refund webhook also records it on the payment.</p>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <input value={refundNote} onChange={(e) => setRefundNote(e.target.value)} maxLength={300} placeholder="Note (provider refund id…)" className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-1 text-xs" />
+                <input value={refundNote} onChange={(e) => setRefundNote(e.target.value)} maxLength={300} placeholder="Note (provider refund id…)" className="w-full min-w-0 sm:w-auto sm:flex-1 rounded-lg border border-border bg-background px-2 py-1.5 text-base sm:py-1 sm:text-xs" />
                 <button type="button" disabled={busy !== null} onClick={() => onRefund("refunded", refundNote)} className="rounded-lg bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-60">
                   Mark refunded
                 </button>
@@ -413,7 +413,7 @@ function CampaignCard({ c, busy, onModerate, onRefund, onBoost }: { c: Campaign;
       {c.actions.length ? (
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           {c.actions.some((a) => NEEDS_REASON.includes(a)) ? (
-            <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} placeholder="Reason — the advertiser sees it" className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-1 text-xs" aria-label="Reason" />
+            <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} placeholder="Reason — the advertiser sees it" className="w-full min-w-0 sm:w-auto sm:flex-1 rounded-lg border border-border bg-background px-2 py-1.5 text-base sm:py-1 sm:text-xs" aria-label="Reason" />
           ) : null}
           {c.actions.map((a) => {
             const needs = NEEDS_REASON.includes(a) && !reason.trim();
@@ -439,7 +439,7 @@ function CampaignCard({ c, busy, onModerate, onRefund, onBoost }: { c: Campaign;
         </div>
       ) : null}
 
-      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-muted/50 p-2.5 text-[11.5px]">
+      <div className="mt-3 flex flex-col items-start gap-1.5 rounded-xl bg-muted/50 p-2.5 text-[11.5px] sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
         <span className="font-semibold">Dashboard sample data ×10</span>
         <span className="text-muted-foreground">Display only: the advertiser sees 10× views, clicks and conversions (labelled “Sample data”). Stored counts and billing stay real.</span>
         <button
@@ -493,7 +493,7 @@ function AdvertiserRow({ a, busy, onSave }: { a: Advertiser; busy: boolean; onSa
           </p>
           {a.statusReason ? <p className="text-[11.5px] text-rose-700">Reason: {a.statusReason}</p> : null}
         </div>
-        <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-lg border border-border bg-background px-2 py-1 text-xs" aria-label={`${a.businessName} status`}>
+        <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-lg border border-border bg-background px-2 py-1.5 text-base sm:py-1 sm:text-xs" aria-label={`${a.businessName} status`}>
           {ADVERTISER_STATUSES.map((s) => (
             <option key={s} value={s}>
               {s}
@@ -503,7 +503,7 @@ function AdvertiserRow({ a, busy, onSave }: { a: Advertiser; busy: boolean; onSa
       </div>
       {changed ? (
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {status !== "active" ? <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} placeholder="Reason (required)" className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-1 text-xs" /> : null}
+          {status !== "active" ? <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} placeholder="Reason (required)" className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-1.5 text-base sm:py-1 sm:text-xs" /> : null}
           <button type="button" disabled={busy || (status !== "active" && !reason.trim())} onClick={() => onSave(status, reason.trim())} className="rounded-lg bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground disabled:opacity-50">
             {busy ? "…" : status === "active" ? "Reactivate" : `Set ${status}`}
           </button>

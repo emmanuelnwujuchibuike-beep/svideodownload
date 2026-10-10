@@ -55,6 +55,7 @@ const CollectionPicker = dynamic(() => import("@/features/social/collection-pick
 const PostEditSheet = dynamic(() => import("@/features/social/post-edit-sheet").then((m) => m.PostEditSheet), { ssr: false });
 const ReportSheet = dynamic(() => import("@/features/social/report-sheet").then((m) => m.ReportSheet), { ssr: false });
 import { downloadPost } from "@/lib/media/download-post";
+import { getQualityPreference, getSyncConditions } from "@/lib/media/network-conditions";
 import { clampFeedRatio, isReelsShaped } from "@/lib/media/aspect";
 import { claimPlayback, releasePlayback, suspendPlayback } from "@/lib/media/video-coordinator";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
@@ -1022,7 +1023,7 @@ function AlbumSwipe({
                       muted
                       loop
                       playsInline
-                      preload={Math.abs(i - index) <= 1 ? "auto" : "metadata"}
+                      preload={i === index || (Math.abs(i - index) === 1 && neighboursMayBuffer()) ? "auto" : "metadata"}
                       style={fitStyle}
                       onLoadedMetadata={(e) => {
                         const v = e.currentTarget;
@@ -1138,4 +1139,15 @@ function RailBtn({ icon: Icon, count, active, fill, activeClass, label, onClick 
       {count !== undefined && count > 0 ? <AnimatedCount value={count} className="text-[11px] font-bold tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]" /> : null}
     </motion.button>
   );
+}
+
+/**
+ * Part 10: the carousel buffers the neighbouring video (real bytes) only when the
+ * member is not saving data — Save-Data, a 2G link or the Data saver quality
+ * choice keep neighbours on metadata, the same rule the reels governor follows.
+ */
+function neighboursMayBuffer(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const c = getSyncConditions();
+  return !(c.saveData || c.effectiveType === "2g" || c.effectiveType === "slow-2g" || getQualityPreference() === "data-saver");
 }

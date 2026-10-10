@@ -199,8 +199,8 @@ export function Notice({ icon: Icon, children, tone = "indigo" }: { icon: Lucide
 export function Row({ label, value, strong, muted }: { label: ReactNode; value: ReactNode; strong?: boolean; muted?: boolean }) {
   return (
     <div className={cn("flex items-baseline justify-between gap-4 py-1.5", strong && "pt-3 text-[16px] font-bold", muted && "text-muted-foreground")}>
-      <span className={cn("min-w-0", !strong && "text-[13.5px]")}>{label}</span>
-      <span className={cn("shrink-0 text-right tabular-nums", !strong && "text-[13.5px] font-semibold")}>{value}</span>
+      <span className={cn("max-w-[60%] shrink-0", !strong && "text-[13.5px]")}>{label}</span>
+      <span className={cn("min-w-0 flex-1 text-right tabular-nums [overflow-wrap:anywhere]", !strong && "text-[13.5px] font-semibold")}>{value}</span>
     </div>
   );
 }

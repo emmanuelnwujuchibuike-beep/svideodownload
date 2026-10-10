@@ -25,6 +25,7 @@
 
 import { ALL_SLOTS_PLACEMENT, type AdMediaType, type AdPageContext } from "./catalog";
 import { checkDestinationUrl } from "./creative-validation";
+import { sizedAdImageUrl, slotImageEdge } from "./media-url";
 
 /* ─────────────────────────── the snapshot (from SQL) ─────────────────────────── */
 
@@ -187,6 +188,7 @@ export function eligibleForPlacement(snapshot: ServingSnapshot, placementCode: s
   const format = snapshot.formats.find((f) => f.code === placement.format_code);
   if (!format?.enabled) return [];
   const rules = formatRules(format, snapshot.settings.default_slot_count);
+  const edge = slotImageEdge(format.width, format.height);
 
   const out: EligibleAd[] = [];
   const shared: EligibleAd[] = [];
@@ -204,8 +206,9 @@ export function eligibleForPlacement(snapshot: ServingSnapshot, placementCode: s
       cr: cr.id,
       slot: c.slot_number,
       mediaType: cr.media_type as AdMediaType,
-      media: cr.media_url!,
-      thumb: cr.thumbnail_url,
+      // images (and a video's poster) resized for the slot — never the upload itself (media-url.ts)
+      media: cr.media_type === "image" ? sizedAdImageUrl(cr.media_url, edge)! : cr.media_url!,
+      thumb: sizedAdImageUrl(cr.thumbnail_url, edge),
       url: cr.destination_url,
       headline: cr.headline,
       body: cr.description,

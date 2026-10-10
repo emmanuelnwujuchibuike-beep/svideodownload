@@ -54,3 +54,24 @@ describe("service worker: avatars are cached apart, cache-first", () => {
     expect(Number(/SWX\.VERSION\s*=\s*"v(\d+)"/.exec(SW("config.js"))?.[1])).toBeGreaterThanOrEqual(26);
   });
 });
+
+describe("service worker v27: rendered avatars, and a cache that survives deploys (2026-10-10)", () => {
+  const RENDER = "https://wmimmsrtafazowjperog.supabase.co/storage/v1/render/image/public/media/00d46d9a";
+  it("the rendered avatar the app now draws is answered cache-first from AVATAR_CACHE", () => {
+    const { picked, swx } = route(`${RENDER}/avatar-1790745090148.jpg?v=1790745090822&width=128&height=128&resize=cover&quality=70`);
+    expect(picked).toEqual([`cacheFirst:${swx.AVATAR_CACHE as string}`]);
+  });
+
+  it("the avatar cache is not named after the SW version, so a deploy does not empty it", () => {
+    const { swx } = route(`${RENDER}/avatar-1.jpg?v=1`);
+    expect(swx.AVATAR_CACHE as string).not.toContain(swx.VERSION as string);
+    expect(swx.KEEP).toContain(swx.AVATAR_CACHE);
+  });
+
+  it("teeth: an unversioned render, or a render that is not an avatar, is not kept forever", () => {
+    const unversioned = route(`${RENDER}/avatar-1.jpg?width=128`);
+    expect(unversioned.picked).not.toContain(`cacheFirst:${unversioned.swx.AVATAR_CACHE as string}`);
+    const post = route(`${RENDER}/post-1.jpg?v=1&width=128`);
+    expect(post.picked).not.toContain(`cacheFirst:${post.swx.AVATAR_CACHE as string}`);
+  });
+});

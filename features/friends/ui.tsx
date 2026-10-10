@@ -22,10 +22,20 @@ import { cn } from "@/lib/utils";
 export const GLASS =
   "bg-white/75 backdrop-blur-xl ring-1 ring-black/[0.06] shadow-[0_1px_2px_rgba(15,23,42,0.04),0_10px_30px_-14px_rgba(15,23,42,0.18)] dark:bg-white/[0.05] dark:ring-white/10 dark:shadow-[0_10px_30px_-14px_rgba(0,0,0,0.6)]";
 
-/** The soft colour behind the glass — two blurred tints at the top of the page; static, no animation. */
+/**
+ * The soft colour behind the glass — two blurred tints at the top of the page; static, no animation.
+ *
+ * Owner, 2026-10-10 ("hero gradient is not properly edged"): the box clipped
+ * the blurred tints into a visible rectangle (hard left, right and bottom
+ * edges). A radial mask now fades the wash to nothing before any edge, so it
+ * has no edge to show at any width.
+ */
 export function AmbientWash() {
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-x-0 -top-6 -z-10 h-72 overflow-hidden">
+    <div
+      aria-hidden
+      className="pointer-events-none absolute -inset-x-3 -top-6 -z-10 h-80 overflow-hidden [-webkit-mask-image:radial-gradient(ellipse_70%_60%_at_50%_30%,#000_35%,transparent_100%)] [mask-image:radial-gradient(ellipse_70%_60%_at_50%_30%,#000_35%,transparent_100%)] sm:-inset-x-4"
+    >
       <div className="absolute -left-16 top-0 h-56 w-56 rounded-full bg-blue-400/20 blur-3xl dark:bg-blue-500/15" />
       <div className="absolute -right-10 top-10 h-48 w-48 rounded-full bg-violet-400/20 blur-3xl dark:bg-violet-500/15" />
     </div>

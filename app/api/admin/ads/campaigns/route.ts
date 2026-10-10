@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { campaignEvents, listAdminCampaigns, MODERATION_ACTIONS, moderateCampaign, setRefund } from "@/lib/ads-platform/admin-campaigns";
+import { campaignEvents, listAdminCampaigns, MODERATION_ACTIONS, moderateCampaign, setRefund, setStatsBoost } from "@/lib/ads-platform/admin-campaigns";
 import { requireAdminApi } from "@/lib/admin/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -16,6 +16,7 @@ const NO_STORE = { "cache-control": "no-store" };
  * GET  ?view=review|live|refunds|all&status=&q=   campaigns with creatives, flags, refund state, totals
  * GET  ?events=<campaign id>                      that campaign's audit trail
  * POST { id, action, version, reason }            approve · reject · pause · resume · remove (0204)
+ * POST { id, statsMultiplier: 1 | 10 }          test mode: dashboard figures x10 (0211, display only)
  * POST { id, refund: "refunded" | "waived", note } the refund decision
  *
  * Admins only (404 otherwise). Fetched when the panel opens, never polled.
@@ -39,6 +40,7 @@ export async function GET(request: Request) {
   }
 }
 
+const boostSchema = z.object({ id: z.string().uuid(), statsMultiplier: z.union([z.literal(1), z.literal(10)]) }).strict();
 const moderateSchema = z
   .object({
     id: z.string().uuid(),
@@ -57,6 +59,12 @@ export async function POST(request: Request) {
   const body: unknown = await request.json().catch(() => null);
   const db = createAdminClient();
   try {
+    const boost = boostSchema.safeParse(body);
+    if (boost.success) {
+      const out = await setStatsBoost(db, gate.user.id, { id: boost.data.id, multiplier: boost.data.statsMultiplier });
+      console.info("[admin/ads/campaigns] stats boost", { by: gate.user.id, id: boost.data.id, multiplier: boost.data.statsMultiplier, ok: out.ok });
+      return NextResponse.json(out, { status: out.ok ? 200 : 409, headers: NO_STORE });
+    }
     const refund = refundSchema.safeParse(body);
     if (refund.success) {
       const out = await setRefund(db, gate.user.id, { id: refund.data.id, status: refund.data.refund, note: refund.data.note || null });

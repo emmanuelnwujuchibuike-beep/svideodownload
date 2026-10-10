@@ -37,6 +37,7 @@ import {
   type PaymentRow,
   type StatRow,
 } from "./dashboard-data";
+import { TestModeNote } from "./test-mode-note";
 
 /**
  * One campaign: its creative, link and settings, its performance, its
@@ -431,6 +432,7 @@ function Performance({ id }: { id: string }) {
   const t = useMemo(() => (rows ? totalsOf(rows) : null), [rows]);
   return (
     <AiPanel>
+      <TestModeNote campaignId={id} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[14px] font-semibold">Performance</p>
         <div className="flex gap-1">

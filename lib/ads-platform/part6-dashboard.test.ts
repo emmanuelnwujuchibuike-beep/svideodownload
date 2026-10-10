@@ -166,10 +166,21 @@ describe("§15.12/13 — analytics", () => {
     expect(src("features/ads-platform/dashboard/dashboard-data.ts")).not.toMatch(/from\("ad_events"\)/);
   });
 
-  it("figures are shown as the database counts them — no scaling anywhere", () => {
+  it("figures are shown as the database counts them - the only scaling is the labelled admin sample-data mode (0211)", () => {
     const d = src("features/ads-platform/dashboard/dashboard-data.ts");
-    expect(d).not.toMatch(/multiplier|\* *factor|inflat/i);
-    expect(fn("ad_my_summary")).not.toMatch(/\*\s*\d|multipl/i);
+    // no ad-hoc factors or inflation: a scale may only come from an admin-set stats_multiplier
+    expect(d).not.toMatch(/\* *factor|inflat/i);
+    expect(d.replace(/stats_multiplier/g, "")).not.toMatch(/multiplier/i);
+    // test mode is never silent: the dashboards render the note whenever a campaign is boosted
+    expect(src("features/ads-platform/dashboard/campaign-detail.tsx")).toContain("TestModeNote");
+    expect(src("features/ads-platform/my-campaigns.tsx")).toContain("TestModeNote");
+    expect(src("features/ads-platform/dashboard/test-mode-note.tsx")).toMatch(/Sample data/);
+    // display only: the stored aggregates, billing and the 0211 migration never rewrite them
+    const m = src("supabase/migrations/0211_ad_stats_test_boost.sql");
+    expect(m).not.toMatch(/update\s+public\.ad_campaign_daily_stats|update\s+public\.ad_events|insert\s+into\s+public\.ad_campaign_daily_stats/i);
+    expect(m).toMatch(/stats_multiplier in \(1, 10\)/);
+    // a boost can only be set through the admin-only, service-role function
+    expect(m).toMatch(/revoke all on function public\.admin_set_ad_stats_boost\(uuid, integer, uuid\) from public, anon, authenticated/);
   });
 
   it("a preview records nothing: no ad renderer, no event client on the dashboard", () => {

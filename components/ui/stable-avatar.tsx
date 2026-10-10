@@ -1,5 +1,9 @@
 "use client";
 
+import { useState } from "react";
+
+import { avatarSrc } from "@/lib/media/avatar-url";
+
 /**
  * An avatar that never visibly reloads once it has been seen (owner,
  * 2026-10-09: "make the top and chat avatar to never reload on backswipe
@@ -19,6 +23,16 @@
  *
  * It only ever changes when the URL changes, i.e. when someone actually
  * changes their photo. Nothing here polls or refetches.
+ *
+ * ── 2026-10-10: small, CORS, and cacheable on iOS ───────────────────────────
+ * The owner tested the fix above on an iPhone and "nothing changed": this map
+ * lives in memory, and iOS tears a home-screen app down constantly, so every
+ * relaunch started empty and re-fetched each FULL ~512 px upload, which storage
+ * serves `Cache-Control: no-cache`. Now every avatar is the Supabase render at
+ * its drawn size (lib/media/avatar-url.ts, ~3 KB), loaded `crossorigin` so the
+ * response is a real, small cache entry (an opaque one is padded to megabytes
+ * in the quota and iOS silently stops storing them), and the service worker
+ * keeps it cache-first in a cache that survives SW updates (public/sw/).
  */
 
 const MAX_KEPT = 300;
@@ -34,8 +48,8 @@ function remember(url: string, img: HTMLImageElement): void {
 }
 
 /** True once `url` has decoded in this tab. */
-export function isAvatarReady(url: string | null | undefined): boolean {
-  return !!url && decoded.has(url);
+export function isAvatarReady(url: string | null | undefined, displayPx = 52): boolean {
+  return !!url && (decoded.has(url) || decoded.has(avatarSrc(url, displayPx)));
 }
 
 /*
@@ -43,7 +57,9 @@ export function isAvatarReady(url: string | null | undefined): boolean {
   flash (owner, 2026-10-09: "History Medias and the Frenz logo at the top
   reloads on every page entry") — SmartThumb (history tiles) and FrenzLogo.
 */
-export const isImageSeen = isAvatarReady;
+export function isImageSeen(url: string | null | undefined): boolean {
+  return !!url && decoded.has(url);
+}
 export function markImageSeen(url: string, img: HTMLImageElement): void {
   remember(url, img);
 }
@@ -53,11 +69,14 @@ export function markImageSeen(url: string, img: HTMLImageElement): void {
  * including the ones below the fold) so the first time each is mounted it is
  * already instant. Already-decoded URLs cost nothing.
  */
-export function warmAvatars(urls: readonly (string | null | undefined)[]): void {
+export function warmAvatars(urls: readonly (string | null | undefined)[], displayPx = 52): void {
   if (typeof Image === "undefined") return;
-  for (const url of urls) {
+  for (const raw of urls) {
+    // the SAME url and CORS mode StableAvatar requests, or the warm-up is a second download
+    const url = avatarSrc(raw, displayPx);
     if (!url || decoded.has(url)) continue;
     const img = new Image();
+    img.crossOrigin = "anonymous";
     img.decoding = "async";
     img.src = url;
     img
@@ -85,19 +104,27 @@ export function StableAvatar({
   /** "lazy" for long lists (Part 9) — kept even once seen; a seen avatar then decodes sync as it loads */
   loading?: "lazy" | "eager";
 }) {
-  const ready = decoded.has(src);
+  // a render that fails (transformations off, a moved file) falls back to the original once
+  const [failedRender, setFailedRender] = useState<string | null>(null);
+  const rendered = avatarSrc(src, width ?? 52);
+  const url = failedRender === rendered ? src : rendered;
+  const ready = decoded.has(url);
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={src}
+      src={url}
       alt={alt}
+      crossOrigin="anonymous"
       width={width}
       height={height}
       // lazy stays lazy even once seen: a long list must never load every avatar at once (2026-10-09)
       loading={loading}
       draggable={false}
       decoding={ready ? "sync" : "async"}
-      onLoad={(e) => remember(src, e.currentTarget)}
+      onLoad={(e) => remember(url, e.currentTarget)}
+      onError={() => {
+        if (url !== src) setFailedRender(rendered);
+      }}
       className={className}
     />
   );

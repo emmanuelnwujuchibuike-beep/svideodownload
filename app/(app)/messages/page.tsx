@@ -1,21 +1,8 @@
-import { RefreshCw } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
 
-import { ConversationList } from "@/features/social/conversation-list";
-import { InboxListSkeleton, InboxShell } from "@/features/social/inbox-shell";
-import { listIncomingFriendRequests, type FriendRequestItem } from "@/lib/social/friends";
-import { listConversations, type ConversationSummary } from "@/lib/social/messages";
-import { createClient, getUserBounded } from "@/lib/supabase/server";
-import { withTimeout } from "@/lib/utils";
-
-type LoadResult = { ok: true; conversations: ConversationSummary[] } | { ok: false; conversations: ConversationSummary[] };
-
-const LOAD_TIMEOUT_MS = 8000;
-
-export const dynamic = "force-dynamic";
+import { InboxShell } from "@/features/social/inbox-shell";
+import { InstantInbox } from "@/features/social/instant-inbox";
 
 export const metadata: Metadata = {
   title: "Messages",
@@ -52,59 +39,23 @@ const hasSupabase =
  * shared client cache (features/data), so a warm re-entry paints the last-known
  * conversations immediately and revalidates silently in the background — the
  * "silently revalidate for current data and messages" half of the ask.
+ *
+ * 🔴 2026-10-10 — THE LIST NO LONGER WAITS FOR THE SERVER AT ALL (owner: "the
+ * avatar and nothing in the message page should ever load on first or every
+ * entry, it should open instant"). The streamed list above still awaited auth +
+ * every conversation + the friend requests on each entry and each iOS relaunch,
+ * with the stripe loader up until they returned. Now <InstantInbox> paints from
+ * memory or from this account's saved copy on the device and refreshes through
+ * /api/messages behind it; the loader shows only on a device that has never
+ * seen this inbox. Signed-out visitors are sent to /login by InstantInbox, and
+ * the data endpoint answers nothing without a session.
  */
 export default function MessagesPage() {
   if (!hasSupabase) redirect("/login");
 
   return (
     <InboxShell>
-      <Suspense fallback={<InboxListSkeleton />}>
-        <InboxList />
-      </Suspense>
+      <InstantInbox />
     </InboxShell>
   );
-}
-
-/**
- * The list's data — streamed, never on the shell's render path. This is the
- * only part of the route that can suspend, so it's the only part that can ever
- * show a skeleton.
- */
-async function InboxList() {
-  const supabase = await createClient();
-  // Time-boxed auth (docs/STARTUP_AUDIT.md) — a timeout renders the same
-  // Retry state as a slow query below; only a real "no session" redirects.
-  const auth = await getUserBounded(supabase);
-  if (auth.kind === "signed-out") redirect("/login?next=/messages");
-
-  // A stuck/slow query here used to leave the whole inbox on its loading
-  // skeleton forever — nothing timed it out, so Next had nothing to fall
-  // back to. Racing it means the WORST case is now "shows a retry prompt
-  // after 8s", never "stuck indefinitely".
-  const viewerId = auth.kind === "user" ? auth.user.id : "";
-  const [result, requests] =
-    auth.kind === "timeout"
-      ? [{ ok: false as const, conversations: [] }, []]
-      : await Promise.all([
-          withTimeout<LoadResult>(
-            listConversations(auth.user.id).then((c) => ({ ok: true, conversations: c })),
-            LOAD_TIMEOUT_MS,
-            { ok: false, conversations: [] },
-          ),
-          withTimeout<FriendRequestItem[]>(listIncomingFriendRequests(auth.user.id), LOAD_TIMEOUT_MS, []),
-        ]);
-
-  if (!result.ok) {
-    return (
-      <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/70 p-10 text-center">
-        <p className="text-sm font-medium">This is taking longer than usual</p>
-        <p className="text-xs text-muted-foreground">Check your connection and try again.</p>
-        <Link href="/messages" className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary">
-          <RefreshCw className="h-3.5 w-3.5" /> Retry
-        </Link>
-      </div>
-    );
-  }
-
-  return <ConversationList initial={result.conversations} initialRequests={requests} viewerId={viewerId} />;
 }

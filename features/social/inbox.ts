@@ -2,8 +2,11 @@
 
 import { useEffect } from "react";
 
-import { getEntry, mutate, revalidate } from "@/features/data";
+import { getEntry, mutate, revalidate, seed } from "@/features/data";
 import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
+import { readIdentity } from "@/lib/auth/identity-cache";
+import type { FriendRequestItem } from "@/lib/social/friends";
+import { readInboxCache, writeInboxCache } from "@/lib/social/inbox-cache";
 import type { ConversationSummary } from "@/lib/social/messages";
 import type { BrowserClient } from "@/lib/supabase/client-instance";
 import { getClient } from "@/lib/supabase/client-lazy";
@@ -34,6 +37,46 @@ export async function loadInbox(): Promise<Inbox> {
   if (!res.ok) return { conversations: [], unread: 0 };
   const d = (await res.json()) as Inbox;
   return { conversations: d.conversations ?? [], unread: d.unread ?? 0 };
+}
+
+/** Incoming friend requests (the inbox's Requests tab), in the shared cache beside the inbox. */
+export const INBOX_REQUESTS_KEY = "inbox-requests";
+
+export async function loadInboxRequests(): Promise<FriendRequestItem[]> {
+  if (!hasAuthCookie()) return [];
+  const res = await fetch("/api/messages?requests=1");
+  if (!res.ok) return [];
+  const d = (await res.json()) as { requests?: FriendRequestItem[] };
+  return d.requests ?? [];
+}
+
+/**
+ * Paint from the device on a cold start (lib/social/inbox-cache.ts): fill the
+ * shared cache from what this ACCOUNT saw last, when memory has nothing. `seed`,
+ * never `mutate` — the fetch that follows must still win (see seed's note).
+ * Returns true when the inbox in memory did NOT come from the network yet, so
+ * the caller knows to refresh it.
+ */
+export function primeInboxFromDevice(): boolean {
+  if (typeof window === "undefined") return false;
+  const entry = getEntry<Inbox>(INBOX_KEY);
+  if (entry.data === undefined) {
+    const saved = readInboxCache(readIdentity()?.handle);
+    if (saved) {
+      seed<Inbox>(INBOX_KEY, { conversations: saved.conversations, unread: saved.unread });
+      if (saved.requests && getEntry<FriendRequestItem[]>(INBOX_REQUESTS_KEY).data === undefined) seed(INBOX_REQUESTS_KEY, saved.requests);
+    }
+  }
+  return getEntry<Inbox>(INBOX_KEY).updatedAt === 0;
+}
+
+/** Keep the device copy current with what is on screen (debounced; a burst of messages is one write). */
+export function usePersistInbox(inbox: Inbox | undefined, requests: FriendRequestItem[] | undefined): void {
+  useEffect(() => {
+    if (!inbox && !requests) return;
+    const id = setTimeout(() => writeInboxCache(readIdentity()?.handle, inbox ?? null, requests ?? null), 800);
+    return () => clearTimeout(id);
+  }, [inbox, requests]);
 }
 
 /**

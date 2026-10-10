@@ -27,7 +27,7 @@ import {
 import { FIRST_WARM_ROUTE, GUEST_WARM_ROUTES, afterPageLoad } from "@/features/app-shell/warm-routes";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useQuery } from "@/features/data";
-import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
+import { INBOX_KEY, loadInbox, primeInboxFromDevice, type Inbox } from "@/features/social/inbox";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
@@ -147,6 +147,10 @@ export function MobileNav({
   // reloads on swipe back" report (owner, 2026-07-21). This component is mounted
   // on every signed-in surface, so it's also what keeps INBOX_KEY frozen
   // app-wide (the cache's opt-out is reference-counted — see cache.ts).
+  // the badge and Chats paint from this account's saved inbox on a cold start; the fetch below refreshes it
+  useEffect(() => {
+    if (handle || hasAuthCookie()) primeInboxFromDevice();
+  }, [handle]);
   const { data: inbox } = useQuery<Inbox>(INBOX_KEY, loadInbox, { revalidateOnFocus: false });
   const unread = inbox?.unread ?? 0;
   /*
@@ -156,7 +160,8 @@ export function MobileNav({
     tapped every face is decoded and paints in the frame it mounts. Idle-time,
     and already-decoded URLs cost nothing.
   */
-  const inboxAvatars = (inbox?.conversations ?? []).map((c) => c.avatarUrl ?? c.other?.avatarUrl ?? "").join("|");
+  // the first screenful only — Chats loads the rest as they scroll near (conversation-list VISIBLE_AVATAR_ROWS)
+  const inboxAvatars = (inbox?.conversations ?? []).slice(0, 12).map((c) => c.avatarUrl ?? c.other?.avatarUrl ?? "").join("|");
   useEffect(() => {
     if (!inboxAvatars) return;
     const run = () => warmAvatars(inboxAvatars.split("|"));

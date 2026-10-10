@@ -141,7 +141,8 @@ self.addEventListener("fetch", (event) => {
     always correct and never worth a network check. Kept apart from IMAGE_CACHE,
     whose 80 entries feed thumbnails were filling, evicting every face.
   */
-  if (isImage && /\/storage\/v1\/object\/public\/media\/[^/]+\/avatar-[^/]+$/.test(url.pathname) && url.searchParams.has("v")) {
+  // 2026-10-10: the stored file OR its render (lib/media/avatar-url.ts) — the app now draws the render
+  if (isImage && /\/storage\/v1\/(object|render\/image)\/public\/media\/[^/]+\/avatar-[^/]+$/.test(url.pathname) && url.searchParams.has("v")) {
     event.respondWith(SWX.cacheFirst(req, SWX.AVATAR_CACHE));
     return;
   }

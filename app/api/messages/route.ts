@@ -5,6 +5,7 @@ import { type PushPriority, sendSmartPush } from "@/lib/notifications/smart-deli
 import { messageLimiter } from "@/lib/rate-limit";
 import { parseMentionedHandles } from "@/lib/social/message-meta";
 import { ALLOWED_MIME, MAX_ATTACHMENTS_PER_MESSAGE, MAX_SIZE_BYTES } from "@/lib/social/message-media";
+import { listIncomingFriendRequests } from "@/lib/social/friends";
 import { listConversations, sendMessage, type AttachmentInput } from "@/lib/social/messages";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -29,6 +30,16 @@ export async function GET(request: Request) {
     inbox.ts) to patch the rows a message touched instead of reloading all of
     them. Same function, same rules, scoped to the viewer's own memberships.
   */
+  /*
+    `?requests=1` — the viewer's incoming friend requests (the inbox's Requests
+    tab). /messages paints from the device and refreshes through here instead
+    of a server render (2026-10-10, "it should open instant").
+  */
+  if (new URL(request.url).searchParams.get("requests") === "1") {
+    const requests = await listIncomingFriendRequests(user.id);
+    return NextResponse.json({ requests }, { headers: { "Cache-Control": "private, no-store" } });
+  }
+
   const idsParam = new URL(request.url).searchParams.get("ids");
   if (idsParam !== null) {
     const ids = [...new Set(idsParam.split(",").filter((id) => UUID_RE.test(id)))].slice(0, MAX_PARTIAL_IDS);

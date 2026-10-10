@@ -10,6 +10,8 @@ import { clearAiFreeAccessCache } from "@/lib/ai/free-access-cache";
 import { clearAiHistoryCache } from "@/lib/ai/history-cache";
 import { forgetAiDeviceData } from "@/lib/ai/device-keys";
 
+import { clearInboxCache } from "@/lib/social/inbox-cache";
+
 import { clearIdentity } from "./identity-cache";
 
 /**
@@ -51,7 +53,7 @@ function forgetCachedImages(): void {
     if (typeof caches === "undefined") return;
     void caches
       .keys()
-      .then((names) => Promise.all(names.filter((n) => n.startsWith("frenz-img-")).map((n) => caches.delete(n))))
+      .then((names) => Promise.all(names.filter((n) => n.startsWith("frenz-img-") || n.startsWith("frenz-avatar-")).map((n) => caches.delete(n))))
       .catch(() => undefined);
   } catch {
     /* Cache Storage blocked — nothing stored */
@@ -81,7 +83,8 @@ export async function signOutClient(): Promise<void> {
   clearAiEntitlementCache(); // and the plan/allowance snapshot (2026-09-13)
   clearAiFreeAccessCache(); // and the complimentary-creations snapshot (2026-10-05)
   clearCharacterReplaceBalanceCache(); // and the Character Replace wallet snapshot (Part 3)
-  forgetCachedImages(); // and the service worker's image copies (Part 7 §56, 2026-10-07)
+  forgetCachedImages(); // and the service worker's image copies (Part 7 §56, 2026-10-07) — chat faces too: who you talk to
+  clearInboxCache(); // and the inbox painted on entry (2026-10-10) — another account must never see it
 
   // Clear the "just signed in" splash cookie so the hard navigation to `/` below
   // can never make BootSplash force its F loader on sign-out (owner, 2026-08-02:

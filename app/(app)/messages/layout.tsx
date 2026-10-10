@@ -1,16 +1,10 @@
 import { MessageCircle } from "lucide-react";
-import { Suspense, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
-import { ConversationList } from "@/features/social/conversation-list";
 import { InboxHeaderActions } from "@/features/social/inbox-header-actions";
-import { Skeleton, SkeletonAvatar } from "@/features/ui/skeleton";
-import { listIncomingFriendRequests, type FriendRequestItem } from "@/lib/social/friends";
-import { listConversations, type ConversationSummary } from "@/lib/social/messages";
-import { createClient, getUserBounded } from "@/lib/supabase/server";
-import { withTimeout } from "@/lib/utils";
+import { InstantInbox } from "@/features/social/instant-inbox";
 
-const LOAD_TIMEOUT_MS = 8000;
 
 /**
  * Glass Split (owner-picked design): on desktop the inbox is a persistent left
@@ -52,59 +46,14 @@ export default function MessagesLayout({ children }: { children: ReactNode }) {
           Messages
           <InboxHeaderActions />
         </h1>
-        <Suspense fallback={<PaneSkeleton />}>
-          <InboxPane />
-        </Suspense>
+        {/* 2026-10-10: painted from memory/the device like the mobile list — no server wait (features/social/instant-inbox.tsx) */}
+        <InstantInbox variant="pane" />
       </aside>
 
       {/* Thread / index panel */}
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background lg:rounded-3xl lg:border lg:border-border/70 lg:shadow-sm">
         {children}
       </main>
-    </div>
-  );
-}
-
-/**
- * The desktop pane's data — streamed, never on the render critical path. Every
- * path here degrades to "an empty pane" (a real, if imperfect, page) rather
- * than blocking or redirecting: a transient slow/failed auth just shows the
- * empty list, and the mobile page (which is what actually matters on an iOS
- * PWA) is entirely independent of this.
- */
-async function InboxPane() {
-  let conversations: ConversationSummary[] = [];
-  let requests: FriendRequestItem[] = [];
-  let viewerId = "";
-  try {
-    const supabase = await createClient();
-    const auth = await getUserBounded(supabase);
-    if (auth.kind === "user") {
-      viewerId = auth.user.id;
-      [conversations, requests] = await Promise.all([
-        withTimeout(listConversations(auth.user.id), LOAD_TIMEOUT_MS, []),
-        withTimeout(listIncomingFriendRequests(auth.user.id), LOAD_TIMEOUT_MS, []),
-      ]);
-    }
-  } catch {
-    /* pages handle their own auth redirects; the pane just shows empty */
-  }
-
-  return <ConversationList initial={conversations} variant="pane" initialRequests={requests} viewerId={viewerId} />;
-}
-
-function PaneSkeleton() {
-  return (
-    <div className="flex-1 space-y-1 px-3 pt-2" aria-hidden>
-      {Array.from({ length: 7 }).map((_, i) => (
-        <div key={i} className="flex items-center gap-3 rounded-xl p-3">
-          <SkeletonAvatar className="h-12 w-12" />
-          <div className="flex-1 space-y-2">
-            <Skeleton className="h-3.5 w-32" />
-            <Skeleton className="h-3 w-44" />
-          </div>
-        </div>
-      ))}
     </div>
   );
 }

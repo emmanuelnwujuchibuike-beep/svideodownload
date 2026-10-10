@@ -32,7 +32,7 @@ import { mutate, revalidate, useQuery } from "@/features/data";
 import { usePresence } from "@/features/friends/use-presence";
 import { isThreadWarm, warmThread } from "@/features/social/thread-cache";
 import { GroupAvatarStack } from "@/features/social/group-avatar-stack";
-import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
+import { INBOX_KEY, INBOX_REQUESTS_KEY, loadInbox, loadInboxRequests, usePersistInbox, type Inbox } from "@/features/social/inbox";
 import { useTypingIndicator } from "@/features/social/use-typing";
 import { haptic } from "@/lib/motion/haptics";
 import { isSlowConnection } from "@/lib/pwa/use-network-status";
@@ -46,6 +46,8 @@ import { cn } from "@/lib/utils";
  *  thread cache holds 10, so warming past this would only evict what it just
  *  fetched. */
 const WARM_THREAD_LIMIT = 10;
+/** About one phone screen of chat rows: their avatars are decoded on entry; the rest load as they scroll near (loading=lazy). */
+const VISIBLE_AVATAR_ROWS = 12;
 
 /**
  * Friend-request ids this browser session has already accepted/declined.
@@ -217,10 +219,26 @@ export function ConversationList({
     revalidateOnMount: false,
   });
   const conversations = data?.conversations ?? initial;
+  // Incoming requests live in the shared cache too (InstantInbox refreshes them); the state below overlays optimistic answers.
+  const { data: cachedRequests } = useQuery<FriendRequestItem[]>(INBOX_REQUESTS_KEY, loadInboxRequests, {
+    initialData: initialRequests,
+    revalidateOnFocus: false,
+    revalidateOnMount: false,
+  });
+  // the device copy follows what is on screen, so the next cold start paints it (lib/social/inbox-cache.ts)
+  usePersistInbox(data, cachedRequests);
 
-  // Decode every row's avatar once, below-the-fold rows included, so a row
-  // mounting later (scroll, back-swipe) paints its face in the same frame.
-  const avatarKey = conversations.map((c) => c.avatarUrl ?? c.other?.avatarUrl ?? "").join("|");
+  /*
+    Avatars: the rows on screen FIRST (owner, 2026-10-10: "users avatar should
+    prefetch from the visible chat … as user scrolls the chats below load").
+    The first screenful is decoded now; rows further down are `loading=lazy`,
+    which the browser fetches as they near the viewport. Each is a ~3 KB render
+    kept by the service worker, so a face is never fetched twice.
+  */
+  const avatarKey = conversations
+    .slice(0, VISIBLE_AVATAR_ROWS)
+    .map((c) => c.avatarUrl ?? c.other?.avatarUrl ?? "")
+    .join("|");
   useEffect(() => {
     warmAvatars(avatarKey.split("|"));
   }, [avatarKey]);
@@ -307,6 +325,10 @@ export function ConversationList({
   const [requests, setRequests] = useState<FriendRequestItem[]>(() =>
     initialRequests.filter((r) => !respondedRequestIds.has(r.id)),
   );
+  // fresh requests from the network replace the painted ones (still minus anything answered here)
+  useEffect(() => {
+    if (cachedRequests) setRequests(cachedRequests.filter((r) => !respondedRequestIds.has(r.id)));
+  }, [cachedRequests]);
   const [requestBusyId, setRequestBusyId] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   // Owner ask: only one row's swipe-reveal strip open at a time — opening a

@@ -106,12 +106,17 @@ var SWX = (self.SWX = self.SWX || {});
 // v26 (2026-10-10): avatars get their own cache-first AVATAR_CACHE (routes.js)
 // — the 80-entry IMAGE_CACHE was evicting them behind feed thumbnails, so the
 // chat avatars re-fetched (~1 s each from storage) on every entry. Must bump.
-SWX.VERSION = "v26";
+// v27 (2026-10-10): avatars are the Supabase RENDER at their drawn size
+// (lib/media/avatar-url.ts), requested with CORS; routes.js now matches render
+// URLs too. AVATAR_CACHE no longer carries VERSION: an avatar URL is versioned
+// itself, so its cache never goes stale, and naming it after the SW version
+// threw every face away on each deploy (iPhone: "nothing changed"). Must bump.
+SWX.VERSION = "v27";
 SWX.STATIC_CACHE = `frenz-static-${SWX.VERSION}`;
 SWX.IMAGE_CACHE = `frenz-img-${SWX.VERSION}`;
 SWX.PAGE_CACHE = `frenz-pages-${SWX.VERSION}`;
 SWX.API_CACHE = `frenz-api-${SWX.VERSION}`;
-SWX.AVATAR_CACHE = `frenz-avatar-${SWX.VERSION}`;
+SWX.AVATAR_CACHE = "frenz-avatar-stable-1";
 SWX.KEEP = [SWX.STATIC_CACHE, SWX.IMAGE_CACHE, SWX.PAGE_CACHE, SWX.API_CACHE, SWX.AVATAR_CACHE];
 
 // Every runtime cache that can grow unboundedly gets trimmed (oldest-
@@ -121,7 +126,7 @@ SWX.LIMITS = {
   [SWX.IMAGE_CACHE]: 80,
   [SWX.PAGE_CACHE]: 60,
   [SWX.API_CACHE]: 40,
-  [SWX.AVATAR_CACHE]: 150,
+  [SWX.AVATAR_CACHE]: 400, // ~3 KB each as renders — 400 faces is ~1.2 MB
 };
 
 // Small, build-STABLE public assets only. Anything under /_next/static/ has

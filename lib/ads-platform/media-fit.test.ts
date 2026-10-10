@@ -28,7 +28,7 @@ vi.mock("./server", () => ({ activateCampaign: async (_db: unknown, id: string) 
 vi.mock("./advertiser-server", () => ({ STAGING_BUCKET: "ad-creatives-staging", posterPath: (p: string) => p.replace(/\.[a-z0-9]+$/, "-poster.webp") }));
 
 import { advanceVideoProcessing, PROCESSING_TIMEOUT_MS } from "./media-processing";
-import { containBox, fitWithin, imageNeedsOptimizing, specOf, videoNeedsProcessing, withinUploadCaps } from "./media-spec";
+import { CARD_MAX, ORIGINAL_SERVE_MAX_BYTES, canServeOriginalVideo, cardMediaBox, containBox, fitWithin, imageNeedsOptimizing, specOf, videoNeedsProcessing, withinUploadCaps } from "./media-spec";
 
 const code = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 
@@ -277,5 +277,50 @@ describe("MOV videos (0209)", () => {
     expect(adv).toContain('if (input.mimeType === "video/quicktime" && !formatLimits(f).videoProcessing) refuse("quicktime");');
     expect(adv).not.toContain('else if (facts.mime === "video/quicktime") errors.push("quicktime");');
     expect(code("supabase/migrations/0209_ad_mov_uploads.sql")).toContain("array_append(allowed_mime_types, 'video/quicktime')");
+  });
+});
+
+describe("the paid card takes the creative's own shape inside 320 × 500 (owner, 2026-10-10)", () => {
+  it("a landscape picture fills the width at its own ratio", () => {
+    expect(cardMediaBox(1000, 697)).toEqual({ width: 320, height: 223 });
+  });
+
+  it("a portrait picture or 9:16 video is held to 500 px high, narrower rather than cropped", () => {
+    expect(cardMediaBox(1024, 1280)).toEqual({ width: 320, height: 400 });
+    expect(cardMediaBox(1080, 1920)).toEqual({ width: 281, height: 500 });
+  });
+
+  it("an unknown size keeps the old 320 × 200 box", () => {
+    expect(cardMediaBox(null, null)).toEqual({ width: 320, height: 200 });
+    expect(cardMediaBox(0, 500)).toEqual({ width: 320, height: 200 });
+  });
+
+  it("teeth: for any shape the box never passes 320 × 500 and keeps the ratio (nothing cropped)", () => {
+    for (const [w, h] of [[4000, 300], [300, 4000], [320, 500], [1, 1], [3840, 2160], [100, 50]] as const) {
+      const box = cardMediaBox(w, h);
+      expect(box.width).toBeLessThanOrEqual(CARD_MAX.width);
+      expect(box.height).toBeLessThanOrEqual(CARD_MAX.height);
+      expect(Math.abs(box.width / box.height - w / h) / (w / h)).toBeLessThan(0.05);
+    }
+  });
+});
+
+describe("Stream full → the original video is served from Supabase storage (owner, 2026-10-10)", () => {
+  it("an MP4 or WebM within the public bucket's limit is served as uploaded", () => {
+    expect(canServeOriginalVideo("video/mp4", 30 * 1024 * 1024)).toBe(true);
+    expect(canServeOriginalVideo("video/webm", ORIGINAL_SERVE_MAX_BYTES)).toBe(true);
+  });
+
+  it("teeth: a MOV, an oversized file or an empty one still waits for Stream", () => {
+    expect(canServeOriginalVideo("video/quicktime", 10 * 1024 * 1024)).toBe(false);
+    expect(canServeOriginalVideo("video/mp4", ORIGINAL_SERVE_MAX_BYTES + 1)).toBe(false);
+    expect(canServeOriginalVideo("video/mp4", 0)).toBe(false);
+    expect(canServeOriginalVideo(null, 1024)).toBe(false);
+  });
+
+  it("the finalize step falls back ONLY when Stream itself was unavailable", () => {
+    const code = readFileSync(join(process.cwd(), "lib/ads-platform/advertiser-server.ts"), "utf8");
+    expect(code).toContain('const fallbackToStorage = !started.ok && started.error === "processing_unavailable" && canServeOriginalVideo(facts!.mime, size);');
+    expect(code).toContain("if (started.ok) return");
   });
 });

@@ -12,6 +12,9 @@ import {
   formatMoney,
   formatSpecs,
   fromPrice,
+  isStripFormat,
+  recommendedSize,
+  STRIP_GUIDANCE,
   maxPlacements,
   offeredDurations,
   offeredFormats,
@@ -184,7 +187,8 @@ describe("format information is the admin's CURRENT configuration", () => {
     expect(formatSpecs({ ...reward, max_duration_seconds: 20 })).toContain("Video up to 20 s");
   });
   it("sizes: a strip, a card, full-screen", () => {
-    expect(formatSpecs(catalog().formats[0]!)[0]).toBe("32 px high, full width");
+    // 2026-10-10 (owner): the strip asks for an image 32–40 px tall and fits its width to every screen
+    expect(formatSpecs(catalog().formats[0]!)[0]).toBe("Image 32–40 px tall, fitted to every screen");
     expect(formatSpecs(fmt("C", { width: 320, height: 200 }))[0]).toBe("320 × 200");
     expect(formatSpecs(catalog().formats[1]!)[0]).toBe("Full-screen");
   });
@@ -366,5 +370,26 @@ describe("application state is read off the ONE campaign status", () => {
   it("there is no manual 'awaiting admin approval' step in the normal flow", () => {
     const all = readFileSync(join(process.cwd(), "lib/ads-platform/application.ts"), "utf8");
     expect(all).not.toMatch(/awaiting_approval|pending_approval|admin_review/);
+  });
+});
+
+describe("the top strip: an image 32–40 px tall, no description (owner, 2026-10-10)", () => {
+  it("the strip is told the height and that its words go in the image", () => {
+    const strip = catalog().formats[0]!;
+    expect(isStripFormat(strip)).toBe(true);
+    expect(recommendedSize(strip)).toBe("an image 32–40 px tall, any width");
+    expect(STRIP_GUIDANCE).toMatch(/32–40 px tall/);
+    expect(STRIP_GUIDANCE).toMatch(/no description/);
+  });
+
+  it("teeth: a card or full-screen format is not a strip", () => {
+    expect(isStripFormat({ width: 320, height: 200 })).toBe(false);
+    expect(isStripFormat({ width: null, height: null })).toBe(false);
+  });
+
+  it("the wizard hides the description and sends none for a strip", () => {
+    const wizard = readFileSync(join(process.cwd(), "features/ads-platform/advertise-wizard.tsx"), "utf8");
+    expect(wizard).toContain("{format && isStripFormat(format) ? null : (");
+    expect(wizard).toContain(`description: format && isStripFormat(format) ? "" : form.description,`);
   });
 });

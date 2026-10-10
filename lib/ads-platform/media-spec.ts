@@ -22,6 +22,40 @@
 /** Never crop, never distort: the whole creative, centred, with space around it where the shapes differ. */
 export const FIT_RULE = "contain" as const;
 
+/**
+ * The in-page paid CARD takes the creative's OWN shape (owner, 2026-10-10: "the
+ * banner don't have to be a fixed size, it should fit in on the ratio of the
+ * picture or video, as long as it doesn't cross 320 px width and 500 px height,
+ * nothing should be cropped"). No fixed 320 × 200 box, no backdrop bars.
+ */
+export const CARD_MAX = { width: 320, height: 500 } as const;
+
+/** The card's media box for a w × h creative: its ratio, as large as fits inside CARD_MAX. Unknown size → the old 320 × 200. */
+export function cardMediaBox(w: number | null | undefined, h: number | null | undefined, max: { width: number; height: number } = CARD_MAX): { width: number; height: number } {
+  if (!w || !h || !(w > 0) || !(h > 0)) return { width: max.width, height: Math.round((max.width * 200) / 320) };
+  const scale = Math.min(max.width / w, max.height / h);
+  return { width: Math.round(w * scale), height: Math.round(h * scale) };
+}
+
+/*
+ * The Stream fallback (owner, 2026-10-10: "if cloudflare stream storage is full,
+ * supabase can be the fallback") — see advertiser-server.ts publishAll.
+ */
+/** What every browser plays straight from storage — the Stream fallback serves only these (a MOV still needs Stream). */
+export const STORAGE_PLAYABLE_VIDEO: ReadonlySet<string> = new Set(["video/mp4", "video/webm"]);
+/**
+ * The LAST resort only — Stream full AND the worker unreachable: an original is
+ * served uncompressed up to this size. Normally the worker compresses it to
+ * 480p first (ad-transcode-plan.ts). Deliberately below the bucket's 200 MB
+ * (0215): a viewer should never be sent a huge original.
+ */
+export const ORIGINAL_SERVE_MAX_BYTES = 50 * 1024 * 1024;
+
+/** May a video Stream could not take be served as uploaded from storage instead? */
+export function canServeOriginalVideo(mime: string | null | undefined, bytes: number): boolean {
+  return STORAGE_PLAYABLE_VIDEO.has(mime ?? "") && bytes > 0 && bytes <= ORIGINAL_SERVE_MAX_BYTES;
+}
+
 /** Defaults for a database that has not run 0208 yet — the code must work in both orders. */
 export const SPEC_DEFAULTS = { deliveryLongEdge: 1280, imageQuality: 82 } as const;
 

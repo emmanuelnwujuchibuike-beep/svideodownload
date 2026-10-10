@@ -354,7 +354,12 @@ describe("ONE physical slot → ONE provider (slots addendum)", () => {
     // and every paid surface shows it whole, over a soft backdrop of itself
     const creative = src("features/ads-platform/serve/self-ad-creative.tsx");
     expect(creative).toContain("fit = FIT_RULE,");
-    expect(creative).toContain('const backdrop = fit === "contain" ? (ad.mediaType === "video" ? ad.thumb : ad.media) : null;');
+    expect(creative).toContain('const backdrop = fit === "contain" && withBackdrop ? (ad.mediaType === "video" ? ad.thumb : ad.media) : null;');
+    // 2026-10-10: only the CARD drops the backdrop, because its box IS the creative's ratio (cardMediaBox)
+    const banner = src("features/ads-platform/serve/self-ad-banner.tsx");
+    expect(banner.match(/backdrop: false/g)?.length).toBe(1);
+    expect(banner).toContain("const box = cardMediaBox(current.w, current.h);");
+    expect(banner).toContain("aspectRatio: `${box.width} / ${box.height}`");
     expect(src("features/ads-platform/serve/self-ad-banner.tsx")).not.toMatch(/fit=\{variant === "strip" \? "contain" : "cover"\}/);
   });
 

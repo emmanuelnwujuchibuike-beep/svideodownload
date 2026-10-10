@@ -6,7 +6,13 @@ const ORIGINAL = "https://x.supabase.co/storage/v1/object/public/ad-creatives/a/
 
 describe("ad images are served resized for the slot (owner, 2026-10-10: landing LCP)", () => {
   it("a Supabase public image goes through the renderer at the slot's retina edge", () => {
-    expect(sizedAdImageUrl(ORIGINAL, slotImageEdge(320, 200))).toBe("https://x.supabase.co/storage/v1/render/image/public/ad-creatives/a/b/c.png?width=640&quality=75");
+    expect(sizedAdImageUrl(ORIGINAL, slotImageEdge(320, 200))).toBe("https://x.supabase.co/storage/v1/render/image/public/ad-creatives/a/b/c.png?width=640&resize=contain&quality=75");
+  });
+
+  it("teeth: the renderer is always told to CONTAIN — its default (cover) crops the sides off a wide creative", () => {
+    const url = new URL(sizedAdImageUrl(ORIGINAL, 640)!);
+    expect(url.searchParams.get("resize")).toBe("contain");
+    expect(url.searchParams.has("height")).toBe(false);
   });
 
   it("the edge is twice the slot's, between 640 and 1600 px", () => {

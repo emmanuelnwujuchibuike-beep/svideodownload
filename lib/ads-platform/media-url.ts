@@ -9,6 +9,11 @@
  *
  * The long edge is twice the slot's (retina), kept between 640 and 1600 px. Only
  * a Supabase public-object URL is rewritten; anything else is left exactly as is.
+ *
+ * 🔴 `resize=contain` is REQUIRED (owner, 2026-10-10, screenshot: the Samsung TV
+ * ad cut at both sides). Given only a width, the renderer defaults to `cover`
+ * and KEEPS THE ORIGINAL HEIGHT: a 1000 × 697 creative came back 640 × 697,
+ * its sides cropped off. With `contain` it is 640 × 446 — the whole picture.
  */
 const PUBLIC_OBJECT = "/storage/v1/object/public/";
 const RENDER_IMAGE = "/storage/v1/render/image/public/";
@@ -20,5 +25,5 @@ export function slotImageEdge(slotWidth: number | null | undefined, slotHeight: 
 
 export function sizedAdImageUrl(url: string | null, edge: number): string | null {
   if (!url || !url.includes(PUBLIC_OBJECT) || url.includes("?")) return url;
-  return `${url.replace(PUBLIC_OBJECT, RENDER_IMAGE)}?width=${edge}&quality=75`;
+  return `${url.replace(PUBLIC_OBJECT, RENDER_IMAGE)}?width=${edge}&resize=contain&quality=75`;
 }

@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { copyAdVideoToStream, deleteStreamVideo, ensureStreamMp4, getStreamVideo, hasStream, streamThumbnailUrl } from "@/lib/media/stream";
 
+import { WORKER_SECRET, WORKER_URL, hasWorker } from "@/lib/worker";
+
 import { notifyAdvertiser } from "./ad-notify";
 import { posterPath, STAGING_BUCKET } from "./advertiser-server";
 
@@ -37,6 +39,14 @@ export const PROCESSING_TIMEOUT_MS = 60 * 60 * 1000;
 
 export const canProcessVideo = hasStream;
 
+/**
+ * `stream_uid` of a creative the WORKER is transcoding instead of Stream (Stream
+ * full: 413 / 10011). Not a Stream id — nothing ever sends it to Cloudflare;
+ * advanceVideoProcessing only times it out, and the worker publishes it itself
+ * (app/api/internal/ads/transcode). Reusing the column keeps 0208's schema.
+ */
+export const WORKER_TRANSCODE = "worker-480p";
+
 export async function startVideoProcessing(
   db: Db,
   cr: { id: string; storage_path: string },
@@ -47,7 +57,16 @@ export async function startVideoProcessing(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   // a signed URL Stream can fetch for an hour — long enough for the copy to start
   const { data: signed } = await db.storage.from(STAGING_BUCKET).createSignedUrl(lockedPath, 3600);
-  const uid = signed?.signedUrl ? await copyAdVideoToStream(signed.signedUrl, cr.id, maxDurationSeconds) : null;
+  let uid = signed?.signedUrl ? await copyAdVideoToStream(signed.signedUrl, cr.id, maxDurationSeconds) : null;
+  /*
+    Stream refused (2026-10-10: its storage is FULL) → the worker compresses the
+    video to 480p with ffmpeg and publishes it from Supabase Storage (owner: "a
+    1080px video must be compressed to 480"). The row is marked first, so the
+    worker finds it waiting; if the worker cannot be reached either, this is
+    still "processing_unavailable" and the caller decides.
+  */
+  const viaWorker = !uid && hasWorker;
+  if (viaWorker) uid = WORKER_TRANSCODE;
   if (!uid) return { ok: false, error: "processing_unavailable" };
   const { data: prev } = await db.from("ad_creatives").select("processing_attempts").eq("id", cr.id).maybeSingle();
   // Part 8's moderation columns are written on their own: a database without 0206 refuses an update naming them
@@ -68,12 +87,33 @@ export async function startVideoProcessing(
       processing_attempts: Number(prev?.processing_attempts ?? 0) + 1,
     })
     .eq("id", cr.id);
+  if (viaWorker && !(await dispatchWorkerTranscode(cr.id))) {
+    await db.from("ad_creatives").update({ processing_status: "none", stream_uid: null, processing_started_at: null }).eq("id", cr.id);
+    return { ok: false, error: "processing_unavailable" };
+  }
   return { ok: true };
+}
+
+/** Ask the worker to transcode one creative. The request is ONE id — the worker reads everything else from the row. */
+async function dispatchWorkerTranscode(creativeId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${WORKER_URL}/api/internal/ads/transcode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(WORKER_SECRET ? { "x-worker-secret": WORKER_SECRET } : {}) },
+      body: JSON.stringify({ creativeId }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) console.error("[ads] worker transcode refused", res.status);
+    return res.ok;
+  } catch (e) {
+    console.error("[ads] worker transcode unreachable", e instanceof Error ? e.name : "error");
+    return false;
+  }
 }
 
 export type ProcessingState = { state: "none" | "processing" | "ready" | "failed"; error: string | null; mediaUrl: string | null; thumbnailUrl: string | null };
 
-type Row = {
+export type Row = {
   id: string;
   campaign_id: string;
   storage_path: string | null;
@@ -97,7 +137,7 @@ const stagingPaths = (p: string | null) => {
   return [p, `${p}.checked`, poster, `${poster}.checked`];
 };
 
-async function fail(db: Db, r: Row, code: string): Promise<ProcessingState> {
+export async function fail(db: Db, r: Row, code: string): Promise<ProcessingState> {
   await db.storage.from(STAGING_BUCKET).remove(stagingPaths(r.storage_path)).catch(() => {});
   if (r.stream_uid) await deleteStreamVideo(r.stream_uid);
   await db
@@ -125,6 +165,8 @@ export async function advanceVideoProcessing(db: Db, creativeId: string, now: nu
   if (state !== "processing") return { state, error: r.processing_error, mediaUrl: r.media_url, thumbnailUrl: r.thumbnail_url };
   if (r.status === "removed" || !r.stream_uid) return fail(db, r, "processing_cancelled");
   if (r.processing_started_at && now - Date.parse(r.processing_started_at) > PROCESSING_TIMEOUT_MS) return fail(db, r, "processing_timeout");
+  // the worker publishes its own result (publishProcessed); until then there is nothing to read here
+  if (r.stream_uid === WORKER_TRANSCODE) return { state: "processing", error: null, mediaUrl: null, thumbnailUrl: null };
 
   const v = await getStreamVideo(r.stream_uid);
   if (!v) return { state: "processing", error: null, mediaUrl: null, thumbnailUrl: null }; // Stream unreachable: try again later
@@ -142,17 +184,31 @@ export async function advanceVideoProcessing(db: Db, creativeId: string, now: nu
   if (mp4.status !== "ready" || !mp4.url) return { state: "processing", error: null, mediaUrl: null, thumbnailUrl: null };
 
   const thumb = streamThumbnailUrl(r.stream_uid) ?? r.thumbnail_url;
+  const out = await publishProcessed(db, r, { mediaUrl: mp4.url, thumbnailUrl: thumb, durationSeconds: v.durationSeconds, width: v.width, height: v.height });
+  return out ?? advanceVideoProcessing(db, creativeId, now); // null: someone else finished it
+}
+
+/**
+ * The one way a processed video goes live — Stream's MP4 or the worker's 480p
+ * file. Claims the transition (two callers can never both publish and swap),
+ * clears staging, then swaps a replacement in or activates a waiting draft.
+ * Returns null when another caller had already claimed it.
+ */
+export async function publishProcessed(
+  db: Db,
+  r: Pick<Row, "id" | "campaign_id" | "storage_path" | "processing_kind">,
+  m: { mediaUrl: string; thumbnailUrl: string | null; durationSeconds: number | null; width: number | null; height: number | null },
+): Promise<ProcessingState | null> {
   const now_ = new Date().toISOString();
-  // claim the transition so two callers cannot both publish and swap
   const { data: claimed } = await db
     .from("ad_creatives")
     .update({
-      media_url: mp4.url,
-      thumbnail_url: thumb,
+      media_url: m.mediaUrl,
+      thumbnail_url: m.thumbnailUrl,
       mime_type: "video/mp4",
-      duration_seconds: v.durationSeconds,
-      delivery_width: v.width,
-      delivery_height: v.height,
+      duration_seconds: m.durationSeconds,
+      delivery_width: m.width,
+      delivery_height: m.height,
       processing_status: "ready",
       processing_error: null,
       validation_status: "valid",
@@ -162,7 +218,7 @@ export async function advanceVideoProcessing(db: Db, creativeId: string, now: nu
     .eq("id", r.id)
     .eq("processing_status", "processing")
     .select("id");
-  if (!claimed?.length) return advanceVideoProcessing(db, creativeId, now); // someone else finished it
+  if (!claimed?.length) return null;
   await db.storage.from(STAGING_BUCKET).remove(stagingPaths(r.storage_path)).catch(() => {});
 
   if (r.processing_kind === "replacement") {
@@ -173,7 +229,7 @@ export async function advanceVideoProcessing(db: Db, creativeId: string, now: nu
     await db.from("ad_creatives").update({ status: "removed" }).eq("campaign_id", r.campaign_id).neq("id", r.id).neq("status", "removed");
     await tryActivate(db, r.campaign_id);
   }
-  return { state: "ready", error: null, mediaUrl: mp4.url, thumbnailUrl: thumb };
+  return { state: "ready", error: null, mediaUrl: m.mediaUrl, thumbnailUrl: m.thumbnailUrl };
 }
 
 async function formatCodeOf(db: Db, creativeId: string): Promise<string | null> {

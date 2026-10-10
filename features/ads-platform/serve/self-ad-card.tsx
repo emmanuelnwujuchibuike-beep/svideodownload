@@ -6,11 +6,12 @@ import { cn } from "@/lib/utils";
 import { SelfAdBanner } from "./self-ad-banner";
 
 /**
- * The 320×200 paid card (CONTENT_BANNER, DOWNLOAD_RESULT_BANNER) in the
- * product's own card language — the same "Sponsored" caption the network
- * surface uses, the sponsor named, a calm rounded frame. Never wider than
- * 320 px on a phone column and never stretched on desktop; the 320/200 box is
- * reserved by `aspect-ratio`, so the creative arriving moves nothing.
+ * The paid card (CONTENT_BANNER, DOWNLOAD_RESULT_BANNER), laid out like the
+ * advertiser's preview: the creative at its own ratio inside 320 × 500
+ * (cardMediaBox, never cropped), then "Sponsored · sponsor", headline,
+ * description and Visit. The box is reserved from the creative's stored size,
+ * so the media arriving moves nothing. The row names it Sponsored, so the old
+ * caption above the card is gone (it said the same thing twice).
  */
 export function SelfAdCard({
   ads,
@@ -28,9 +29,6 @@ export function SelfAdCard({
   if (!ads.length) return null;
   return (
     <aside className={cn("mx-auto w-full max-w-[320px]", className)} aria-label="Sponsored">
-      <p className="mb-1.5 flex items-center gap-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
-        Sponsored
-      </p>
       <SelfAdBanner ads={ads} rules={rules} placement={placement} page={page} variant="card" />
     </aside>
   );

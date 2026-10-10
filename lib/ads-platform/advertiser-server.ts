@@ -12,7 +12,7 @@ import { moderateCreative, type ModerationStatus } from "./creative-moderation";
 import { IMAGE_MIME_TYPES, validateCreative, VIDEO_MIME_TYPES } from "./creative-validation";
 import { probeMedia, sniff, type MediaFacts } from "./media-probe";
 import { startVideoProcessing } from "./media-processing";
-import { specOf, videoNeedsProcessing } from "./media-spec";
+import { canServeOriginalVideo, specOf, videoNeedsProcessing } from "./media-spec";
 import { deleteStreamVideo } from "@/lib/media/stream";
 import { maxPlacements, offeredDurations, offeredPlacements, parseCatalog, type AdCatalog } from "./offer";
 import { ADVERTISING_RULES_VERSION } from "./rules";
@@ -527,6 +527,7 @@ export async function probeAndPublish(db: Db, cr: { id: string; storage_path: st
       The creative stays pending until the processed MP4 is ready; the poster is
       published now so the advertiser sees their video meanwhile.
     */
+    let publishedPoster: string | null = null; // the Stream fallback below has already published the poster
     if (facts!.mediaType === "video" && videoNeedsProcessing(facts!.width!, facts!.height!, size, specOf(f), facts!.mime)) {
       let posterUrl: string | null = null;
       if (posterOk) {
@@ -543,16 +544,29 @@ export async function probeAndPublish(db: Db, cr: { id: string; storage_path: st
             moderated_at: now,
           })
         : { ok: false as const, error: "video_needs_processing" };
-      if (!started.ok) {
+      /*
+        🔴 LAST RESORT (owner, 2026-10-10: "if cloudflare stream storage is
+        full, supabase can be the fallback"). startVideoProcessing already
+        hands a video Stream refuses to the WORKER, which compresses it to 480p
+        and publishes it from Supabase Storage. Only when the worker cannot be
+        reached either does this run: a video every browser plays (MP4, WebM)
+        up to ORIGINAL_SERVE_MAX_BYTES is published as uploaded, whole, never
+        cropped (the card takes its ratio). A MOV, or anything larger, gets the
+        "try again" message until Stream or the worker has room.
+      */
+      const fallbackToStorage = !started.ok && started.error === "processing_unavailable" && canServeOriginalVideo(facts!.mime, size);
+      if (fallbackToStorage) console.warn("[ads] Stream unavailable - serving the original video from storage", { creative: cr.id });
+      if (!started.ok && !fallbackToStorage) {
         await cleanup();
         await db.from("ad_creatives").update({ validation_status: "invalid", validation_errors: [started.error], validated_at: now, ...factCols }).eq("id", cr.id);
         return { ok: false, errors: [started.error], facts: factsOut, limits: outLimits, mediaUrl: null, thumbnailUrl: null };
       }
-      return { ok: true, errors: [], facts: factsOut, limits: outLimits, mediaUrl: null, thumbnailUrl: posterUrl, moderation: moderation.status, processing: true };
+      if (started.ok) return { ok: true, errors: [], facts: factsOut, limits: outLimits, mediaUrl: null, thumbnailUrl: posterUrl, moderation: moderation.status, processing: true };
+      publishedPoster = posterUrl;
     }
 
-    let thumbnailUrl: string | null = null;
-    if (posterOk) {
+    let thumbnailUrl: string | null = publishedPoster;
+    if (posterOk && !thumbnailUrl) {
       const { error } = await staging.copy(lockedPoster, poster, { destinationBucket: PUBLIC_BUCKET });
       if (!error) thumbnailUrl = db.storage.from(PUBLIC_BUCKET).getPublicUrl(poster).data.publicUrl;
     }

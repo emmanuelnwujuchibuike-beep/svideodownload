@@ -225,7 +225,7 @@ export function formatBytes(bytes: number): string {
 export function formatSpecs(f: CatalogFormat): string[] {
   const out: string[] = [];
   if (f.width && f.height) out.push(`${f.width} × ${f.height}`);
-  else if (f.height) out.push(`${f.height} px high, full width`);
+  else if (f.height) out.push(`Image ${STRIP_IMAGE_HEIGHT.min}–${STRIP_IMAGE_HEIGHT.max} px tall, fitted to every screen`);
   else out.push("Full-screen");
   out.push(f.media_types.length === 2 ? "Image or video" : f.media_types[0] === "video" ? "Video" : "Image");
   if (f.media_types.includes("video") && f.max_duration_seconds) out.push(`Video up to ${f.max_duration_seconds} s`);
@@ -236,8 +236,24 @@ export function formatSpecs(f: CatalogFormat): string[] {
   return out;
 }
 
+/**
+ * The thin strip under the header (a height, no width) — owner, 2026-10-10:
+ * "let users be told to only use an image of 32 to 40px height, and width will
+ * be compressed by us on all screen sizes. No description, because of the
+ * size: the description comes from the image." The strip shows the image and
+ * nothing else, so the words must be IN the image.
+ */
+export const STRIP_IMAGE_HEIGHT = { min: 32, max: 40 } as const;
+
+export function isStripFormat(f: Pick<CatalogFormat, "width" | "height">): boolean {
+  return !f.width && !!f.height;
+}
+
+export const STRIP_GUIDANCE = `Use an image ${STRIP_IMAGE_HEIGHT.min}–${STRIP_IMAGE_HEIGHT.max} px tall, any width — we fit it to every screen size. There is no description on this banner, so put your message in the image itself.`;
+
 /** The recommended creative size from the format's shape and minimum. */
 export function recommendedSize(f: CatalogFormat): string | null {
+  if (isStripFormat(f)) return `an image ${STRIP_IMAGE_HEIGHT.min}–${STRIP_IMAGE_HEIGHT.max} px tall, any width`;
   if (!f.min_width || !f.min_height) return null;
   return `at least ${f.min_width} × ${f.min_height}`;
 }

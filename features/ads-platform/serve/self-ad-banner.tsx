@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { EligibleAd, FormatRules } from "@/lib/ads-platform/eligibility";
+import { cardMediaBox } from "@/lib/ads-platform/media-spec";
 import { creativeFailed, nextFromPool, recordShown } from "@/lib/ads-platform/serving-state";
 import { cn } from "@/lib/utils";
 
@@ -131,6 +132,68 @@ export function SelfAdBanner({
       </span>
     ) : null;
 
+  const creative = (opts: { className: string; backdrop?: boolean }) => (
+    <SelfAdCreative
+      key={current.cr}
+      ad={current}
+      placement={placement}
+      page={page}
+      // 0208: every variant shows the creative whole (contain)
+      fit="contain"
+      eager={variant === "strip"}
+      backdrop={opts.backdrop}
+      className={opts.className}
+      onView={(v) => {
+        viewRef.current = v;
+      }}
+      onFail={() => bump((n) => n + 1)}
+    />
+  );
+
+  /*
+    🔴 The CARD takes the creative's own shape (owner, 2026-10-10, with a
+    screenshot of a TV ad squeezed into a fixed 320 × 200 box beside two blurred
+    bars, and of the advertiser preview as the reference): the media at its own
+    ratio inside 320 × 500 (cardMediaBox), nothing cropped, then the same row
+    the preview shows — Sponsored · sponsor, headline, description, Visit.
+    The box is sized from the creative's stored w × h before the bytes arrive,
+    so the media loading moves nothing; a rotation to a different shape does
+    resize it, which is what "not a fixed size" asks for.
+  */
+  if (variant === "card") {
+    const box = cardMediaBox(current.w, current.h);
+    return (
+      <a
+        href={current.url}
+        target="_blank"
+        rel="sponsored noopener noreferrer"
+        onClick={(e) => {
+        e.preventDefault();
+        openAdDetail(current, viewRef.current);
+      }}
+        aria-label={`Ad from ${current.sponsor}${current.headline ? `: ${current.headline}` : ""} (opens its details)`}
+        style={{ width: box.width }}
+        className={cn(
+          "mx-auto block max-w-full overflow-hidden rounded-[1.25rem] bg-card ring-1 ring-inset ring-black/[0.06] outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:ring-white/10",
+          className,
+        )}
+      >
+        <span className="relative block w-full bg-muted" style={{ aspectRatio: `${box.width} / ${box.height}` }}>
+          {label}
+          {creative({ className: "h-full w-full animate-in fade-in duration-300 motion-reduce:animate-none", backdrop: false })}
+        </span>
+        <span className="flex items-center gap-3 px-3.5 py-2.5 text-left">
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[12px] font-semibold text-muted-foreground">Sponsored · {current.sponsor}</span>
+            {current.headline ? <span className="line-clamp-2 text-[14px] font-bold leading-tight text-foreground">{current.headline}</span> : null}
+            {current.body ? <span className="line-clamp-1 text-[12px] text-muted-foreground">{current.body}</span> : null}
+          </span>
+          <span className="shrink-0 rounded-full bg-foreground px-3.5 py-1.5 text-[12.5px] font-semibold text-background">Visit</span>
+        </span>
+      </a>
+    );
+  }
+
   return (
     <a
       href={current.url}
@@ -146,28 +209,13 @@ export function SelfAdBanner({
         "relative block overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",
         variant === "strip"
           ? "h-8 w-full"
-          : variant === "tile"
-            ? "aspect-square w-full rounded-2xl bg-black/40"
-            : "aspect-[320/200] w-full rounded-[1.25rem] bg-muted ring-1 ring-inset ring-black/[0.06] dark:ring-white/10",
+          : "aspect-square w-full rounded-2xl bg-black/40",
         className,
       )}
     >
       {label}
       {caption}
-      <SelfAdCreative
-        key={current.cr}
-        ad={current}
-        placement={placement}
-        page={page}
-        // 0208: every variant shows the creative whole (contain) — the card and tile get the soft backdrop
-        fit="contain"
-        eager={variant === "strip"}
-        className="h-full w-full animate-in fade-in duration-300 motion-reduce:animate-none"
-        onView={(v) => {
-          viewRef.current = v;
-        }}
-        onFail={() => bump((n) => n + 1)}
-      />
+      {creative({ className: "h-full w-full animate-in fade-in duration-300 motion-reduce:animate-none" })}
     </a>
   );
 }

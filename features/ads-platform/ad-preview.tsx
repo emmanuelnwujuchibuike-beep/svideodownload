@@ -1,7 +1,9 @@
 "use client";
 
 import { ArrowRight, Gift, X } from "lucide-react";
+import { useState, type ReactNode } from "react";
 
+import { cardMediaBox } from "@/lib/ads-platform/media-spec";
 import type { CatalogFormat } from "@/lib/ads-platform/offer";
 import { cn } from "@/lib/utils";
 
@@ -74,6 +76,32 @@ function Media({ c, className }: { c: PreviewCreative; className?: string }) {
         <img src={c.src} alt="" className="relative h-full w-full object-contain" />
       )}
     </span>
+  );
+}
+
+/**
+ * The CARD frame at the creative's own ratio (owner, 2026-10-10) — the same
+ * cardMediaBox rule the served card uses, read from the file's natural size
+ * once it loads, so the preview never shows a shape viewers will not see.
+ */
+function CardMedia({ c, fallback, empty, children }: { c: PreviewCreative | null; fallback: { width: number; height: number }; empty: ReactNode; children: ReactNode }) {
+  const [natural, setNatural] = useState<{ src: string; w: number; h: number } | null>(null);
+  const size = c && natural?.src === c.src ? cardMediaBox(natural.w, natural.h) : fallback;
+  return (
+    <div className="mx-auto mt-3 overflow-hidden rounded-2xl ring-1 ring-black/[0.06]" style={{ width: "calc(100% - 24px)", maxWidth: size.width }}>
+      <div className="relative w-full bg-slate-100" style={{ aspectRatio: `${size.width} / ${size.height}` }}>
+        {c ? (
+          c.mediaType === "video" ? (
+            <video src={c.src} poster={c.poster ?? undefined} className="absolute inset-0 h-full w-full object-contain" muted loop autoPlay playsInline preload="metadata" onLoadedMetadata={(e) => setNatural({ src: c.src, w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight })} />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element -- a local object URL or a storage URL, measured for its true shape
+            <img src={c.src} alt="" className="absolute inset-0 h-full w-full object-contain" onLoad={(e) => setNatural({ src: c.src, w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} />
+          )
+        ) : null}
+        {!c ? empty : null}
+      </div>
+      {children}
+    </div>
   );
 }
 
@@ -152,10 +180,7 @@ export function AdPreview({
           <Skeleton className="h-3 w-1/3" />
           <Skeleton className="h-20 w-full rounded-2xl" />
         </div>
-        <div className="mx-auto mt-3 overflow-hidden rounded-2xl ring-1 ring-black/[0.06]" style={{ width: "calc(100% - 24px)", maxWidth: w }}>
-          <div className="relative w-full" style={{ aspectRatio: `${w} / ${h}` }}>
-            {creative ? <Media c={creative} /> : empty}
-          </div>
+        <CardMedia c={creative} fallback={{ width: w, height: h }} empty={empty}>
           <div className="flex items-center gap-2 bg-white px-3 py-2">
             <div className="min-w-0 flex-1">
               <p className="truncate text-[11px] font-semibold text-slate-500">Sponsored · {label}</p>
@@ -164,7 +189,7 @@ export function AdPreview({
             </div>
             <span className="shrink-0 rounded-full bg-slate-900 px-2.5 py-1 text-[10.5px] font-semibold text-white">Visit</span>
           </div>
-        </div>
+        </CardMedia>
         <div className="space-y-3 px-3 pt-3">
           <Skeleton className="h-3 w-2/3" />
           <Skeleton className="h-20 w-full rounded-2xl" />

@@ -32,7 +32,9 @@ import {
   offeredDurations,
   offeredFormats,
   offeredPlacements,
+  isStripFormat,
   recommendedSize,
+  STRIP_GUIDANCE,
   type AdCatalog,
 } from "@/lib/ads-platform/offer";
 import { ADVERTISING_RULES, ADVERTISING_RULES_VERSION, AUTOMATED_VALIDATION_NOTICE, RULES_CHECKBOX_TEXT } from "@/lib/ads-platform/rules";
@@ -370,7 +372,8 @@ export function AdvertiseWizard() {
       name: form.name,
       businessName: form.businessName,
       headline: form.headline,
-      description: form.description,
+      // the strip has no description (owner, 2026-10-10): its words are in the image
+      description: format && isStripFormat(format) ? "" : form.description,
       destinationUrl: dest,
       rulesAccepted,
       rulesVersion: ADVERTISING_RULES_VERSION,
@@ -600,7 +603,7 @@ export function AdvertiseWizard() {
       {/* ── 4 · creative ── */}
       {form.step === "creative" && format ? (
         <section>
-          <StepTitle title="Upload your creative" sub={format.recommendation ?? undefined} />
+          <StepTitle title="Upload your creative" sub={isStripFormat(format) ? STRIP_GUIDANCE : (format.recommendation ?? undefined)} />
           {!user ? (
             <SignInCard />
           ) : (
@@ -664,9 +667,11 @@ export function AdvertiseWizard() {
             <Field label="Headline" htmlFor="ad-headline" hint="Optional" count={[form.headline.length, TEXT_LIMITS.headline]}>
               <input id="ad-headline" value={form.headline} maxLength={TEXT_LIMITS.headline} onChange={(e) => update({ headline: e.target.value })} className={inputClass} />
             </Field>
-            <Field label="Description" htmlFor="ad-desc" hint="Optional" count={[form.description.length, TEXT_LIMITS.description]}>
-              <textarea id="ad-desc" rows={3} value={form.description} maxLength={TEXT_LIMITS.description} onChange={(e) => update({ description: e.target.value })} className={cn(inputClass, "h-auto resize-none py-3")} />
-            </Field>
+            {format && isStripFormat(format) ? null : (
+              <Field label="Description" htmlFor="ad-desc" hint="Optional" count={[form.description.length, TEXT_LIMITS.description]}>
+                <textarea id="ad-desc" rows={3} value={form.description} maxLength={TEXT_LIMITS.description} onChange={(e) => update({ description: e.target.value })} className={cn(inputClass, "h-auto resize-none py-3")} />
+              </Field>
+            )}
           </div>
         </section>
       ) : null}

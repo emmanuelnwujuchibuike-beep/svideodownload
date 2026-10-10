@@ -30,6 +30,40 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
 - **SEO system (2026-10-09):** public, static explainers at `/frenz-ai` (hub + 5 live tools + Kling + 2 tutorials) and `/advertise/{pricing,banner-ads,video-ads,campaign-guide}`, all from `lib/seo/guides.ts` (tests: `lib/seo/guides.test.ts`). The `/ai` TOOLS are unchanged — still noindex/Disallow. `/advertise` and `/advertise/rules` added to the sitemap; sitemap dates are real (guide `updated`, blog post date) rather than the build time. `/frenz-ai` is excluded from the middleware matcher (no session work on a static page). Search Console steps: `docs/SEO_LAUNCH.md`. Kling 4.0 is described only as announced; Character Replace (retired) is never offered.
 - **Advertiser dashboard caching (2026-10-09):** every section reads through `features/ads-platform/dashboard/use-dash.ts` (the shared SWR cache): instant on entry and back-swipe, no focus refetch, re-read after a minute or after an action. The "Sample data" label's admin check now uses `/api/ads/advertiser/viewer` (the server's `getAdminUser`, which includes ADMIN_EMAILS — the DB's `is_admin()` missed an admin by email).
 
+### Open from 2026-10-10 (start here next session)
+
+1. **Landing cold-entry first paint is slow — needs a CPU profile, not guesses.**
+   Measured with Playwright, iPhone 13 emulation, 4× CPU, 1.6 Mbps / 150 ms,
+   local `next start`: landing `/` FCP = LCP 1.8–3.2 s (the hero `<p>`), while
+   `/tiktok-video-downloader` paints at ~0.5 s under the SAME conditions. Same
+   CSS, same fonts, similar HTML (70 KB vs 55 KB gz), so it is main-thread work
+   specific to the landing page before its first frame. Record a performance
+   trace of `/` (Playwright `page.tracing` or Chrome DevTools) and find it.
+   ⚠️ Locally, mock `/api/app-version` (`{}`): without `VERCEL_GIT_COMMIT_SHA`
+   the build stamp is `dev-<Date.now()>` and the 4 s version check reloads the
+   page, which ruins any measurement. Production does NOT reload (checked).
+2. **First History tap is ~1.8 s when tapped within ~5 s of opening the
+   landing page** (0.2–0.7 s once warmed). The nav's prefetch of `/history`
+   starts only ~5 s in because the landing keeps the main thread busy — so
+   item 1 is the real fix. Measure again after it.
+3. **Cloudflare Stream storage is FULL** (`413`, code `10011`, "Storage capacity
+   exceeded"). Every ad video that needs transcoding fails ("larger than we
+   serve"), and new reels get no Stream copy. Owner action in the Cloudflare
+   dashboard (delete unused videos / buy storage). `lib/media/stream.ts` now logs
+   Cloudflare's reason: `npx vercel logs --environment production --since 2h
+   --query stream --expand --no-branch`.
+4. **Migration 0214** (ALL_SLOTS `max_upload_bytes` = 200 MB) not yet run in
+   production. Code already defaults it (`uploadBytesOf`, `lib/ads-platform/media-spec.ts`).
+5. **Verify on the owner's iPhone:** the bottom nav after minimising
+   (`lib/pwa/resume-viewport.ts`), chat avatars instant on entry (SW v26
+   AVATAR_CACHE + nav warm-up), History top half painted on cold entry.
+
+Rules learned 2026-10-10: **no www → apex redirect** (sign-in cookies live on
+the host where sign-in began; the redirect bounced admin login — removed in
+f05e323). **Push only when the owner says so** — every deploy shows "new
+version available" on every open device. After a push, check `npx vercel ls`
+shows the new deploy **Ready** (cb8cb60's deploy was silently Canceled).
+
 This container's network policy blocks `frenzsave.com` and `*.supabase.co`, so these
 were not probed live from here. Probe each object after the push:
 

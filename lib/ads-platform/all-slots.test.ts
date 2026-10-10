@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import { eligibleForPlacement, type ServingSnapshot, type SnapshotCampaign, type SnapshotCreative, type SnapshotFormat } from "./eligibility";
@@ -76,5 +78,28 @@ describe("All slots", () => {
     const s = snap([paused, unpaid, campaign("feed-only", "feed_banner", creative("CONTENT_BANNER", "image"))]);
     expect(eligibleForPlacement(s, "global_top_banner", NOW)).toEqual([]);
     expect(eligibleForPlacement(s, "feed_banner", NOW).map((a) => a.c)).toEqual(["feed-only"]);
+  });
+});
+
+describe("0214: All slots uploads like every other video format", () => {
+  // 0211 created ALL_SLOTS after 0208 filled max_upload_bytes, and the upload step
+  // reads a null there as "no transcoding" - every MOV refused, every video over 10 MB too
+  const sql = readFileSync("supabase/migrations/0214_ad_all_slots_upload.sql", "utf8");
+  const clause = (s: string) => /update public\.ad_formats set max_upload_bytes = (\d+)\s+where ([^;]+);/.exec(s);
+
+  it("fills the 200 MB the other video formats got in 0208, for ALL_SLOTS only, and only when unset", () => {
+    const m = clause(sql);
+    expect(m?.[1]).toBe(String(200 * 1024 * 1024));
+    expect(m?.[2]).toContain("code = 'ALL_SLOTS'");
+    expect(m?.[2]).toContain("max_upload_bytes is null");
+  });
+
+  it("teeth: a version that overwrote an admin's own value is caught", () => {
+    const mutant = sql.replace(" and max_upload_bytes is null", "");
+    expect(clause(mutant)?.[2]).not.toContain("max_upload_bytes is null");
+  });
+
+  it("the upload step still reads max_upload_bytes as the transcoding switch (why the null mattered)", () => {
+    expect(readFileSync("features/ads-platform/creative-step.tsx", "utf8")).toContain("videoProcessing: format.max_upload_bytes != null");
   });
 });

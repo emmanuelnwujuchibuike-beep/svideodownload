@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { useBottomAdBarPresent } from "@/lib/dom/bottom-ad-bar";
 import { useScrollDirection } from "@/lib/dom/use-scroll-direction";
+import { useResumeViewportRepair } from "@/lib/pwa/resume-viewport";
 import { useEffect, useRef } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
@@ -132,6 +133,8 @@ export function MobileNav({
   // Writes html[data-glass="reduced"] on a constrained device, which drops the
   // nav's blur (see `.frenz-nav-glass`). Once per mount; no timer, no listener.
   useAiGlassTier();
+  // iOS resumes with a stale viewport and the nav floats mid-screen (lib/pwa/resume-viewport.ts)
+  useResumeViewportRepair();
   /* Whether a real, filled ad bar is docked below — see bottom-ad-bar.ts. */
   const bottomAdBarPresent = useBottomAdBarPresent();
   const router = useRouter();

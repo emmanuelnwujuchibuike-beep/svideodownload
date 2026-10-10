@@ -248,10 +248,20 @@ export async function copyAdVideoToStream(sourceUrl: string, creativeId: string,
       }),
       signal: AbortSignal.timeout(20_000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      /*
+        2026-10-10: ad videos failed with "can't be optimized right now" and
+        nothing said why. Cloudflare's own codes (quota, token scope, a URL it
+        cannot fetch) are logged; the token and the signed URL never are.
+      */
+      const body = (await res.json().catch(() => null)) as { errors?: { code?: number; message?: string }[] } | null;
+      console.error("[stream] ad video copy refused", res.status, JSON.stringify(body?.errors ?? []).slice(0, 500));
+      return null;
+    }
     const json = (await res.json()) as { result?: { uid?: string } };
     return json.result?.uid ?? null;
-  } catch {
+  } catch (e) {
+    console.error("[stream] ad video copy failed", e instanceof Error ? e.name : "error");
     return null;
   }
 }

@@ -140,7 +140,7 @@ export async function createAdCampaignPayment(
   // the creative and the link are re-checked right before money moves
   const { data: creatives } = await db.from("ad_creatives").select("validation_status, url_validation_status, destination_url").eq("campaign_id", applicationId).eq("status", "active");
   const cr = creatives?.[0];
-  // a link waiting on a person (Part 8 'pending') may be paid for - it goes live only after approval
+  // a link still pending review may be paid for — since 0210 it goes live at once (only a BLOCKED link holds)
   if (!cr || cr.validation_status !== "valid" || !["valid", "pending"].includes(cr.url_validation_status as string) || !cr.destination_url) return { kind: "refused", code: "creative_not_valid", status: 409 };
   const dest = await checkDestination(db, cr.destination_url as string);
   if (dest.status === "blocked") return { kind: "refused", code: "destination_blocked", status: 409 };
@@ -156,7 +156,9 @@ export async function createAdCampaignPayment(
     purpose: "ad_campaign",
     market: input.market,
     routing: landing.frenzAiPlans.wallet.routing,
-    usable: (p) => (p === "bachs" ? bachsConfigured() : paystackOk),
+    // owner, 2026-10-09: "Let ad payment go through paystack alone and not bachs" — Bachs stays wired only so
+    // payments already started on it still settle (webhook, verify, reconcile)
+    usable: (p) => p === "paystack" && paystackOk,
     preferred: landing.frenzAiPlans.wallet.memberChoice ? input.preferredProvider : undefined,
   });
   if (!candidates.length) return { kind: "refused", code: "payments_unavailable", status: 503 };

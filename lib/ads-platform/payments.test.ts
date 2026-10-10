@@ -280,3 +280,17 @@ describe("2026-10-09: pending ad payments are confirmed with nobody watching", (
     expect(src("app/api/cron/ai-reconcile/route.ts")).toContain("reconcilePendingAdPayments(createAdminClient())");
   });
 });
+
+describe("2026-10-09: ad payments go through Paystack alone; a paid campaign goes live by itself", () => {
+  it("the ad checkout router can only choose Paystack (Bachs stays wired for payments already started)", () => {
+    const pay = src("lib/ads-platform/payment-server.ts");
+    expect(pay).toContain('usable: (p) => p === "paystack" && paystackOk,');
+    expect(pay).toContain("export async function handleBachsAdCollection("); // in-flight Bachs payments still settle
+  });
+  it("0210: only HARD reasons hold activation — a pending link or a safety review does not", () => {
+    const m = src("supabase/migrations/0210_ad_auto_activation.sql");
+    expect(m).toContain("url_validation_status = 'blocked'");
+    expect(m).not.toContain("v_flags := v_flags || 'safety_review'");
+    expect(m).toContain("'validation_pending'");
+  });
+});

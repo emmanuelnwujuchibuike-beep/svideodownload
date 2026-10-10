@@ -32,31 +32,60 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
 
 ### Open from 2026-10-10 (start here next session)
 
-1. **Landing cold-entry first paint is slow — needs a CPU profile, not guesses.**
-   Measured with Playwright, iPhone 13 emulation, 4× CPU, 1.6 Mbps / 150 ms,
-   local `next start`: landing `/` FCP = LCP 1.8–3.2 s (the hero `<p>`), while
-   `/tiktok-video-downloader` paints at ~0.5 s under the SAME conditions. Same
-   CSS, same fonts, similar HTML (70 KB vs 55 KB gz), so it is main-thread work
-   specific to the landing page before its first frame. Record a performance
-   trace of `/` (Playwright `page.tracing` or Chrome DevTools) and find it.
-   ⚠️ Locally, mock `/api/app-version` (`{}`): without `VERCEL_GIT_COMMIT_SHA`
-   the build stamp is `dev-<Date.now()>` and the 4 s version check reloads the
-   page, which ruins any measurement. Production does NOT reload (checked).
-2. **First History tap is ~1.8 s when tapped within ~5 s of opening the
-   landing page** (0.2–0.7 s once warmed). The nav's prefetch of `/history`
-   starts only ~5 s in because the landing keeps the main thread busy — so
-   item 1 is the real fix. Measure again after it.
-3. **Cloudflare Stream storage is FULL** (`413`, code `10011`, "Storage capacity
-   exceeded"). Every ad video that needs transcoding fails ("larger than we
-   serve"), and new reels get no Stream copy. Owner action in the Cloudflare
-   dashboard (delete unused videos / buy storage). `lib/media/stream.ts` now logs
-   Cloudflare's reason: `npx vercel logs --environment production --since 2h
-   --query stream --expand --no-branch`.
-4. **Migration 0214** (ALL_SLOTS `max_upload_bytes` = 200 MB) not yet run in
-   production. Code already defaults it (`uploadBytesOf`, `lib/ads-platform/media-spec.ts`).
+1. **Landing cold entry — PROFILED 2026-10-10 (later session); no landing-specific
+   blocker exists.** Harness (Playwright, iPhone 13, 4× CPU, 1.6 Mbps / 150 ms,
+   local `next start`, `/api/app-version` mocked), 15 interleaved cold runs:
+   `/` FCP median 2.08 s vs `/tiktok-video-downloader` 2.44 s — the "0.5 s vs
+   1.8–3.2 s" gap does not reproduce. The CPU trace shows what precedes first
+   paint on EVERY page (even `/terms`): the first style+layout pass, ~300–600 ms
+   at 4×, of which ~175 ms is `FontCache::CreateFontPlatformData` (Chromium on
+   WINDOWS loading 13 system font files) plus text shaping. That cost is the
+   test machine's, not an iPhone's, and it makes local FCP swing 1.3–3.2 s run
+   to run. Tried and REVERTED: per-section `content-visibility` on the landing
+   (n=10 injected: FCP −300 ms; n=15 on a real build: +230 ms — inside the
+   noise, so it did not ship). The shared stylesheet is 395 KB raw / 58 KB gz
+   and the landing uses 12 % of it — a candidate if a REAL-device trace (Safari
+   Web Inspector on the iPhone) ever points at style. Don't re-run the Windows
+   harness expecting a different answer.
+   ⚠️ Locally, mock `/api/app-version` (`{}`) — without `VERCEL_GIT_COMMIT_SHA`
+   the 4 s version check reloads the page. Run nothing else on the machine
+   while measuring: concurrent vitest/builds doubled the numbers once.
+2. **First History tap — FIXED 2026-10-10.** Cause (traced): the nav's
+   `/history` warm-up was issued LAST, after every visible tab and link had
+   viewport-prefetched its own route + JS, plus ~410 KB of Google scripts; the
+   History page chunk started downloading 6.5 s after the tap. Now History is
+   warmed the moment the nav mounts and the other tabs warm after `load`
+   (`features/app-shell/warm-routes.ts`). Tap at 5 s: median 5.6 s → ~2.1–2.6 s
+   (n=6 before, n=25 after); tap before hydration ≈ 1 s (a full page load);
+   tap once warmed 0.1–0.4 s. Rare 10–19 s stalls (2 of 37 runs) showed zero
+   requests in flight — consistent with local HTTP/1.1's 6-connection cap, not
+   seen on HTTP/2; re-check on the phone. Still open: the Frenz AI tile
+   (`/ai`, `/features`) viewport-prefetches on purpose (owner, 2026-09-09) and
+   still competes; the Google ad/analytics scripts cost another ~1.8 s of the
+   tap (measured by blocking them) — an owner decision, revenue.
+3. **Cloudflare Stream storage is FULL** (`413`, code `10011`). Since
+   2026-10-10 an ad video Stream refuses goes to the WORKER, which compresses it
+   to 480p (short edge; 1080p 20 MB → 0.35 MB measured) with ffmpeg and
+   publishes it from Supabase Storage (`server/services/ad-video-transcode.ts`,
+   `app/api/internal/ads/transcode`). The worker must be REDEPLOYED with this
+   code for it to work. With no worker, an MP4/WebM ≤ 50 MB is served as
+   uploaded; anything else still gets "try again". Reels already keep playing
+   their MP4 without a Stream copy. Freeing Stream storage is still the owner's
+   call in the Cloudflare dashboard.
+4. **Migrations 0214 and 0215** not yet run in production. 0215 raises the
+   public `ad-creatives` bucket to 200 MB (PGlite-tested twice + a mutant).
+   Code works before and after each.
 5. **Verify on the owner's iPhone:** the bottom nav after minimising
-   (`lib/pwa/resume-viewport.ts`), chat avatars instant on entry (SW v26
-   AVATAR_CACHE + nav warm-up), History top half painted on cold entry.
+   (`lib/pwa/resume-viewport.ts`) and chat avatars instant on entry (SW v26) —
+   neither can be reproduced in desktop Chromium. History's top half painting
+   on cold entry is CONFIRMED locally (first frame at 1.52 s shows header,
+   search, filters and nav).
+6. **Ad card (2026-10-10):** the paid card now takes the creative's own ratio
+   inside 320 × 500 (`cardMediaBox`), with Sponsored · headline · description ·
+   Visit under it. Ad images were being CROPPED by Supabase's renderer (width
+   only defaults to `cover` and keeps the original height) — fixed with
+   `resize=contain`. The top strip asks for an image 32–40 px tall and has no
+   description field.
 
 Rules learned 2026-10-10: **no www → apex redirect** (sign-in cookies live on
 the host where sign-in began; the redirect bounced admin login — removed in

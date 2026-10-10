@@ -9,6 +9,7 @@ import {
   type ChatAppearanceRow,
 } from "@/lib/social/chat-appearance";
 import { createClient } from "@/lib/supabase/server";
+import { isMissingColumn } from "@/lib/supabase/missing-column";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -110,7 +111,7 @@ export async function PATCH(request: Request) {
     // have nothing to do with wallpaper — retry without the new column. Same
     // "a missing column costs only its own feature" stance the SSR read and
     // /api/stories' `format` insert already take.
-    if (error.code === "42703") {
+    if (isMissingColumn(error)) {
       const { error: retry } = await supabase.from("chat_appearance_preferences").upsert(
         {
           user_id: user.id,

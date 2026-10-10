@@ -7,6 +7,7 @@ import { parseAudience, type RepostAudience } from "@/lib/social/repost/audience
 import { checkRepostSpam, type RepostHistoryEntry } from "@/lib/social/repost/antispam";
 import { recordAttribution } from "@/lib/social/repost/attribution";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { insertDroppingMissing, isMissingColumn } from "@/lib/supabase/missing-column";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -194,30 +195,26 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     quote_media: media.media,
     throttled_at: spam.verdict === "throttle" ? new Date().toISOString() : null,
   };
-  const attempts: Record<string, unknown>[] = [
+  // A column the database doesn't have yet is dropped on its own and the rest
+  // is kept (lib/supabase/missing-column.ts). user_id and post_id are the repost.
+  const { data: insertedRow, error: insertError, dropped } = await insertDroppingMissing<{ id: string }>(
+    (row) => db.from("reposts").insert(row).select("id").maybeSingle(),
     full,
-    { user_id: user.id, post_id: id, caption: cleaned.caption },
-    { user_id: user.id, post_id: id },
-  ];
-
-  let inserted: { id: string } | null = null;
-  for (const row of attempts) {
-    const { data, error } = await db.from("reposts").insert(row).select("id").maybeSingle();
-    if (!error) {
-      inserted = (data as { id: string } | null) ?? null;
-      break;
-    }
-    if (error.code === "23505") {
+    ["user_id", "post_id"],
+  );
+  if (insertError) {
+    if (insertError.code === "23505") {
       // Already reposted → idempotent success.
       return NextResponse.json({ ok: true, reposted: true, audience, count: await repostCount(db, id) });
     }
-    if (error.code === "42P01") {
+    if (insertError.code === "42P01") {
       return NextResponse.json({ error: "Reposts aren't enabled yet." }, { status: 503 });
     }
-    if (error.code !== "42703") {
-      return NextResponse.json({ error: "Couldn't repost." }, { status: 500 });
-    }
+    console.error("[repost] insert failed", insertError.code, insertError.message);
+    return NextResponse.json({ error: "Couldn't repost." }, { status: 500 });
   }
+  if (dropped.length) console.warn("[repost] saved without columns the database lacks:", dropped.join(", "));
+  const inserted = insertedRow ?? null;
 
   await bumpEphemeralCount(repeatKey(user.id, id), REPEAT_TTL_S);
 
@@ -379,7 +376,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const { error } = await db.from("reposts").update(patch).eq("id", row.id);
   if (error) {
-    if (error.code === "42703" && "audience" in patch) {
+    if (isMissingColumn(error) && "audience" in patch) {
       return NextResponse.json({ error: "Repost audiences aren't enabled yet." }, { status: 503 });
     }
     return NextResponse.json({ error: "Couldn't update the repost." }, { status: 500 });

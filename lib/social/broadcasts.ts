@@ -1,6 +1,7 @@
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import type { PushPayload } from "@/lib/push/web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isMissingColumn } from "@/lib/supabase/missing-column";
 
 /**
  * Admin broadcast alerts. Segment targeting is plan tier — the one real,
@@ -108,7 +109,7 @@ export async function prepareBroadcast(
       const base = chunk.map((userId) => ({ user_id: userId, actor_id: null, type: "admin_broadcast", post_id: null }));
       if (dataOk) {
         const { error } = await db.from("notifications").insert(base.map((r) => ({ ...r, data: rowData })));
-        if (error?.code === "42703") {
+        if (isMissingColumn(error)) {
           dataOk = false;
           await db.from("notifications").insert(base);
         }

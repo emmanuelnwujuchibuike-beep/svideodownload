@@ -4,6 +4,7 @@ import { z } from "zod";
 import { pushSocialEvent } from "@/lib/push/social-push";
 import { trackLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
+import { isMissingColumn } from "@/lib/supabase/missing-column";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,7 +49,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .from("post_reactions")
     .insert({ user_id: c.user.id, post_id: c.id, type: c.type, emotion });
   // Pre-migration-0033 the column doesn't exist — insert the plain reaction.
-  if (error?.code === "42703") {
+  if (isMissingColumn(error)) {
     ({ error } = await c.supabase
       .from("post_reactions")
       .insert({ user_id: c.user.id, post_id: c.id, type: c.type }));

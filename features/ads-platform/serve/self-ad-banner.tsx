@@ -4,6 +4,10 @@ import { useEffect, useRef, useState } from "react";
 
 import type { EligibleAd, FormatRules } from "@/lib/ads-platform/eligibility";
 import { cardMediaBox } from "@/lib/ads-platform/media-spec";
+import { dwellSeconds, VIDEO_MIN_DWELL_SECONDS } from "@/lib/ads-platform/rotation";
+
+/** How far outside the viewport a tile/card keeps its media mounted — about a screen, so scrolling meets a ready ad. */
+const MEDIA_MOUNT_MARGIN_PX = 600;
 import { creativeFailed, nextFromPool, recordShown } from "@/lib/ads-platform/serving-state";
 import { cn } from "@/lib/utils";
 
@@ -62,9 +66,39 @@ export function SelfAdBanner({
   const [, bump] = useState(0);
   const viewRef = useRef<AdView | null>(null);
 
+  /*
+    🔴 THE HISTORY CRASH (owner, 2026-10-10: "the history page always crashes when a
+    video ad shows or when an ad rotates"). The History grid puts an ad tile after
+    every 3 downloads, and every tile mounted its own <video> of the full creative
+    and its own rotation timer — measured with 60 items: 19 tiles, 19 <video>
+    elements of a 1920x1080 file at once, each remounted on every rotation. iOS
+    Safari kills a tab holding that much video. Now a tile or card holds its MEDIA
+    only while it is within about a screen of the viewport, and rotates only while
+    visible; off-screen it keeps its box with a light sponsor placeholder. The top
+    strip is always on screen and is unaffected.
+  */
+  const hostRef = useRef<HTMLAnchorElement | null>(null);
+  const [inView, setInView] = useState(variant === "strip");
+  useEffect(() => {
+    if (variant === "strip") return;
+    const el = hostRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setInView(true);
+      return;
+    }
+    const io = new IntersectionObserver(([e]) => setInView(!!e?.isIntersecting), { rootMargin: `${MEDIA_MOUNT_MARGIN_PX}px 0px` });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [variant]);
+
   const live = ads.filter((a) => !creativeFailed(a.cr));
   const count = live.length;
   const current = count ? live[index % count]! : null;
+  // 2026-10-10: how long THIS creative stays (pictures ≥5 s, videos ≥10 s — lib/ads-platform/rotation.ts),
+  // and for a video, whether it has actually started playing yet
+  const dwell = dwellSeconds(current?.mediaType, seconds);
+  const [playingCr, setPlayingCr] = useState<string | null>(null);
+  const waitingForPlay = current?.mediaType === "video" && playingCr !== current.cr;
 
   // Remember what a per-show placement showed, so the NEXT download starts after it.
   useEffect(() => {
@@ -73,14 +107,17 @@ export function SelfAdBanner({
   }, [current, seconds, placement]);
 
   useEffect(() => {
-    if (count <= 1 || !seconds || seconds <= 0) return;
+    // an off-screen tile does not rotate (its media is not even mounted)
+    if (count <= 1 || !dwell || !inView) return;
+    // a video that has not started yet gets VIDEO_MIN_DWELL_SECONDS to start; once it plays, its full dwell runs from then
+    const wait = (waitingForPlay ? VIDEO_MIN_DWELL_SECONDS : dwell) * 1000;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const arm = () => {
       if (timer || document.visibilityState !== "visible") return;
       timer = setTimeout(() => {
         timer = null;
         setIndex((i) => (i + 1) % count);
-      }, seconds * 1000);
+      }, wait);
     };
     const onVis = () => {
       if (document.visibilityState === "visible") {
@@ -97,7 +134,7 @@ export function SelfAdBanner({
       if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [index, count, seconds]);
+  }, [index, count, dwell, waitingForPlay, inView]);
 
   // Warm ONLY the next creative, and only an image.
   useEffect(() => {
@@ -132,7 +169,12 @@ export function SelfAdBanner({
       </span>
     ) : null;
 
-  const creative = (opts: { className: string; backdrop?: boolean }) => (
+  const creative = (opts: { className: string; backdrop?: boolean }) =>
+    !inView ? (
+      <span aria-hidden className={cn(opts.className, "flex items-end bg-gradient-to-br from-slate-200 to-slate-300 p-2 dark:from-slate-800 dark:to-slate-900")}>
+        <span className="truncate text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-500">{current.sponsor}</span>
+      </span>
+    ) : (
     <SelfAdCreative
       key={current.cr}
       ad={current}
@@ -146,6 +188,7 @@ export function SelfAdBanner({
       onView={(v) => {
         viewRef.current = v;
       }}
+      onPlaying={() => setPlayingCr(current.cr)}
       onFail={() => bump((n) => n + 1)}
     />
   );
@@ -164,6 +207,7 @@ export function SelfAdBanner({
     const box = cardMediaBox(current.w, current.h);
     return (
       <a
+        ref={hostRef}
         href={current.url}
         target="_blank"
         rel="sponsored noopener noreferrer"
@@ -196,6 +240,7 @@ export function SelfAdBanner({
 
   return (
     <a
+      ref={hostRef}
       href={current.url}
       target="_blank"
       rel="sponsored noopener noreferrer"

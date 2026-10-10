@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import type { EligibleAd } from "@/lib/ads-platform/eligibility";
+import { loadAdsConfig } from "@/lib/monetization/ads-config-client";
+import { DEFAULT_VAST_INTERSTITIAL, normalizeVastInterstitial } from "@/lib/monetization/vast-interstitial";
 import { cn } from "@/lib/utils";
 
 import { trackAdEvent, type AdView } from "../ad-events-client";
@@ -15,9 +17,14 @@ import { destinationHost, SelfAdCreative } from "./self-ad-creative";
  * A full-screen paid ad — INTERSTITIAL, DOWNLOAD_COMPLETED_INTERSTITIAL, and
  * the sponsor video beside an AI save (REWARD_VIDEO).
  *
- * Never a trap (§37/§38):
- *   · the close button is there from the first frame, Escape closes, a tap on
- *     the backdrop closes — no countdown gates leaving
+ * Never a trap (§37/§38), with one owner-set exception:
+ *   · 🔴 2026-10-10 (owner: "make interstitial ad to be skipped after 5 seconds
+ *     or any set by admin, 5 secs as default"): close, Escape, a backdrop tap
+ *     wait out a short countdown — the admin's "Seconds before an
+ *     ad can be skipped" (Monetization → VAST interstitial, 0–30 s, default 5),
+ *     so every interstitial follows one setting. It is shown and announced. A
+ *     REWARD video has no countdown — it never gates anything (below). A
+ *     creative that FAILS still closes at once — nobody waits on a broken ad
  *   · focus moves to the close button and goes back where it was
  *   · the page under it does not scroll while it is open
  *   · the video is muted, pauses and is released on close (SelfAdCreative)
@@ -54,15 +61,49 @@ export function SelfInterstitial({
   const view = useRef<AdView | null>(null);
   const [ended, setEnded] = useState(false);
   const host = destinationHost(ad.url);
+  // seconds until it may be skipped: the default at once, the admin's value when the (cached) config answers
+  // a REWARD video is never gated (it accompanies a save that has already started) — no countdown for it
+  const [left, setLeft] = useState<number>(reward ? 0 : DEFAULT_VAST_INTERSTITIAL.skipAfterSeconds);
+  const canSkip = left <= 0;
+  const canSkipRef = useRef(canSkip);
+  canSkipRef.current = canSkip;
+  const dialog = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (reward) return;
+    let alive = true;
+    const opened = Date.now();
+    void loadAdsConfig()
+      .then((d) => normalizeVastInterstitial((d as { vastInterstitial?: unknown }).vastInterstitial).skipAfterSeconds)
+      .catch(() => DEFAULT_VAST_INTERSTITIAL.skipAfterSeconds)
+      .then((secs) => {
+        if (alive) setLeft(Math.max(0, Math.ceil(secs - (Date.now() - opened) / 1000)));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [reward]);
+  useEffect(() => {
+    if (left <= 0) return;
+    const t = window.setTimeout(() => setLeft((n) => n - 1), 1000);
+    return () => window.clearTimeout(t);
+  }, [left]);
+  useEffect(() => {
+    if (canSkip) closeBtn.current?.focus();
+  }, [canSkip]);
+  const skip = () => {
+    if (canSkipRef.current) onClose();
+  };
 
   useEffect(() => {
     const before = document.activeElement as HTMLElement | null;
-    closeBtn.current?.focus();
+    // the dialog takes focus first; the close button gets it once it can be used
+    dialog.current?.focus();
     const html = document.documentElement;
     const prev = html.style.overflow;
     html.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && canSkipRef.current) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => {
@@ -84,8 +125,10 @@ export function SelfInterstitial({
       data-ad-provider="frenzsave"
       aria-label={reward ? `Sponsored video from ${ad.sponsor}` : `Advertisement from ${ad.sponsor}`}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) skip();
       }}
+      ref={dialog}
+      tabIndex={-1}
     >
       <div
         className={cn(
@@ -96,15 +139,21 @@ export function SelfInterstitial({
         <div className="flex items-center gap-2 px-4 pb-2 pt-3.5">
           <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Ad</span>
           <p className="min-w-0 flex-1 truncate text-[13px] font-semibold">{ad.sponsor}</p>
-          <button
-            ref={closeBtn}
-            type="button"
-            onClick={onClose}
-            aria-label={reward ? "Close the sponsored video" : "Close the ad"}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-muted text-foreground transition hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-          >
-            <X className="h-[18px] w-[18px]" aria-hidden />
-          </button>
+          {canSkip ? (
+            <button
+              ref={closeBtn}
+              type="button"
+              onClick={onClose}
+              aria-label={reward ? "Close the sponsored video" : "Close the ad"}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-muted text-foreground transition hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              <X className="h-[18px] w-[18px]" aria-hidden />
+            </button>
+          ) : (
+            <span role="status" aria-live="polite" className="inline-flex h-9 items-center rounded-full bg-muted px-3 text-[12px] font-semibold tabular-nums text-muted-foreground">
+              Skip in {left}
+            </span>
+          )}
         </div>
 
         {reward ? (

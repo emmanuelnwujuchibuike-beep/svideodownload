@@ -38,6 +38,7 @@ export function SelfAdCreative({
   mediaClassName,
   onFail,
   onEnded,
+  onPlaying,
   onView,
 }: {
   ad: EligibleAd;
@@ -53,6 +54,8 @@ export function SelfAdCreative({
   mediaClassName?: string;
   onFail?: () => void;
   onEnded?: () => void;
+  /** the video actually started playing (a rotating banner starts its clock here) */
+  onPlaying?: () => void;
   /** the view, for a caller that tracks more (click, interstitial_view, reward events) */
   onView?: (view: AdView) => void;
 }) {
@@ -128,7 +131,7 @@ export function SelfAdCreative({
       {ad.mediaType === "video" ? (
         <video
           ref={video}
-          src={ad.media}
+          src={ad.thumb ? ad.media : withFirstFrame(ad.media)}
           poster={ad.thumb ?? undefined}
           muted
           playsInline
@@ -137,7 +140,10 @@ export function SelfAdCreative({
           aria-label={alt}
           className={media}
           onLoadedData={() => trackAdEvent(view, "loaded")}
-          onPlaying={() => trackAdEvent(view, "video_start")}
+          onPlaying={() => {
+            trackAdEvent(view, "video_start");
+            onPlaying?.();
+          }}
           onEnded={() => {
             trackAdEvent(view, "video_complete");
             onEnded?.();
@@ -158,6 +164,17 @@ export function SelfAdCreative({
       )}
     </div>
   );
+}
+
+/**
+ * A video ad with no poster shows its own first frame (owner, 2026-10-10, iPhone
+ * screenshot: the History-grid ad was a black box). iOS Low Power Mode and data
+ * saver refuse autoplay, and a video with no poster that never plays paints
+ * black. A `#t=` media fragment makes Safari and Chrome load and show that frame
+ * as the still; the fragment is never sent to the server, so caching is unchanged.
+ */
+export function withFirstFrame(url: string): string {
+  return url.includes("#") ? url : `${url}#t=0.1`;
 }
 
 /** Record the click on this view, then let the link open the server-validated destination. */

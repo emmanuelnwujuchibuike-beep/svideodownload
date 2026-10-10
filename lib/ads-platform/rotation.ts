@@ -9,6 +9,23 @@
  * Pure, so the rules are testable without a DOM.
  */
 
+/**
+ * How long ONE creative stays before the banner moves on (owner, 2026-10-10:
+ * "video ad rotate even when they haven't played — give video ad 10 seconds to
+ * play before rotating and picture ads 5 secs"). Minimums per media type; an
+ * admin's longer rotation (e.g. the 15 s top banner) still wins. For a video
+ * the clock starts when it actually PLAYS (SelfAdBanner); one that never starts
+ * moves on after VIDEO_MIN_DWELL_SECONDS so the slot never freezes. Null = a
+ * format without a timer (a new ad on every show).
+ */
+export const IMAGE_MIN_DWELL_SECONDS = 5;
+export const VIDEO_MIN_DWELL_SECONDS = 10;
+
+export function dwellSeconds(mediaType: string | null | undefined, rotationSeconds: number | null): number | null {
+  if (!rotationSeconds || rotationSeconds <= 0) return null;
+  return Math.max(rotationSeconds, mediaType === "video" ? VIDEO_MIN_DWELL_SECONDS : IMAGE_MIN_DWELL_SECONDS);
+}
+
 /** Which pool entry a rotating banner shows `elapsedMs` after it mounted. */
 export function bannerIndexAt(elapsedMs: number, rotationSeconds: number | null, count: number): number {
   if (count <= 1 || !rotationSeconds || rotationSeconds <= 0 || !(elapsedMs > 0)) return 0;

@@ -349,7 +349,14 @@ export function statusLabel(c: Pick<CampaignRow, "status" | "status_reason" | "s
 }
 
 export const usd = (cents: number | null | undefined) => (cents === null || cents === undefined ? "—" : `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-export const num = (n: number) => n.toLocaleString("en-US");
+/**
+ * Counts on the advertiser dashboard (owner, 2026-10-10: "count in K when it
+ * reaches 1k and M when it reaches a million"): exact below 1,000, then 1.2K,
+ * 12K, 1.5M. The figure is only ever shortened, never rounded up.
+ */
+// roundingMode "trunc": 999,999 is "999.9K", never "1M" — a shortened figure must not read higher than the real one
+const COMPACT = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1, roundingMode: "trunc" } as Intl.NumberFormatOptions);
+export const num = (n: number) => (Math.abs(n) < 1000 ? n.toLocaleString("en-US") : COMPACT.format(n));
 export const pct = (r: number | null) => (r === null ? "—" : `${(r * 100).toFixed(r < 0.01 ? 2 : 1)}%`);
 export const date = (v: string | null) => (v ? new Date(v).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—");
 

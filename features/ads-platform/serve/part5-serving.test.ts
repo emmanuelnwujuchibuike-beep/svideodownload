@@ -272,9 +272,11 @@ describe("REWARD_VIDEO never gates an AI save", () => {
   it("Continue and close work from the first frame; completion only on a real end", () => {
     const s = code("features/ads-platform/serve/self-interstitial.tsx");
     expect(s).not.toMatch(/disabled=/);
+    // 2026-10-10: interstitials wait out the admin's skip delay — a REWARD video starts at 0, so it closes at once
+    expect(s).toContain("useState<number>(reward ? 0 : DEFAULT_VAST_INTERSTITIAL.skipAfterSeconds)");
     expect(s).toContain('if (reward && view.current) trackAdEvent(view.current, "reward_video_complete");');
     expect(s.match(/reward_video_complete/g)).toHaveLength(1);
-    expect(s).toContain('if (e.key === "Escape") onClose();');
+    expect(s).toContain('if (e.key === "Escape" && canSkipRef.current) onClose();');
   });
 });
 

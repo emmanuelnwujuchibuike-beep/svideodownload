@@ -29,11 +29,11 @@ export function TestModeNote({ campaignId }: { campaignId?: string }) {
     };
   }, [campaignId]);
   if (!on) return null;
-  return (
-    <p role="note" className="w-fit rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-      Sample data
-    </p>
-  );
+  // return (
+  //   <p role="note" className="w-fit rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+      
+  //   </p>
+  // );
 }
 
 /** One request per page life, and only when a boosted campaign is on screen. Fails closed: no answer → the label shows. */

@@ -176,7 +176,7 @@ describe("§15.12/13 — analytics", () => {
     expect(src("features/ads-platform/my-campaigns.tsx")).toContain("TestModeNote");
     expect(src("features/ads-platform/dashboard/test-mode-note.tsx")).toMatch(/Sample data/);
     // display only: the stored aggregates, billing and the 0211 migration never rewrite them
-    const m = src("supabase/migrations/0211_ad_stats_test_boost.sql");
+    const m = src("supabase/migrations/0212_ad_stats_test_boost.sql");
     expect(m).not.toMatch(/update\s+public\.ad_campaign_daily_stats|update\s+public\.ad_events|insert\s+into\s+public\.ad_campaign_daily_stats/i);
     expect(m).toMatch(/stats_multiplier in \(1, 10\)/);
     // a boost can only be set through the admin-only, service-role function
@@ -237,5 +237,13 @@ describe("display", () => {
     expect(remaining("2026-10-10T12:00:00Z", now)).toBe("2 days left");
     expect(remaining("2026-10-08T15:00:00Z", now)).toBe("3 hours left");
     expect(remaining("2026-10-08T11:00:00Z", now)).toBe("Ended");
+  });
+});
+
+describe("2026-10-09: the admin campaign list survives a database that has not run 0212 yet", () => {
+  it("never names stats_multiplier in its select (it would fail the whole list)", () => {
+    const a = src("lib/ads-platform/admin-campaigns.ts");
+    expect(a).toContain('.select("*, advertisers(id, business_name, status), ad_placements(code, name, format_code)")');
+    expect(a).toContain("statsMultiplier: Number(c.stats_multiplier ?? 1),");
   });
 });

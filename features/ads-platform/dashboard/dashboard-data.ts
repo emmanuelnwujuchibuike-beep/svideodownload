@@ -35,7 +35,7 @@ export interface Summary {
   video_completes: number;
   /** 0201: members who opened the ad's details on Frenzsave (also counted as clicks) */
   conversions: number;
-  /** 0211: campaigns an admin put in test mode (figures shown x10) */
+  /** 0212: campaigns an admin put in test mode (figures shown x10) */
   boosted: number;
   /** 0201: members who then chose to visit the site after the external-link warning */
   outbounds: number;

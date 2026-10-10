@@ -1,4 +1,4 @@
--- 0211 · Admin test boost: show a campaign's dashboard figures x10.
+-- 0212 · Admin test boost (numbered 0211 when written - renumbered: 0211 is the All slots migration): show a campaign's dashboard figures x10.
 --
 -- DISPLAY ONLY. ad_events, ad_campaign_daily_stats, billing and refunds are never
 -- changed. Per campaign, off by default (1), switched by an admin only. The
@@ -9,7 +9,7 @@
 alter table public.ad_campaigns add column if not exists stats_multiplier smallint not null default 1;
 alter table public.ad_campaigns drop constraint if exists ad_campaigns_stats_multiplier_chk;
 alter table public.ad_campaigns add constraint ad_campaigns_stats_multiplier_chk check (stats_multiplier in (1, 10));
-comment on column public.ad_campaigns.stats_multiplier is '0211: dashboard display multiplier (1 or 10), admin-set test mode. Never applied to stored counts, billing or refunds.';
+comment on column public.ad_campaigns.stats_multiplier is '0212: dashboard display multiplier (1 or 10), admin-set test mode. Never applied to stored counts, billing or refunds.';
 
 create or replace function public.admin_set_ad_stats_boost(p_campaign uuid, p_multiplier integer, p_admin uuid) returns jsonb
 language plpgsql security definer set search_path = public as $$

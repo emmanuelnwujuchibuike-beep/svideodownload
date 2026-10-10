@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { loadBoosts } from "./dashboard-data";
 
 /**
- * 0211: shown above the figures when an admin has put a campaign in test mode,
+ * 0212: shown above the figures when an admin has put a campaign in test mode,
  * so boosted numbers are never read as measured ones. Renders nothing otherwise
  * (and when the read fails).
  */

@@ -66,7 +66,7 @@ export interface AdminCampaignRow {
   startedAt: string | null;
   flags: string[];
   refund: { status: string; owedMinor: number | null; note: string | null; decidedAt: string | null };
-  /** 0211: dashboard figures multiplier (1 = real, 10 = test mode) */
+  /** 0212: dashboard figures multiplier (1 = real, 10 = test mode) */
   statsMultiplier: number;
   creatives: AdminCreative[];
   impressions: number;
@@ -87,9 +87,14 @@ export async function listAdminCampaigns(db: Db, f: AdminCampaignFilters): Promi
   const view: AdminCampaignView = (ADMIN_CAMPAIGN_VIEWS as readonly string[]).includes(f.view ?? "") ? (f.view as AdminCampaignView) : "review";
   let q = db
     .from("ad_campaigns")
-    .select(
-      "id, name, status, status_reason, version, duration_days, extra_days, currency, total_amount_minor, payment_method, payment_reference, payment_verified_at, created_at, start_at, end_at, started_at, review_flags, refund_status, refund_owed_minor, refund_note, refund_decided_at, stats_multiplier, advertisers(id, business_name, status), ad_placements(code, name, format_code)",
-    )
+    /*
+      "*" rather than naming stats_multiplier: that column arrives with migration
+      0212, and naming a column the database does not have yet fails the WHOLE
+      list (verified on production 2026-10-09: the admin Campaigns desk was
+      erroring). With "*" it is simply absent until 0212 runs, and
+      statsMultiplier below defaults it to 1.
+    */
+    .select("*, advertisers(id, business_name, status), ad_placements(code, name, format_code)")
     .order("updated_at", { ascending: false })
     .limit(Math.min(100, Math.max(1, f.limit ?? 50)));
   if (view === "refunds") q = q.eq("refund_status", "owed");
@@ -313,7 +318,7 @@ export async function setAdvertiserStatus(db: Db, adminId: string, input: { id: 
   return (data ?? { ok: false, reason: "no_result" }) as RpcResult;
 }
 
-/** 0211: switch a campaign's dashboard figures between real (1) and test mode (10). Display only. */
+/** 0212: switch a campaign's dashboard figures between real (1) and test mode (10). Display only. */
 export async function setStatsBoost(db: Db, adminId: string, input: { id: string; multiplier: 1 | 10 }): Promise<{ ok: boolean; reason?: string; multiplier?: number }> {
   const { data, error } = await db.rpc("admin_set_ad_stats_boost", { p_campaign: input.id, p_multiplier: input.multiplier, p_admin: adminId });
   if (error) throw new Error(`stats boost: ${error.message}`);

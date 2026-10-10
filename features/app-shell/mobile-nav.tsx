@@ -24,7 +24,7 @@ import {
   FrenzInboxSolid,
   FrenzPersonSolid,
 } from "@/components/icons/frenz-icons";
-import { GUEST_WARM_ROUTES } from "@/features/app-shell/warm-routes";
+import { FIRST_WARM_ROUTE, GUEST_WARM_ROUTES, afterPageLoad } from "@/features/app-shell/warm-routes";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useQuery } from "@/features/data";
 import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
@@ -227,10 +227,11 @@ export function MobileNav({
     const routes = member
       ? ["/home", "/friends", "/messages", "/account", "/history", "/studio/ai/history", profileHref]
       : GUEST_WARM_ROUTES;
-    const id = setTimeout(() => {
-      for (const r of routes) router.prefetch(r);
-    }, 400);
-    return () => clearTimeout(id);
+    // History first and at once; the rest after the page has loaded (warm-routes.ts, measured)
+    if ((routes as readonly string[]).includes(FIRST_WARM_ROUTE)) router.prefetch(FIRST_WARM_ROUTE);
+    return afterPageLoad(() => {
+      for (const r of routes) if (r !== FIRST_WARM_ROUTE) router.prefetch(r);
+    });
   }, [router, profileHref, handle]);
 
   // Publish the nav's real height (already includes the home-indicator
@@ -358,18 +359,19 @@ export function MobileNav({
             icon={FrenzFeedOutline}
             activeIcon={FrenzFeedSolid}
             active={pathname === "/home" || pathname.startsWith("/feed") || pathname.startsWith("/reels")}
+            prefetch={false}
             onWarm={router.prefetch}
           />
         ) : (
           /* Earn in Feed's place on the landing (owner, 2026-10-09) — the quests; the page itself asks a guest to sign in. */
-          <NavTab label="Earn" href="/quests" icon={FrenzEarnOutline} activeIcon={FrenzEarnSolid} active={pathname.startsWith("/quests")} onWarm={router.prefetch} />
+          <NavTab label="Earn" href="/quests" icon={FrenzEarnOutline} activeIcon={FrenzEarnSolid} active={pathname.startsWith("/quests")} prefetch={false} onWarm={router.prefetch} />
         )}
         <NavTab label="History" href="/history" icon={History} activeIcon={History} active={pathname.startsWith("/history")} onWarm={router.prefetch} />
         {/* Signed in: Chats in Support's place (owner, 2026-10-08). A guest keeps Support. */}
         {handle ? (
-          <NavTab label="Chats" href="/messages" icon={FrenzInboxOutline} activeIcon={FrenzInboxSolid} active={pathname.startsWith("/messages")} badge={unread} onWarm={router.prefetch} />
+          <NavTab label="Chats" href="/messages" icon={FrenzInboxOutline} activeIcon={FrenzInboxSolid} active={pathname.startsWith("/messages")} badge={unread} prefetch={false} onWarm={router.prefetch} />
         ) : (
-          <NavTab label="Support" href="/support" icon={Headset} activeIcon={Headset} active={pathname.startsWith("/support")} onWarm={router.prefetch} />
+          <NavTab label="Support" href="/support" icon={Headset} activeIcon={Headset} active={pathname.startsWith("/support")} prefetch={false} onWarm={router.prefetch} />
         )}
 
         {/* Profile (avatar-in-circle) — active state is now a colored ring
@@ -382,6 +384,7 @@ export function MobileNav({
             plain icon only when there truly isn't one. */}
         <Link
           href={profileHref}
+          prefetch={false}
           onPointerDown={() => router.prefetch(profileHref)}
           onClick={() => {
             haptic("light");

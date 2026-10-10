@@ -461,20 +461,13 @@ const nextConfig: NextConfig = {
     answers the query, instead of just discarding it.
   */
   async redirects() {
+    /*
+      No www → apex redirect (added and removed 2026-10-10). Sign-in started on
+      www keeps its PKCE/session cookies on www; a host redirect mid-flow lands
+      the callback on the apex without them and the owner could not sign in.
+      www pages already carry the apex canonical, which is all Google needs.
+    */
     return [
-      /*
-        www → apex (2026-10-09 indexing audit). www.frenzsave.com answered 200
-        with the full site straight from Vercel, so every page existed at two
-        hosts. The canonical tag already pointed at the apex; a permanent
-        redirect makes it unambiguous and stops crawl budget going to the copy.
-        Matched on the exact host, so preview deployments are untouched.
-      */
-      {
-        source: "/:path*",
-        has: [{ type: "host" as const, value: "www.frenzsave.com" }],
-        destination: "https://frenzsave.com/:path*",
-        permanent: true,
-      },
       ...REMOVED_SEO_PAGES.map(({ from, to }) => ({
         source: `/${from}`,
         destination: `/${to}`,

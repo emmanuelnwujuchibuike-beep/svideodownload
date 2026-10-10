@@ -8,6 +8,7 @@ import { cdnBucket } from "@/lib/net/cdn-bucket";
 import type { CampaignStatus } from "./catalog";
 import { checkDestinationUrl, validateCreative, type CreativeLimits } from "./creative-validation";
 import type { ServingSnapshot } from "./eligibility";
+import { uploadBytesOf } from "./media-spec";
 import { buildServingPayload, type ServingPayload } from "./serving-payload";
 import { baseDomain, chaseRedirects, destinationHeuristics, reputationLookup } from "./url-safety";
 
@@ -190,7 +191,7 @@ export function formatLimits(f: FormatRow): CreativeLimits {
     minHeight: f.min_height,
     aspectRatio: f.aspect_ratio === null ? null : Number(f.aspect_ratio),
     aspectTolerance: f.aspect_tolerance === null ? null : Number(f.aspect_tolerance),
-    maxUploadBytes: f.max_upload_bytes == null ? null : Number(f.max_upload_bytes),
+    maxUploadBytes: uploadBytesOf(f),
     // transcoding needs Stream AND 0208 (its columns): before the migration runs, oversized videos are refused as before
     videoProcessing: hasStream && f.delivery_long_edge !== undefined,
   };

@@ -19,7 +19,7 @@
  * Pure: the browser and the server both use it.
  */
 
-import { SPEC_DEFAULTS } from "./media-spec";
+import { SPEC_DEFAULTS, uploadBytesOf } from "./media-spec";
 
 export type Currency = "CREDIT" | "USD" | "NGN";
 
@@ -117,7 +117,7 @@ export function parseCatalog(raw: unknown): AdCatalog | null {
       aspect_tolerance: n(f.aspect_tolerance ?? 0),
       delivery_long_edge: f.delivery_long_edge == null ? SPEC_DEFAULTS.deliveryLongEdge : n(f.delivery_long_edge),
       image_quality: f.image_quality == null ? SPEC_DEFAULTS.imageQuality : n(f.image_quality),
-      max_upload_bytes: f.max_upload_bytes == null ? null : n(f.max_upload_bytes),
+      max_upload_bytes: uploadBytesOf(f),
     })),
     placements: r.placements as CatalogPlacement[],
     durations: (r.durations as CatalogDuration[]).map((d) => ({ ...d, days: n(d.days) })),

@@ -26,6 +26,21 @@ export const FIT_RULE = "contain" as const;
 export const SPEC_DEFAULTS = { deliveryLongEdge: 1280, imageQuality: 82 } as const;
 
 /**
+ * What a VIDEO format may be uploaded at before Stream transcodes it — the 200 MB
+ * 0208 gave every video format. A video format whose max_upload_bytes is unset
+ * (ALL_SLOTS was created by 0211, after 0208 ran) takes this, so a missing row
+ * value can never again mean "every MOV refused, every video over 10 MB refused"
+ * (owner, 2026-10-10). An image-only format keeps null: images are resized in
+ * the browser, never uploaded large. An admin's own value always wins.
+ */
+export const DEFAULT_VIDEO_UPLOAD_BYTES = 200 * 1024 * 1024;
+
+export function uploadBytesOf(f: { media_types?: readonly string[] | null; max_upload_bytes?: number | string | null }): number | null {
+  if (f.max_upload_bytes != null) return Number(f.max_upload_bytes);
+  return f.media_types?.includes("video") ? DEFAULT_VIDEO_UPLOAD_BYTES : null;
+}
+
+/**
  * Decompression-bomb guard for images decoded in the browser: a tiny file that
  * claims 50 000 × 50 000 px would allocate gigabytes. Checked from the header
  * BEFORE anything is decoded.
@@ -54,6 +69,7 @@ type FormatLike = {
   max_height: number;
   max_file_bytes: number | string;
   max_upload_bytes?: number | string | null;
+  media_types?: readonly string[] | null;
   delivery_long_edge?: number | null;
   image_quality?: number | null;
   max_duration_seconds?: number | null;
@@ -61,7 +77,8 @@ type FormatLike = {
 
 export function specOf(f: FormatLike): MediaSpec {
   const served = Number(f.max_file_bytes);
-  const upload = f.max_upload_bytes == null ? served : Math.max(served, Number(f.max_upload_bytes));
+  const cap = uploadBytesOf(f);
+  const upload = cap == null ? served : Math.max(served, cap);
   return {
     recommendedWidth: f.width ?? null,
     recommendedHeight: f.height ?? null,

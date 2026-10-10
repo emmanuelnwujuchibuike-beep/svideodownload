@@ -103,3 +103,21 @@ describe("0214: All slots uploads like every other video format", () => {
     expect(readFileSync("features/ads-platform/creative-step.tsx", "utf8")).toContain("videoProcessing: format.max_upload_bytes != null");
   });
 });
+
+describe("a video format with no upload limit set still takes large and MOV videos (owner, 2026-10-10)", () => {
+  it("defaults to the 200 MB every video format has, for video formats only; an admin's own value wins", async () => {
+    const { uploadBytesOf, specOf, DEFAULT_VIDEO_UPLOAD_BYTES } = await import("./media-spec");
+    expect(uploadBytesOf({ media_types: ["image", "video"], max_upload_bytes: null })).toBe(DEFAULT_VIDEO_UPLOAD_BYTES);
+    expect(uploadBytesOf({ media_types: ["image"], max_upload_bytes: null })).toBeNull();
+    expect(uploadBytesOf({ media_types: ["video"], max_upload_bytes: 5 * 1024 * 1024 })).toBe(5 * 1024 * 1024);
+    expect(specOf({ media_types: ["image", "video"], max_width: 2160, max_height: 3840, max_file_bytes: 10485760, max_upload_bytes: null }).maxUploadBytes).toBe(DEFAULT_VIDEO_UPLOAD_BYTES);
+  });
+
+  it("teeth: the browser's catalog no longer hands a video format a null limit (which switched transcoding off)", async () => {
+    const { parseCatalog } = await import("./offer");
+    const src = readFileSync("lib/ads-platform/offer.ts", "utf8");
+    expect(src).toContain("max_upload_bytes: uploadBytesOf(f)");
+    expect(typeof parseCatalog).toBe("function");
+    expect(readFileSync("lib/ads-platform/server.ts", "utf8")).toContain("maxUploadBytes: uploadBytesOf(f)");
+  });
+});

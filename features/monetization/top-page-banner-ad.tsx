@@ -34,7 +34,14 @@ import { useShowAds } from "./use-show-ads";
 const SelfTopCreative = dynamic(() => import("@/features/ads-platform/serve/self-top-creative").then((m) => m.SelfTopCreative), { ssr: false });
 
 // Paths that own a download/paste flow — no top ad here (home + guest library).
-const HIDDEN_PATHS = new Set(["/", "/library"]);
+/*
+  2026-10-10 (owner: "the global top banner is not showing in the landing page"):
+  the landing page "/" now shows it too — it was hidden there by the 2026-08-03
+  brief. Mounted after first paint (deferred furniture) and its height is already
+  reserved by the marketing layout, so the cold entry and the hero are untouched.
+  The guest library keeps it off.
+*/
+const HIDDEN_PATHS = new Set(["/library"]);
 
 export function TopPageBannerAd() {
   const pathname = usePathname();

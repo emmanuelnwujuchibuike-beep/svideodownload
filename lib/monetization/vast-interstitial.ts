@@ -108,6 +108,13 @@ export const DEFAULT_VAST_INTERSTITIAL: VastInterstitialConfig = {
   cooldownMs: 90_000,
 };
 
+/**
+ * The ONE skip delay for every full-screen ad — VAST, ExoClick and paid
+ * interstitials (owner, 2026-10-10: "5 sec and can be changed by admin").
+ * Stored as monetization `interstitialSkipSeconds`; default 5.
+ */
+export const INTERSTITIAL_SKIP_OPTIONS = [0, 3, 5, 7, 10, 15, 20, 30] as const;
+
 /** Bounds. A stored value outside these is clamped, never honoured. */
 export const VAST_LIMITS = {
   skipAfterSeconds: { min: 0, max: 30 },

@@ -5,6 +5,7 @@ import { HILLTOP_BANNER_SLOTS } from "./hilltop";
 import { DEFAULT_HILLTOP, normalizeHilltop, type HilltopConfig } from "./hilltop-config";
 import {
   DEFAULT_VAST_INTERSTITIAL,
+  INTERSTITIAL_SKIP_OPTIONS,
   normalizeVastInterstitial,
   type VastInterstitialConfig,
 } from "./vast-interstitial";
@@ -917,7 +918,8 @@ export function normalizeMonetagPlacements(value: unknown): MonetagPlacement[] {
 }
 
 /** Interstitial skip delays offered in the admin (seconds). */
-export const INTERSTITIAL_SKIP_OPTIONS = [0, 5, 10] as const;
+// 2026-10-10: one skip delay for every full-screen ad — defined in the client-safe vast-interstitial module
+export { INTERSTITIAL_SKIP_OPTIONS };
 
 /** Clamp a stored skip value to an offered option (defends against bad data). */
 export function normalizeSkipSeconds(value: unknown): number {

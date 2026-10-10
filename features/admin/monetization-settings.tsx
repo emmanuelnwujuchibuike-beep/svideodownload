@@ -39,7 +39,7 @@ import {
 import type { MonetizationSettings } from "@/lib/monetization/settings";
 import {
   DEFAULT_VAST_INTERSTITIAL,
-  SKIP_SECOND_OPTIONS,
+  INTERSTITIAL_SKIP_OPTIONS,
   type VastInterstitialConfig,
 } from "@/lib/monetization/vast-interstitial";
 import { cn } from "@/lib/utils";
@@ -1804,21 +1804,8 @@ export function MonetizationSettings({
                 {vast.skipEnabled ? (
                   <VastRow
                     label="Skip after"
-                    hint="A CEILING, not a fixed countdown — a shorter ad unlocks Skip when it ends. Set 10s and the network fills a 5s ad, Skip appears at 5s."
-                    control={
-                      <select
-                        value={vast.skipAfterSeconds}
-                        disabled={busy}
-                        onChange={(e) => void setVast({ skipAfterSeconds: Number(e.target.value) })}
-                        className={selectCls}
-                      >
-                        {SKIP_SECOND_OPTIONS.map((n) => (
-                          <option key={n} value={n}>
-                            {n === 0 ? "Immediately" : `${n} seconds`}
-                          </option>
-                        ))}
-                      </select>
-                    }
+                    hint="Follows the Interstitial skip delay below — one setting for every full-screen ad (2026-10-10)."
+                    control={<span className="text-sm font-semibold tabular-nums">{state.interstitialSkipSeconds === 0 ? "Immediately" : `${state.interstitialSkipSeconds} seconds`}</span>}
                   />
                 ) : null}
                 <VastRow
@@ -1895,13 +1882,17 @@ export function MonetizationSettings({
             ) : null}
           </div>
 
-          {/* Interstitial skip delay — how long before a full-screen ad can be
-              skipped. Only meaningful with full-screen units on; saves on change. */}
-          {state.interstitial ? (
+          {/* Interstitial skip delay — THE one setting for every full-screen ad
+              (owner, 2026-10-10: "the return interstitial is 15 sec until exit while
+              I said 5 sec and can be changed by admin"). It used to show only with
+              ExoClick units on, while the VAST ad read its own hidden "Skip after"
+              (15). Now always shown, and VAST, ExoClick and paid interstitials all
+              follow it. Saves on change. */}
+          {true ? (
             <div className="mt-2.5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
               <span className="min-w-0">
                 <span className="block text-sm font-semibold">Interstitial skip delay</span>
-                <span className="block truncate text-xs text-muted-foreground">How long before a full-screen ad can be skipped.</span>
+                <span className="block text-xs text-muted-foreground">How long before ANY full-screen ad can be skipped — network (VAST, ExoClick) and paid campaigns alike. Reward videos are never gated.</span>
               </span>
               <select
                 value={state.interstitialSkipSeconds}
@@ -1917,8 +1908,11 @@ export function MonetizationSettings({
                 className="h-9 shrink-0 rounded-lg bg-background px-2.5 text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-border focus:ring-primary"
               >
                 <option value={0}>Skip immediately</option>
-                <option value={5}>After 5 seconds</option>
-                <option value={10}>After 10 seconds</option>
+                {INTERSTITIAL_SKIP_OPTIONS.filter((n) => n > 0).map((n) => (
+                  <option key={n} value={n}>
+                    After {n} seconds
+                  </option>
+                ))}
               </select>
             </div>
           ) : null}

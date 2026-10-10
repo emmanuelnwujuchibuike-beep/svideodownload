@@ -74,7 +74,11 @@ export function SelfInterstitial({
     let alive = true;
     const opened = Date.now();
     void loadAdsConfig()
-      .then((d) => normalizeVastInterstitial((d as { vastInterstitial?: unknown }).vastInterstitial).skipAfterSeconds)
+      .then((d) => {
+        const c = d as { vastInterstitial?: unknown; interstitialSkipSeconds?: unknown };
+        // the one admin setting for every full-screen ad ("Interstitial skip delay"), else the VAST value
+        return typeof c.interstitialSkipSeconds === "number" ? c.interstitialSkipSeconds : normalizeVastInterstitial(c.vastInterstitial).skipAfterSeconds;
+      })
       .catch(() => DEFAULT_VAST_INTERSTITIAL.skipAfterSeconds)
       .then((secs) => {
         if (alive) setLeft(Math.max(0, Math.ceil(secs - (Date.now() - opened) / 1000)));

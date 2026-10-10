@@ -107,7 +107,11 @@ let configPromise: Promise<VastInterstitialConfig> | null = null;
 
 async function loadConfig(): Promise<VastInterstitialConfig> {
   configPromise ??= loadAdsConfig()
-    .then((d: { vastInterstitial?: unknown }) => normalizeVastInterstitial(d.vastInterstitial))
+    // 2026-10-10: one skip delay for every full-screen ad — interstitialSkipSeconds wins over the VAST-only value
+    .then((d: { vastInterstitial?: unknown; interstitialSkipSeconds?: unknown }) => {
+      const v = normalizeVastInterstitial(d.vastInterstitial);
+      return typeof d.interstitialSkipSeconds === "number" ? normalizeVastInterstitial({ ...v, skipAfterSeconds: d.interstitialSkipSeconds }) : v;
+    })
     /*
       A failed config read must not block a download, and must not silently
       enable an intrusive placement either — so it falls back to the DEFAULTS,

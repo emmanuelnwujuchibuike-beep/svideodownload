@@ -78,10 +78,13 @@ describe("no server call per tap or keystroke", () => {
   const wiz = readFileSync(join(process.cwd(), "features/ads-platform/advertise-wizard.tsx"), "utf8");
   const creative = readFileSync(join(process.cwd(), "features/ads-platform/creative-step.tsx"), "utf8");
 
-  it("the wizard calls the server at exactly four checkpoints: save draft, submit, pay, discard", () => {
+  it("the wizard calls the server at exactly five checkpoints: save draft, submit, pay, discard, and an admin's test publish", () => {
     const sites = [...wiz.matchAll(/await api(?:<[^>]*>)?\("([^"]+)", "(POST|DELETE)"/g)].map((m) => `${m[2]} ${m[1]}`);
-    expect(sites.sort()).toEqual(["DELETE /api/ads/advertiser/draft", "POST /api/ads/advertiser/draft", "POST /api/ads/advertiser/submit", "POST /api/ads/payment/create"]);
-    expect(wiz.match(/\bfetch\(/g)).toHaveLength(1); // inside api() only
+    // 2026-10-10: + the admin-only "Publish as test (no charge)" — one tap, refused (404) for anyone not an admin
+    expect(sites.sort()).toEqual(["DELETE /api/ads/advertiser/draft", "POST /api/ads/advertiser/draft", "POST /api/ads/advertiser/submit", "POST /api/ads/advertiser/test-publish", "POST /api/ads/payment/create"]);
+    // inside api(), plus ONE read on mount: is the viewer an admin (whether to show that button)
+    expect(wiz.match(/\bfetch\(/g)).toHaveLength(2);
+    expect(wiz).toContain('void fetch("/api/ads/advertiser/viewer")');
   });
 
   it("no onChange handler talks to the server", () => {

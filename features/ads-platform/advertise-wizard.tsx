@@ -167,6 +167,23 @@ export function AdvertiseWizard() {
   const [hydrated, setHydrated] = useState(false);
   const [notes, setNotes] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  /*
+    2026-10-10 (owner: "make admin account can make ad without going through
+    payment for testing"): an admin sees "Publish as test" at checkout. The
+    server decides (/api/ads/advertiser/test-publish answers 404 to anyone
+    else); this only chooses whether to show the button.
+  */
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void fetch("/api/ads/advertiser/viewer")
+      .then((r) => (r.ok ? r.json() : { admin: false }))
+      .then((d: { admin?: boolean }) => alive && setIsAdmin(!!d.admin))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [rulesAccepted, setRulesAccepted] = useState(false);
   const [locked, setLocked] = useState<{ total: number; currency: string; quoteId: string; expiresAt: string } | null>(null);
@@ -345,6 +362,22 @@ export function AdvertiseWizard() {
       return; // stays busy: the page is leaving
     }
     window.location.assign(`/advertise/payment?reference=${encodeURIComponent(r.data.reference)}`);
+  };
+
+  /** Admin test publish: submit (lock the review) if needed, then publish at no charge — recorded as a test, never revenue. */
+  const testPublish = async () => {
+    if (!form.campaignId || busy) return;
+    setError(null);
+    const quote = locked ?? (await submit());
+    if (!quote || !form.campaignId) return;
+    setBusy("test");
+    const r = await api<{ status?: string; note?: string | null }>("/api/ads/advertiser/test-publish", "POST", { campaignId: form.campaignId });
+    setBusy(null);
+    if (!r.ok) {
+      setError(r.message);
+      return;
+    }
+    window.location.assign("/advertise/campaigns");
   };
 
   /** §59 "Review Campaign": a fresh menu (prices and promotions may have moved), then the review again. */
@@ -769,6 +802,18 @@ export function AdvertiseWizard() {
               <span className="mt-0.5 block text-[12.5px] leading-snug text-muted-foreground">You&apos;ll choose how to pay on our payment partner&apos;s secure page. Nothing is charged until you confirm there.</span>
             </span>
           </div>
+
+          {isAdmin ? (
+            <div className="mt-3 rounded-[1.4rem] bg-amber-500/10 p-4 ring-1 ring-inset ring-amber-500/30">
+              <p className="text-[14px] font-semibold">Admin test</p>
+              <p className="mt-0.5 text-[12.5px] leading-snug text-muted-foreground">
+                Publish this campaign without paying, to test how it serves. It is recorded at no charge, marked as a test, and never counted as revenue.
+              </p>
+              <AiButton variant="secondary" size="sm" className="mt-3" onClick={() => void testPublish()} disabled={!rulesAccepted || !!busy} aria-busy={busy === "test"}>
+                {busy === "test" ? "Publishing test…" : "Publish as test (no charge)"}
+              </AiButton>
+            </div>
+          ) : null}
 
           <p className="mt-3 flex items-center gap-2 text-[13px] font-semibold text-emerald-700 dark:text-emerald-300">
             <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden /> Advertising Rules {rulesAccepted ? "accepted" : "not accepted yet"}

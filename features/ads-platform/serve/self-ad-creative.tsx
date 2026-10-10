@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { Volume2, VolumeX } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 
 import type { EligibleAd } from "@/lib/ads-platform/eligibility";
 import { FIT_RULE } from "@/lib/ads-platform/media-spec";
@@ -9,6 +10,7 @@ import { claimPlayback, releasePlayback } from "@/lib/media/video-coordinator";
 import { cn } from "@/lib/utils";
 
 import { newAdView, observeImpression, trackAdEvent, type AdView } from "../ad-events-client";
+import { adSoundOn, setAdSound, useAdSound } from "./ad-sound";
 
 /**
  * ONE paid creative on screen — the only place a self-serve ad's media is
@@ -73,6 +75,33 @@ export function SelfAdCreative({
     return el ? observeImpression(el, view) : undefined;
   }, [view]);
 
+  /*
+    Sound (owner, 2026-10-10: "let video ads play their audio, but users should
+    be able to mute"). Tried WITH sound; a browser that refuses sound without a
+    tap gets it muted instead and the button says "Tap for sound". The choice is
+    the session's (./ad-sound.ts) — muting one ad mutes them all.
+  */
+  const soundOn = useAdSound();
+  const [soundBlocked, setSoundBlocked] = useState(false);
+  useEffect(() => {
+    const v = video.current;
+    if (v) v.muted = !soundOn || soundBlocked;
+  }, [soundOn, soundBlocked]);
+  const toggleSound = (e: MouseEvent<HTMLButtonElement>) => {
+    // the ad itself is a link — the speaker must never open it
+    e.preventDefault();
+    e.stopPropagation();
+    const v = video.current;
+    const next = soundBlocked || !soundOn;
+    setAdSound(next);
+    setSoundBlocked(false);
+    if (v) {
+      v.muted = !next;
+      // inside the tap, so the browser now allows sound
+      if (next && v.paused) void v.play().catch(() => {});
+    }
+  };
+
   // A video plays only while it is at least half visible — never in the background.
   useEffect(() => {
     const v = video.current;
@@ -81,8 +110,13 @@ export function SelfAdCreative({
       ([e]) => {
         if (e && e.isIntersecting && e.intersectionRatio >= 0.5 && document.visibilityState === "visible") {
           claimPlayback(v);
+          v.muted = !adSoundOn();
           void v.play().catch(() => {
-            /* autoplay refused: the poster stays, nothing is broken */
+            if (v.muted) return; // autoplay refused outright: the first frame stays, nothing is broken
+            // sound refused without a tap: play muted and offer "Tap for sound"
+            v.muted = true;
+            setSoundBlocked(true);
+            void v.play().catch(() => {});
           });
         } else v.pause();
       },
@@ -162,6 +196,18 @@ export function SelfAdCreative({
           onError={fail}
         />
       )}
+      {ad.mediaType === "video" ? (
+        <button
+          type="button"
+          onClick={toggleSound}
+          aria-label={soundOn && !soundBlocked ? "Mute ad" : "Turn ad sound on"}
+          aria-pressed={!(soundOn && !soundBlocked)}
+          className="absolute bottom-2 right-2 z-20 inline-flex min-h-[2.25rem] items-center gap-1 rounded-full bg-black/55 px-2.5 text-[11px] font-semibold text-white backdrop-blur-sm transition hover:bg-black/70"
+        >
+          {soundOn && !soundBlocked ? <Volume2 className="h-4 w-4" aria-hidden /> : <VolumeX className="h-4 w-4" aria-hidden />}
+          {soundBlocked ? "Tap for sound" : null}
+        </button>
+      ) : null}
     </div>
   );
 }

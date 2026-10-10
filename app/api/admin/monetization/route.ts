@@ -11,7 +11,7 @@ import {
   HILLTOP_MIN_EVERY,
   HILLTOP_PLACEMENTS,
 } from "@/lib/monetization/hilltop-config";
-import { setMonetizationSettings } from "@/lib/monetization/settings";
+import { INTERSTITIAL_SKIP_OPTIONS, setMonetizationSettings } from "@/lib/monetization/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -74,10 +74,10 @@ const schema = z.object({
   affiliates: z.boolean(),
   recommendedTools: z.boolean(),
   interstitial: z.boolean(),
-  // How long before an interstitial can be skipped: 0 / 5 / 10 seconds only.
+  // How long before ANY full-screen ad can be skipped (the one setting — INTERSTITIAL_SKIP_OPTIONS).
   interstitialSkipSeconds: z
     .number()
-    .refine((v) => [0, 5, 10].includes(v), { message: "Skip delay must be 0, 5 or 10 seconds" })
+    .refine((v) => (INTERSTITIAL_SKIP_OPTIONS as readonly number[]).includes(v), { message: `Skip delay must be one of ${INTERSTITIAL_SKIP_OPTIONS.join(", ")} seconds` })
     .default(5),
   // Per-moment interstitial switches. Default false so an existing saved
   // settings row (written before these existed) can never come back with an

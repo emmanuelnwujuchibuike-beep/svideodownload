@@ -90,9 +90,10 @@ describe("entering /history shows the stripe, never a white screen", () => {
       elsewhere in this file (the kind-filter pills), and a whole-file match
       would fail on code that was never part of the bug.
     */
-    const start = panel.indexOf("if (!ready) {");
+    // 2026-10-10: the not-ready state is now the grid slot only (the page's layout paints around it)
+    const start = panel.indexOf("{!ready ? (");
     expect(start).toBeGreaterThan(-1);
-    const branch = panel.slice(start, panel.indexOf("if (items.length === 0)"));
+    const branch = panel.slice(start, panel.indexOf("<MediaGallery", start));
     // the tint that caused the original report, and the grid of tiles that replaced it
     expect(branch).not.toContain("bg-secondary/");
     expect(branch).not.toContain("Array.from({ length: 12 }");

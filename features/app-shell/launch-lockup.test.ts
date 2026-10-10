@@ -131,7 +131,8 @@ describe("the precached document was invalidated", () => {
     */
     const cfg = src("public/sw/config.js");
     expect(cfg).toContain('SWX.PRECACHE_DOCUMENTS = ["/launch.html"]');
-    expect(cfg).toContain('SWX.VERSION = "v25"');
+    // moved past v25 (the launch-lockup bump) — any later bump also invalidates the precached document
+    expect(Number(/SWX\.VERSION = "v(\d+)"/.exec(cfg)?.[1])).toBeGreaterThanOrEqual(25);
     expect(cfg).toContain("// v25 (2026-10-04)");
   });
 });

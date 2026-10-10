@@ -8,6 +8,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useBottomAdBarPresent } from "@/lib/dom/bottom-ad-bar";
 import { useScrollDirection } from "@/lib/dom/use-scroll-direction";
 import { useResumeViewportRepair } from "@/lib/pwa/resume-viewport";
+import { warmAvatars } from "@/components/ui/stable-avatar";
 import { useEffect, useRef } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
@@ -148,6 +149,21 @@ export function MobileNav({
   // app-wide (the cache's opt-out is reference-counted — see cache.ts).
   const { data: inbox } = useQuery<Inbox>(INBOX_KEY, loadInbox, { revalidateOnFocus: false });
   const unread = inbox?.unread ?? 0;
+  /*
+    Decode the inbox's avatars as soon as the inbox is in hand, on any page —
+    not when Chats mounts (owner, 2026-10-10: the chat avatars "delay to load on
+    first or anytime, it shouldn't even be noticeable"). By the time Chats is
+    tapped every face is decoded and paints in the frame it mounts. Idle-time,
+    and already-decoded URLs cost nothing.
+  */
+  const inboxAvatars = (inbox?.conversations ?? []).map((c) => c.avatarUrl ?? c.other?.avatarUrl ?? "").join("|");
+  useEffect(() => {
+    if (!inboxAvatars) return;
+    const run = () => warmAvatars(inboxAvatars.split("|"));
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
+    if (idle) idle(run);
+    else setTimeout(run, 300);
+  }, [inboxAvatars]);
 
   /*
     🔴 `/profile` for a guest, not `/account` (owner, 2026-08-16: "i want it

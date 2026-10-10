@@ -90,7 +90,7 @@ function HistoryStorageBar({
   onCancelClear,
 }: {
   itemCount: number;
-  usedBytes: number;
+  usedBytes: number | null;
   selecting: boolean;
   onToggleSelect: () => void;
   confirmClear: boolean;
@@ -120,7 +120,7 @@ function HistoryStorageBar({
         >
           <HardDrive className="h-4 w-4 text-primary" aria-hidden />
           Storage
-          <span className="font-extrabold text-primary">{formatBytes(usedBytes)}</span>
+          {usedBytes === null ? null : <span className="font-extrabold text-primary">{formatBytes(usedBytes)}</span>}
           <ChevronDown
             aria-hidden
             className={cn("h-4 w-4 text-muted-foreground transition-transform duration-200", open && "rotate-180")}
@@ -365,41 +365,20 @@ export function HistoryPanel({
     setSelecting(false);
   };
 
-  if (!ready) {
-    if (!standalone && !embedded) return null;
-    /*
-      ── 🔴 THE BLOCK SKELETON IS GONE — THE STRIPE REPLACES IT (owner, 2026-10-04)
+  if (!ready && !standalone && !embedded) return null;
+  /*
+    🔴 THE PAGE'S OWN LAYOUT IS IN THE FIRST PAINT (owner, 2026-10-10, with a
+    screenshot: "the History page always flash this half white on first /cold
+    entry"). Before this, the not-ready pass returned only a 2 px stripe, so the
+    static HTML painted the header, a blank block and the footer pulled up under
+    it until the bundle hydrated (reproduced: ~1.5–2 s on a throttled phone).
+    The store reads localStorage, which the server cannot — so now everything
+    that does NOT need the records (storage bar, search, filter chips) renders
+    on the server too, and only the grid waits, under the stripe. Counts and the
+    size are left out until they are real — never a placeholder number.
+  */
 
-      "The history first screen that shows when I enter the history immediately
-      is still showing. Instead of the white screen, the skeleton stripe loader
-      should show, or nothing should show."
-
-      The previous pass fixed the skeleton's CONTRAST (it was `--secondary` at
-      ~97.7% on a 98% background — a 0.3% difference, which is why a
-      structurally correct loading state painted as a blank page). That was a
-      real bug and the fix was right, but it answered the wrong question: a
-      screenful of grey placeholder blocks is still a screenful of furniture
-      for a wait that is HYDRATION, not a fetch.
-
-      So the whole thing is replaced by the one loader this project already
-      uses everywhere else for exactly this — `LoadingStripe`, two pixels of
-      animated gradient under the header. It says "working" without drawing a
-      fake page, and it is the same thing a cold entry and an in-app navigation
-      already show, so the three cases finally look identical.
-
-      ⚠️ The wait itself is unchanged and cannot be removed here: this page is
-      `force-static` and the store reads `localStorage`, which cannot happen on
-      the server. `loading.tsx` does NOT cover it either — there is no server
-      await to suspend on. Only the component can paint this state.
-    */
-    return (
-      <section aria-busy="true" aria-label="Loading your history">
-        <LoadingStripe />
-      </section>
-    );
-  }
-
-  if (items.length === 0) {
+  if (ready && items.length === 0) {
     // Embedded (e.g. on /library) → render nothing so it doesn't take space; the
     // dedicated history page passes `standalone` so it shows an empty state instead.
     if (!standalone && !embedded) return null;
@@ -455,7 +434,7 @@ export function HistoryPanel({
         {standalone ? (
           <HistoryStorageBar
             itemCount={items.length}
-            usedBytes={usedBytes}
+            usedBytes={ready ? usedBytes : null}
             selecting={selecting}
             onToggleSelect={() => { tap(); setSelecting((v) => !v); setSelected(new Set()); }}
             confirmClear={confirmClear}
@@ -589,11 +568,11 @@ export function HistoryPanel({
         <div className="-mx-2 mt-4 flex gap-2 overflow-x-auto px-2 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {KIND_FILTERS.map((f) => (
             <Chip key={f.key} active={tab === "recent" && kind === f.key} onClick={() => { setTab("recent"); setKind(f.key); }}>
-              {f.label} <Count>{counts[f.key]}</Count>
+              {f.label} {ready ? <Count>{counts[f.key]}</Count> : null}
             </Chip>
           ))}
           <Chip active={tab === "favorites"} onClick={() => setTab(tab === "favorites" ? "recent" : "favorites")}>
-            <Heart className={cn("h-3.5 w-3.5", tab === "favorites" && "fill-current")} /> Favorites <Count>{favCount}</Count>
+            <Heart className={cn("h-3.5 w-3.5", tab === "favorites" && "fill-current")} /> Favorites {ready ? <Count>{favCount}</Count> : null}
           </Chip>
           {/*
             Failed & cancelled. Shown only when there ARE any: a permanent
@@ -624,6 +603,12 @@ export function HistoryPanel({
         {beforeGrid}
 
         <div className="mt-5">
+        {!ready ? (
+          // holds the screen the grid will take, so the footer never rides up into it and back down
+          <section aria-busy="true" aria-label="Loading your history" className="min-h-[70svh]">
+            <LoadingStripe />
+          </section>
+        ) : (
         <MediaGallery
           items={filtered}
           onToggleFavorite={toggleFavorite}
@@ -632,6 +617,7 @@ export function HistoryPanel({
           selection={{ active: selecting, selected, onToggle: toggleSelected }}
           emptyText={tab === "favorites" ? "No favorites yet — tap the heart on any download to save it here." : "No downloads match your search."}
         />
+        )}
         </div>
       </div>
 

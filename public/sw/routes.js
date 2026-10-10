@@ -134,6 +134,18 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  /*
+    Avatars — cache-first in their OWN cache (2026-10-10, owner: "the users chat
+    avatar always reloads … it shouldn't even be noticeable"). An avatar URL is
+    versioned (`…/avatar-<ts>.jpg?v=<ts>`): a new photo is a new URL, so a hit is
+    always correct and never worth a network check. Kept apart from IMAGE_CACHE,
+    whose 80 entries feed thumbnails were filling, evicting every face.
+  */
+  if (isImage && /\/storage\/v1\/object\/public\/media\/[^/]+\/avatar-[^/]+$/.test(url.pathname) && url.searchParams.has("v")) {
+    event.respondWith(SWX.cacheFirst(req, SWX.AVATAR_CACHE));
+    return;
+  }
+
   // Images — stale-while-revalidate, capped (config.js LIMITS).
   if (isImage) {
     event.respondWith(SWX.staleWhileRevalidate(req, SWX.IMAGE_CACHE));

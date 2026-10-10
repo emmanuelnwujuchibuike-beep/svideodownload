@@ -103,12 +103,16 @@ var SWX = (self.SWX = self.SWX || {});
 // navigation's RSC payload the way v21 revalidates a document — the "A new
 // version is ready" screen that stuck for two hours after a deploy. A
 // submodule change; must bump.
-SWX.VERSION = "v25";
+// v26 (2026-10-10): avatars get their own cache-first AVATAR_CACHE (routes.js)
+// — the 80-entry IMAGE_CACHE was evicting them behind feed thumbnails, so the
+// chat avatars re-fetched (~1 s each from storage) on every entry. Must bump.
+SWX.VERSION = "v26";
 SWX.STATIC_CACHE = `frenz-static-${SWX.VERSION}`;
 SWX.IMAGE_CACHE = `frenz-img-${SWX.VERSION}`;
 SWX.PAGE_CACHE = `frenz-pages-${SWX.VERSION}`;
 SWX.API_CACHE = `frenz-api-${SWX.VERSION}`;
-SWX.KEEP = [SWX.STATIC_CACHE, SWX.IMAGE_CACHE, SWX.PAGE_CACHE, SWX.API_CACHE];
+SWX.AVATAR_CACHE = `frenz-avatar-${SWX.VERSION}`;
+SWX.KEEP = [SWX.STATIC_CACHE, SWX.IMAGE_CACHE, SWX.PAGE_CACHE, SWX.API_CACHE, SWX.AVATAR_CACHE];
 
 // Every runtime cache that can grow unboundedly gets trimmed (oldest-
 // inserted-first) after each write. Fixes the PAGE_CACHE gap found in the
@@ -117,6 +121,7 @@ SWX.LIMITS = {
   [SWX.IMAGE_CACHE]: 80,
   [SWX.PAGE_CACHE]: 60,
   [SWX.API_CACHE]: 40,
+  [SWX.AVATAR_CACHE]: 150,
 };
 
 // Small, build-STABLE public assets only. Anything under /_next/static/ has

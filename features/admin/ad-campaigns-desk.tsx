@@ -173,7 +173,7 @@ export function AdCampaignsDesk() {
   async function setBoost(c: Campaign, statsMultiplier: 1 | 10) {
     const out = await post("/api/admin/ads/campaigns", { id: c.id, statsMultiplier }, `${c.id}:boost`);
     if (!out) return;
-    setNote(out.ok ? { tone: "ok", text: statsMultiplier === 10 ? `Test mode ON: “${c.name}” shows ×10 views, clicks and conversions on its dashboard.` : `Test mode OFF: “${c.name}” shows real figures.` } : { tone: "bad", text: "That didn't go through. Nothing changed (has migration 0211 been run?)." });
+    setNote(out.ok ? { tone: "ok", text: statsMultiplier === 10 ? `Sample-data ×10 ON: “${c.name}” shows ×10 views, clicks and conversions on its dashboard.` : `Sample-data ×10 OFF: “${c.name}” shows real figures.` } : { tone: "bad", text: "That didn't go through. Nothing changed (has migration 0211 been run?)." });
     void load();
   }
 
@@ -415,8 +415,8 @@ function CampaignCard({ c, busy, onModerate, onRefund, onBoost }: { c: Campaign;
       ) : null}
 
       <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-muted/50 p-2.5 text-[11.5px]">
-        <span className="font-semibold">Dashboard test mode ×10</span>
-        <span className="text-muted-foreground">Display only: the advertiser sees 10× views, clicks and conversions (labelled “Test mode”). Stored counts and billing stay real.</span>
+        <span className="font-semibold">Dashboard sample data ×10</span>
+        <span className="text-muted-foreground">Display only: the advertiser sees 10× views, clicks and conversions (labelled “Sample data”). Stored counts and billing stay real.</span>
         <button
           type="button"
           disabled={busy !== null}

@@ -20,8 +20,8 @@ export function TestModeNote({ campaignId }: { campaignId?: string }) {
   }, [campaignId]);
   if (!on) return null;
   return (
-    <p role="note" className="rounded-xl bg-amber-50 px-3 py-2 text-[12px] font-medium text-amber-900">
-      Test mode: {campaignId ? "this campaign's" : "some campaigns'"} views, clicks and conversions are shown ×10 for testing. Billing is unaffected.
+    <p role="note" className="w-fit rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+      Sample data
     </p>
   );
 }

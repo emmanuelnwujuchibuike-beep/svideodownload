@@ -23,7 +23,7 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
 
 ### Live probes owed (production)
 
-- **0211 (admin test mode ×10):** column `ad_campaigns.stats_multiplier`, function `admin_set_ad_stats_boost`, and the re-created `ad_my_summary` (now returns `boosted`). Admin → Ads → Campaigns → each card has a "Dashboard test mode ×10" switch. Display only, per campaign, off by default, labelled "Test mode" on the advertiser dashboard; stored stats and billing stay real. Turn it off when the Frenzsave advert is done.
+- **0211 (admin test mode ×10):** column `ad_campaigns.stats_multiplier`, function `admin_set_ad_stats_boost`, and the re-created `ad_my_summary` (now returns `boosted`). Admin → Ads → Campaigns → each card has a "Dashboard sample data ×10" switch. Display only, per campaign, off by default, labelled "Sample data" on the advertiser dashboard; stored stats and billing stay real. Turn it off when the Frenzsave advert is done.
 
 This container's network policy blocks `frenzsave.com` and `*.supabase.co`, so these
 were not probed live from here. Probe each object after the push:

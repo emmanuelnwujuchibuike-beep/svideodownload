@@ -178,14 +178,14 @@ export function AdCampaignsDesk() {
   }
 
   async function setBoostAllLive(statsMultiplier: 1 | 10) {
-    if (!window.confirm(statsMultiplier === 10 ? "Show ×10 sample data on the dashboard of EVERY live campaign? (Display only — stored counts, billing and refunds are untouched.)" : "Show real figures on every live campaign's dashboard?")) return;
+    if (!window.confirm(statsMultiplier === 10 ? "Show ×10 on the dashboard of EVERY live campaign, and of every campaign that goes live while this is on? (Display only — stored counts, billing and refunds are untouched.)" : "Show real figures on every live campaign's dashboard, and stop new campaigns starting at ×10?")) return;
     const out = await post("/api/admin/ads/campaigns", { allLive: true, statsMultiplier }, "boost-all");
     if (!out) return;
     const changed = Number(out.changed ?? 0);
     const failed = Number(out.failed ?? 0);
     setNote(
       out.ok
-        ? { tone: "ok", text: changed === 0 ? `Every live campaign already shows ${statsMultiplier === 10 ? "×10 sample data" : "real figures"}.` : `Sample-data ×10 ${statsMultiplier === 10 ? "ON" : "OFF"} for ${changed} live campaign(s).` }
+        ? { tone: "ok", text: (changed === 0 ? `Every live campaign already shows ${statsMultiplier === 10 ? "×10 sample data" : "real figures"}.` : `Sample-data ×10 ${statsMultiplier === 10 ? "ON" : "OFF"} for ${changed} live campaign(s).`) + (statsMultiplier === 10 ? " Campaigns that go live from now on start at ×10 too." : " New campaigns start with real figures.") }
         : { tone: "bad", text: failed > 0 ? `${changed} changed, ${failed} didn't go through. Try again.` : "That didn't go through. Nothing changed (has migration 0212 been run?)." },
     );
     void load();
@@ -441,7 +441,7 @@ function CampaignCard({ c, busy, onModerate, onRefund, onBoost }: { c: Campaign;
 
       <div className="mt-3 flex flex-col items-start gap-1.5 rounded-xl bg-muted/50 p-2.5 text-[11.5px] sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
         <span className="font-semibold">Dashboard sample data ×10</span>
-        <span className="text-muted-foreground">Display only: the advertiser sees 10× views, clicks and conversions (labelled “Sample data”). Stored counts and billing stay real.</span>
+        <span className="text-muted-foreground">Display only: the advertiser sees 10× views, clicks and conversions. “All live” also applies to every campaign that goes live while it is on. Stored counts and billing stay real.</span>
         <button
           type="button"
           disabled={busy !== null}

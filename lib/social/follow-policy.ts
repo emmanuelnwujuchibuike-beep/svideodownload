@@ -42,7 +42,8 @@ export function followDecision(policy: string | null | undefined, viewer: { isFr
 }
 
 /** Where a follow came from (follows.source / follow_requests.source, 0217) — counted for the owner, never who. */
-export const FOLLOW_SOURCES = ["profile", "search", "suggestion", "feed", "reels", "qr", "request", "other"] as const;
+// 0220 added "contacts" (the Contacts page). The database checks this same list (follows_source_chk).
+export const FOLLOW_SOURCES = ["profile", "search", "suggestion", "feed", "reels", "qr", "request", "contacts", "other"] as const;
 export type FollowSource = (typeof FOLLOW_SOURCES)[number];
 export function isFollowSource(v: unknown): v is FollowSource {
   return typeof v === "string" && (FOLLOW_SOURCES as readonly string[]).includes(v);
@@ -56,6 +57,7 @@ export const FOLLOW_SOURCE_LABELS: Record<FollowSource, string> = {
   reels: "Reels",
   qr: "QR code",
   request: "Approved requests",
+  contacts: "Your contacts",
   other: "Elsewhere",
 };
 

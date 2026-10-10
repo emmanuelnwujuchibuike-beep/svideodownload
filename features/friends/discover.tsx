@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Loader2, QrCode, RotateCw, Search, Send, UserCheck, UserPlus, Users, X } from "lucide-react";
+import { BookUser, Check, ChevronRight, Loader2, QrCode, RotateCw, Search, Send, UserCheck, UserPlus, Users, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -8,6 +8,7 @@ import { VerifiedTick } from "@/components/badges/identity-badges";
 import { AmbientWash, GLASS, GlassGroup, GlassIconLink, PersonAvatar, primaryPill, SectionHeader } from "@/features/friends/ui";
 import { usePresence } from "@/features/friends/use-presence";
 import { attributionLink, reportReferralShared, shareOrCopy } from "@/lib/referrals/share-client";
+import type { FollowSource } from "@/lib/social/follow-policy";
 import { toggleFollow, useFollowState } from "@/lib/social/follow-store";
 import type { SearchPerson } from "@/lib/social/search";
 import type { SuggestedCreator } from "@/lib/social/suggest";
@@ -155,7 +156,12 @@ export function FriendsDiscover({ initialSuggestions, handle = null }: { initial
         </div>
       </div>
 
-      {searching ? null : <InviteCard />}
+      {searching ? null : (
+        <>
+          <ContactsLink />
+          <InviteCard />
+        </>
+      )}
 
       <SectionHeader
         title={searching ? (loading ? "Searching…" : "Results") : "People you may know"}
@@ -180,6 +186,22 @@ export function FriendsDiscover({ initialSuggestions, handle = null }: { initial
         </GlassGroup>
       )}
     </div>
+  );
+}
+
+/** The way into Contact Discovery (Part 5): contacts are read and hashed on the device, on that page. */
+function ContactsLink() {
+  return (
+    <Link href="/friends/contacts" prefetch={false} className={cn("mb-3 flex items-center gap-3 rounded-[22px] p-3.5 transition active:scale-[0.99] motion-reduce:active:scale-100", GLASS)}>
+      <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">
+        <BookUser className="h-5 w-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[14.5px] font-semibold leading-tight">Find friends from your contacts</span>
+        <span className="mt-0.5 block text-[12.5px] leading-snug text-muted-foreground">Private: your contacts never leave this device.</span>
+      </span>
+      <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+    </Link>
   );
 }
 
@@ -254,12 +276,12 @@ function PersonRow({ person }: { person: Person }) {
  * The accessible name carries the person and the state ("Follow Chris" becomes
  * "Following Chris"), because a screen reader cannot see a colour change.
  */
-function FollowChip({ id, name, initial }: { id: string; name: string; initial: boolean }) {
+export function FollowChip({ id, name, initial, source = "suggestion" }: { id: string; name: string; initial: boolean; source?: FollowSource }) {
   const following = useFollowState(id, initial);
   return (
     <button
       type="button"
-      onClick={() => void toggleFollow(id, !following, "suggestion")}
+      onClick={() => void toggleFollow(id, !following, source)}
       aria-pressed={following}
       aria-label={following ? `Following ${name}. Tap to unfollow.` : `Follow ${name}`}
       className={cn(

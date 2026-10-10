@@ -184,8 +184,70 @@ second table to drift), People You May Know with non-disclosing reasons
 
 ---
 
+## Part 5 — Contact Sync™, Smart Discovery & the Invitation Platform
+
+| Layer | File |
+|---|---|
+| Device-side parsing, normalisation, invite links (pure) | `lib/social/contacts/normalize.ts` |
+| Browser hashing (Web Crypto SHA-256) | `lib/social/contacts/hash.ts` |
+| Server (runs as the member) | `lib/social/contacts/server.ts` |
+| API | `app/api/contacts/match`, `matches`, `privacy` |
+| UI | `/friends/contacts` (`features/friends/contacts.tsx`), linked from Add friends |
+| Schema | `0220` |
+| Tests | `lib/social/contacts/contacts.test.ts` + the 0220 PGlite run (25 checks, run twice, 2 mutants that fail) |
+
+**How a contact is matched, and what is never done with it**
+
+1. Contacts are read **on the device**: the Contact Picker (Chrome on Android),
+   a `.vcf` or `.csv` export (phone, Google, Apple, Outlook), or pasted
+   addresses. Duplicates merge there (one person per address).
+2. Each e-mail address is normalised (`trim`, lower case) and hashed with
+   SHA-256 **in the browser**. Only those hashes are sent, at most 500 per
+   request. The route refuses anything that is not a 64-character hex hash.
+3. The database keys each hash again with a secret no client role can read
+   (`contact_private_settings`) and looks it up in `contact_match_keys`, one keyed
+   hash per member with a **confirmed** address, kept current by a trigger on
+   `auth.users`. So a leaked key table cannot be reversed with a dictionary of
+   addresses, and an unconfirmed sign-up with someone else's address never
+   makes them "found".
+4. A hash that matches nobody is never stored. A match is returned only if
+   the member allows it (`profile_discovery.findable_by_email`: anyone, friends
+   of friends, or nobody) and neither side has blocked the other.
+5. Nothing is remembered unless the member switches on "Remember matches",
+   and then only the pair (them, the member found), never the address.
+   Remembered matches are re-checked against today's privacy settings on
+   every read, and "Forget" deletes them all.
+6. Enumeration is capped in the database: 500 hashes per call, 2,000 per
+   member per UTC day (`contact_match_usage`), plus 10 calls a minute at the edge.
+
+**Invitations** are links the device opens (mail, SMS, WhatsApp, Telegram, or
+the native share sheet for Signal and everything else), carrying the member's
+one attribution link (`/r/<token>`), so a join is credited by the existing
+referral system. Frenz sends nothing to a contact and never sees their address.
+
+**Gap Ledger**
+
+| Brief item | State |
+|---|---|
+| Phone / e-mail contacts, file import (vCard, CSV: phone, SIM export, Google, Apple, Microsoft), paste | **live** |
+| Privacy-first matching (hash on device, keyed server compare, discard unmatched, confirmed addresses only) | **live** |
+| Sync permissions: manual sync, remember or not, delete synced data, who may find me | **live** |
+| Contact Health: read / on Frenz / to invite / duplicates merged | **live** (counts from this run, on the device) |
+| Invite by e-mail, SMS, WhatsApp, Telegram, Signal (share sheet), QR (`/u/<handle>/card`), profile link | **live** |
+| Follows made here are attributed (follow source `contacts`, follower insights) | **live** |
+| Matching on PHONE numbers | planned — Frenz has no verified phone numbers. Matching unverified ones would let anyone claim someone else's number |
+| Automatic / background sync | planned — the web cannot read a phone's address book in the background. The member re-runs it |
+| Who may invite me / see my contact info / see mutual contacts | partly — Frenz never stores a contact's address, so there is nothing to show. Invites are sent by the inviter's own device |
+| Invitation landing with profile preview and reason | partly — `/r/<token>` already credits the referral. A richer landing page is planned |
+| Contact labels (family, work…) and AI Reconnect ("you worked together") | planned — needs organisation and school data Frenz does not hold. Relationship labels (Part 1) apply once connected |
+| Contact timeline (invited → joined → became friend) | planned — invites are opened on the device, so "invited" is not observable. Joins are in the referral records |
+| Business / organisation / educational directories, corporate import | planned — no directory product exists |
+| NFC, Nearby Share | planned (future, as the brief says) |
+
+---
+
 ## Migrations to run (in order)
 
-`0214`, `0215`, `0216`, `0217`. Each is idempotent and PGlite-tested (run twice,
+`0214`, `0215`, `0216`, `0217`, `0218`, `0219` (×10 dashboard switch stands for new campaigns), `0220` (Contact Discovery: run after 0217, whose follow-source constraint it widens). Each is idempotent and PGlite-tested (run twice,
 plus a mutant that must fail). The code works before and after each: every new
 read falls back to today's behaviour when its column or table is missing.

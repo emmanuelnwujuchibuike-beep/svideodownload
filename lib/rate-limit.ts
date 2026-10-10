@@ -168,6 +168,12 @@ export const deviceLimiter: Limiter = buildLimiter(
 // recipients per call; this bounds how often that call can be made).
 export const shareLimiter: Limiter = buildLimiter(Number(process.env.RATE_LIMIT_SHARE_PER_MIN || 20));
 
+// Feature 19 Part 5 — contact matching. A member's whole address book is a few
+// batches of 500, so 10 calls a minute is generous for a person and useless for
+// a scraper. The real cap (2,000 hashes a day) is counted in the database
+// (migration 0220), so a Redis outage cannot lift it.
+export const contactMatchLimiter: Limiter = buildLimiter(Number(process.env.RATE_LIMIT_CONTACT_MATCH_PER_MIN || 10));
+
 // Reward-gated downloads (HD/batch unlock). Starting a session is cheap to spam
 // (no ad shown yet), so it gets the tighter bound; completing one is rarer and
 // already gated behind actually watching something.

@@ -271,6 +271,24 @@ describe("2026-10-09: x10 for every live campaign at once", () => {
     expect(route).toContain("requireAdminApi");
     expect(src("features/admin/ad-campaigns-desk.tsx")).toContain("{ allLive: true, statsMultiplier }");
   });
+
+  it("0219: the switch STANDS - a campaign that goes live later inherits x10 (it used to stay x1)", () => {
+    const fn = src("lib/ads-platform/admin-campaigns.ts").slice(src("lib/ads-platform/admin-campaigns.ts").indexOf("export async function setStatsBoostAllLive"));
+    expect(fn).toContain(`db.rpc("admin_set_ad_stats_boost_new_live"`);
+    const m = src("supabase/migrations/0219_ad_stats_boost_new_live.sql");
+    // on the edge INTO active only, from x1 only, and only while the standing switch is on
+    expect(m).toContain("(tg_op = 'INSERT' or old.status is distinct from 'active')");
+    expect(m).toContain("new.stats_multiplier = 1");
+    expect(m).toContain("s.stats_boost_new_live = 10");
+    expect(m).toMatch(/create trigger ad_campaigns_inherit_boost before insert or update on public\.ad_campaigns/);
+    // private: never on the publicly readable ad_platform_settings
+    expect(m).not.toMatch(/alter table public\.ad_platform_settings/);
+    expect(m).toMatch(/revoke all on function public\.admin_set_ad_stats_boost_new_live\(integer, uuid\) from public, anon, authenticated/);
+    // the runner splits on ";" - none may hide in a comment or a comment string
+    const plain = m.split("$$").filter((_, i) => i % 2 === 0).join("");
+    for (const line of plain.split("\n")) if (line.trim().startsWith("--")) expect(line, line).not.toContain(";");
+    expect(plain).not.toMatch(/comment on [^']*'[^']*;[^']*'/);
+  });
 });
 
 describe("2026-10-09: advertisers remove drafts and finished campaigns from their list (0213)", () => {

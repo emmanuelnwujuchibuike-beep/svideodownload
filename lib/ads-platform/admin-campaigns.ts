@@ -329,8 +329,16 @@ export async function setStatsBoost(db: Db, adminId: string, input: { id: string
  * 0212: the same switch for EVERY live campaign at once. Each one still goes
  * through admin_set_ad_stats_boost, so each gets its own audit event. Display
  * only - stored counts are untouched. Campaigns already at that multiplier are skipped.
+ *
+ * 0219 (owner, 2026-10-10: "the 10x user advert stat seems not to be working"):
+ * the switch also STANDS - every campaign that goes live later starts at the
+ * same multiplier (a trigger on ad_campaigns). Before, it only stamped the
+ * campaigns live at that moment, so a newer one showed real figures. Before
+ * 0219 runs the standing part is skipped and the bulk stamp still works.
  */
 export async function setStatsBoostAllLive(db: Db, adminId: string, multiplier: 1 | 10): Promise<{ ok: boolean; changed: number; failed: number }> {
+  const standing = await db.rpc("admin_set_ad_stats_boost_new_live", { p_multiplier: multiplier, p_admin: adminId });
+  if (standing.error && !/admin_set_ad_stats_boost_new_live|function|schema cache/i.test(standing.error.message)) throw new Error(`stats boost standing: ${standing.error.message}`);
   const { data, error } = await db.from("ad_campaigns").select("id, stats_multiplier").eq("status", "active").neq("stats_multiplier", multiplier).limit(1000);
   if (error) throw new Error(`stats boost all: ${error.message}`);
   const ids = ((data ?? []) as { id: string }[]).map((r) => r.id);

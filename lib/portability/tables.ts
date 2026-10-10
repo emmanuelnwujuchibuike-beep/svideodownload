@@ -43,6 +43,7 @@ export const SECRET_TABLES: Record<string, string> = {
   user_encryption_keys: "Private keys for end-to-end encrypted chats. Exporting them would let anyone holding the file read those conversations.",
   webauthn_credentials: "Passkey material, which is bound to the device that holds it and is meaningless — and dangerous — anywhere else.",
   webauthn_challenges: "Short-lived sign-in challenges. They expire in minutes and mean nothing outside a live sign-in.",
+  contact_private_settings: "The server secret that keys contact-matching hashes. With it, the stored hashes could be tested against a list of addresses.",
 };
 
 /**
@@ -82,6 +83,9 @@ export const NOT_EXPORTED: Record<string, string> = {
   ad_ingest_counters: "Short-lived counters (kept for minutes) that rate-limit ad events. Not personal data.",
   ad_risk_flags: "Admin review flags about ad campaigns — counts only, about campaigns rather than people.",
   ad_private_settings: "The platform's private hashing salt. Not personal data.",
+  /* Feature 19 Part 5 (0220): contact discovery internals */
+  contact_match_keys: "A keyed hash of your confirmed e-mail address, used only to match contacts. Your address itself is in your account section.",
+  contact_match_usage: "A per-day count of contact hashes checked (the anti-abuse cap), deleted after 7 days.",
   affiliate_offers: "Affiliate catalogue. Not personal data.",
   media_assets: "Shared media records, not owned by one member.",
   asset_usage: "Links assets to places they appear. Not personal data.",
@@ -310,6 +314,7 @@ export const OWNER_COLUMN: Record<string, string> = {
 
   /* discovery */
   profile_discovery: "user_id",
+  contact_matches: "owner_id", // 0220: the contact matches you chose to remember
   profile_bookmarks: "owner_id",
   profile_bookmark_lists: "owner_id",
   collections: "user_id",

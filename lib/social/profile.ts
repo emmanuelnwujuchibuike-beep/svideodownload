@@ -3,6 +3,7 @@ import "server-only";
 import { getCached } from "@/lib/cache";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { flagsOf, isAccountVisibleTo, relationTo } from "@/lib/social/account-visibility";
+import type { RequestPolicy } from "@/lib/social/friend-requests/trust";
 import { friendIdSet } from "@/lib/social/friend-ids";
 import { PROFILE_ACCENTS } from "@/lib/social/profile-moods";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -329,6 +330,8 @@ export interface PrivacySettings {
   /** Migration 0122 (Feature 15 Part 5 tranche 4) — comments containing any
    *  of these words (case-insensitive substring) are rejected at post time. */
   muted_comment_keywords: string[];
+  /** Migration 0216 (Feature 19 · Part 2) — who may send you a friend request. */
+  friend_requests_policy: RequestPolicy;
 }
 
 export const DEFAULT_PRIVACY: PrivacySettings = {
@@ -351,6 +354,7 @@ export const DEFAULT_PRIVACY: PrivacySettings = {
   show_views: true,
   story_screenshot_alerts: true,
   muted_comment_keywords: [],
+  friend_requests_policy: "everyone",
 };
 
 /* ----------------------------- follow lists ----------------------------- */
@@ -539,6 +543,7 @@ const PRIVACY_BASE_COLS =
 const PRIVACY_NEW_COLS = "show_reputation, show_plan_badge, show_views"; // migrations 0102 + 0106
 const PRIVACY_NEWER_COLS = "muted_comment_keywords"; // migration 0122
 const PRIVACY_NEWEST_COLS = "story_screenshot_alerts"; // migration 0181
+const PRIVACY_0216_COLS = "friend_requests_policy"; // migration 0216
 
 export async function getPrivacySettings(userId: string): Promise<PrivacySettings> {
   if (!hasSupabase) return DEFAULT_PRIVACY;
@@ -547,6 +552,18 @@ export async function getPrivacySettings(userId: string): Promise<PrivacySetting
   // applied yet must never revert an EARLIER, already-live setting to its
   // default (that would be a real privacy regression), so each tier only
   // drops the columns that are actually missing.
+  // 0216 first, as its own tier: a missing friend_requests_policy column drops ONLY that column
+  try {
+    const { data, error } = await db
+      .from("privacy_settings")
+      .select(`${PRIVACY_BASE_COLS}, ${PRIVACY_NEW_COLS}, ${PRIVACY_NEWER_COLS}, ${PRIVACY_NEWEST_COLS}, ${PRIVACY_0216_COLS}`)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    return { ...DEFAULT_PRIVACY, ...((data ?? {}) as Partial<PrivacySettings>) };
+  } catch {
+    /* 0216 not applied yet — the tiers below, exactly as before */
+  }
   try {
     const { data, error } = await db
       .from("privacy_settings")

@@ -22,6 +22,13 @@ const POLICY: Choice[] = [
   { value: "followers", label: "Followers" },
   { value: "off", label: "Off" },
 ];
+/** 0216 — who may send you a friend request (lib/social/friend-requests/trust.ts) */
+const REQUEST_POLICY: Choice[] = [
+  { value: "everyone", label: "Everyone" },
+  { value: "friends_of_friends", label: "Mutuals" },
+  { value: "verified", label: "Verified" },
+  { value: "nobody", label: "Nobody" },
+];
 const REL_POLICY: Choice[] = [
   { value: "everyone", label: "Everyone" },
   { value: "friends", label: "Friends" },
@@ -69,6 +76,7 @@ export function PrivacyEditor({ settings }: { settings: PrivacySettings }) {
           <SegRow icon={Bookmark} tint="amber" title="Saved tab" desc="Who can see the posts you save" value={state.saves_visibility} choices={VIS} onChange={(v) => set("saves_visibility", v as PrivacySettings["saves_visibility"])} />
           <SegRow icon={MessageSquare} tint="violet" title="Comments" desc="Who can comment on your posts" value={state.comments_policy} choices={POLICY} onChange={(v) => set("comments_policy", v as PrivacySettings["comments_policy"])} />
           <SegRow icon={MessageSquare} tint="purple" title="Messages" desc="Who can send you direct messages" value={state.messages_policy} choices={POLICY} onChange={(v) => set("messages_policy", v as PrivacySettings["messages_policy"])} />
+          <SegRow icon={UserPlus} tint="blue" title="Friend requests" desc="Who can send you one. Mutuals = friends of your friends." value={state.friend_requests_policy} choices={REQUEST_POLICY} onChange={(v) => set("friend_requests_policy", v as PrivacySettings["friend_requests_policy"])} />
           <ToggleRow icon={Search} tint="slate" title="Search engine indexing" desc="Let Google show your profile" on={state.allow_indexing} onToggle={() => set("allow_indexing", !state.allow_indexing)} />
           <ToggleRow icon={Sparkles} tint="purple" title="Recommendations" desc="Show me in suggestions & trending" on={state.show_in_recommendations} onToggle={() => set("show_in_recommendations", !state.show_in_recommendations)} />
           {/* Public-by-default, hideable (owner). */}

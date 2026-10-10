@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { REQUEST_POLICIES } from "@/lib/social/friend-requests/trust";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -41,6 +42,8 @@ const schema = z.object({
   following_visibility: vis.optional(),
   show_mutual_connections: z.boolean().optional(),
   // Migration 0122 — comment keyword filter (Feature 15 Part 5 tranche 4).
+  /** 0216 (Feature 19 · Part 2) — who may send you a friend request */
+  friend_requests_policy: z.enum(REQUEST_POLICIES).optional(),
   muted_comment_keywords: z.array(z.string().trim().min(1).max(40)).max(50).optional(),
 });
 
@@ -78,6 +81,7 @@ export async function PATCH(request: Request) {
       following_visibility: _flv,
       show_mutual_connections: _smc,
       muted_comment_keywords: _mck,
+      friend_requests_policy: _frp,
       ...base
     } = row;
     void _sr;
@@ -88,6 +92,7 @@ export async function PATCH(request: Request) {
     void _flv;
     void _smc;
     void _mck;
+    void _frp;
     const retry = await supabase.from("privacy_settings").upsert(base, { onConflict: "user_id" });
     if (retry.error) return NextResponse.json({ error: "Couldn't save settings." }, { status: 500 });
   }

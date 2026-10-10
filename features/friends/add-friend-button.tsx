@@ -60,7 +60,7 @@ export function AddFriendButton({
     armTimer.current = setTimeout(() => setArmed(false), 3000);
   };
 
-  const post = async (body: { action: string; note?: string }) => {
+  const post = async (body: { action: string; note?: string | undefined; source?: string }) => {
     const res = await fetch(`/api/friends/${targetId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -177,7 +177,8 @@ export function AddFriendButton({
         targetAvatarUrl={targetAvatarUrl}
         mutualCount={mutualCount}
         onSend={async (note) => {
-          const res = await post({ action: "request", note: note || undefined });
+          // Feature 19 · Part 2: where it came from — this button lives on the profile
+          const res = await post({ action: "request", note: note || undefined, source: "profile" });
           if (res.ok) {
             setState("outgoing");
             // Same prompt a follow raises — see creator-notify-nudge.tsx. Fired

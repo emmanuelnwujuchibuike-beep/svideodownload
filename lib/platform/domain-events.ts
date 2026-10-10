@@ -35,6 +35,11 @@ export const DOMAIN_EVENTS = [
   { id: "user.created", name: "UserCreated", description: "A new account was created.", domain: "identity", payload: ["userId"] },
   { id: "session.started", name: "SessionStarted", description: "A user signed in on a device.", domain: "identity", payload: ["userId", "sessionId"] },
   { id: "follow.created", name: "FollowCreated", description: "One user followed another.", domain: "social", payload: ["followerId", "followeeId"] },
+  // Feature 19 · Part 2 — the friend graph (lib/social/friends.ts emits these)
+  { id: "friend.requested", name: "FriendRequested", description: "A friend request was sent.", domain: "social", payload: ["senderId", "receiverId", "source"] },
+  { id: "friend.added", name: "FriendAdded", description: "A friend request was accepted — two people became friends.", domain: "social", payload: ["userId", "friendId", "label"] },
+  { id: "friend.closed", name: "FriendRequestClosed", description: "A friend request was declined, ignored or cancelled.", domain: "social", payload: ["senderId", "receiverId", "outcome"] },
+  { id: "friend.removed", name: "FriendRemoved", description: "A friendship was ended.", domain: "social", payload: ["userId", "friendId"] },
   { id: "post.published", name: "PostPublished", description: "A post/reel/story went live.", domain: "social", payload: ["postId", "authorId", "kind"] },
   { id: "comment.added", name: "CommentAdded", description: "A comment was added to a post.", domain: "social", payload: ["commentId", "postId", "authorId"] },
   { id: "reaction.added", name: "ReactionAdded", description: "A reaction was added to a post.", domain: "social", payload: ["postId", "actorId", "reaction"] },
@@ -59,6 +64,10 @@ export interface DomainEventPayloads {
   "user.created": { userId: string };
   "session.started": { userId: string; sessionId: string };
   "follow.created": { followerId: string; followeeId: string };
+  "friend.requested": { senderId: string; receiverId: string; source: string | null };
+  "friend.added": { userId: string; friendId: string; label: string | null };
+  "friend.closed": { senderId: string; receiverId: string; outcome: "declined" | "ignored" | "cancelled" };
+  "friend.removed": { userId: string; friendId: string };
   "post.published": { postId: string; authorId: string; kind: "post" | "reel" | "story" };
   "comment.added": { commentId: string; postId: string; authorId: string };
   "reaction.added": { postId: string; actorId: string; reaction: string };

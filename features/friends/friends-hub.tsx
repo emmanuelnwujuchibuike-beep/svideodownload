@@ -22,6 +22,8 @@ import { useMemo, useRef, useState } from "react";
 
 import { FriendCelebration } from "@/features/friends/friend-celebration";
 import { FriendOrbit } from "@/features/friends/friend-orbit";
+import { RequestCard } from "@/features/friends/request-card";
+import { filterRequests, REQUEST_FILTERS, type RequestFilter } from "@/features/friends/request-logic";
 import { usePresence } from "@/features/friends/use-presence";
 import { timeAgo } from "@/features/notifications/meta";
 import type { FriendItem, FriendProfile, FriendRequestItem, FriendsOverview } from "@/lib/social/friends";
@@ -37,6 +39,7 @@ import { cn } from "@/lib/utils";
 
 const DAY = 24 * 60 * 60 * 1000;
 type Tab = "all" | "online" | "favorites" | "active" | "new";
+
 
 /**
  * A header tool: neutral, bordered, and a real 44px target.
@@ -80,7 +83,8 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
   // Live green dots — everyone currently in the shared presence channel.
   const online = usePresence();
 
-  const respond = async (req: FriendRequestItem, action: "accept" | "decline") => {
+  // Feature 19 · Part 2 — ignore (silent) and Accept As (a label on accept)
+  const respond = async (req: FriendRequestItem, action: "accept" | "decline" | "ignore", as?: string) => {
     if (busyId) return;
     setBusyId(req.id);
     const prevIn = incoming;
@@ -96,7 +100,7 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
       const res = await fetch(`/api/friends/${req.user.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify(as ? { action, as } : { action }),
       });
       if (!res.ok) {
         setIncoming(prevIn);
@@ -107,6 +111,32 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
     } catch {
       setIncoming(prevIn);
       setFriends(prevFriends);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const [requestFilter, setRequestFilter] = useState<RequestFilter>("newest");
+  const visibleRequests = useMemo(() => filterRequests(incoming, requestFilter), [incoming, requestFilter]);
+
+  /** Follow instead: follow them, and quietly set the request aside (ignore) — they keep a follower, not a friend. */
+  const followInstead = async (req: FriendRequestItem) => {
+    if (busyId) return;
+    const res = await fetch(`/api/follow/${req.user.id}`, { method: "POST" }).catch(() => null);
+    if (res?.ok) await respond(req, "ignore");
+  };
+
+  /** Block from the request itself — the block route also closes the request and any friendship (app/api/block). */
+  const blockRequester = async (req: FriendRequestItem) => {
+    if (busyId) return;
+    setBusyId(req.id);
+    const prev = incoming;
+    setIncoming((l) => l.filter((r) => r.id !== req.id));
+    try {
+      const res = await fetch(`/api/block/${req.user.id}`, { method: "POST" });
+      if (!res.ok) setIncoming(prev);
+    } catch {
+      setIncoming(prev);
     } finally {
       setBusyId(null);
     }
@@ -216,46 +246,36 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
               {incoming.length}
             </span>
           </h2>
+          {incoming.length > 1 ? (
+            <div className="mb-2.5 flex gap-1.5 overflow-x-auto pb-0.5" role="group" aria-label="Sort and filter requests">
+              {REQUEST_FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  aria-pressed={requestFilter === f.id}
+                  onClick={() => setRequestFilter(f.id)}
+                  className={cn(
+                    "min-h-[2.25rem] shrink-0 rounded-full px-3 text-xs font-semibold transition",
+                    requestFilter === f.id ? "bg-foreground text-background" : "bg-secondary text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <ul className="space-y-2.5">
-            {incoming.map((req) => (
-              <li key={req.id} className="relative overflow-hidden rounded-3xl border border-border/70 bg-card/80 p-4 shadow-sm backdrop-blur">
-                <div aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-gradient-to-br from-blue-500/15 to-violet-500/15 blur-2xl" />
-                <div className="flex items-start gap-3">
-                  <ProfileAvatar user={req.user} />
-                  <div className="min-w-0 flex-1">
-                    <Link href={`/u/${req.user.handle}`} className="font-semibold hover:underline">
-                      {req.user.displayName}
-                    </Link>
-                    <span className="ml-1.5 text-xs text-muted-foreground">
-                      @{req.user.handle} · {timeAgo(req.createdAt)} ago
-                    </span>
-                    {req.note ? (
-                      <p className="mt-1.5 rounded-2xl border border-violet-500/20 bg-violet-500/[0.06] px-3 py-2 text-sm leading-relaxed">
-                        “{req.note}”
-                      </p>
-                    ) : null}
-                    <div className="mt-2.5 flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => respond(req, "accept")}
-                        disabled={busyId === req.id}
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-1.5 text-sm font-semibold text-white shadow-md shadow-violet-500/25 transition hover:opacity-95 disabled:opacity-60"
-                      >
-                        {busyId === req.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Accept
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => respond(req, "decline")}
-                        disabled={busyId === req.id}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-4 py-1.5 text-sm font-semibold text-muted-foreground transition hover:bg-secondary disabled:opacity-60"
-                      >
-                        <X className="h-4 w-4" /> Decline
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </li>
+            {visibleRequests.map((req) => (
+              <RequestCard
+                key={req.id}
+                req={req}
+                busy={busyId === req.id}
+                onRespond={(action, as) => void respond(req, action, as)}
+                onFollowInstead={() => void followInstead(req)}
+                onBlock={() => void blockRequester(req)}
+              />
             ))}
+            {visibleRequests.length === 0 ? <li className="px-1 py-3 text-sm text-muted-foreground">No requests match this filter.</li> : null}
           </ul>
         </section>
       ) : null}

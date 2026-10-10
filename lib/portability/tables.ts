@@ -301,6 +301,7 @@ export const OWNER_COLUMN: Record<string, string> = {
   circle_members: "owner_id",
   trusted_contacts: "owner_id",
   friend_requests: "sender_id",
+  friend_request_ignores: "receiver_id", // 0216: the receiver's own "Ignore"
   friend_favorites: "user_id",
 
   /* discovery */

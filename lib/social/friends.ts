@@ -1,9 +1,23 @@
 import { after } from "next/server";
 
+import { emit } from "@/lib/platform/event-bus";
 import { sendPushToUser } from "@/lib/push/web-push";
 import { flagsOf, isAccountVisibleTo } from "@/lib/social/account-visibility";
 import { listConversations } from "@/lib/social/messages";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveLabelInput } from "@/lib/social/graph/labels";
+import {
+  expireStaleRequests,
+  ignoredRequestIds,
+  mutualFriendCount,
+  recentlyRefused,
+  requestContexts,
+  requestPolicyOf,
+  sameNoteSentToday,
+  senderFacts,
+  type RequestContext,
+} from "@/lib/social/friend-requests/server";
+import { NOTE_MAX, noteProblem, policyAllows, requestAllowance, type RequestSource } from "@/lib/social/friend-requests/trust";
 
 /**
  * Frenz Connect — friendships (mutual, request-based; distinct from follows).
@@ -21,8 +35,6 @@ const hasSupabase =
 
 const pair = (a: string, b: string): [string, string] => (a < b ? [a, b] : [b, a]);
 
-/** Max friend requests a user may send per rolling 24h (anti-spam). */
-const DAILY_REQUEST_CAP = 20;
 const REMINDER_DELAY_MS = 5 * 60 * 1000;
 
 export type FriendshipState = "self" | "friends" | "outgoing" | "incoming" | "none";
@@ -40,6 +52,8 @@ export interface FriendRequestItem {
   note: string | null;
   createdAt: string;
   user: FriendProfile; // the other party (sender for incoming, receiver for outgoing)
+  /** Incoming only (Feature 19 · Part 2): mutual friends, time on Frenz, where it came from. */
+  context?: RequestContext | undefined;
 }
 
 export interface FriendItem {
@@ -100,13 +114,18 @@ export async function listIncomingFriendRequests(userId: string, limit = 30): Pr
       .eq("status", "pending")
       .order("created_at", { ascending: false })
       .limit(limit);
-    const rows = (data as { id: string; sender_id: string; note: string | null; created_at: string }[]) ?? [];
+    const ignored = await ignoredRequestIds(db, userId);
+    const rows = ((data as { id: string; sender_id: string; note: string | null; created_at: string }[]) ?? []).filter((r) => !ignored.has(r.id));
+    after(() => expireStaleRequests(db, userId).catch(() => {}));
     if (rows.length === 0) return [];
-    const profiles = await loadProfiles(db, [...new Set(rows.map((r) => r.sender_id))]);
+    const [profiles, contexts] = await Promise.all([
+      loadProfiles(db, [...new Set(rows.map((r) => r.sender_id))]),
+      requestContexts(db, userId, rows).catch(() => new Map<string, RequestContext>()),
+    ]);
     return rows
-      .map((r) => {
+      .map((r): FriendRequestItem | null => {
         const user = profiles.get(r.sender_id);
-        return user ? { id: r.id, note: r.note, createdAt: r.created_at, user } : null;
+        return user ? { id: r.id, note: r.note, createdAt: r.created_at, user, context: contexts.get(r.id) } : null;
       })
       .filter((x): x is FriendRequestItem => !!x);
   } catch {
@@ -204,13 +223,20 @@ export async function mutualFriendsCount(a: string, b: string): Promise<number> 
 
 export type FriendActionResult =
   | { ok: true; state: FriendshipState }
-  | { ok: false; reason: "self" | "blocked" | "exists" | "incoming" | "cap" | "unavailable" };
+  | {
+      ok: false;
+      reason:
+        | "self" | "blocked" | "exists" | "incoming" | "cap" | "unavailable"
+        // Feature 19 · Part 2 — the trust workflow (lib/social/friend-requests/trust.ts)
+        | "policy" | "cooldown" | "hourly" | "paused" | "note_link" | "note_contact" | "note_repeated";
+    };
 
 /** Send a friend request (with optional ≤150-char note). Notifies + pushes the receiver. */
 export async function sendFriendRequest(
   senderId: string,
   receiverId: string,
   note?: string | null,
+  source: RequestSource | null = null,
 ): Promise<FriendActionResult> {
   if (!hasSupabase) return { ok: false, reason: "unavailable" };
   if (senderId === receiverId) return { ok: false, reason: "self" };
@@ -219,9 +245,9 @@ export async function sendFriendRequest(
 
     const { data: profs } = await db
       .from("profiles")
-      .select("id, is_suspended, is_hidden, handle")
+      .select("id, is_suspended, is_hidden, handle, is_verified")
       .in("id", [senderId, receiverId]);
-    const rows = (profs ?? []) as { id: string; is_suspended: boolean; is_hidden: boolean; handle: string | null }[];
+    const rows = (profs ?? []) as { id: string; is_suspended: boolean; is_hidden: boolean; handle: string | null; is_verified?: boolean }[];
     const rec = rows.find((r) => r.id === receiverId);
     const me = rows.find((r) => r.id === senderId);
     if (!rec || !rec.handle) return { ok: false, reason: "unavailable" };
@@ -249,19 +275,35 @@ export async function sendFriendRequest(
       .eq("status", "pending");
     if ((incoming ?? 0) > 0) return { ok: false, reason: "incoming" };
 
-    // Rolling 24h cap — keeps requests meaningful (anti-spam per the spec).
-    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { count: sentToday } = await db
-      .from("friend_requests")
-      .select("id", { head: true, count: "exact" })
-      .eq("sender_id", senderId)
-      .gte("created_at", dayAgo);
-    if ((sentToday ?? 0) >= DAILY_REQUEST_CAP) return { ok: false, reason: "cap" };
+    /*
+      Feature 19 · Part 2 — the Adaptive Trust Workflow (friend-requests/trust.ts).
+      Order: the receiver's own rule first (who may ask), then the pair (a recent
+      decline), then the sender's behaviour (adaptive allowance), then the note.
+      Each refusal names what to do, never a score.
+    */
+    const policy = await requestPolicyOf(db, receiverId);
+    if (policy !== "everyone") {
+      const mutualFriends = policy === "friends_of_friends" ? await mutualFriendCount(db, senderId, receiverId) : 0;
+      if (!policyAllows(policy, { mutualFriends, verified: !!me?.is_verified })) return { ok: false, reason: "policy" };
+    }
+    if (await recentlyRefused(db, senderId, receiverId)) return { ok: false, reason: "cooldown" };
 
-    const trimmed = note?.trim().slice(0, 150) || null;
-    const { error } = await db
+    const allowance = requestAllowance(await senderFacts(db, senderId));
+    if (!allowance.ok) return { ok: false, reason: allowance.reason === "daily" ? "cap" : allowance.reason };
+
+    const trimmed = note?.trim().slice(0, NOTE_MAX) || null;
+    if (trimmed) {
+      const problem = noteProblem(trimmed, await sameNoteSentToday(db, senderId, trimmed));
+      if (problem) return { ok: false, reason: `note_${problem}` };
+    }
+
+    // `source` is 0216's column — before it runs, the request is still sent, without it
+    let { error } = await db
       .from("friend_requests")
-      .insert({ sender_id: senderId, receiver_id: receiverId, note: trimmed });
+      .insert({ sender_id: senderId, receiver_id: receiverId, note: trimmed, ...(source ? { source } : {}) });
+    if (error && source && error.code !== "23505") {
+      ({ error } = await db.from("friend_requests").insert({ sender_id: senderId, receiver_id: receiverId, note: trimmed }));
+    }
     // Unique pending index — a duplicate send is an idempotent success.
     if (error && error.code !== "23505") return { ok: false, reason: "unavailable" };
 
@@ -281,6 +323,7 @@ export async function sendFriendRequest(
           actionable: true,
         }),
       );
+      emit("friend.requested", { senderId, receiverId, source });
     }
     return { ok: true, state: "outgoing" };
   } catch {
@@ -288,11 +331,22 @@ export async function sendFriendRequest(
   }
 }
 
-/** Accept or decline the pending request the other user sent you. */
+/**
+ * Accept, decline or ignore the pending request the other user sent you.
+ *
+ *   ignore   (Feature 19 · Part 2) the request leaves YOUR list and stays
+ *            pending for the sender — they are never told. Stored apart, in
+ *            friend_request_ignores, which only you can read (0216).
+ *   accept   may carry `as`: a relationship label ("close_friend", "family",
+ *            "colleague", or your own words) applied the moment you accept —
+ *            Relationship Categorization™, through the same rules as the labels
+ *            API (lib/social/graph/labels.ts).
+ */
 export async function respondToFriendRequest(
   userId: string,
   otherId: string,
-  action: "accept" | "decline",
+  action: "accept" | "decline" | "ignore",
+  opts: { as?: string | null } = {},
 ): Promise<FriendActionResult> {
   if (!hasSupabase) return { ok: false, reason: "unavailable" };
   try {
@@ -306,12 +360,25 @@ export async function respondToFriendRequest(
       .maybeSingle();
     if (!req) return { ok: false, reason: "unavailable" };
 
+    if (action === "ignore") {
+      const { error } = await db
+        .from("friend_request_ignores")
+        .upsert({ request_id: req.id, receiver_id: userId }, { onConflict: "request_id" });
+      // before 0216 there is nowhere to keep a SILENT ignore — and a decline is visible to the
+      // sender, the one thing an ignore promises not to be, so it is refused, not substituted
+      if (error) return { ok: false, reason: "unavailable" };
+      await db.from("notifications").delete().eq("user_id", userId).eq("actor_id", otherId).eq("type", "friend_request");
+      emit("friend.closed", { senderId: otherId, receiverId: userId, outcome: "ignored" });
+      return { ok: true, state: "none" };
+    }
+
     if (action === "decline") {
       await db
         .from("friend_requests")
         .update({ status: "declined", responded_at: new Date().toISOString() })
         .eq("id", req.id)
         .eq("status", "pending");
+      emit("friend.closed", { senderId: otherId, receiverId: userId, outcome: "declined" });
       return { ok: true, state: "none" };
     }
 
@@ -331,6 +398,18 @@ export async function respondToFriendRequest(
     await db
       .from("friendships")
       .upsert({ user_low: low, user_high: high, request_id: req.id }, { onConflict: "user_low,user_high" });
+
+    // Accept As — categorised the moment they become friends (a bad label is skipped, never fatal)
+    let label: string | null = null;
+    const resolved = opts.as ? resolveLabelInput(opts.as) : null;
+    if (resolved && !("error" in resolved)) {
+      label = resolved.kind === "builtin" ? resolved.key : resolved.value;
+      const { error: labelErr } = await db
+        .from("relationship_labels")
+        .upsert({ owner_id: userId, subject_id: otherId, label, updated_at: now.toISOString() }, { onConflict: "owner_id,subject_id" });
+      if (labelErr) label = null;
+    }
+    emit("friend.added", { userId, friendId: otherId, label });
 
     await db
       .from("notifications")
@@ -369,6 +448,7 @@ export async function cancelFriendRequest(userId: string, otherId: string): Prom
         .eq("user_id", otherId)
         .eq("actor_id", userId)
         .eq("type", "friend_request");
+      emit("friend.closed", { senderId: userId, receiverId: otherId, outcome: "cancelled" });
     }
     return { ok: true, state: "none" };
   } catch {
@@ -389,6 +469,7 @@ export async function unfriend(userId: string, otherId: string): Promise<FriendA
       .or(
         `and(user_id.eq.${userId},friend_id.eq.${otherId}),and(user_id.eq.${otherId},friend_id.eq.${userId})`,
       );
+    emit("friend.removed", { userId, friendId: otherId });
     return { ok: true, state: "none" };
   } catch {
     return { ok: false, reason: "unavailable" };
@@ -474,7 +555,11 @@ export async function friendsOverview(userId: string, limit = 100): Promise<Frie
     );
 
     const friendships = (fr as { user_low: string; user_high: string; created_at: string }[]) ?? [];
-    const incomingRows = (inc as { id: string; sender_id: string; note: string | null; created_at: string }[]) ?? [];
+    // Feature 19 · Part 2: ignored requests leave the list; stale ones expire; each card gets its context
+    const ignored = await ignoredRequestIds(db, userId);
+    const incomingRows = ((inc as { id: string; sender_id: string; note: string | null; created_at: string }[]) ?? []).filter((r) => !ignored.has(r.id));
+    after(() => expireStaleRequests(db, userId).catch(() => {}));
+    const contexts = await requestContexts(db, userId, incomingRows).catch(() => new Map<string, RequestContext>());
     const outgoingRows = (out as { id: string; receiver_id: string; note: string | null; created_at: string }[]) ?? [];
 
     const ids = new Set<string>([userId]);
@@ -530,9 +615,9 @@ export async function friendsOverview(userId: string, limit = 100): Promise<Frie
         // Favorites always on top (spec), newest friendship first within each group.
         .sort((a, b) => Number(b.favorite) - Number(a.favorite)),
       incoming: incomingRows
-        .map((r) => {
+        .map((r): FriendRequestItem | null => {
           const u = item(r.sender_id);
-          return u ? { id: r.id, note: r.note, createdAt: r.created_at, user: u } : null;
+          return u ? { id: r.id, note: r.note, createdAt: r.created_at, user: u, context: contexts.get(r.id) } : null;
         })
         .filter((x): x is FriendRequestItem => !!x),
       outgoing: outgoingRows

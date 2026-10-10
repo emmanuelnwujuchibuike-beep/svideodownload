@@ -67,6 +67,26 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       .or(
         `and(follower_id.eq.${user.id},following_id.eq.${id}),and(follower_id.eq.${id},following_id.eq.${user.id})`,
       );
+    /*
+      Feature 19 · Part 2 (found 2026-10-10): a block left the friend graph intact —
+      a pending request from the blocked person stayed in the blocker's list and a
+      friendship outlived the block. A block now closes both: pending requests
+      either way are cancelled, and the friendship (with its stars) ends.
+    */
+    const now = new Date().toISOString();
+    const [low, high] = user.id < id ? [user.id, id] : [id, user.id];
+    await Promise.all([
+      db
+        .from("friend_requests")
+        .update({ status: "cancelled", responded_at: now })
+        .eq("status", "pending")
+        .or(`and(sender_id.eq.${user.id},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${user.id})`),
+      db.from("friendships").delete().eq("user_low", low).eq("user_high", high),
+      db
+        .from("friend_favorites")
+        .delete()
+        .or(`and(user_id.eq.${user.id},friend_id.eq.${id}),and(user_id.eq.${id},friend_id.eq.${user.id})`),
+    ]);
     return NextResponse.json({ ok: true, blocked: true });
   } catch {
     return NextResponse.json({ error: "Couldn't block." }, { status: 500 });

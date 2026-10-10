@@ -82,7 +82,7 @@ export function StableAvatar({
   className?: string;
   width?: number;
   height?: number;
-  /** "lazy" for long lists (Part 9); ignored once the URL has decoded, which paints at once */
+  /** "lazy" for long lists (Part 9) — kept even once seen; a seen avatar then decodes sync as it loads */
   loading?: "lazy" | "eager";
 }) {
   const ready = decoded.has(src);
@@ -93,7 +93,8 @@ export function StableAvatar({
       alt={alt}
       width={width}
       height={height}
-      loading={ready ? undefined : loading}
+      // lazy stays lazy even once seen: a long list must never load every avatar at once (2026-10-09)
+      loading={loading}
       draggable={false}
       decoding={ready ? "sync" : "async"}
       onLoad={(e) => remember(src, e.currentTarget)}

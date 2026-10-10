@@ -98,9 +98,9 @@ export function imageNeedsOptimizing(w: number, h: number, bytes: number, mime: 
   return mime !== "image/webp" && mime !== "image/avif" && bytes > 300 * 1024;
 }
 
-/** Does a video need transcoding before it can be served? */
-export function videoNeedsProcessing(w: number, h: number, bytes: number, spec: MediaSpec): boolean {
-  return Math.max(w, h) > spec.deliveryLongEdge || bytes > spec.maxServedBytes;
+/** Does a video need transcoding before it can be served? A MOV always does (0209): only MP4 is served. */
+export function videoNeedsProcessing(w: number, h: number, bytes: number, spec: MediaSpec, mime?: string | null): boolean {
+  return mime === "video/quicktime" || Math.max(w, h) > spec.deliveryLongEdge || bytes > spec.maxServedBytes;
 }
 
 /** How a creative of w×h sits in a slot of aspect `slotRatio` (w/h): the box it fills, as fractions of the slot. */

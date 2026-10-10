@@ -56,7 +56,13 @@ export type CreativeVerdict = { status: "valid"; errors: [] } | { status: "inval
 
 /** What the ad-creatives buckets accept (0195/0196). The ACCEPT lists the browser offers in its file picker. */
 export const IMAGE_MIME_TYPES = ["image/webp", "image/jpeg", "image/png", "image/avif"] as const;
-export const VIDEO_MIME_TYPES = ["video/mp4", "video/webm"] as const;
+/**
+ * 0209 (owner, 2026-10-09: "it shouldn't be selective on any video"): MOV is
+ * what an iPhone records. It is accepted whenever the server can transcode
+ * (videoProcessing) — and then ALWAYS transcoded, so only an MP4 is ever
+ * served. Without a transcoder it is refused with "export as MP4", as before.
+ */
+export const VIDEO_MIME_TYPES = ["video/mp4", "video/webm", "video/quicktime"] as const;
 const IMAGE_MIME = new Set<string>(IMAGE_MIME_TYPES);
 const VIDEO_MIME = new Set<string>(VIDEO_MIME_TYPES);
 
@@ -75,6 +81,8 @@ export function validateCreative(facts: CreativeFacts, limits: CreativeLimits): 
   if (facts.mimeType) {
     const allowed = facts.mediaType === "video" ? VIDEO_MIME : IMAGE_MIME;
     if (!allowed.has(facts.mimeType)) errors.push("mime_not_allowed");
+    // a MOV is served only as Stream's MP4: without a transcoder it cannot be accepted
+    else if (facts.mimeType === "video/quicktime" && !limits.videoProcessing) errors.push("quicktime");
   }
   // a video that will be transcoded may arrive larger than it is served (0208)
   const sizeCap = facts.mediaType === "video" && limits.videoProcessing ? Math.max(limits.maxFileBytes, limits.maxUploadBytes ?? 0) : limits.maxFileBytes;

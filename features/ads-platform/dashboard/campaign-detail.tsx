@@ -323,7 +323,7 @@ function Replace({ c, done }: { c: CampaignRow; done: Flash }) {
   return (
     <div className="mt-4">
       <p className="text-[13px] text-muted-foreground">Your current ad keeps showing while the new file uploads and is checked. It&apos;s replaced only if the new one passes — same campaign, same dates, no extra charge.</p>
-      <input ref={inputRef} type="file" accept="image/*,video/mp4,video/webm" className="sr-only" disabled={working} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void pick(f); }} />
+      <input ref={inputRef} type="file" accept="image/*,video/mp4,video/webm,video/quicktime,.mov" className="sr-only" disabled={working} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void pick(f); }} />
       <button type="button" disabled={working} onClick={() => inputRef.current?.click()} className="ai-btn ai-btn--primary mt-3 inline-flex min-h-[2.75rem] items-center gap-1.5 disabled:opacity-70">
         {working ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Upload className="h-4 w-4" aria-hidden />}
         {phase.k === "uploading"

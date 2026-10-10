@@ -128,7 +128,7 @@ export interface PaymentRow {
 }
 
 const CAMPAIGN_COLUMNS =
-  "id, name, status, status_reason, version, duration_days, extra_days, start_at, end_at, payment_verified_at, payment_reference, total_amount_minor, currency, created_at, updated_at, ad_placements(code, name, format_code), ad_creatives(id, status, media_type, media_url, thumbnail_url, destination_url, headline, description, validation_status, validation_errors, url_validation_status, width, height, duration_seconds, updated_at)";
+  "id, name, status, status_reason, version, duration_days, extra_days, start_at, end_at, payment_verified_at, payment_reference, total_amount_minor, currency, created_at, updated_at, ad_placements(code, name, format_code), ad_creatives!ad_creatives_campaign_id_fkey(id, status, media_type, media_url, thumbnail_url, destination_url, headline, description, validation_status, validation_errors, url_validation_status, width, height, duration_seconds, updated_at)";
 
 export async function loadSummary(): Promise<Summary | null> {
   const sb = await getClient();

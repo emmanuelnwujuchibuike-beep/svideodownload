@@ -66,6 +66,7 @@ export function adMessage(code: string, f: MessageFacts = {}): string {
     case "not_recognised":
       return "That file type isn't supported. Use JPG, PNG, WebP or AVIF for images, and MP4 or WebM for video.";
     case "quicktime":
+      // 0209: only reached when the server cannot transcode right now
       return "That's a MOV (QuickTime) video. Please export or share it as MP4 and upload again.";
     case "duration_unknown":
       return "We couldn't read the length of that video. Please export it again as MP4.";

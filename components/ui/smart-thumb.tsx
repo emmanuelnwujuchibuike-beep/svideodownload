@@ -58,16 +58,25 @@ export function SmartThumb({
     */
     // eslint-disable-next-line @next/next/no-img-element -- external CDNs; next/image 403s on this project's media hosts
     /*
-      🔴 …BUT NOT FOR A TILE ALREADY SEEN (owner, 2026-10-09: "History Medias …
-      reloads on every page entry"). Re-entering History remounts every tile;
-      lazy + async then made each one wait and decode after first paint, so the
-      grid flashed empty on every visit. A thumbnail that has already decoded in
-      this tab now renders eager + sync and paints in the frame it mounts.
+      🔴 ALWAYS LAZY — SECTION BY SECTION (owner, 2026-10-09: "the history page
+      and button now doesn't open and respond instant … the medias shouldn't
+      load at once, it should be loading and prefetching section by section").
+
+      An earlier fix the same day made a tile already seen in this tab
+      `loading="eager"` (to stop a flash on re-entry). That was wrong: the
+      grouped History grid renders EVERY day section, and an eager image is
+      fetched and decoded whether or not its section is on screen — so a long
+      history loaded and decoded every thumbnail at once on entry, blocking the
+      main thread (the page opened late and taps, the History button included,
+      waited). Now every tile is lazy again — only what is on screen loads, the
+      next section as it approaches — and a SEEN tile only decodes synchronously,
+      which happens when the browser actually loads it, i.e. when it is on
+      screen. No flash for the visible screenful, no work for the rest.
     */
     <img
       src={src}
       alt={alt}
-      loading={isImageSeen(src) ? "eager" : "lazy"}
+      loading="lazy"
       decoding={isImageSeen(src) ? "sync" : "async"}
       onLoad={(e) => markImageSeen(src, e.currentTarget)}
       onError={() => setBroken(true)}

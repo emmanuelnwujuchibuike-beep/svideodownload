@@ -54,7 +54,7 @@ export async function loadMyApplications(): Promise<{ applications: MyApplicatio
       sb
         .from("ad_campaigns")
         .select(
-          "id, application_id, name, status, duration_id, updated_at, ad_placements(code, format_code), ad_creatives(id, status, media_type, media_url, thumbnail_url, destination_url, headline, description, validation_status, url_validation_status, width, height, duration_seconds, file_size_bytes)",
+          "id, application_id, name, status, duration_id, updated_at, ad_placements(code, format_code), ad_creatives!ad_creatives_campaign_id_fkey(id, status, media_type, media_url, thumbnail_url, destination_url, headline, description, validation_status, url_validation_status, width, height, duration_seconds, file_size_bytes)",
         )
         .in("status", ["draft", "awaiting_payment"])
         .order("updated_at", { ascending: false })

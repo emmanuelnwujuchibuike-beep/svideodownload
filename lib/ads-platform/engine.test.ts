@@ -197,7 +197,9 @@ describe("validateCreative — the verdict written to the row", () => {
   });
   it("refuses an image on a video-only format, a wrong mime, too large, unknown facts, a bad URL", () => {
     expect(video(10, { mediaType: "image", mimeType: "image/png" }).errors).toContain("media_type_not_allowed");
-    expect(video(10, { mimeType: "video/quicktime" }).errors).toContain("mime_not_allowed");
+    expect(video(10, { mimeType: "video/x-msvideo" }).errors).toContain("mime_not_allowed");
+    // 0209: a MOV is refused only when nothing can transcode it — with "export as MP4", not "wrong type"
+    expect(video(10, { mimeType: "video/quicktime" }).errors).toContain("quicktime");
     expect(video(10, { fileSizeBytes: 60 * 1024 * 1024 }).errors).toContain("file_too_large");
     expect(video(10, { width: 4000 }).errors).toContain("dimensions_too_large");
     expect(video(null).errors).toContain("duration_unknown");

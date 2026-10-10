@@ -120,9 +120,11 @@ describe("admin pushes for referrals", () => {
 
 // owner, 2026-10-09: "History Medias and the Frenz logo at the top reloads on every page entry"
 describe("no flash on page entry", () => {
-  it("a history tile already seen in this tab paints eager + sync; a new one stays lazy + async", () => {
+  it("every history tile is LAZY (section by section); a seen one decodes sync once it loads on screen", () => {
     const t = code("components/ui/smart-thumb.tsx");
-    expect(t).toContain('loading={isImageSeen(src) ? "eager" : "lazy"}');
+    // owner, later the same day: "the medias shouldn't load at once … section by section" — never eager
+    expect(t).toContain('loading="lazy"');
+    expect(t).not.toMatch(/loading=\{[^}]*"eager"/);
     expect(t).toContain('decoding={isImageSeen(src) ? "sync" : "async"}');
     expect(t).toContain("onLoad={(e) => markImageSeen(src, e.currentTarget)}");
   });

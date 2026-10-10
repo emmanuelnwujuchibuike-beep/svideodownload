@@ -256,3 +256,26 @@ describe("migration 0208 (also run twice on PGlite, with a mutant)", () => {
     expect(sql).toContain("'delivery_long_edge', f.delivery_long_edge, 'image_quality', f.image_quality,");
   });
 });
+
+// owner, 2026-10-09: "it shouldn't be selective on any video" — an iPhone records MOV
+describe("MOV videos (0209)", () => {
+  const spec = specOf({ max_width: 2160, max_height: 3840, max_file_bytes: 10 * 1024 * 1024, max_upload_bytes: 200 * 1024 * 1024, delivery_long_edge: 1280 });
+  it("a MOV is always transcoded — even a small one — so only MP4 is ever served", () => {
+    expect(videoNeedsProcessing(720, 1280, 2_000_000, spec, "video/quicktime")).toBe(true);
+    expect(videoNeedsProcessing(720, 1280, 2_000_000, spec, "video/mp4")).toBe(false);
+  });
+  it("accepted when the server can transcode; refused with 'export as MP4' when it cannot", async () => {
+    const { validateCreative } = await import("./creative-validation");
+    const lim = { code: "REWARD_VIDEO", mediaTypes: ["video"], maxDurationSeconds: 15, maxFileBytes: 10 * 1024 * 1024, maxWidth: 2160, maxHeight: 3840, maxUploadBytes: 200 * 1024 * 1024 };
+    const mov = { formatCode: "REWARD_VIDEO", mediaType: "video", mimeType: "video/quicktime", fileSizeBytes: 30_000_000, width: 1080, height: 1920, durationSeconds: 12, destinationUrl: null };
+    expect(validateCreative(mov, { ...lim, videoProcessing: true }).status).toBe("valid");
+    expect(validateCreative(mov, { ...lim, videoProcessing: false }).errors).toContain("quicktime");
+  });
+  it("the server passes the MIME to the processing decision; the staging bucket accepts MOV", () => {
+    const adv = code("lib/ads-platform/advertiser-server.ts");
+    expect(adv).toContain("videoNeedsProcessing(facts!.width!, facts!.height!, size, specOf(f), facts!.mime)");
+    expect(adv).toContain('if (input.mimeType === "video/quicktime" && !formatLimits(f).videoProcessing) refuse("quicktime");');
+    expect(adv).not.toContain('else if (facts.mime === "video/quicktime") errors.push("quicktime");');
+    expect(code("supabase/migrations/0209_ad_mov_uploads.sql")).toContain("array_append(allowed_mime_types, 'video/quicktime')");
+  });
+});

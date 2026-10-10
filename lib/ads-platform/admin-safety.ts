@@ -111,7 +111,7 @@ export async function loadSafetyOverview(db: Db, view: "open" | "resolved" = "op
     db.from("ad_invalid_daily").select("reason, events").gte("day", since).limit(5000),
     db
       .from("ad_creatives")
-      .select("id, campaign_id, validation_status, validation_errors, url_validation_status, url_block_reason, moderation_status, moderation_labels, updated_at, ad_campaigns(name)")
+      .select("id, campaign_id, validation_status, validation_errors, url_validation_status, url_block_reason, moderation_status, moderation_labels, updated_at, ad_campaigns!ad_creatives_campaign_id_fkey(name)")
       .gte("updated_at", sinceTs)
       .or("validation_status.in.(invalid,blocked),url_validation_status.in.(blocked,pending),moderation_status.in.(review,rejected)")
       .order("updated_at", { ascending: false })

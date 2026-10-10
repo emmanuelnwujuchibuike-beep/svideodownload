@@ -240,7 +240,7 @@ export interface TicketInput {
   sizeBytes: number;
 }
 
-const EXT: Record<string, string> = { "image/webp": "webp", "image/jpeg": "jpg", "image/png": "png", "image/avif": "avif", "video/mp4": "mp4", "video/webm": "webm" };
+const EXT: Record<string, string> = { "image/webp": "webp", "image/jpeg": "jpg", "image/png": "png", "image/avif": "avif", "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov" };
 
 /**
  * A signed PUT target in the PRIVATE staging bucket for one exact path. The
@@ -272,7 +272,8 @@ export async function stageCreative(
   if (input.mediaType !== "image" && input.mediaType !== "video") refuse("mime_not_allowed");
   if (!f.media_types.includes(input.mediaType)) refuse("media_type_not_allowed", 400, { mediaType: input.mediaType });
   const allowed: readonly string[] = input.mediaType === "video" ? VIDEO_MIME_TYPES : IMAGE_MIME_TYPES;
-  if (input.mimeType === "video/quicktime") refuse("quicktime");
+  // 0209: a MOV is accepted only when it can be transcoded (it is never served as is)
+  if (input.mimeType === "video/quicktime" && !formatLimits(f).videoProcessing) refuse("quicktime");
   if (!allowed.includes(input.mimeType)) refuse("mime_not_allowed");
   const spec = specOf(f);
   const cap = input.mediaType === "video" && formatLimits(f).videoProcessing ? spec.maxUploadBytes : spec.maxServedBytes;
@@ -462,7 +463,6 @@ export async function probeAndPublish(db: Db, cr: { id: string; storage_path: st
   const errors: string[] = [];
   if (size > sizeCap) errors.push("file_too_large");
   else if (!facts) errors.push("not_recognised");
-  else if (facts.mime === "video/quicktime") errors.push("quicktime");
   else {
     if (declared?.mime_type && declared.mime_type !== facts.mime) errors.push("type_mismatch");
     const verdict = validateCreative(
@@ -527,7 +527,7 @@ export async function probeAndPublish(db: Db, cr: { id: string; storage_path: st
       The creative stays pending until the processed MP4 is ready; the poster is
       published now so the advertiser sees their video meanwhile.
     */
-    if (facts!.mediaType === "video" && videoNeedsProcessing(facts!.width!, facts!.height!, size, specOf(f))) {
+    if (facts!.mediaType === "video" && videoNeedsProcessing(facts!.width!, facts!.height!, size, specOf(f), facts!.mime)) {
       let posterUrl: string | null = null;
       if (posterOk) {
         const { error } = await staging.copy(lockedPoster, poster, { destinationBucket: PUBLIC_BUCKET });
@@ -591,7 +591,7 @@ export async function probeAndPublish(db: Db, cr: { id: string; storage_path: st
     running ad, so it must be published and checked before it is answered.
   */
   if (kind === "draft") {
-    const willProcess = facts!.mediaType === "video" && videoNeedsProcessing(facts!.width!, facts!.height!, size, specOf(f));
+    const willProcess = facts!.mediaType === "video" && videoNeedsProcessing(facts!.width!, facts!.height!, size, specOf(f), facts!.mime);
     await writeCreative(db, cr.id, { ...factCols, mime_type: facts!.mime, validation_status: "pending", validation_errors: [], validated_at: now }, { moderation_status: "review", moderation_labels: ["moderation_pending"] });
     after(async () => {
       const r = await publishAll().catch(() => null);

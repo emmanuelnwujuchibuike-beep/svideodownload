@@ -109,7 +109,8 @@ export function CreativeStep({
     setFileName(file.name);
     setPhase({ kind: "checking" });
     const kind = mediaTypeOf(file);
-    if (file.type === "video/quicktime") return setPhase({ kind: "error", messages: [adMessage("quicktime")] });
+    // 0209: a MOV (an iPhone's own format) is accepted when the server can transcode it; it is always converted to MP4
+    if (file.type === "video/quicktime" && !limits.videoProcessing) return setPhase({ kind: "error", messages: [adMessage("quicktime")] });
     if (!kind) return setPhase({ kind: "error", messages: [adMessage("not_recognised")] });
 
     /*
@@ -130,12 +131,16 @@ export function CreativeStep({
       return setPhase({ kind: "error", messages: [adMessage("file_too_large", { mediaType: kind, maxFileBytes: sizeCap })] });
     }
     const local = await readLocalMedia(upload);
-    if (!local) return setPhase({ kind: "error", messages: [adMessage("not_recognised")] });
-    const verdict = validateCreative(
-      { formatCode: format.code, mediaType: kind, mimeType: upload.type, durationSeconds: local.durationSeconds, fileSizeBytes: upload.size, width: local.width, height: local.height, destinationUrl: null },
-      limits,
-    );
-    if (verdict.status === "invalid") {
+    // a MOV this browser cannot open (desktop Chrome often can't) is still checked — by the server, from its bytes
+    const isMov = upload.type === "video/quicktime";
+    if (!local && !isMov) return setPhase({ kind: "error", messages: [adMessage("not_recognised")] });
+    const verdict = local
+      ? validateCreative(
+          { formatCode: format.code, mediaType: kind, mimeType: upload.type, durationSeconds: local.durationSeconds, fileSizeBytes: upload.size, width: local.width, height: local.height, destinationUrl: null },
+          limits,
+        )
+      : { status: "valid" as const, errors: [] as string[] };
+    if (local && verdict.status === "invalid") {
       const facts = { ...local, mediaType: kind, fileSizeBytes: upload.size, ...limits };
       return setPhase({ kind: "error", messages: verdict.errors.map((c) => adMessage(c, facts)) });
     }

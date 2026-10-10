@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { VerifiedTick } from "@/components/badges/identity-badges";
-import { FollowChip } from "@/features/friends/discover";
+import { FollowChip } from "@/features/friends/follow-chip";
 import { AmbientWash, GLASS, GlassGroup, PersonAvatar, primaryPill, quietPill, SectionHeader } from "@/features/friends/ui";
 import { attributionLink, shareOrCopy } from "@/lib/referrals/share-client";
 import { hashEmail } from "@/lib/social/contacts/hash";

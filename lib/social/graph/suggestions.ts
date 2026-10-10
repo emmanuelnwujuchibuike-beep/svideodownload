@@ -54,6 +54,23 @@ export interface SuggestionCandidate {
   followers: number;
   /** Days since the account was created; new accounts rank lower. */
   accountAgeDays: number | null;
+
+  /* ── Feature 19 Part 6 (People You May Know™) — all optional, so every older caller keeps its meaning ── */
+  /** An address in the VIEWER's own contacts matched them (Part 5, privacy re-checked). The viewer's own data. */
+  inContacts?: boolean;
+  /** They follow the viewer. The viewer can already see this in their followers list. */
+  followsViewer?: boolean;
+  /** People the viewer follows who also follow them. Ranking only, unless disclosable. */
+  mutualFollows?: number;
+  /** Every one of those follows may be disclosed (their followers lists are public). */
+  mutualFollowsDisclosable?: boolean;
+  /** 0..1 overlap of the two members' interest categories. Ranking ONLY - never named, it comes from private watch history. */
+  interestOverlap?: number;
+  /** The profile's own public type (0107): personal, creator, business, professional, student, developer, community, organization. */
+  profileType?: string;
+  isVerified?: boolean;
+  /** The viewer dismissed them (hide, not interested, already know) or snoozed them and the snooze has not run out. */
+  dismissed?: boolean;
 }
 
 export interface ViewerContext {
@@ -75,6 +92,7 @@ export function isEligible(c: SuggestionCandidate, ctx: ViewerContext): boolean 
   if (c.optedOut) return false;
   if (c.alreadyFriend) return false;
   if (c.requestPending) return false;
+  if (c.dismissed) return false;
   return true;
 }
 
@@ -102,6 +120,15 @@ export function scoreSuggestion(c: SuggestionCandidate): number {
   score += Math.min(50, Math.round(Math.log2(c.mutualFriends + 1) * 16));
 
   if (c.sharedCircles > 0) score += Math.min(12, c.sharedCircles * 6);
+
+  // Part 6 signals. Contacts and "follows you" are the viewer's own real-world
+  // evidence, so they weigh like several mutual friends. Mutual follows are
+  // weaker than mutual friends (a follow is one-sided) and saturate sooner.
+  if (c.inContacts) score += 30;
+  if (c.followsViewer) score += 14;
+  if (c.mutualFollows) score += Math.min(20, Math.round(Math.log2(c.mutualFollows + 1) * 7));
+  if (c.interestOverlap) score += Math.round(Math.min(1, Math.max(0, c.interestOverlap)) * 10);
+  if (c.isVerified) score += 2;
   if (c.sameLocation) score += 10;
   if (c.alreadyFollowing) score += 8; // already interested — a friendship is plausible
 
@@ -122,16 +149,69 @@ export function scoreSuggestion(c: SuggestionCandidate): number {
  * simply describe something the viewer already knows or that is public.
  */
 export function reasonFor(c: SuggestionCandidate): { reason: string; disclosesMutual: boolean } {
+  // the viewer's own address book: the most specific true reason there is
+  if (c.inContacts) return { reason: "In your contacts", disclosesMutual: false };
   if (c.mutualFriends > 0 && c.mutualsDisclosable) {
     return {
       reason: c.mutualFriends === 1 ? "1 friend in common" : `${c.mutualFriends} friends in common`,
       disclosesMutual: true,
     };
   }
+  if (c.followsViewer) return { reason: "Follows you", disclosesMutual: false };
+  if (c.mutualFollows && c.mutualFollows > 0 && c.mutualFollowsDisclosable) {
+    return { reason: c.mutualFollows === 1 ? "Followed by someone you follow" : `Followed by ${c.mutualFollows} people you follow`, disclosesMutual: true };
+  }
   if (c.sharedCircles > 0) return { reason: "Already in one of your circles", disclosesMutual: false };
   if (c.alreadyFollowing) return { reason: "You follow them", disclosesMutual: false };
   if (c.sameLocation) return { reason: "Near you", disclosesMutual: false };
+  // the profile's own public type - something it says about itself
+  const typeReason = c.profileType ? TYPE_REASON[c.profileType] : undefined;
+  if (typeReason) return { reason: typeReason, disclosesMutual: false };
   return { reason: "Suggested for you", disclosesMutual: false };
+}
+
+const TYPE_REASON: Record<string, string> = {
+  creator: "Creator on Frenz",
+  business: "Business on Frenz",
+  professional: "Professional on Frenz",
+  developer: "Developer on Frenz",
+  student: "Student on Frenz",
+  community: "Community on Frenz",
+  organization: "Organization on Frenz",
+};
+
+/**
+ * Internal confidence (Part 6: "never shown publicly"). Used to order and to
+ * decide what fills a short list. It is not returned by any API.
+ */
+export type SuggestionConfidence = "very_high" | "high" | "medium" | "low" | "experimental";
+export function confidenceFor(score: number): SuggestionConfidence {
+  return score >= 60 ? "very_high" : score >= 40 ? "high" : score >= 22 ? "medium" : score >= 10 ? "low" : "experimental";
+}
+
+/** The discovery filters. Each is a fact about the candidate, never a guess. */
+export const SUGGESTION_FILTERS = ["all", "mutual", "creators", "businesses", "professionals", "verified", "nearby"] as const;
+export type SuggestionFilter = (typeof SUGGESTION_FILTERS)[number];
+export function isSuggestionFilter(v: unknown): v is SuggestionFilter {
+  return typeof v === "string" && (SUGGESTION_FILTERS as readonly string[]).includes(v);
+}
+export function matchesFilter(c: SuggestionCandidate, f: SuggestionFilter): boolean {
+  switch (f) {
+    case "all":
+      return true;
+    case "mutual":
+      return c.mutualFriends > 0 || !!c.inContacts || !!c.followsViewer;
+    case "creators":
+      return c.profileType === "creator";
+    case "businesses":
+      return c.profileType === "business" || c.profileType === "organization";
+    case "professionals":
+      return c.profileType === "professional" || c.profileType === "developer";
+    case "verified":
+      return !!c.isVerified;
+    case "nearby":
+      return c.sameLocation;
+  }
 }
 
 /** Eligibility + score + reason, sorted, capped. The one function callers need. */

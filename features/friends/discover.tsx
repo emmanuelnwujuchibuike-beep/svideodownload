@@ -1,6 +1,6 @@
 "use client";
 
-import { BookUser, Check, ChevronRight, Loader2, QrCode, RotateCw, Search, Send, UserCheck, UserPlus, Users, X } from "lucide-react";
+import { BookUser, Check, ChevronRight, Loader2, QrCode, RotateCw, Search, Send, Users, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -8,10 +8,10 @@ import { VerifiedTick } from "@/components/badges/identity-badges";
 import { AmbientWash, GLASS, GlassGroup, GlassIconLink, PersonAvatar, primaryPill, SectionHeader } from "@/features/friends/ui";
 import { usePresence } from "@/features/friends/use-presence";
 import { attributionLink, reportReferralShared, shareOrCopy } from "@/lib/referrals/share-client";
-import type { FollowSource } from "@/lib/social/follow-policy";
-import { toggleFollow, useFollowState } from "@/lib/social/follow-store";
+import { FollowChip } from "@/features/friends/follow-chip";
+import { PeopleYouMayKnow } from "@/features/friends/people-you-may-know";
 import type { SearchPerson } from "@/lib/social/search";
-import type { SuggestedCreator } from "@/lib/social/suggest";
+import type { PersonSuggestion } from "@/lib/social/people/engine";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 type Person = {
@@ -45,7 +45,7 @@ type Person = {
  * field that honestly says "popular". A follower-count threshold would be a
  * number invented to justify a badge, so both are absent rather than faked.
  */
-export function FriendsDiscover({ initialSuggestions, handle = null }: { initialSuggestions: SuggestedCreator[]; handle?: string | null }) {
+export function FriendsDiscover({ initialSuggestions, handle = null }: { initialSuggestions: PersonSuggestion[]; handle?: string | null }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<SearchPerson[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -89,7 +89,7 @@ export function FriendsDiscover({ initialSuggestions, handle = null }: { initial
   }, [q, attempt]);
 
   const searching = results !== null;
-  const people: Person[] = searching ? (results ?? []) : initialSuggestions;
+  const people: Person[] = results ?? [];
 
   return (
     <div className="relative isolate">
@@ -163,27 +163,29 @@ export function FriendsDiscover({ initialSuggestions, handle = null }: { initial
         </>
       )}
 
-      <SectionHeader
-        title={searching ? (loading ? "Searching…" : "Results") : "People you may know"}
-        count={searching && !loading && !failed ? people.length : undefined}
-      />
-
-      {loading && people.length === 0 ? (
-        <SkeletonRows />
-      ) : failed ? (
-        <ErrorState onRetry={() => setAttempt((n) => n + 1)} />
-      ) : people.length === 0 ? (
-        <EmptyState searching={searching} query={q} />
+      {searching ? (
+        <>
+          <SectionHeader title={loading ? "Searching…" : "Results"} count={!loading && !failed ? people.length : undefined} />
+          {loading && people.length === 0 ? (
+            <SkeletonRows />
+          ) : failed ? (
+            <ErrorState onRetry={() => setAttempt((n) => n + 1)} />
+          ) : people.length === 0 ? (
+            <EmptyState searching query={q} />
+          ) : (
+            /*
+              One grouped glass card with hairline dividers instead of a card per
+              person. It reads lighter and is one paint instead of fourteen.
+            */
+            <GlassGroup label="Search results">
+              {people.map((p) => (
+                <PersonRow key={p.id} person={p} />
+              ))}
+            </GlassGroup>
+          )}
+        </>
       ) : (
-        /*
-          One grouped glass card with hairline dividers instead of a card per
-          person. It reads lighter and is one paint instead of fourteen.
-        */
-        <GlassGroup label={searching ? "Search results" : "Suggested people"}>
-          {people.map((p) => (
-            <PersonRow key={p.id} person={p} />
-          ))}
-        </GlassGroup>
+        <PeopleYouMayKnow initial={initialSuggestions} />
       )}
     </div>
   );
@@ -266,42 +268,6 @@ function PersonRow({ person }: { person: Person }) {
 
       <FollowChip id={person.id} name={person.displayName} initial={person.isFollowing ?? false} />
     </li>
-  );
-}
-
-/**
- * Follow / Following.
- *
- * Same shared store as everywhere else, so the state is optimistic and app-wide.
- * The accessible name carries the person and the state ("Follow Chris" becomes
- * "Following Chris"), because a screen reader cannot see a colour change.
- */
-export function FollowChip({ id, name, initial, source = "suggestion" }: { id: string; name: string; initial: boolean; source?: FollowSource }) {
-  const following = useFollowState(id, initial);
-  return (
-    <button
-      type="button"
-      onClick={() => void toggleFollow(id, !following, source)}
-      aria-pressed={following}
-      aria-label={following ? `Following ${name}. Tap to unfollow.` : `Follow ${name}`}
-      className={cn(
-        "inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold max-[359px]:px-2.5",
-        "transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100",
-        following
-          ? "bg-black/[0.05] text-foreground/80 dark:bg-white/[0.08]"
-          : "bg-primary text-primary-foreground shadow-[0_6px_16px_-8px_hsl(var(--primary)/0.7)]",
-      )}
-    >
-      {following ? (
-        <>
-          <UserCheck className="h-4 w-4" aria-hidden /> Following
-        </>
-      ) : (
-        <>
-          <UserPlus className="h-4 w-4" aria-hidden /> Follow
-        </>
-      )}
-    </button>
   );
 }
 

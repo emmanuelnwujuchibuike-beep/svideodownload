@@ -315,6 +315,7 @@ export const OWNER_COLUMN: Record<string, string> = {
   /* discovery */
   profile_discovery: "user_id",
   contact_matches: "owner_id", // 0220: the contact matches you chose to remember
+  people_suggestion_feedback: "viewer_id", // 0221: your answers to People You May Know
   profile_bookmarks: "owner_id",
   profile_bookmark_lists: "owner_id",
   collections: "user_id",

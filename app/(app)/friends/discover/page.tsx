@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { FriendsDiscover } from "@/features/friends/discover";
-import { getSuggestedCreators } from "@/lib/social/suggest";
+import { peopleYouMayKnow } from "@/lib/social/people/engine";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,8 @@ export default async function DiscoverPage() {
 
   // In parallel: the handle only feeds the QR-card link, so a miss just hides it.
   const [suggestions, handle] = await Promise.all([
-    getSuggestedCreators(user.id, 24),
+    // Feature 19 Part 6: the one People You May Know engine, every person with a reason
+    peopleYouMayKnow(user.id, { limit: 24, userClient: supabase }),
     supabase
       .from("profiles")
       .select("handle")

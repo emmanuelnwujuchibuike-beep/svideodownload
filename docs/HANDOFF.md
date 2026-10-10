@@ -72,8 +72,8 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
    uploaded; anything else still gets "try again". Reels already keep playing
    their MP4 without a Stream copy. Freeing Stream storage is still the owner's
    call in the Cloudflare dashboard.
-4. **Migrations 0214, 0215, 0216, 0217, 0218, 0219, 0220** not yet run in production, in that
-   order. 0219 = the admin "×10 for all live" switch now STANDS (new live campaigns inherit ×10 via a trigger) — after running it, press "×10 all live" once so the switch is recorded. 0220 = Contact Discovery (Feature 19 Part 5, docs/FEATURE_19_SOCIAL_GRAPH.md): keyed e-mail hashes, privacy, the daily cap, and the "contacts" follow source. 0218 = admin funding alerts (a trigger queues every successful payment;
+4. **Migrations 0214, 0215, 0216, 0217, 0218, 0219, 0220, 0221** not yet run in production, in that
+   order. 0221 = People You May Know feedback (Feature 19 Part 6). 0219 = the admin "×10 for all live" switch now STANDS (new live campaigns inherit ×10 via a trigger) — after running it, press "×10 all live" once so the switch is recorded. 0220 = Contact Discovery (Feature 19 Part 5, docs/FEATURE_19_SOCIAL_GRAPH.md): keyed e-mail hashes, privacy, the daily cap, and the "contacts" follow source. 0218 = admin funding alerts (a trigger queues every successful payment;
    push + email to admins via lib/admin/funding-alerts.ts) and weekly AI prizes
    (ai_weekly_awards; 50/30/20 credits for the top 3 who spent >500 that week,
    paid by the 10-minute reconcile cron the day after a week closes). 0215 raises the public `ad-creatives` bucket to 200 MB; 0216 is Friend

@@ -246,8 +246,72 @@ referral system. Frenz sends nothing to a contact and never sees their address.
 
 ---
 
+## Part 6 — People You May Know™ & the AI Relationship Engine
+
+| Layer | File |
+|---|---|
+| Ranking, reasons, filters, confidence (pure) | `lib/social/graph/suggestions.ts` (the Part 17 ranker, extended, not replaced) |
+| The ONE engine (gathers the evidence) | `lib/social/people/engine.ts` |
+| API | `GET /api/people/suggestions?filter=`, `POST`/`DELETE /api/people/suggestions/feedback` |
+| UI | `features/friends/people-you-may-know.tsx` on Add friends |
+| Schema | `0221` (`people_suggestion_feedback`) |
+| Tests | `lib/social/people/engine.test.ts` (the whole engine over an in-memory graph), `suggestions.test.ts`, 0221 PGlite + an RLS mutant |
+
+**Where candidates come from:** friends of friends, people the member's follows
+follow, people who follow the member, the member's remembered contact matches
+(Part 5, privacy re-checked by the database), and a popular pool for a cold
+start.
+
+**What ranks them:** mutual friends (saturating), the member's own contacts,
+"follows you", mutual follows, shared circles, the same public location,
+interest overlap (cosine over `user_interest_profile`), verification, and a
+small logarithmic popularity prior. New accounts sink. Confidence bands
+(very high → experimental) are computed for ordering and tests, and are
+**never** returned by an API.
+
+**Every suggestion has a reason, and the reason never leaks:** a mutual friend
+or a mutual follow is named or counted only when every person involved has a
+public list. Interest overlap moves the ranking but is never the reason (it
+comes from private watch history). The other reasons are things the member
+already knows ("In your contacts", "Follows you") or things the profile says
+about itself ("Business on Frenz").
+
+**Removed before ranking:** you, your friends, pending requests either way,
+blocks either way, people you muted or restricted, suspended, hidden, private
+or being-deleted profiles, members who turned recommendations off, and anyone
+you dismissed (or snoozed, until the snooze runs out).
+
+**Feedback** (private, 0221): Not interested · I already know them (offers a
+friend request) · Remind me later (7 days) · Hide · Undo · Reset. A piece of
+feedback moves the viewer's cache version, so the next list is fresh.
+
+**Measured on production, read-only (2026-10-10), uncached:** the engine
+answered in 0.65–1.2 s from this machine (several round trips to Supabase).
+Lists are cached per viewer for 60 s on the server and per filter in the tab,
+so a repeat view or a filter switch is instant. Sub-100 ms on a COLD request
+is not met and needs a precomputed candidate table (planned).
+
+**Gap Ledger**
+
+| Brief item | State |
+|---|---|
+| One engine, explainable reasons, privacy-safe mutuals, quality filtering (blocks, mutes, restrictions, suspended, hidden, opt-out) | **live** |
+| Mutual friends, mutual followers, contacts, follows-you, circles, location, interests, verification | **live** |
+| Internal confidence (very high → experimental), never shown | **live** |
+| Filters: people you know, creators, businesses, professionals, verified, near you | **live** (from `profile_type` 0107, verification, profile location) |
+| Feedback: not interested, already know, later, hide, undo, reset. Private discovery history | **live** |
+| Freshness: recent follows and friendships are read live, 60 s cache, feedback busts it | **live** |
+| Shared schools, companies, events, communities, learning paths, marketplace | planned — Frenz holds none of that data yet |
+| Language / country / profession / education / industry filters | planned — no such profile fields. Country rides on the free-text location |
+| "Recommend more / less like this" weights, learned ranking, AI Discovery Lab (opt-in models) | planned — needs feedback volume first. "Not interested" is already stored separately for it |
+| Suggestions on Feed, Search, Profile, Messaging, Notifications | planned — the engine and API are ready. The home rail still uses `getSuggestedCreators` (also the engine's cold-start pool) until its latency is measured on the home render |
+| Inactive / bot / compromised-account down-ranking | partly — new accounts sink and suspended ones are removed. There is no last-active signal yet |
+| Sub-100 ms cold, offline cache, edge delivery | partly — cached and per-tab instant. Cold is 0.65–1.2 s (see above) |
+
+---
+
 ## Migrations to run (in order)
 
-`0214`, `0215`, `0216`, `0217`, `0218`, `0219` (×10 dashboard switch stands for new campaigns), `0220` (Contact Discovery: run after 0217, whose follow-source constraint it widens). Each is idempotent and PGlite-tested (run twice,
+`0214`, `0215`, `0216`, `0217`, `0218`, `0219` (×10 dashboard switch stands for new campaigns), `0220` (Contact Discovery: run after 0217, whose follow-source constraint it widens), `0221` (People You May Know feedback). Each is idempotent and PGlite-tested (run twice,
 plus a mutant that must fail). The code works before and after each: every new
 read falls back to today's behaviour when its column or table is missing.

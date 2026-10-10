@@ -175,7 +175,7 @@ export const DATA_DOMAINS: DataDomain[] = [
     name: "Profile Discovery",
     owner: "lib/discovery, lib/social/profile-search",
     description:
-      "Who can be FOUND, and by what (migration 0113). Per-member discoverability with a per-FIELD opt-in — city and country are off by default, because being findable by name is what a profile is for while being findable by location is a separate consent. Private bookmarks of other people (never disclosed to them), plus discovery analytics kept as DAILY AGGREGATES: a row per search would be the highest-write table here and would record who looked for whom, so counters answer the owner's question while storing nothing about any searcher. `profile_search_terms` has no column that could hold a searcher id. Contact Discovery (0220, Feature 19 Part 5): the browser hashes an address before it leaves the device, and the server keys that hash again with a secret no client can read (`contact_private_settings`) before looking it up in `contact_match_keys` (one keyed hash per CONFIRMED address). Unmatched hashes are never stored. `contact_matches` holds only the (owner, matched member) pairs a member chose to remember, and `contact_match_usage` is the per-day enumeration cap. Who may find a member this way is `profile_discovery.findable_by_email`.",
+      "Who can be FOUND, and by what (migration 0113). Per-member discoverability with a per-FIELD opt-in — city and country are off by default, because being findable by name is what a profile is for while being findable by location is a separate consent. Private bookmarks of other people (never disclosed to them), plus discovery analytics kept as DAILY AGGREGATES: a row per search would be the highest-write table here and would record who looked for whom, so counters answer the owner's question while storing nothing about any searcher. `profile_search_terms` has no column that could hold a searcher id. Contact Discovery (0220, Feature 19 Part 5): the browser hashes an address before it leaves the device, and the server keys that hash again with a secret no client can read (`contact_private_settings`) before looking it up in `contact_match_keys` (one keyed hash per CONFIRMED address). Unmatched hashes are never stored. `contact_matches` holds only the (owner, matched member) pairs a member chose to remember, and `contact_match_usage` is the per-day enumeration cap. Who may find a member this way is `profile_discovery.findable_by_email`. People You May Know (0221, Part 6): `people_suggestion_feedback` is a member's private answers to their suggestions (hide, not interested, already know, later), owner-only and never shown to the person it is about.",
     tables: [
       "profile_discovery",
       "profile_bookmarks",
@@ -186,6 +186,7 @@ export const DATA_DOMAINS: DataDomain[] = [
       "contact_match_keys",
       "contact_matches",
       "contact_match_usage",
+      "people_suggestion_feedback",
     ],
     storage: ["relational"],
   },

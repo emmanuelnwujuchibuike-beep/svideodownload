@@ -2839,6 +2839,38 @@ body:has(.frenz-canvas-page) {
     -webkit-touch-callout: none;
   }
 
+  /*
+    🔴 iOS SELECT-ALL / "SHRUNK" MEDIA (owner, 2026-10-11, screenshots: a held
+    tap on a feed video left it dimmed and shrunk inside the card, and a tap on
+    the profile options backdrop put selection handles on the page corners with
+    the magnifier). A held touch on an element with no text of its own makes iOS
+    start a text selection on the nearest block — up to the whole document — and
+    draw it lifted and dimmed. The media rule above covers img/video, not the
+    tappable boxes around them or an overlay's backdrop.
+
+      · a control is never a selection anchor (a native <button>'s label is not
+        text to copy either), so role="button" boxes — the feed video and photo
+        boxes are — and buttons can't start one;
+      · while a modal is open nothing on the page can be selected; fields inside
+        it stay editable. CSS only (:has), no listener, no navigation touched.
+  */
+  [role="button"],
+  button {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  body:has([aria-modal="true"]) {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  body:has([aria-modal="true"]) :is(input, textarea, [contenteditable="true"], [contenteditable=""]) {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+  }
+
   /* The escape hatch, for a surface that genuinely wants the native menu. */
   [data-media-unprotected],
   [data-media-unprotected] img,

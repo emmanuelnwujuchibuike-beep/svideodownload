@@ -103,7 +103,7 @@ export function ProfileActions({
         ? createPortal(
             <AnimatePresence>
               {open ? (
-                <div className="sm:hidden">
+                <div className="sm:hidden" role="dialog" aria-modal="true" aria-label="Profile options">
                   <motion.button
                     type="button"
                     aria-label="Close"

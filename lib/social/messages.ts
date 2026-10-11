@@ -45,6 +45,8 @@ export interface OtherUser {
   displayName: string;
   avatarUrl: string | null;
   isVerified: boolean;
+  /** Their profile cover (profiles.banner_url) — read for an open thread only, for the chat menu card. */
+  bannerUrl?: string | null;
 }
 
 export interface ConversationMember {
@@ -2111,7 +2113,7 @@ export async function getConversation(
       if (otherId) {
         const [{ data: otherPriv }, { data: prof }] = await Promise.all([
           db.from("privacy_settings").select("read_receipts_enabled").eq("user_id", otherId).maybeSingle(),
-          db.from("profiles").select("id, handle, display_name, avatar_url, is_verified").eq("id", otherId).maybeSingle(),
+          db.from("profiles").select("id, handle, display_name, avatar_url, banner_url, is_verified").eq("id", otherId).maybeSingle(),
         ]);
         otherReadReceiptsEnabled = otherPriv?.read_receipts_enabled ?? true;
         other = prof
@@ -2121,6 +2123,7 @@ export async function getConversation(
               displayName: (prof.display_name as string) || `@${prof.handle as string}`,
               avatarUrl: (prof.avatar_url as string) ?? null,
               isVerified: (prof.is_verified as boolean) ?? false,
+              bannerUrl: (prof.banner_url as string | null) ?? null,
             }
           : null;
       }

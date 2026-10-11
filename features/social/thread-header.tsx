@@ -264,6 +264,7 @@ export function ThreadHeader({
             otherHandle={other.handle}
             otherName={other.displayName}
             otherAvatarUrl={other.avatarUrl}
+            otherBannerUrl={other.bannerUrl ?? null}
             otherIsVerified={other.isVerified}
             initialTheme={liveTheme}
             initialWallpaperUrl={liveWallpaperUrl}

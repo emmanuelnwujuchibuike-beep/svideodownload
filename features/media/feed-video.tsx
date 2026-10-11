@@ -534,7 +534,7 @@ export function FeedVideo({
         // `isolate`: the blurred backdrop below is `-z-10`; without its own
         // stacking context it rendered BEHIND this box's black and was never
         // seen — the side bars stayed black (owner, 2026-10-08).
-        "group relative isolate overflow-hidden rounded-2xl bg-black",
+        "group relative isolate select-none overflow-hidden rounded-2xl bg-black [-webkit-touch-callout:none]",
         // Twitter-style: full width, the media's OWN true aspect ratio — a
         // HEIGHT ceiling, never a ratio clamp, so it can't disagree with the
         // clip's true shape (no letterboxing/cropping). A same-day tightening

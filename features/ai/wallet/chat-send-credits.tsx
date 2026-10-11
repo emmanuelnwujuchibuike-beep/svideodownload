@@ -13,7 +13,11 @@ import { toast } from "@/features/ui/toast";
  * when it opens (GET /api/ai/wallet/transfer); the chat loads none of this
  * until "Send credits" is tapped (callers import this lazily).
  */
-export function ChatSendCredits({ recipient, onClose }: { recipient: PresetRecipient; onClose: () => void }) {
+/**
+ * `aboveZ`: the layer it was opened from (the chat menu sits at z-110). The send
+ * sheet opens above it, never under it (owner 2026-10-11).
+ */
+export function ChatSendCredits({ recipient, onClose, aboveZ }: { recipient: PresetRecipient; onClose: () => void; aboveZ?: number }) {
   const [state, setState] = useState<{ rules: TransferRules | null; balance: number | null; withdrawable?: number | null; deposited?: number | null } | null>(null);
 
   useEffect(() => {
@@ -41,5 +45,5 @@ export function ChatSendCredits({ recipient, onClose }: { recipient: PresetRecip
   }, [onClose]);
 
   if (!state?.rules) return null;
-  return <SendSheet rules={state.rules} balance={state.balance} withdrawable={state.withdrawable ?? null} deposited={state.deposited ?? null} recipient={recipient} onClose={onClose} onSent={onClose} />;
+  return <SendSheet backdropZ={aboveZ ? aboveZ + 10 : undefined} panelZ={aboveZ ? aboveZ + 11 : undefined} rules={state.rules} balance={state.balance} withdrawable={state.withdrawable ?? null} deposited={state.deposited ?? null} recipient={recipient} onClose={onClose} onSent={onClose} />;
 }

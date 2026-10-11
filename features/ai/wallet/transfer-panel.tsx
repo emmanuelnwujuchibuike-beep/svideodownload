@@ -305,7 +305,12 @@ export function SendSheet({
   onClose,
   onSent,
   recipient = null,
+  backdropZ,
+  panelZ,
 }: {
+  /** Layer overrides for a sheet opened from inside another overlay (the chat menu is z-110). */
+  backdropZ?: number;
+  panelZ?: number;
   rules: TransferRules;
   balance: number | null;
   /** The withdrawable part of `balance`; null when unknown (the server still decides). */
@@ -383,7 +388,7 @@ export function SendSheet({
 
   const field = "mt-1 h-12 w-full rounded-2xl border border-border/70 bg-background px-4 text-[15px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400";
   return (
-    <GlassSheetShell open onClose={onClose} title="Send credits" fitContent defaultHeightVh={78}>
+    <GlassSheetShell open onClose={onClose} title="Send credits" fitContent defaultHeightVh={78} {...(backdropZ ? { backdropZ } : {})} {...(panelZ ? { panelZ } : {})}>
       <div className="px-4 pb-6">
         {!who ? (
           <>

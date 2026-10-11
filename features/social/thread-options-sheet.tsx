@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { BadgeCheck, Check, ChevronRight, Clock, Coins, Image as ImageIcon, Loader2, Palette, ShieldBan, Sparkles, Trash2, User, UserCircle, X } from "lucide-react";
+import { BadgeCheck, Check, ChevronRight, Clock, Coins, Image as ImageIcon, Loader2, Palette, ShieldBan, Sparkles, Trash2, User, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -78,6 +78,7 @@ export function ThreadOptionsSheet({
   otherHandle,
   otherName,
   otherAvatarUrl,
+  otherBannerUrl = null,
   otherIsVerified = false,
   initialTheme,
   initialWallpaperUrl,
@@ -93,6 +94,8 @@ export function ThreadOptionsSheet({
   otherHandle: string;
   otherName?: string;
   otherAvatarUrl?: string | null;
+  /** Their profile cover: the hero's background when set, the brand gradient otherwise (owner 2026-10-11). */
+  otherBannerUrl?: string | null;
   otherIsVerified?: boolean;
   initialTheme: ConversationTheme | null;
   initialWallpaperUrl: string | null;
@@ -279,7 +282,15 @@ export function ThreadOptionsSheet({
 
             <div className="space-y-3 px-4 pb-6 pt-1.5">
               {/* ── who this chat is with — the credits hero's gradient ── */}
-              <section className="relative overflow-hidden rounded-[1.6rem] bg-[linear-gradient(135deg,#1d4ed8_0%,#4f46e5_55%,#a21caf_100%)] p-4 text-white shadow-[0_24px_48px_-28px_rgba(79,70,229,0.75)]">
+              <section className="relative isolate overflow-hidden rounded-[1.6rem] bg-[linear-gradient(135deg,#1d4ed8_0%,#4f46e5_55%,#a21caf_100%)] p-4 text-white shadow-[0_24px_48px_-28px_rgba(79,70,229,0.75)]">
+                {/* their cover photo, when they set one, under a shade that keeps the text readable */}
+                {otherBannerUrl ? (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element -- the member's own cover URL, shown as-is like their profile does */}
+                    <img src={otherBannerUrl} alt="" aria-hidden draggable={false} className="pointer-events-none absolute inset-0 -z-10 h-full w-full select-none object-cover" />
+                    <span aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-t from-black/70 via-black/35 to-black/15" />
+                  </>
+                ) : null}
                 <button
                   type="button"
                   onClick={onClose}
@@ -294,7 +305,9 @@ export function ThreadOptionsSheet({
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={otherAvatarUrl} alt="" className="h-full w-full object-cover" />
                     ) : (
-                      <UserCircle className="h-8 w-8 text-white/90" strokeWidth={1.5} />
+                      <span className="text-[22px] font-bold" aria-hidden>
+                        {(otherName || otherHandle || "?").trim().charAt(0).toUpperCase()}
+                      </span>
                     )}
                   </span>
                   <span className="min-w-0">
@@ -539,6 +552,7 @@ export function ThreadOptionsSheet({
       {sendCreditsOpen && otherUserId ? (
         <ChatSendCredits
           key="send"
+          aboveZ={110}
           recipient={{ userId: otherUserId, name: otherName || (otherHandle ? `@${otherHandle}` : "Frenz member"), handle: otherHandle ?? null, avatarUrl: otherAvatarUrl ?? null }}
           onClose={closeSendCredits}
         />

@@ -1,7 +1,7 @@
 import { isOverPushFrequencyCap } from "@/lib/notifications/frequency-limit";
 import { computeShouldPush, getNotificationSettings } from "@/lib/social/notification-settings";
 import type { NotificationCategory } from "@/lib/social/notifications";
-import { getOwnPresenceStatus } from "@/lib/social/presence-status";
+import { presenceHoldsPush } from "@/lib/social/presence/server";
 import type { NotificationType } from "@/lib/platform/notifications-registry";
 import type { PushPayload } from "@/lib/push/web-push";
 import { sendPushToUser } from "@/lib/push/web-push";
@@ -124,7 +124,9 @@ export async function sendSmartPush(
   // branch only, which is why Do Not Disturb still pushed every DM through.
   // In-app delivery is unaffected — Realtime and the Notification Center still
   // get it; this only governs the lock screen.
-  if ((await getOwnPresenceStatus(userId)) === "dnd") return;
+  // Feature 19 Part 9: a focus mode that holds pushes (Sleep, Meeting, Driving, Personal time,
+  // Vacation - chosen by hand or by an automation) holds them exactly like DND does.
+  if (await presenceHoldsPush(userId)) return;
 
   if (priority === "high") {
     // Still honors the master/push/category switches (a user who turned

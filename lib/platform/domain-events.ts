@@ -40,6 +40,9 @@ export const DOMAIN_EVENTS = [
   { id: "friend.added", name: "FriendAdded", description: "A friend request was accepted — two people became friends.", domain: "social", payload: ["userId", "friendId", "label"] },
   { id: "friend.closed", name: "FriendRequestClosed", description: "A friend request was declined, ignored or cancelled.", domain: "social", payload: ["senderId", "receiverId", "outcome"] },
   { id: "friend.removed", name: "FriendRemoved", description: "A friendship was ended.", domain: "social", payload: ["userId", "friendId"] },
+  // Feature 19 · Part 9 — presence (app/api/presence-status emits these; private details never ride the payload)
+  { id: "presence.changed", name: "StatusChanged", description: "A member changed their own status, focus mode or custom status.", domain: "social", payload: ["userId", "status", "focusMode"] },
+  { id: "focus.enabled", name: "FocusModeEnabled", description: "A member turned on a focus mode by hand.", domain: "social", payload: ["userId", "focusMode"] },
   { id: "post.published", name: "PostPublished", description: "A post/reel/story went live.", domain: "social", payload: ["postId", "authorId", "kind"] },
   { id: "comment.added", name: "CommentAdded", description: "A comment was added to a post.", domain: "social", payload: ["commentId", "postId", "authorId"] },
   { id: "reaction.added", name: "ReactionAdded", description: "A reaction was added to a post.", domain: "social", payload: ["postId", "actorId", "reaction"] },
@@ -68,6 +71,8 @@ export interface DomainEventPayloads {
   "friend.added": { userId: string; friendId: string; label: string | null };
   "friend.closed": { senderId: string; receiverId: string; outcome: "declined" | "ignored" | "cancelled" };
   "friend.removed": { userId: string; friendId: string };
+  "presence.changed": { userId: string; status: string; focusMode: string | null };
+  "focus.enabled": { userId: string; focusMode: string };
   "post.published": { postId: string; authorId: string; kind: "post" | "reel" | "story" };
   "comment.added": { commentId: string; postId: string; authorId: string };
   "reaction.added": { postId: string; actorId: string; reaction: string };

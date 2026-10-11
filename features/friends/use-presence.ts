@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import {
   ensureMyPresenceStatusLoaded,
+  getCachedBroadcast,
   getCachedMyPresenceStatus,
   setMyPresenceStatusLocal,
   subscribeMyPresenceStatus,
@@ -27,8 +28,33 @@ import { getClientAuthUser } from "@/lib/supabase/client-user";
  * `subscribeMyPresenceStatus`, not just at initial connect.
  */
 
+/*
+  Feature 19 Part 9: the channel is PUBLIC - everyone on it sees every key on it.
+  So a member whose last seen is "friends" or "nobody" never tracks here at all
+  (before this they did, and anyone saw them "Active now" whatever they chose).
+  Their friends see "active recently" through the server instead, which applies
+  the setting. The payload carries only the device kind, for the member's own
+  "where you're online" list.
+*/
+const mayTrack = () => getCachedMyPresenceStatus() !== "invisible" && getCachedBroadcast();
+function deviceKind(): "phone" | "tablet" | "desktop" {
+  if (typeof navigator === "undefined") return "desktop";
+  const ua = navigator.userAgent;
+  if (/iPad|Tablet/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return "tablet";
+  return /Mobi|iPhone|Android/i.test(ua) ? "phone" : "desktop";
+}
+const trackPayload = () => ({ at: Date.now(), d: deviceKind() });
+
+/** The member's OWN tabs and devices on the channel right now (Cross-Platform Presence, self only). */
+export function myOnlineDevices(uid: string): ("phone" | "tablet" | "desktop")[] {
+  const metas = (channel?.presenceState() ?? {})[uid] as { d?: string }[] | undefined;
+  return [...new Set((metas ?? []).map((m) => m.d).filter((d): d is "phone" | "tablet" | "desktop" => d === "phone" || d === "tablet" || d === "desktop"))];
+}
+
 let channel: RealtimeChannel | null = null;
 let started = false;
+let lastBeat = 0;
+const BEAT_MS = 3 * 60_000;
 let current = new Set<string>();
 const listeners = new Set<(online: Set<string>) => void>();
 
@@ -48,7 +74,8 @@ function ensureStarted(): void {
       })
       .subscribe((status) => {
         if (status === "SUBSCRIBED" && myStatus !== "invisible" && getCachedMyPresenceStatus() !== "invisible") {
-          void channel?.track({ at: Date.now() });
+          if (mayTrack()) void channel?.track(trackPayload());
+          lastBeat = Date.now();
           // "Last seen" heartbeat — bumps user_presence_status.updated_at so
           // PresenceBadge can show "last seen Xm ago" for someone who isn't
           // currently online. Status-change events alone (the only other
@@ -65,10 +92,10 @@ function ensureStarted(): void {
           }).catch(() => {});
         }
       });
-    subscribeMyPresenceStatus((status) => {
+    subscribeMyPresenceStatus(() => {
       if (!channel) return;
-      if (status === "invisible") void channel.untrack();
-      else if (document.visibilityState === "visible") void channel.track({ at: Date.now() });
+      if (!mayTrack()) void channel.untrack();
+      else if (document.visibilityState === "visible") void channel.track(trackPayload());
     });
 
     /*
@@ -90,8 +117,12 @@ function ensureStarted(): void {
         if (hiddenTimer) {
           clearTimeout(hiddenTimer);
           hiddenTimer = null;
-        } else if (getCachedMyPresenceStatus() !== "invisible") {
-          void channel.track({ at: Date.now() });
+        } else if (mayTrack()) {
+          void channel.track(trackPayload());
+        } else if (getCachedMyPresenceStatus() !== "invisible" && Date.now() - lastBeat > BEAT_MS) {
+          // not on the public channel: one "last active" touch per return to the app, at most every 3 minutes
+          lastBeat = Date.now();
+          void fetch("/api/presence-status", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: getCachedMyPresenceStatus() }) }).catch(() => {});
         }
       }
     });

@@ -119,6 +119,10 @@ export const DATA_DOMAINS: DataDomain[] = [
       // only an accepted collaborator is credited or may open the analytics.
       "post_collaborators",
       "user_presence_status",
+      // Feature 19 Part 9 (0224): a member's own focus automations and private
+      // presence history. Owner-only, read-time evaluated (no cron).
+      "presence_schedules",
+      "presence_history",
       "user_restrictions",
     ],
     storage: ["relational", "object"],

@@ -384,6 +384,8 @@ export const OWNER_COLUMN: Record<string, string> = {
   // FrenzDNA™ — the viewer's own derived interest weights (Feature 15 Part 8).
   user_interest_profile: "user_id",
   user_presence_status: "user_id",
+  presence_schedules: "owner_id", // 0224: your focus automations
+  presence_history: "owner_id", // 0224: your private status history
   user_stickers: "user_id",
 
   /* Creator Studio™ (Feature 15 Part 9, migration 0140) */

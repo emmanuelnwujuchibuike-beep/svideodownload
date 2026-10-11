@@ -1,13 +1,14 @@
 "use client";
 
-import { Check, EyeOff } from "lucide-react";
+import { Check, ChevronRight, EyeOff } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useAnchoredPanel } from "@/features/ui/use-anchored-panel";
 import { haptic } from "@/lib/motion/haptics";
 import type { PresenceStatus } from "@/lib/social/presence-status";
-import { ensureMyPresenceStatusLoaded, getCachedMyPresenceStatus, setMyPresenceStatusLocal, subscribeMyPresenceStatus } from "@/lib/social/presence-status-client";
+import { ensureMyPresenceStatusLoaded, getCachedMyPresenceStatus, setMyBroadcastLocal, setMyPresenceStatusLocal, subscribeMyPresenceStatus } from "@/lib/social/presence-status-client";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { getClientAuthUser } from "@/lib/supabase/client-user";
@@ -126,6 +127,8 @@ export function PresenceStatusPicker({ onCloseAll }: { onCloseAll?: () => void }
         body: JSON.stringify({ last_seen_visibility: next ? "nobody" : "everyone" }),
       });
       if (!res.ok) setLastSeenHidden(!next);
+      // Part 9: leave (or rejoin) the PUBLIC online channel at once - it is what "hidden" means
+      else setMyBroadcastLocal(!next);
     } catch {
       setLastSeenHidden(!next);
     } finally {
@@ -238,6 +241,11 @@ export function PresenceStatusPicker({ onCloseAll }: { onCloseAll?: () => void }
                     </span>
                   </button>
                 </div>
+                {/* Part 9: focus modes, custom status, automations, auto reply */}
+                <Link href="/account/presence" prefetch={false} onClick={() => setOpen(false)} className="mt-1 flex items-center gap-3 border-t border-border/60 px-3.5 pb-1 pt-2.5 text-sm font-medium transition hover:bg-secondary">
+                  <span className="min-w-0 flex-1">Focus, custom status and more</span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                </Link>
               </div>
             </>,
             document.body,

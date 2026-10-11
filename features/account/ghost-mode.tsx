@@ -13,6 +13,7 @@ import {
   type GhostSignalKey,
   type GhostState,
 } from "@/lib/privacy/ghost";
+import { setMyBroadcastLocal, setMyPresenceStatusLocal } from "@/lib/social/presence-status-client";
 import { cn } from "@/lib/utils";
 
 /**
@@ -60,6 +61,8 @@ export function GhostModePanel({ initial }: { initial: GhostState }) {
             body: JSON.stringify(writes.privacy),
           });
           if (!res.ok) failures.push("privacy");
+          // Feature 19 Part 9: leave or rejoin the public online channel now, not on the next reload
+          else if (typeof writes.privacy.last_seen_visibility === "string") setMyBroadcastLocal(writes.privacy.last_seen_visibility === "everyone");
         } catch {
           failures.push("privacy");
         }
@@ -75,6 +78,8 @@ export function GhostModePanel({ initial }: { initial: GhostState }) {
             body: JSON.stringify({ status: writes.presence }),
           });
           if (!res.ok) failures.push("presence");
+          // the live cache use-presence.ts reads: Invisible untracks at once
+          else setMyPresenceStatusLocal(writes.presence);
         } catch {
           failures.push("presence");
         }

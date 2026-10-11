@@ -426,8 +426,92 @@ classified (3 Consistent, 4 New connection) and one evolution was suggested.
 
 ---
 
+## Part 9 — Online Presence™, Focus Modes™ & Presence Automation™
+
+| Layer | File |
+|---|---|
+| Focus modes, schedules, effective presence, Smart Availability (pure) | `lib/social/presence/engine.ts` |
+| The ONE read for other people (privacy transform) | `getDisplayedStatuses` in `lib/social/presence-status.ts`, `GET /api/presence-status` |
+| The member's own presence, saving, automations, the push question | `lib/social/presence/server.ts`, `PATCH /api/presence-status`, `/api/presence/schedules` |
+| Live online set (Supabase Realtime presence) | `features/friends/use-presence.ts` |
+| UI | `/account/presence` (`features/account/presence-settings.tsx`), the chat header (`presence-badge.tsx`), the inbox status picker |
+| Schema | `0224` (columns on `user_presence_status`, `presence_schedules`, `presence_history` + trigger) |
+| Tests | `lib/social/presence/*.test.ts` (20) + 0224 PGlite (6 checks, run twice, 2 mutants that fail) |
+
+**The architecture: one row, derived at read time.** Presence already had a
+home: `user_presence_status` (0043) for the manual status, `last_seen_visibility`
+(0060) for who sees you online, and one shared Realtime channel for who is
+connected. Part 9 adds to that row instead of building a second store. What is
+true *now* is worked out when someone reads it: a custom status that "clears
+after an hour" stores the hour and is ignored once it has passed, and an
+automation ("Sleep, every night 23:00 to 07:00", in the member's own time zone)
+is a stored window that applies while the clock is inside it. **No cron, no
+timer, no polling**: presence costs nothing while nobody is looking.
+
+**Two independent questions, two settings.** *Who sees that I'm online and when
+I was last active* stays `last_seen_visibility` (Everyone / Friends / Nobody).
+*Who sees my status, focus, auto reply and what I'm open to* is the new
+`audience` (Everyone / Friends / one of my circles / Nobody). A hidden status
+reads as the ordinary default, exactly like someone who never set one. Typing
+and read receipts stay in Ghost Mode, linked from the page: one switch per signal.
+
+**A privacy hole closed.** The online channel is public: everyone on it sees
+every key on it. Before this part, a member whose last seen was "Friends" or
+"Nobody" still joined it, so anyone saw them "Active now". Now only members
+whose last seen is "Everyone" join it; the others' friends see "active recently"
+from the server, which applies the setting. Their app touches "last active" at
+most once every 3 minutes when it comes back to the foreground (never on a
+timer). Ghost Mode and the inbox picker now update the live cache too, so going
+Invisible or hiding last seen takes effect at once, not after a reload.
+
+**Focus Modes™.** Work, Study, Meeting, Driving, Sleep, Gaming, Personal time,
+Vacation. Each says what others see ("In a meeting") and whether pushes wait.
+Meeting, Driving, Sleep, Personal time and Vacation hold pushes exactly like Do
+Not Disturb, through the same check in `smart-delivery.ts`. In-app delivery and
+security alerts are untouched. A focus runs for an hour, until morning, or until
+ended, and can bring its suggested auto reply (opt-in).
+
+**Smart Reply Status™ is not a message.** The auto reply shows in the chat header
+to people allowed to see your status, and only while a focus or custom status is
+on or you are Busy or Do Not Disturb. Sending real automatic messages would put
+words in a member's mouth in someone else's inbox, and would notify them.
+
+**Smart Availability™ is rules, not a model.** Late at night it offers Sleep,
+and on a weekday afternoon with no working hours it offers them. It reads only the
+member's own clock and settings, offers at most two things, and applies nothing
+without a tap.
+
+**Presence history** is private, kept 90 days, written by a database trigger on
+real changes (status, focus, custom status). Automatic Away is left out, since it
+would bury everything else. Searchable on the page.
+
+**Gap Ledger**
+
+| Brief item | State |
+|---|---|
+| Statuses: Online, Recently active, Away, Busy, Do Not Disturb, Invisible, Offline, Sleeping, Vacation, Custom | **live** (Sleeping and Vacation are focus modes, so they can hold pushes and be scheduled) |
+| Independent visibility: last seen / online, status details, typing, read receipts | **live** (typing and read receipts in Ghost Mode) |
+| Focus Modes with effects on notifications, visibility, presence, messages | **live** (sounds follow pushes, which wait) |
+| Presence Automation (scheduled focus by day and time, own time zone) | **live** |
+| Custom status with presets and clear-after | **live** |
+| Smart Reply Status (auto reply) | **live**, shown in the chat, never sent as a message |
+| Smart Availability suggestions | **live** (rules over the member's own clock) |
+| Social availability (open to chat, collaboration, business, friend requests, mentorship) | **live** (set and shown in chat. Showing it on profiles is planned) |
+| Status audience: everyone, friends, one circle, nobody | **live** |
+| Presence history, searchable | **live** |
+| Multi-device presence: where you're online | **live**, for the member only (phone / tablet / computer from the live channel) |
+| Domain events `presence.changed`, `focus.enabled` | **live** (declared and emitted on saves from the Presence page) |
+| A different status per device | planned — one status everywhere is the honest default. Per-device needs a device id on every presence write |
+| Business availability (Open / Closed / Holiday) | planned — opening hours are saved without a time zone, so "open now" cannot be computed truthfully. Needs a time zone on the business profile |
+| Creator availability (Live, Recording, Tour mode), live activity (streaming, audio rooms, editing together) | planned — none of those products exist yet. The focus modes and custom status cover the honest part |
+| AI suggestions of In Meeting / Driving from sensors or calendar | refused for now — it would mean reading location or calendar. The rules above never leave the member's own settings |
+| Vacation from a calendar | planned — no calendar connection exists |
+| Sub-100 ms updates at 500M users | the live set is Supabase Realtime presence on one channel. That is right for today's scale. Sharding the channel by friend graph is the exit path, not something running now |
+
+---
+
 ## Migrations to run (in order)
 
-`0214`, `0215`, `0216`, `0217`, `0218`, `0219` (×10 dashboard switch stands for new campaigns), `0220` (Contact Discovery: run after 0217, whose follow-source constraint it widens), `0221` (People You May Know feedback), `0222` (Friend Profiles: bucket list, capsules for friends, hidden moments), `0223` (Relationship Intelligence: archive, reconnect controls, activity counts). Each is idempotent and PGlite-tested (run twice,
+`0214`, `0215`, `0216`, `0217`, `0218`, `0219` (×10 dashboard switch stands for new campaigns), `0220` (Contact Discovery: run after 0217, whose follow-source constraint it widens), `0221` (People You May Know feedback), `0222` (Friend Profiles: bucket list, capsules for friends, hidden moments), `0223` (Relationship Intelligence: archive, reconnect controls, activity counts), `0224` (Presence: status details, focus, automations, private history). Each is idempotent and PGlite-tested (run twice,
 plus a mutant that must fail). The code works before and after each: every new
 read falls back to today's behaviour when its column or table is missing.

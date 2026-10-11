@@ -1,5 +1,6 @@
 import {
   Accessibility,
+  Activity,
   BadgeCheck,
   BarChart3,
   Bell,
@@ -196,6 +197,8 @@ export default async function AccountPage() {
           sub: "Who can find you, and by what",
           tint: "blue",
         },
+        // Feature 19 Part 9: status, focus modes, automations, auto reply and who sees them
+        { href: "/account/presence", Icon: Activity, title: "Presence", sub: "Status, focus modes and who sees them", tint: "emerald" },
         {
           href: "/account/ghost",
           Icon: Ghost,

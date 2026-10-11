@@ -11,6 +11,13 @@ import type { PresenceStatus } from "@/lib/social/presence-status";
  */
 
 let current: PresenceStatus = "available";
+/**
+ * Feature 19 Part 9: may this member appear on the PUBLIC online channel? Only
+ * when their last seen is "everyone". Default false until the server says so,
+ * so a member who chose "friends" or "nobody" is never broadcast for a moment
+ * while the answer loads.
+ */
+let broadcast = false;
 let loaded = false;
 let loadingPromise: Promise<PresenceStatus> | null = null;
 const listeners = new Set<(status: PresenceStatus) => void>();
@@ -39,6 +46,7 @@ export async function ensureMyPresenceStatusLoaded(userId: string): Promise<Pres
         const json = await res.json();
         const s = json?.statuses?.[userId] as PresenceStatus | undefined;
         if (s) current = s;
+        broadcast = json?.self?.broadcast !== false;
       }
     } catch {
       /* stays "available" (the default) on failure */
@@ -50,6 +58,16 @@ export async function ensureMyPresenceStatusLoaded(userId: string): Promise<Pres
     return current;
   })();
   return loadingPromise;
+}
+
+export function getCachedBroadcast(): boolean {
+  return broadcast;
+}
+
+/** After the member changes who sees their last seen: re-announce so use-presence.ts tracks or untracks at once. */
+export function setMyBroadcastLocal(next: boolean): void {
+  broadcast = next;
+  emit();
 }
 
 /** Optimistic local set — call right after a successful (or in-flight) PATCH. */

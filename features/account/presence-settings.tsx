@@ -76,9 +76,9 @@ const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frid
 
 const CARD = "overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm";
 const H2 = "mb-2 px-1 text-[13px] font-semibold uppercase tracking-[0.06em] text-muted-foreground";
-const CHIP = "inline-flex min-h-[2.25rem] items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium transition disabled:opacity-60";
-const BTN = "inline-flex min-h-[2.5rem] items-center justify-center gap-1.5 rounded-full bg-foreground px-4 text-[13.5px] font-semibold text-background transition disabled:opacity-60";
-const QUIET = "inline-flex min-h-[2.5rem] items-center justify-center gap-1.5 rounded-full border border-border px-4 text-[13.5px] font-semibold transition hover:bg-secondary disabled:opacity-60";
+const CHIP = "inline-flex min-h-[2.25rem] items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium transition disabled:opacity-60 active:scale-[0.97] motion-reduce:active:scale-100 touch-manipulation select-none";
+const BTN = "inline-flex min-h-[2.5rem] items-center justify-center gap-1.5 rounded-full bg-foreground px-4 text-[13.5px] font-semibold text-background transition disabled:opacity-60 active:scale-[0.97] motion-reduce:active:scale-100 touch-manipulation select-none";
+const QUIET = "inline-flex min-h-[2.5rem] items-center justify-center gap-1.5 rounded-full border border-border px-4 text-[13.5px] font-semibold transition hover:bg-secondary disabled:opacity-60 active:scale-[0.97] motion-reduce:active:scale-100 touch-manipulation select-none";
 const INPUT = "w-full rounded-xl border border-border bg-background px-3 py-2.5 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
 
 const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
@@ -126,11 +126,13 @@ export function PresenceSettings({ initial, userId }: { initial: OwnPresence; us
   const effective = useMemo(() => effectivePresence(row, schedules, new Date()), [row, schedules]);
   const line = presenceLine(effective);
   const suggestions = clock ? smartSuggestions({ ...clock, effective, schedules }).filter((s) => !dismissed.includes(s.id)) : [];
-  const devices = online.has(userId) ? myOnlineDevices(userId) : [];
+  // the live online set exists only in the browser: read it after mount (clock is set then) so hydration matches
+  const devices = clock && online.has(userId) ? myOnlineDevices(userId) : [];
 
   /** Optimistic write: the row changes at once and goes back if the server says no. */
   const save = async (key: string, patch: Partial<typeof row>, body: Record<string, unknown>) => {
     const prev = row;
+    haptic("selection");
     setRow({ ...row, ...patch });
     setBusy(key);
     setNote(null);
@@ -141,7 +143,6 @@ export function PresenceSettings({ initial, userId }: { initial: OwnPresence; us
       setNote(err);
       return false;
     }
-    haptic("selection");
     return true;
   };
 
@@ -156,6 +157,7 @@ export function PresenceSettings({ initial, userId }: { initial: OwnPresence; us
   const [useReply, setUseReply] = useState(false);
   const startFocus = async (mode: FocusMode, until: string | null) => {
     const reply = useReply ? FOCUS_SPECS[mode].reply : undefined;
+    setPendingFocus(null);
     const ok = await save("focus", { focusMode: mode, focusUntil: until, ...(reply ? { autoReply: reply } : {}) }, { focusMode: mode, focusUntil: until, ...(reply ? { autoReply: reply } : {}) });
     if (ok) {
       setPendingFocus(null);
@@ -202,6 +204,7 @@ export function PresenceSettings({ initial, userId }: { initial: OwnPresence; us
   };
   const setSeen = async (v: "everyone" | "friends" | "nobody") => {
     const prev = lastSeen;
+    haptic("selection");
     setLastSeen(v);
     setBusy("seen");
     const res = await fetch("/api/privacy", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ last_seen_visibility: v }) }).catch(() => null);
@@ -220,15 +223,20 @@ export function PresenceSettings({ initial, userId }: { initial: OwnPresence; us
   const addSchedule = async (s?: { mode: FocusMode; days: number; startMin: number; endMin: number }) => {
     const body = s ?? { mode: draft.mode, days: draft.days, startMin: toMin(draft.start), endMin: toMin(draft.end) };
     if (!body.days) return setNote("Choose at least one day.");
-    setBusy("sched-add");
+    haptic("selection");
+    const temp = `pending-${Date.now()}`;
+    setSchedules((l) => [...l, { id: temp, ...body, tz: localTz(), enabled: true }]);
     const res = await fetch("/api/presence/schedules", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, tz: localTz(), enabled: true }) }).catch(() => null);
     const j = (await res?.json().catch(() => null)) as { id?: string; error?: string } | null;
-    setBusy(null);
-    if (!res?.ok || !j?.id) return setNote(j?.error ?? "Couldn't save that.");
-    setSchedules((l) => [...l, { id: j.id!, ...body, tz: localTz(), enabled: true }]);
-    haptic("light");
+    if (!res?.ok || !j?.id) {
+      setSchedules((l) => l.filter((x) => x.id !== temp));
+      return setNote(j?.error ?? "Couldn't save that.");
+    }
+    setSchedules((l) => l.map((x) => (x.id === temp ? { ...x, id: j.id! } : x)));
   };
   const toggleSchedule = async (s: PresenceSchedule) => {
+    if (s.id.startsWith("pending-")) return;
+    haptic("selection");
     setSchedules((l) => l.map((x) => (x.id === s.id ? { ...x, enabled: !x.enabled } : x)));
     const res = await fetch("/api/presence/schedules", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: s.id, mode: s.mode, days: s.days, startMin: s.startMin, endMin: s.endMin, tz: s.tz, enabled: !s.enabled }) }).catch(() => null);
     if (!res?.ok) {
@@ -237,6 +245,8 @@ export function PresenceSettings({ initial, userId }: { initial: OwnPresence; us
     }
   };
   const removeSchedule = async (s: PresenceSchedule) => {
+    if (s.id.startsWith("pending-")) return;
+    haptic("selection");
     setSchedules((l) => l.filter((x) => x.id !== s.id));
     const res = await fetch(`/api/presence/schedules?id=${s.id}`, { method: "DELETE" }).catch(() => null);
     if (!res?.ok) {
@@ -334,8 +344,7 @@ export function PresenceSettings({ initial, userId }: { initial: OwnPresence; us
               role="radio"
               aria-checked={row.status === o.value}
               onClick={() => void chooseStatus(o.value)}
-              disabled={busy === "status"}
-              className="flex w-full items-center gap-3 border-b border-border/60 px-3.5 py-3 text-left last:border-0 hover:bg-secondary/40"
+              className="flex w-full items-center gap-3 border-b border-border/60 px-3.5 py-3 text-left last:border-0 hover:bg-secondary/40 active:bg-secondary/70 touch-manipulation"
             >
               <span aria-hidden className={cn("h-2.5 w-2.5 shrink-0 rounded-full", o.dot)} />
               <span className="min-w-0 flex-1">
@@ -370,7 +379,7 @@ export function PresenceSettings({ initial, userId }: { initial: OwnPresence; us
               </p>
             </div>
             {effective.focus.source === "manual" ? (
-              <button type="button" className={QUIET} onClick={endFocus} disabled={busy === "focus"}>
+              <button type="button" className={QUIET} onClick={endFocus}>
                 End
               </button>
             ) : null}
@@ -388,7 +397,7 @@ export function PresenceSettings({ initial, userId }: { initial: OwnPresence; us
                 onClick={() => setPendingFocus(pendingFocus === m ? null : m)}
                 disabled={!initial.ready}
                 className={cn(
-                  "flex min-h-[4.5rem] flex-col items-start justify-between rounded-2xl border px-3 py-2.5 text-left transition disabled:opacity-50",
+                  "flex min-h-[4.5rem] touch-manipulation flex-col items-start justify-between rounded-2xl border px-3 py-2.5 text-left transition active:scale-[0.97] disabled:opacity-50 motion-reduce:active:scale-100",
                   on || pendingFocus === m ? "border-primary/50 bg-primary/[0.07]" : "border-border/70 bg-card hover:bg-secondary/40",
                 )}
               >
@@ -412,13 +421,13 @@ export function PresenceSettings({ initial, userId }: { initial: OwnPresence; us
               </span>
             </label>
             <div className="mt-3 flex flex-wrap gap-2">
-              <button type="button" className={BTN} disabled={busy === "focus"} onClick={() => void startFocus(pendingFocus, new Date(Date.now() + 3_600_000).toISOString())}>
+              <button type="button" className={BTN} onClick={() => void startFocus(pendingFocus, new Date(Date.now() + 3_600_000).toISOString())}>
                 For an hour
               </button>
-              <button type="button" className={QUIET} disabled={busy === "focus"} onClick={() => void startFocus(pendingFocus, nextLocalTime(new Date(), localTz(), 7))}>
+              <button type="button" className={QUIET} onClick={() => void startFocus(pendingFocus, nextLocalTime(new Date(), localTz(), 7))}>
                 Until morning
               </button>
-              <button type="button" className={QUIET} disabled={busy === "focus"} onClick={() => void startFocus(pendingFocus, null)}>
+              <button type="button" className={QUIET} onClick={() => void startFocus(pendingFocus, null)}>
                 Until I end it
               </button>
             </div>
@@ -456,7 +465,7 @@ export function PresenceSettings({ initial, userId }: { initial: OwnPresence; us
             </select>
             <span className="flex-1" />
             {row.customText ? (
-              <button type="button" className={QUIET} disabled={busy === "custom"} onClick={() => { setCustom(""); void save("custom", { customText: null, customUntil: null }, { customText: null }); }}>
+              <button type="button" className={QUIET} onClick={() => { setCustom(""); void save("custom", { customText: null, customUntil: null }, { customText: null }); }}>
                 Clear
               </button>
             ) : null}
@@ -480,7 +489,7 @@ export function PresenceSettings({ initial, userId }: { initial: OwnPresence; us
           <p className="mt-1.5 text-[12.5px] text-muted-foreground">Shown at the top of a chat with you while a focus or custom status is on, or you&apos;re Busy. It is never sent as a message.</p>
           <div className="mt-2.5 flex justify-end gap-2">
             {row.autoReply ? (
-              <button type="button" className={QUIET} disabled={busy === "reply"} onClick={() => { setReply(""); void save("reply", { autoReply: null }, { autoReply: null }); }}>
+              <button type="button" className={QUIET} onClick={() => { setReply(""); void save("reply", { autoReply: null }, { autoReply: null }); }}>
                 Turn off
               </button>
             ) : null}
@@ -500,7 +509,7 @@ export function PresenceSettings({ initial, userId }: { initial: OwnPresence; us
           {OPEN_TO.map((o) => {
             const on = row.openTo.includes(o);
             return (
-              <button key={o} type="button" aria-pressed={on} className={cn(CHIP, on ? "border-primary/50 bg-primary/[0.08] text-primary" : "border-border bg-card")} onClick={() => toggleOpen(o)} disabled={!initial.ready || busy === `open-${o}`}>
+              <button key={o} type="button" aria-pressed={on} className={cn(CHIP, on ? "border-primary/50 bg-primary/[0.08] text-primary" : "border-border bg-card")} onClick={() => toggleOpen(o)} disabled={!initial.ready}>
                 {OPEN_TO_LABEL[o]}
               </button>
             );
@@ -527,10 +536,10 @@ export function PresenceSettings({ initial, userId }: { initial: OwnPresence; us
                         {daysLabel(s.days)} · {s.startMin === s.endMin ? "all day" : `${hhmm(s.startMin)} to ${hhmm(s.endMin)}`}
                       </span>
                     </span>
-                    <button type="button" role="switch" aria-checked={s.enabled} aria-label={`${FOCUS_SPECS[s.mode].label} automation`} onClick={() => void toggleSchedule(s)} className={cn("relative h-6 w-11 shrink-0 rounded-full transition", s.enabled ? "bg-primary" : "bg-muted")}>
+                    <button type="button" role="switch" aria-checked={s.enabled} aria-label={`${FOCUS_SPECS[s.mode].label} automation`} onClick={() => void toggleSchedule(s)} className={cn("relative h-6 w-11 shrink-0 touch-manipulation rounded-full transition", s.enabled ? "bg-primary" : "bg-muted")}>
                       <span aria-hidden className={cn("absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-[left] motion-reduce:transition-none", s.enabled ? "left-[1.375rem]" : "left-0.5")} />
                     </button>
-                    <button type="button" aria-label={`Remove the ${FOCUS_SPECS[s.mode].label} automation`} onClick={() => void removeSchedule(s)} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary">
+                    <button type="button" aria-label={`Remove the ${FOCUS_SPECS[s.mode].label} automation`} onClick={() => void removeSchedule(s)} className="inline-flex h-10 w-10 shrink-0 touch-manipulation items-center justify-center rounded-full text-muted-foreground hover:bg-secondary active:bg-secondary">
                       <Trash2 className="h-4 w-4" aria-hidden />
                     </button>
                   </li>
@@ -566,13 +575,13 @@ export function PresenceSettings({ initial, userId }: { initial: OwnPresence; us
                 {DAY_LETTERS.map((d, i) => {
                   const on = (draft.days & (1 << i)) !== 0;
                   return (
-                    <button key={i} type="button" aria-pressed={on} aria-label={DAY_NAMES[i]} onClick={() => setDraft({ ...draft, days: draft.days ^ (1 << i) })} className={cn("h-10 w-10 rounded-full border text-[13px] font-semibold", on ? "border-primary bg-primary text-primary-foreground" : "border-border")}>
+                    <button key={i} type="button" aria-pressed={on} aria-label={DAY_NAMES[i]} onClick={() => setDraft({ ...draft, days: draft.days ^ (1 << i) })} className={cn("h-10 w-10 touch-manipulation rounded-full border text-[13px] font-semibold transition active:scale-95 motion-reduce:active:scale-100", on ? "border-primary bg-primary text-primary-foreground" : "border-border")}>
                       {d}
                     </button>
                   );
                 })}
                 <span className="flex-1" />
-                <button type="button" className={BTN} onClick={() => void addSchedule()} disabled={busy === "sched-add" || !initial.ready}>
+                <button type="button" className={BTN} onClick={() => void addSchedule()} disabled={!initial.ready}>
                   <Plus className="h-4 w-4" aria-hidden /> Add
                 </button>
               </div>
@@ -598,7 +607,7 @@ export function PresenceSettings({ initial, userId }: { initial: OwnPresence; us
                   ["nobody", "Nobody"],
                 ] as const
               ).map(([v, l]) => (
-                <button key={v} type="button" aria-pressed={row.audience === v} className={cn(CHIP, row.audience === v ? "border-primary/50 bg-primary/[0.08] text-primary" : "border-border")} onClick={() => setAudience(v)} disabled={!initial.ready || busy === "audience"}>
+                <button key={v} type="button" aria-pressed={row.audience === v} className={cn(CHIP, row.audience === v ? "border-primary/50 bg-primary/[0.08] text-primary" : "border-border")} onClick={() => setAudience(v)} disabled={!initial.ready}>
                   {l}
                 </button>
               ))}
@@ -633,7 +642,7 @@ export function PresenceSettings({ initial, userId }: { initial: OwnPresence; us
                   ["nobody", "Nobody"],
                 ] as const
               ).map(([v, l]) => (
-                <button key={v} type="button" aria-pressed={lastSeen === v} className={cn(CHIP, lastSeen === v ? "border-primary/50 bg-primary/[0.08] text-primary" : "border-border")} onClick={() => void setSeen(v)} disabled={busy === "seen"}>
+                <button key={v} type="button" aria-pressed={lastSeen === v} className={cn(CHIP, lastSeen === v ? "border-primary/50 bg-primary/[0.08] text-primary" : "border-border")} onClick={() => void setSeen(v)}>
                   {l}
                 </button>
               ))}

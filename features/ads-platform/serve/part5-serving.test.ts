@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EligibleAd, FormatRules } from "@/lib/ads-platform/eligibility";
+import { topStripBox } from "@/lib/ads-platform/media-spec";
 import { bannerIndexAt, msUntilNextRotation } from "@/lib/ads-platform/rotation";
 import type { ServingPayload } from "@/lib/ads-platform/serving-payload";
 import {
@@ -155,10 +156,21 @@ describe("TOP_BANNER — 10 ads, 5-second LOCAL rotation", () => {
     }
   });
 
-  it("the paid top creative keeps its 10:1 shape (not a 32 px sliver)", () => {
-    const t = src("features/ads-platform/serve/self-top-creative.tsx");
-    expect(t).toContain("max-w-[728px]");
-    expect(t).toContain("style={{ aspectRatio: String(ratio) }}");
+  it("the paid top creative takes its OWN shape — no crop, no side bars (owner, 2026-10-11)", () => {
+    // a 5.4 : 1 banner on a phone: full width, its own ratio
+    expect(topStripBox(1035 / 190)).toEqual({ width: "min(100%, 728px)", aspectRatio: String(1035 / 190) });
+    // a taller shape is narrowed to keep its ratio under 140 px, never cropped
+    expect(topStripBox(2)).toEqual({ width: "min(100%, 280px)", aspectRatio: "2" });
+    // unknown size falls back to the 10 : 1 TOP_BANNER format
+    expect(topStripBox(null).aspectRatio).toBe("10");
+    expect(topStripBox(Number.NaN).aspectRatio).toBe("10");
+    const banner = src("features/ads-platform/serve/self-ad-banner.tsx");
+    // the strip's box follows the MEASURED media, and draws no blurred bars
+    expect(banner).toContain('style={variant === "strip" ? topStripBox(stripRatio) : undefined}');
+    expect(banner).toContain('backdrop: variant === "strip" ? false : undefined');
+    expect(banner).not.toContain('"h-8 w-full"');
+    // the wrapper no longer forces the FIRST ad's shape onto every creative
+    expect(src("features/ads-platform/serve/self-top-creative.tsx")).not.toContain("aspectRatio");
   });
 });
 

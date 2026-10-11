@@ -37,6 +37,22 @@ export function cardMediaBox(w: number | null | undefined, h: number | null | un
   return { width: Math.round(w * scale), height: Math.round(h * scale) };
 }
 
+/**
+ * The TOP banner strip takes the creative's OWN shape too (owner, 2026-10-11, with
+ * a screenshot of a 5.4 : 1 banner shrunk inside a wider box beside two blurred
+ * bars: "it doesn't need to crop and it doesn't need to cut out the left and right
+ * part"). Full width up to a 728 px leaderboard, and no taller than 140 px — a
+ * taller shape is narrowed to keep its ratio, never cropped.
+ */
+export const TOP_STRIP_MAX = { width: 728, height: 140 } as const;
+
+/** The strip's CSS width + aspect-ratio for a creative of ratio w/h (unknown → the 10 : 1 TOP_BANNER format). */
+export function topStripBox(ratio: number | null | undefined, max: { width: number; height: number } = TOP_STRIP_MAX): { width: string; aspectRatio: string } {
+  const r = ratio && ratio > 0 && Number.isFinite(ratio) ? ratio : 10;
+  const widthAtMaxHeight = Math.round(max.height * r);
+  return { width: `min(100%, ${Math.min(max.width, widthAtMaxHeight)}px)`, aspectRatio: String(r) };
+}
+
 /*
  * The Stream fallback (owner, 2026-10-10: "if cloudflare stream storage is full,
  * supabase can be the fallback") — see advertiser-server.ts publishAll.

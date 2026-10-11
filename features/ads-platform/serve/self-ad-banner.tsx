@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { EligibleAd, FormatRules } from "@/lib/ads-platform/eligibility";
-import { cardMediaBox } from "@/lib/ads-platform/media-spec";
+import { cardMediaBox, topStripBox } from "@/lib/ads-platform/media-spec";
 import { dwellSeconds, VIDEO_MIN_DWELL_SECONDS } from "@/lib/ads-platform/rotation";
 
 /** How far outside the viewport a tile/card keeps its media mounted — about a screen, so scrolling meets a ready ad. */
@@ -100,6 +100,9 @@ export function SelfAdBanner({
   const dwell = dwellSeconds(current?.mediaType, seconds);
   const [playingCr, setPlayingCr] = useState<string | null>(null);
   const waitingForPlay = current?.mediaType === "video" && playingCr !== current.cr;
+  // The strip's shape: the media's REAL size once loaded (a stored w × h can be wrong or missing), else the stored one
+  const [measured, setMeasured] = useState<{ cr: string; ratio: number } | null>(null);
+  const stripRatio = measured && measured.cr === current?.cr ? measured.ratio : current?.w && current?.h ? current.w / current.h : null;
 
   // Remember what this placement showed, so its NEXT mount (the next download, page view or entry) starts after it.
   useEffect(() => {
@@ -190,6 +193,7 @@ export function SelfAdBanner({
         viewRef.current = v;
       }}
       onPlaying={() => setPlayingCr(current.cr)}
+      onSize={variant === "strip" ? (w, h) => w > 0 && h > 0 && setMeasured({ cr: current.cr, ratio: w / h }) : undefined}
       onFail={() => bump((n) => n + 1)}
     />
   );
@@ -251,17 +255,19 @@ export function SelfAdBanner({
         openAdDetail(current, viewRef.current);
       }}
       aria-label={`Ad from ${current.sponsor}${current.headline ? `: ${current.headline}` : ""} (opens its details)`}
+      // 2026-10-11 (owner): the top strip is the creative's own shape (topStripBox), so nothing is cropped and there are no side bars
+      style={variant === "strip" ? topStripBox(stripRatio) : undefined}
       className={cn(
         "relative block overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",
         variant === "strip"
-          ? "h-8 w-full"
+          ? "mx-auto"
           : "aspect-square w-full rounded-2xl bg-black/40",
         className,
       )}
     >
       {label}
       {caption}
-      {creative({ className: "h-full w-full animate-in fade-in duration-300 motion-reduce:animate-none" })}
+      {creative({ className: "h-full w-full animate-in fade-in duration-300 motion-reduce:animate-none", backdrop: variant === "strip" ? false : undefined })}
     </a>
   );
 }

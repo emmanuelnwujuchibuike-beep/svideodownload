@@ -9,17 +9,17 @@ import { SelfAdBanner } from "./self-ad-banner";
  * (TopPageBannerAd / StickyTopAd own the frame, padding and caption — owner,
  * 2026-10-08: "it should use the existing top banner slot").
  *
- * The creative keeps its own 10:1 proportion (the TOP_BANNER format), up to a
- * 728 px leaderboard width — about 37 px tall on a phone, 73 px on desktop —
- * and the box is reserved by `aspect-ratio`, so its arrival moves nothing
- * inside the bar. Rotation stays local (SelfAdBanner).
+ * The box is the CURRENT creative's own shape (owner, 2026-10-11: no crop, no
+ * side bars), full width up to a 728 px leaderboard and at most 140 px tall
+ * (TOP_STRIP_MAX). It starts from the stored w × h, so the arrival moves
+ * nothing; it corrects to the media's real size once loaded, and a rotation
+ * to a different shape resizes it (the bar republishes its height). Rotation
+ * stays local (SelfAdBanner).
  */
 export function SelfTopCreative({ ads, rules, page }: { ads: readonly EligibleAd[]; rules: FormatRules | null; page: string }) {
-  const first = ads[0];
-  const ratio = first?.w && first?.h ? first.w / first.h : 10;
   return (
-    <div className="w-full max-w-[728px]" style={{ aspectRatio: String(ratio) }}>
-      <SelfAdBanner ads={ads} rules={rules} placement="global_top_banner" page={page} variant="strip" className="h-full rounded-md" />
+    <div className="flex w-full justify-center">
+      <SelfAdBanner ads={ads} rules={rules} placement="global_top_banner" page={page} variant="strip" className="rounded-md" />
     </div>
   );
 }

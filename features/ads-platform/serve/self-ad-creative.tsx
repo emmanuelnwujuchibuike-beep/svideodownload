@@ -42,6 +42,7 @@ export function SelfAdCreative({
   onEnded,
   onPlaying,
   onView,
+  onSize,
 }: {
   ad: EligibleAd;
   placement: string;
@@ -60,6 +61,8 @@ export function SelfAdCreative({
   onPlaying?: () => void;
   /** the view, for a caller that tracks more (click, interstitial_view, reward events) */
   onView?: (view: AdView) => void;
+  /** the media's real pixel size once loaded (the top strip takes this shape, not the stored one) */
+  onSize?: (w: number, h: number) => void;
 }) {
   const host = useRef<HTMLDivElement | null>(null);
   const video = useRef<HTMLVideoElement | null>(null);
@@ -173,6 +176,7 @@ export function SelfAdCreative({
           preload="metadata"
           aria-label={alt}
           className={media}
+          onLoadedMetadata={(e) => onSize?.(e.currentTarget.videoWidth, e.currentTarget.videoHeight)}
           onLoadedData={() => trackAdEvent(view, "loaded")}
           onPlaying={() => {
             trackAdEvent(view, "video_start");
@@ -192,7 +196,10 @@ export function SelfAdCreative({
           loading={eager ? "eager" : "lazy"}
           decoding="async"
           className={media}
-          onLoad={() => trackAdEvent(view, "loaded")}
+          onLoad={(e) => {
+            onSize?.(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight);
+            trackAdEvent(view, "loaded");
+          }}
           onError={fail}
         />
       )}

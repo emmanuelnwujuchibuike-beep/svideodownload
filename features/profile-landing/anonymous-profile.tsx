@@ -156,12 +156,15 @@ export function AnonymousProfile({ earn, cashOut, sub, wallpapers }: AnonymousPr
           </ul>
           <p className="mt-3 text-[12px] text-muted-foreground">Earnings depend on your subscribers; nothing is guaranteed. Payouts follow Frenzsave&apos;s payout rules.</p>
           <div className="mt-4 flex flex-wrap gap-2.5">
-            <Link prefetch={false} href={login("/members")} className={PRIMARY}>
+            {/* /earn/start: sign in, then straight onto the creator's own SUB setup (2026-10-11).
+                A plain <a>: it is a route handler that redirects, which a client navigation cannot follow. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+            <a href="/earn/start" className={PRIMARY}>
               Become a Creator <ArrowRight className="h-4 w-4" aria-hidden />
-            </Link>
-            <a href="#how-creators" className={QUIET}>
-              How It Works
             </a>
+            <Link prefetch={false} href="/earn" className={QUIET}>
+              Fees and FAQ
+            </Link>
           </div>
           <ol id="how-creators" className={cn(SECTION, "mt-4 grid gap-2 border-t border-black/[0.06] pt-4 text-[13.5px] dark:border-white/[0.08] sm:grid-cols-4")}>
             {["Create your account", "Set your subscription price", "Post for subscribers", "Withdraw your earnings"].map((step, i) => (

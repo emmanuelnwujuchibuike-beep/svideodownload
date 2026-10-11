@@ -199,6 +199,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // the public advertising pages, never listed until now (2026-10-09 audit)
     { url: `${siteUrl}/advertise`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${siteUrl}/advertise/rules`, changeFrequency: "monthly", priority: 0.5 },
+    // the creator-monetization page (owner SEO brief 2026-10-11) — never /earn/start, which only redirects
+    { url: `${siteUrl}/earn`, changeFrequency: "monthly", priority: 0.8 },
     { url: `${siteUrl}/help`, changeFrequency: "monthly", priority: 0.7 },
     { url: `${siteUrl}/trust`, changeFrequency: "monthly", priority: 0.7 },
     { url: `${siteUrl}/glossary`, changeFrequency: "monthly", priority: 0.5 },

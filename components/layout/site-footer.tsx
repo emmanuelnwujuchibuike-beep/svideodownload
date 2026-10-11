@@ -146,6 +146,8 @@ export function SiteFooter({ locale = DEFAULT_LOCALE }: { locale?: LocaleCode } 
         <FooterColumn
           title="Business"
           links={[
+            // the creator-monetization page (owner SEO brief 2026-10-11)
+            ["Earn from your content", "/earn"],
             ["Advertise on Frenzsave", "/advertise"],
             ["Ad prices", "/advertise/pricing"],
             ["Campaign guide", "/advertise/campaign-guide"],

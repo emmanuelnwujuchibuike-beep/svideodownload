@@ -150,6 +150,17 @@ export const EVENTS = [
   { id: "pwa_install_accepted", label: "Install accepted", description: "The visitor accepted the install prompt.", domain: "growth" },
   { id: "pwa_install_dismissed", label: "Install dismissed", description: "The visitor dismissed the install prompt.", domain: "growth" },
   { id: "pwa_installed", label: "PWA installed", description: "The app was installed to the home screen.", domain: "growth" },
+  /*
+    The /earn creator funnel (owner SEO brief 2026-10-11). Written server-side by
+    /earn/start, one row per tap, and once when setup completes — never per page
+    view (page_view already covers /earn). Stage, plus whether the visitor was
+    signed in; never a price, a handle or anything a subscriber did.
+      cta        tapped Start Earning while signed out → sent to sign in
+      returned   came back from sign-in (or sign-up) to /earn/start
+      setup      reached their own SUB setup screen
+      completed  finished SUB setup (saveSubSettings complete)
+  */
+  { id: "earn_funnel", label: "Creator earn funnel", description: "A step of the /earn page → sign in → SUB setup funnel.", domain: "growth", metadata: ["stage", "signedIn"] },
   { id: "experiment_exposure", label: "Experiment exposure", description: "An enrolled visitor was exposed to an experiment arm.", domain: "experiment", metadata: ["experiment", "variant"] },
 ] as const satisfies readonly EventDef[];
 

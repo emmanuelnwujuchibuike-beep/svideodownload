@@ -2,6 +2,7 @@ import "server-only";
 
 import { after } from "next/server";
 
+import { trackEvent } from "@/lib/analytics/events";
 import { resolveCheckoutRate } from "@/lib/ai/character-replace/fx-rate-server";
 import { quoteCheckout } from "@/lib/ai/character-replace/topup-fx";
 import { subscriptionCharge, usd, validatePrice, withdrawalSplit } from "@/lib/creator/membership/engine";
@@ -100,6 +101,8 @@ export async function saveSubSettings(creatorId: string, patch: { priceCents?: n
   }
   const { error } = await db.from("creator_membership_settings").upsert(cols, { onConflict: "creator_id" });
   if (error) return MISSING(error.message) ? fail("Creator monetization arrives with the next update.", 503) : fail("Couldn't save that.", 500);
+  // the last step of the /earn funnel — the first completion only, never a re-save
+  if (patch.complete && !current.setupCompleted) trackEvent("earn_funnel", { userId: creatorId, metadata: { stage: "completed", signedIn: true } });
   return { ok: true, settings: { ...current, ...(await getSubSettings(creatorId)) } };
 }
 

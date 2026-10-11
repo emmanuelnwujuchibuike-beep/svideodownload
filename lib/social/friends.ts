@@ -4,6 +4,7 @@ import { emit } from "@/lib/platform/event-bus";
 import { sendPushToUser } from "@/lib/push/web-push";
 import { flagsOf, isAccountVisibleTo } from "@/lib/social/account-visibility";
 import { listConversations } from "@/lib/social/messages";
+import { requestFiltered } from "@/lib/privacy/enforce";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLabelInput } from "@/lib/social/graph/labels";
 import {
@@ -307,6 +308,13 @@ export async function sendFriendRequest(
     // Unique pending index — a duplicate send is an idempotent success.
     if (error && error.code !== "23505") return { ok: false, reason: "unavailable" };
 
+    // 0232 (Part 17): the receiver's friend-request filters file it quietly — sent, reviewable, not notified
+    if (!error && (await requestFiltered(db, senderId, receiverId))) {
+      const { data: reqRow } = await db.from("friend_requests").select("id").eq("sender_id", senderId).eq("receiver_id", receiverId).eq("status", "pending").order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (reqRow) await db.from("friend_request_ignores").upsert({ request_id: (reqRow as { id: string }).id, receiver_id: receiverId }, { onConflict: "request_id" }).then(undefined, () => {});
+      emit("friend.requested", { senderId, receiverId, source });
+      return { ok: true, state: "outgoing" };
+    }
     if (!error) {
       await db
         .from("notifications")

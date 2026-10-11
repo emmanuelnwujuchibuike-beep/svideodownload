@@ -829,7 +829,7 @@ member themselves and never to anyone else.
 
 **History is private by construction.** Triggers write each change only into the
 history of the person it belongs to: a follow or unfollow is recorded for the
-follower, never told to the person followed; blocks and circle changes are the
+follower (Part 17 adds it to the followed person's history too, as the brief asks); blocks and circle changes are the
 actor's alone. Every write checks both accounts exist, so deleting an account (a
 cascade through these tables) can never be refused — the 0228 lesson, tested.
 Kept two years, trimmed when looked at.
@@ -857,8 +857,108 @@ Kept two years, trimmed when looked at.
 
 ---
 
+## Part 16 — Relationship Reputation™, Transparency Center™ & Trust Intelligence™
+
+| Layer | File |
+|---|---|
+| Reputation — levels, badges, strengths, improvements, recovery (pure) | `lib/trust/reputation.ts` |
+| Reads — reputation, every decision explained, admin abuse signals | `lib/trust/server.ts` |
+| Member page | `/account/reputation` (Reputation + `#transparency`), linked from Account |
+| Admin | Moderation → Trust signals (`GET /api/admin/trust-signals`, admin-only, loaded on a button, never polled) |
+| Tests | `reputation.test.ts` (no popularity input exists; no number is shown; recovery after twelve months; restrictions point to the Transparency Center) |
+
+**Trust, never popularity.** The input type has no follower, like, view or spend
+field at all, and a test fails if one is added. The level is a title (Emerging →
+Legacy), never a score. Signals are the Part 15 Trust Graph's (verification,
+account age, recent activity, friendships, vouched work) plus helpful reports,
+moderator roles, community size, recognitions and mentoring.
+
+**Nothing stored, nothing hidden.** Computed on read from decisions Frenz already
+records, so there is no score to drift. The Transparency Center lists every
+decision on the account (suspension, limited visibility, paused withdrawals, a
+refused application, each upheld report, each appeal) with why, the rule, the
+date, and the appeal link.
+
+**Recovery is automatic.** An upheld report stops counting after twelve months;
+an overturned appeal never counted. Neither needs a request.
+
+**Conflict to decide:** Feature 18's creator "Reputation" ranks use followers,
+engagement and views. Part 16 forbids exactly that, so it is built beside them,
+not over them. The owner decides whether those ranks are renamed or retired.
+
+**Gap Ledger**
+
+| Brief item | State |
+|---|---|
+| Reputation levels, badges with reasons, strengths, improvements | **live** |
+| Trusted Creator / Business / Mentor / Moderator, Community Leader, Safety Contributor, Verified Identity | **live**, each earned from recorded facts |
+| Transparency Center (why, rule, date, appeal) | **live** |
+| Appeals | **live** (existing `/account/appeals`, linked from each decision) |
+| Reputation recovery | **live** (twelve months; overturned appeals) |
+| Trust Intelligence: mass requests, mass follows, repeat violations, new accounts | **live**, admin review only — nothing acts automatically |
+| Bot, fake-account, fraud-ring and impersonation detection by model | planned — no model is trained; the signals above are counts |
+| Reputation shown to others | not built on purpose — a member's standing is theirs alone |
+| Public trust numbers or percentages | never — the Truth rule |
+
+---
+
+## Part 17 — Relationship Privacy™, Consent Center & Boundary Modes
+
+| Layer | File |
+|---|---|
+| Rules, presets, boundary modes, advisor (pure) | `lib/privacy/relationship.ts` |
+| Enforcement — connect policies, friend request filters | `lib/privacy/enforce.ts` |
+| Center reads and writes — presets, boundaries, consents, leave a memory, expiry sweep | `lib/privacy/center.ts` |
+| API | `GET/POST /api/privacy-center`; `PATCH /api/privacy` takes the new policies |
+| UI | `/account/privacy-center`, linked from Account |
+| Schema | `0232_relationship_privacy.sql` |
+| Tests | `relationship.test.ts`; 0232 PGlite (9 checks, incl. a mutant where a blocked person can still mention) |
+
+**Who can.** Mentions, collaboration invites and adding you to a memory each have a
+policy (everyone / following / friends / nobody), enforced where the action
+happens: the mention notification trigger (which now also respects blocks),
+`inviteCollaborator`, the memory people check, and the Permission Graph. Before
+0232 the policies read as "everyone", today's behaviour.
+
+**Friend request filters.** A filtered request is not refused, which would tell the
+sender. It goes straight to the member's ignored requests with no notification.
+
+**Boundary modes** (Quiet, Vacation, Friends only, Work, Creator, Invisible,
+Weekend) change the real settings and remember the originals, so ending one
+restores exactly what was there. Timed modes end through the existing
+reconcile cron (no new schedule, nothing runs while idle). **Temporary blocks**
+(e.g. "Block for a week") expire the same way.
+
+**Consent Center.** Pending collaboration invites (accept or decline), pro
+requests, and memories you're in, each with "Remove me".
+
+**Relationship audit log.** The Part 15 history gains followed you, unfollowed
+you, privacy changed, boundary on/off and removed from a memory. This replaces
+Part 15's rule that a follow is recorded only for the follower: the brief asks
+that a person see who followed and unfollowed them. **Who blocked you is never
+recorded or shown**, because that would tell a blocked person how to evade the
+block. Edges stay owner-only for block, mute and restrict.
+
+**Gap Ledger**
+
+| Brief item | State |
+|---|---|
+| Who can mention, tag in memories, invite to collaborate, send requests, message, see lists | **live** (new policies + the existing privacy settings) |
+| Friend request filters (no mutuals, new accounts, no photo, unverified) | **live** |
+| Boundary modes with automatic end | **live** |
+| Temporary blocks | **live** (`blocks.expires_at`); temporary mutes: column live, no UI yet |
+| Temporary permissions for other people (e.g. 24-hour access) | planned |
+| Privacy presets (8) | **live** |
+| Consent Center | **live** for collaborations, pro requests and memories |
+| Relationship audit log | **live**, except who blocked you (never, by design) |
+| AI Privacy Advisor | **live** as explainable rules over the settings; no model |
+| Discoverability (search, suggestions, contacts) | **live** through the existing privacy settings, surfaced in the center |
+| Location, story-tag and photo-tag consent | planned — those surfaces have no tagging yet |
+
+---
+
 ## Migrations to run (in order)
 
-`0214`, `0215`, `0216`, `0217`, `0218`, `0219` (×10 dashboard switch stands for new campaigns), `0220` (Contact Discovery: run after 0217, whose follow-source constraint it widens), `0221` (People You May Know feedback), `0222` (Friend Profiles: bucket list, capsules for friends, hidden moments), `0223` (Relationship Intelligence: archive, reconnect controls, activity counts), `0224` (Presence: status details, focus, automations, private history), `0225` (Friend Lists: nesting, archive, tags, rules). **All of 0214–0225 were applied and probed live on 2026-10-11.** Then `0226` (Professional Network: open-to and industry, confirmed connections, recommendations, endorsements, opportunities, three in-app notification types), then `0227_sub_monetization.sql` (SUB: creator settings, memberships, Paystack-paid subscriptions with their fee, the SUB balance and ledger, SUB withdrawals on `withdrawal_requests`, the financial audit log, subscriber-only posts, notes, recognitions, sponsors, ratings, two notification types). Then `0229_shared_memories.sql` (Part 14) and `0230_graph_history.sql` (Part 15: triggers on friendships, follows, blocks, pro_connections, creator_memberships and circle_members, each guarded so account deletion is never refused). Also `0228` (bug fix: account deletion refused for anyone with a follower, from 0217's follower-stat trigger; safe to run at any time). Before 0227 the SUB tab, checkout and withdrawals answer "arrives with the next update"; subscriber-only uploads also need the private R2 bucket (`R2_PRIVATE_BUCKET`). Each is idempotent and PGlite-tested (run twice,
+`0214`, `0215`, `0216`, `0217`, `0218`, `0219` (×10 dashboard switch stands for new campaigns), `0220` (Contact Discovery: run after 0217, whose follow-source constraint it widens), `0221` (People You May Know feedback), `0222` (Friend Profiles: bucket list, capsules for friends, hidden moments), `0223` (Relationship Intelligence: archive, reconnect controls, activity counts), `0224` (Presence: status details, focus, automations, private history), `0225` (Friend Lists: nesting, archive, tags, rules). **All of 0214–0225 were applied and probed live on 2026-10-11.** Then `0226` (Professional Network: open-to and industry, confirmed connections, recommendations, endorsements, opportunities, three in-app notification types), then `0227_sub_monetization.sql` (SUB: creator settings, memberships, Paystack-paid subscriptions with their fee, the SUB balance and ledger, SUB withdrawals on `withdrawal_requests`, the financial audit log, subscriber-only posts, notes, recognitions, sponsors, ratings, two notification types). Then `0229_shared_memories.sql` (Part 14) and `0230_graph_history.sql` (Part 15: triggers on friendships, follows, blocks, pro_connections, creator_memberships and circle_members, each guarded so account deletion is never refused). Then `0231_sub_promo_dismiss.sql` (the Get paid card's dismissal) and `0232_relationship_privacy.sql` (Part 17: connect policies, request filters, boundary modes, temporary blocks and mutes, wider graph history, mention trigger respecting blocks). Also `0228` (bug fix: account deletion refused for anyone with a follower, from 0217's follower-stat trigger; safe to run at any time). Before 0227 the SUB tab, checkout and withdrawals answer "arrives with the next update"; subscriber-only uploads also need the private R2 bucket (`R2_PRIVATE_BUCKET`). Each is idempotent and PGlite-tested (run twice,
 plus a mutant that must fail). The code works before and after each: every new
 read falls back to today's behaviour when its column or table is missing.

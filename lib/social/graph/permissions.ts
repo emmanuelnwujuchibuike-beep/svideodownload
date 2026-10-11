@@ -1,5 +1,6 @@
 import "server-only";
 
+import { connectPolicyAllows } from "@/lib/privacy/enforce";
 import { decideFollow } from "@/lib/social/follows";
 import { canMessage } from "@/lib/social/messages";
 import { getMemory } from "@/lib/social/memories/server";
@@ -20,7 +21,7 @@ import { canSeeFriendList, relationshipPrivacy } from "./store";
  * reason back, not a bare boolean. Unknown actions fail closed.
  */
 
-export const GRAPH_ACTIONS = ["message", "follow", "view_friends", "view_sub_posts", "view_memory", "add_to_memory", "invite_collaborator", "moderate_community"] as const;
+export const GRAPH_ACTIONS = ["message", "follow", "mention", "view_friends", "view_sub_posts", "view_memory", "add_to_memory", "invite_collaborator", "moderate_community"] as const;
 export type GraphAction = (typeof GRAPH_ACTIONS)[number];
 
 export interface Permission {
@@ -70,10 +71,20 @@ export async function can(viewerId: string, action: GraphAction, target: string)
       return (await getMemory(viewerId, target)) ? { allowed: true, reason: "This memory is shared with you." } : { allowed: false, reason: "This memory isn't shared with you." };
     case "add_to_memory":
       if (await blockedEitherWay(db, viewerId, target)) return { allowed: false, reason: "Not available." };
-      return (await isFriend(db, viewerId, target)) ? { allowed: true, reason: "You're friends, so you can add them to a memory." } : { allowed: false, reason: "Only friends can be added to a memory." };
+      if (!(await isFriend(db, viewerId, target))) return { allowed: false, reason: "Only friends can be added to a memory." };
+      {
+        const { data: pol } = await db.from("privacy_settings").select("memory_tag_policy").eq("user_id", target).maybeSingle();
+        if ((pol as Row | null)?.memory_tag_policy === "nobody") return { allowed: false, reason: "They've chosen not to be added to memories." };
+      }
+      return { allowed: true, reason: "You're friends, so you can add them to a memory." };
     case "invite_collaborator":
-      // mirrors lib/creator/collab.ts inviteCollaborator: anyone except a blocked account (they accept or decline)
-      return (await blockedEitherWay(db, viewerId, target)) ? { allowed: false, reason: "Not available." } : { allowed: true, reason: "You can invite them; they accept or decline." };
+      // mirrors lib/creator/collab.ts inviteCollaborator: not blocked, and their collaboration-invite setting (0232)
+      if (await blockedEitherWay(db, viewerId, target)) return { allowed: false, reason: "Not available." };
+      return (await connectPolicyAllows(db, target, viewerId, "collab_invite_policy")) ? { allowed: true, reason: "You can invite them; they accept or decline." } : { allowed: false, reason: "They limit who can invite them to collaborate." };
+    case "mention":
+      // the comment trigger (0232) applies the same rule when a mention is written
+      if (await blockedEitherWay(db, viewerId, target)) return { allowed: false, reason: "Not available." };
+      return (await connectPolicyAllows(db, target, viewerId, "mention_policy")) ? { allowed: true, reason: "Your mentions reach them." } : { allowed: false, reason: "They limit who can notify them with a mention." };
     case "moderate_community": {
       // can the VIEWER moderate the community of creator `target`?
       if (viewerId === target) return { allowed: true, reason: "It's your community." };

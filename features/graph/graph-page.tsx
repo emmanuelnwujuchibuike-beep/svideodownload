@@ -25,6 +25,7 @@ const EXAMPLES = ["Friends from university", "Business partners in Lagos", "Phot
 const ACTIONS: [string, string][] = [
   ["message", "Message"],
   ["follow", "Follow"],
+  ["mention", "Mention them"],
   ["view_friends", "See their friends"],
   ["add_to_memory", "Add to a memory"],
   ["invite_collaborator", "Invite to collaborate"],
@@ -171,7 +172,7 @@ export function GraphPage({ trust, growth }: { trust: (TrustResult & { signals: 
   );
 }
 
-function History() {
+export function History() {
   const [items, setItems] = useState<{ id: number; text: string; person: { name: string; handle: string; avatarUrl: string | null } | null; at: string; detail: string | null }[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
   const load = async (before: string | null) => {
@@ -196,7 +197,7 @@ function History() {
                 {h.person ? <PersonAvatar user={{ displayName: h.person.name, avatarUrl: h.person.avatarUrl }} size={36} /> : <Network className="h-5 w-5 text-muted-foreground" aria-hidden />}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13.5px]">
-                    {h.text} <b>{h.person?.name ?? "a deleted account"}</b>
+                    {h.text} <b>{h.person?.name ?? h.detail ?? "a deleted account"}</b>
                   </span>
                   <span className="block text-[12px] text-muted-foreground" suppressHydrationWarning>
                     {new Date(h.at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}

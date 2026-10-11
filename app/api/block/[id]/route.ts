@@ -19,13 +19,15 @@ async function requireUser() {
 }
 
 /** Body is optional — `{}`/omitted keeps the original full-block behavior. */
-async function readScope(req: Request): Promise<RestrictionScope | "all" | null> {
+async function readScope(req: Request): Promise<{ scope: RestrictionScope | "all" | null; hours: number | null }> {
   try {
-    const body = (await req.json()) as { scope?: string };
-    if (!body?.scope || body.scope === "all") return "all";
-    return (SCOPES as readonly string[]).includes(body.scope) ? (body.scope as RestrictionScope) : null;
+    const body = (await req.json()) as { scope?: string; hours?: number };
+    // 0232 (Part 17): a temporary block lifts by itself after 1 hour to 30 days
+    const hours = typeof body?.hours === "number" && Number.isInteger(body.hours) && body.hours >= 1 && body.hours <= 720 ? body.hours : null;
+    if (!body?.scope || body.scope === "all") return { scope: "all", hours };
+    return { scope: (SCOPES as readonly string[]).includes(body.scope) ? (body.scope as RestrictionScope) : null, hours: null };
   } catch {
-    return "all"; // no/empty body — the pre-existing full-block call shape
+    return { scope: "all", hours: null }; // no/empty body — the pre-existing full-block call shape
   }
 }
 
@@ -44,7 +46,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   if (user.id === id) return NextResponse.json({ error: "You can't block yourself." }, { status: 400 });
 
-  const scope = await readScope(req);
+  const { scope, hours } = await readScope(req);
   if (scope === null) return NextResponse.json({ error: "Bad scope." }, { status: 400 });
 
   try {
@@ -60,6 +62,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       { blocker_id: user.id, blocked_id: id },
       { onConflict: "blocker_id,blocked_id" },
     );
+    // temporary: the reconcile cron lifts it when it ends (before 0232 runs, the block simply stays)
+    if (hours) await db.from("blocks").update({ expires_at: new Date(Date.now() + hours * 3_600_000).toISOString() }).eq("blocker_id", user.id).eq("blocked_id", id).then(undefined, () => {});
+    else await db.from("blocks").update({ expires_at: null }).eq("blocker_id", user.id).eq("blocked_id", id).then(undefined, () => {});
     // Sever follows both ways (trigger keeps the counts correct).
     await db
       .from("follows")
@@ -101,7 +106,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
 
-  const scope = await readScope(req);
+  const { scope } = await readScope(req);
   if (scope === null) return NextResponse.json({ error: "Bad scope." }, { status: 400 });
 
   try {

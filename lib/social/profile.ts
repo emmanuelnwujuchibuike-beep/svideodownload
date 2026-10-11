@@ -335,7 +335,21 @@ export interface PrivacySettings {
   friend_requests_policy: RequestPolicy;
   /** Migration 0217 (Feature 19 · Part 3) — who may follow you. */
   follow_policy: FollowPolicy;
+  /** 0232 (Feature 19 · Part 17) — who can notify you with an @mention */
+  mention_policy: ConnectPolicy;
+  /** 0232 — who can invite you to collaborate on a post */
+  collab_invite_policy: ConnectPolicy;
+  /** 0232 — who can put you on a shared memory */
+  memory_tag_policy: "friends" | "nobody";
+  /** 0232 — friend requests filed quietly instead of notified */
+  request_filters: { noPhoto?: boolean; minAccountDays?: number };
+  /** 0232 — a Boundary Mode in force, and when it ends (null = until turned off) */
+  boundary_mode: string | null;
+  boundary_until: string | null;
 }
+
+/** 0232: the four-way "who can" used by mentions and collaboration invites. */
+export type ConnectPolicy = "everyone" | "following" | "friends" | "nobody";
 
 export const DEFAULT_PRIVACY: PrivacySettings = {
   activity_visibility: "public",
@@ -359,6 +373,12 @@ export const DEFAULT_PRIVACY: PrivacySettings = {
   muted_comment_keywords: [],
   friend_requests_policy: "everyone",
   follow_policy: "everyone",
+  mention_policy: "everyone",
+  collab_invite_policy: "everyone",
+  memory_tag_policy: "friends",
+  request_filters: {},
+  boundary_mode: null,
+  boundary_until: null,
 };
 
 /* ----------------------------- follow lists ----------------------------- */
@@ -549,6 +569,7 @@ const PRIVACY_NEWER_COLS = "muted_comment_keywords"; // migration 0122
 const PRIVACY_NEWEST_COLS = "story_screenshot_alerts"; // migration 0181
 const PRIVACY_0216_COLS = "friend_requests_policy"; // migration 0216
 const PRIVACY_0217_COLS = "follow_policy"; // migration 0217
+const PRIVACY_0232_COLS = "mention_policy, collab_invite_policy, memory_tag_policy, request_filters, boundary_mode, boundary_until"; // migration 0232
 
 export async function getPrivacySettings(userId: string): Promise<PrivacySettings> {
   if (!hasSupabase) return DEFAULT_PRIVACY;
@@ -557,6 +578,18 @@ export async function getPrivacySettings(userId: string): Promise<PrivacySetting
   // applied yet must never revert an EARLIER, already-live setting to its
   // default (that would be a real privacy regression), so each tier only
   // drops the columns that are actually missing.
+  // 0232 first (Part 17); before it runs, the tiers below answer exactly as they always have
+  try {
+    const { data, error } = await db
+      .from("privacy_settings")
+      .select(`${PRIVACY_BASE_COLS}, ${PRIVACY_NEW_COLS}, ${PRIVACY_NEWER_COLS}, ${PRIVACY_NEWEST_COLS}, ${PRIVACY_0216_COLS}, ${PRIVACY_0217_COLS}, ${PRIVACY_0232_COLS}`)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    return { ...DEFAULT_PRIVACY, ...((data ?? {}) as Partial<PrivacySettings>) };
+  } catch {
+    /* 0232 not applied yet */
+  }
   // 0217, then 0216, each as its own tier: a missing newer column drops ONLY that column
   try {
     const { data, error } = await db

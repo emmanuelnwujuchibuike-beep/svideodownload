@@ -48,6 +48,11 @@ const schema = z.object({
   /** 0217 (Feature 19 · Part 3) — who may follow you */
   follow_policy: z.enum(FOLLOW_POLICIES).optional(),
   muted_comment_keywords: z.array(z.string().trim().min(1).max(40)).max(50).optional(),
+  /** 0232 (Feature 19 · Part 17) — mentions, collaboration invites, memories, request filters */
+  mention_policy: z.enum(["everyone", "following", "friends", "nobody"]).optional(),
+  collab_invite_policy: z.enum(["everyone", "following", "friends", "nobody"]).optional(),
+  memory_tag_policy: z.enum(["friends", "nobody"]).optional(),
+  request_filters: z.object({ noPhoto: z.boolean().optional(), minAccountDays: z.number().int().min(0).max(365).optional() }).strict().optional(),
 });
 
 /** PATCH /api/privacy — upsert the signed-in user's privacy settings. */

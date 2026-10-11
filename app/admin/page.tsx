@@ -160,6 +160,7 @@ import { PaystackSettings } from "@/features/admin/paystack-settings";
 import { StatAdjuster } from "@/features/admin/stat-adjuster";
 import { PricingEditor } from "@/features/admin/pricing-editor";
 import { ModerationQueue } from "@/features/admin/moderation-queue";
+import { TrustSignals } from "@/features/admin/trust-signals";
 import { SignedInUsersLazy } from "@/features/admin/signed-in-users-lazy";
 import { UserModeration } from "@/features/admin/user-moderation";
 import { AppealsQueue } from "@/features/admin/appeals-queue";
@@ -584,6 +585,11 @@ export default async function AdminPage() {
                   /* Admin stat overrides — adjust a user's followers or a
                      post's likes/views (owner). A deliberate manual control,
                      and one nobody wants to scroll past to reach the queue. */
+                  id: "trust-signals",
+                  label: "Trust signals",
+                  content: <TrustSignals />,
+                },
+                {
                   id: "stat-overrides",
                   label: "Stat overrides",
                   content: <StatAdjuster />,

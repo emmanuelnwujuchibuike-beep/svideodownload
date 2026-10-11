@@ -1,6 +1,7 @@
 import {
   Accessibility,
   Activity,
+  Award,
   BadgeCheck,
   BarChart3,
   Bell,
@@ -182,6 +183,9 @@ export default async function AccountPage() {
         { href: "/network", Icon: Users, title: "Professional network", sub: "Connections, recommendations & opportunities", tint: "blue" },
         // Feature 19 Part 13: your community, SUB subscriptions and payouts
         { href: "/members", Icon: Crown, title: "Members", sub: "Your community, and memberships you hold", tint: "violet" },
+        // Feature 19 Parts 16 and 17: reputation and transparency; the relationship privacy center
+        { href: "/account/reputation", Icon: Award, title: "Reputation", sub: "Your standing, badges and every decision explained", tint: "amber" },
+        { href: "/account/privacy-center", Icon: ShieldCheck, title: "Privacy Center", sub: "Who can find, reach, mention and remember you", tint: "emerald" },
         // Feature 19 Part 14: shared memories and life journey
         { href: "/memories", Icon: BookHeart, title: "Memories", sub: "Moments you keep, and your life journey", tint: "rose" },
       ],

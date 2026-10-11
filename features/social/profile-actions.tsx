@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Ban, Check, Link2, Loader2, MoreHorizontal, ShieldOff } from "lucide-react";
+import { Ban, Clock, Check, Link2, Loader2, MoreHorizontal, ShieldOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -48,12 +48,13 @@ export function ProfileActions({
       .catch(() => {});
   };
 
-  const toggleBlock = async () => {
+  /** `hours`: a temporary block (Part 17) that lifts by itself; omitted = a lasting block. */
+  const toggleBlock = async (hours?: number) => {
     if (busy) return;
     setBusy(true);
     const next = !blocked;
     try {
-      const res = await fetch(`/api/block/${targetId}`, { method: next ? "POST" : "DELETE" });
+      const res = await fetch(`/api/block/${targetId}`, { method: next ? "POST" : "DELETE", ...(next && hours ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ hours }) } : {}) });
       if (res.ok) {
         setBlocked(next);
         setOpen(false);
@@ -71,10 +72,19 @@ export function ProfileActions({
         {copied ? <Check className="h-[18px] w-[18px] text-green-500" /> : <Link2 className="h-[18px] w-[18px]" />}
         {copied ? "Copied" : "Copy link"}
       </button>
-      <button type="button" role="menuitem" onClick={toggleBlock} disabled={busy} className={`${rowCls} text-red-500 hover:bg-red-500/10 disabled:opacity-60`}>
+      <button type="button" role="menuitem" onClick={() => void toggleBlock()} disabled={busy} className={`${rowCls} text-red-500 hover:bg-red-500/10 disabled:opacity-60`}>
         {busy ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : blocked ? <ShieldOff className="h-[18px] w-[18px]" /> : <Ban className="h-[18px] w-[18px]" />}
         {blocked ? "Unblock" : "Block"}
       </button>
+      {!blocked ? (
+        <button type="button" role="menuitem" onClick={() => void toggleBlock(168)} disabled={busy} className={`${rowCls} text-red-500/90 hover:bg-red-500/10 disabled:opacity-60`}>
+          <Clock className="h-[18px] w-[18px]" />
+          <span className="text-left">
+            Block for a week
+            <span className="block text-[11.5px] font-normal text-muted-foreground">Lifts by itself. Follows and friendship don&apos;t come back.</span>
+          </span>
+        </button>
+      ) : null}
     </>
   );
 

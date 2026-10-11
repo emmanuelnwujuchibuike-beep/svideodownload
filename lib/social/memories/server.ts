@@ -255,7 +255,11 @@ async function allowedPeople(db: ReturnType<typeof createAdminClient>, ownerId: 
   if (!want.length) return [];
   const { data } = await db.from("friendships").select("user_low, user_high").or(`user_low.eq.${ownerId},user_high.eq.${ownerId}`).limit(5000);
   const friends = new Set(((data ?? []) as Row[]).map((f) => (f.user_low === ownerId ? (f.user_high as string) : (f.user_low as string))));
-  return want.every((id) => friends.has(id)) ? want : null;
+  if (!want.every((id) => friends.has(id))) return null;
+  // 0232 (Part 17): someone who chose "nobody can put me on a memory" is never added
+  const { data: pol } = await db.from("privacy_settings").select("user_id, memory_tag_policy").in("user_id", want);
+  if (((pol ?? []) as Row[]).some((p) => p.memory_tag_policy === "nobody")) return null;
+  return want;
 }
 
 const PUBLIC_MEDIA = () => [process.env.R2_PUBLIC_BASE_URL, process.env.NEXT_PUBLIC_SUPABASE_URL].filter((u): u is string => !!u).map((u) => new URL(u).host);
@@ -295,7 +299,7 @@ export async function saveMemory(ownerId: string, input: MemoryInput & { id?: st
   if (!v.ok) return fail(v.error);
   const db = createAdminClient();
   const ppl = input.peopleIds ? await allowedPeople(db, ownerId, input.peopleIds) : undefined;
-  if (ppl === null) return fail("You can add friends to a memory, no one else.", 403);
+  if (ppl === null) return fail("You can add friends who allow it to a memory, no one else.", 403);
   const media = input.media ? cleanMedia(input.media) : undefined;
   if (media === null) return fail("A photo or video must be one already on Frenzsave; links must start with https://");
   if (!(await circleOwned(db, ownerId, input.visibility === "circle" ? input.circleId : null))) return fail("That circle isn't yours.", 403);

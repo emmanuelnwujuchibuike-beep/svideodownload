@@ -92,7 +92,7 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
    only defaults to `cover` and keeps the original height) — fixed with
    `resize=contain`. The top strip asks for an image 32–40 px tall and has no
    description field.
-7. **Feature 19 (Friends, Followers, Social Graph) — Parts 1–10 and 12–15 built (Part 11 skipped by the owner); Parts 16–17 next. Parts up to 13 were pushed 2026-10-11 (→5910533) and 0226–0228 applied. 0229 (Shared Memories) and 0230 (Graph History) are committed, not pushed: they apply with the Part 17 push.** The
+7. **Feature 19 (Friends, Followers, Social Graph) — Parts 1–10 and 12–17 built (Part 11 skipped by the owner) — Feature 19 is complete. Parts up to 13 were pushed 2026-10-11 (→5910533) and 0226–0228 applied; Parts 14–17 with 0229–0232 were pushed 2026-10-11 (probe them live). Open owner decision: Feature 18 creator "Reputation" ranks use followers and views, which Part 16 forbids — rename or retire them. SUB uploads need `R2_PRIVATE_BUCKET` set on Vercel. Next session: notification features.** The
    governing doc is `docs/FEATURE_19_SOCIAL_GRAPH.md` (architecture, decisions and
    a Gap Ledger per part). Part 1 already existed as Feature 18 Part 17. Planned,
    with reasons in the doc: SUB auto-renewal, close-friends-only stories

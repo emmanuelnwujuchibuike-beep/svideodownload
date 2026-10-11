@@ -162,6 +162,12 @@ const KIND_TEXT: Record<string, string> = {
   member_joined: "A new member joined:",
   circle_added: "You added to a circle:",
   circle_removed: "You removed from a circle:",
+  followed_you: "Started following you:",
+  unfollowed_you: "Stopped following you:",
+  privacy_changed: "You changed who can reach you:",
+  boundary_on: "You turned on a Boundary Mode:",
+  boundary_off: "Your Boundary Mode ended:",
+  removed_from_memory: "Took themselves off your memory:",
 };
 
 export async function graphHistory(viewerId: string, before?: string | null): Promise<{ items: { id: number; text: string; person: { name: string; handle: string; avatarUrl: string | null } | null; at: string; detail: string | null }[]; next: string | null; ready: boolean }> {

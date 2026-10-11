@@ -1,5 +1,6 @@
 import "server-only";
 
+import { connectPolicyAllows } from "@/lib/privacy/enforce";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import type { CollabInvite, CollabRole, CollabStatus, Collaborator } from "./collab-types";
@@ -139,6 +140,8 @@ export async function inviteCollaborator(
       )
       .limit(1);
     if ((blocks ?? []).length > 0) return { ok: false, error: `You can't invite @${clean}.` };
+    // 0232 (Part 17): the invitee chooses who may invite them to collaborate
+    if (!(await connectPolicyAllows(db, inviteeId, ownerId, "collab_invite_policy"))) return { ok: false, error: `@${clean} isn't taking collaboration invites from you.` };
 
     const { error } = await db
       .from("post_collaborators")

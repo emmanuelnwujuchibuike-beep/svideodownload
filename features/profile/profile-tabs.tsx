@@ -24,7 +24,7 @@ import {
   Wrench,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { type ComponentType, type ReactNode, useMemo, useState } from "react";
+import { type ComponentType, type ReactNode, useMemo, useRef, useState } from "react";
 
 import { WowOutline } from "@/components/brand/wow-icon";
 
@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 // These tabs render only when selected, so defer their chunks off first load.
 const CollectionsTab = dynamic(() => import("@/features/profile/collections-tab").then((m) => m.CollectionsTab), { ssr: false });
 const DownloadsTab = dynamic(() => import("@/features/profile/downloads-tab").then((m) => m.DownloadsTab), { ssr: false });
+const SubPromoCard = dynamic(() => import("@/features/sub/sub-promo-card").then((m) => m.SubPromoCard), { ssr: false });
 const SubTab = dynamic(() => import("@/features/sub/sub-tab").then((m) => m.SubTab), { ssr: false });
 
 /** The subscriber-only tab's key (in the URL as ?tab=sub). */
@@ -45,7 +46,7 @@ export interface SubTabData {
   creatorName: string;
   signedIn: boolean;
   quote: { priceCents: number; feeCents: number; totalCents: number; feePercent: number; periodDays: number } | null;
-  settings: { priceCents: number | null; active: boolean; setupStep: number; setupCompleted: boolean } | null;
+  settings: { priceCents: number | null; active: boolean; setupStep: number; setupCompleted: boolean; promoDismissed?: boolean } | null;
   bounds: { minPriceCents: number; maxPriceCents: number; purchaseFeePercent: number; withdrawalFeePercent: number };
 }
 
@@ -151,6 +152,10 @@ export function ProfileTabs({
   const reels = useMemo(() => posts.filter((p) => p.mediaKind === "video"), [posts]);
   const publishedDownloads = useMemo(() => posts.filter((p) => p.platform && p.platform !== "frenz"), [posts]);
 
+  // owner 2026-10-11: the "Get paid" card above the tray flips to the subscribe link the moment setup goes live
+  const [subLive, setSubLive] = useState(!!sub?.settings?.setupCompleted);
+  const [promoClosed, setPromoClosed] = useState(!!sub?.settings?.promoDismissed);
+  const tray = useRef<HTMLDivElement>(null);
   const select = (id: string) => {
     setActive(id);
     // Reflect the section in the URL for shareability — WITHOUT a navigation.
@@ -177,7 +182,7 @@ export function ProfileTabs({
   const showViewToggle = POST_TABS.has(active) && active !== "downloads" && active !== "collections";
 
   const renderActive = () => {
-    if (active === SUB_TAB_KEY && sub) return <SubTab creatorId={ownerId} creatorName={sub.creatorName} handle={handle} isOwner={isOwner} signedIn={sub.signedIn} quote={sub.quote} settings={sub.settings} bounds={sub.bounds} />;
+    if (active === SUB_TAB_KEY && sub) return <SubTab onLiveChange={setSubLive} creatorId={ownerId} creatorName={sub.creatorName} handle={handle} isOwner={isOwner} signedIn={sub.signedIn} quote={sub.quote} settings={sub.settings} bounds={sub.bounds} />;
     if (!POST_TABS.has(active)) return panels?.[active] ?? null;
     if (active === "downloads" && isOwner) return <DownloadsTab emptyText={empty.downloads!} />;
     if (active === "collections") return <CollectionsTab ownerId={ownerId} isOwner={isOwner} emptyText={empty.collections!} />;
@@ -205,7 +210,22 @@ export function ProfileTabs({
 
   return (
     <div className="mt-8">
-      <div className="mb-6 flex items-center gap-2">
+      {isOwner && sub?.settings && !promoClosed ? (
+        <SubPromoCard
+          handle={handle}
+          live={subLive}
+          onClose={() => {
+            // closes on the tap; remembered on the account (0231), put back if the save is refused
+            setPromoClosed(true);
+            void fetch("/api/members", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "settings", dismissPromo: true }) }).then((r) => (r.ok ? null : setPromoClosed(false))).catch(() => setPromoClosed(false));
+          }}
+          onOpen={() => {
+            select(SUB_TAB_KEY);
+            tray.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
+        />
+      ) : null}
+      <div ref={tray} className="mb-6 flex scroll-mt-24 items-center gap-2">
         {/* A premium glass segmented control: the active section lifts into a
             brand pill while the rest stay calm icons (labelled on wider screens,
             icon-only on mobile so every section fits). */}

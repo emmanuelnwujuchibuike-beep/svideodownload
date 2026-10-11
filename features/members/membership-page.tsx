@@ -198,9 +198,7 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
                 <p className="mt-2 text-[13.5px] text-foreground/80">
                   {c.displayName}&apos;s subscriber-only photos and videos. Private: they can&apos;t be shared, linked or downloaded.
                 </p>
-                <p className="mt-1.5 text-[12.5px] text-muted-foreground">
-                  {usd(data.quote.priceCents)} + {usd(data.quote.feeCents)} purchase fee ({data.quote.feePercent}%) = <b className="text-foreground">{usd(data.quote.totalCents)}</b>, paid through Paystack. No automatic renewal.
-                </p>
+                <p className="mt-1.5 text-[12.5px] text-muted-foreground">Paid securely through Paystack. No automatic renewal.</p>
                 <div className="mt-3.5">
                   {data.viewer.isCreator ? null : !data.viewer.signedIn ? (
                     <Link href={`/login?next=${encodeURIComponent(`/u/${c.handle}/membership`)}`} prefetch={false} className={primaryPill}>
@@ -213,7 +211,7 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
                   ) : (
                     <button type="button" className={cn(primaryPill, "bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600")} disabled={!!busy} onClick={() => void subscribe()}>
                       {busy === "sub" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-                      {busy === "sub" ? "Opening Paystack…" : `Subscribe for ${usd(data.quote.totalCents)}`}
+                      {busy === "sub" ? "Opening Paystack…" : "Subscribe"}
                     </button>
                   )}
                 </div>

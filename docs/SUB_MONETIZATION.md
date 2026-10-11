@@ -149,6 +149,7 @@ impossible.
 | SUB withdrawals via Paystack Transfers | `lib/rewards/paystack-payouts.ts`, `/api/sub/withdraw`, webhook `transfer.*`, cron verify | built |
 | Subscriber-only posts, private storage | `lib/sub/posts.ts`, `/api/sub/posts*`, `lib/storage/r2.ts` private bucket | built; needs `R2_PRIVATE_BUCKET` |
 | SUB POSTS tab, notice, Get Paid (4 steps), share card, creator overview | `features/sub/sub-tab.tsx`, profile tabs | built |
+| "Get paid for your content" card on the owner's profile, between the hero and the posts tray: opens the setup, then shows the subscribe link (/u/<handle>?tab=sub) with share and copy | `features/sub/sub-promo-card.tsx` | built |
 | SUB withdraw sheet (bank check, live fee, replay key, history) | `features/sub/sub-withdraw.tsx` | built |
 | Withdraw button on the AI credit dashboard (replaces "Explore AI tools") | `features/ai/wallet/withdraw-chooser.tsx` | built |
 | Paystack "Recommended", Bachs behind "More payment methods" | `features/ai/wallet/payment-provider-picker.tsx` | built |

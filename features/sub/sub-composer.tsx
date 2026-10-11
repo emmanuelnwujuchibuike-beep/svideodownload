@@ -1,6 +1,6 @@
 "use client";
 
-import { ImagePlus, Loader2, Lock, X } from "lucide-react";
+import { Camera, ImagePlus, Images, Loader2, Lock, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -39,6 +39,8 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pick = useRef<HTMLInputElement>(null);
+  // owner 2026-10-11: straight from the camera too, not only the gallery
+  const shoot = useRef<HTMLInputElement>(null);
   const pickCover = useRef<HTMLInputElement>(null);
 
   const add = async (files: FileList | null) => {
@@ -99,7 +101,8 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
             <X className="h-5 w-5" aria-hidden />
           </button>
         </div>
-        <input ref={pick} type="file" accept="image/*,video/*" multiple hidden onChange={(e) => void add(e.target.files)} />
+        <input ref={pick} type="file" accept="image/*,video/*" multiple hidden onChange={(e) => (void add(e.target.files), (e.target.value = ""))} />
+        <input ref={shoot} type="file" accept="image/*,video/*" capture="environment" hidden onChange={(e) => (void add(e.target.files), (e.target.value = ""))} />
         <input ref={pickCover} type="file" accept="image/*" hidden onChange={(e) => setCover(e.target.files?.[0] ?? null)} />
         <div className="grid grid-cols-4 gap-1.5">
           {items.map((it, i) => (
@@ -116,9 +119,14 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
             </div>
           ))}
           {items.length < 10 ? (
-            <button type="button" onClick={() => pick.current?.click()} className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border text-[11.5px] text-muted-foreground transition active:scale-95">
-              <ImagePlus className="h-5 w-5" aria-hidden /> Add
-            </button>
+            <>
+              <button type="button" onClick={() => pick.current?.click()} className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border text-[11.5px] font-semibold text-muted-foreground transition active:scale-95">
+                <Images className="h-5 w-5" aria-hidden /> Gallery
+              </button>
+              <button type="button" onClick={() => shoot.current?.click()} className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border text-[11.5px] font-semibold text-muted-foreground transition active:scale-95">
+                <Camera className="h-5 w-5" aria-hidden /> Camera
+              </button>
+            </>
           ) : null}
         </div>
         <label htmlFor="sub-caption" className="sr-only">

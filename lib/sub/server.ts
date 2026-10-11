@@ -52,16 +52,23 @@ export interface SubSettings {
   setupCompleted: boolean;
   open: boolean;
   welcome: string | null;
+  /** 0231: the creator closed the Get paid card on their profile */
+  promoDismissed: boolean;
 }
 
 export async function getSubSettings(creatorId: string): Promise<SubSettings & { ready: boolean }> {
-  const { data, error } = await createAdminClient().from("creator_membership_settings").select("sub_price_cents, sub_active, setup_step, setup_completed_at, open, welcome").eq("creator_id", creatorId).maybeSingle();
+  const db = createAdminClient();
+  const base = "sub_price_cents, sub_active, setup_step, setup_completed_at, open, welcome";
+  // 0231's column, with the older shape as the answer before that migration runs
+  let res = await db.from("creator_membership_settings").select(`${base}, promo_dismissed_at`).eq("creator_id", creatorId).maybeSingle();
+  if (res.error && MISSING(res.error.message)) res = (await db.from("creator_membership_settings").select(base).eq("creator_id", creatorId).maybeSingle()) as typeof res;
+  const { data, error } = res;
   const r = (data ?? {}) as Row;
-  return { priceCents: (r.sub_price_cents as number | null) ?? null, active: !!r.sub_active, setupStep: Number(r.setup_step ?? 0), setupCompleted: !!r.setup_completed_at, open: !!r.open, welcome: (r.welcome as string | null) ?? null, ready: !error };
+  return { priceCents: (r.sub_price_cents as number | null) ?? null, active: !!r.sub_active, setupStep: Number(r.setup_step ?? 0), setupCompleted: !!r.setup_completed_at, open: !!r.open, welcome: (r.welcome as string | null) ?? null, promoDismissed: !!r.promo_dismissed_at, ready: !error };
 }
 
 /** Saves setup progress and the price. Completing setup needs a valid price; it never grants payout eligibility. */
-export async function saveSubSettings(creatorId: string, patch: { priceCents?: number; step?: number; complete?: boolean; active?: boolean; open?: boolean; welcome?: string | null }): Promise<Result<{ settings: SubSettings }>> {
+export async function saveSubSettings(creatorId: string, patch: { priceCents?: number; step?: number; complete?: boolean; active?: boolean; open?: boolean; welcome?: string | null; dismissPromo?: boolean }): Promise<Result<{ settings: SubSettings }>> {
   const cfg = await subConfig();
   const db = createAdminClient();
   const current = await getSubSettings(creatorId);
@@ -85,6 +92,7 @@ export async function saveSubSettings(creatorId: string, patch: { priceCents?: n
     cols.sub_active = patch.active;
   }
   if (patch.open !== undefined) cols.open = patch.open;
+  if (patch.dismissPromo !== undefined) cols.promo_dismissed_at = patch.dismissPromo ? new Date().toISOString() : null;
   if (patch.welcome !== undefined) {
     const w = patch.welcome?.trim() || null;
     if (w && (w.length > 400 || /[<>]/.test(w))) return fail("Keep the welcome to 400 characters of plain text.");

@@ -112,14 +112,14 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
             <div className="min-w-0 flex-1">
               <p className="text-[15px] font-bold leading-tight">Subscribe to {creatorName}</p>
               <p className="mt-0.5 text-[13px] text-muted-foreground">
-                {usd(quote.priceCents)} + {usd(quote.feeCents)} fee ({quote.feePercent}%) = <b className="text-foreground">{usd(quote.totalCents)}</b> for {quote.periodDays} days of their subscriber posts.
+                <b className="text-foreground">{usd(quote.priceCents)}</b> for {quote.periodDays} days of their subscriber posts.
               </p>
             </div>
           </div>
           {signedIn ? (
             <button type="button" onClick={() => void subscribe()} disabled={paying} className={cn(primaryPill, "mt-3 w-full justify-center bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600")}>
               {paying ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-              {paying ? "Opening secure payment…" : `Subscribe for ${usd(quote.totalCents)}`}
+              {paying ? "Opening secure payment…" : "Subscribe"}
             </button>
           ) : (
             <Link href={`/login?next=${encodeURIComponent(loginNext)}`} prefetch={false} className={cn(primaryPill, "mt-3 w-full justify-center")}>

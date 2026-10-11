@@ -1306,7 +1306,7 @@ async function subTabFor(creatorId: string, creatorName: string, viewerId: strin
       signedIn: !!viewerId,
       bounds,
       quote: c ? { priceCents: c.priceCents, feeCents: c.feeCents, totalCents: c.totalCents, feePercent: cfg.purchaseFeePercent, periodDays: cfg.periodDays } : null,
-      settings: owner ? { priceCents: settings.priceCents, active: settings.active, setupStep: settings.setupStep, setupCompleted: settings.setupCompleted } : null,
+      settings: owner ? { priceCents: settings.priceCents, active: settings.active, setupStep: settings.setupStep, setupCompleted: settings.setupCompleted, promoDismissed: settings.promoDismissed } : null,
     };
   } catch {
     // a non-critical read: no tab beats a broken profile

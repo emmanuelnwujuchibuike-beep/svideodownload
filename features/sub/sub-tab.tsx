@@ -58,7 +58,10 @@ export function SubTab({
   quote,
   settings,
   bounds,
+  onLiveChange,
 }: {
+  /** tells the profile's "Get paid" card when setup has gone live (or been paused) */
+  onLiveChange?: (live: boolean) => void;
   creatorId: string;
   creatorName: string;
   handle: string;
@@ -68,7 +71,11 @@ export function SubTab({
   settings: SubOwnerSettings | null;
   bounds: SubBounds;
 }) {
-  const [s, setS] = useState<SubOwnerSettings | null>(settings);
+  const [s, setSRaw] = useState<SubOwnerSettings | null>(settings);
+  const setS = (next: SubOwnerSettings) => {
+    setSRaw(next);
+    onLiveChange?.(next.setupCompleted);
+  };
   const [composing, setComposing] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   const [galleryKey, setGalleryKey] = useState(0);
@@ -164,11 +171,7 @@ function GetPaidSetup({ settings, bounds, onChange }: { settings: SubOwnerSettin
             Monthly price (USD)
           </label>
           <input id="sub-price" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value.replace(/[^0-9.]/g, "").slice(0, 8))} placeholder="5.00" className="mt-1 w-full rounded-2xl border border-border bg-background px-3 py-2.5 text-[16px] outline-none focus-visible:ring-2 focus-visible:ring-primary/40" />
-          {charge ? (
-            <p className="mt-2 text-[13px] text-muted-foreground">
-              A subscriber pays {usd(charge.priceCents)} + {usd(charge.feeCents)} fee = <b className="text-foreground">{usd(charge.totalCents)}</b>. You earn <b className="text-foreground">{usd(charge.priceCents)}</b>.
-            </p>
-          ) : null}
+          {charge ? <p className="mt-2 text-[13px] text-muted-foreground">{usd(charge.priceCents)} a month</p> : null}
           <button type="button" disabled={!priceOk} onClick={() => go(1, { priceCents: cents })} className={cn(primaryPill, "mt-4 w-full justify-center")}>
             Continue <ArrowRight className="h-4 w-4" aria-hidden />
           </button>

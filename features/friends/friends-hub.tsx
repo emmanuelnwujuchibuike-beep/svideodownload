@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Compass,
   Hand,
+  ListChecks,
   Loader2,
   MessageCircle,
   MoreHorizontal,
@@ -235,15 +236,30 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
         </div>
       </header>
 
-      {/* Part 8: the private Social Intelligence dashboard (stages in words, reconnect, archive) */}
-      <Link href="/friends/insights" prefetch={false} className={cn("mb-5 flex items-center gap-3 rounded-[20px] px-3.5 py-2.5", GLASS)}>
-        <Sparkles className="h-[18px] w-[18px] shrink-0 text-primary" aria-hidden />
-        <span className="min-w-0 flex-1">
-          <span className="block text-[14px] font-semibold">Your connections</span>
-          <span className="block truncate text-[12.5px] text-muted-foreground">How each friendship is going. Only you see it.</span>
-        </span>
-        <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
-      </Link>
+      {/* Part 8: the private Social Intelligence dashboard (stages in words, reconnect, archive) and
+          Part 10: the Relationship Manager (lists, tags, bulk actions) - one grouped card, two rows */}
+      <ul className={cn("mb-5 divide-y divide-black/[0.06] overflow-hidden rounded-[20px] dark:divide-white/[0.07]", GLASS)}>
+        <li>
+          <Link href="/friends/insights" prefetch={false} className="flex items-center gap-3 px-3.5 py-2.5">
+            <Sparkles className="h-[18px] w-[18px] shrink-0 text-primary" aria-hidden />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-semibold">Your connections</span>
+              <span className="block truncate text-[12.5px] text-muted-foreground">How each friendship is going. Only you see it.</span>
+            </span>
+            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+          </Link>
+        </li>
+        <li>
+          <Link href="/friends/manage" prefetch={false} className="flex items-center gap-3 px-3.5 py-2.5">
+            <ListChecks className="h-[18px] w-[18px] shrink-0 text-primary" aria-hidden />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-semibold">Manage people</span>
+              <span className="block truncate text-[12.5px] text-muted-foreground">Lists, tags and everyone you follow, in one place.</span>
+            </span>
+            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+          </Link>
+        </li>
+      </ul>
 
       {favorites.length > 0 ? (
         <section className="mb-5" aria-labelledby="friends-favourites">

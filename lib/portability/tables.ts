@@ -308,6 +308,8 @@ export const OWNER_COLUMN: Record<string, string> = {
   friend_goals: "created_by", // 0222: the bucket-list goals you added
   friendship_timeline_hidden: "owner_id", // 0222: moments you took off a friendship's timeline
   relationship_prefs: "owner_id", // 0223: friends you archived and reconnect nudges you snoozed
+  relationship_tags: "owner_id", // 0225: private tags you put on people
+  circle_rules: "owner_id", // 0225: your list automation rules
   social_circles: "owner_id",
   circle_members: "owner_id",
   trusted_contacts: "owner_id",

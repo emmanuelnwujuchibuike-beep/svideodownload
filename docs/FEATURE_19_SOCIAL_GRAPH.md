@@ -510,8 +510,86 @@ would bury everything else. Searchable on the page.
 
 ---
 
+## Part 10 — Friend Lists™, Relationship Manager™ & Smart Lists™
+
+| Layer | File |
+|---|---|
+| Smart lists, rules, nesting, organization suggestions, insights, search, tags, CSV (pure) | `lib/social/lists/engine.ts` |
+| The one directory read + every write (bulk, list ops, import) | `lib/social/lists/server.ts` |
+| API | `POST /api/graph/bulk`, `POST /api/graph/lists` (list creation stays `app/api/graph/circles`) |
+| UI | `/friends/manage` (`features/friends/relationship-manager.tsx`), "Manage people" on Friends |
+| Schema | `0225` (`social_circles.parent_id / archived_at / description`, `relationship_tags`, `circle_rules` + two triggers) |
+| Tests | `lib/social/lists/engine.test.ts` (18) + 0225 PGlite (16 checks, run twice, 2 mutants that fail) + live probes 2026-10-11 |
+
+**A list IS a circle.** Circles (0112, 0217) were already private lists:
+owner-only RLS, many per person, colours, icons, special kinds and a real
+permission. A second list table would be a second source of truth, so 0225 adds
+only what circles could not hold: nesting (four levels, cycles and cross-owner
+parents refused by a trigger), archiving, a description, private many-per-person
+tags (the one relationship label per person stays), and rules.
+
+**Smart lists are filters, not rows**: Friends, Followers, Following, Follow
+each other, Favourites, New friends, Online now, Verified, Creators, Businesses,
+Not in a list, Archived. They are answered from the graph every time, so they
+can never go stale.
+
+**One directory, every relationship.** Friends, people you follow and people who
+follow you, merged into one row per person, paginated past PostgREST's silent
+1,000-row ceiling, a fixed number of queries however big the network (capped at
+3,000 people, friends first, and the page says so). Search and filters run in
+the browser over that one read, so a keystroke costs no request.
+
+**AI organizes, the member decides.** The organization engine is transparent
+rules over the member's own lists: two lists with nearly the same people (merge:
+the old list is archived, never deleted), a big list mixing in creators or
+businesses (make a sub-list), a list empty for a month (archive), friends in no
+list, and people waiting for a list's rules. At most five offers, each applied
+only on a tap. List automation works the same way: a rule ("Is a creator", "Has
+the tag Investor"…) offers people for a list. Nobody is added silently.
+
+**Bulk management with undo, drawn on the tap.** Select people, then add to or
+remove from a list, tag, favourite or unfavourite, archive or restore, export.
+The screen changes on the tap (measured 3–16 ms with the server held 3 s);
+the server's answer names exactly who changed, anything it refused is put back,
+and Undo sends the opposite action. Only people you are connected to (and not
+blocked with) can be put in a list or tagged: a private list of strangers would
+be a dossier.
+
+**Import and export.** Export the people shown as CSV or JSON (labels, tags,
+lists), generated in the browser. CSV cells can never run as spreadsheet
+formulas. Import pastes handles or a CSV's first column into a list. Only
+connections are added, and the rest are named back.
+
+**List permissions today:** profile sections (Part 17 of Feature 18) and now the
+Part 9 status audience. Both are enforced in code on a real membership row.
+
+**Gap Ledger**
+
+| Brief item | State |
+|---|---|
+| Relationship Manager (friends, followers, following in one place) | **live** |
+| Custom lists, multi-list membership | **live** (circles, up to 50 lists of 500) |
+| Nested lists | **live** (four levels, enforced in the database) |
+| Smart lists | **live** (12, computed) |
+| AI Organization Engine (merge, sub-list, archive, unsorted, rules waiting) | **live**, offers only |
+| List automation rules (creator, business, verified, favourite, new friend, tag, follow each other) | **live**, applied on a tap |
+| Private relationship tags, searchable | **live** |
+| List analytics (largest, where you talk most, quiet, growing) | **live**, in words |
+| Advanced search and filters (name, handle, label, tag, list, smart list) | **live** |
+| Bulk actions with undo | **live** |
+| Export CSV and JSON, import handles | **live** |
+| Social dashboard (friends, followers, following, creators, businesses, lists) | **live** |
+| List permissions for stories, posts, messages, live streams | planned — the same blockers as Part 4 (`CIRCLE_PERMISSIONS`): stories and posts resolve their audience in RLS and feed indexes |
+| Rules on events, organizations, location, language, reputation | planned — that data does not exist on profiles yet |
+| Shared lists, Social Workspaces, enterprise admin, managed lists | planned — they would end the owner-only privacy every list has today, and there is no organisation product to own them. A design, not a toggle |
+| Business CRM import | planned — CSV import of handles is the honest version |
+| Drag-and-drop ordering | planned — "Inside" chooses the parent today |
+| Offline editing | partly — the page works on what it loaded. Writes need a connection and put themselves back if they fail |
+
+---
+
 ## Migrations to run (in order)
 
-`0214`, `0215`, `0216`, `0217`, `0218`, `0219` (×10 dashboard switch stands for new campaigns), `0220` (Contact Discovery: run after 0217, whose follow-source constraint it widens), `0221` (People You May Know feedback), `0222` (Friend Profiles: bucket list, capsules for friends, hidden moments), `0223` (Relationship Intelligence: archive, reconnect controls, activity counts), `0224` (Presence: status details, focus, automations, private history). Each is idempotent and PGlite-tested (run twice,
+`0214`, `0215`, `0216`, `0217`, `0218`, `0219` (×10 dashboard switch stands for new campaigns), `0220` (Contact Discovery: run after 0217, whose follow-source constraint it widens), `0221` (People You May Know feedback), `0222` (Friend Profiles: bucket list, capsules for friends, hidden moments), `0223` (Relationship Intelligence: archive, reconnect controls, activity counts), `0224` (Presence: status details, focus, automations, private history), `0225` (Friend Lists: nesting, archive, tags, rules). **All of 0214–0225 were applied and probed live on 2026-10-11.** Each is idempotent and PGlite-tested (run twice,
 plus a mutant that must fail). The code works before and after each: every new
 read falls back to today's behaviour when its column or table is missing.

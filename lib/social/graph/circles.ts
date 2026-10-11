@@ -45,6 +45,7 @@ export interface CirclePermissionSpec {
 
 export type CirclePermissionKey =
   | "profile_modules"
+  | "presence"
   | "filter"
   | "story_audience"
   | "post_audience"
@@ -62,6 +63,13 @@ export const CIRCLE_PERMISSIONS: readonly CirclePermissionSpec[] = [
     key: "profile_modules",
     label: "Profile sections",
     blurb: "Show a profile section to this circle only.",
+    live: true,
+  },
+  {
+    // Feature 19 Part 9: user_presence_status.audience = 'circle' (0224), applied in getDisplayedStatuses
+    key: "presence",
+    label: "Status and focus",
+    blurb: "Only this list sees your custom status, focus and auto reply.",
     live: true,
   },
   {

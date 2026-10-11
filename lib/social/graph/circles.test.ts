@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -44,6 +47,9 @@ describe("circle permissions", () => {
 
   it("does claim the profile-module audience, which the engine enforces", () => {
     expect(circlePermission("profile_modules")!.live).toBe(true);
+    // Part 9: the status audience reads the circle (0224) - and it is enforced in the one presence transform
+    expect(circlePermission("presence")!.live).toBe(true);
+    expect(readFileSync(join(process.cwd(), "lib/social/presence-status.ts"), "utf8")).toContain('inCircle: !!row.audience_circle && inCircles.has(row.audience_circle)');
   });
 });
 

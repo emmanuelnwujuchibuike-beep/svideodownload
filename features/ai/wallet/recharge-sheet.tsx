@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { formatCredits } from "@/lib/ai/credits/units";
 import { formatCents } from "@/lib/ai/economy";
-import { PaymentProviderPicker, usePaymentOptions, type PaymentProvider } from "@/features/ai/wallet/payment-provider-picker";
+import { defaultProvider, PaymentProviderPicker, usePaymentOptions, type PaymentProvider } from "@/features/ai/wallet/payment-provider-picker";
 import { beginAiWalletTopup, type AiWalletBalance } from "@/lib/ai/wallet/client";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -76,7 +76,7 @@ export function AiWalletRechargeSheet({
   const options = usePaymentOptions(open);
   const providers = options?.walletTopup ?? [];
   const [provider, setProvider] = useState<PaymentProvider | null>(null);
-  const chosen = provider && providers.includes(provider) ? provider : (providers[0] ?? null);
+  const chosen = provider && providers.includes(provider) ? provider : defaultProvider(providers);
   const offer = balance.offer;
   const packs = offer.packs;
 

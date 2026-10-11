@@ -6,6 +6,7 @@ import {
   Briefcase,
   ChevronRight,
   Compass,
+  Crown,
   Hand,
   ListChecks,
   Loader2,
@@ -267,6 +268,17 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
             <span className="min-w-0 flex-1">
               <span className="block text-[14px] font-semibold">Professional network</span>
               <span className="block truncate text-[12.5px] text-muted-foreground">Work, mentors, recommendations and opportunities.</span>
+            </span>
+            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+          </Link>
+        </li>
+        {/* Part 13: creator memberships */}
+        <li>
+          <Link href="/members" prefetch={false} className="flex items-center gap-3 px-3.5 py-2.5 transition active:bg-black/[0.04]">
+            <Crown className="h-[18px] w-[18px] shrink-0 text-primary" aria-hidden />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-semibold">Members</span>
+              <span className="block truncate text-[12.5px] text-muted-foreground">Your community, and the memberships you hold.</span>
             </span>
             <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
           </Link>

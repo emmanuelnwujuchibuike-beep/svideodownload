@@ -677,8 +677,70 @@ search is a URL the router cache keeps. Edits survive a back-swipe through
 
 ---
 
+## Part 13 — Creator Fans™, Memberships & the Creator Relationship Platform™
+
+| Layer | File |
+|---|---|
+| Roles, fee arithmetic (price + fee, withdrawal − fee), loyalty, insights, assistant, validation (pure) | `lib/creator/membership/engine.ts` |
+| Community reads, free joins, creator actions | `lib/creator/membership/server.ts` |
+| SUB money: settings, quote, checkout, verify, settle, reverse, earnings, withdrawal | `lib/sub/server.ts` |
+| Subscriber-only posts, private storage, signed links | `lib/sub/posts.ts`, `lib/storage/r2.ts` (private bucket) |
+| Money in SQL | `settle_sub_purchase`, `reverse_sub_purchase`, `release_sub_earnings`, `request_sub_withdrawal`, `resolve_withdrawal` (0227) — the ONLY writers |
+| Payouts | `lib/rewards/paystack-payouts.ts`, `lib/rewards/paystack-banks.ts` (Paystack Transfers) |
+| API | `POST /api/members`, `GET /api/members/export`, `/api/sub/{checkout,withdraw,earnings,posts,posts/upload,posts/[id]}`, `GET/POST /api/admin/memberships`, `/api/rewards/banks`, `/api/rewards/resolve-account`, `POST /api/admin/rewards/withdrawals/[id]/paystack`, Paystack webhook (charge, refund, dispute, transfer) |
+| UI | the **SUB POSTS** tab on every profile (`features/sub/sub-tab.tsx`: notice, Get Paid in 4 steps, share card, creator overview, private gallery and viewer, composer, withdraw sheet), `/u/<handle>/membership`, `/members`, `/sub/return`, the AI dashboard's Withdraw button, Admin → Rewards → SUB |
+| Schema | `0227_sub_monetization.sql` |
+| Tests | `lib/creator/membership/engine.test.ts`, `lib/rewards/paystack-payouts.test.ts`, 0227 PGlite (21 checks incl. mutants: settle refuses a short or foreign payment, no double settle, reversal to debt, fee in SQL = fee in TS, one open withdrawal per source, replay key) |
+
+**SUB is money, never credits** (owner brief 2026-10-11, which replaced the
+credit-billed memberships built earlier the same day before they ever shipped).
+The subscriber pays the creator's price plus a 10 % purchase fee through
+Paystack; the creator's earnings sit in a SUB balance of their own and are
+withdrawn through Paystack less a 10 % withdrawal fee — instantly and without
+the reward qualification, per the owner, each an admin switch. The design and the
+honest limits of anti-capture protection are in
+[`docs/SUB_MONETIZATION.md`](SUB_MONETIZATION.md); every money rule is in
+[`docs/BILLING.md`](BILLING.md).
+
+**Communities before numbers.** Titles are mature (Member, Supporter, Inner
+circle, VIP member, Moderator, Creator partner, Brand partner, Team member).
+Loyalty notes are tenure, participation and collaboration, never money: a test
+proves the loyalty signals carry no spending field. There is no public list of
+anyone's spending. Fan Insights are aggregates with a floor of five, and member
+ratings of the creator show only as averages once five members answered.
+
+**Gap Ledger**
+
+| Brief item | State |
+|---|---|
+| Audience tiers and roles | **live** (8 roles, set per member) |
+| Memberships | **live**: a free community and one paid SUB subscription per creator. The brief's tier kinds (premium, business, educational, seasonal, lifetime…) are not separate products; one price, one period **(admin)** |
+| Exclusive posts | **live**: SUB POSTS, subscriber-only photos and videos in private storage, opened through five-minute signed links after a server access check |
+| Exclusive stories, reels, downloads, live streams, private communities | planned — SUB POSTS are the exclusive content today |
+| Member card, member milestones (1 month, 6 months, 1 year…) | **live** |
+| Super Supporters and recognition | **live**, private unless shown; no spending ranking |
+| Creator Notes, by role | **live** (members see them on the membership page; nobody is notified) |
+| Loyalty Intelligence (tenure, participation, collaboration) | **live**, in words, never money |
+| Fan Insights (members, subscribers, joins by month, 30/90-day retention, places, languages, SUB earnings) | **live**, aggregated with a floor |
+| Private member directory and filters | **live** (name, handle, country, language, role, past members) |
+| AI Community Assistant | **live** (rules, explained) |
+| Creator reputation (members rate privately) | **live**, averages only, floor of five |
+| Sponsor relationships, always disclosed | **live** |
+| Creator export (members CSV) | **live**; SUB money in the admin view, the creator's SUB history and the member's data export |
+| Creator Circles | **live** — the creator's own lists (Part 10) |
+| Automatic renewal | planned — each period is a new Paystack payment |
+| Screenshot / screen-recording block | not possible on the web; deterrents and a viewer watermark are live, Android `FLAG_SECURE` needs the native wrapper (planned) |
+| Screenshot alert to the creator, Block or Ignore | **live on computers** (keyboard shortcut seen while a SUB post is open); phones send no signal — planned with native code |
+| New subscriber / member alerts | **live**: in-app, push and email |
+| Saved payout account and auto-withdrawal | **live** |
+| Early product access, private sessions, events, courses, product testing | planned — those products don't exist yet |
+| Creator timeline for a member (events attended, courses completed) | planned — no event or course records exist |
+| Fan reputation from upheld reports | partly — reports are not linked to memberships yet |
+
+---
+
 ## Migrations to run (in order)
 
-`0214`, `0215`, `0216`, `0217`, `0218`, `0219` (×10 dashboard switch stands for new campaigns), `0220` (Contact Discovery: run after 0217, whose follow-source constraint it widens), `0221` (People You May Know feedback), `0222` (Friend Profiles: bucket list, capsules for friends, hidden moments), `0223` (Relationship Intelligence: archive, reconnect controls, activity counts), `0224` (Presence: status details, focus, automations, private history), `0225` (Friend Lists: nesting, archive, tags, rules). **All of 0214–0225 were applied and probed live on 2026-10-11.** Then `0226` (Professional Network: open-to and industry, confirmed connections, recommendations, endorsements, opportunities, three in-app notification types). Each is idempotent and PGlite-tested (run twice,
+`0214`, `0215`, `0216`, `0217`, `0218`, `0219` (×10 dashboard switch stands for new campaigns), `0220` (Contact Discovery: run after 0217, whose follow-source constraint it widens), `0221` (People You May Know feedback), `0222` (Friend Profiles: bucket list, capsules for friends, hidden moments), `0223` (Relationship Intelligence: archive, reconnect controls, activity counts), `0224` (Presence: status details, focus, automations, private history), `0225` (Friend Lists: nesting, archive, tags, rules). **All of 0214–0225 were applied and probed live on 2026-10-11.** Then `0226` (Professional Network: open-to and industry, confirmed connections, recommendations, endorsements, opportunities, three in-app notification types), then `0227_sub_monetization.sql` (SUB: creator settings, memberships, Paystack-paid subscriptions with their fee, the SUB balance and ledger, SUB withdrawals on `withdrawal_requests`, the financial audit log, subscriber-only posts, notes, recognitions, sponsors, ratings, two notification types). Then `0228` (bug fix: account deletion refused for anyone with a follower, from 0217's follower-stat trigger; safe to run at any time). Before 0227 the SUB tab, checkout and withdrawals answer "arrives with the next update"; subscriber-only uploads also need the private R2 bucket (`R2_PRIVATE_BUCKET`). Each is idempotent and PGlite-tested (run twice,
 plus a mutant that must fail). The code works before and after each: every new
 read falls back to today's behaviour when its column or table is missing.

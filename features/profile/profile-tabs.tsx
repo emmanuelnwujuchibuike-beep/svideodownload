@@ -15,6 +15,7 @@ import {
   Grid3x3,
   IdCard,
   LayoutGrid,
+  Lock,
   Package,
   Repeat2,
   Rows3,
@@ -34,6 +35,19 @@ import { cn } from "@/lib/utils";
 // These tabs render only when selected, so defer their chunks off first load.
 const CollectionsTab = dynamic(() => import("@/features/profile/collections-tab").then((m) => m.CollectionsTab), { ssr: false });
 const DownloadsTab = dynamic(() => import("@/features/profile/downloads-tab").then((m) => m.DownloadsTab), { ssr: false });
+const SubTab = dynamic(() => import("@/features/sub/sub-tab").then((m) => m.SubTab), { ssr: false });
+
+/** The subscriber-only tab's key (in the URL as ?tab=sub). */
+export const SUB_TAB_KEY = "sub";
+
+/** What the server resolved for the SUB POSTS tab: a quote for visitors, settings for the creator. */
+export interface SubTabData {
+  creatorName: string;
+  signedIn: boolean;
+  quote: { priceCents: number; feeCents: number; totalCents: number; feePercent: number; periodDays: number } | null;
+  settings: { priceCents: number | null; active: boolean; setupStep: number; setupCompleted: boolean } | null;
+  bounds: { minPriceCents: number; maxPriceCents: number; purchaseFeePercent: number; withdrawalFeePercent: number };
+}
 
 /** The post-backed sections this component renders from its own datasets. */
 export type ProfileTab = "posts" | "reels" | "downloads" | "reposted" | "liked" | "saved" | "collections";
@@ -67,6 +81,7 @@ const ICONS: Record<string, IconType> = {
   Package,
   Wrench,
   Clock,
+  Lock,
 };
 
 /** One entry in the dock — resolved by the Universal Profile Engine. */
@@ -103,6 +118,7 @@ export function ProfileTabs({
   saved,
   reposted = [],
   panels,
+  sub = null,
 }: {
   handle: string;
   ownerId: string;
@@ -116,6 +132,7 @@ export function ProfileTabs({
   reposted?: PostCard[];
   /** Server-rendered content for every non-post section. */
   panels?: Record<string, ReactNode>;
+  sub?: SubTabData | null;
 }) {
   const keys = useMemo(() => sections.map((s) => s.key), [sections]);
   const [active, setActive] = useState<string>(() => (keys.includes(initialTab) ? initialTab : (keys[0] ?? "posts")));
@@ -160,6 +177,7 @@ export function ProfileTabs({
   const showViewToggle = POST_TABS.has(active) && active !== "downloads" && active !== "collections";
 
   const renderActive = () => {
+    if (active === SUB_TAB_KEY && sub) return <SubTab creatorId={ownerId} creatorName={sub.creatorName} handle={handle} isOwner={isOwner} signedIn={sub.signedIn} quote={sub.quote} settings={sub.settings} bounds={sub.bounds} />;
     if (!POST_TABS.has(active)) return panels?.[active] ?? null;
     if (active === "downloads" && isOwner) return <DownloadsTab emptyText={empty.downloads!} />;
     if (active === "collections") return <CollectionsTab ownerId={ownerId} isOwner={isOwner} emptyText={empty.collections!} />;

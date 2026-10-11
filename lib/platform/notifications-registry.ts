@@ -92,6 +92,11 @@ export const NOTIFICATIONS = [
   { id: "pro_request", label: "Professional connection request", category: "social" },
   { id: "pro_accepted", label: "Professional connection confirmed", category: "social" },
   { id: "pro_recommendation", label: "Wrote you a recommendation", category: "social" },
+  // Feature 19 Part 13 (0227): creator memberships. A new member or subscriber also pushes and emails (lib/sub/notify.ts).
+  { id: "member_joined", label: "Joined your membership", category: "social" },
+  { id: "membership_update", label: "Membership update", category: "social" },
+  // 0227 (owner 2026-10-11): a viewer pressed a screenshot shortcut on a subscriber-only post. Pushes; Block or Ignore on the card.
+  { id: "sub_capture", label: "Screenshot of your SUB post", category: "social" },
   { id: "message", label: "New message", category: "social", group: "conversation", countsToBadge: false },
   { id: "message_reaction", label: "Reacted to your message", category: "social", group: "conversation", countsToBadge: false },
   { id: "message_mention", label: "Mentioned you in chat", category: "social", group: "conversation" },

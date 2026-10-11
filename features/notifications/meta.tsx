@@ -4,6 +4,7 @@ import {
   Bell,
   Bookmark,
   Briefcase,
+  Camera,
   CheckCircle2,
   CreditCard,
   Crown,
@@ -42,6 +43,9 @@ const ICONS: Partial<Record<NotificationType, LucideIcon>> = {
   pro_request: Briefcase,
   pro_accepted: Briefcase,
   pro_recommendation: Quote,
+  member_joined: Users,
+  membership_update: Crown,
+  sub_capture: Camera,
   streak_reminder: Flame,
   streak_milestone: Flame,
   streak_lost: Flame,
@@ -146,6 +150,12 @@ export function verbFor(type: NotificationType): string {
       return "confirmed your professional connection";
     case "pro_recommendation":
       return "wrote you a recommendation to review";
+    case "member_joined":
+      return "joined your membership";
+    case "sub_capture":
+      return "took a screenshot of your SUB post";
+    case "membership_update":
+      return "— your membership couldn't renew. Top up to keep it";
     case "message":
       return "sent you a message";
     case "message_reaction":

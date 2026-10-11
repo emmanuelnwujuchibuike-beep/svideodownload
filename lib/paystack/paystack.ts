@@ -54,6 +54,9 @@ async function paystack<T = Record<string, unknown>>(
   return json;
 }
 
+/** The same authenticated request, for the payout rail (lib/rewards/paystack-payouts.ts). */
+export const paystackRequest = paystack;
+
 /** The plan's amount (in kobo). Paystack's initialize requires an amount even
  * when a plan is passed, so we read it from the plan to stay correct. */
 async function planAmount(planCode: string): Promise<number | undefined> {
@@ -212,6 +215,18 @@ export async function initializeAdCheckout(opts: {
   return data.data.authorization_url;
 }
 
+/** 0227: a subscriber paying for a creator's SUB. Its own purpose: it can never credit an AI wallet or touch a plan. */
+export const SUB_PURPOSE = "frenz_sub";
+
+/** A hosted checkout for a SUB purchase (lib/sub/checkout.ts): the server's amount, currency and reference. */
+export async function initializeSubCheckout(opts: { email: string; userId: string; amount: number; currency: string; reference: string; callbackUrl: string; metadata: Record<string, string | number | null> }): Promise<string> {
+  const data = await paystack<{ data: { authorization_url: string } }>("/transaction/initialize", {
+    method: "POST",
+    body: { email: opts.email, amount: opts.amount, currency: opts.currency, reference: opts.reference, callback_url: opts.callbackUrl, metadata: { ...opts.metadata, user_id: opts.userId, purpose: SUB_PURPOSE } },
+  });
+  return data.data.authorization_url;
+}
+
 /**
  * Did Paystack REFUSE (nothing was created), or is the outcome unknown?
  * A refusal is Paystack answering with its own message. A timeout, a dropped
@@ -330,6 +345,10 @@ export interface PaystackEventData {
   gateway_response?: string | null;
   channel?: string | null;
   paid_at?: string | null;
+  /** refund.processed: the refunded charge's reference (0227, SUB reversals) */
+  transaction_reference?: string;
+  /** charge.dispute.*: the disputed charge */
+  transaction?: { reference?: string };
 }
 
 /**

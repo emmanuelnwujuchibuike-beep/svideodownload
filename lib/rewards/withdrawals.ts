@@ -5,6 +5,8 @@ import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import { splitWithdrawalUsdCents, withdrawalUsdCents, type RewardsConfig } from "@/lib/rewards/config";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { resolveAccount } from "./paystack-banks";
+
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  *  WITHDRAWALS — only the cashable part of the wallet, paid out by an admin
@@ -24,12 +26,19 @@ export interface PayoutDetails {
   accountNumber: string;
   bankName: string;
   country?: string;
+  /** "paystack" payouts (owner 2026-10-11): the Paystack bank code; the name is resolved by Paystack, never typed */
+  bankCode?: string;
 }
 
 export function validatePayoutDetails(method: string, raw: unknown): PayoutDetails | null {
-  if (method !== "bank_transfer" || !raw || typeof raw !== "object") return null;
+  if ((method !== "bank_transfer" && method !== "paystack") || !raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
   const s = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+  if (method === "paystack") {
+    // a Nigerian NUBAN and a Paystack bank code; the account name is filled from Paystack in requestWithdrawal
+    const p = { accountName: "", accountNumber: s(r.accountNumber, 10), bankName: s(r.bankName, 120), bankCode: s(r.bankCode, 10), country: "NG" };
+    return /^\d{10}$/.test(p.accountNumber) && /^[0-9A-Za-z]{2,10}$/.test(p.bankCode) && p.bankName.length >= 2 ? p : null;
+  }
   const d = { accountName: s(r.accountName, 120), accountNumber: s(r.accountNumber, 40), bankName: s(r.bankName, 120), country: s(r.country, 2).toUpperCase() || undefined };
   if (d.accountName.length < 2 || !/^[0-9A-Za-z -]{4,40}$/.test(d.accountNumber) || d.bankName.length < 2) return null;
   return d;
@@ -43,6 +52,12 @@ export async function requestWithdrawal(input: { userId: string; credits: number
   if (!w.methods.includes(input.method)) return { ok: false, status: 400, error: "That payout method isn't available." };
   const details = validatePayoutDetails(input.method, input.details);
   if (!details) return { ok: false, status: 400, error: "Check your payout details." };
+  if (input.method === "paystack") {
+    // the money goes where Paystack says the account is: the holder name comes from the bank, not from the form
+    const name = await resolveAccount(details.accountNumber, details.bankCode ?? "");
+    if (!name) return { ok: false, status: 400, error: "That account number doesn't match the bank. Check both." };
+    details.accountName = name;
+  }
 
   const db = createAdminClient();
   const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
@@ -72,7 +87,7 @@ export async function requestWithdrawal(input: { userId: string; credits: number
   return { ok: true, id: out.id, status, usdCents };
 }
 
-export async function resolveWithdrawal(input: { id: string; status: WithdrawalStatus; adminId: string; note?: string | null; payoutReference?: string | null }): Promise<{ ok: boolean; reason?: string }> {
+export async function resolveWithdrawal(input: { id: string; status: WithdrawalStatus; adminId: string | null; note?: string | null; payoutReference?: string | null }): Promise<{ ok: boolean; reason?: string }> {
   const { data, error } = await createAdminClient().rpc("resolve_withdrawal", { p_id: input.id, p_status: input.status, p_admin: input.adminId, p_note: input.note ?? null, p_payout_ref: input.payoutReference ?? null });
   if (error) {
     console.error("[rewards/withdraw] resolve failed", { id: input.id, message: error.message });

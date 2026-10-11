@@ -81,3 +81,43 @@ export async function presignR2Put(
   const signed = await r2().sign(url.toString(), { method: "PUT", aws: { signQuery: true } });
   return { uploadUrl: signed.url, publicUrl: r2PublicUrl(key) };
 }
+
+/*
+ * ── The PRIVATE bucket (0227, subscriber-only posts) ───────────────────────────
+ * A second bucket with NO public domain: nothing in it can be fetched by URL.
+ * An object leaves only through a presigned GET minted by the server AFTER it has
+ * checked that the viewer is an active subscriber, and that link expires within
+ * minutes. It must be a different bucket from R2_BUCKET (whose objects are public
+ * through R2_PUBLIC_BASE_URL) — `hasPrivateR2` is false otherwise, and subscriber
+ * uploads are refused rather than stored publicly.
+ *
+ *   R2_PRIVATE_BUCKET   the private bucket's name (same account and API token)
+ */
+const PRIVATE_BUCKET = process.env.R2_PRIVATE_BUCKET?.trim();
+export const hasPrivateR2 = hasR2 && !!PRIVATE_BUCKET && PRIVATE_BUCKET !== BUCKET;
+
+function privateEndpoint(key: string): string {
+  return `https://${ACCOUNT_ID}.r2.cloudflarestorage.com/${PRIVATE_BUCKET}/${encodeURI(key)}`;
+}
+
+/** A short-lived upload URL into the private bucket. */
+export async function presignPrivatePut(key: string, expiresSeconds = 300): Promise<string> {
+  if (!hasPrivateR2) throw new Error("private storage is not configured");
+  const url = new URL(privateEndpoint(key));
+  url.searchParams.set("X-Amz-Expires", String(expiresSeconds));
+  return (await r2().sign(url.toString(), { method: "PUT", aws: { signQuery: true } })).url;
+}
+
+/** A short-lived read URL for one private object. Call ONLY after an access check. */
+export async function presignPrivateGet(key: string, expiresSeconds = 600): Promise<string> {
+  if (!hasPrivateR2) throw new Error("private storage is not configured");
+  const url = new URL(privateEndpoint(key));
+  url.searchParams.set("X-Amz-Expires", String(expiresSeconds));
+  return (await r2().sign(url.toString(), { method: "GET", aws: { signQuery: true } })).url;
+}
+
+/** Remove a private object (a creator deleting a post). Best effort. */
+export async function deletePrivate(key: string): Promise<void> {
+  if (!hasPrivateR2) return;
+  await r2().fetch(privateEndpoint(key), { method: "DELETE" }).catch(() => null);
+}

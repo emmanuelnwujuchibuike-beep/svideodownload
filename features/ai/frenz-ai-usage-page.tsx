@@ -2,7 +2,6 @@
 
 import { ArrowDownLeft, ArrowLeft, ArrowUpRight, ChevronRight, Eye, EyeOff, Plus, RotateCcw, ShieldCheck, Sparkles, Wallet } from "lucide-react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 
 import { refreshWallet, useWallet } from "@/features/ai/wallet/use-wallet";
 import { TapOnceLink } from "@/features/ui/tap-once-link";
@@ -78,6 +77,7 @@ const LEDGER_COPY: Record<LedgerKind, { label: string; Icon: typeof Sparkles; to
 };
 
 // 2026-10-07 (owner): the subscription celebration + optional survey — its chunk loads only when there is a plan to celebrate
+const WithdrawChooser = dynamic(() => import("@/features/ai/wallet/withdraw-chooser").then((m) => m.WithdrawChooser), { ssr: false });
 const PlanCelebration = dynamic(() => import("@/features/ai/credits/plan-celebration").then((m) => m.PlanCelebration), { ssr: false });
 
 /** The welcome push opens `?plan_welcome=1` (lib/ai/credits/plan-welcome.ts) — taken once and removed from the address. */
@@ -98,13 +98,13 @@ function takePlanWelcome(): boolean {
 
 export function FrenzAIUsagePage({
   aiHref = "/ai",
-  createHref = "/studio/ai/character-replace",
   slides = [],
 }: {
   aiHref?: string;
-  createHref?: string;
   slides?: ShowcaseSlide[];
 }) {
+  // owner brief 2026-10-11: "Explore AI tools" became Withdraw — AI Credits or SUB earnings
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
   /* 2026-09-20: a tap on the figure hides it (kept per browser); a tap on a line opens it in full */
   const [hidden, toggleHidden] = useBalanceHidden();
   const [openLine, setOpenLine] = useState<LedgerRow | null>(null);
@@ -326,13 +326,18 @@ export function FrenzAIUsagePage({
                   <Plus className="h-4 w-4" aria-hidden />
                   Top up credits
                 </button>
-                <Link
-                  href={createHref}
-                  className="inline-flex min-h-[46px] items-center gap-2 rounded-full px-4 text-[14px] font-semibold text-white/90 ring-1 ring-inset ring-white/30 transition hover:bg-white/10"
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic("selection");
+                    setWithdrawOpen(true);
+                  }}
+                  className="inline-flex min-h-[46px] items-center gap-2 rounded-full px-4 text-[14px] font-semibold text-white/90 ring-1 ring-inset ring-white/30 transition hover:bg-white/10 active:scale-[0.98]"
                 >
-                  <Sparkles className="h-4 w-4" aria-hidden />
-                  Explore AI tools
-                </Link>
+                  <ArrowDownLeft className="h-4 w-4" aria-hidden />
+                  Withdraw
+                </button>
+                {withdrawOpen ? <WithdrawChooser onClose={() => setWithdrawOpen(false)} creditsLabel={typeof balance.withdrawableCents === "number" && !hidden ? formatKind(balance.withdrawableCents, "withdrawable") : null} /> : null}
               </div>
               {balance.offer.packs.length > 0 ? (
                 <div className="relative mt-4 flex flex-wrap gap-1.5" aria-label="Quick credit packs">

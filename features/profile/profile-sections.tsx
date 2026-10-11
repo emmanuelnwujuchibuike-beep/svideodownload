@@ -1,5 +1,5 @@
 import { ProfileHub } from "@/features/profile/profile-hub";
-import { ProfileTabs, type ProfileSection } from "@/features/profile/profile-tabs";
+import { ProfileTabs, SUB_TAB_KEY, type ProfileSection, type SubTabData } from "@/features/profile/profile-tabs";
 import type { ViewerRole } from "@/lib/profile/audience";
 import { resolveProfileLayout, type StoredModule } from "@/lib/profile/engine";
 import { HUB_OWNER_KEYS, MEDIA_MODULE_KEYS, isHubKey, type HubEntry } from "@/lib/profile/hub";
@@ -54,6 +54,7 @@ export function ProfileSections({
   previewRole = null,
   allowedGoverned,
   viewerCircles,
+  sub = null,
 }: {
   handle: string;
   profileId: string;
@@ -80,6 +81,8 @@ export function ProfileSections({
   previewRole?: ViewerRole | null;
   /** Owner circles this viewer belongs to (Part 17). Absent = none. */
   viewerCircles?: ReadonlySet<string>;
+  /** The SUB POSTS tab, when this viewer should see one (owner briefs 2026-10-11). */
+  sub?: SubTabData | null;
 }) {
   const isOwner = role === "owner";
   const byKind = credentialsByKind(credentials);
@@ -132,6 +135,8 @@ export function ProfileSections({
 
   const media = layout.modules.filter((m) => MEDIA_MODULE_KEYS.has(m.key));
   const sections: ProfileSection[] = media.map((m) => ({ key: m.key, label: m.spec.label, icon: m.spec.icon }));
+  // SUB POSTS sits beside the media tabs, clearly labelled, never inside the feed grid
+  if (sub) sections.push({ key: SUB_TAB_KEY, label: "SUB POSTS", icon: "Lock" });
 
   /*
     The hub: the engine's other modules, then — for the owner, and only the
@@ -158,7 +163,7 @@ export function ProfileSections({
     for (const key of HUB_OWNER_KEYS) entries.push({ key, sub: null });
   }
 
-  if (layout.modules.length === 0) return null;
+  if (layout.modules.length === 0 && !sub) return null;
 
   // A ?tab= that this viewer can't see falls back to the resolved landing
   // section rather than showing an empty dock. Only media sections are tabs
@@ -181,6 +186,7 @@ export function ProfileSections({
           liked={liked}
           saved={saved}
           reposted={reposted}
+          sub={sub}
         />
       ) : null}
       <ProfileHub handle={handle} entries={entries} />

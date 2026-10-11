@@ -72,7 +72,7 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
    uploaded; anything else still gets "try again". Reels already keep playing
    their MP4 without a Stream copy. Freeing Stream storage is still the owner's
    call in the Cloudflare dashboard.
-4. **Migrations 0214–0225 are all applied in production. 0226 (Professional Network, Feature 19 Part 12) is new and NOT yet run.** (probed live 2026-10-11, including the effects of 0224 and 0225: constraints refuse bad values, the presence history trigger logs and skips auto-away, lists nest to four levels and refuse cycles, rule owners are stamped). History of the list, in
+4. **Migrations 0214–0225 are all applied in production. 0226 (Professional Network, Part 12) and `0227_sub_monetization.sql` (SUB — paid subscriptions in money, subscriber-only posts, SUB withdrawals, financial audit log; Part 13 — see docs/SUB_MONETIZATION.md and docs/BILLING.md) are new and NOT yet run, in that order. **Also run `0228_follower_daily_account_delete.sql` — a live bug fix, independent of the others and safe to run first: since 0217 no member with a follower could delete their account (the follow-delete trigger wrote a stat row for the account being deleted and its foreign key refused the whole deletion; reproduced in PGlite and on production test accounts 2026-10-11).** 0227 was renamed from `0227_creator_memberships.sql` and rewritten before it ever ran (credit-billed memberships were replaced by SUB). Owner infra for SUB: (a) a PRIVATE R2 bucket (no public access, no custom domain) and `R2_PRIVATE_BUCKET` set on Vercel — without it subscriber-only uploads are refused, never stored publicly; (b) Paystack: Transfers enabled, an NGN balance, "OTP for transfers" off, and webhook events `transfer.success`, `transfer.failed`, `transfer.reversed`, `refund.processed`, `charge.dispute.create` added (same URL).** (probed live 2026-10-11, including the effects of 0224 and 0225: constraints refuse bad values, the presence history trigger logs and skips auto-away, lists nest to four levels and refuse cycles, rule owners are stamped). History of the list, in
    order. 0223 = Relationship Intelligence (Feature 19 Part 8). 0222 = Friend Profiles (Feature 19 Part 7). 0221 = People You May Know feedback (Feature 19 Part 6). 0219 = the admin "×10 for all live" switch now STANDS (new live campaigns inherit ×10 via a trigger) — after running it, press "×10 all live" once so the switch is recorded. 0220 = Contact Discovery (Feature 19 Part 5, docs/FEATURE_19_SOCIAL_GRAPH.md): keyed e-mail hashes, privacy, the daily cap, and the "contacts" follow source. 0218 = admin funding alerts (a trigger queues every successful payment;
    push + email to admins via lib/admin/funding-alerts.ts) and weekly AI prizes
    (ai_weekly_awards; 50/30/20 credits for the top 3 who spent >500 that week,
@@ -92,10 +92,10 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
    only defaults to `cover` and keeps the original height) — fixed with
    `resize=contain`. The top strip asks for an image 32–40 px tall and has no
    description field.
-7. **Feature 19 (Friends, Followers, Social Graph) — Parts 1–4 done.** The
+7. **Feature 19 (Friends, Followers, Social Graph) — Parts 1–10, 12 and 13 built (Part 11 skipped by the owner); Parts 14–17 next. Nothing is pushed until Part 17 or the owner says.** The
    governing doc is `docs/FEATURE_19_SOCIAL_GRAPH.md` (architecture, decisions and
    a Gap Ledger per part). Part 1 already existed as Feature 18 Part 17. Planned,
-   with reasons in the doc: paid creator memberships, close-friends-only stories
+   with reasons in the doc: SUB auto-renewal, close-friends-only stories
    and posts, favourite/VIP feed priority, contact sync, admin spam review.
 8. **History crash fixed 2026-10-10:** the grid mounted a <video> per ad tile
    (19 at once with 60 items); tiles now hold media only near the viewport. One

@@ -179,6 +179,8 @@ export default async function AccountPage() {
         { href: "/account/professional", Icon: Briefcase, title: "Professional", sub: "Portfolio, experience & credentials", tint: "amber" },
         // Feature 19 Part 12: confirmed connections, recommendations, endorsements, opportunities
         { href: "/network", Icon: Users, title: "Professional network", sub: "Connections, recommendations & opportunities", tint: "blue" },
+        // Feature 19 Part 13: your community, SUB subscriptions and payouts
+        { href: "/members", Icon: Crown, title: "Members", sub: "Your community, and memberships you hold", tint: "violet" },
       ],
     },
     {

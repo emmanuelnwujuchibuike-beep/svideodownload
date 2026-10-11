@@ -2,7 +2,7 @@
 
 import { ArrowLeft, Check, Clock, Coins, Gift, Lock, Share2 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { KindSymbol } from "@/features/ai/wallet/wallet-kinds";
 import { TapOnceLink } from "@/features/ui/tap-once-link";
@@ -222,7 +222,7 @@ function WithdrawSection({ summary }: { summary: Summary }) {
   }
 
   return (
-    <section aria-label="Withdraw rewards" className={cn(panel, "mt-4", !canWithdraw && "opacity-[0.97]")}>
+    <section id="withdraw" aria-label="Withdraw rewards" className={cn(panel, "mt-4 scroll-mt-20", !canWithdraw && "opacity-[0.97]")}>
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[15px] font-semibold">Withdraw rewards</h2>
         {canWithdraw ? (
@@ -380,15 +380,55 @@ function WithdrawForm({ enabled, max, min, creditsPerUsd, methods, withdrawable,
   const [details, setDetails] = useState({ accountName: "", accountNumber: "", bankName: "" });
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
   const [error, setError] = useState<string | null>(null);
+  // owner 2026-10-11: payouts through Paystack - a bank from Paystack's list, and the holder name Paystack confirms
+  const [banks, setBanks] = useState<{ name: string; code: string }[] | null>(null);
+  const [bankCode, setBankCode] = useState("");
+  const [resolved, setResolved] = useState<{ key: string; name: string | null; checking: boolean }>({ key: "", name: null, checking: false });
+  const paystack = method === "paystack";
   const n = Number(credits);
-  const valid = enabled && Number.isInteger(n) && n >= min && n <= max && details.accountName.trim().length >= 2 && /^[0-9A-Za-z -]{4,40}$/.test(details.accountNumber.trim()) && details.bankName.trim().length >= 2;
+  const acct = details.accountNumber.trim();
+  const valid = enabled && Number.isInteger(n) && n >= min && n <= max && (paystack ? /^\d{10}$/.test(acct) && !!bankCode && resolved.key === `${bankCode}:${acct}` && !!resolved.name : details.accountName.trim().length >= 2 && /^[0-9A-Za-z -]{4,40}$/.test(acct) && details.bankName.trim().length >= 2);
+
+  useEffect(() => {
+    if (!paystack || banks) return;
+    let cancelled = false;
+    void fetch("/api/rewards/banks").then((r) => r.json()).then((j: { banks?: { name: string; code: string }[]; error?: string }) => {
+      if (cancelled) return;
+      setBanks(j.banks ?? []);
+      if (j.error) setError(j.error);
+    }).catch(() => !cancelled && setBanks([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [paystack, banks]);
+
+  // one check per (bank, number) pair, only once the number is complete
+  useEffect(() => {
+    if (!paystack || !bankCode || !/^\d{10}$/.test(acct)) return;
+    const key = `${bankCode}:${acct}`;
+    if (resolved.key === key) return;
+    setResolved({ key, name: null, checking: true });
+    let cancelled = false;
+    void fetch("/api/rewards/resolve-account", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ accountNumber: acct, bankCode }) })
+      .then((r) => r.json())
+      .then((j: { accountName?: string; error?: string }) => {
+        if (cancelled) return;
+        setResolved({ key, name: j.accountName ?? null, checking: false });
+        setError(j.accountName ? null : (j.error ?? "Couldn't check that account."));
+      })
+      .catch(() => !cancelled && setResolved({ key, name: null, checking: false }));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paystack, bankCode, acct]);
 
   async function submit() {
     if (!valid || state === "sending") return;
     setState("sending");
     setError(null);
     try {
-      const res = await fetch("/api/rewards/withdrawals", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ credits: n, method, details }) });
+      const res = await fetch("/api/rewards/withdrawals", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ credits: n, method, details: paystack ? { bankCode, bankName: banks?.find((b) => b.code === bankCode)?.name ?? "", accountNumber: acct } : details }) });
       const json = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
         setError(json.error ?? "Couldn't request that withdrawal.");
@@ -426,12 +466,34 @@ function WithdrawForm({ enabled, max, min, creditsPerUsd, methods, withdrawable,
           <select value={method} onChange={(e) => setMethod(e.target.value)} className={field}>
             {methods.map((m) => (
               <option key={m} value={m}>
-                {m.replace(/_/g, " ")}
+                {m === "paystack" ? "Bank account, paid by Paystack (Nigeria)" : m === "bank_transfer" ? "Bank transfer, paid by hand" : m.replace(/_/g, " ")}
               </option>
             ))}
           </select>
         </label>
       ) : null}
+      {paystack ? (
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <label className="block text-[12.5px] font-medium">
+            Bank
+            <select value={bankCode} onChange={(e) => setBankCode(e.target.value)} className={field} disabled={!banks?.length}>
+              <option value="">{banks === null ? "Loading banks…" : "Choose your bank"}</option>
+              {(banks ?? []).map((b) => (
+                <option key={b.code} value={b.code}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-[12.5px] font-medium">
+            Account number
+            <input inputMode="numeric" maxLength={10} value={details.accountNumber} onChange={(e) => setDetails((d) => ({ ...d, accountNumber: e.target.value.replace(/\D/g, "") }))} className={field} autoComplete="off" />
+          </label>
+          <p aria-live="polite" className="text-[12.5px] sm:col-span-2">
+            {resolved.checking ? <span className="text-slate-500">Checking the account…</span> : resolved.name && resolved.key === `${bankCode}:${acct}` ? <span className="font-semibold text-emerald-700">✓ {resolved.name}</span> : <span className="text-slate-500">Paystack confirms the account holder before anything is sent.</span>}
+          </p>
+        </div>
+      ) : (
       <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
         {(
           [
@@ -446,6 +508,7 @@ function WithdrawForm({ enabled, max, min, creditsPerUsd, methods, withdrawable,
           </label>
         ))}
       </div>
+      )}
       {error ? (
         <p role="alert" className="mt-2 text-[12.5px] font-semibold text-rose-600">
           {error}

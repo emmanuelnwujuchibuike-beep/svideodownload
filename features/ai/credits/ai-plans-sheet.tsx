@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useState } from "react";
 
 import { aiButtonClass } from "@/features/ai/design/ai-button";
-import { PaymentProviderPicker, usePaymentOptions, type PaymentProvider } from "@/features/ai/wallet/payment-provider-picker";
+import { defaultProvider, PaymentProviderPicker, usePaymentOptions, type PaymentProvider } from "@/features/ai/wallet/payment-provider-picker";
 import type { CharacterReplaceCreditsView } from "@/lib/ai/character-replace/types";
 import { beginAiPlanCheckout, buyAiPlanWithCredits } from "@/lib/ai/credits/client";
 import type { AiPlansPublic } from "@/lib/ai/credits/config";
@@ -63,7 +63,7 @@ export function AiPlansSheet({
   const providersFor = (plan: "ai_pro" | "ai_max") => options?.plans[plan] ?? [];
   const chosenFor = (plan: "ai_pro" | "ai_max") => {
     const list = providersFor(plan);
-    return provider && list.includes(provider) ? provider : (list[0] ?? null);
+    return provider && list.includes(provider) ? provider : defaultProvider(list);
   };
 
   const subscribe = useCallback(

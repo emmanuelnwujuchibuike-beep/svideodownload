@@ -90,6 +90,9 @@ export const NOT_EXPORTED: Record<string, string> = {
   media_assets: "Shared media records, not owned by one member.",
   asset_usage: "Links assets to places they appear. Not personal data.",
   post_media: "Attachments belonging to a post; the post itself is exported.",
+  sub_balances: "Your SUB balance is a running total of sub_ledger, which is exported; it is not a separate fact.",
+  sub_post_media: "The private files of a subscriber-only post, keyed by the post. The post is exported; the files stay in private storage and are never given a public link.",
+  financial_audit_log: "The operator's audit trail of money decisions. It carries admin ids and internal references that are not the member's to read; every money fact about you is exported through sub_purchases, sub_ledger and withdrawal_requests.",
   /* Keyed by job, not by person: the operator-facing audit trail of what the
      BACKGROUND did to an AI job (webhook, finalization attempts, push, refund,
      an operator's recovery action). It carries provider and operator ids that
@@ -294,6 +297,16 @@ export const OWNER_COLUMN: Record<string, string> = {
   profile_events: "user_id",
   profile_event_rsvps: "user_id",
   profile_membership_tiers: "user_id",
+  creator_membership_settings: "creator_id", // 0227: your membership page settings
+  creator_memberships: "member_id", // 0227: memberships you hold (a creator's members are their own export at /api/members/export)
+  sub_purchases: "subscriber_id", // 0227: SUB subscriptions you bought, with price, fee and total
+  sub_ledger: "creator_id", // 0227: every change to your SUB earnings
+  sub_payout_accounts: "creator_id", // 0227: your saved payout account and auto-withdrawal setting
+  sub_posts: "creator_id", // 0227: your subscriber-only posts (captions and dates; files stay in private storage)
+  creator_notes: "creator_id", // 0227: notes you wrote for your members
+  creator_recognitions: "creator_id", // 0227: recognitions you gave
+  creator_sponsors: "creator_id", // 0227: sponsors you disclosed
+  creator_feedback: "member_id", // 0227: your private ratings of creators
   profile_repositories: "user_id",
   profile_snapshots: "user_id",
   profile_versions: "user_id",

@@ -32,7 +32,8 @@ export interface RewardsAdminView {
   };
   withdrawals: { pending: number; reviewing: number; approved: number; processing: number; completedCredits: number; completedUsdCents: number };
   recentReferrals: { at: string; referrer: string; referred: string | null; event: string; amount: number; creditClass: string; contentType: string | null }[];
-  queue: { id: string; user: string; userId: string; credits: number; usdCents: number; status: string; method: string; details: Record<string, string>; createdAt: string }[];
+  /** source: "credits" (AI wallet) or "sub" (0227 — SUB money; credits 0, gross − fee = net) */
+  queue: { id: string; user: string; userId: string; credits: number; usdCents: number; status: string; method: string; details: Record<string, string>; createdAt: string; source: "credits" | "sub"; grossCents: number | null; feeCents: number | null }[];
   /**
    * 0191 (owner 2026-10-07: "admin can track users if they reach the requirement, account activity per day, week and month, and show progress"):
    * each member's application status, progress against the thresholds, and rewarded activity over a day, a week and a month — computed in SQL
@@ -62,20 +63,31 @@ export interface RewardsAdminMember {
  * the server to add up. Open withdrawals are counted whatever their age (the
  * old window missed a request older than 90 days that was still pending).
  */
+type OpenRow = { id: string; user_id: string; credits: number; amount_usd_cents: number; status: string; payout_method: string; payout_details: Record<string, string>; created_at: string; source?: string | null; gross_cents?: number | null; fee_cents?: number | null };
+
+/** The open queue, with the SUB columns when 0227 is applied and without them before (never an empty queue because a column is missing). */
+async function openWithdrawals(db: ReturnType<typeof createAdminClient>): Promise<OpenRow[]> {
+  const base = "id, user_id, credits, amount_usd_cents, status, payout_method, payout_details, created_at";
+  const withSub = await db.from("withdrawal_requests").select(`${base}, source, gross_cents, fee_cents`).in("status", [...OPEN]).order("created_at", { ascending: true }).limit(500);
+  if (!withSub.error) return (withSub.data ?? []) as OpenRow[];
+  const plain = await db.from("withdrawal_requests").select(base).in("status", [...OPEN]).order("created_at", { ascending: true }).limit(500);
+  return (plain.data ?? []) as OpenRow[];
+}
+
 export async function loadRewardsAdmin(): Promise<RewardsAdminView> {
   const db = createAdminClient();
   const since = new Date(Date.now() - WINDOW_DAYS * 86_400_000).toISOString();
   const [totals, recent, open, membersRpc] = await Promise.all([
     db.rpc("rewards_admin_totals", { p_since: since }),
     db.from("reward_events").select("beneficiary_id, event_type, amount, credit_class, referred_user_id, created_at").eq("role", "referrer").order("created_at", { ascending: false }).limit(50),
-    db.from("withdrawal_requests").select("id, user_id, credits, amount_usd_cents, status, payout_method, payout_details, created_at").in("status", [...OPEN]).order("created_at", { ascending: true }).limit(500),
+    openWithdrawals(db),
     db.rpc("rewards_admin_members", { p_limit: 200 }),
   ]);
   const memberRows = (membersRpc.error ? [] : ((membersRpc.data ?? []) as Record<string, unknown>[]));
   if (totals.error || !totals.data) return loadRewardsAdminLegacy();
   const t = totals.data as Partial<Record<keyof RewardsAdminView["totals"], unknown>> & { withdrawals?: Partial<Record<keyof RewardsAdminView["withdrawals"], unknown>> };
   const ev = (recent.data ?? []) as { beneficiary_id: string; event_type: string; amount: number; credit_class: string; referred_user_id: string | null; created_at: string }[];
-  const queue = (open.data ?? []) as { id: string; user_id: string; credits: number; amount_usd_cents: number; status: string; payout_method: string; payout_details: Record<string, string>; created_at: string }[];
+  const queue = open;
   const referredIds = [...new Set(ev.map((e) => e.referred_user_id).filter((x): x is string => !!x))];
   const memberIds = memberRows.map((m) => String(m.user_id));
   const ids = [...new Set([...memberIds, ...ev.flatMap((e) => [e.beneficiary_id, e.referred_user_id]), ...queue.map((w) => w.user_id)].filter((x): x is string => !!x))];
@@ -115,7 +127,7 @@ export async function loadRewardsAdmin(): Promise<RewardsAdminView> {
       completedUsdCents: n(t.withdrawals?.completedUsdCents),
     },
     recentReferrals: ev.map((e) => ({ at: e.created_at, referrer: name(e.beneficiary_id) ?? "?", referred: name(e.referred_user_id), event: e.event_type, amount: e.amount, creditClass: e.credit_class, contentType: e.referred_user_id ? (contentOf.get(e.referred_user_id) ?? null) : null })),
-    queue: queue.map((w) => ({ id: w.id, user: name(w.user_id) ?? w.user_id.slice(0, 8), userId: w.user_id, credits: w.credits, usdCents: w.amount_usd_cents, status: w.status, method: w.payout_method, details: w.payout_details ?? {}, createdAt: w.created_at })),
+    queue: queue.map((w) => ({ id: w.id, user: name(w.user_id) ?? w.user_id.slice(0, 8), userId: w.user_id, credits: w.credits, usdCents: w.amount_usd_cents, status: w.status, method: w.payout_method, details: w.payout_details ?? {}, createdAt: w.created_at, source: w.source === "sub" ? ("sub" as const) : ("credits" as const), grossCents: w.gross_cents ?? null, feeCents: w.fee_cents ?? null })),
     members: memberRows.map((m) => ({
       userId: String(m.user_id),
       user: name(String(m.user_id)) ?? String(m.user_id).slice(0, 8),
@@ -193,7 +205,7 @@ async function loadRewardsAdminLegacy(): Promise<RewardsAdminView> {
       .filter((e) => e.role === "referrer")
       .slice(0, 50)
       .map((e) => ({ at: e.created_at, referrer: name(e.beneficiary_id) ?? "?", referred: name(e.referred_user_id), event: e.event_type, amount: e.amount, creditClass: e.credit_class, contentType: e.referred_user_id ? (contentOf.get(e.referred_user_id) ?? null) : null })),
-    queue: open.map((w) => ({ id: w.id, user: name(w.user_id) ?? w.user_id.slice(0, 8), userId: w.user_id, credits: w.credits, usdCents: w.amount_usd_cents, status: w.status, method: w.payout_method, details: w.payout_details ?? {}, createdAt: w.created_at })),
+    queue: open.map((w) => ({ id: w.id, user: name(w.user_id) ?? w.user_id.slice(0, 8), userId: w.user_id, credits: w.credits, usdCents: w.amount_usd_cents, status: w.status, method: w.payout_method, details: w.payout_details ?? {}, createdAt: w.created_at, source: "credits" as const, grossCents: null, feeCents: null })),
     members: [],
   };
 }

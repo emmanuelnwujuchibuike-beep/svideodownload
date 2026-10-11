@@ -154,6 +154,26 @@ export const DATA_DOMAINS: DataDomain[] = [
       "profile_team_members",
       "profile_reviews",
       "profile_membership_tiers",
+      // Feature 19 Part 13 (0227): creator memberships — a free community and SUB, paid
+      // subscriptions in real money through Paystack, never AI credits. Money moves only through
+      // settle_sub_purchase / reverse_sub_purchase / request_sub_withdrawal / resolve_withdrawal;
+      // sub_balances is the running total of the immutable sub_ledger; financial_audit_log records
+      // every money decision (actor, reference, before and after); sub_payout_accounts is the creator's
+      // saved Paystack beneficiary and auto-withdrawal switch (server-only, shown masked); sub_posts / sub_post_media hold
+      // subscriber-only posts whose files live in the PRIVATE bucket (keys only, never URLs).
+      "creator_membership_settings",
+      "creator_memberships",
+      "sub_purchases",
+      "sub_balances",
+      "sub_ledger",
+      "sub_payout_accounts",
+      "financial_audit_log",
+      "sub_posts",
+      "sub_post_media",
+      "creator_notes",
+      "creator_recognitions",
+      "creator_sponsors",
+      "creator_feedback",
       "profile_repositories",
       "profile_spaces",
       "profile_widgets",

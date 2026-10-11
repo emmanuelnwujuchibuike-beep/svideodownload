@@ -1,0 +1,293 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+
+import { usd } from "@/lib/creator/membership/engine";
+import type { LandingSettings } from "@/lib/landing/settings";
+import { cn } from "@/lib/utils";
+
+/**
+ * Admin → Rewards: SUB (0227, owner briefs 2026-10-11).
+ *
+ *   · The rules: buying and withdrawing on/off, both fees, the price bounds, the
+ *     minimum withdrawal, the hold, the access period, instant Paystack payout,
+ *     whether the reward qualification applies, and the viewer watermark. A
+ *     change applies to the NEXT purchase or withdrawal; each row already made
+ *     keeps the fee it was charged.
+ *   · Every recent purchase with its price, fee and total, and a reversal that
+ *     ends the access it bought and takes the price back off the creator's
+ *     balance (as debt, if already withdrawn) — the same path a Paystack refund
+ *     or dispute takes.
+ *   · Creator balances and the financial audit log.
+ * Loaded once when the panel opens; never polled.
+ */
+
+interface Purchase {
+  id: string;
+  creator_id: string;
+  subscriber_id: string;
+  price_cents: number;
+  fee_cents: number;
+  total_cents: number;
+  charged_currency: string | null;
+  charged_minor: number | null;
+  reference: string;
+  status: string;
+  paid_at: string | null;
+  reversed_at: string | null;
+  created_at: string;
+}
+interface Balance {
+  creator_id: string;
+  pending_cents: number;
+  available_cents: number;
+  held_cents: number;
+  debt_cents: number;
+  lifetime_cents: number;
+  withdrawn_cents: number;
+}
+interface Audit {
+  id: string;
+  actor_id: string | null;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  reference: string | null;
+  details: Record<string, unknown> | null;
+  created_at: string;
+}
+
+const input = "w-28 rounded-lg border border-border bg-background px-2 py-1.5 text-sm";
+
+export function SubAdmin({ settings }: { settings: LandingSettings }) {
+  const router = useRouter();
+  const c = settings.frenzRewards.sub;
+  const [f, setF] = useState({
+    purchasesEnabled: c.purchasesEnabled,
+    withdrawalsEnabled: c.withdrawalsEnabled,
+    autoPayout: c.autoPayout,
+    requireQualification: c.requireQualification,
+    watermark: c.watermark,
+    purchaseFee: String(c.purchaseFeePercent),
+    withdrawalFee: String(c.withdrawalFeePercent),
+    minPrice: (c.minPriceCents / 100).toFixed(2),
+    maxPrice: (c.maxPriceCents / 100).toFixed(2),
+    minWithdrawal: (c.minWithdrawalCents / 100).toFixed(2),
+    holdDays: String(c.holdDays),
+    periodDays: String(c.periodDays),
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<{ ok: boolean; text: string } | null>(null);
+  const [data, setData] = useState<{ purchases: Purchase[]; balances: Balance[]; audit: Audit[]; ready: boolean } | null>(null);
+  const [reason, setReason] = useState<Record<string, string>>({});
+  const [kind, setKind] = useState<Record<string, "refunded" | "disputed" | "reversed">>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/admin/memberships")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => !cancelled && setData(d ?? { purchases: [], balances: [], audit: [], ready: false }))
+      .catch(() => !cancelled && setData({ purchases: [], balances: [], audit: [], ready: false }));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const cents = (v: string, d: number) => (Number.isFinite(Number(v)) && v.trim() !== "" ? Math.max(1, Math.round(Number(v) * 100)) : d);
+  const pct = (v: string, d: number) => (Number.isFinite(Number(v)) && v.trim() !== "" ? Math.min(50, Math.max(0, Number(v))) : d);
+  const int = (v: string, d: number, lo: number, hi: number) => (Number.isFinite(Number(v)) && v.trim() !== "" ? Math.min(hi, Math.max(lo, Math.floor(Number(v)))) : d);
+
+  const save = async () => {
+    setSaving(true);
+    setSaved(null);
+    const sub = {
+      purchasesEnabled: f.purchasesEnabled,
+      withdrawalsEnabled: f.withdrawalsEnabled,
+      autoPayout: f.autoPayout,
+      requireQualification: f.requireQualification,
+      watermark: f.watermark,
+      purchaseFeePercent: pct(f.purchaseFee, c.purchaseFeePercent),
+      withdrawalFeePercent: pct(f.withdrawalFee, c.withdrawalFeePercent),
+      minPriceCents: cents(f.minPrice, c.minPriceCents),
+      maxPriceCents: cents(f.maxPrice, c.maxPriceCents),
+      minWithdrawalCents: cents(f.minWithdrawal, c.minWithdrawalCents),
+      holdDays: int(f.holdDays, c.holdDays, 0, 90),
+      periodDays: int(f.periodDays, c.periodDays, 1, 366),
+    };
+    try {
+      const res = await fetch("/api/admin/landing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ frenzRewards: { sub } }) });
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      setSaved(res.ok ? { ok: true, text: "Saved. New purchases and withdrawals use these rules; past ones keep theirs." } : { ok: false, text: j.error ?? "Failed to save." });
+      if (res.ok) router.refresh();
+    } catch {
+      setSaved({ ok: false, text: "Network error." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const reverse = async (p: Purchase) => {
+    const why = (reason[p.id] ?? "").trim();
+    if (why.length < 3) return setNote("Give a reason of at least 3 characters first.");
+    setBusy(p.id);
+    setNote(null);
+    const status = kind[p.id] ?? "reversed";
+    const res = await fetch("/api/admin/memberships", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reference: p.reference, status, note: why }) }).catch(() => null);
+    const j = (await res?.json().catch(() => null)) as { error?: string; debtAfter?: number } | null;
+    setBusy(null);
+    if (!res?.ok) return setNote(j?.error ?? "Couldn't reverse it.");
+    setData((d) => (d ? { ...d, purchases: d.purchases.map((x) => (x.id === p.id ? { ...x, status, reversed_at: new Date().toISOString() } : x)) } : d));
+    setNote(`Reversed. The access it bought has ended${j?.debtAfter ? `; the creator now owes ${usd(j.debtAfter)}` : ""}. Refund the subscriber in Paystack if money is going back.`);
+  };
+
+  const paid = (data?.purchases ?? []).filter((p) => p.status === "paid");
+  const totals = paid.reduce((a, p) => ({ price: a.price + p.price_cents, fee: a.fee + p.fee_cents }), { price: 0, fee: 0 });
+  const Switch = ({ k, label }: { k: "purchasesEnabled" | "withdrawalsEnabled" | "autoPayout" | "requireQualification" | "watermark"; label: string }) => (
+    <label className="flex items-center gap-2 text-xs">
+      <input type="checkbox" checked={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.checked })} /> {label}
+    </label>
+  );
+
+  return (
+    <section className="rounded-3xl border border-border bg-card px-3 py-6 shadow-card sm:px-6">
+      <h2 className="font-semibold">SUB — paid subscriptions</h2>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Real money through Paystack, separate from AI credits. The subscriber pays the creator&apos;s price plus the purchase fee; a SUB withdrawal pays out less the withdrawal fee.</p>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        <Switch k="purchasesEnabled" label="New subscriptions can be bought" />
+        <Switch k="withdrawalsEnabled" label="SUB withdrawals are open" />
+        <Switch k="autoPayout" label="Pay withdrawals through Paystack at once (no admin step)" />
+        <Switch k="requireQualification" label="Require the reward qualification to withdraw SUB" />
+        <Switch k="watermark" label="Watermark subscriber-only media with the viewer's @handle" />
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <label className="text-xs text-muted-foreground">Purchase fee (%)<input inputMode="decimal" value={f.purchaseFee} onChange={(e) => setF({ ...f, purchaseFee: e.target.value })} className={cn(input, "mt-1 block")} /></label>
+        <label className="text-xs text-muted-foreground">Withdrawal fee (%)<input inputMode="decimal" value={f.withdrawalFee} onChange={(e) => setF({ ...f, withdrawalFee: e.target.value })} className={cn(input, "mt-1 block")} /></label>
+        <label className="text-xs text-muted-foreground">Lowest price ($)<input inputMode="decimal" value={f.minPrice} onChange={(e) => setF({ ...f, minPrice: e.target.value })} className={cn(input, "mt-1 block")} /></label>
+        <label className="text-xs text-muted-foreground">Highest price ($)<input inputMode="decimal" value={f.maxPrice} onChange={(e) => setF({ ...f, maxPrice: e.target.value })} className={cn(input, "mt-1 block")} /></label>
+        <label className="text-xs text-muted-foreground">Minimum withdrawal ($)<input inputMode="decimal" value={f.minWithdrawal} onChange={(e) => setF({ ...f, minWithdrawal: e.target.value })} className={cn(input, "mt-1 block")} /></label>
+        <label className="text-xs text-muted-foreground">Hold before withdrawable (days)<input inputMode="numeric" value={f.holdDays} onChange={(e) => setF({ ...f, holdDays: e.target.value })} className={cn(input, "mt-1 block")} /></label>
+        <label className="text-xs text-muted-foreground">Access per payment (days)<input inputMode="numeric" value={f.periodDays} onChange={(e) => setF({ ...f, periodDays: e.target.value })} className={cn(input, "mt-1 block")} /></label>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button type="button" onClick={() => void save()} disabled={saving} className={cn("btn-lux bg-foreground text-background", saving && "opacity-60")}>
+          {saving ? "Saving…" : "Save SUB rules"}
+        </button>
+        {saved ? <p className={cn("text-sm", saved.ok ? "text-emerald-600" : "text-rose-600")}>{saved.text}</p> : null}
+      </div>
+
+      <h3 className="mt-6 text-sm font-semibold">Purchases (last 100)</h3>
+      {!data ? (
+        <p className="mt-2 text-sm text-muted-foreground">Loading…</p>
+      ) : !data.ready ? (
+        <p className="mt-2 text-sm text-muted-foreground">Arrives with migration 0227.</p>
+      ) : data.purchases.length === 0 ? (
+        <p className="mt-2 text-sm text-muted-foreground">No SUB purchases yet.</p>
+      ) : (
+        <>
+          <p className="mt-2 text-sm">
+            Paid, shown here: <b className="tabular-nums">{usd(totals.price)}</b> to creators · <b className="tabular-nums">{usd(totals.fee)}</b> in purchase fees
+          </p>
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-xs">
+              <thead className="text-muted-foreground">
+                <tr>
+                  <th className="py-1.5 pr-2 font-medium">When</th>
+                  <th className="py-1.5 pr-2 font-medium">Price + fee = total</th>
+                  <th className="py-1.5 pr-2 font-medium">Charged</th>
+                  <th className="py-1.5 pr-2 font-medium">Reference</th>
+                  <th className="py-1.5 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.purchases.map((p) => (
+                  <tr key={p.id} className="border-t border-border/60 align-top">
+                    <td className="py-2 pr-2 tabular-nums">{new Date(p.created_at).toLocaleString()}</td>
+                    <td className="py-2 pr-2 tabular-nums">
+                      {usd(p.price_cents)} + {usd(p.fee_cents)} = {usd(p.total_cents)}
+                    </td>
+                    <td className="py-2 pr-2 tabular-nums">{p.charged_minor != null && p.charged_currency ? `${(p.charged_minor / 100).toLocaleString()} ${p.charged_currency}` : "—"}</td>
+                    <td className="py-2 pr-2 font-mono text-[11px]">{p.reference}</td>
+                    <td className="py-2">
+                      {p.status !== "paid" ? (
+                        <span className="capitalize text-muted-foreground">{p.status}</span>
+                      ) : (
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <select aria-label="Kind" value={kind[p.id] ?? "reversed"} onChange={(e) => setKind({ ...kind, [p.id]: e.target.value as "refunded" | "disputed" | "reversed" })} className="rounded-lg border border-border bg-background px-1.5 py-1">
+                            <option value="reversed">Reversal</option>
+                            <option value="refunded">Refund</option>
+                            <option value="disputed">Dispute</option>
+                          </select>
+                          <input aria-label="Reason" placeholder="Reason" value={reason[p.id] ?? ""} onChange={(e) => setReason({ ...reason, [p.id]: e.target.value })} className="w-32 rounded-lg border border-border bg-background px-2 py-1" />
+                          <button type="button" disabled={busy === p.id} onClick={() => void reverse(p)} className="rounded-lg border border-rose-500/50 px-2 py-1 font-semibold text-rose-600 transition active:scale-95 disabled:opacity-50">
+                            {busy === p.id ? "Reversing…" : "Reverse"}
+                          </button>
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      {note ? <p className="mt-3 text-sm text-muted-foreground">{note}</p> : null}
+
+      {data?.balances.length ? (
+        <>
+          <h3 className="mt-6 text-sm font-semibold">Creator balances</h3>
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left text-xs">
+              <thead className="text-muted-foreground">
+                <tr>
+                  <th className="py-1.5 pr-2 font-medium">Creator</th>
+                  <th className="py-1.5 pr-2 font-medium">Clearing</th>
+                  <th className="py-1.5 pr-2 font-medium">Available</th>
+                  <th className="py-1.5 pr-2 font-medium">Being paid</th>
+                  <th className="py-1.5 pr-2 font-medium">Debt</th>
+                  <th className="py-1.5 pr-2 font-medium">Lifetime</th>
+                  <th className="py-1.5 font-medium">Withdrawn</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.balances.map((b) => (
+                  <tr key={b.creator_id} className="border-t border-border/60 tabular-nums">
+                    <td className="py-2 pr-2 font-mono text-[11px]">{b.creator_id.slice(0, 8)}</td>
+                    <td className="py-2 pr-2">{usd(b.pending_cents)}</td>
+                    <td className="py-2 pr-2">{usd(b.available_cents)}</td>
+                    <td className="py-2 pr-2">{usd(b.held_cents)}</td>
+                    <td className={cn("py-2 pr-2", b.debt_cents > 0 && "font-semibold text-rose-600")}>{usd(b.debt_cents)}</td>
+                    <td className="py-2 pr-2">{usd(b.lifetime_cents)}</td>
+                    <td className="py-2">{usd(b.withdrawn_cents)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : null}
+
+      {data?.audit.length ? (
+        <>
+          <h3 className="mt-6 text-sm font-semibold">Financial audit log (last 100)</h3>
+          <ul className="mt-2 max-h-80 divide-y divide-border/60 overflow-y-auto rounded-2xl border border-border/70 text-xs">
+            {data.audit.map((a) => (
+              <li key={a.id} className="px-3 py-2">
+                <span className="font-semibold">{a.action}</span> <span className="text-muted-foreground">· {new Date(a.created_at).toLocaleString()}</span>
+                {a.reference ? <span className="ml-1 font-mono text-[11px]">{a.reference}</span> : null}
+                <span className="block text-muted-foreground">
+                  {a.actor_id ? `by ${a.actor_id.slice(0, 8)}` : "by the system"}
+                  {a.details ? ` · ${Object.entries(a.details).map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`).join(" · ")}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </section>
+  );
+}

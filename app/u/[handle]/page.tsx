@@ -71,6 +71,9 @@ import {
   type ProfileDetails,
 } from "@/lib/social/profile-platform";
 import { createClient } from "@/lib/supabase/server";
+import { subscriptionCharge } from "@/lib/creator/membership/engine";
+import { getSubSettings, subConfig } from "@/lib/sub/server";
+import type { SubTabData } from "@/features/profile/profile-tabs";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -758,6 +761,7 @@ async function ProfileData({
                     <ProfileSectionsLoader
                       profileId={profile.id}
                       handle={profile.handle}
+                      displayName={profile.displayName}
                       viewerId={me}
                       role={viewerRole}
                       type={identity.type}
@@ -1139,6 +1143,7 @@ async function ProfileData({
                   <ProfileSectionsLoader
                     profileId={profile.id}
                     handle={profile.handle}
+                    displayName={profile.displayName}
                     viewerId={me}
                     role={viewerRole}
                     type={identity.type}
@@ -1179,6 +1184,7 @@ async function ProfileData({
 async function ProfileSectionsLoader({
   profileId,
   handle,
+  displayName,
   viewerId,
   role,
   type,
@@ -1197,6 +1203,7 @@ async function ProfileSectionsLoader({
 }: {
   profileId: string;
   handle: string;
+  displayName: string;
   viewerId: string | null;
   role: ViewerRole;
   type: ProfileTypeKey;
@@ -1216,7 +1223,7 @@ async function ProfileSectionsLoader({
   const isOwner = role === "owner";
   // Only fetch a section's dataset when this viewer is allowed to see it — a
   // hidden section never even loads its data, so nothing can leak.
-  const [posts, liked, saved, reposted, jar, viewerCircles] = await Promise.all([
+  const [posts, liked, saved, reposted, jar, viewerCircles, sub] = await Promise.all([
     // The viewer id is what lets a FOLLOWER see followers-only posts, so it
     // must stay the real viewer — not a stand-in derived from the role.
     /*
@@ -1247,6 +1254,7 @@ async function ProfileSectionsLoader({
     // gated to "Family" resolves against real membership. Ids only; the viewer
     // never learns a circle's name from a visibility check.
     viewerCircleIds(profileId, viewerId),
+    subTabFor(profileId, displayName, viewerId, isOwner && !previewRole),
   ]);
   // Seed the grid/list choice from the cookie so the layout paints instantly.
   const initialView = jar.get("svd_profile_view")?.value === "list" ? "list" : "grid";
@@ -1275,6 +1283,33 @@ async function ProfileSectionsLoader({
       previewRole={previewRole}
       allowedGoverned={allowedGoverned}
       viewerCircles={viewerCircles}
+      sub={sub}
     />
   );
+}
+
+/**
+ * The SUB POSTS tab (owner briefs 2026-10-11): always there for the creator
+ * (it holds "Get paid for your content"), there for everyone else only once the
+ * creator is live with a price. One row read; the gallery itself loads on tap.
+ */
+async function subTabFor(creatorId: string, creatorName: string, viewerId: string | null, owner: boolean): Promise<SubTabData | null> {
+  try {
+    const [settings, cfg] = await Promise.all([getSubSettings(creatorId), subConfig()]);
+    if (!settings.ready) return null;
+    const bounds = { minPriceCents: cfg.minPriceCents, maxPriceCents: cfg.maxPriceCents, purchaseFeePercent: cfg.purchaseFeePercent, withdrawalFeePercent: cfg.withdrawalFeePercent };
+    const live = settings.active && !!settings.priceCents && cfg.purchasesEnabled;
+    if (!owner && !live) return null;
+    const c = live && settings.priceCents ? subscriptionCharge(settings.priceCents, cfg.purchaseFeePercent) : null;
+    return {
+      creatorName,
+      signedIn: !!viewerId,
+      bounds,
+      quote: c ? { priceCents: c.priceCents, feeCents: c.feeCents, totalCents: c.totalCents, feePercent: cfg.purchaseFeePercent, periodDays: cfg.periodDays } : null,
+      settings: owner ? { priceCents: settings.priceCents, active: settings.active, setupStep: settings.setupStep, setupCompleted: settings.setupCompleted } : null,
+    };
+  } catch {
+    // a non-critical read: no tab beats a broken profile
+    return null;
+  }
 }

@@ -455,6 +455,26 @@ const schema = z.object({
           maxCreditsPerMonth: z.number().int().min(1).max(1_000_000_000).optional(),
           manualReviewAboveCredits: z.number().int().min(0).max(100_000_000).optional(),
           methods: z.array(z.string().max(30)).max(6).optional(),
+          // 0202: deposited credits cash out at their own rate and fee (the panel always sent this; the strict schema refused the whole save)
+          deposited: z.object({ creditsPerUsd: z.number().int().min(1).max(1_000_000).optional(), feePercent: z.number().min(0).max(50).optional() }).strict().optional(),
+        })
+        .strict()
+        .optional(),
+      /** 0227: SUB — paid subscriptions in money (lib/rewards/config.ts normalizeSubConfig clamps again). */
+      sub: z
+        .object({
+          purchasesEnabled: z.boolean().optional(),
+          withdrawalsEnabled: z.boolean().optional(),
+          purchaseFeePercent: z.number().min(0).max(50).optional(),
+          withdrawalFeePercent: z.number().min(0).max(50).optional(),
+          minPriceCents: z.number().int().min(1).max(100_000_000).optional(),
+          maxPriceCents: z.number().int().min(1).max(100_000_000).optional(),
+          minWithdrawalCents: z.number().int().min(1).max(100_000_000).optional(),
+          holdDays: z.number().int().min(0).max(90).optional(),
+          periodDays: z.number().int().min(1).max(366).optional(),
+          autoPayout: z.boolean().optional(),
+          requireQualification: z.boolean().optional(),
+          watermark: z.boolean().optional(),
         })
         .strict()
         .optional(),

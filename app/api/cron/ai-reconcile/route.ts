@@ -4,6 +4,8 @@ import { flushFundingAlerts } from "@/lib/admin/funding-alerts";
 import { reconcilePendingAdPayments } from "@/lib/ads-platform/payment-server";
 import { sweepAiJobs } from "@/lib/ai/recovery";
 import { awardClosedWeek } from "@/lib/ai/weekly-top";
+import { verifyProcessingPayouts } from "@/lib/rewards/paystack-payouts";
+import { sweepAutoWithdrawals } from "@/lib/sub/payout-account";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cronAuthorized } from "@/lib/cron/auth";
 
@@ -34,11 +36,15 @@ async function run(request: Request) {
   // 2026-10-09: ad payments whose provider webhook never arrived are confirmed every 10 minutes too
   const [ai, adPayments] = await Promise.all([sweepAiJobs(), reconcilePendingAdPayments(createAdminClient()).catch((e: unknown) => ({ error: String(e).slice(0, 160) }))]);
   // 0218: any payment alert a webhook did not send yet; and the weekly AI prizes once a week has closed
-  const [fundingAlerts, weeklyAwards] = await Promise.all([
+  const [fundingAlerts, weeklyAwards, payouts, autoWithdrawals] = await Promise.all([
     flushFundingAlerts().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
     awardClosedWeek(createAdminClient()).catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
+    // Paystack payouts still processing whose webhook never came
+    verifyProcessingPayouts().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
+    // SUB auto-withdrawal: money a hold released, or left after an earlier payout finished
+    sweepAutoWithdrawals().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
   ]);
-  return NextResponse.json({ ...ai, adPayments, fundingAlerts, weeklyAwards });
+  return NextResponse.json({ ...ai, adPayments, fundingAlerts, weeklyAwards, payouts, autoWithdrawals });
 }
 
 export const GET = run;

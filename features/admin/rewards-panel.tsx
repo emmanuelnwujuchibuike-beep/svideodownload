@@ -11,6 +11,8 @@ import type { RewardsAdminView } from "@/lib/rewards/admin";
 import { QUEST_EVENT_LABELS, QUEST_EVENTS, questId, type Quest, type QuestEvent } from "@/lib/rewards/quests";
 import { cn } from "@/lib/utils";
 
+import { SubAdmin } from "./sub-admin";
+
 /**
  * Admin → Frenz AI → Rewards (rewards brief §15, §19; 2026-10-07).
  *
@@ -32,7 +34,7 @@ export function RewardsPanel({ settings }: { settings: LandingSettings }) {
     Object.fromEntries(REWARD_EVENTS.map((e) => { const r = cfg.events[e]; return [e, { enabled: r.enabled, actor: String(r.actorCredits), referrer: String(r.referrerCredits), repeatable: r.referrerRepeatable, once: r.actorOncePerUser, minSeconds: String(r.minDurationSeconds ?? ""), includeFree: !!r.includeComplimentary }]; })) as Record<RewardEventType, RuleRow>,
   );
   const [q, setQ] = useState({ age: String(cfg.qualification.minAccountAgeDays), eng: String(cfg.qualification.minEngagements), window: String(cfg.attribution.windowDays), extra: (cfg.qualification.extraRequirements ?? []).join("\n") });
-  const [w, setW] = useState({ enabled: cfg.withdrawals.enabled, rate: String(cfg.withdrawals.creditsPerUsd), min: String(cfg.withdrawals.minCredits), max: String(cfg.withdrawals.maxCredits), perDay: String(cfg.withdrawals.maxRequestsPerDay), perMonth: String(cfg.withdrawals.maxCreditsPerMonth), review: String(cfg.withdrawals.manualReviewAboveCredits), depRate: String(cfg.withdrawals.deposited.creditsPerUsd), depFee: String(cfg.withdrawals.deposited.feePercent) });
+  const [w, setW] = useState({ enabled: cfg.withdrawals.enabled, rate: String(cfg.withdrawals.creditsPerUsd), min: String(cfg.withdrawals.minCredits), max: String(cfg.withdrawals.maxCredits), perDay: String(cfg.withdrawals.maxRequestsPerDay), perMonth: String(cfg.withdrawals.maxCreditsPerMonth), review: String(cfg.withdrawals.manualReviewAboveCredits), depRate: String(cfg.withdrawals.deposited.creditsPerUsd), depFee: String(cfg.withdrawals.deposited.feePercent), paystack: cfg.withdrawals.methods.includes("paystack"), manual: cfg.withdrawals.methods.includes("bank_transfer") });
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const n = (v: string, d: number) => (v.trim() === "" || !Number.isFinite(Number(v)) ? d : Math.max(0, Math.floor(Number(v))));
@@ -60,9 +62,9 @@ export function RewardsPanel({ settings }: { settings: LandingSettings }) {
           .filter((x) => x.title.trim())
           .map((x) => ({ id: x.id || questId(x.title), title: x.title.trim(), event: x.event, target: Math.max(1, n(x.target, 1)), credits: Math.max(0, n(x.credits, 0)), period: x.period, enabled: x.enabled })),
       },
-      withdrawals: { enabled: w.enabled, creditsPerUsd: Math.max(1, n(w.rate, 10)), minCredits: Math.max(1, n(w.min, 100)), maxCredits: Math.max(1, n(w.max, 10000)), maxRequestsPerDay: Math.max(1, n(w.perDay, 1)), maxCreditsPerMonth: Math.max(1, n(w.perMonth, 50000)), manualReviewAboveCredits: n(w.review, 0), methods: cfg.withdrawals.methods, deposited: { creditsPerUsd: Math.max(1, n(w.depRate, 10)), feePercent: Math.min(50, Math.max(0, Number(w.depFee) || 0)) } },
+      withdrawals: { enabled: w.enabled, creditsPerUsd: Math.max(1, n(w.rate, 10)), minCredits: Math.max(1, n(w.min, 100)), maxCredits: Math.max(1, n(w.max, 10000)), maxRequestsPerDay: Math.max(1, n(w.perDay, 1)), maxCreditsPerMonth: Math.max(1, n(w.perMonth, 50000)), manualReviewAboveCredits: n(w.review, 0), methods: [...(w.paystack ? ["paystack"] : []), ...(w.manual || !w.paystack ? ["bank_transfer"] : [])], deposited: { creditsPerUsd: Math.max(1, n(w.depRate, 10)), feePercent: Math.min(50, Math.max(0, Number(w.depFee) || 0)) } },
     }),
-    [cfg.events, cfg.withdrawals.methods, enabled, q, rules, w, questsOn, questCap, quests],
+    [cfg.events, enabled, q, rules, w, questsOn, questCap, quests],
   );
 
   const save = async () => {
@@ -183,6 +185,9 @@ export function RewardsPanel({ settings }: { settings: LandingSettings }) {
             {/* 0202 (owner, 2026-10-09): deposited credits cash out at their own rate, less their own fee */}
             <label className="text-xs text-muted-foreground">Deposited credits — credits per $1<input inputMode="numeric" value={w.depRate} onChange={(x) => setW({ ...w, depRate: x.target.value })} className={cn(input, "mt-1 block")} /></label>
             <label className="text-xs text-muted-foreground">Deposited credits — withdrawal fee (%)<input inputMode="decimal" value={w.depFee} onChange={(x) => setW({ ...w, depFee: x.target.value })} className={cn(input, "mt-1 block")} /></label>
+            {/* owner 2026-10-11: payouts through Paystack Transfers (Nigerian bank accounts, NGN at the live rate) */}
+            <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={w.paystack} onChange={(x) => setW({ ...w, paystack: x.target.checked })} /> Pay out through Paystack (members pick a bank; Paystack confirms the account name)</label>
+            <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={w.manual} onChange={(x) => setW({ ...w, manual: x.target.checked })} /> Also allow manual bank transfer</label>
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -192,6 +197,8 @@ export function RewardsPanel({ settings }: { settings: LandingSettings }) {
         </div>
       </section>
       <RewardsActivity minAge={cfg.qualification.minAccountAgeDays} minEngagements={cfg.qualification.minEngagements} />
+      {/* 0227: SUB — the rules, every purchase with its fee, creator balances, reversal and the audit log */}
+      <SubAdmin settings={settings} />
     </div>
   );
 }
@@ -218,6 +225,17 @@ function RewardsActivity({ minAge, minEngagements }: { minAge: number; minEngage
     const json = await res.json().catch(() => ({}));
     setNote(res.ok ? `Moved to ${status}.` : (json.error ?? "Failed."));
     if (res.ok) void load();
+  };
+  // owner 2026-10-11: pay through Paystack Transfers; the webhook marks it paid or returns the credits
+  const [paying, setPaying] = useState<string | null>(null);
+  const payPaystack = async (id: string) => {
+    if (!window.confirm("Send this withdrawal through Paystack now? The amount goes to the bank account Paystack confirmed.")) return;
+    setPaying(id);
+    const res = await fetch(`/api/admin/rewards/withdrawals/${id}/paystack`, { method: "POST" }).catch(() => null);
+    const json = (await res?.json().catch(() => ({}))) as { error?: string; status?: string };
+    setPaying(null);
+    setNote(res?.ok ? (json.status === "otp" ? "Sent to Paystack. It is waiting for the OTP in your Paystack dashboard." : "Sent through Paystack. It completes when Paystack confirms.") : (json.error ?? "Failed."));
+    if (res?.ok) void load();
   };
   // 0191: an application is decided here — approve sets the member's qualification, reject keeps their AI credits as they are
   const review = async (userId: string, approve: boolean) => {
@@ -332,13 +350,28 @@ function RewardsActivity({ minAge, minEngagements }: { minAge: number; minEngage
             <li key={q.id} className="px-3 py-2 text-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span>
-                  <strong>{q.user}</strong> · {formatCredits(q.credits)} → {formatCents(q.usdCents, "$")} · <span className="uppercase text-xs">{q.status}</span>
+                  <strong>{q.user}</strong> ·{" "}
+                  {q.source === "sub" ? (
+                    <>
+                      <span className="rounded bg-indigo-500/10 px-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300">SUB</span> {formatCents(q.grossCents ?? q.usdCents, "$")} − {formatCents(q.feeCents ?? 0, "$")} fee → {formatCents(q.usdCents, "$")}
+                    </>
+                  ) : (
+                    <>
+                      {formatCredits(q.credits)} → {formatCents(q.usdCents, "$")}
+                    </>
+                  )}{" "}
+                  · <span className="uppercase text-xs">{q.status}</span>
                 </span>
                 <span className="flex flex-wrap gap-1">
                   {q.status === "pending" ? <button type="button" onClick={() => void move(q.id, "reviewing")} className="rounded-lg border border-border px-2 py-1 text-xs">Review</button> : null}
                   {q.status === "pending" || q.status === "reviewing" ? <button type="button" onClick={() => void move(q.id, "approved")} className="rounded-lg border border-border px-2 py-1 text-xs">Approve</button> : null}
-                  {q.status === "approved" || q.status === "processing" ? <button type="button" onClick={() => void move(q.id, "completed")} className="rounded-lg border border-emerald-500/50 px-2 py-1 text-xs text-emerald-700">Mark paid</button> : null}
-                  <button type="button" onClick={() => void move(q.id, "rejected")} className="rounded-lg border border-rose-500/50 px-2 py-1 text-xs text-rose-600">Reject (return credits)</button>
+                  {q.method === "paystack" && ["pending", "reviewing", "approved"].includes(q.status) ? (
+                    <button type="button" disabled={paying === q.id} onClick={() => void payPaystack(q.id)} className="rounded-lg bg-emerald-600 px-2 py-1 text-xs font-semibold text-white transition active:scale-95 disabled:opacity-60">
+                      {paying === q.id ? "Sending…" : "Pay with Paystack"}
+                    </button>
+                  ) : null}
+                  {q.method !== "paystack" && (q.status === "approved" || q.status === "processing") ? <button type="button" onClick={() => void move(q.id, "completed")} className="rounded-lg border border-emerald-500/50 px-2 py-1 text-xs text-emerald-700">Mark paid</button> : null}
+                  <button type="button" onClick={() => void move(q.id, "rejected")} className="rounded-lg border border-rose-500/50 px-2 py-1 text-xs text-rose-600">{q.source === "sub" ? "Reject (return to SUB balance)" : "Reject (return credits)"}</button>
                 </span>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">

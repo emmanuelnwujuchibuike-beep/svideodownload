@@ -4,11 +4,13 @@ import { announceCharacterReplaceRecharge, creditVerifiedCharacterReplaceRecharg
 import { resolveCredit } from "@/lib/ai/character-replace/topup-fx";
 import { WALLET_UNIT } from "@/lib/ai/credits/units";
 import { getLandingSettings } from "@/lib/landing/settings";
-import { AD_CAMPAIGN_PURPOSE, AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, verifyPaystackSignature, type PaystackEventData } from "@/lib/paystack/paystack";
+import { AD_CAMPAIGN_PURPOSE, AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, SUB_PURPOSE, verifyPaystackSignature, type PaystackEventData } from "@/lib/paystack/paystack";
+import { confirmSubPayment, reverseSub } from "@/lib/sub/server";
 import { isAiPlanEvent, syncAiPlanEvent } from "@/lib/ai/credits/paystack";
 import { syncPaystackEvent } from "@/lib/paystack/sync";
 import { handlePaystackAdCharge, handlePaystackAdReversal } from "@/lib/ads-platform/payment-server";
 import { claimProviderEvent, markProviderEvent } from "@/lib/payments/events";
+import { settlePaystackTransfer } from "@/lib/rewards/paystack-payouts";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -21,6 +23,13 @@ const HANDLED = new Set([
   "subscription.not_renew",
   "invoice.update",
   "invoice.payment_failed",
+  // owner 2026-10-11: withdrawals paid out through Paystack Transfers (lib/rewards/paystack-payouts.ts)
+  "transfer.success",
+  "transfer.failed",
+  "transfer.reversed",
+  // 0227: SUB refunds and chargebacks take the access back and claw the earnings back
+  "refund.processed",
+  "charge.dispute.create",
 ]);
 
 /**
@@ -40,6 +49,43 @@ export async function POST(request: Request) {
     event = JSON.parse(payload);
   } catch {
     return NextResponse.json({ error: "Bad payload" }, { status: 400 });
+  }
+
+  /*
+    ── A WITHDRAWAL PAYOUT (owner 2026-10-11) — before everything else ─────────
+    Our transfers carry the reference frenz_wd_<withdrawal>. Settling is
+    idempotent (a finished withdrawal is left alone); a failure of ours is a 500
+    so Paystack redelivers, and the reconcile cron verifies anything still open.
+  */
+  if (event.event === "transfer.success" || event.event === "transfer.failed" || event.event === "transfer.reversed") {
+    try {
+      await settlePaystackTransfer(event.event, event.data?.reference ?? undefined);
+      return NextResponse.json({ received: true });
+    } catch {
+      return NextResponse.json({ error: "Retry" }, { status: 500 });
+    }
+  }
+
+  /*
+    ── A SUB PAYMENT (0227) — its own purpose, so it can never credit a wallet ───
+    confirmSubPayment re-verifies the reference with Paystack and settles in the
+    database (idempotent). A refund or a dispute on a SUB charge reverses it.
+  */
+  if (event.event === "charge.success" && event.data?.metadata?.purpose === SUB_PURPOSE) {
+    const ref = event.data.reference ?? "";
+    const key = `charge.success:${ref}`;
+    if ((await claimProviderEvent("paystack", key, event.event, ref)) === "done") return NextResponse.json({ received: true, duplicate: true });
+    const out = await confirmSubPayment(ref);
+    if (out.status === "pending") return NextResponse.json({ error: "Retry" }, { status: 500 });
+    await markProviderEvent("paystack", key, out.status);
+    return NextResponse.json({ received: true });
+  }
+  if (event.event === "refund.processed" || event.event === "charge.dispute.create") {
+    const ref = event.data?.transaction_reference ?? event.data?.transaction?.reference ?? event.data?.reference ?? "";
+    if (ref.startsWith("frenz_sub_")) {
+      const out = await reverseSub(ref, event.event === "refund.processed" ? "refunded" : "disputed", null, `Paystack ${event.event}`);
+      return out.ok ? NextResponse.json({ received: true }) : NextResponse.json({ received: true, note: out.error });
+    }
   }
 
   /*

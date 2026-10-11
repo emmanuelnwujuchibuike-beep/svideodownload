@@ -1,0 +1,80 @@
+import "server-only";
+
+import { usd } from "@/lib/creator/membership/engine";
+import { emailMember } from "@/lib/email/member-email";
+import { sendSmartPush } from "@/lib/notifications/smart-delivery";
+import { categoryForType } from "@/lib/social/notifications";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+/**
+ * "Someone subscribed" — push and email to the creator (owner, 2026-10-11: "let
+ * users get push and email notification when someone subscribe to their content
+ * or profile").
+ *
+ * ── Once ────────────────────────────────────────────────────────────────────
+ * A paid subscription is settled by the webhook AND the return page, in either
+ * order. Only the call that actually settled it (the SQL answers the other with
+ * `duplicate`) calls this, so the creator hears about one payment once. The
+ * in-app row is written by `settle_sub_purchase` in the same transaction as the
+ * money, so here the push is sent "already-recorded".
+ *
+ * ── Never on the money path ─────────────────────────────────────────────────
+ * Callers run this in `after()`. A push or an email provider that fails only
+ * logs; it can never undo a settled payment or make Paystack redeliver.
+ *
+ * Push follows the creator's notification settings (category "social"). The
+ * email names the subscriber by public display name only.
+ */
+
+type Row = Record<string, unknown>;
+
+async function who(id: string): Promise<{ name: string; handle: string | null }> {
+  const { data } = await createAdminClient().from("profiles").select("display_name, handle").eq("id", id).maybeSingle();
+  const r = data as Row | null;
+  const handle = (r?.handle as string | null) ?? null;
+  return { name: ((r?.display_name as string | null) || (handle ? `@${handle}` : "Someone")).slice(0, 60), handle };
+}
+
+/** A paid SUB subscription was just settled. */
+export async function notifySubscribed(reference: string): Promise<void> {
+  try {
+    const { data } = await createAdminClient().from("sub_purchases").select("creator_id, subscriber_id, price_cents, period_days").eq("reference", reference).maybeSingle();
+    const p = data as Row | null;
+    if (!p) return;
+    const creatorId = p.creator_id as string;
+    const sub = await who(p.subscriber_id as string);
+    const earned = usd(Number(p.price_cents ?? 0));
+    await Promise.allSettled([
+      sendSmartPush(creatorId, { title: "New subscriber", body: `${sub.name} subscribed to your SUB POSTS. You earned ${earned}.`, url: "/members", tag: `sub-${reference}` }, "high", categoryForType("member_joined"), "already-recorded"),
+      emailMember(creatorId, {
+        subject: `${sub.name} subscribed to your content`,
+        heading: "You have a new subscriber",
+        intro: `${sub.name} just subscribed to your SUB POSTS for ${Number(p.period_days ?? 30)} days.`,
+        body: `You earned ${earned}. It's in your SUB balance now, and if auto-withdrawal is on it is on its way to your saved bank account.`,
+        ctaLabel: "See your members",
+        ctaPath: "/members",
+      }),
+    ]);
+  } catch (e) {
+    console.error("[sub/notify] subscribed failed", { reference, error: String(e).slice(0, 160) });
+  }
+}
+
+/** Someone joined the creator's FREE community (the in-app row is written by joinFree). */
+export async function notifyJoinedFree(creatorId: string, memberId: string): Promise<void> {
+  try {
+    const m = await who(memberId);
+    await Promise.allSettled([
+      sendSmartPush(creatorId, { title: "New member", body: `${m.name} joined your community.`, url: "/members", tag: `join-${memberId}` }, "medium", categoryForType("member_joined"), "already-recorded"),
+      emailMember(creatorId, {
+        subject: `${m.name} joined your community`,
+        heading: "You have a new member",
+        intro: `${m.name} joined your free community on Frenz.`,
+        ctaLabel: "See your members",
+        ctaPath: "/members",
+      }),
+    ]);
+  } catch (e) {
+    console.error("[sub/notify] joined failed", { creatorId, error: String(e).slice(0, 160) });
+  }
+}

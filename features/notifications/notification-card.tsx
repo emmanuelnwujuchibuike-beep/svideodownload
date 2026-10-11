@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Check, Loader2, MoreHorizontal, Trash2, UserPlus, UserRound, X } from "lucide-react";
+import { Check, Loader2, MoreHorizontal, Trash2, UserPlus, UserRound, UserX, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { memo, useState } from "react";
@@ -91,7 +91,7 @@ function NotificationCardImpl({
   // accept request or follow back") — a friend_request used to only LINK to
   // /friends, and a follow notification offered no way to follow back at
   // all. Single-actor cards act right here; grouped cards still link out.
-  const [actionState, setActionState] = useState<"idle" | "busy" | "accepted" | "declined" | "followed">("idle");
+  const [actionState, setActionState] = useState<"idle" | "busy" | "accepted" | "declined" | "followed" | "blocked">("idle");
   const canActInline = group.totalActors === 1 && !!actor;
   const respondToRequest = async (e: React.MouseEvent, action: "accept" | "decline") => {
     e.preventDefault();
@@ -128,6 +128,29 @@ function NotificationCardImpl({
     } catch {
       setActionState("idle");
     }
+  };
+
+  /*
+    A screenshot of a SUB post (0227, owner 2026-10-11: "then they decide to block
+    or ignore"). Block answers on the tap and is put back if the server refuses;
+    a block also ends the viewer's SUB access (lib/sub/server.ts hasActiveSub).
+    Ignore simply clears the alert.
+  */
+  const blockActor = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!actor || actionState === "blocked") return;
+    haptic("selection");
+    setActionState("blocked");
+    if (!group.read) onMarkRead(group);
+    const res = await fetch(`/api/block/${actor.id}`, { method: "POST" }).catch(() => null);
+    if (!res?.ok) setActionState("idle");
+  };
+  const ignore = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    haptic("selection");
+    onDelete(group);
   };
 
   const body = (
@@ -221,6 +244,25 @@ function NotificationCardImpl({
                   className="flex items-center gap-1.5 rounded-full border border-border/70 px-4 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-50"
                 >
                   <X className="h-3.5 w-3.5" /> Decline
+                </button>
+              </>
+            )}
+          </div>
+        ) : null}
+
+        {group.type === "sub_capture" && canActInline ? (
+          <div className="mt-2 flex items-center gap-2">
+            {actionState === "blocked" ? (
+              <span className="flex items-center gap-1 text-xs font-semibold text-rose-600">
+                <UserX className="h-3.5 w-3.5" /> Blocked · their SUB access has ended
+              </span>
+            ) : (
+              <>
+                <button type="button" onClick={blockActor} className="flex items-center gap-1.5 rounded-full bg-rose-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:opacity-95 active:scale-[0.97]">
+                  <UserX className="h-3.5 w-3.5" /> Block
+                </button>
+                <button type="button" onClick={ignore} className="flex items-center gap-1.5 rounded-full border border-border/70 px-4 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-secondary hover:text-foreground active:scale-[0.97]">
+                  <X className="h-3.5 w-3.5" /> Ignore
                 </button>
               </>
             )}

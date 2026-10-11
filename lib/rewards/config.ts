@@ -119,6 +119,15 @@ export interface RewardsConfig {
      */
     deposited: { creditsPerUsd: number; feePercent: number };
   };
+  /**
+   * 0227 (owner brief 2026-10-11): SUB — paid subscriptions in money, never AI credits.
+   * The subscriber pays the creator's price plus `purchaseFeePercent`; a SUB
+   * withdrawal pays out less `withdrawalFeePercent`. Owner: SUB money from a
+   * verified Paystack payment is withdrawable at once (`holdDays` 0), paid straight
+   * through Paystack (`autoPayout`), without the reward qualification
+   * (`requireQualification` false) — each one an admin switch.
+   */
+  sub: SubConfig;
   version: number;
   updatedAt: string | null;
 }
@@ -126,6 +135,51 @@ export interface RewardsConfig {
 const OFF: RewardRule = { enabled: false, actorCredits: 0, referrerCredits: 0, referrerRepeatable: false, actorOncePerUser: false };
 
 /** 🔴 Mirrors `reward_default_rule` in supabase/migrations/0187_rewards_referrals.sql. */
+export interface SubConfig {
+  /** new subscriptions can be bought */
+  purchasesEnabled: boolean;
+  /** SUB money can be withdrawn */
+  withdrawalsEnabled: boolean;
+  purchaseFeePercent: number;
+  withdrawalFeePercent: number;
+  minPriceCents: number;
+  maxPriceCents: number;
+  minWithdrawalCents: number;
+  /** days a verified payment stays pending before it can be withdrawn (0 = at once) */
+  holdDays: number;
+  /** days of access one payment buys */
+  periodDays: number;
+  /** pay SUB withdrawals through Paystack the moment they are requested */
+  autoPayout: boolean;
+  /** require the admin-approved reward qualification for SUB withdrawals */
+  requireQualification: boolean;
+  /** a light watermark (the viewer's @handle and Frenz) over subscriber-only media; never alters the file */
+  watermark: boolean;
+}
+
+export const SUB_DEFAULTS: SubConfig = { purchasesEnabled: true, withdrawalsEnabled: true, purchaseFeePercent: 10, withdrawalFeePercent: 10, minPriceCents: 100, maxPriceCents: 100_000, minWithdrawalCents: 500, holdDays: 0, periodDays: 30, autoPayout: true, requireQualification: false, watermark: true };
+
+export function normalizeSubConfig(raw: unknown): SubConfig {
+  const d = SUB_DEFAULTS;
+  const r = isRecord(raw) ? raw : {};
+  const pct = (v: unknown, dv: number) => (typeof v === "number" && Number.isFinite(v) ? Math.min(50, Math.max(0, Math.round(v * 100) / 100)) : dv);
+  const minPriceCents = int(r.minPriceCents, d.minPriceCents, 1, 100_000_000);
+  return {
+    purchasesEnabled: bool(r.purchasesEnabled, d.purchasesEnabled),
+    withdrawalsEnabled: bool(r.withdrawalsEnabled, d.withdrawalsEnabled),
+    purchaseFeePercent: pct(r.purchaseFeePercent, d.purchaseFeePercent),
+    withdrawalFeePercent: pct(r.withdrawalFeePercent, d.withdrawalFeePercent),
+    minPriceCents,
+    maxPriceCents: Math.max(minPriceCents, int(r.maxPriceCents, d.maxPriceCents, 1, 100_000_000)),
+    minWithdrawalCents: int(r.minWithdrawalCents, d.minWithdrawalCents, 1, 100_000_000),
+    holdDays: int(r.holdDays, d.holdDays, 0, 90),
+    periodDays: int(r.periodDays, d.periodDays, 1, 366),
+    autoPayout: bool(r.autoPayout, d.autoPayout),
+    requireQualification: bool(r.requireQualification, d.requireQualification),
+    watermark: bool(r.watermark, d.watermark),
+  };
+}
+
 export const REWARDS_DEFAULTS: RewardsConfig = {
   enabled: true,
   events: {
@@ -136,7 +190,8 @@ export const REWARDS_DEFAULTS: RewardsConfig = {
   qualification: { minAccountAgeDays: 30, minEngagements: 100, extraRequirements: [] },
   attribution: { windowDays: 7 },
   quests: QUESTS_DEFAULTS,
-  withdrawals: { enabled: false, creditsPerUsd: 10, minCredits: 100, maxCredits: 10_000, maxRequestsPerDay: 1, maxCreditsPerMonth: 50_000, manualReviewAboveCredits: 0, methods: ["bank_transfer"], deposited: { creditsPerUsd: 10, feePercent: 10 } },
+  withdrawals: { enabled: false, creditsPerUsd: 10, minCredits: 100, maxCredits: 10_000, maxRequestsPerDay: 1, maxCreditsPerMonth: 50_000, manualReviewAboveCredits: 0, methods: ["paystack", "bank_transfer"], deposited: { creditsPerUsd: 10, feePercent: 10 } },
+  sub: SUB_DEFAULTS,
   version: 1,
   updatedAt: null,
 };
@@ -202,6 +257,7 @@ export function normalizeRewardsConfig(raw: unknown): RewardsConfig {
         return { creditsPerUsd: int(dep.creditsPerUsd, d.withdrawals.deposited.creditsPerUsd, 1, 1_000_000), feePercent: Math.min(50, Math.max(0, Math.round(fee * 100) / 100)) };
       })(),
     },
+    sub: normalizeSubConfig(r.sub),
     version: int(r.version, d.version, 1, 1_000_000_000),
     updatedAt: typeof r.updatedAt === "string" ? r.updatedAt : null,
   };

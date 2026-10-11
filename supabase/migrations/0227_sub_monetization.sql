@@ -33,6 +33,29 @@
 --
 -- Idempotent. No semicolon inside any quoted string. Every dollar-quoted block is at the end.
 
+-- ── an earlier draft of 0227 already ran on production ─────────────────────
+-- The credit-billed memberships draft (superseded the same day by SUB) was applied
+-- before this file replaced it, so its tables exist with the old shape and
+-- `create table if not exists` below would skip them. Probed live 2026-10-11: every
+-- one of them has 0 rows. This brings them to this migration's shape. On a database
+-- that never saw the draft, every statement here is a no-op.
+--   · its two money functions and its payments table belong to the abandoned design
+--   · its billing CHECK allowed only free/month/season/year/lifetime and would have
+--     refused every SUB row ('sub') while this migration still reported success
+--   · the tier, credit price and auto-renew columns no longer exist in the design
+-- (Its four extra AI-wallet ledger kinds are left allowed: unused, and harmless.)
+drop function if exists public.charge_membership(uuid, uuid, uuid, text, integer, integer);
+drop function if exists public.reverse_membership_payment(uuid, uuid, text);
+drop table if exists public.membership_payments;
+alter table if exists public.creator_memberships drop constraint if exists creator_memberships_billing_chk;
+alter table if exists public.creator_memberships drop constraint if exists creator_memberships_role_chk;
+alter table if exists public.creator_memberships drop constraint if exists creator_memberships_status_chk;
+drop index if exists public.creator_memberships_due_idx;
+alter table if exists public.creator_memberships drop column if exists tier_id;
+alter table if exists public.creator_memberships drop column if exists price_credits;
+alter table if exists public.creator_memberships drop column if exists auto_renew;
+alter table if exists public.creator_membership_settings drop constraint if exists creator_membership_settings_welcome_chk;
+
 -- ── settings and memberships ────────────────────────────────────────────────
 create table if not exists public.creator_membership_settings (
   creator_id         uuid primary key references auth.users (id) on delete cascade,
@@ -44,6 +67,11 @@ create table if not exists public.creator_membership_settings (
   setup_completed_at timestamptz,
   updated_at         timestamptz not null default now()
 );
+-- the draft's settings table had none of the SUB columns
+alter table public.creator_membership_settings add column if not exists sub_price_cents integer;
+alter table public.creator_membership_settings add column if not exists sub_active boolean not null default false;
+alter table public.creator_membership_settings add column if not exists setup_step smallint not null default 0;
+alter table public.creator_membership_settings add column if not exists setup_completed_at timestamptz;
 alter table public.creator_membership_settings enable row level security;
 drop policy if exists "creator membership settings owner" on public.creator_membership_settings;
 create policy "creator membership settings owner" on public.creator_membership_settings
@@ -64,6 +92,8 @@ create table if not exists public.creator_memberships (
   ended_at     timestamptz,
   constraint creator_memberships_not_self check (creator_id <> member_id)
 );
+-- the draft priced memberships in credits
+alter table public.creator_memberships add column if not exists price_cents integer not null default 0;
 create unique index if not exists creator_memberships_pair_uidx on public.creator_memberships (creator_id, member_id);
 create index if not exists creator_memberships_member_idx on public.creator_memberships (member_id);
 -- the access check: is this viewer an active, paid-up subscriber of this creator?

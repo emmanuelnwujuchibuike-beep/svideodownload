@@ -142,6 +142,23 @@ export async function loadSummary(): Promise<Summary | null> {
   return { total: n("total"), live: n("live"), awaiting_payment: n("awaiting_payment"), validating: n("validating"), paused: n("paused"), expired: n("expired"), impressions: n("impressions"), clicks: n("clicks"), reward_completes: n("reward_completes"), video_completes: n("video_completes"), conversions: n("conversions"), boosted: n("boosted"), outbounds: n("outbounds"), spend_usd_cents: n("spend_usd_cents") };
 }
 
+/**
+ * Owner, 2026-10-11: for an ADMIN the two tabs count different things, on purpose —
+ * Overview (ad_my_summary) counts the campaigns on their own account; Analytics
+ * reads ad_campaign_daily_stats under its "own or admin" policy, so it counts every
+ * advertiser's. Kept apart and LABELLED. This asks the same is_admin() that policy
+ * uses, so the label can't disagree with the data. One call per page life; on any
+ * error the answer is false (no "All advertisers" label).
+ */
+let seesAll: Promise<boolean> | null = null;
+export function viewerSeesAllCampaigns(): Promise<boolean> {
+  seesAll ??= getClient()
+    .then((sb) => sb.rpc("is_admin"))
+    .then(({ data, error }) => !error && data === true)
+    .catch(() => false);
+  return seesAll;
+}
+
 export type SortKey = "newest" | "oldest" | "ending" | "name";
 export const PAGE_SIZE = 10;
 

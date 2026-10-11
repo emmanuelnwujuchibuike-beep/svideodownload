@@ -30,6 +30,7 @@ import {
   statusLabel,
   totalsOf,
   usd,
+  viewerSeesAllCampaigns,
   type CampaignRow,
   type PaymentRow,
   type SortKey,
@@ -265,7 +266,8 @@ function Overview({ onOpen, onTab }: { onOpen: (id: string) => void; onTab: (t: 
   return (
     <div className="space-y-6">
       <section aria-labelledby="ov-perf">
-        <SectionTitle id="ov-perf">Performance · all time</SectionTitle>
+        <SectionTitle id="ov-perf">Your campaigns · all time</SectionTitle>
+        <ScopeNote overview />
         <KpiGrid className="mt-1.5 grid-cols-2 sm:grid-cols-3">
           <Stat emphasis label="Views" value={num(s.impressions)} hint="Seen on screen for at least a second" />
           <Stat emphasis label="Clicks" value={num(s.clicks)} />
@@ -498,6 +500,25 @@ function Campaigns({ onOpen }: { onOpen: (id: string) => void }) {
   );
 }
 
+/**
+ * Which campaigns these figures count — shown to admins only, because only for an
+ * admin do the two tabs differ (owner, 2026-10-11: "keep the separation, and label
+ * them so I know the difference"). Overview: your own account. Analytics: every
+ * advertiser's. Everyone else sees only their own on both, so nothing is shown.
+ */
+function ScopeNote({ overview = false, rangeLabel }: { overview?: boolean; rangeLabel?: string }) {
+  const admin = useDash("viewer-sees-all", viewerSeesAllCampaigns).data === true;
+  if (!admin) return null;
+  return overview ? (
+    <p className="mt-0.5 text-[12px] text-muted-foreground">Only campaigns on your own account. The Analytics tab counts every advertiser&apos;s.</p>
+  ) : (
+    <div className="rounded-xl border border-indigo-500/25 bg-indigo-500/[0.06] px-3 py-2">
+      <p className="text-[12.5px] font-semibold text-indigo-800 dark:text-indigo-200">All advertisers{rangeLabel ? ` · ${rangeLabel}` : ""}</p>
+      <p className="text-[12px] text-muted-foreground">You&apos;re an admin, so Analytics counts every advertiser&apos;s campaigns. Overview counts only yours.</p>
+    </div>
+  );
+}
+
 /* ─────────────────────────────── analytics ─────────────────────────────── */
 
 const RANGES: { id: string; label: string; days: number | null }[] = [
@@ -560,6 +581,7 @@ function Analytics({ onOpen }: { onOpen: (id: string) => void }) {
       {!rows || !totals ? <Skeleton /> : (
         <>
           <TestModeNote />
+          <ScopeNote rangeLabel={rangeLabel} />
           <KpiGrid className="grid-cols-2 sm:grid-cols-3">
             <Stat emphasis label="Views" value={num(totals.views)} />
             <Stat emphasis label="Clicks" value={num(totals.clicks)} />

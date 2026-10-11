@@ -88,6 +88,10 @@ export const NOTIFICATIONS = [
   { id: "friend_request", label: "Friend request", category: "social" },
   { id: "friend_accepted", label: "Friend request accepted", category: "social" },
   { id: "friend_reminder", label: "Friend reminder", category: "social" },
+  // Feature 19 Part 12 (0226): the Professional Network. In-app only, never a push.
+  { id: "pro_request", label: "Professional connection request", category: "social" },
+  { id: "pro_accepted", label: "Professional connection confirmed", category: "social" },
+  { id: "pro_recommendation", label: "Wrote you a recommendation", category: "social" },
   { id: "message", label: "New message", category: "social", group: "conversation", countsToBadge: false },
   { id: "message_reaction", label: "Reacted to your message", category: "social", group: "conversation", countsToBadge: false },
   { id: "message_mention", label: "Mentioned you in chat", category: "social", group: "conversation" },

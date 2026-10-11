@@ -588,8 +588,97 @@ Part 9 status audience. Both are enforced in code on a real membership row.
 
 ---
 
+## Part 11
+
+Skipped by the owner (2026-10-11).
+
+---
+
+## Part 12 — Professional Network™, Career Timeline™ & Professional Reputation™
+
+| Layer | File |
+|---|---|
+| Roles and their inverses, open-to, recommendations, opportunities, Career Timeline, trust checklist, Network Assistant, relationship history (pure) | `lib/social/professional/engine.ts` |
+| Reads (dashboard, public page, discovery, opportunities, export) and every write | `lib/social/professional/server.ts` |
+| API | `POST /api/network` (one route, one op per write), `GET /api/network/export` |
+| UI | `/network` (dashboard), `/network/discover`, `/network/opportunities`, `/u/<handle>/network` (public). Entry: Friends hub card, Account menu |
+| Schema | `0226` (`profile_details.open_to / industry`, `pro_connections`, `pro_recommendations`, `skill_endorsements`, `pro_opportunities`, three in-app notification types) |
+| Tests | `lib/social/professional/engine.test.ts` (12) + 0226 PGlite (19 checks, run twice, 2 mutants that fail) |
+
+**Reused, not rebuilt.** Headline, skills, languages, country, availability and
+résumé (`profile_details`, 0107). Experience, education, certifications,
+awards, publications and projects (`profile_credentials`, 0107) are the source
+of the **Career Timeline**, which stores nothing of its own. The **Business
+Card** with its QR already lives at `/u/<handle>/card`. Private words like
+"Colleague" or "Mentor" stay in `relationship_labels`.
+
+**What is new: relationships both people confirm.** A private label is one
+person's note. "Ada was my manager at Acme" says something about two people,
+so it exists only when both agree: you name what they were to you and what you
+were to them (22 roles, each with the inverses that make sense, a symmetry test
+keeps the table honest), they confirm or say "Not right". One open request or
+connection per pair (a database index), thirty new requests a day.
+
+**Recommendations are moderated by the person they are about.** Recommendation,
+testimonial, client review, business reference or mentor review: plain text,
+20 to 1,500 characters, at most one link. It is shown on their page only after
+they approve it, they can keep it private or delete it, and an edit goes back
+for approval. Only friends or confirmed connections can write one or endorse a
+skill, and only skills the person lists.
+
+**Professional Reputation is a private checklist, never a score.** Verified
+identity, a headline and skills, history, three confirmed connections, an
+approved recommendation, endorsements from three people, ninety days on Frenz.
+Each says how to meet it. Nobody else sees it, and nothing ranks anyone.
+
+**The AI Network Assistant explains every suggestion**, in words, from public
+profile facts and confirmed relationships only: "You were both at Acme",
+"Worked with Kemi", "Available for work, with Figma", "Open to mentoring".
+People who opted out of discovery, are blocked, suspended, hidden, already
+connected or asked are never suggested. Rules, not a model: nothing to pay for
+per view, and nothing to explain away.
+
+**Respectful by default.** Notifications for a request, a confirmation and a
+recommendation are in-app only, never a push. Endorsements notify nobody.
+Discovery shows only people who allow it, and nobody is told you searched.
+Someone's connection list follows their friend-list privacy setting, and their
+career sections follow each section's own audience on their profile.
+
+**Instant on the tap, cached on the way back** (owner, 2026-10-11). Every toggle
+and button draws its result at once and puts itself back if the server says no.
+Discover and Opportunities are GET forms: they work before hydration and every
+search is a URL the router cache keeps. Edits survive a back-swipe through
+`features/ui/use-sticky-state.ts`.
+
+**Gap Ledger**
+
+| Brief item | State |
+|---|---|
+| Business connection types (all 19 + custom), both sides named and confirmed | **live** |
+| Network dashboard (connections, colleagues, mentors, clients, recommendations, endorsed skills) | **live** |
+| Business Cards with QR, profile link, contact, résumé, website | **live** (Feature 18 Part 18, linked from here) |
+| Career Timeline (experience, education, certifications, awards, publications, projects, connections, recommendations), permission-controlled | **live** (public view obeys each profile section's audience) |
+| Recommendations, testimonials, client reviews, references, mentor reviews, moderated | **live** (subject approves) |
+| Skill endorsements | **live** |
+| Collaboration status (work, hiring, freelance, partnerships, investors, mentoring, looking for a mentor, speaking) | **live** |
+| Professional discovery and filters (role, skill, open-to, country, language, industry, verified) | **live** |
+| AI Network Assistant, explainable | **live** (rules) |
+| Professional Reputation, transparent | **live** (private checklist) |
+| Hiring: open positions, internships, freelance, volunteer, partnership, research, creator roles | **live** (post, search, message the poster). No applicant tracking |
+| Business relationship history per connection | **live** (requested, connected, recommendations) |
+| Network export (contacts, recommendations both ways, endorsements, credentials, opportunities) | **live** (JSON) |
+| Mentorship requests | **live** as a mentor/mentee connection with a note. Office hours, sessions, progress tracking: planned (no scheduling product exists) |
+| Professional, business, creator, developer and research identities managed separately | partly — profile types (personal, creator, business, professional, student) exist. One account holds one type |
+| Verified organizations, enterprise departments, teams, directories, roles | planned — there is no organisation entity to verify or administer. A design of its own |
+| Project collaboration: repositories, documents, tasks, milestones, meetings, contracts, invoices | planned — none of these products exist |
+| Investments, conferences, contracts in the relationship history | planned — no such records exist to read |
+| NFC cards | planned (the brief marks it future) |
+| Filters by education and certification | planned — credentials are free text without an index |
+
+---
+
 ## Migrations to run (in order)
 
-`0214`, `0215`, `0216`, `0217`, `0218`, `0219` (×10 dashboard switch stands for new campaigns), `0220` (Contact Discovery: run after 0217, whose follow-source constraint it widens), `0221` (People You May Know feedback), `0222` (Friend Profiles: bucket list, capsules for friends, hidden moments), `0223` (Relationship Intelligence: archive, reconnect controls, activity counts), `0224` (Presence: status details, focus, automations, private history), `0225` (Friend Lists: nesting, archive, tags, rules). **All of 0214–0225 were applied and probed live on 2026-10-11.** Each is idempotent and PGlite-tested (run twice,
+`0214`, `0215`, `0216`, `0217`, `0218`, `0219` (×10 dashboard switch stands for new campaigns), `0220` (Contact Discovery: run after 0217, whose follow-source constraint it widens), `0221` (People You May Know feedback), `0222` (Friend Profiles: bucket list, capsules for friends, hidden moments), `0223` (Relationship Intelligence: archive, reconnect controls, activity counts), `0224` (Presence: status details, focus, automations, private history), `0225` (Friend Lists: nesting, archive, tags, rules). **All of 0214–0225 were applied and probed live on 2026-10-11.** Then `0226` (Professional Network: open-to and industry, confirmed connections, recommendations, endorsements, opportunities, three in-app notification types). Each is idempotent and PGlite-tested (run twice,
 plus a mutant that must fail). The code works before and after each: every new
 read falls back to today's behaviour when its column or table is missing.

@@ -23,6 +23,7 @@ export const GUEST_LOGIN_PREFIXES = [
   "/downloads",
   "/friends",
   "/home",
+  "/network", // Feature 19 Part 12: the professional dashboard, discovery and opportunities
   "/notifications",
   "/rewards",
   "/saved",

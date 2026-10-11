@@ -43,6 +43,8 @@ export interface OwnPresence {
   lastSeen: "everyone" | "friends" | "nobody";
   /** false until 0224 has run: the page says so instead of failing to save */
   ready: boolean;
+  /** when this payload was built: a cached replay keeps the same value (features/ui/use-sticky-state.ts) */
+  loadedAt: number;
 }
 
 const BLANK_ROW: PresenceRow = { status: "available", customText: null, customUntil: null, focusMode: null, focusUntil: null, autoReply: null, openTo: [], audience: "everyone" };
@@ -77,6 +79,7 @@ export async function getOwnPresence(userId: string, now = new Date()): Promise<
     circles: circles.error ? [] : ((circles.data ?? []) as { id: string; name: string }[]),
     lastSeen: ls === "friends" || ls === "nobody" ? ls : "everyone",
     ready,
+    loadedAt: Date.now(),
   };
 }
 

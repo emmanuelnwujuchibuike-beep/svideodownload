@@ -310,6 +310,10 @@ export const OWNER_COLUMN: Record<string, string> = {
   relationship_prefs: "owner_id", // 0223: friends you archived and reconnect nudges you snoozed
   relationship_tags: "owner_id", // 0225: private tags you put on people
   circle_rules: "owner_id", // 0225: your list automation rules
+  pro_connections: "requester_id", // 0226: professional connections you asked for (the /network export has both sides)
+  pro_recommendations: "author_id", // 0226: recommendations you wrote (the /network export also has the ones about you)
+  skill_endorsements: "endorser_id", // 0226: skills you endorsed
+  pro_opportunities: "owner_id", // 0226: opportunities you posted
   social_circles: "owner_id",
   circle_members: "owner_id",
   trusted_contacts: "owner_id",

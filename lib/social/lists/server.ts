@@ -50,6 +50,8 @@ export interface RelationshipDirectory {
   /** true when the network is larger than the directory shows */
   capped: boolean;
   ready: { nesting: boolean; tags: boolean; rules: boolean };
+  /** when this payload was built: a cached replay keeps the same value (features/ui/use-sticky-state.ts) */
+  loadedAt: number;
 }
 
 async function loadLists(db: Db, userId: string): Promise<{ lists: ListNode[]; nesting: boolean }> {
@@ -190,6 +192,7 @@ export async function relationshipDirectory(userId: string): Promise<Relationshi
     addedAt,
     capped,
     ready: { nesting: listsR.nesting, tags: !tagsR.error, rules: !rulesR.error },
+    loadedAt: Date.now(),
   };
 }
 

@@ -3,6 +3,7 @@ import {
   AtSign,
   Bell,
   Bookmark,
+  Briefcase,
   CheckCircle2,
   CreditCard,
   Crown,
@@ -38,6 +39,9 @@ const ICONS: Partial<Record<NotificationType, LucideIcon>> = {
   friend_request: UserPlus,
   friend_accepted: PartyPopper,
   friend_reminder: MessageCircle,
+  pro_request: Briefcase,
+  pro_accepted: Briefcase,
+  pro_recommendation: Quote,
   streak_reminder: Flame,
   streak_milestone: Flame,
   streak_lost: Flame,
@@ -136,6 +140,12 @@ export function verbFor(type: NotificationType): string {
       return "accepted your friend request 🎉";
     case "friend_reminder":
       return "is ready to chat — say hi 👋";
+    case "pro_request":
+      return "wants to confirm you worked together";
+    case "pro_accepted":
+      return "confirmed your professional connection";
+    case "pro_recommendation":
+      return "wrote you a recommendation to review";
     case "message":
       return "sent you a message";
     case "message_reaction":

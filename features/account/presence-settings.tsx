@@ -23,6 +23,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { myOnlineDevices, usePresence } from "@/features/friends/use-presence";
+import { useStickyState } from "@/features/ui/use-sticky-state";
 import { haptic } from "@/lib/motion/haptics";
 import type { PresenceStatus } from "@/lib/social/presence-status";
 import { setMyBroadcastLocal, setMyPresenceStatusLocal } from "@/lib/social/presence-status-client";
@@ -109,9 +110,10 @@ async function patchPresence(body: Record<string, unknown>): Promise<string | nu
 }
 
 export function PresenceSettings({ initial, userId }: { initial: OwnPresence; userId: string }) {
-  const [row, setRow] = useState(initial.row);
-  const [schedules, setSchedules] = useState<PresenceSchedule[]>(initial.schedules);
-  const [lastSeen, setLastSeen] = useState(initial.lastSeen);
+  // sticky: a back-swipe replays the cached payload, and the member's changes must survive it
+  const [row, setRow] = useStickyState("pr-row", initial.loadedAt, initial.row);
+  const [schedules, setSchedules] = useStickyState<PresenceSchedule[]>("pr-schedules", initial.loadedAt, initial.schedules);
+  const [lastSeen, setLastSeen] = useStickyState("pr-lastseen", initial.loadedAt, initial.lastSeen);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(initial.ready ? null : "Focus modes, custom status and automations arrive with the next update. Your status below works today.");
   const [dismissed, setDismissed] = useState<string[]>([]);

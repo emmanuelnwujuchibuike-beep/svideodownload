@@ -5,6 +5,13 @@ import { useEffect, useState } from "react";
 import { usePresence } from "@/features/friends/use-presence";
 import { cn } from "@/lib/utils";
 
+/*
+  Owner, 2026-10-11: nothing should refetch on every entry. Re-opening the same
+  chat within a minute (a back-swipe, a quick switch) reuses the last answer.
+*/
+const CACHE_MS = 60_000;
+const cache = new Map<string, { at: number; lastSeen: string | null; details: { line: string | null; autoReply: string | null } | null }>();
+
 function lastSeenLabel(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
   // Part 9: "Recently active" - no minute count for the first few minutes, so nobody watches a clock tick
@@ -37,19 +44,29 @@ export function PresenceBadge({
   forceLight?: boolean;
 }) {
   const online = usePresence().has(userId);
-  const [lastSeen, setLastSeen] = useState<string | null>(null);
+  const hit = cache.get(userId);
+  const [lastSeen, setLastSeen] = useState<string | null>(hit?.lastSeen ?? null);
   // Part 9: their focus / custom status and auto reply, only when THEY allow this viewer (the API applies it)
-  const [details, setDetails] = useState<{ line: string | null; autoReply: string | null } | null>(null);
+  const [details, setDetails] = useState<{ line: string | null; autoReply: string | null } | null>(hit?.details ?? null);
 
-  // once per open chat: the server answer carries the details for an online person too
+  // once per open chat (at most once a minute per person): the server answer carries the details for an online person too
   useEffect(() => {
+    const c = cache.get(userId);
+    if (c && Date.now() - c.at < CACHE_MS) {
+      setLastSeen(c.lastSeen);
+      setDetails(c.details);
+      return;
+    }
     let cancelled = false;
     void fetch(`/api/presence-status?ids=${userId}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
+        if (!d) return;
+        const entry = { at: Date.now(), lastSeen: (d.lastSeen?.[userId] as string | undefined) ?? null, details: d.details?.[userId] ?? null };
+        cache.set(userId, entry);
         if (cancelled) return;
-        if (d?.lastSeen?.[userId]) setLastSeen(d.lastSeen[userId]);
-        if (d?.details?.[userId]) setDetails(d.details[userId]);
+        setLastSeen(entry.lastSeen);
+        setDetails(entry.details);
       })
       .catch(() => {});
     return () => {

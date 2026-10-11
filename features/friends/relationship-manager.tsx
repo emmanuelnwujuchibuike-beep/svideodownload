@@ -24,6 +24,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { CircleGlyph } from "@/features/friends/circle-icon";
 import { usePresence } from "@/features/friends/use-presence";
+import { useStickyState } from "@/features/ui/use-sticky-state";
 import { AmbientWash, GLASS, GlassGroup, PersonAvatar, primaryPill, quietPill, SectionHeader } from "@/features/friends/ui";
 import { haptic } from "@/lib/motion/haptics";
 import { circleColorClasses } from "@/lib/social/graph/circles";
@@ -78,9 +79,10 @@ const NO_ONE: ReadonlySet<string> = new Set();
 const plural = (n: number, one: string, many: string) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
 export function RelationshipManager({ initial }: { initial: RelationshipDirectory }) {
-  const [people, setPeople] = useState(initial.people);
-  const [lists, setLists] = useState(initial.lists);
-  const [rules, setRules] = useState(initial.rules);
+  // sticky: a back-swipe replays the cached payload, and the member's changes must survive it
+  const [people, setPeople] = useStickyState("rm-people", initial.loadedAt, initial.people);
+  const [lists, setLists] = useStickyState("rm-lists", initial.loadedAt, initial.lists);
+  const [rules, setRules] = useStickyState("rm-rules", initial.loadedAt, initial.rules);
   // Undo runs LATER, from a closure made earlier: it must read the people and lists as they are now
   const peopleRef = useRef(people);
   peopleRef.current = people;

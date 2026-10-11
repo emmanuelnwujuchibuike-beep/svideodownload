@@ -177,6 +177,8 @@ export default async function AccountPage() {
         { href: "/account/layout-studio", Icon: Palette, title: "Layout Studio", sub: themeSub, tint: "purple" },
         { href: "/account/business", Icon: Store, title: "Business", sub: "Overview, contact, hours & catalogue", tint: "emerald" },
         { href: "/account/professional", Icon: Briefcase, title: "Professional", sub: "Portfolio, experience & credentials", tint: "amber" },
+        // Feature 19 Part 12: confirmed connections, recommendations, endorsements, opportunities
+        { href: "/network", Icon: Users, title: "Professional network", sub: "Connections, recommendations & opportunities", tint: "blue" },
       ],
     },
     {

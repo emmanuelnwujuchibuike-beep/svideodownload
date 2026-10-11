@@ -227,10 +227,7 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Link href="/friends/discover" prefetch className={primaryPill} aria-label="Add friends">
-            <UserPlus className="h-4 w-4" aria-hidden />
-            <span className="max-[359px]:sr-only">Add</span>
-          </Link>
+          {/* owner 2026-10-11: no Add pill here — the header's add-friend icon is the one way in */}
           <GlassIconLink href="/friends/circles" label="Circles">
             <Users className="h-[18px] w-[18px]" aria-hidden />
           </GlassIconLink>

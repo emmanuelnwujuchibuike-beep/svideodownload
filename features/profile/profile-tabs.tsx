@@ -29,6 +29,7 @@ import { type ComponentType, type ReactNode, useMemo, useRef, useState } from "r
 import { WowOutline } from "@/components/brand/wow-icon";
 
 import { ProfileMediaGrid } from "@/features/social/profile-media-grid";
+import { useStickyState } from "@/features/ui/use-sticky-state";
 import type { PostCard } from "@/lib/social/posts";
 import { cn } from "@/lib/utils";
 
@@ -152,9 +153,10 @@ export function ProfileTabs({
   const reels = useMemo(() => posts.filter((p) => p.mediaKind === "video"), [posts]);
   const publishedDownloads = useMemo(() => posts.filter((p) => p.platform && p.platform !== "frenz"), [posts]);
 
-  // owner 2026-10-11: the "Get paid" card above the tray flips to the subscribe link the moment setup goes live
-  const [subLive, setSubLive] = useState(!!sub?.settings?.setupCompleted);
-  const [promoClosed, setPromoClosed] = useState(!!sub?.settings?.promoDismissed);
+  // owner 2026-10-11: the "Get paid" card above the tray flips to the subscribe link the moment setup goes live.
+  // Sticky: the router cache replays the pre-tap payload on re-entry, which brought a closed card back.
+  const [subLive, setSubLive] = useStickyState(`sub-live-${handle}`, Number(!!sub?.settings?.setupCompleted), !!sub?.settings?.setupCompleted);
+  const [promoClosed, setPromoClosed] = useStickyState(`sub-promo-${handle}`, Number(!!sub?.settings?.promoDismissed), !!sub?.settings?.promoDismissed);
   const tray = useRef<HTMLDivElement>(null);
   const select = (id: string) => {
     setActive(id);

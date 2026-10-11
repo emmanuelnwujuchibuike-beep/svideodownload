@@ -9,6 +9,7 @@ import { OtpInput } from "@/features/auth/otp-input";
 import { needsMfaStepUp } from "@/lib/auth/mfa";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { safeNext } from "@/lib/auth/safe-next";
 
 type View = "choices" | "email" | "code";
 
@@ -50,7 +51,8 @@ function suggestEmail(email: string): string | null {
  * same flow — unknown emails are provisioned on first code. Google OAuth stays
  * for existing Google accounts. No passwords anywhere.
  */
-export function AuthPanel({ next = "/home" }: { next?: string }) {
+export function AuthPanel({ next: nextRaw = "/home" }: { next?: string }) {
+  const next = safeNext(nextRaw);
   const [view, setView] = useState<View>("choices");
   const [email, setEmail] = useState("");
   const [suggestion, setSuggestion] = useState<string | null>(null);

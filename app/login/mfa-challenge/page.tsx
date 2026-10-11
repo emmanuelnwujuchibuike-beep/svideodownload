@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { MfaChallengeForm } from "@/features/auth/mfa-challenge-form";
 import { needsMfaStepUp } from "@/lib/auth/mfa";
 import { createClient } from "@/lib/supabase/server";
+import { safeNext } from "@/lib/auth/safe-next";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export default async function MfaChallengePage({
   searchParams: Promise<{ next?: string }>;
 }) {
   const { next } = await searchParams;
-  const dest = next || "/home";
+  const dest = safeNext(next);
 
   const supabase = await createClient();
   const {

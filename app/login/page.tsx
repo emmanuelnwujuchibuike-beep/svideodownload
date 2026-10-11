@@ -7,6 +7,7 @@ import { FollowLinks } from "@/components/social/follow-links";
 import { AuthPanel } from "@/features/auth/auth-panel";
 import { LoginCollage } from "@/features/auth/login-collage";
 import { createClient } from "@/lib/supabase/server";
+import { safeNext } from "@/lib/auth/safe-next";
 
 export const dynamic = "force-dynamic";
 
@@ -23,14 +24,15 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ next?: string }>;
 }) {
-  const { next } = await searchParams;
+  // only a same-site path survives (lib/auth/safe-next.ts — this was an open redirect)
+  const next = safeNext((await searchParams).next);
 
   if (hasSupabase) {
     const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (user) redirect(next || "/home");
+    if (user) redirect(next);
   }
 
   return (

@@ -5,6 +5,7 @@ import { needsMfaStepUp } from "@/lib/auth/mfa";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { claimReferral, REF_COOKIE, REF_PENDING_COOKIE } from "@/lib/referrals/server";
 import { createClient } from "@/lib/supabase/server";
+import { safeNext } from "@/lib/auth/safe-next";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +21,8 @@ export async function GET(request: Request) {
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
-  const next = searchParams.get("next") || "/account";
+  // only a same-site path: "@evil.com" here once made `${origin}${next}` another host
+  const next = safeNext(searchParams.get("next"), "/account");
 
   // Supabase can redirect here with an explicit error (expired/used link).
   const errDesc = searchParams.get("error_description") || searchParams.get("error");

@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  Archive,
   BadgeCheck,
+  ChevronRight,
   Compass,
   Hand,
   Loader2,
@@ -232,6 +234,16 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
           </GlassIconLink>
         </div>
       </header>
+
+      {/* Part 8: the private Social Intelligence dashboard (stages in words, reconnect, archive) */}
+      <Link href="/friends/insights" prefetch={false} className={cn("mb-5 flex items-center gap-3 rounded-[20px] px-3.5 py-2.5", GLASS)}>
+        <Sparkles className="h-[18px] w-[18px] shrink-0 text-primary" aria-hidden />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[14px] font-semibold">Your connections</span>
+          <span className="block truncate text-[12.5px] text-muted-foreground">How each friendship is going. Only you see it.</span>
+        </span>
+        <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+      </Link>
 
       {favorites.length > 0 ? (
         <section className="mb-5" aria-labelledby="friends-favourites">
@@ -486,6 +498,22 @@ function FriendRow({
     }
   };
 
+  // Part 8: private, undoable; the friend is not told and nothing about the friendship is deleted
+  const archive = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/social/relationship-prefs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ friendId: item.user.id, action: "archive" }),
+      });
+      if (res.ok) onRemoved(item.user.id);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <li className="px-3.5 py-2.5">
       <div className="flex items-center gap-3">
@@ -524,6 +552,10 @@ function FriendRow({
           <Link href={`/friends/with/${item.user.handle}`} prefetch={false} className={quietPill}>
             <Sparkles className="h-4 w-4 text-primary" aria-hidden /> Our story
           </Link>
+          {/* Part 8: archive keeps the history and leaves the list; restore from /friends/insights */}
+          <button type="button" onClick={() => void archive()} disabled={busy} className={quietPill}>
+            <Archive className="h-4 w-4" aria-hidden /> Archive
+          </button>
           <button type="button" onClick={() => onFavorite(item.user.id, !item.favorite)} aria-pressed={item.favorite} className={quietPill}>
             <Star className={cn("h-4 w-4", item.favorite && "fill-amber-400 text-amber-400")} aria-hidden />
             {item.favorite ? "Unfavourite" : "Favourite"}

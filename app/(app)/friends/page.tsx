@@ -8,6 +8,7 @@ import { NearbyDiscovery } from "@/features/friends/nearby-discovery";
 import { getDiscoveryFeed } from "@/lib/social/discovery";
 import { getFriendActivity } from "@/lib/social/friend-activity";
 import { friendsOverview, runFriendRemindersSoon } from "@/lib/social/friends";
+import { archivedFriendIds } from "@/lib/social/intelligence/server";
 import { getActiveStories } from "@/lib/social/stories";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -41,13 +42,19 @@ export default async function FriendsPage() {
     /* location column not migrated yet */
   }
 
-  const [overview, friendStories, followingStories, discovery, activity] = await Promise.all([
+  const [fullOverview, allFriendStories, followingStories, discovery, allActivity, archived] = await Promise.all([
     friendsOverview(user.id),
     getActiveStories(user.id, 24, "friends"),
     getActiveStories(user.id, 24, "following"),
     getDiscoveryFeed(user.id, { viewerLocation }),
     getFriendActivity(user.id, 12),
+    archivedFriendIds(user.id),
   ]);
+  // Feature 19 Part 8: an ARCHIVED friend leaves the list, Catch up, stories
+  // and activity here. Their history stays, and /friends/insights restores them.
+  const overview = archived.size ? { ...fullOverview, friends: fullOverview.friends.filter((f) => !archived.has(f.user.id)) } : fullOverview;
+  const friendStories = archived.size ? allFriendStories.filter((g) => !archived.has(g.userId)) : allFriendStories;
+  const activity = archived.size ? allActivity.filter((a) => !archived.has(a.actor.id)) : allActivity;
 
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-1 gap-4 px-3 sm:px-4">

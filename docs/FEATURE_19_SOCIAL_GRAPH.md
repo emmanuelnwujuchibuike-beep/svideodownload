@@ -369,8 +369,65 @@ capsules as JSON. A sealed capsule leaves without its message.
 
 ---
 
+## Part 8 — Relationship Strength™, Social Intelligence & Connection Health
+
+| Layer | File |
+|---|---|
+| Stages as words, reconnect, evolution, memory surface (pure) | `lib/social/intelligence/stage.ts` |
+| The ONE intelligence read (the "Social Intelligence API") | `lib/social/intelligence/server.ts`, `GET /api/social/intelligence` |
+| Archive and reconnect controls | `POST /api/social/relationship-prefs` |
+| UI | `/friends/insights` (`features/friends/insights-page.tsx`), "Your connections" on Friends, Archive in each friend's menu, the stage and "You talk most" on the friendship page |
+| Schema | `0223` (`relationship_prefs`, `relationship_activity()`) |
+| Tests | `lib/social/intelligence/stage.test.ts` + 0223 PGlite (6 checks, run twice, 2 mutants that fail) |
+
+**No numbers.** A relationship has a stage, a word and one sentence: New
+connection, Growing, Consistent, Established, Long-term, Legacy connection,
+Quiet for a while, Archived. A test fails if any stage copy contains a digit
+or a percent sign. The 0–100 strength score from Part 17 stays internal.
+
+**What it reads, and what it refuses to read.** Only what the member already
+has: how long they have been friends, and the messages in chats they are half
+of (counted in the database by `relationship_activity`, one query for every
+chat). Never how the other person behaves toward them. The brief's
+"Response Patterns" (how fast someone replies) is **refused, not deferred**:
+it would turn the app into a way of monitoring a person. "Shared active hours"
+is the member's own chat, shown as a time of day in their own zone ("in the
+evening"), never as a chart.
+
+**Silence is not decay:** nothing is "Quiet for a while" until half a year
+without a word, and a quiet new friendship is still "New connection".
+
+**AI Reconnect** appears only for friends you have talked to, after a few
+months of silence, in words ("You haven't spoken in several months"). Every
+nudge has "Not now" (30 days) and "Don't suggest". **Relationship Evolution**
+suggests only what is certain: you follow each other, so make it a
+friendship. Or a friend's profile is a business or creator, so label them.
+**AI Memory Surface** lists this week's anniversaries and capsules opening.
+
+**Relationship Archive:** private (the friend is not told), keeps every
+memory, takes them off the Friends list, Catch up, stories and activity there,
+and out of reconnect nudges. Restore anytime from Your connections.
+
+Measured read-only on production (2026-10-10), before 0223: 3.6 s cold from
+this machine, using the fallback. On production, 7 friendships were
+classified (3 Consistent, 4 New connection) and one evolution was suggested.
+
+**Gap Ledger**
+
+| Brief item | State |
+|---|---|
+| Stages in words, private, no numbers; Connection Health; reconnect (dismissible); archive; evolution (follow → friend, friend → business/creator label); memory surface (anniversaries, capsules) | **live** |
+| Communication insight: when you talk most | **live** (your own chat, your own time zone) |
+| Response patterns | **refused** — it measures the other person |
+| Shared communities, events, projects, purchases, collaborations, learning paths, AI sessions | planned — no shared data of that kind exists yet |
+| Anniversary and memory reminders as notifications | planned — they are computed. A daily sender is not built |
+| Intelligence feeding Feed, Search and Messaging ranking | planned — the API exists. Ranking changes need measurement first |
+| Background analysis, offline | partly — counted in the database on demand. No precomputed store yet |
+
+---
+
 ## Migrations to run (in order)
 
-`0214`, `0215`, `0216`, `0217`, `0218`, `0219` (×10 dashboard switch stands for new campaigns), `0220` (Contact Discovery: run after 0217, whose follow-source constraint it widens), `0221` (People You May Know feedback), `0222` (Friend Profiles: bucket list, capsules for friends, hidden moments). Each is idempotent and PGlite-tested (run twice,
+`0214`, `0215`, `0216`, `0217`, `0218`, `0219` (×10 dashboard switch stands for new campaigns), `0220` (Contact Discovery: run after 0217, whose follow-source constraint it widens), `0221` (People You May Know feedback), `0222` (Friend Profiles: bucket list, capsules for friends, hidden moments), `0223` (Relationship Intelligence: archive, reconnect controls, activity counts). Each is idempotent and PGlite-tested (run twice,
 plus a mutant that must fail). The code works before and after each: every new
 read falls back to today's behaviour when its column or table is missing.

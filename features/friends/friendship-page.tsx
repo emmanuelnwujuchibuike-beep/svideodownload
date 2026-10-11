@@ -36,6 +36,20 @@ import { cn, formatCompactNumber } from "@/lib/utils";
  * to defend. Motion is a fade, and reduced motion removes it.
  */
 
+/**
+ * Shared active hours (Part 8), as a time of day in the member's OWN zone, never a chart of
+ * someone's habits. The server sends 24 UTC hour counts of your chat, and this names the busiest part of the day.
+ */
+function activeHours(utc: number[]): string | null {
+  const total = utc.reduce((a, b) => a + b, 0);
+  if (total < 10) return null;
+  const offsetH = -new Date().getTimezoneOffset() / 60;
+  const local = Array.from({ length: 24 }, (_, h) => utc[(((h - offsetH) % 24) + 24) % 24] ?? 0);
+  const parts: [string, number[]][] = [["in the morning", [5, 6, 7, 8, 9, 10, 11]], ["in the afternoon", [12, 13, 14, 15, 16]], ["in the evening", [17, 18, 19, 20, 21]], ["late at night", [22, 23, 0, 1, 2, 3, 4]]];
+  const best = parts.map(([label, hrs]) => [label, hrs.reduce((a, h) => a + (local[h] ?? 0), 0)] as const).sort((a, b) => b[1] - a[1])[0]!;
+  return best[0].charAt(0).toUpperCase() + best[0].slice(1);
+}
+
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
 export function FriendshipPage({ story }: { story: FriendshipStory }) {
@@ -85,6 +99,10 @@ export function FriendshipPage({ story }: { story: FriendshipStory }) {
             <span className="text-muted-foreground"> · {story.insights.daysAsFriends.toLocaleString()} days</span>
           </p>
         ) : null}
+        {/* Part 8: the stage, in words */}
+        <p className="mt-1 text-[12.5px] text-muted-foreground">
+          <span className="font-semibold text-foreground/80">{story.stage.label}.</span> {story.stage.line}
+        </p>
         {/* Friendship Health: private, informational, never a score */}
         {story.health.length ? (
           <ul className="mt-2.5 flex flex-wrap justify-center gap-1.5" aria-label="How your friendship is going (only you see this)">
@@ -129,8 +147,9 @@ export function FriendshipPage({ story }: { story: FriendshipStory }) {
             ["Busiest month", story.insights.mostActiveMonth ? monthLabel(story.insights.mostActiveMonth) : "—"],
             ["Longest streak", story.insights.longestStreakDays ? `${story.insights.longestStreakDays} days` : "—"],
             ["Mutual friends", story.mutuals.disclosed ? String(story.mutuals.total) : "Private"],
+            ["You talk most", activeHours(story.hourCounts) ?? "—"],
           ].map(([k, v], i) => (
-            <div key={k} className={cn("px-3.5 py-3", i % 2 === 1 && "border-l border-black/[0.06] dark:border-white/[0.07]", i >= 2 && "border-t border-black/[0.06] min-[480px]:border-t-0 min-[480px]:border-l dark:border-white/[0.07]")}>
+            <div key={k} className={cn("px-3.5 py-3", i % 2 === 1 && i < 4 && "border-l border-black/[0.06] dark:border-white/[0.07]", i >= 2 && i < 4 && "border-t border-black/[0.06] min-[480px]:border-t-0 min-[480px]:border-l dark:border-white/[0.07]", i === 4 && "col-span-2 border-t border-black/[0.06] min-[480px]:col-span-4 dark:border-white/[0.07]")}>
               <dt className="text-[11.5px] font-medium uppercase tracking-[0.05em] text-muted-foreground">{k}</dt>
               <dd className="mt-0.5 truncate text-[17px] font-bold">{v}</dd>
             </div>

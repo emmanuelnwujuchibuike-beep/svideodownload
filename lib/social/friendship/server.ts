@@ -2,6 +2,8 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { relationshipStage, STAGE_COPY } from "@/lib/social/intelligence/stage";
+
 import { buildStory, friendshipHealth, friendshipInsights, monthlyCounts, nextAnniversary, type FriendshipInsights, type HealthSignal, type StoryEvent, type StoryFacts } from "./story";
 
 /**
@@ -72,6 +74,9 @@ export interface FriendshipStory {
   label: string | null;
   favorite: boolean;
   hiddenKinds: string[];
+  /** Part 8: the relationship's stage, in words (never a score), and when you two talk, as 24 UTC hour counts. */
+  stage: { label: string; line: string; archived: boolean };
+  hourCounts: number[];
   /** The parts of the page that need a migration not yet run (0222) - shown as such, never as empty. */
   ready: { goals: boolean; capsules: boolean; hiding: boolean };
 }
@@ -101,7 +106,7 @@ export async function loadFriendshipStory(viewerId: string, handle: string, now 
   };
 
   // ── batch 1 ────────────────────────────────────────────────────────────────
-  const [conv, request, youFollow, theyFollow, label, fav, hiddenRes, goalsRes, capsulesRes, myFriends, theirFriends, privacy] = await Promise.all([
+  const [conv, request, youFollow, theyFollow, label, fav, hiddenRes, goalsRes, capsulesRes, myFriends, theirFriends, privacy, prefRes] = await Promise.all([
     db.from("conversations").select("id").eq("type", "direct").eq("user_low", low).eq("user_high", high).maybeSingle(),
     db.from("friend_requests").select("sender_id, created_at").eq("status", "accepted").or(`and(sender_id.eq.${viewerId},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${viewerId})`).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     db.from("follows").select("created_at").eq("follower_id", viewerId).eq("following_id", friendId).maybeSingle(),
@@ -114,6 +119,7 @@ export async function loadFriendshipStory(viewerId: string, handle: string, now 
     db.from("friendships").select("user_low, user_high").or(`user_low.eq.${viewerId},user_high.eq.${viewerId}`).limit(2000),
     db.from("friendships").select("user_low, user_high").or(`user_low.eq.${friendId},user_high.eq.${friendId}`).limit(2000),
     db.from("privacy_settings").select("followers_visibility").eq("user_id", friendId).maybeSingle(),
+    db.from("relationship_prefs").select("archived_at").eq("owner_id", viewerId).eq("friend_id", friendId).maybeSingle(),
   ]);
   const conversationId = ((conv.data as Row | null)?.id as string | undefined) ?? null;
 
@@ -188,9 +194,25 @@ export async function loadFriendshipStory(viewerId: string, handle: string, now 
     shown = ((data ?? []) as Row[]).filter((r) => r.handle).map((r) => ({ id: r.id as string, handle: r.handle as string, displayName: (r.display_name as string) || `@${r.handle as string}`, avatarUrl: (r.avatar_url as string | null) ?? null }));
   }
 
+  // Part 8: the stage, from the same facts (time together and your own chat)
+  const recent = ((recentRes.data ?? []) as { created_at: string }[]).map((m) => Date.parse(m.created_at)).filter((t) => !Number.isNaN(t));
+  const DAY = 86_400_000;
+  const archived = !prefRes.error && !!(prefRes.data as Row | null)?.archived_at;
+  const stage = relationshipStage({
+    daysKnown: Math.floor((now.getTime() - Date.parse(facts.friendsSince)) / DAY),
+    daysSinceMessage: facts.lastMessageAt ? Math.floor((now.getTime() - Date.parse(facts.lastMessageAt)) / DAY) : null,
+    msgs90: recent.filter((t) => t >= now.getTime() - 90 * DAY).length,
+    msgsPrev90: recent.filter((t) => t < now.getTime() - 90 * DAY && t >= now.getTime() - 180 * DAY).length,
+    archived,
+  });
+  const hourCounts = Array.from({ length: 24 }, () => 0);
+  for (const t of recent) hourCounts[new Date(t).getUTCHours()]! += 1;
+
   return {
     friend,
     conversationId,
+    stage: { label: STAGE_COPY[stage].label, line: STAGE_COPY[stage].line, archived },
+    hourCounts,
     events: buildStory(facts, now, new Set(hiddenKinds)),
     nextAnniversary: nextAnniversary(facts.friendsSince, now),
     health: friendshipHealth(facts, now),

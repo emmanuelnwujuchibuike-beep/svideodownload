@@ -223,7 +223,7 @@ export default async function EarnPage() {
             </div>
 
             <div className={`mt-4 overflow-x-auto ${card}`}>
-              <table className="w-full min-w-[20rem] text-left text-[14px]">
+              <table className="w-full text-left text-[14px]">
                 <caption className="px-5 pt-4 text-left text-[13px] font-semibold text-muted-foreground">Illustrative, per subscription. Not a forecast of earnings.</caption>
                 <thead>
                   <tr className="border-b border-border/70 text-[12px] uppercase tracking-wider text-muted-foreground">

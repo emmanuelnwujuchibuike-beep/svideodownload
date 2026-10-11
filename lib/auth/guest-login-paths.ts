@@ -24,6 +24,7 @@ export const GUEST_LOGIN_PREFIXES = [
   "/friends",
   "/home",
   "/members", // Feature 19 Part 13: the creator dashboard and your memberships
+  "/memories", // Feature 19 Part 14: Shared Memories and Life Journey
   "/network", // Feature 19 Part 12: the professional dashboard, discovery and opportunities
   "/notifications",
   "/rewards",

@@ -91,6 +91,10 @@ export const NOT_EXPORTED: Record<string, string> = {
   asset_usage: "Links assets to places they appear. Not personal data.",
   post_media: "Attachments belonging to a post; the post itself is exported.",
   sub_balances: "Your SUB balance is a running total of sub_ledger, which is exported; it is not a separate fact.",
+  memory_people: "The friends on each of your memories. Exported inside each memory (memories.people) rather than as raw ids.",
+  memory_media: "References from your memories to existing posts and media. Exported inside each memory.",
+  memory_versions: "Earlier versions of your memories. Exported through the Memories export on /memories; the current version is in memories.",
+  memory_collection_items: "Which memories are in each collection — part of memory_collections, which is exported.",
   sub_post_media: "The private files of a subscriber-only post, keyed by the post. The post is exported; the files stay in private storage and are never given a public link.",
   financial_audit_log: "The operator's audit trail of money decisions. It carries admin ids and internal references that are not the member's to read; every money fact about you is exported through sub_purchases, sub_ledger and withdrawal_requests.",
   /* Keyed by job, not by person: the operator-facing audit trail of what the
@@ -299,6 +303,10 @@ export const OWNER_COLUMN: Record<string, string> = {
   profile_membership_tiers: "user_id",
   creator_membership_settings: "creator_id", // 0227: your membership page settings
   creator_memberships: "member_id", // 0227: memberships you hold (a creator's members are their own export at /api/members/export)
+  graph_history: "user_id", // 0230: your private history of network changes
+  memories: "owner_id", // 0229: memories you kept
+  memory_collections: "owner_id", // 0229: your memory collections
+  memory_reminder_dismissals: "owner_id", // 0229: "on this day" cards and suggestions you dismissed
   sub_purchases: "subscriber_id", // 0227: SUB subscriptions you bought, with price, fee and total
   sub_ledger: "creator_id", // 0227: every change to your SUB earnings
   sub_payout_accounts: "creator_id", // 0227: your saved payout account and auto-withdrawal setting

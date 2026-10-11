@@ -65,6 +65,22 @@ async function notify(db: Db, actorId: string, recipientId: string, verb: string
   }
 }
 
+/**
+ * The follow decision under the target's policy — follow, request or refuse. The one
+ * place it is made: followUser below and the Permission Graph (lib/social/graph/permissions.ts)
+ * both ask it, so "can I follow?" and the follow button can never disagree.
+ */
+export async function decideFollow(db: ReturnType<typeof createAdminClient>, viewerId: string, targetId: string): Promise<ReturnType<typeof followDecision>> {
+  const policy = await followPolicyOf(db, targetId);
+  let decision = followDecision(policy, { isFriend: false, mutualFriends: 0, verified: false });
+  if (decision !== "follow") {
+    const [isFriend, { data: me }] = await Promise.all([areFriends(db, viewerId, targetId), db.from("profiles").select("is_verified").eq("id", viewerId).maybeSingle()]);
+    const mutualFriends = policy === "friends_of_friends" && !isFriend ? await mutualFriendCount(db, viewerId, targetId) : 0;
+    decision = followDecision(policy, { isFriend, mutualFriends, verified: !!(me as { is_verified?: boolean } | null)?.is_verified });
+  }
+  return decision;
+}
+
 /** Follow — or ask to, under the target's policy. Idempotent. */
 export async function followUser(viewerId: string, targetId: string, source: FollowSource | null, now: number = Date.now()): Promise<FollowOutcome> {
   if (viewerId === targetId) return { ok: false, reason: "self" };
@@ -75,13 +91,7 @@ export async function followUser(viewerId: string, targetId: string, source: Fol
     const { count: already } = await db.from("follows").select("follower_id", { head: true, count: "exact" }).eq("follower_id", viewerId).eq("following_id", targetId);
     if ((already ?? 0) > 0) return { ok: true, state: "following", fresh: false };
 
-    const policy = await followPolicyOf(db, targetId);
-    let decision = followDecision(policy, { isFriend: false, mutualFriends: 0, verified: false });
-    if (decision !== "follow") {
-      const [isFriend, { data: me }] = await Promise.all([areFriends(db, viewerId, targetId), db.from("profiles").select("is_verified").eq("id", viewerId).maybeSingle()]);
-      const mutualFriends = policy === "friends_of_friends" && !isFriend ? await mutualFriendCount(db, viewerId, targetId) : 0;
-      decision = followDecision(policy, { isFriend, mutualFriends, verified: !!(me as { is_verified?: boolean } | null)?.is_verified });
-    }
+    const decision = await decideFollow(db, viewerId, targetId);
     if (decision === "refuse") return { ok: false, reason: "policy" };
 
     // Smart Unfollow / anti-automation: the sender's own pace only

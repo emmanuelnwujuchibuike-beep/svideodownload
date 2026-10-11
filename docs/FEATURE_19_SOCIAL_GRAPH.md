@@ -739,8 +739,126 @@ ratings of the creator show only as averages once five members answered.
 
 ---
 
+## Part 14 — Shared Memories™, Mutual Experiences, Collaboration History & Life Journey™
+
+| Layer | File |
+|---|---|
+| Categories, validation, keyword category suggestion, collection suggestions, duplicates, important moments, on this day, natural-language memory search, insights, visibility (pure) | `lib/social/memories/engine.ts` |
+| Library, suggestions from real moments, writes, versions, archive and trash, collections, shared-with-me, map, export | `lib/social/memories/server.ts` |
+| API | `GET/POST /api/memories` (views: library, search, suggestions, archive, shared, versions, one, map, export) |
+| UI | `/memories` (`features/memories/memories-page.tsx`): Journey, Memories, Collections, People, Shared with you; from Friends and Account |
+| Schema | `0229_shared_memories.sql` |
+| Tests | `lib/social/memories/engine.test.ts` (the brief's five search examples, collections, duplicates, on this day, privacy, validation), 0229 PGlite (7 checks: versions, search, single keep, constraints, cascade, a mutant without the version trigger) |
+
+**Builds on Part 7, does not repeat it.** The friendship page already derives a
+per-friend timeline, anniversaries, the bucket list, capsules and the vault. Part
+14 adds what a member keeps for themselves, across every friend and product.
+
+**Nothing is filed for you.** The Shared Memory Engine proposes moments other
+tables already know: a friendship starting, a first conversation, an accepted
+collaboration, a confirmed work connection, an accepted recommendation, a
+membership, a capsule that opened, the first post. A proposal becomes a memory
+only when the member taps Keep. Suggestions are re-derived on the server from the
+source, never trusted from the browser, and a blocked person is never proposed.
+
+**"AI organization", honestly.** Category suggestions, albums (by month, year,
+category and person), duplicate detection, important moments and the natural
+search are explainable rules over the member's own memories: each says why
+("Suggested Travel because you wrote 'trip'", "Shared with 3 people"). No model
+and no image analysis, so nothing private leaves the server.
+
+**Private by default.** Visibility: only me, the people in it, friends, or one of
+the owner's circles. Only friends can be put on a memory. Every read re-checks
+visibility, friendship, circle membership and blocks on the server.
+
+**Recovery.** Every edit keeps the version it replaced (a trigger), and any
+version can be restored (which itself keeps the one it replaces). Archive hides.
+Delete moves to a 30-day trash that empties itself when it is looked at — no job
+runs for it. Export downloads everything as JSON.
+
+**Gap Ledger**
+
+| Brief item | State |
+|---|---|
+| Shared Memory Engine (memories from messaging, posts, collaborations, professional, memberships, capsules) | **live** — suggestions from those sources, kept on a tap |
+| Memories from stories, downloads, marketplace, live streaming, music, communities | planned — stories and downloads are personal; the others don't exist yet |
+| Memory categories (all 16), editable | **live** |
+| Mutual experiences, collaboration history | **live** for what Frenz records (friendship, first conversation, collaborations, work connections, memberships); events, courses, challenges, transactions are planned with those products |
+| Life Journey timeline | **live** (`/memories` Journey, by year, with "Joined Frenzsave") |
+| Automatic collections, important moments, duplicates | **live** (explainable rules, optional) |
+| Memory search in natural language | **live** (shows what it understood) |
+| Private notes, place, feeling, link | **live**. Voice notes, sketches and documents: planned (no private upload path for memories yet) |
+| Insights (most shared with, busiest month, categories, span) | **live**, private |
+| Shared collections, permission-controlled | **live** for viewing (only me / people / friends). Co-editing by others: planned |
+| Memory reminders ("one year ago today") | **live** in the page, dismissible. Push reminders: planned (would need a daily job; nothing runs while nobody looks) |
+| Time Capsule integration | **live** (opened capsules become memory suggestions) |
+| Shared Media Vault | partly — memories reference existing posts and our own media; new uploads into a memory: planned |
+| Social History Map | **live** as a people map (who you share memories with). A geographic map: planned (places are free text, no coordinates are collected) |
+| Export, archive, restore, version history, deleted-memory recovery | **live** |
+| "Encrypted" notes | partly — encrypted at rest by the platform and readable only through the server's checks. Not end-to-end encrypted |
+| Offline browsing, 120 FPS, AI background indexing | planned / not applicable — server-rendered, no background indexing (no idle cost) |
+
+---
+
+## Part 15 — Unified Social Graph™, Trust Graph, Context Engine & Permission Graph
+
+| Layer | File |
+|---|---|
+| Edge catalogue (now 16 edges: subscriber, collaborator, community member, professional connection, circle member, conversation and shared memory are live) | `lib/social/graph/edges.ts` |
+| Context Engine — every way two people are connected, one parallel read | `lib/social/graph/context.ts` |
+| Trust Graph — explainable bands (pure) and the signals read | `lib/social/graph/trust.ts`, `trust-server.ts` |
+| Permission Graph — `can(viewer, action, target)` over the existing rules | `lib/social/graph/permissions.ts` (+ `decideFollow` extracted in `lib/social/follows.ts`) |
+| Graph search (pure parser and matcher) and the network read, growth, history | `lib/social/graph/search.ts`, `graph-server.ts` |
+| Graph API | `GET /api/graph?view=context|can|trust|search|growth|history` |
+| UI | `/friends/graph` — Your network (search, trust explained, 12-month growth, history, a person's contexts and permissions) |
+| Schema | `0230_graph_history.sql` |
+| Tests | `search.test.ts` (the brief's six examples, exact), `trust.test.ts`, edge catalogue tests, 0230 PGlite (6 checks incl. account deletion and a mutant that breaks it) |
+
+**One graph, still.** Part 1's rule stands: the graph is the edge tables that
+already exist, catalogued — not a second store that could drift. Part 15 makes it
+usable as one thing: the Context Engine asks every edge at once, the Permission
+Graph routes each question to the one function that already decides it (messaging,
+the follow policy — now `decideFollow`, shared with the follow button — the friend
+list, SUB access, memories, collaboration invites, community moderation), and
+answers with a reason, not a bare boolean.
+
+**Trust is explainable, never vanity.** Verified identity, account age, recent
+activity, mutual friendships, work others vouched for, and only UPHELD reports.
+Followers and likes are not signals. The band and its reasons are shown to the
+member themselves and never to anyone else.
+
+**History is private by construction.** Triggers write each change only into the
+history of the person it belongs to: a follow or unfollow is recorded for the
+follower, never told to the person followed; blocks and circle changes are the
+actor's alone. Every write checks both accounts exist, so deleting an account (a
+cascade through these tables) can never be refused — the 0228 lesson, tested.
+Kept two years, trimmed when looked at.
+
+**Gap Ledger**
+
+| Brief item | State |
+|---|---|
+| Unified graph over friends, followers, subscribers, community, collaborators, professional, circles, conversations, memories | **live** (catalogue + Context Engine) |
+| Businesses, organizations, families, guardians, students, customers, brands as edges | planned — no tables record those relationships (the catalogue says what each needs) |
+| Edge attributes: type, created date, status, privacy (disclosure) | **live**. Per-edge trust level and interaction history: derived on read (strength, Part 1; trust, Part 15), not stored per edge |
+| Trust Graph | **live**, explainable, self-only |
+| Relationship Engine powering suggestions, feed, search, messaging, discovery | **live** where those features already read the graph (Parts 1–10). A single ranking service for every surface: planned |
+| Permission Graph | **live** for 8 actions over the existing rules. Story, download and workspace permissions: planned (stories and workspaces resolve their own audience today) |
+| Context Engine | **live** |
+| Event graph / graph history | **live** (0230) for friendships, follows, blocks, work connections, memberships, circles |
+| AI personalization graph, relationship prediction | planned — Part 6 suggestions and Part 8 health already explain themselves; no prediction model is trained |
+| Graph search in natural language | **live** over the member's own network and public profile facts |
+| Global knowledge graph | planned |
+| Privacy graph (visibility, ownership, consent, deletion, export) | **live** through disclosure rules, RLS, the deletion guards and the data catalogues |
+| Graph analytics (growth) | **live**, private, 12 months |
+| Zero-trust: edge validation, permission checks, audit, rate limits | **live** (server checks every read, rate-limited search, history as the audit trail). Fraud detection on the graph: planned |
+| Sub-50 ms lookups, billion-user scale, graph database, edge caching, offline snapshots | not claimed — Postgres with indexes; the Context Engine is one parallel batch of indexed reads |
+| AR, VR, wearables, agents | planned |
+
+---
+
 ## Migrations to run (in order)
 
-`0214`, `0215`, `0216`, `0217`, `0218`, `0219` (×10 dashboard switch stands for new campaigns), `0220` (Contact Discovery: run after 0217, whose follow-source constraint it widens), `0221` (People You May Know feedback), `0222` (Friend Profiles: bucket list, capsules for friends, hidden moments), `0223` (Relationship Intelligence: archive, reconnect controls, activity counts), `0224` (Presence: status details, focus, automations, private history), `0225` (Friend Lists: nesting, archive, tags, rules). **All of 0214–0225 were applied and probed live on 2026-10-11.** Then `0226` (Professional Network: open-to and industry, confirmed connections, recommendations, endorsements, opportunities, three in-app notification types), then `0227_sub_monetization.sql` (SUB: creator settings, memberships, Paystack-paid subscriptions with their fee, the SUB balance and ledger, SUB withdrawals on `withdrawal_requests`, the financial audit log, subscriber-only posts, notes, recognitions, sponsors, ratings, two notification types). Then `0228` (bug fix: account deletion refused for anyone with a follower, from 0217's follower-stat trigger; safe to run at any time). Before 0227 the SUB tab, checkout and withdrawals answer "arrives with the next update"; subscriber-only uploads also need the private R2 bucket (`R2_PRIVATE_BUCKET`). Each is idempotent and PGlite-tested (run twice,
+`0214`, `0215`, `0216`, `0217`, `0218`, `0219` (×10 dashboard switch stands for new campaigns), `0220` (Contact Discovery: run after 0217, whose follow-source constraint it widens), `0221` (People You May Know feedback), `0222` (Friend Profiles: bucket list, capsules for friends, hidden moments), `0223` (Relationship Intelligence: archive, reconnect controls, activity counts), `0224` (Presence: status details, focus, automations, private history), `0225` (Friend Lists: nesting, archive, tags, rules). **All of 0214–0225 were applied and probed live on 2026-10-11.** Then `0226` (Professional Network: open-to and industry, confirmed connections, recommendations, endorsements, opportunities, three in-app notification types), then `0227_sub_monetization.sql` (SUB: creator settings, memberships, Paystack-paid subscriptions with their fee, the SUB balance and ledger, SUB withdrawals on `withdrawal_requests`, the financial audit log, subscriber-only posts, notes, recognitions, sponsors, ratings, two notification types). Then `0229_shared_memories.sql` (Part 14) and `0230_graph_history.sql` (Part 15: triggers on friendships, follows, blocks, pro_connections, creator_memberships and circle_members, each guarded so account deletion is never refused). Also `0228` (bug fix: account deletion refused for anyone with a follower, from 0217's follower-stat trigger; safe to run at any time). Before 0227 the SUB tab, checkout and withdrawals answer "arrives with the next update"; subscriber-only uploads also need the private R2 bucket (`R2_PRIVATE_BUCKET`). Each is idempotent and PGlite-tested (run twice,
 plus a mutant that must fail). The code works before and after each: every new
 read falls back to today's behaviour when its column or table is missing.

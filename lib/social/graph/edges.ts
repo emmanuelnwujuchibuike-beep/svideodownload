@@ -39,7 +39,12 @@ export type EdgeKey =
   | "customer"
   | "collaborator"
   | "community_member"
-  | "organization_member";
+  | "organization_member"
+  // Feature 19 Part 15 (2026-10-11): edges other parts made real
+  | "pro_connection"
+  | "circle_member"
+  | "conversation"
+  | "memory_shared";
 
 /** Who is entitled to know this edge exists. */
 export type Disclosure =
@@ -145,15 +150,15 @@ export const GRAPH_EDGES: readonly EdgeSpec[] = [
   },
   // ── Declared by the brief, not observable today ─────────────────────────
   {
+    // Part 15: live since 0227 — a paid SUB subscription (billing = 'sub')
     key: "subscriber",
     label: "Subscriber",
-    table: null,
+    table: "creator_memberships",
     symmetry: "directed",
     disclosure: "participants",
     consent: "one-sided",
-    status: "planned",
-    needs: "Recurring creator billing. Membership tiers (0110) describe an offer and link out; nothing records who is paying.",
-    blurb: "Someone paying for your membership tier.",
+    status: "live",
+    blurb: "Someone with a paid SUB subscription to your content.",
   },
   {
     key: "customer",
@@ -167,26 +172,66 @@ export const GRAPH_EDGES: readonly EdgeSpec[] = [
     blurb: "Someone who bought from you.",
   },
   {
+    // Part 15: live since 0140 — an ACCEPTED post collaboration (post_collaborators)
     key: "collaborator",
     label: "Collaborator",
-    table: null,
+    table: "post_collaborators",
     symmetry: "symmetric",
     disclosure: "public",
     consent: "mutual",
-    status: "planned",
-    needs: "Co-authored posts. `posts` carries a single author_id, so there is no second author to read.",
-    blurb: "Someone credited alongside you on a post or project.",
+    status: "live",
+    blurb: "Someone credited alongside you on a post.",
   },
   {
+    // Part 15: live since 0227 — a creator's free community (billing = 'free')
     key: "community_member",
     label: "Community member",
-    table: null,
+    table: "creator_memberships",
     symmetry: "directed",
-    disclosure: "public",
+    disclosure: "participants",
     consent: "one-sided",
-    status: "planned",
-    needs: "Communities. The notification taxonomy reserves the types; no communities table exists.",
-    blurb: "Someone in a community you're also in.",
+    status: "live",
+    blurb: "Someone in your free creator community.",
+  },
+  {
+    key: "pro_connection",
+    label: "Professional connection",
+    table: "pro_connections",
+    symmetry: "symmetric",
+    disclosure: "participants",
+    consent: "mutual",
+    status: "live",
+    blurb: "Someone you confirmed you worked with, and in what role (0226).",
+  },
+  {
+    key: "circle_member",
+    label: "In one of your circles",
+    table: "circle_members",
+    symmetry: "directed",
+    disclosure: "owner-only",
+    consent: "one-sided",
+    status: "live",
+    blurb: "Your own circles and lists. The person is never told which circles they're in.",
+  },
+  {
+    key: "conversation",
+    label: "Conversation",
+    table: "conversations",
+    symmetry: "symmetric",
+    disclosure: "participants",
+    consent: "mutual",
+    status: "live",
+    blurb: "A direct chat between the two of you.",
+  },
+  {
+    key: "memory_shared",
+    label: "On a shared memory",
+    table: "memory_people",
+    symmetry: "directed",
+    disclosure: "participants",
+    consent: "one-sided",
+    status: "live",
+    blurb: "A friend put you on a memory they shared with you (0229).",
   },
   {
     key: "organization_member",

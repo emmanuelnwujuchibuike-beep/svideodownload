@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Code2,
   Compass,
+  BookHeart,
   Crown,
   Download,
   Ghost,
@@ -181,6 +182,8 @@ export default async function AccountPage() {
         { href: "/network", Icon: Users, title: "Professional network", sub: "Connections, recommendations & opportunities", tint: "blue" },
         // Feature 19 Part 13: your community, SUB subscriptions and payouts
         { href: "/members", Icon: Crown, title: "Members", sub: "Your community, and memberships you hold", tint: "violet" },
+        // Feature 19 Part 14: shared memories and life journey
+        { href: "/memories", Icon: BookHeart, title: "Memories", sub: "Moments you keep, and your life journey", tint: "rose" },
       ],
     },
     {

@@ -161,6 +161,19 @@ export const DATA_DOMAINS: DataDomain[] = [
       // every money decision (actor, reference, before and after); sub_payout_accounts is the creator's
       // saved Paystack beneficiary and auto-withdrawal switch (server-only, shown masked); sub_posts / sub_post_media hold
       // subscriber-only posts whose files live in the PRIVATE bucket (keys only, never URLs).
+      // Feature 19 Part 14 (0229): Shared Memories. A memory exists only when its owner kept one;
+      // memory_people are friends on it, memory_media references existing media (no new storage),
+      // memory_versions is every earlier version (trigger), collections group memories.
+      // Feature 19 Part 15 (0230): a member's private history of their own network changes,
+      // written by triggers only into the history of the person it belongs to (never about an unfollow).
+      "graph_history",
+      "memories",
+      "memory_people",
+      "memory_media",
+      "memory_versions",
+      "memory_collections",
+      "memory_collection_items",
+      "memory_reminder_dismissals",
       "creator_membership_settings",
       "creator_memberships",
       "sub_purchases",

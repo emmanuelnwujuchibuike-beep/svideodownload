@@ -3,6 +3,7 @@
 import {
   Archive,
   BadgeCheck,
+  BookHeart,
   Briefcase,
   ChevronRight,
   Compass,
@@ -10,6 +11,7 @@ import {
   Hand,
   ListChecks,
   Loader2,
+  Network,
   MessageCircle,
   MoreHorizontal,
   Search,
@@ -268,6 +270,28 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
             <span className="min-w-0 flex-1">
               <span className="block text-[14px] font-semibold">Professional network</span>
               <span className="block truncate text-[12.5px] text-muted-foreground">Work, mentors, recommendations and opportunities.</span>
+            </span>
+            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+          </Link>
+        </li>
+        {/* Part 15: your network — graph search, trust explained, growth, history */}
+        <li>
+          <Link href="/friends/graph" prefetch={false} className="flex items-center gap-3 px-3.5 py-2.5 transition active:bg-black/[0.04]">
+            <Network className="h-[18px] w-[18px] shrink-0 text-primary" aria-hidden />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-semibold">Your network</span>
+              <span className="block truncate text-[12.5px] text-muted-foreground">Search it, see how it grew, and how Frenz reads your account.</span>
+            </span>
+            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+          </Link>
+        </li>
+        {/* Part 14: shared memories and life journey */}
+        <li>
+          <Link href="/memories" prefetch={false} className="flex items-center gap-3 px-3.5 py-2.5 transition active:bg-black/[0.04]">
+            <BookHeart className="h-[18px] w-[18px] shrink-0 text-primary" aria-hidden />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-semibold">Memories</span>
+              <span className="block truncate text-[12.5px] text-muted-foreground">Moments you keep, and your life journey.</span>
             </span>
             <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
           </Link>

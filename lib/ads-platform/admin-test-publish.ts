@@ -14,12 +14,22 @@ type Db = SupabaseClient;
  *     put someone else's unpaid campaign live for free
  *   · only one that was submitted (awaiting_payment / payment_processing)
  *   · the money record is written ONCE (ad_campaigns_guard keeps it immutable):
- *     amount 0 and the reference `admin-test:<admin id>` — so it can never be
+ *     amount 0 and the reference `admin-test:<admin id>:<campaign id>` — so it can never be
  *     counted as revenue and is always recognisable as a test
  *   · an audit event says so, then the ordinary activation runs (creatives,
  *     placement, a free slot) — a test goes live exactly like a paid campaign
  */
 export const ADMIN_TEST_REFERENCE_PREFIX = "admin-test:";
+
+/**
+ * One reference PER CAMPAIGN. ad_campaigns.payment_reference is `unique`
+ * (0195), so the old `admin-test:<admin id>` let exactly one test ever be
+ * published: the second hit the constraint and the wizard showed a generic
+ * error. The campaign id keeps it unique and still recognisable as a test.
+ */
+export function adminTestReference(adminId: string, campaignId: string): string {
+  return `${ADMIN_TEST_REFERENCE_PREFIX}${adminId}:${campaignId}`;
+}
 
 export async function adminTestPublish(db: Db, adminId: string, campaignId: string): Promise<{ ok: boolean; reason?: string; status?: string }> {
   const { data: c } = await db.from("ad_campaigns").select("id, status, advertiser_id, payment_verified_at, advertisers(user_id)").eq("id", campaignId).maybeSingle();
@@ -32,12 +42,16 @@ export async function adminTestPublish(db: Db, adminId: string, campaignId: stri
 
   const { data: updated, error } = await db
     .from("ad_campaigns")
-    .update({ status: "paid", payment_verified_at: new Date().toISOString(), payment_reference: `${ADMIN_TEST_REFERENCE_PREFIX}${adminId}`, total_amount_minor: 0 })
+    .update({ status: "paid", payment_verified_at: new Date().toISOString(), payment_reference: adminTestReference(adminId, campaignId), total_amount_minor: 0 })
     .eq("id", campaignId)
     .in("status", ["awaiting_payment", "payment_processing"])
     .is("payment_verified_at", null)
     .select("id");
-  if (error || !updated?.length) return { ok: false, reason: "changed" };
+  if (error) {
+    console.error("[ads/test-publish] update failed", { campaignId, code: error.code, message: error.message });
+    return { ok: false, reason: "failed" };
+  }
+  if (!updated?.length) return { ok: false, reason: "changed" };
   await db.from("ad_campaign_events").insert({ campaign_id: campaignId, kind: "paid", from_status: row.status, to_status: "paid", actor_id: adminId, actor_role: "admin", reason: "admin test - no charge" });
 
   const { activateCampaign } = await import("./server");

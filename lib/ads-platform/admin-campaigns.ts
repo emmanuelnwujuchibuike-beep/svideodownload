@@ -83,7 +83,7 @@ export interface AdminCampaignFilters {
 
 const n = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 
-export async function listAdminCampaigns(db: Db, f: AdminCampaignFilters): Promise<{ rows: AdminCampaignRow[]; counts: Record<AdminCampaignView, number> }> {
+export async function listAdminCampaigns(db: Db, f: AdminCampaignFilters): Promise<{ rows: AdminCampaignRow[]; counts: Record<AdminCampaignView, number>; standingBoost: 1 | 10 | null }> {
   const view: AdminCampaignView = (ADMIN_CAMPAIGN_VIEWS as readonly string[]).includes(f.view ?? "") ? (f.view as AdminCampaignView) : "review";
   let q = db
     .from("ad_campaigns")
@@ -180,7 +180,7 @@ export async function listAdminCampaigns(db: Db, f: AdminCampaignFilters): Promi
       actions: actionsFor(c.status as string),
     };
   });
-  return { rows, counts };
+  return { rows, counts, standingBoost: await standingBoostSetting(db) };
 }
 
 /** How many campaigns wait in each view — head-only counts, no rows. */
@@ -316,6 +316,17 @@ export async function setAdvertiserStatus(db: Db, adminId: string, input: { id: 
   const { data, error } = await db.rpc("admin_set_advertiser_status", { p_advertiser: input.id, p_status: input.status, p_admin: adminId, p_reason: input.reason });
   if (error) throw new Error(`advertiser status: ${error.message}`);
   return (data ?? { ok: false, reason: "no_result" }) as RpcResult;
+}
+
+/**
+ * 0219: is the standing "new campaigns start at ×10" switch on? null when 0219
+ * has not run. Shown in the desk so the owner can SEE it - it used to be
+ * invisible, so a switch that was off looked like a ×10 that "stopped working".
+ */
+async function standingBoostSetting(db: Db): Promise<1 | 10 | null> {
+  const { data, error } = await db.from("ad_private_settings").select("stats_boost_new_live").limit(1).maybeSingle();
+  if (error || !data) return null;
+  return Number((data as { stats_boost_new_live: number }).stats_boost_new_live) === 10 ? 10 : 1;
 }
 
 /** 0212: switch a campaign's dashboard figures between real (1) and test mode (10). Display only. */

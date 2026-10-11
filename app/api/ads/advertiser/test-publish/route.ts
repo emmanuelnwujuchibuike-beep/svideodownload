@@ -16,6 +16,7 @@ const ERR: Record<string, string> = {
   already_paid: "This campaign is already paid.",
   not_submitted: "Review the campaign first, then publish it as a test.",
   changed: "The campaign changed — reload and try again.",
+  failed: "The test couldn't be published. Please try again.",
 };
 
 /**
@@ -31,6 +32,8 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   const out = await adminTestPublish(createAdminClient(), gate.user.id, parsed.data.campaignId);
   console.info("[ads/test-publish]", { by: gate.user.id, campaign: parsed.data.campaignId, ok: out.ok, reason: out.reason, status: out.status });
-  if (!out.ok) return NextResponse.json({ error: ERR[out.reason ?? ""] ?? "Couldn't publish the test.", reason: out.reason }, { status: 409 });
+  // `error` is the CODE and `message` the sentence: the wizard's api() reads
+  // `message`, and used to fall back to a generic "went wrong on our side".
+  if (!out.ok) return NextResponse.json({ error: out.reason ?? "failed", message: ERR[out.reason ?? ""] ?? "Couldn't publish the test.", reason: out.reason }, { status: 409 });
   return NextResponse.json({ ok: true, status: out.status, note: out.reason ?? null }, { headers: { "cache-control": "no-store" } });
 }

@@ -115,6 +115,7 @@ export function AdCampaignsDesk() {
   const [q, setQ] = useState("");
   const [rows, setRows] = useState<Campaign[] | null>(null);
   const [counts, setCounts] = useState<Record<AdminCampaignView, number> | null>(null);
+  const [standing, setStanding] = useState<1 | 10 | null>(null);
   const [advertisers, setAdvertisers] = useState<Advertiser[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
@@ -128,7 +129,8 @@ export function AdCampaignsDesk() {
     if (next === "advertisers") {
       setAdvertisers(((await res.json()) as { advertisers: Advertiser[] }).advertisers);
     } else {
-      const d = (await res.json()) as { rows: Campaign[]; counts: Record<AdminCampaignView, number> };
+      const d = (await res.json()) as { rows: Campaign[]; counts: Record<AdminCampaignView, number>; standingBoost?: 1 | 10 | null };
+      setStanding(d.standingBoost ?? null);
       setRows(d.rows);
       setCounts(d.counts);
     }
@@ -226,6 +228,11 @@ export function AdCampaignsDesk() {
         {tab !== "advertisers" ? (
           <div className="flex items-center gap-1.5" role="group" aria-label="Sample-data ×10 for all live campaigns">
             <span className="text-xs text-muted-foreground">All live ×10:</span>
+            {standing !== null ? (
+              <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", standing === 10 ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" : "bg-muted text-muted-foreground")}>
+                {standing === 10 ? "ON for new campaigns" : "OFF for new campaigns"}
+              </span>
+            ) : null}
             <button type="button" disabled={busy !== null} onClick={() => void setBoostAllLive(10)} className="rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-60">
               {busy === "boost-all" ? "…" : "Turn on"}
             </button>

@@ -302,3 +302,23 @@ limits (needs auth-provider logs Frenz does not receive), impossible travel at c
 (needs IP geolocation), cryptographic signatures a member could check offline, family /
 organisation / guardian roles and their audit consoles (those account types do not exist),
 breach monitoring, OS-level emergency alerts (web push cannot override silent mode at all).
+
+# Part 8 — Social notifications (2026-10-12)
+
+Audit: Relationship Intelligence as words (`lib/social/intelligence/stage.ts`), the Relationship
+Timeline / Friendship Health / Insights (`lib/social/friendship/story.ts`), Shared Memories
+(`lib/social/memories`), relationship milestones derived from real timestamps
+(`lib/social/graph/milestones.ts`), favourites and close friends, the "start chatting"
+reconnect reminders, streak / rank / plan celebrations, the per-person new-post bell, the
+daily digest (Social Recaps) and Suggested rules (Part 5, the digital-wellbeing nudge) all
+existed. Built:
+
+- **Friendship anniversaries** (`lib/social/anniversaries.ts`) — "You became friends N years
+  ago today 🎉" to both friends, on the existing daily job; low priority, bounded, de-duplicated.
+- **Close to you** — an Activity Center view of favourite friends and close friends only.
+
+Planned, honestly: birthdays (no birthday is stored — an optional, privacy-controlled field is
+the owner's decision first), animated avatars / 3-second profile videos on notification cards,
+AI "engagement insights" and "strongest friendships" summaries (the brief itself warns against
+engagement-maximising; the existing Friendship Insights are the private, explainable form),
+live-stream and Time Capsule / Life Journey alerts (those products do not exist yet).

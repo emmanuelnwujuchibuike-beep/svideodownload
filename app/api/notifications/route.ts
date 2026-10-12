@@ -28,7 +28,8 @@ export async function GET(request: Request) {
   }
 
   // Feature 20: ?view=archived reads only what the member put away (fetched when that tab opens, never otherwise)
-  const view = url.searchParams.get("view") === "archived" ? "archived" : "inbox";
+  const viewParam = url.searchParams.get("view");
+  const view = viewParam === "archived" ? "archived" : viewParam === "close" ? "close" : "inbox";
   // Part 3: ?q= searches the member's WHOLE history (archive included) with the same parser the center shows as chips
   const search = url.searchParams.get("q");
   // older pages (premium brief): ?before=<created_at of the oldest row already shown>

@@ -11,6 +11,7 @@ import {
   NOTIF_GROUPED_KEY as KEY,
   NOTIF_KEY as BELL_KEY,
   loadArchivedNotifications as loadArchived,
+  loadCloseNotifications as loadClose,
   loadFlatNotifications,
   loadGroupedNotifications as loadGrouped,
   loadOlderNotifications,
@@ -51,7 +52,7 @@ import { cn } from "@/lib/utils";
   Every change is drawn on the tap and the server's answer replaces it (owner rule:
   every button responds on tap); a refusal puts it back and says so.
 */
-type View = "priority" | "pinned" | "held" | "archived";
+type View = "priority" | "pinned" | "held" | "archived" | "close";
 // the everyday tabs are the smart categories (Social, Content, Messages, Earnings…), premium brief 2026-10-12
 type Tab = "all" | "unread" | View | SmartCategory;
 type Layout = "cards" | "compact" | "timeline";
@@ -63,6 +64,7 @@ const TAB_LABEL: Record<Tab, string> = {
   pinned: "Pinned",
   held: "Held",
   archived: "Archived",
+  close: "Close to you",
   ...SMART_CATEGORY_LABEL,
 };
 const smartOf = (g: NotificationGroup) => smartCategoryOf(g.type, g.category);
@@ -70,7 +72,8 @@ const LAYOUT_KEY = "frenz:activity-layout";
 const DELETE_GRACE_MS = 6000;
 
 const isPriority = (g: NotificationGroup) => g.priority === "critical" || g.priority === "high";
-const EMPTY: Partial<Record<Tab, string>> = { unread: "You're all caught up", priority: "Nothing urgent", pinned: "Nothing pinned", held: "Nothing held", archived: "Nothing archived" };
+const EMPTY: Partial<Record<Tab, string>> = { unread: "You're all caught up", priority: "Nothing urgent", pinned: "Nothing pinned", held: "Nothing held", archived: "Nothing archived", close: "Nothing from people close to you yet" };
+const CLOSE_KEY = "notifications:close";
 const EMPTY_HINT: Partial<Record<Tab, string>> = {
   priority: "Security alerts, payments, messages and requests show here.",
   pinned: "Pin a notification from its ⋯ menu to keep it at the top.",
@@ -112,6 +115,8 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
   }, []);
   // Archived is read only while its tab is open
   const archived = useQuery<GroupedNotificationsResult>(ARCHIVED_KEY, loadArchived, { enabled: tab === "archived", revalidateOnFocus: false });
+  // Part 8: favourite friends + close friends — fetched only when this tab is opened
+  const close = useQuery<GroupedNotificationsResult>(CLOSE_KEY, loadClose, { enabled: tab === "close", revalidateOnFocus: false });
   const [query, setQuery] = useState("");
   const [labelFilter, setLabelFilter] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -193,7 +198,7 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
     if (groups.some(isPriority)) views.push("priority");
     if (groups.some((g) => g.pinned)) views.push("pinned");
     if (groups.some((g) => g.delivery === "held")) views.push("held");
-    const out: Tab[] = ["all", "unread", ...SMART_CATEGORY_ORDER.filter((c) => present.has(c)), ...views];
+    const out: Tab[] = ["all", "unread", "close", ...SMART_CATEGORY_ORDER.filter((c) => present.has(c)), ...views];
     if (organizable) out.push("archived");
     // a tab opened from a link stays visible even when it is empty
     if (!out.includes(tab)) out.splice(2, 0, tab);
@@ -223,9 +228,9 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
 
   const visible = useMemo(() => {
     if (history) return history.groups;
-    const source = tab === "archived" ? (archived.data?.groups ?? []) : older ? [...groups, ...older.groups] : groups;
+    const source = tab === "archived" ? (archived.data?.groups ?? []) : tab === "close" ? (close.data?.groups ?? []) : older ? [...groups, ...older.groups] : groups;
     let list =
-      tab === "all" || tab === "archived"
+      tab === "all" || tab === "archived" || tab === "close"
         ? source
         : tab === "unread"
           ? source.filter((g) => !g.read)

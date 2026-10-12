@@ -352,7 +352,7 @@ export interface GroupedNotificationsResult {
 }
 
 /** Inbox = everything not archived (the default). Archived = only what the member put away. */
-export type ActivityView = "inbox" | "archived";
+export type ActivityView = "inbox" | "archived" | "close";
 const RANK = { critical: 3, high: 2, medium: 1, low: 0 } as const;
 
 // Post-scoped actions collapse per post; relationship signals collapse together;
@@ -398,6 +398,22 @@ export async function listGroupedNotifications(userId: string, limit = 60, view:
     }
     // older pages: a cursor on created_at (indexed with user_id), never an offset
     if (before && !Number.isNaN(Date.parse(before))) listQuery = listQuery.lt("created_at", new Date(before).toISOString());
+    /*
+      Feature 20 Part 8 — "Close to you": only what came from the member's favourite friends
+      and close friends circle. Read only when that view is asked for (one tap), never on every
+      load. Nobody close yet → an empty view, not everything.
+    */
+    if (view === "close") {
+      const [favs, circle] = await Promise.all([
+        db.from("friend_favorites").select("friend_id").eq("user_id", userId).limit(500),
+        db.from("social_circles").select("id").eq("owner_id", userId).eq("kind", "close_friends").limit(1),
+      ]);
+      const circleId = (circle.data as { id: string }[] | null)?.[0]?.id;
+      const members = circleId ? await db.from("circle_members").select("member_id").eq("circle_id", circleId).limit(500) : { data: [] };
+      const ids = [...new Set([...((favs.data ?? []) as { friend_id: string }[]).map((r) => r.friend_id), ...((members.data ?? []) as { member_id: string }[]).map((r) => r.member_id)])];
+      if (!ids.length) return { groups: [], unread: 0 };
+      listQuery = listQuery.in("actor_id", ids.slice(0, 500));
+    }
     const activity = await hasActivityColumns(db);
     const inbox = await hasInboxColumns(db);
     const q = search?.trim() ? parseActivityQuery(search.slice(0, 200), new Date()) : null;

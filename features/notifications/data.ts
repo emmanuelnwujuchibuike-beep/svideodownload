@@ -47,6 +47,15 @@ export async function loadOlderNotifications(before: string, view: "inbox" | "ar
 
 /** Feature 20: the Archived tab — read only when that tab is opened, never with the inbox. */
 export const NOTIF_ARCHIVED_KEY = "notifications:archived";
+/** Feature 20 Part 8 — "Close to you": only what came from favourite friends and close friends. Read when the tab is opened. */
+export async function loadCloseNotifications(): Promise<GroupedNotificationsResult> {
+  if (!hasAuthCookie()) return { groups: [], unread: 0 };
+  const res = await fetch("/api/notifications?grouped=1&limit=60&view=close");
+  if (!res.ok) return { groups: [], unread: 0 };
+  const d = (await res.json()) as GroupedNotificationsResult;
+  return { groups: d.groups ?? [], unread: d.unread ?? 0 };
+}
+
 export async function loadArchivedNotifications(): Promise<GroupedNotificationsResult> {
   if (!hasAuthCookie()) return { groups: [], unread: 0 };
   const res = await fetch("/api/notifications?grouped=1&limit=80&view=archived");

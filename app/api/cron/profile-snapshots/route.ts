@@ -139,7 +139,16 @@ export async function GET(request: Request) {
     // a gap far better than the job failing loudly and being disabled.
   }
 
+  // Feature 20 Part 8: friendship anniversaries ride this existing daily run (no new schedule)
+  let anniversaries = 0;
+  try {
+    const { sendFriendAnniversaries } = await import("@/lib/social/anniversaries");
+    anniversaries = (await sendFriendAnniversaries()).sent;
+  } catch {
+    /* tomorrow's run is unaffected */
+  }
+
   // `ok` reflects what actually happened. A query error used to render as a
   // successful run with zero rows, which is how this stayed broken.
-  return NextResponse.json({ ok: !failure, capturedOn, scanned, written, ...(failure ? { error: failure } : {}) });
+  return NextResponse.json({ ok: !failure, capturedOn, scanned, written, anniversaries, ...(failure ? { error: failure } : {}) });
 }

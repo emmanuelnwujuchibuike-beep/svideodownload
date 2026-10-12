@@ -173,7 +173,10 @@ function NetworkResultAd({ className, onEmpty }: { className?: string; onEmpty?:
         without ever having been prevented from filling.
       */}
       {isVideo ? (
-        <div className="overflow-hidden rounded-2xl border border-border/40 bg-card/60">
+        // 320 × 200, like the image creatives in this slot and the paid video (owner 2026-10-12:
+        // "shorten the height and width of video ad so it fits in the download result card like
+        // 320 200"); the whole video stays visible (contain), never cropped
+        <div className="mx-auto w-full max-w-[320px] overflow-hidden rounded-2xl border border-border/40 bg-card/60">
           <p className="px-3 pt-2.5 text-[9px] font-medium tracking-wide text-muted-foreground/50">Ad</p>
           <div className="px-3 pb-3 pt-1.5">
             <video
@@ -183,7 +186,7 @@ function NetworkResultAd({ className, onEmpty }: { className?: string; onEmpty?:
               muted
               playsInline
               controls
-              className="aspect-video w-full rounded-xl bg-black"
+              className="h-[200px] w-full rounded-xl bg-black object-contain"
             />
           </div>
         </div>

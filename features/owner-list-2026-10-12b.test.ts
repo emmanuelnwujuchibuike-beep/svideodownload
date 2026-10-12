@@ -68,3 +68,24 @@ describe("a feed video never changes size", () => {
     expect(code("features/feed/feed-post-card.tsx")).not.toContain("group-hover:scale-105");
   });
 });
+
+// owner, 2026-10-12: "it shouldn't prefetch ad with the download fetch time … and the ad slot on the result card is too close to the quality picker"
+describe("no ad loads while a link or a file is downloading", () => {
+  it("the completion creative is warmed while choosing a quality, never on the Download tap", () => {
+    const p = code("features/downloader/preview-card.tsx");
+    expect(p).not.toContain("warmCompletionCreative();");
+    expect(p).toContain("downloadStarted.current = true;");
+    expect(p).toMatch(/if \(downloadStarted\.current\) return;[\s\S]{0,200}warmCreativeFor\("download-complete"\)/);
+  });
+  it("the preparing ad mounts only when idle and never during a fetch", () => {
+    const a = code("features/monetization/preparing-ad.tsx");
+    expect(a).toContain("useEffect(() => afterPageLoad(() => setIdle(true)), []);");
+    expect(a).toContain("if (idle && !active) setMounted(true);");
+    expect(a).toContain("if (!mounted) return null;");
+  });
+  it("the result card ad keeps its distance from the quality picker", () => {
+    const r = code("features/monetization/result-ad.tsx");
+    expect(r).toContain('data-ad-provider="frenzsave" className={cn("mt-8", className)}');
+    expect(r).toContain('"mx-auto mt-8 w-full max-w-2xl"');
+  });
+});

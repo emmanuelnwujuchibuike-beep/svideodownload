@@ -491,7 +491,8 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
       completion ad — so this is the one place that covers all of them, and it
       fires exactly once per real download.
     */
-    warmCompletionCreative();
+    // never warm an ad while the file is downloading (owner 2026-10-12) — see the idle warm below
+    downloadStarted.current = true;
 
     const fmt = formats.find((f) => f.formatId === formatId && f.kind === kind);
     const ads = rewardAdsFor({
@@ -691,14 +692,28 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
     seconds a real download takes are exactly the lead time the media needs —
     which is what stops the completion ad starting cold at ~10.9s to first frame.
   */
-  const warmCompletionCreative = useCallback(() => {
+  /*
+    🔴 2026-10-12 (owner: "the fetch delays more … it shouldn't prefetch ad with the download
+    fetch time, it should use any other chance that won't be noticeable"): the creative used to
+    be fetched ON the Download tap — its VAST request and its video then shared the connection
+    with the file itself. It is now fetched while the visitor is choosing a quality (the
+    connection is idle), 1.5 s after the result appears, once per result; if Download is tapped
+    before that, it is not fetched at all during the download (the completion fetches normally).
+  */
+  const downloadStarted = useRef(false);
+  useEffect(() => {
+    downloadStarted.current = false;
     if (!adsReady || !showAds) return;
-    void import("@/features/monetization/vast-interstitial/request")
-      .then((m) => m.warmCreativeFor("download-complete"))
-      .catch(() => {
-        /* The completion still fetches normally — this is only a head start. */
-      });
-  }, [adsReady, showAds]);
+    const t = window.setTimeout(() => {
+      if (downloadStarted.current) return;
+      void import("@/features/monetization/vast-interstitial/request")
+        .then((m) => m.warmCreativeFor("download-complete"))
+        .catch(() => {
+          /* The completion still fetches normally — this is only a head start. */
+        });
+    }, 1500);
+    return () => window.clearTimeout(t);
+  }, [adsReady, showAds, metadata.id]);
 
   const platform = PLATFORMS[metadata.platform];
   const BrandIcon = BRAND_ICONS[metadata.platform];

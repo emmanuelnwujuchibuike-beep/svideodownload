@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
+import { afterPageLoad } from "@/features/app-shell/warm-routes";
 import { cn } from "@/lib/utils";
 
 import { AdSlot } from "./ad-slot";
@@ -35,6 +38,22 @@ export function PreparingAd({
   active: boolean;
   className?: string;
 }) {
+  /*
+    🔴 NEVER LOADS DURING A FETCH (owner, 2026-10-12: "the fetch delays more … it shouldn't
+    prefetch ad with the download fetch time, it should use any other chance that won't be
+    noticeable"). The slot used to mount with the page, so its VAST request and video download
+    could run while a pasted link was being fetched — sharing the connection with it. It now
+    mounts only once the page has loaded and the browser is idle, and only while NO fetch is in
+    flight; a fetch that starts first simply goes without it this time. Once mounted, it keeps
+    its buffered creative for the next fetch.
+  */
+  const [idle, setIdle] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => afterPageLoad(() => setIdle(true)), []);
+  useEffect(() => {
+    if (idle && !active) setMounted(true);
+  }, [idle, active]);
+  if (!mounted) return null;
   /*
     🔴 MOUNTED ALWAYS, REVEALED WHEN BUSY (owner, 2026-08-30: "the preparing for
     download is not showing too").

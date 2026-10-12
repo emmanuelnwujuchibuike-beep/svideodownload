@@ -52,7 +52,8 @@ export function ResultAd({ className }: { className?: string }) {
   if (state.status === "pending" || state.provider === null) return null;
   if (state.provider === "frenzsave") {
     return (
-      <div data-ad-slot="download_result_page" data-ad-provider="frenzsave" className={className}>
+      // breathing room under the quality picker, like the network branch (owner 2026-10-12: "too close to the quality picker")
+      <div data-ad-slot="download_result_page" data-ad-provider="frenzsave" className={cn("mt-8", className)}>
         <SelfAdCard ads={state.ads} rules={state.rules} placement="download_result_banner" page="download_result" />
       </div>
     );
@@ -112,7 +113,7 @@ function NetworkResultAd({ className, onEmpty }: { className?: string; onEmpty?:
   const isVideo = ad.format === "video" && Boolean(ad.scriptCode);
 
   return (
-    <div className={cn("mx-auto mt-6 w-full max-w-2xl", className)}>
+    <div className={cn("mx-auto mt-8 w-full max-w-2xl", className)}>
       {/*
         🔴 THE HEAVY HEADER IS GONE (owner, 2026-09-02: "remove this our sponsor
         tag and skip button from the download result card … make the ad less

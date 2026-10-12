@@ -65,6 +65,7 @@ export async function POST(request: Request) {
 
   const db = createAdminClient();
   const created: string[] = [];
+  let firstId: string | null = null;
   const warm: string[] = [];
   const failed: string[] = [];
   let index = 0;
@@ -117,7 +118,7 @@ export async function POST(request: Request) {
         }
       }
 
-      const { error: rowErr } = await db
+      const { data: row, error: rowErr } = await db
         .from("wallpapers")
         .insert({
           title,
@@ -130,7 +131,9 @@ export async function POST(request: Request) {
           status: "published",
           source: "member",
           uploaded_by: user.id,
-        });
+        })
+        .select("id")
+        .maybeSingle();
 
       if (rowErr) {
         // Never leave an orphaned object behind if the row didn't land.
@@ -139,12 +142,19 @@ export async function POST(request: Request) {
         continue;
       }
       created.push(title);
+      if (!firstId && row) firstId = (row as { id: string }).id;
       warm.push(pub.publicUrl);
     } catch (e) {
       failed.push(`${file.name}: ${e instanceof Error ? e.message : "failed"}`);
     }
   }
 
+  // people who asked to hear about this member's posts hear about the upload — once per batch, after the response
+  if (firstId) {
+    const wid = firstId;
+    const n = created.length;
+    after(() => import("@/lib/social/creator-notify-emit").then((m) => m.notifyNewWallpaper(user.id, wid, n)).catch(() => {}));
+  }
   // 2026-10-09 landing speed test: the newest wallpaper is the landing LCP — warm its optimized variants now, not on a visitor's phone
   if (warm.length) after(() => Promise.all(warm.map(warmWallpaperImage)));
   return NextResponse.json({ ok: created.length > 0, created: created.length, failed });

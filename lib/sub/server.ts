@@ -341,22 +341,26 @@ export async function subEarnings(creatorId: string): Promise<SubEarnings> {
 
 // ─── Money out ───────────────────────────────────────────────────────────────
 
-export async function requestSubWithdrawal(input: { userId: string; grossCents: number; details: unknown; idempotencyKey: string }): Promise<Result<{ id: string; status: string; netCents: number; feeCents: number; paidOut: boolean }>> {
+export async function requestSubWithdrawal(input: { userId: string; grossCents: number; details: unknown; idempotencyKey: string; method?: "paystack" | "international" }): Promise<Result<{ id: string; status: string; netCents: number; feeCents: number; paidOut: boolean }>> {
   const cfg = await subConfig();
   if (!cfg.withdrawalsEnabled) return fail("SUB withdrawals are paused right now.", 503, "paused");
   if (!/^[A-Za-z0-9_-]{8,80}$/.test(input.idempotencyKey)) return fail("Invalid request.");
-  const details = validatePayoutDetails("paystack", input.details);
-  if (!details) return fail("Pick your bank and enter a 10-digit account number.");
-  const name = await resolveAccount(details.accountNumber, details.bankCode ?? "");
-  if (!name) return fail("That account number doesn't match the bank. Check both.");
-  details.accountName = name;
+  // owner 2026-10-12: outside Nigeria → a bank wire or PayPal, paid by hand from the admin queue (never Paystack)
+  const method = input.method === "international" ? "international" : "paystack";
+  const details = validatePayoutDetails(method, input.details);
+  if (!details) return fail(method === "international" ? "Check your payout details: country (not Nigeria), name, and the bank with its SWIFT code, or your PayPal email." : "Pick your bank and enter a 10-digit account number.");
+  if (method === "paystack") {
+    const name = await resolveAccount(details.accountNumber, details.bankCode ?? "");
+    if (!name) return fail("That account number doesn't match the bank. Check both.");
+    details.accountName = name;
+  }
   const split = withdrawalSplit(input.grossCents, cfg.withdrawalFeePercent);
   const { data, error } = await createAdminClient().rpc("request_sub_withdrawal", {
     p_user: input.userId,
     p_gross_cents: split.grossCents,
     p_fee_bp: split.feeBp,
     p_min_cents: cfg.minWithdrawalCents,
-    p_method: "paystack",
+    p_method: method,
     p_details: details,
     p_snapshot: { withdrawalFeePercent: cfg.withdrawalFeePercent, version: 1 },
     p_idempotency: input.idempotencyKey,
@@ -378,7 +382,8 @@ export async function requestSubWithdrawal(input: { userId: string; grossCents: 
   // owner: "withdraw instantly" — straight to Paystack Transfers, no admin step
   let paidOut = false;
   let status = "pending";
-  if (cfg.autoPayout) {
+  // only a Paystack (Nigerian bank) withdrawal can leave automatically; international ones wait for the team
+  if (cfg.autoPayout && method === "paystack") {
     const out = await payWithdrawalViaPaystack(r.id!, null);
     paidOut = out.ok;
     status = out.ok ? (out.status === "success" ? "completed" : "processing") : "pending";

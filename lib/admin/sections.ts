@@ -106,7 +106,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     label: "Revenue",
     category: "monetization",
     icon: "DollarSign",
-    blurb: "Subscription income at your configured prices, and real ad engagement.",
+    blurb: "Subscription income at your configured prices, and your traffic.",
   },
   {
     id: "ads",

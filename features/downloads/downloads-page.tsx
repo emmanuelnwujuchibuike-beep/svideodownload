@@ -208,7 +208,8 @@ export function DownloadsPage({
         hero is the paste box and nothing else — the same shape as the landing.
       */}
       <DownloadPageCore
-        topCredits="strip"
+        // owner 2026-10-12: "remove this AI credit card section from the Download page, it should only be in the AI page"
+        topCredits="none"
         platformStatus={platformStatus}
         ctaWallpaperUrl={ctaWallpaperUrl}
         frenzAiTileImageUrl={frenzAiTileImageUrl}

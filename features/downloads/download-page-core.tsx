@@ -2,6 +2,7 @@
 
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { AiCreditStrip, EarnButton } from "@/features/ai/design/ai-credit-strip";
+import { PromoteButton } from "@/features/downloads/promote-button";
 import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
 import { ExploreFeaturesBar, FrenzAICta } from "@/features/downloads/frenz-ai-cta";
 import type { AiPromo } from "@/lib/ai/promo/config";
@@ -138,7 +139,8 @@ export function DownloadPageCore({
    * Earn button on the landing ("only the earn button at the top of the
    * landing page where it will be fully noticeable").
    */
-  topCredits?: "strip" | "earn" | null;
+  /** "none" (owner 2026-10-12: the AI credits card lives on the AI pages only): no strip, and the hero keeps the /downloads layout without the paragraph */
+  topCredits?: "strip" | "earn" | "none" | null;
 }) {
   const { items } = useHistory();
 
@@ -149,7 +151,8 @@ export function DownloadPageCore({
         <AiCreditStrip base="/ai" className="mb-3" />
       ) : null}
       {/* /downloads: the "Save. Discover. Create." line sits under the credits card, without the paragraph (owner, 2026-10-09) */}
-      <DownloadsHero trailing={topCredits === "earn" ? <EarnButton size="md" /> : undefined} subtitle={topCredits !== "strip"} />
+      {/* /downloads: Promote sits opposite "Save. Discover. Create." (owner 2026-10-12: out of the crowded top bar) */}
+      <DownloadsHero trailing={topCredits === "earn" ? <EarnButton size="md" /> : topCredits === "none" ? <PromoteButton /> : undefined} subtitle={topCredits !== "strip" && topCredits !== "none"} />
 
       {/*
         🔴 Install moved BELOW the paste box (owner, 2026-08-25, with a

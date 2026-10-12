@@ -170,7 +170,9 @@ export function ProfileSections({
   // now; a hub key in the URL simply lands on the first grid.
   const mediaKeys = new Set(sections.map((s) => s.key));
   const landing = layout.landing && mediaKeys.has(layout.landing) ? layout.landing : (sections[0]?.key ?? null);
-  const active = initialTab && mediaKeys.has(initialTab) ? initialTab : landing;
+  // ?tab=sub (the subscribe link creators share, and where Paystack returns subscribers) is a real tab whenever
+  // this profile HAS a SUB tab — it is added inside ProfileTabs, so it is not among the media sections (2026-10-12 fix)
+  const active = initialTab && (mediaKeys.has(initialTab) || (initialTab === "sub" && !!sub)) ? initialTab : landing;
 
   return (
     <>

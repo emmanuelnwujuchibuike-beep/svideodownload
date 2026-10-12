@@ -84,16 +84,18 @@ describe("small fixes", () => {
     expect(b).toContain("group-data-[pending]:inline-block");
   });
 
-  it("Promote sits in the top bar on /downloads, as on the landing header", () => {
-    expect(code("features/app-shell/app-topbar.tsx")).toContain('{pathname === "/downloads" && !searchActive ? <PromoteButton size="header" /> : null}');
+  it("Promote on /downloads sits opposite Save. Discover. Create. (owner 2026-10-12, out of the crowded top bar)", () => {
+    expect(code("features/app-shell/app-topbar.tsx")).not.toContain("<PromoteButton");
     const core = code("features/downloads/download-page-core.tsx");
-    expect(core).not.toContain("<PromoteButton");
+    expect(core).toContain('topCredits === "none" ? <PromoteButton /> : undefined');
+    // the strip itself still exists for a caller that asks for it — /downloads no longer does (owner 2026-10-12)
     expect(core).toContain('<AiCreditStrip base="/ai" className="mb-3" />');
+    expect(code("features/downloads/downloads-page.tsx")).toContain('topCredits="none"');
   });
 
   it("Save. Discover. Create. sits under the credits card on /downloads, without the paragraph", () => {
     const core = code("features/downloads/download-page-core.tsx");
-    expect(core).toContain("subtitle={topCredits !== \"strip\"}");
+    expect(core).toContain("subtitle={topCredits !== \"strip\" && topCredits !== \"none\"}");
     expect(core).not.toContain("headline={topCredits !== \"strip\"}");
     expect(core.indexOf("<AiCreditStrip")).toBeLessThan(core.indexOf("<DownloadsHero"));
     expect(code("features/downloads/downloads-sections.tsx")).toContain("{subtitle ? (");

@@ -28,12 +28,45 @@ export interface PayoutDetails {
   country?: string;
   /** "paystack" payouts (owner 2026-10-11): the Paystack bank code; the name is resolved by Paystack, never typed */
   bankCode?: string;
+  /** "international" (owner 2026-10-12, paid by hand): how — a bank wire or PayPal */
+  rail?: "bank" | "paypal";
+  /** a bank's SWIFT / BIC, for an international wire */
+  swift?: string;
+  /** the PayPal account's email */
+  email?: string;
+}
+
+/**
+ * International payouts (owner 2026-10-12: "payout should not only go to Nigerian accounts").
+ * A Nigerian Paystack business can only pay Nigerian banks — Paystack does not transfer across
+ * currencies — so a creator outside Nigeria saves a bank wire or a PayPal account and the
+ * withdrawal waits in the admin queue to be paid BY HAND ("Mark paid" there). Nigeria itself
+ * is refused here: Nigerian banks are paid instantly through Paystack instead.
+ */
+const SWIFT = /^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/;
+const EMAIL = /^[^\s@<>"']{1,64}@[^\s@<>"']{1,190}\.[A-Za-z]{2,24}$/;
+function validateInternational(r: Record<string, unknown>, s: (v: unknown, max: number) => string): PayoutDetails | null {
+  // exactly a two-letter ISO code: "Ghana" must not be cut to "GH" (a cut name could name another country)
+  const country = s(r.country, 8).toUpperCase();
+  if (!/^[A-Z]{2}$/.test(country) || country === "NG") return null;
+  const accountName = s(r.accountName, 120);
+  if (accountName.length < 2) return null;
+  if (r.rail === "paypal") {
+    const email = s(r.email, 254).toLowerCase();
+    return EMAIL.test(email) ? { accountName, accountNumber: "", bankName: "PayPal", country, rail: "paypal", email } : null;
+  }
+  const bankName = s(r.bankName, 120);
+  const accountNumber = s(r.accountNumber, 40).replace(/\s+/g, " ");
+  const swift = s(r.swift, 11).toUpperCase().replace(/\s+/g, "");
+  if (bankName.length < 2 || !/^[0-9A-Za-z -]{4,40}$/.test(accountNumber) || !SWIFT.test(swift)) return null;
+  return { accountName, accountNumber, bankName, country, rail: "bank", swift };
 }
 
 export function validatePayoutDetails(method: string, raw: unknown): PayoutDetails | null {
-  if ((method !== "bank_transfer" && method !== "paystack") || !raw || typeof raw !== "object") return null;
+  if ((method !== "bank_transfer" && method !== "paystack" && method !== "international") || !raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
   const s = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+  if (method === "international") return validateInternational(r, s);
   if (method === "paystack") {
     // a Nigerian NUBAN and a Paystack bank code; the account name is filled from Paystack in requestWithdrawal
     const p = { accountName: "", accountNumber: s(r.accountNumber, 10), bankName: s(r.bankName, 120), bankCode: s(r.bankCode, 10), country: "NG" };

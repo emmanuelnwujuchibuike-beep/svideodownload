@@ -156,7 +156,7 @@ export async function notifyNewStory(publisherId: string, storyId?: string | nul
     const since = new Date(Date.now() - 60 * 60_000).toISOString();
     const [excluded, recent] = await Promise.all([
       excludedFor(db, publisherId, subscribers),
-      inChunks<{ user_id: string }>(subscribers, (c) => db.from("notifications").select("user_id").eq("type", "news_following").eq("actor_id", publisherId).is("post_id", null).gte("created_at", since).in("user_id", c)),
+      inChunks<{ user_id: string }>(subscribers, (c) => db.from("notifications").select("user_id").eq("type", "news_following").eq("actor_id", publisherId).is("post_id", null).like("data->>url", "/u/%").gte("created_at", since).in("user_id", c)),
     ]);
     for (const r of recent) excluded.add(r.user_id);
     const viewers = eligibleViewers({ publisherId, subscribers, visibility: "public", follows: new Set(), excluded });
@@ -178,6 +178,43 @@ export async function notifyNewStory(publisherId: string, storyId?: string | nul
     }));
   } catch {
     /* never let a notification failure affect the story */
+  }
+}
+
+/**
+ * Someone you asked to hear from uploaded wallpapers (complete-system brief, 2026-10-12). Member
+ * wallpapers are public the moment they upload, so the "posts" opt-in decides; one notification
+ * per upload batch, never one per file, and once per wallpaper (idempotent on its link).
+ */
+export async function notifyNewWallpaper(publisherId: string, wallpaperId: string, count = 1): Promise<void> {
+  try {
+    const db = createAdminClient();
+    const subscribers = (await subscribersFor(publisherId, "posts")).slice(0, MAX_FANOUT);
+    if (!subscribers.length) return;
+    const url = `/wallpapers?w=${wallpaperId}`;
+    const [excluded, already] = await Promise.all([
+      excludedFor(db, publisherId, subscribers),
+      inChunks<{ user_id: string }>(subscribers, (c) => db.from("notifications").select("user_id").eq("type", "news_following").eq("actor_id", publisherId).eq("data->>url", url).in("user_id", c)),
+    ]);
+    for (const r of already) excluded.add(r.user_id);
+    const viewers = eligibleViewers({ publisherId, subscribers, visibility: "public", follows: new Set(), excluded });
+    if (!viewers.length) return;
+    const who = await pushPerson(publisherId);
+    await deliver(viewers, (userId) => ({
+      userId,
+      type: "news_following",
+      actorId: publisherId,
+      push: {
+        title: who.name,
+        body: count > 1 ? `Uploaded ${count} new wallpapers` : "Uploaded a new wallpaper",
+        genericBody: "New wallpaper from someone you follow.",
+        url,
+        icon: who.icon,
+        tag: `new-wallpaper:${publisherId}`,
+      },
+    }));
+  } catch {
+    /* never let a notification failure affect the upload */
   }
 }
 

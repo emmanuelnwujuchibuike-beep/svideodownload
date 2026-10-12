@@ -137,7 +137,7 @@ export function ProfileTabs({
   sub?: SubTabData | null;
 }) {
   const keys = useMemo(() => sections.map((s) => s.key), [sections]);
-  const [active, setActive] = useState<string>(() => (keys.includes(initialTab) ? initialTab : (keys[0] ?? "posts")));
+  const [active, setActive] = useState<string>(() => (keys.includes(initialTab) || (initialTab === SUB_TAB_KEY && !!sub) ? initialTab : (keys[0] ?? "posts")));
 
   // Grid vs list — seeded from a cookie (instant, no flash), remembered on-device.
   const [view, setView] = useState<MediaView>(initialView);

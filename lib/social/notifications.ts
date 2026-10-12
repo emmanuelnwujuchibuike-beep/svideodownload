@@ -188,7 +188,7 @@ async function enrichRows(db: ReturnType<typeof createAdminClient>, rows: Row[],
   const actorIds = [...new Set(rows.map((r) => r.actor_id).filter(Boolean) as string[])];
   const postIds = [...new Set(rows.map((r) => r.post_id).filter(Boolean) as string[])];
   const commentIds = [...new Set(rows.map((r) => (r.type === "comment" || r.type === "reply" ? r.comment_id : null)).filter(Boolean) as string[])];
-  const wallpaperIds = [...new Set(rows.map((r) => (r.type.startsWith("wallpaper_") ? WALLPAPER_IN_URL.exec(r.data?.url ?? "")?.[1] : null)).filter(Boolean) as string[])];
+  const wallpaperIds = [...new Set(rows.map((r) => (r.type.startsWith("wallpaper_") || r.type === "news_following" ? WALLPAPER_IN_URL.exec(r.data?.url ?? "")?.[1] : null)).filter(Boolean) as string[])];
   // one read per kind for the whole page — never one per notification
   const [{ data: profs }, { data: posts }, { data: walls }, { data: comments }] = await Promise.all([
     actorIds.length
@@ -230,7 +230,7 @@ async function enrichRows(db: ReturnType<typeof createAdminClient>, rows: Row[],
       ? visible(postById.get(r.post_id))
         ? httpsOnly(postById.get(r.post_id)?.thumbnail_url)
         : null
-      : r.type.startsWith("wallpaper_")
+      : r.type.startsWith("wallpaper_") || r.type === "news_following"
         ? (wallThumb.get(WALLPAPER_IN_URL.exec(r.data?.url ?? "")?.[1] ?? "") ?? null)
         : null,
     postGone: !!r.post_id && !visible(postById.get(r.post_id)),

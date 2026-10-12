@@ -1,59 +1,28 @@
-import { AlertTriangle, ChevronDown, DollarSign, Layers, MousePointerClick, Eye, TrendingUp, Users } from "lucide-react";
+import { AlertTriangle, MousePointerClick, Eye, TrendingUp, Users } from "lucide-react";
 
 import { PageViewsChart } from "./page-views-chart";
 
-import { AD_ZONE_META, type AdZoneId } from "@/lib/monetization/ad-schema";
-import { MONETAG_SLOT_LABELS } from "@/lib/monetization/monetag-track";
-import { REVENUE_SOURCE_LABELS, type RevenueSource } from "@/lib/monetization/collected-revenue";
 import type { MonetizationAnalytics, RevenueStats } from "@/lib/monetization/stats";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 /**
  * The revenue picture — the first thing the dashboard shows.
  *
+ * Subscription income and traffic only (owner 2026-10-12: "remove all the ad network
+ * ad stats and card from the admin dashboard revenue", and the NGN collected-revenue
+ * card — credits deposited are already reported in USD elsewhere). Ad impressions,
+ * clicks, CTR and the estimated ad revenue are no longer shown here; the ads platform
+ * keeps its own reporting.
+ *
  * ── Every number here is counted, never modelled ──────────────────────────────
- *
- * Impressions and clicks are exact counts from `ad_impressions` / `ad_clicks`,
- * written by the `/api/track` beacon. Subscription income is live subscriber
- * counts multiplied by the prices set on the pricing screen. Nothing is
- * projected, annualised or estimated, because a plausible-looking number nobody
- * can trace is worse than no number — this project has declined invented
- * statistics three times and this screen is where the temptation is highest.
- *
- * There is deliberately no ad REVENUE figure. Networks report earnings in their
- * own dashboards and we do not receive them; multiplying impressions by an
- * assumed RPM would produce exactly the kind of confident fiction above. What we
- * genuinely know is engagement, so that is what is shown.
+ * Subscription income is live subscriber counts multiplied by the prices set on the
+ * pricing screen. Nothing is projected, annualised or estimated.
  *
  * ── Partial totals are labelled as partial ────────────────────────────────────
- *
  * `mrrComplete` is false when a configured price is not a number ("Contact us"
  * is a real thing to write on a pricing page). The total then excludes that plan
  * and says so, rather than quietly counting those subscribers as free.
  */
-
-/**
- * Human labels for the Hilltop slot rows `/api/track` now records.
- *
- * They are not AD_ZONES — no ads-table row, no `AD_ZONE_META` entry — so
- * without this the table would print `hilltop_historyfeed` at an operator and
- * make them work out where on the site that is. The wording matches the
- * placement switches in the monetization panel, so a row here and the switch
- * that controls it read as the same thing.
- */
-const HILLTOP_SLOT_LABELS: Record<string, string> = {
-  /*
-    Monetag's formats and moments, spread in from the registries. Every one of
-    them now reports (features/monetization/monetag-report.ts), so without a
-    label this table would print `monetag_moment_download_complete` at an
-    operator and make them decode it.
-  */
-  ...MONETAG_SLOT_LABELS,
-  hilltop_history: "HilltopAds — History, above the grid",
-  hilltop_historyfeed: "HilltopAds — History, between time periods",
-  hilltop_landing: "HilltopAds — Landing, under the wallpaper button",
-  hilltop_feed: "HilltopAds — in-feed",
-};
 
 function Metric({
   icon: Icon,
@@ -61,16 +30,19 @@ function Metric({
   value,
   sub,
   emphasis,
+  className,
 }: {
   icon: typeof Eye;
   label: string;
   value: string;
   sub?: string;
   emphasis?: boolean;
+  className?: string;
 }) {
   return (
     <div
       className={cn(
+        className,
         "rounded-2xl border p-4 transition-colors",
         emphasis
           ? "border-primary/25 bg-gradient-to-br from-primary/[0.07] to-transparent"
@@ -96,7 +68,6 @@ function Metric({
 
 export function RevenueOverview({
   revenue,
-  analytics,
   traffic,
 }: {
   revenue: RevenueStats | null;
@@ -134,62 +105,20 @@ export function RevenueOverview({
     );
   }
 
-  const { subscribers, ads, affiliate, api } = revenue;
-  const zones = analytics?.adZones ?? [];
+  const { subscribers, affiliate, api } = revenue;
 
   /*
-    2026-10-10 (owner: "include funding revenue in the total revenue and not just
-    subscribers"): money that actually ARRIVED, per currency and per source —
-    AI credit funding, AI subscriptions, advertisers. Pro/Business subscriptions
-    have no payment ledger, so the total below adds their MRR as an estimate,
-    said in so many words, and only when it is in the same currency.
+    🔴 Owner, 2026-10-12: "remove all the ad network ad stats and card from the admin
+    dashboard revenue" and the NGN "Total collected" card ("a wrong stat … I already
+    have a section for credits deposited in USD"). Gone from this screen: the
+    collected-revenue card, ad impressions / clicks, impressions per 100 views, the
+    estimated ad revenue and the click-through rate, and the placement table. The
+    data behind them is untouched (the ads platform keeps its own reporting); this
+    screen now shows subscription income and traffic only.
   */
-  const collected = revenue.collected ? Object.entries(revenue.collected.currencies) : [];
-  const mrrCode = ({ "$": "USD", "₦": "NGN", "£": "GBP", "€": "EUR" } as Record<string, string>)[revenue.currency.trim()] ?? revenue.currency.trim().toUpperCase();
-  const money = (minor: number, code: string) => `${code} ${(minor / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-
   return (
     <div className="space-y-8">
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold">Collected revenue</h3>
-        {revenue.collected === null ? (
-          <p className="text-sm text-muted-foreground">Payments could not be read.</p>
-        ) : collected.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No successful payments yet.</p>
-        ) : (
-          collected.map(([code, c]) => (
-            <div key={code} className="rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/[0.07] to-transparent p-4">
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground">Total collected, last 30 days · {code}</p>
-                  <p className="mt-1 text-2xl font-bold tabular-nums">{money(c.d30.total, code)}</p>
-                  {mrrCode === code && revenue.mrr > 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      With Pro/Business subscriptions (MRR, estimated): <b className="text-foreground">{money(c.d30.total + Math.round(revenue.mrr * 100), code)}</b>
-                    </p>
-                  ) : null}
-                </div>
-                <div className="grid grid-cols-3 gap-4 text-right text-xs">
-                  <span><span className="block text-muted-foreground">Today</span><b className="tabular-nums">{money(c.today.total, code)}</b></span>
-                  <span><span className="block text-muted-foreground">7 days</span><b className="tabular-nums">{money(c.d7.total, code)}</b></span>
-                  <span><span className="block text-muted-foreground">All time</span><b className="tabular-nums">{money(c.all.total, code)}</b></span>
-                </div>
-              </div>
-              <ul className="mt-3 grid gap-1.5 sm:grid-cols-3">
-                {(Object.keys(REVENUE_SOURCE_LABELS) as RevenueSource[]).map((src) => (
-                  <li key={src} className="rounded-xl bg-card/70 px-3 py-2 text-xs">
-                    <span className="block text-muted-foreground">{REVENUE_SOURCE_LABELS[src]} · 30 days</span>
-                    <b className="tabular-nums">{money(c.d30.bySource[src], code)}</b>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-2 text-[11px] text-muted-foreground">{c.d30.payments} payment{c.d30.payments === 1 ? "" : "s"} in 30 days. Admin test campaigns are never counted — they have no payment.</p>
-            </div>
-          ))
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         <Metric
           icon={TrendingUp}
           label="Monthly recurring revenue"
@@ -209,65 +138,13 @@ export function RevenueOverview({
           value={formatCompactNumber(subscribers.total)}
           sub={`${subscribers.pro} Pro · ${subscribers.business} Business`}
         />
+        {/* the third tile spans both columns on a phone so the row never leaves a hole */}
         <Metric
-          icon={Eye}
-          label="Ad impressions (7d)"
-          value={formatCompactNumber(ads.impr7d)}
-          sub={`${formatCompactNumber(ads.impressionsToday)} today`}
-        />
-        <Metric
-          icon={MousePointerClick}
-          label="Ad clicks (7d)"
-          value={formatCompactNumber(ads.clicks7d)}
-          sub={`${ads.ctr}% CTR · ${formatCompactNumber(ads.clicksToday)} today`}
-        />
-      </div>
-
-      {/*
-        Traffic, on the revenue screen, because ad income is a function of it.
-        An impression count with no view count beside it cannot be judged.
-      */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Metric
+          className="col-span-2 lg:col-span-1"
           icon={Eye}
           label="Page views"
           value={traffic ? formatCompactNumber(traffic.pageViews) : "—"}
           sub={traffic ? `${formatCompactNumber(traffic.uniqueVisitors)} unique visitors` : "Analytics unavailable"}
-        />
-        <Metric
-          icon={Layers}
-          label="Impressions per 100 views"
-          /*
-            The ratio that says whether the placements are actually filling.
-            Deliberately per-100 rather than a percentage: a page carries several
-            slots, so the number is routinely above 100 and a "%" label on it
-            would read as broken.
-          */
-          value={
-            traffic && traffic.pageViews > 0
-              ? Math.round((ads.impr7d / traffic.pageViews) * 100).toLocaleString()
-              : "—"
-          }
-          sub={traffic && traffic.pageViews > 0 ? "Ad impressions ÷ page views" : "Needs both numbers"}
-        />
-        <Metric
-          icon={DollarSign}
-          label="Estimated ad revenue"
-          value={traffic ? `$${traffic.adRevenueUsd.toFixed(2)}` : "—"}
-          /*
-            🔴 Labelled ESTIMATED, and the CPM it used is printed beside it.
-            The networks do not report revenue to us — this is impressions ÷
-            1000 × the CPM an admin typed in. Showing it without the input
-            visible would turn a projection into a figure somebody plans
-            against.
-          */
-          sub={traffic ? `At $${traffic.cpmUsd.toFixed(2)} CPM — your estimate, not network-reported` : "Analytics unavailable"}
-        />
-        <Metric
-          icon={MousePointerClick}
-          label="Click-through rate"
-          value={`${ads.ctr}%`}
-          sub={`${formatCompactNumber(ads.clicks7d)} clicks ÷ ${formatCompactNumber(ads.impr7d)} impressions`}
         />
       </div>
 
@@ -286,90 +163,6 @@ export function RevenueOverview({
           </span>
         </p>
       ) : null}
-
-      {/*
-        Per-placement engagement, BEHIND A DISCLOSURE (owner, 2026-09-02: "remove
-        this ad details from the revenue section, and put them inisde a button
-        that displays them in the revenue so they load when is clicks to reduce
-        admin budget, and to reduce cluster in the admin revenue").
-
-        The rows themselves cost nothing extra to fetch — they arrive on the
-        same monetization payload the cards above already use, so this is not a
-        saved query. What it saves is the RENDER: a table of every served
-        placement, on a screen whose job is four headline numbers, is most of
-        the scroll and most of the clutter.
-
-        Counted, and only for placements actually seen — a row of zeroes for
-        every declared zone would bury the ones carrying the site.
-      */}
-      <details className="group rounded-2xl border border-border/70 bg-card">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-sm font-semibold">
-          <span>Placement performance · last 7 days</span>
-          <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            {zones.length > 0
-              ? `${zones.length} ${zones.length === 1 ? "placement" : "placements"}`
-              : "none yet"}
-            <ChevronDown aria-hidden className="h-4 w-4 transition-transform group-open:rotate-180" />
-          </span>
-        </summary>
-        <div className="border-t border-border/60 p-4">
-        {/*
-          🔴 SAY WHAT A MONETAG ROW'S NUMBERS ARE, because they are not the same
-          kind of number as the rows above them.
-
-          Owner, 2026-09-03: "make all monetag ad slot and format shows the
-          impression, click and interaction sections in the admin dashboard."
-          They do now — but Monetag's formats place themselves inside their own
-          cross-origin frames, so what this app can witness is what it drew and
-          what was pointed at, never what the network billed. An operator
-          reading a Monetag CTR beside an ExoClick CTR would otherwise compare
-          two different measurements and conclude the wrong thing.
-        */}
-        {zones.some((z) => z.zone.startsWith("monetag_")) ? (
-          <p className="mb-4 rounded-xl border border-border/60 bg-secondary/40 p-3 text-xs leading-relaxed text-muted-foreground">
-            <span className="font-medium text-foreground">Monetag rows are measured here, not reported by Monetag.</span>{" "}
-            An impression means this site saw the creative drawn; a click means a pointer landed on it.
-            Clicks inside Monetag&rsquo;s own frame never reach us, so Monetag clicks and CTR are a{" "}
-            <span className="font-medium">lower bound</span> — Monetag&rsquo;s dashboard is the authority on
-            what was billed. A row with requests and no impressions is a placement that loads and never draws.
-          </p>
-        ) : null}
-        {zones.length === 0 ? (
-          <p className="rounded-2xl border border-border/70 bg-card p-4 text-sm leading-relaxed text-muted-foreground">
-            No impressions recorded yet. Placements appear here once they have been served — seed
-            one on the Ad placements section and it will start reporting.
-          </p>
-        ) : (
-          <div className="overflow-x-auto rounded-2xl border border-border/70">
-            <table className="w-full min-w-[34rem] text-sm">
-              <thead className="bg-secondary/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Placement</th>
-                  <th className="px-4 py-3 font-medium">Impressions</th>
-                  <th className="px-4 py-3 font-medium">Clicks</th>
-                  <th className="px-4 py-3 font-medium">CTR</th>
-                </tr>
-              </thead>
-              <tbody>
-                {zones.map((z) => (
-                  <tr key={z.zone} className="border-t border-border/60">
-                    {/* The human label, matching the Ad placements dropdown —
-                        an operator should not have to map `result_top` to a
-                        position on the page in their head. */}
-                    <td className="px-4 py-3 font-medium">
-                      {AD_ZONE_META[z.zone as AdZoneId]?.label ?? HILLTOP_SLOT_LABELS[z.zone] ?? z.zone}
-                    </td>
-                    <td className="px-4 py-3 tabular-nums">{formatCompactNumber(z.impressions)}</td>
-                    <td className="px-4 py-3 tabular-nums">{formatCompactNumber(z.clicks)}</td>
-                    <td className="px-4 py-3 tabular-nums text-muted-foreground">{z.ctr}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        </div>
-      </details>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Metric

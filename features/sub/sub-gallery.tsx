@@ -206,6 +206,8 @@ interface Opened {
   media: { kind: "image" | "video"; url: string; width: number | null; height: number | null }[];
   expiresAt: string;
   watermark: string | null;
+  /** the creator's public handle — the bottom-edge mark links to their profile */
+  creatorHandle?: string | null;
 }
 
 /** The private viewer: a portal with no URL, no share action, covered whenever the app is not in front. */
@@ -322,14 +324,29 @@ function PrivateViewer({ postId, isCreator, onClose, onDeleted }: { postId: stri
           </div>
         ) : (
           <div className="mx-auto w-full max-w-xl space-y-2 pb-6">
-            {data.media.map((m, i) =>
-              m.kind === "image" ? (
-                // eslint-disable-next-line @next/next/no-img-element -- a five-minute private link; next/image would cache it on our server
-                <img key={i} src={m.url} alt={data.caption ?? "Subscriber photo"} draggable={false} onContextMenu={block} className="pointer-events-none w-full" style={m.width && m.height ? { aspectRatio: `${m.width} / ${m.height}` } : undefined} />
-              ) : (
-                <video key={i} src={m.url} controls playsInline preload="metadata" controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture disableRemotePlayback onContextMenu={block} className="w-full bg-black" />
-              ),
-            )}
+            {data.media.map((m, i) => (
+              <div key={i} className="relative">
+                {m.kind === "image" ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- a five-minute private link; next/image would cache it on our server
+                  <img src={m.url} alt={data.caption ?? "Subscriber photo"} draggable={false} onContextMenu={block} className="pointer-events-none w-full" style={m.width && m.height ? { aspectRatio: `${m.width} / ${m.height}` } : undefined} />
+                ) : (
+                  <video src={m.url} controls playsInline preload="metadata" controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture disableRemotePlayback onContextMenu={block} className="w-full bg-black" />
+                )}
+                {/*
+                  The creator's address along the bottom edge (owner 2026-10-12, "like onlyfans.com/<user>"):
+                  a screenshot that leaves Frenz still says where to find them — their PUBLIC profile, never
+                  this private post. Above a video's controls, so it never covers them.
+                */}
+                {data.creatorHandle ? (
+                  <a
+                    href={`/u/${encodeURIComponent(data.creatorHandle)}`}
+                    className={cn("absolute right-3 select-none text-[12.5px] font-semibold tracking-[0.01em] text-white/85 [text-shadow:0_1px_3px_rgba(0,0,0,0.75)]", m.kind === "video" ? "bottom-14" : "bottom-2.5")}
+                  >
+                    frenzsave.com/u/{data.creatorHandle}
+                  </a>
+                ) : null}
+              </div>
+            ))}
             {data.caption ? <p className="whitespace-pre-line px-4 pt-2 text-[15px] leading-relaxed text-white/90">{data.caption}</p> : null}
             {!isCreator ? <p className="px-4 pt-3 text-center text-[11.5px] text-white/45">Private to subscribers. Screenshots taken with a keyboard shortcut are reported to the creator.</p> : null}
           </div>

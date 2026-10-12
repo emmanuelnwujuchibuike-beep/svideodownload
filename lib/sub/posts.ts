@@ -130,7 +130,7 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
 }
 
 /** Opens one post for a viewer who may see it: the caption and five-minute links. Anyone else gets 403 and nothing. */
-export async function openSubPost(postId: string, viewerId: string | null): Promise<{ ok: true; caption: string | null; media: { kind: "image" | "video"; url: string; width: number | null; height: number | null }[]; expiresAt: string; watermark: string | null } | Fail> {
+export async function openSubPost(postId: string, viewerId: string | null): Promise<{ ok: true; caption: string | null; media: { kind: "image" | "video"; url: string; width: number | null; height: number | null }[]; expiresAt: string; watermark: string | null; creatorHandle: string | null } | Fail> {
   if (!viewerId) return fail("Sign in to view this.", 401);
   const db = createAdminClient();
   const { data: post } = await db.from("sub_posts").select("id, creator_id, caption, status").eq("id", postId).maybeSingle();
@@ -141,9 +141,19 @@ export async function openSubPost(postId: string, viewerId: string | null): Prom
   const { data: media } = await db.from("sub_post_media").select("idx, media_kind, object_key, width, height").eq("post_id", postId).order("idx");
   const items = await Promise.all(((media ?? []) as Row[]).map(async (m) => ({ kind: m.media_kind as "image" | "video", url: await presignPrivateGet(m.object_key as string, SIGNED_TTL_SECONDS), width: (m.width as number | null) ?? null, height: (m.height as number | null) ?? null })));
   // the watermark names the VIEWER by public handle only: never an email, phone or payout detail
-  const [cfg, viewer] = await Promise.all([subConfig(), db.from("profiles").select("handle").eq("id", viewerId).maybeSingle()]);
+  /*
+    Plus the CREATOR's public handle (owner 2026-10-12): the media carries "frenzsave.com/u/<handle>"
+    along its bottom edge, so a screenshot that travels points back to their PUBLIC profile — never
+    to this private post, which has no URL at all.
+  */
+  const [cfg, viewer, creator] = await Promise.all([
+    subConfig(),
+    db.from("profiles").select("handle").eq("id", viewerId).maybeSingle(),
+    db.from("profiles").select("handle").eq("id", p.creator_id as string).maybeSingle(),
+  ]);
   const handle = (viewer.data as Row | null)?.handle as string | undefined;
-  return { ok: true, caption: (p.caption as string | null) ?? null, media: items, expiresAt: new Date(Date.now() + SIGNED_TTL_SECONDS * 1000).toISOString(), watermark: cfg.watermark && viewerId !== p.creator_id && handle ? `@${handle}` : null };
+  const creatorHandle = ((creator.data as Row | null)?.handle as string | undefined) ?? null;
+  return { ok: true, caption: (p.caption as string | null) ?? null, media: items, expiresAt: new Date(Date.now() + SIGNED_TTL_SECONDS * 1000).toISOString(), watermark: cfg.watermark && viewerId !== p.creator_id && handle ? `@${handle}` : null, creatorHandle };
 }
 
 export async function deleteSubPost(creatorId: string, postId: string): Promise<{ ok: true } | Fail> {

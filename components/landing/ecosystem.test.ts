@@ -82,15 +82,16 @@ describe("the landing page structure", () => {
     expect(core).not.toContain("promoteCta");
   });
 
-  it("owner 2026-10-09: the credits strip (with Earn) tops /downloads; the landing has no Earn at the top", () => {
-    expect(src("features/downloads/downloads-page.tsx")).toMatch(/<DownloadPageCore\s+topCredits="strip"/);
+  it("owner 2026-10-12: no credits strip on /downloads (Earn moved to the top bar); the landing has no Earn at the top", () => {
+    expect(src("features/downloads/downloads-page.tsx")).toMatch(/topCredits="none"/);
+    expect(src("features/app-shell/app-topbar.tsx")).toContain('href="/quests"');
     expect(src("components/landing/hero.tsx")).toContain("topCredits={null}");
     expect(src("components/landing/hero.tsx")).not.toContain('topCredits="earn"');
     const core = src("features/downloads/download-page-core.tsx");
     // 2026-10-08 (owner): smaller, on the headline's row — it no longer pushes the headline down
-    expect(core).toContain('<DownloadsHero trailing={topCredits === "earn" ? <EarnButton size="md" /> : undefined}');
+    expect(core).toContain('<DownloadsHero trailing={topCredits === "earn" ? <EarnButton size="md" /> : topCredits === "none" ? <PromoteButton /> : undefined}');
     // /downloads drops the paragraph but shows the line under the credits card (owner, 2026-10-08 / 2026-10-09)
-    expect(core).toContain('subtitle={topCredits !== "strip"}');
+    expect(core).toContain('subtitle={topCredits !== "strip" && topCredits !== "none"}');
     expect(src("features/downloads/downloads-sections.tsx")).toContain('<h1 className="sr-only">Download</h1>');
     // one Earn definition, shared by the strip and the landing
     expect(src("features/ai/design/ai-credit-strip.tsx")).toContain("<EarnButton />");

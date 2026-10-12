@@ -35,13 +35,12 @@ const GRAINS: { id: Granularity; label: string }[] = [
  * one long scroll for a long tab row, which is the same problem wearing a
  * different hat.
  */
+// owner 2026-10-12: the Ads and Reward-ads tabs are gone ("remove all the ad network ad stats")
 const TABS: AdminTab[] = [
   { id: "overview", label: "Overview" },
-  { id: "ads", label: "Ads" },
   { id: "visitors", label: "Visitors" },
   { id: "downloads", label: "Downloads" },
   { id: "installs", label: "Installs" },
-  { id: "rewards", label: "Reward ads" },
 ];
 
 /**
@@ -558,53 +557,6 @@ export function RevenueCharts({
         */}
       </AdminTabPanel>
 
-      <AdminTabPanel id="ads" active={tab} className="grid gap-4 lg:grid-cols-2">
-        <AdminAreaChart
-          title="Ad impressions"
-          subtitle={`${totalImpr.toLocaleString()} in the last ${windowDays} days`}
-          points={impressions}
-          compare={prev.impressions}
-          {...grainProps}
-          slot={1}
-        />
-        <AdminAreaChart
-          title="Ad clicks"
-          subtitle={ctr !== null ? `${totalClicks.toLocaleString()} clicks · ${ctr.toFixed(2)}% CTR` : undefined}
-          points={clicks}
-          compare={prev.clicks}
-          {...grainProps}
-          slot={2}
-        />
-        {/* The figures an ad panel is actually read for, under the charts they
-            come from — the same "line first, figures second" order the reward
-            and install blocks already use. */}
-        <div className="rounded-2xl border border-border/70 bg-secondary/25 p-4 lg:col-span-2">
-          <div className="mb-3 flex items-baseline justify-between gap-3">
-            <p className="text-sm font-bold">Ad performance</p>
-            <p className="text-xs text-muted-foreground">Last {windowDays} days</p>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { label: "Impressions", value: totalImpr.toLocaleString() },
-              { label: "Clicks", value: totalClicks.toLocaleString() },
-              // "—" not "0%" when nothing was served: a CTR with no impressions
-              // behind it is undefined, not zero.
-              { label: "CTR", value: ctr === null ? "—" : `${ctr.toFixed(2)}%` },
-            ].map((s) => (
-              <div key={s.label} className="rounded-xl bg-card px-3 py-3 text-center shadow-soft">
-                <p className="text-2xl font-extrabold tabular-nums tracking-tight">{s.value}</p>
-                <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">{s.label}</p>
-              </div>
-            ))}
-          </div>
-          <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-            Counted from this app&rsquo;s own impression and click records. Earnings are not shown
-            because AdSense and Monetag report them only in their own dashboards — see the note in
-            this file on why an assumed RPM is not an acceptable substitute.
-          </p>
-        </div>
-      </AdminTabPanel>
-
       <AdminTabPanel id="visitors" active={tab} className="grid gap-4 lg:grid-cols-2">
         {visits.length > 0 ? (
           <AdminAreaChart
@@ -740,103 +692,6 @@ export function RevenueCharts({
             someone adds Frenz to their Home Screen, so real installs are higher than this.
           </p>
         </div>
-      </AdminTabPanel>
-
-      <AdminTabPanel id="rewards" active={tab} className="grid gap-4 lg:grid-cols-2">
-        {/*
-          Rewarded ads, as two charts rather than one (owner, 2026-08-23: "add
-          reward ad activity in the revenue, the chart and information like how
-          other revenue information there are").
-
-          Started and completed are plotted separately, at their own honest
-          scales, for the same reason this whole panel is a grid instead of one
-          multi-line chart: the two series differ in magnitude, and overlaying
-          them would need a second axis — the most misleading thing a chart can
-          do. Read across the shared x-axis; the gap between the lines IS the
-          drop-off.
-        */}
-        <AdminAreaChart
-          title="Reward ads started"
-          subtitle={`${totalRewardsStarted.toLocaleString()} opened in the last ${windowDays} days`}
-          points={rewardsStarted}
-          compare={prev.rewardsStarted}
-          {...grainProps}
-          slot={2}
-        />
-        <AdminAreaChart
-          title="Reward ads completed"
-          subtitle={
-            rewardCompletion === null
-              ? `${totalRewardsGranted.toLocaleString()} verified in the last ${windowDays} days`
-              : `${totalRewardsGranted.toLocaleString()} verified · ${rewardCompletion}% completion`
-          }
-          points={rewardsGranted}
-          compare={prev.rewardsGranted}
-          {...grainProps}
-          slot={1}
-        />
-
-        {/*
-          Multi-Link batches (owner, 2026-08-25: "also a chart in revenue").
-
-          Two lines for the same reason as the pair above: a success-only
-          series makes a limit that is turning people away look like an
-          absence of demand. `batch_started` is charted rather than
-          `batch_authorized` because authorization happens BEFORE the ad and
-          before the allowance is spent, so it would count batches nobody
-          completed — this is "batches that actually ran", which is what
-          corresponds to the impressions and downloads charted elsewhere.
-        */}
-        <AdminAreaChart
-          title="Multi-Link batches"
-          subtitle={`${totalMultilinkBatches.toLocaleString()} ran in the last ${windowDays} days`}
-          points={multilinkBatches}
-          compare={prev.multilinkBatches}
-          {...grainProps}
-          slot={2}
-        />
-        <AdminAreaChart
-          title="Multi-Link refused"
-          subtitle={
-            totalMultilinkRefused === 0
-              ? `None refused in the last ${windowDays} days`
-              : `${totalMultilinkRefused.toLocaleString()} hit a limit — unmet intent, and the upgrade case`
-          }
-          points={multilinkRefused}
-          compare={prev.multilinkRefused}
-          {...grainProps}
-          slot={1}
-        />
-
-      {/*
-        The reward funnel in numbers, under the charts it summarises — the same
-        "line first, figures second" order every other panel here uses.
-      */}
-      <div className="rounded-2xl border border-border/70 bg-secondary/25 p-4 lg:col-span-2">
-        <div className="mb-3 flex items-baseline justify-between gap-3">
-          <p className="text-sm font-bold">Reward ads</p>
-          <p className="text-xs text-muted-foreground">Last {windowDays} days</p>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: "Started", value: totalRewardsStarted.toLocaleString() },
-            { label: "Completed", value: totalRewardsGranted.toLocaleString() },
-            // "—" not "0%" when nothing started: see the note on rewardCompletion.
-            { label: "Completion", value: rewardCompletion === null ? "—" : `${rewardCompletion}%` },
-          ].map((s) => (
-            <div key={s.label} className="rounded-xl bg-card px-3 py-3 text-center shadow-soft">
-              <p className="text-2xl font-extrabold tabular-nums tracking-tight">{s.value}</p>
-              <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">{s.label}</p>
-            </div>
-          ))}
-        </div>
-        <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-          Counted server-side when a reward session is opened and again when one is verified — never
-          from the ad player&rsquo;s own &ldquo;finished&rdquo; claim, which is exactly what the
-          verification step exists to distrust. Revenue per reward isn&rsquo;t shown because no ad
-          network reports earnings back to this system.
-        </p>
-      </div>
       </AdminTabPanel>
     </section>
   );

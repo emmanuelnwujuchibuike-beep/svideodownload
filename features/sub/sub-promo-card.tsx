@@ -41,6 +41,14 @@ export function SubPromoCard({ handle, live, onOpen, onClose }: { handle: string
   };
   return (
     <section aria-label={live ? "Your subscription link" : "Get paid for your content"} className="relative mb-5 overflow-hidden rounded-[28px] bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 px-5 pb-5 pt-5 text-white shadow-[0_24px_48px_-24px_rgba(79,70,229,0.9)] ring-1 ring-inset ring-white/15">
+      {/*
+        "Money talk" (owner 2026-10-12): the rolled-hundreds wallpaper from the Frenz library, as a
+        13 KB WebP served from /brand (never the 161 KB original), on the right and faded into the
+        brand blue so the white text always sits on the gradient, never on the photo.
+      */}
+      {/* eslint-disable-next-line @next/next/no-img-element -- a 13 KB local decoration; next/image would add a request hop for nothing */}
+      <img src="/brand/sub-money.webp" alt="" aria-hidden width={420} height={569} loading="lazy" decoding="async" className="pointer-events-none absolute inset-y-0 right-0 h-full w-[62%] object-cover" />
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-r from-blue-600 from-[34%] via-indigo-600/65 to-transparent" />
       <div aria-hidden className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/12 blur-2xl" />
       <div aria-hidden className="pointer-events-none absolute -bottom-24 -left-10 h-48 w-48 rounded-full bg-fuchsia-400/20 blur-3xl" />
       <div className="relative flex items-start justify-between gap-3">

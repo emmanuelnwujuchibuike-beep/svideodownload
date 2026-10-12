@@ -71,6 +71,18 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
   const lookup = useBankLookup();
   const [saved] = useSavedPayoutAccount();
   const [useNew, setUseNew] = useState(false);
+  /*
+    Owner 2026-10-12: creators outside Nigeria. A Nigerian Paystack account can only pay
+    Nigerian banks, so "Outside Nigeria" takes a bank wire (with SWIFT) or a PayPal email,
+    and the withdrawal is paid by hand by the Frenz team after a review — never instantly.
+  */
+  const [where, setWhere] = useState<"ng" | "intl">("ng");
+  const [intl, setIntl] = useState({ rail: "bank" as "bank" | "paypal", country: "", accountName: "", bankName: "", accountNumber: "", swift: "", email: "" });
+  const intlOk =
+    /^[A-Z]{2}$/.test(intl.country) && intl.country !== "NG" && intl.accountName.trim().length >= 2 &&
+    (intl.rail === "paypal"
+      ? /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(intl.email.trim())
+      : intl.bankName.trim().length >= 2 && /^[0-9A-Za-z -]{4,40}$/.test(intl.accountNumber.trim()) && /^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/.test(intl.swift.trim().toUpperCase()));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const replay = useRef<{ sig: string; key: string } | null>(null);
@@ -82,7 +94,7 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
   const e = data?.earnings;
   const cents = Math.round(Number(amount) * 100);
   const split = rules && Number.isFinite(cents) && cents > 0 ? withdrawalSplit(cents, rules.withdrawalFeePercent) : null;
-  const accountOk = viaSaved || lookup.accountOk;
+  const accountOk = where === "intl" ? intlOk : viaSaved || lookup.accountOk;
   const open = (e?.withdrawals ?? []).some((w) => ["pending", "reviewing", "approved", "processing"].includes(w.status));
   const valid = !!rules && !!e && rules.withdrawalsEnabled && !open && !!split && cents >= rules.minWithdrawalCents && cents <= e.availableCents && accountOk;
 
@@ -92,16 +104,22 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
     setBusy(true);
     setMsg(null);
     // same request ⇒ same key (a retry is a replay, not a second payout)
-    const sig = viaSaved ? `${cents}:saved` : `${cents}:${bankCode}:${acct}`;
+    const sig = where === "intl" ? `${cents}:intl:${JSON.stringify(intl)}` : viaSaved ? `${cents}:saved` : `${cents}:${bankCode}:${acct}`;
     if (replay.current?.sig !== sig) replay.current = { sig, key: newKey() };
     const end = beginCriticalActivity();
     try {
-      const res = await fetch("/api/sub/withdraw", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(viaSaved ? { grossCents: cents, idempotencyKey: replay.current.key, useSaved: true } : { grossCents: cents, idempotencyKey: replay.current.key, details: { bankCode, bankName: lookup.bankName, accountNumber: acct } }) });
+      const res = await fetch("/api/sub/withdraw", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(
+          where === "intl"
+            ? { grossCents: cents, idempotencyKey: replay.current.key, international: intl.rail === "paypal" ? { rail: "paypal", country: intl.country, accountName: intl.accountName.trim(), email: intl.email.trim() } : { rail: "bank", country: intl.country, accountName: intl.accountName.trim(), bankName: intl.bankName.trim(), accountNumber: intl.accountNumber.trim(), swift: intl.swift.trim().toUpperCase() } }
+            : viaSaved
+              ? { grossCents: cents, idempotencyKey: replay.current.key, useSaved: true }
+              : { grossCents: cents, idempotencyKey: replay.current.key, details: { bankCode, bankName: lookup.bankName, accountNumber: acct } },
+        ) });
       const j = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; netCents?: number; paidOut?: boolean; status?: string } | null;
       if (res.ok && j?.ok) {
         replay.current = null;
         setAmount("");
-        setMsg({ ok: true, text: j.status === "completed" ? `${usd(j.netCents ?? 0)} is on its way to ${viaSaved ? savedAccount!.accountName : resolved.name}.` : j.paidOut ? `${usd(j.netCents ?? 0)} is being sent through Paystack.` : `Requested. ${usd(j.netCents ?? 0)} will be sent once it's reviewed.` });
+        setMsg({ ok: true, text: where === "intl" ? `Requested. Our team will send ${usd(j.netCents ?? 0)} to your ${intl.rail === "paypal" ? "PayPal" : "bank"} after a quick review, and you'll be notified when it's paid.` : j.status === "completed" ? `${usd(j.netCents ?? 0)} is on its way to ${viaSaved ? savedAccount!.accountName : resolved.name}.` : j.paidOut ? `${usd(j.netCents ?? 0)} is being sent through Paystack.` : `Requested. ${usd(j.netCents ?? 0)} will be sent once it's reviewed.` });
         void reload();
         onDone?.();
       } else {
@@ -140,7 +158,7 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
               {e!.debtCents > 0 ? <Stat label="Owed back (refunds)" value={usd(e!.debtCents)} /> : null}
             </div>
             <p className="mt-2 text-[12.5px] text-muted-foreground">
-              SUB money is separate from AI credits. A {rules!.withdrawalFeePercent}% withdrawal fee applies. Minimum {usd(rules!.minWithdrawalCents)}. {rules!.autoPayout ? "Paid out through Paystack straight away." : "Paid through Paystack after a quick review."}
+              SUB money is separate from AI credits. A {rules!.withdrawalFeePercent}% withdrawal fee applies. Minimum {usd(rules!.minWithdrawalCents)}. {where === "intl" ? "Outside Nigeria, our team pays it after a quick review." : rules!.autoPayout ? "Paid out through Paystack straight away." : "Paid through Paystack after a quick review."}
             </p>
 
             {!rules!.withdrawalsEnabled ? (
@@ -165,7 +183,22 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
               </p>
             ) : null}
 
-            {savedAccount && !useNew ? (
+            <div className="mt-3 grid grid-cols-2 gap-1 rounded-2xl bg-black/[0.04] p-1 dark:bg-white/[0.06]" role="group" aria-label="Where should we pay you?">
+              {(
+                [
+                  ["ng", "Nigerian bank"],
+                  ["intl", "Outside Nigeria"],
+                ] as const
+              ).map(([id, label]) => (
+                <button key={id} type="button" onClick={() => setWhere(id)} aria-pressed={where === id} className={cn("min-h-[2.5rem] rounded-xl text-[13.5px] font-semibold transition", where === id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {where === "intl" ? (
+              <IntlFields value={intl} onChange={setIntl} />
+            ) : savedAccount && !useNew ? (
               <div className="mt-3 rounded-2xl border border-border/70 px-3 py-2.5">
                 <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">To your saved account</p>
                 <p className="mt-0.5 text-[14px] font-semibold">
@@ -215,6 +248,74 @@ function Stat({ label, value, strong = false }: { label: string; value: string; 
     <div className="min-w-0">
       <p className="text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className={cn("tabular-nums", strong ? "text-[20px] font-extrabold" : "text-[15px] font-bold")}>{value}</p>
+    </div>
+  );
+}
+
+
+/** Every ISO country the browser can name, except Nigeria (paid through Paystack instead). */
+function countries(): { code: string; name: string }[] {
+  try {
+    const dn = new Intl.DisplayNames([navigator.language || "en"], { type: "region" });
+    const out: { code: string; name: string }[] = [];
+    for (let a = 65; a <= 90; a++)
+      for (let b = 65; b <= 90; b++) {
+        const code = String.fromCharCode(a, b);
+        const name = dn.of(code);
+        if (name && name !== code && code !== "NG" && !/^(AA|Q[M-Z]|X[A-Z]|ZZ|EU|EZ|UN)$/.test(code)) out.push({ code, name });
+      }
+    return out.sort((x, y) => x.name.localeCompare(y.name));
+  } catch {
+    return [];
+  }
+}
+
+type Intl_ = { rail: "bank" | "paypal"; country: string; accountName: string; bankName: string; accountNumber: string; swift: string; email: string };
+
+/** Outside Nigeria: a bank wire (with SWIFT) or PayPal. Paid by hand — said plainly. */
+function IntlFields({ value, onChange }: { value: Intl_; onChange: (v: Intl_) => void }) {
+  const [list] = useState(countries);
+  const set = (patch: Partial<Intl_>) => onChange({ ...value, ...patch });
+  return (
+    <div className="mt-3 space-y-2.5">
+      <label className="block text-[13px] font-semibold" htmlFor="sw-country">
+        Country
+      </label>
+      {list.length ? (
+        <select id="sw-country" value={value.country} onChange={(e) => set({ country: e.target.value })} className={FIELD}>
+          <option value="">Choose your country</option>
+          {list.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input id="sw-country" value={value.country} onChange={(e) => set({ country: e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2) })} placeholder="Two-letter code, e.g. GH" className={FIELD} />
+      )}
+      <div className="grid grid-cols-2 gap-1 rounded-2xl bg-black/[0.04] p-1 dark:bg-white/[0.06]" role="group" aria-label="Paid by">
+        {(
+          [
+            ["bank", "Bank transfer"],
+            ["paypal", "PayPal"],
+          ] as const
+        ).map(([id, label]) => (
+          <button key={id} type="button" onClick={() => set({ rail: id })} aria-pressed={value.rail === id} className={cn("min-h-[2.25rem] rounded-xl text-[13px] font-semibold transition", value.rail === id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <input aria-label="Account holder's full name" value={value.accountName} onChange={(e) => set({ accountName: e.target.value.slice(0, 120) })} placeholder="Account holder's full name" autoComplete="name" className={FIELD} />
+      {value.rail === "paypal" ? (
+        <input aria-label="PayPal email" type="email" value={value.email} onChange={(e) => set({ email: e.target.value.slice(0, 254) })} placeholder="PayPal email" autoComplete="email" className={FIELD} />
+      ) : (
+        <>
+          <input aria-label="Bank name" value={value.bankName} onChange={(e) => set({ bankName: e.target.value.slice(0, 120) })} placeholder="Bank name" className={FIELD} />
+          <input aria-label="IBAN or account number" value={value.accountNumber} onChange={(e) => set({ accountNumber: e.target.value.slice(0, 40) })} placeholder="IBAN or account number" autoComplete="off" className={FIELD} />
+          <input aria-label="SWIFT / BIC code" value={value.swift} onChange={(e) => set({ swift: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 11) })} placeholder="SWIFT / BIC (8 or 11 characters)" autoComplete="off" className={FIELD} />
+        </>
+      )}
+      <p className="text-[12px] leading-snug text-muted-foreground">Paid by our team after a quick review, usually in USD. Your bank or PayPal may charge its own fee to receive it.</p>
     </div>
   );
 }

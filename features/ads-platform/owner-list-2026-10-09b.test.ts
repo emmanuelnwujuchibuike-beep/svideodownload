@@ -51,9 +51,9 @@ describe("the promote button has a fixed home — no dragging, no floating (owne
   /** Where it lives, as a function of the sources, so the teeth can run it on broken copies. */
   function fixedHomes(core: string, header: string, button: string, topbar: string = TOPBAR): boolean {
     return (
-      // 2026-10-09 (owner, later): on /downloads it moved from beside the credits card to the top bar, as on the landing
-      !core.includes("<PromoteButton") &&
-      topbar.includes('{pathname === "/downloads" && !searchActive ? <PromoteButton size="header" /> : null}') &&
+      // 2026-10-12 (owner): on /downloads it moved out of the crowded top bar, opposite "Save. Discover. Create."
+      core.includes('<DownloadsHero trailing={topCredits === "earn" ? <EarnButton size="md" /> : topCredits === "none" ? <PromoteButton /> : undefined}') &&
+      !topbar.includes("<PromoteButton") &&
       (header.match(/\{landing \? <PromoteButton size="header" \/> : null\}/g) ?? []).length === 2 &&
       !/drag|createPortal|pointermove|position: fixed|\bfixed\b/.test(button) &&
       /\n\s*Promote\n/.test(button)
@@ -64,12 +64,12 @@ describe("the promote button has a fixed home — no dragging, no floating (owne
   const header = code("components/layout/site-header.tsx");
   // comments stripped: the file documents the bubble it replaced
   const button = code("features/downloads/promote-button.tsx").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-  it("in the top bar on /downloads, beside Install in both landing header rows, tagged Promote", () => {
+  it("on /downloads in the hero row, beside Install in both landing header rows, tagged Promote", () => {
     expect(fixedHomes(core, header, button)).toBe(true);
   });
   it("teeth: a draggable/fixed button, or losing a home, fails", () => {
     expect(fixedHomes(core, header, button + "\nconst drag = 1;")).toBe(false);
-    expect(fixedHomes(core, header, button, TOPBAR.replace('<PromoteButton size="header" />', ""))).toBe(false);
+    expect(fixedHomes(core.replace('topCredits === "none" ? <PromoteButton /> : ', ""), header, button)).toBe(false);
     expect(fixedHomes(core, header.replace('{landing ? <PromoteButton size="header" /> : null}', ""), button)).toBe(false);
   });
   it("tinted, not pure white, and the floating bubble is gone", () => {

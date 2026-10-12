@@ -1,6 +1,6 @@
 "use client";
 
-import { IoAdd, IoCloudUploadOutline, IoPersonAdd, IoSearchOutline } from "react-icons/io5";
+import { IoAdd, IoCloudUploadOutline, IoLogoUsd, IoPersonAdd, IoSearchOutline } from "react-icons/io5";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
@@ -10,7 +10,6 @@ import { IconTile } from "@/components/icons/icon-tile";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { InstallHeaderCta } from "@/features/pwa/install-button";
-import { PromoteButton } from "@/features/downloads/promote-button";
 import { setTopbarHidden } from "@/features/app-shell/topbar-visibility";
 import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { useTopbarCenter } from "@/features/app-shell/topbar-slot";
@@ -265,7 +264,8 @@ export function AppTopbar() {
         */}
         {/* Empty on /feed — Reels lives inline next to For You/Following in the
             center slot now (see FeedTopbarTabs), not off in this corner. */}
-        {!onFeedIndex && !!handle ? (
+        {/* not on /downloads (owner 2026-10-12: "remove the plus button from the Download page top header") */}
+        {!onFeedIndex && !!handle && pathname !== "/downloads" ? (
           <PressIcon className="lg:hidden">
             <button
               type="button"
@@ -450,9 +450,24 @@ export function AppTopbar() {
           app is installed or running standalone, so it can never be a dead
           control, and it hides while the search field has the row.
         */}
-        {pathname === "/downloads" && !searchActive ? <InstallHeaderCta className="h-9 px-3.5 text-[13px]" /> : null}
+        {pathname === "/downloads" && !searchActive ? <InstallHeaderCta className="h-9 px-3.5 text-[13px]" label="Install" /> : null}
         {/* Promote in the top bar on /downloads, beside Install — as on the landing header (owner, 2026-10-09: "put the promote button in the Download page at the top header like it is in the landing page"). */}
-        {pathname === "/downloads" && !searchActive ? <PromoteButton size="header" /> : null}
+        {/* Promote moved down to the "Save. Discover. Create." row (owner 2026-10-12: the bar was crowded) */}
+        {/*
+          Earn beside Promote (owner 2026-10-12: the credits card left /downloads, its Earn button moved up here).
+          Built inline — importing the AI credit strip module would pull the wallet code into every page's first load.
+        */}
+        {pathname === "/downloads" && !searchActive && !!handle ? (
+          <Link
+            href="/quests"
+            prefetch={false}
+            aria-label="Earn credits"
+            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 px-3 text-[12.5px] font-bold text-white shadow-[0_6px_14px_-8px_rgba(249,115,22,0.9)] transition-transform active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 motion-reduce:active:scale-100"
+          >
+            <IoLogoUsd className="h-3.5 w-3.5" aria-hidden />
+            Earn
+          </Link>
+        ) : null}
 
         <span className={searchActive ? "hidden" : "lg:hidden"}>
           {searchActive ? null : <NotificationBell />}

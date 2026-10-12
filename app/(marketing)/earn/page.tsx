@@ -96,7 +96,7 @@ export default async function EarnPage() {
     },
     {
       q: "How do I get paid?",
-      a: `Save a bank account once and withdraw from your SUB balance. Payouts are sent through Paystack, currently to bank accounts in Nigeria. Payouts for creators in other countries are planned. The minimum withdrawal is ${usd(sub.minWithdrawalCents)}, and you can turn on automatic withdrawal so new earnings are sent to your saved account.`,
+      a: `Save a bank account once and withdraw from your SUB balance. In Nigeria, payouts go straight to your bank through Paystack, and you can turn on automatic withdrawal so new earnings are sent as they arrive. Outside Nigeria, withdraw to a bank account (with its SWIFT code) or PayPal, and our team sends it after a quick review. The minimum withdrawal is ${usd(sub.minWithdrawalCents)}.`,
     },
     {
       q: "Are subscription earnings guaranteed?",
@@ -284,7 +284,7 @@ export default async function EarnPage() {
               ))}
             </ol>
             <p className="mt-4 flex items-start gap-2 text-[13px] leading-snug text-muted-foreground">
-              <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /> Payouts go through Paystack, currently to bank accounts in Nigeria. Payouts for creators in other countries are planned.
+              <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /> Nigerian banks are paid instantly through Paystack. Creators in other countries withdraw to a bank account or PayPal, paid by our team after a quick review.
             </p>
           </section>
 

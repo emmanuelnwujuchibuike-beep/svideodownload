@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, Copy, Lock, Pause, Pencil, Play, Plus, Share2, ShieldCheck, Wallet } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, Copy, Lock, Pause, Pencil, Play, Plus, Share2, ShieldCheck, Wallet } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 
@@ -97,7 +97,7 @@ export function SubTab({
       ) : subscribed ? null : (
         <SubNotice />
       )}
-      <SubGallery key={galleryKey} creatorId={creatorId} creatorName={creatorName} quote={isOwner ? null : quote} signedIn={signedIn} loginNext={loginNext} onCompose={isOwner ? () => setComposing(true) : undefined} onAccess={setSubscribed} />
+      <SubGallery key={galleryKey} creatorId={creatorId} creatorName={creatorName} quote={isOwner ? null : quote} signedIn={signedIn} loginNext={loginNext} onAccess={setSubscribed} />
       {composing ? <SubComposer onClose={() => setComposing(false)} onPosted={() => setGalleryKey((k) => k + 1)} /> : null}
       {withdrawing ? <SubWithdrawSheet onClose={() => setWithdrawing(false)} /> : null}
     </div>
@@ -276,8 +276,16 @@ function ShareCard({ handle }: { handle: string }) {
   );
 }
 
+/**
+ * The creator's SUB dashboard (owner 2026-10-12: "collapse on default when the SUB POSTS tab is
+ * clicked, and the user clicks See dashboard and it opens"). Collapsed it is one calm row —
+ * live or paused, the price, New SUB post and See dashboard — and the earnings are not even
+ * fetched until it opens. Open: the available balance first, with Withdraw beside it, then
+ * the rest of the numbers, the price and pause controls, and the payout account.
+ */
 function CreatorOverview({ settings, bounds, onChange, onCompose, onWithdraw }: { settings: SubOwnerSettings; bounds: SubBounds; onChange: (s: SubOwnerSettings) => void; onCompose: () => void; onWithdraw: () => void }) {
-  const { data, failed } = useSubEarnings();
+  const [open, setOpen] = useState(false);
+  const { data, failed } = useSubEarnings(open);
   const [editing, setEditing] = useState(false);
   const [price, setPrice] = useState(settings.priceCents ? (settings.priceCents / 100).toFixed(2) : "");
   const [note, setNote] = useState<string | null>(null);
@@ -310,65 +318,98 @@ function CreatorOverview({ settings, bounds, onChange, onCompose, onWithdraw }: 
     });
   };
 
+  const toggleOpen = () => {
+    haptic("selection");
+    setOpen((v) => !v);
+  };
+
   return (
-    <div className={cn("mb-3 rounded-[24px] p-4", GLASS)}>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[15px] font-bold">Your subscription</p>
-        <span className={cn("rounded-full px-2.5 py-0.5 text-[12px] font-semibold", settings.active ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400" : "bg-amber-500/12 text-amber-700 dark:text-amber-300")}>{settings.active ? "Live" : "Paused"}</span>
+    <div className={cn("mb-3 overflow-hidden rounded-[24px]", GLASS)}>
+      {/* the collapsed row — always there */}
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[15.5px] font-bold tracking-[-0.01em]">Your subscription</p>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">
+              <span className="font-semibold tabular-nums text-foreground">{settings.priceCents ? `${usd(settings.priceCents)}` : "No price"}</span>
+              {settings.priceCents ? " a month" : ""}
+            </p>
+          </div>
+          <span className={cn("inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold", settings.active ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400" : "bg-amber-500/12 text-amber-700 dark:text-amber-300")}>
+            <span aria-hidden className={cn("h-1.5 w-1.5 rounded-full", settings.active ? "bg-emerald-500" : "bg-amber-500")} />
+            {settings.active ? "Live" : "Paused"}
+          </span>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <button type="button" onClick={onCompose} className={cn(primaryPill, "flex-1 justify-center")}>
+            <Plus className="h-4 w-4" aria-hidden /> New SUB post
+          </button>
+          <button type="button" onClick={toggleOpen} aria-expanded={open} aria-controls="sub-dashboard" className={cn(quietPill, "flex-1 justify-center")}>
+            {open ? "Hide dashboard" : "See dashboard"}
+            <ChevronDown className={cn("h-4 w-4 transition-transform duration-200 motion-reduce:transition-none", open && "rotate-180")} aria-hidden />
+          </button>
+        </div>
       </div>
-      <div className="mt-3 grid grid-cols-3 gap-3">
-        <Metric label="Price" value={settings.priceCents ? `${usd(settings.priceCents)}/mo` : "—"} />
-        <Metric label="Subscribers" value={e ? String(e.activeSubscribers) : failed ? "—" : "…"} />
-        <Metric label="Lifetime" value={e ? usd(e.lifetimeCents) : failed ? "—" : "…"} />
-        <Metric label="Clearing" value={e ? usd(e.pendingCents) : failed ? "—" : "…"} />
-        <Metric label="Available" value={e ? usd(e.availableCents) : failed ? "—" : "…"} strong />
-        <Metric label="Withdrawn" value={e ? usd(e.withdrawnCents) : failed ? "—" : "…"} />
-      </div>
-      {editing ? (
-        <div className="mt-3">
-          <label htmlFor="sub-price-edit" className="text-[13px] font-semibold">
-            New monthly price (USD) — applies to new subscriptions
-          </label>
-          <div className="mt-1 flex gap-2">
-            <input id="sub-price-edit" inputMode="decimal" value={price} onChange={(ev) => setPrice(ev.target.value.replace(/[^0-9.]/g, "").slice(0, 8))} className="w-full rounded-2xl border border-border bg-background px-3 py-2 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-primary/40" />
-            <button type="button" onClick={savePrice} disabled={!priceOk} className={cn(primaryPill, "shrink-0")}>
-              Save
+
+      {open ? (
+        <div id="sub-dashboard" className="border-t border-black/[0.06] p-4 dark:border-white/[0.08]">
+          {/* the money first: what can leave today */}
+          <div className="rounded-[20px] bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 p-4 text-white shadow-[0_14px_32px_-20px_rgba(67,56,202,0.9)]">
+            <p className="text-[11.5px] font-semibold uppercase tracking-[0.1em] text-white/80">Available to withdraw</p>
+            <div className="mt-1 flex items-end justify-between gap-3">
+              <p className="text-[1.85rem] font-extrabold leading-none tracking-[-0.03em] tabular-nums">{e ? usd(e.availableCents) : failed ? "—" : "…"}</p>
+              <button type="button" onClick={onWithdraw} className="inline-flex min-h-[2.5rem] items-center gap-1.5 rounded-full bg-white px-4 text-[13.5px] font-bold text-indigo-700 transition active:scale-[0.97] motion-reduce:active:scale-100">
+                <Wallet className="h-4 w-4" aria-hidden /> Withdraw
+              </button>
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Metric label="Subscribers" value={e ? String(e.activeSubscribers) : failed ? "—" : "…"} />
+            <Metric label="Earned all time" value={e ? usd(e.lifetimeCents) : failed ? "—" : "…"} />
+            <Metric label="Clearing" value={e ? usd(e.pendingCents) : failed ? "—" : "…"} />
+            <Metric label="Withdrawn" value={e ? usd(e.withdrawnCents) : failed ? "—" : "…"} />
+          </div>
+          {editing ? (
+            <div className="mt-3">
+              <label htmlFor="sub-price-edit" className="text-[13px] font-semibold">
+                New monthly price (USD) — applies to new subscriptions
+              </label>
+              <div className="mt-1 flex gap-2">
+                <input id="sub-price-edit" inputMode="decimal" value={price} onChange={(ev) => setPrice(ev.target.value.replace(/[^0-9.]/g, "").slice(0, 8))} className="w-full rounded-2xl border border-border bg-background px-3 py-2 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-primary/40" />
+                <button type="button" onClick={savePrice} disabled={!priceOk} className={cn(primaryPill, "shrink-0")}>
+                  Save
+                </button>
+              </div>
+              {!priceOk && price ? <p className="mt-1 text-[12.5px] text-rose-600">Choose from {usd(bounds.minPriceCents)} to {usd(bounds.maxPriceCents)}.</p> : null}
+            </div>
+          ) : null}
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => setEditing((v) => !v)} aria-pressed={editing} className={cn(quietPill, "justify-center")}>
+              <Pencil className="h-4 w-4" aria-hidden /> {editing ? "Cancel" : "Change price"}
+            </button>
+            <button type="button" onClick={toggle} className={cn(quietPill, "justify-center")}>
+              {settings.active ? <Pause className="h-4 w-4" aria-hidden /> : <Play className="h-4 w-4" aria-hidden />}
+              {settings.active ? "Pause new subs" : "Resume"}
             </button>
           </div>
-          {!priceOk && price ? <p className="mt-1 text-[12.5px] text-rose-600">Choose from {usd(bounds.minPriceCents)} to {usd(bounds.maxPriceCents)}.</p> : null}
+          <SubPayoutSettings feePercent={bounds.withdrawalFeePercent} className="mt-3" />
         </div>
       ) : null}
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" onClick={onCompose} className={primaryPill}>
-          <Plus className="h-4 w-4" aria-hidden /> New SUB post
-        </button>
-        <button type="button" onClick={onWithdraw} className={quietPill}>
-          <Wallet className="h-4 w-4" aria-hidden /> Withdraw
-        </button>
-        <button type="button" onClick={() => setEditing((v) => !v)} aria-pressed={editing} className={quietPill}>
-          <Pencil className="h-4 w-4" aria-hidden /> Price
-        </button>
-        <button type="button" onClick={toggle} className={quietPill}>
-          {settings.active ? <Pause className="h-4 w-4" aria-hidden /> : <Play className="h-4 w-4" aria-hidden />}
-          {settings.active ? "Pause" : "Resume"}
-        </button>
-      </div>
-      <SubPayoutSettings feePercent={bounds.withdrawalFeePercent} className="mt-3" />
       {!settings.active ? (
-        <p className="mt-2 flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
+        <p className="flex items-center gap-1.5 px-4 pb-3 text-[12.5px] text-muted-foreground">
           <Lock className="h-3.5 w-3.5" aria-hidden /> Paused: nobody new can subscribe. Current subscribers keep access until their period ends.
         </p>
       ) : null}
-      {note ? <p className="mt-2 text-[13px] font-medium text-rose-600">{note}</p> : null}
+      {note ? <p className="px-4 pb-3 text-[13px] font-medium text-rose-600">{note}</p> : null}
     </div>
   );
 }
 
-function Metric({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0">
-      <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className={cn("truncate tabular-nums", strong ? "text-[17px] font-extrabold text-emerald-700 dark:text-emerald-400" : "text-[15px] font-bold")}>{value}</p>
+    <div className="min-w-0 rounded-2xl bg-black/[0.03] px-3 py-2.5 dark:bg-white/[0.05]">
+      <p className="truncate text-[11.5px] font-medium text-muted-foreground">{label}</p>
+      <p className="mt-0.5 truncate text-[16px] font-bold tabular-nums tracking-[-0.01em]">{value}</p>
     </div>
   );
 }

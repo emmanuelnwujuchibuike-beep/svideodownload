@@ -248,7 +248,9 @@ describe("rotation — local, no request", () => {
       last = next.cr;
     }
     expect(new Set(seen).size).toBe(10); // every slot gets its turn
-    expect(seen.slice(0, 4)).toEqual(["ad4", "ad5", "ad6", "ad7"]); // round-robin: Ad 1, Ad 2, Ad 3 …
+    // round-robin in a FIXED order by creative id (2026-10-12, equal rotation whatever order the server sends):
+    // ad1, ad10, ad2, ad3, … — a 0.37 start lands on ring[3] = ad3
+    expect(seen.slice(0, 4)).toEqual(["ad3", "ad4", "ad5", "ad6"]);
   });
 
   it("two ads alternate, one ad repeats (nothing else to show), none ⇒ null", () => {

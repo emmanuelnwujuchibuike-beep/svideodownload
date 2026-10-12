@@ -48,9 +48,12 @@ export function msUntilNextRotation(elapsedMs: number, rotationSeconds: number |
 export function pickNextNoRepeat<T extends { cr: string }>(pool: readonly T[], lastCreativeId: string | null, random: () => number = Math.random): T | null {
   if (pool.length === 0) return null;
   if (pool.length === 1) return pool[0]!;
-  const last = lastCreativeId ? pool.findIndex((a) => a.cr === lastCreativeId) : -1;
-  const start = last >= 0 ? last + 1 : Math.floor(random() * pool.length);
-  return pool[start % pool.length]!;
+  // a FIXED order (by creative id), so "the one after the last" means the same thing whatever
+  // order the server sent: every live ad gets an equal turn (owner 2026-10-12: "make the rotation equal")
+  const ring = [...pool].sort((x, y) => (x.cr < y.cr ? -1 : x.cr > y.cr ? 1 : 0));
+  const last = lastCreativeId ? ring.findIndex((a) => a.cr === lastCreativeId) : -1;
+  const start = last >= 0 ? last + 1 : Math.floor(random() * ring.length);
+  return ring[start % ring.length]!;
 }
 
 /** Frequency limit: may another interstitial show yet? `minGapSeconds` is the format's admin value. */

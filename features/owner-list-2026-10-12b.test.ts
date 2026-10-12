@@ -122,3 +122,13 @@ describe("no broken-image glyph, no moving media in discovery", () => {
     expect(code("app/globals.css")).toContain(".srch-press:not(:has(img, video, picture, canvas)):active {");
   });
 });
+
+// owner, 2026-10-12: "the ad rotation is not equal … make the rotation equal" (video 60 views vs image 692 in one slot)
+describe("ads in one slot rotate equally", () => {
+  it("a video ad is not banned by its own cleanup", () => {
+    const c = code("features/ads-platform/serve/self-ad-creative.tsx");
+    expect(c).toContain("if (unmounting.current) return;");
+    expect(c).toMatch(/unmounting\.current = true;[\s\S]{0,300}v\.removeAttribute\("src"\);/);
+    expect(c).toContain("unmounting.current = false;");
+  });
+});

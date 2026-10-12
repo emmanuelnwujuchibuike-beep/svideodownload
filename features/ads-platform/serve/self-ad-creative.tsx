@@ -66,6 +66,15 @@ export function SelfAdCreative({
 }) {
   const host = useRef<HTMLDivElement | null>(null);
   const video = useRef<HTMLVideoElement | null>(null);
+  /*
+    🔴 THE VIDEO AD WAS BANNED BY ITS OWN CLEANUP (owner 2026-10-12: two ads in the download-result
+    slot, the video showing ~1 time in 12). Unmounting a video ad empties its src to free the
+    decoder — and an emptied src fires the element's "error" event, which ran `fail` and marked
+    the creative failed for the whole session. Every video ad got ONE showing per visit, the image
+    kept rotating. An error we caused ourselves (unmounting, an emptied src, an abort) is now
+    ignored; only a real load failure counts.
+  */
+  const unmounting = useRef(false);
   const view = useMemo(() => newAdView({ campaignId: ad.c, creativeId: ad.cr, placement, page }), [ad.c, ad.cr, placement, page]);
 
   useEffect(() => {
@@ -108,6 +117,7 @@ export function SelfAdCreative({
   // A video plays only while it is at least half visible — never in the background.
   useEffect(() => {
     const v = video.current;
+    unmounting.current = false; // a new creative in the same frame: its real failures count again
     if (!v || typeof IntersectionObserver === "undefined") return;
     const io = new IntersectionObserver(
       ([e]) => {
@@ -131,17 +141,21 @@ export function SelfAdCreative({
     };
     document.addEventListener("visibilitychange", onHidden);
     return () => {
+      unmounting.current = true;
       io.disconnect();
       document.removeEventListener("visibilitychange", onHidden);
       v.pause();
       releasePlayback(v);
-      // give the decoder and the buffered bytes back
+      // give the decoder and the buffered bytes back (the error this fires is ignored, see above)
       v.removeAttribute("src");
       v.load();
     };
   }, [view]);
 
-  const fail = () => {
+  const fail = (e?: { currentTarget: HTMLVideoElement | HTMLImageElement }) => {
+    const el = e?.currentTarget;
+    if (unmounting.current) return;
+    if (el instanceof HTMLVideoElement && (!el.getAttribute("src") || el.error?.code === 1 /* MEDIA_ERR_ABORTED */)) return;
     // Part 8: a load failure is reported (batched), so an admin sees a broken creative
     trackAdEvent(view, "load_failed");
     markCreativeFailed(ad.cr);

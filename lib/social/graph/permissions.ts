@@ -66,7 +66,7 @@ export async function can(viewerId: string, action: GraphAction, target: string)
       return canSeeFriendList(privacy, friend ? "friend" : "stranger") ? { allowed: true, reason: "Their friend list is visible to you." } : { allowed: false, reason: "They keep their friend list private." };
     }
     case "view_sub_posts":
-      return (await hasActiveSub(viewerId, target)) ? { allowed: true, reason: "You have an active subscription." } : { allowed: false, reason: "Subscribe to see their SUB POSTS." };
+      return (await hasActiveSub(viewerId, target)) ? { allowed: true, reason: "You have an active subscription." } : { allowed: false, reason: "Subscribe to see their PRIVATE POSTS." };
     case "view_memory":
       return (await getMemory(viewerId, target)) ? { allowed: true, reason: "This memory is shared with you." } : { allowed: false, reason: "This memory isn't shared with you." };
     case "add_to_memory":

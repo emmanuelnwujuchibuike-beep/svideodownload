@@ -144,7 +144,7 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
           <div className="mt-5 flex flex-wrap gap-2">
             {isSub ? (
               <Link href={subTab} prefetch={false} className="inline-flex min-h-[2.5rem] items-center gap-1.5 rounded-full bg-white px-4 text-[13px] font-bold text-indigo-800 transition active:scale-[0.97] motion-reduce:active:scale-100">
-                Open SUB POSTS <ArrowRight className="h-4 w-4" aria-hidden />
+                Open PRIVATE POSTS <ArrowRight className="h-4 w-4" aria-hidden />
               </Link>
             ) : (
               <button type="button" onClick={() => void leaveNow()} className="inline-flex min-h-[2.5rem] items-center rounded-full bg-white/12 px-4 text-[13px] font-semibold text-white transition active:scale-[0.97] motion-reduce:active:scale-100">
@@ -181,7 +181,7 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
         {!data.ready ? (
           <p className={cn("rounded-[22px] px-3.5 py-3 text-[13px] text-muted-foreground", GLASS)}>Memberships arrive with the next update.</p>
         ) : !data.open && !data.quote ? (
-          <p className={cn("rounded-[22px] px-3.5 py-3 text-[13px] text-muted-foreground", GLASS)}>{data.viewer.isCreator ? "Nothing is open yet. Turn on your free community in Members, or set up SUB from the SUB POSTS tab on your profile." : `${c.displayName} isn't taking members right now.`}</p>
+          <p className={cn("rounded-[22px] px-3.5 py-3 text-[13px] text-muted-foreground", GLASS)}>{data.viewer.isCreator ? "Nothing is open yet. Turn on your free community in Members, or set up Private Posts from the PRIVATE POSTS tab on your profile." : `${c.displayName} isn't taking members right now.`}</p>
         ) : (
           <div className="grid gap-3">
             {data.quote ? (
@@ -191,7 +191,7 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
                     <p className="inline-flex items-center gap-1 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-indigo-600 dark:text-indigo-400">
                       <Lock className="h-3 w-3" aria-hidden /> Paid subscription
                     </p>
-                    <h3 className="text-[17px] font-bold leading-tight">SUB POSTS</h3>
+                    <h3 className="text-[17px] font-bold leading-tight">PRIVATE POSTS</h3>
                   </div>
                   <p className="shrink-0 text-right text-[14px] font-bold">{usd(data.quote.priceCents)} / {data.quote.periodDays} days</p>
                 </div>

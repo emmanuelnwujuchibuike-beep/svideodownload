@@ -157,10 +157,10 @@ export const EVENTS = [
     signed in; never a price, a handle or anything a subscriber did.
       cta        tapped Start Earning while signed out → sent to sign in
       returned   came back from sign-in (or sign-up) to /earn/start
-      setup      reached their own SUB setup screen
-      completed  finished SUB setup (saveSubSettings complete)
+      setup      reached their own private post setup screen
+      completed  finished private post setup (saveSubSettings complete)
   */
-  { id: "earn_funnel", label: "Creator earn funnel", description: "A step of the /earn page → sign in → SUB setup funnel.", domain: "growth", metadata: ["stage", "signedIn"] },
+  { id: "earn_funnel", label: "Creator earn funnel", description: "A step of the /earn page → sign in → private post setup funnel.", domain: "growth", metadata: ["stage", "signedIn"] },
   { id: "experiment_exposure", label: "Experiment exposure", description: "An enrolled visitor was exposed to an experiment arm.", domain: "experiment", metadata: ["experiment", "variant"] },
 ] as const satisfies readonly EventDef[];
 

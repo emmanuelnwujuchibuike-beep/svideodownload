@@ -353,7 +353,7 @@ function RewardsActivity({ minAge, minEngagements }: { minAge: number; minEngage
                   <strong>{q.user}</strong> ·{" "}
                   {q.source === "sub" ? (
                     <>
-                      <span className="rounded bg-indigo-500/10 px-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300">SUB</span> {formatCents(q.grossCents ?? q.usdCents, "$")} − {formatCents(q.feeCents ?? 0, "$")} fee → {formatCents(q.usdCents, "$")}
+                      <span className="rounded bg-indigo-500/10 px-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300">Private</span> {formatCents(q.grossCents ?? q.usdCents, "$")} − {formatCents(q.feeCents ?? 0, "$")} fee → {formatCents(q.usdCents, "$")}
                     </>
                   ) : (
                     <>
@@ -371,7 +371,7 @@ function RewardsActivity({ minAge, minEngagements }: { minAge: number; minEngage
                     </button>
                   ) : null}
                   {q.method !== "paystack" && (q.status === "approved" || q.status === "processing") ? <button type="button" onClick={() => void move(q.id, "completed")} className="rounded-lg border border-emerald-500/50 px-2 py-1 text-xs text-emerald-700">Mark paid</button> : null}
-                  <button type="button" onClick={() => void move(q.id, "rejected")} className="rounded-lg border border-rose-500/50 px-2 py-1 text-xs text-rose-600">{q.source === "sub" ? "Reject (return to SUB balance)" : "Reject (return credits)"}</button>
+                  <button type="button" onClick={() => void move(q.id, "rejected")} className="rounded-lg border border-rose-500/50 px-2 py-1 text-xs text-rose-600">{q.source === "sub" ? "Reject (return to private post balance)" : "Reject (return credits)"}</button>
                 </span>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">

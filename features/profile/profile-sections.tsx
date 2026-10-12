@@ -136,7 +136,7 @@ export function ProfileSections({
   const media = layout.modules.filter((m) => MEDIA_MODULE_KEYS.has(m.key));
   const sections: ProfileSection[] = media.map((m) => ({ key: m.key, label: m.spec.label, icon: m.spec.icon }));
   // SUB POSTS sits beside the media tabs, clearly labelled, never inside the feed grid
-  if (sub) sections.push({ key: SUB_TAB_KEY, label: "SUB POSTS", icon: "Lock" });
+  if (sub) sections.push({ key: SUB_TAB_KEY, label: "PRIVATE POSTS", icon: "Lock" });
 
   /*
     The hub: the engine's other modules, then — for the owner, and only the

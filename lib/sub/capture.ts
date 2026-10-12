@@ -49,8 +49,8 @@ export async function reportSubCapture(postId: string, viewerId: string, kind: C
   const { data: v } = await db.from("profiles").select("handle, display_name").eq("id", viewerId).maybeSingle();
   const viewer = v as Row | null;
   const name = viewer?.handle ? `@${viewer.handle as string}` : ((viewer?.display_name as string | null) ?? "A subscriber");
-  const title = "Screenshot of your SUB post";
-  const body = `${name} took a screenshot of your SUB post. Block them or ignore it.`;
+  const title = "Screenshot of your private post";
+  const body = `${name} took a screenshot of your private post. Block them or ignore it.`;
   const { error } = await db.from("notifications").insert({ user_id: creatorId, actor_id: viewerId, type: "sub_capture", data: { post_id: postId, kind, title, body, url: "/members" } });
   if (error) return { ok: false, status: 503, error: "Couldn't record that." };
   await sendSmartPush(creatorId, { title, body, url: "/notifications", tag: `sub-capture-${postId}-${viewerId}` }, "high", categoryForType("sub_capture"), "already-recorded").catch(() => {});

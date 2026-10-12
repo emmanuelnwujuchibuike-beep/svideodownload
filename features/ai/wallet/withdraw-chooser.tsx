@@ -61,7 +61,7 @@ export function WithdrawChooser({ onClose, creditsLabel }: { onClose: () => void
                   <Lock className="h-5 w-5" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[14.5px] font-semibold">SUB earnings</span>
+                  <span className="block text-[14.5px] font-semibold">Private post earnings</span>
                   <span className="block text-[12.5px] text-muted-foreground">
                     {usd(e!.availableCents)} available · {data!.rules.withdrawalFeePercent}% fee · paid through Paystack
                   </span>
@@ -74,8 +74,8 @@ export function WithdrawChooser({ onClose, creditsLabel }: { onClose: () => void
                   <Lock className="h-5 w-5" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[14.5px] font-semibold">SUB earnings</span>
-                  <span className="block text-[12.5px] text-muted-foreground">{!data && !failed ? "Checking…" : "Money your subscribers pay you. Set up SUB POSTS on your profile to start earning."}</span>
+                  <span className="block text-[14.5px] font-semibold">Private post earnings</span>
+                  <span className="block text-[12.5px] text-muted-foreground">{!data && !failed ? "Checking…" : "Money your subscribers pay you. Set up PRIVATE POSTS on your profile to start earning."}</span>
                 </span>
               </div>
             )}

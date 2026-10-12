@@ -152,11 +152,11 @@ function Setup({ d, handle, act }: { d: Dashboard; handle: string; act: Act }) {
             <Lock className="h-[18px] w-[18px]" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[14.5px] font-semibold">Paid subscription (SUB)</span>
+            <span className="block text-[14.5px] font-semibold">Paid subscription (private posts)</span>
             <span className="block text-[12.5px] text-muted-foreground">
               {st.setupCompleted && st.priceCents
                 ? `${usd(st.priceCents)} a month · ${st.active ? "live" : "paused"} · ${d.insights.subscribers.toLocaleString()} subscriber${d.insights.subscribers === 1 ? "" : "s"}`
-                : "Not set up. Subscribers pay you through Paystack for your SUB POSTS."}
+                : "Not set up. Subscribers pay you through Paystack for your PRIVATE POSTS."}
             </span>
           </span>
         </div>
@@ -178,7 +178,7 @@ function Setup({ d, handle, act }: { d: Dashboard; handle: string; act: Act }) {
         ) : null}
         <div className="mt-3 flex flex-wrap gap-2">
           <Link href={`/u/${handle}?tab=sub`} prefetch={false} className={primaryPill}>
-            {st.setupCompleted ? "Open SUB POSTS" : "Get paid for your content"} <ArrowRight className="h-4 w-4" aria-hidden />
+            {st.setupCompleted ? "Open PRIVATE POSTS" : "Get paid for your content"} <ArrowRight className="h-4 w-4" aria-hidden />
           </Link>
           {st.setupCompleted ? (
             <button type="button" onClick={() => setWithdrawing(true)} className={quietPill}>
@@ -252,7 +252,7 @@ function Insights({ d }: { d: Dashboard }) {
           ))}
         </div>
         <p className="mt-3 text-[12.5px] text-muted-foreground">
-          SUB earned all time: {usd(d.earnings.lifetimeCents)}{i.retention90 ? ` · kept ${i.retention90.kept} of ${i.retention90.of} past 90 days` : ""}.
+          Private posts earned all time: {usd(d.earnings.lifetimeCents)}{i.retention90 ? ` · kept ${i.retention90.kept} of ${i.retention90.of} past 90 days` : ""}.
         </p>
         {i.countries.length || i.languages.length ? (
           <p className="mt-1.5 text-[12.5px] text-muted-foreground">

@@ -343,7 +343,7 @@ export async function subEarnings(creatorId: string): Promise<SubEarnings> {
 
 export async function requestSubWithdrawal(input: { userId: string; grossCents: number; details: unknown; idempotencyKey: string; method?: "paystack" | "international" }): Promise<Result<{ id: string; status: string; netCents: number; feeCents: number; paidOut: boolean }>> {
   const cfg = await subConfig();
-  if (!cfg.withdrawalsEnabled) return fail("SUB withdrawals are paused right now.", 503, "paused");
+  if (!cfg.withdrawalsEnabled) return fail("Private post withdrawals are paused right now.", 503, "paused");
   if (!/^[A-Za-z0-9_-]{8,80}$/.test(input.idempotencyKey)) return fail("Invalid request.");
   // owner 2026-10-12: outside Nigeria → a bank wire or PayPal, paid by hand from the admin queue (never Paystack)
   const method = input.method === "international" ? "international" : "paystack";
@@ -366,14 +366,14 @@ export async function requestSubWithdrawal(input: { userId: string; grossCents: 
     p_idempotency: input.idempotencyKey,
     p_require_qualification: cfg.requireQualification,
   });
-  if (error) return MISSING(error.message) ? fail("SUB withdrawals arrive with the next update.", 503) : fail("Couldn't request that withdrawal.", 500);
+  if (error) return MISSING(error.message) ? fail("Private post withdrawals arrive with the next update.", 503) : fail("Couldn't request that withdrawal.", 500);
   const r = data as { ok?: boolean; reason?: string; id?: string; net?: number; fee?: number; duplicate?: boolean; status?: string } | null;
   if (!r?.ok) {
     const msg: Record<string, string> = {
       not_qualified: "Your account isn't approved for withdrawals yet.",
       restricted: "Withdrawals are paused on your account. Contact support.",
       below_minimum: `The minimum withdrawal is ${usd(cfg.minWithdrawalCents)}.`,
-      insufficient: "That's more than your available SUB balance.",
+      insufficient: "That's more than your available private post balance.",
       open_exists: "You already have a withdrawal in progress.",
     };
     return fail(msg[r?.reason ?? ""] ?? "Couldn't request that withdrawal.", 409, r?.reason);

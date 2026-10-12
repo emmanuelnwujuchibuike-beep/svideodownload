@@ -115,7 +115,7 @@ function SubNotice() {
     <div className="mb-3 flex items-start gap-3 rounded-[22px] border border-indigo-500/25 bg-indigo-500/[0.07] px-4 py-3.5">
       <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600 dark:text-indigo-400" aria-hidden />
       <div className="min-w-0">
-        <p className="text-[14.5px] font-bold">SUB POSTS are for paid subscribers only</p>
+        <p className="text-[14.5px] font-bold">PRIVATE POSTS are for paid subscribers only</p>
         <p className="mt-0.5 text-[13px] text-muted-foreground">These posts are private to this creator&apos;s subscribers. They can&apos;t be shared, reposted, linked or downloaded, and they never appear in feeds or search.</p>
       </div>
     </div>
@@ -172,7 +172,7 @@ function GetPaidSetup({ settings, bounds, onChange }: { settings: SubOwnerSettin
         <div className="mt-4">
           <h3 className="text-[18px] font-extrabold tracking-[-0.01em]">What should a subscription cost?</h3>
           <p className="mt-1 text-[13.5px] text-muted-foreground">
-            Subscribers get your SUB POSTS for 30 days. Choose from {usd(bounds.minPriceCents)} to {usd(bounds.maxPriceCents)}.
+            Subscribers get your PRIVATE POSTS for 30 days. Choose from {usd(bounds.minPriceCents)} to {usd(bounds.maxPriceCents)}.
           </p>
           <label htmlFor="sub-price" className="mt-3 block text-[13px] font-semibold">
             Monthly price (USD)
@@ -189,7 +189,7 @@ function GetPaidSetup({ settings, bounds, onChange }: { settings: SubOwnerSettin
           <ul className="mt-2 space-y-2 text-[13.5px]">
             <Point>People subscribe from your profile and pay through Paystack.</Point>
             <Point>You keep your full price. The subscriber pays a {bounds.purchaseFeePercent}% purchase fee on top.</Point>
-            <Point>Your earnings go to a SUB balance of their own, separate from AI credits.</Point>
+            <Point>Your earnings go to a private post balance of their own, separate from AI credits.</Point>
             <Point>Post photos and videos only subscribers can open. They stay private: no sharing, links, reposts or downloads.</Point>
           </ul>
           <Nav onBack={() => go(0)} onNext={() => go(2)} />
@@ -198,7 +198,7 @@ function GetPaidSetup({ settings, bounds, onChange }: { settings: SubOwnerSettin
         <div className="mt-4">
           <h3 className="text-[18px] font-extrabold tracking-[-0.01em]">Getting paid</h3>
           <ul className="mt-2 space-y-2 text-[13.5px]">
-            <Point>Withdraw your SUB balance to your bank through Paystack.</Point>
+            <Point>Withdraw your private post balance to your bank through Paystack.</Point>
             <Point>Paystack checks the account holder&apos;s name before anything is sent.</Point>
             <Point>A {bounds.withdrawalFeePercent}% withdrawal fee applies. You see exactly what reaches your bank before you confirm.</Point>
             <Point>If a payment is refunded or disputed, that subscription ends and the amount comes back off your balance.</Point>
@@ -210,7 +210,7 @@ function GetPaidSetup({ settings, bounds, onChange }: { settings: SubOwnerSettin
       ) : (
         <div className="mt-4">
           <h3 className="text-[18px] font-extrabold tracking-[-0.01em]">Ready to go live</h3>
-          <p className="mt-1 text-[13.5px] text-muted-foreground">{charge ? `Your subscription is ${usd(charge.priceCents)} a month. ` : ""}Once live, the SUB POSTS tab on your profile shows your price and a Subscribe button. You can pause or change the price any time.</p>
+          <p className="mt-1 text-[13.5px] text-muted-foreground">{charge ? `Your subscription is ${usd(charge.priceCents)} a month. ` : ""}Once live, the PRIVATE POSTS tab on your profile shows your price and a Subscribe button. You can pause or change the price any time.</p>
           {!priceOk ? <p className="mt-2 text-[13px] font-medium text-rose-600">Go back and set your price first.</p> : null}
           <button type="button" disabled={!priceOk || busy} onClick={() => void finish()} className={cn(primaryPill, "mt-4 w-full justify-center bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600")}>
             {busy ? "Going live…" : "Go live"}
@@ -272,7 +272,7 @@ function ShareCard({ handle }: { handle: string }) {
   return (
     <div className="mb-3 overflow-hidden rounded-[24px] bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 p-4 text-white">
       <p className="text-[19px] font-extrabold leading-tight tracking-[-0.01em]">Your Content. Your Earnings.</p>
-      <p className="mt-1 text-[13px] text-white/85">Share your profile so people can subscribe to your SUB POSTS.</p>
+      <p className="mt-1 text-[13px] text-white/85">Share your profile so people can subscribe to your PRIVATE POSTS.</p>
       <button type="button" onClick={() => void share()} className="mt-3 inline-flex min-h-[2.75rem] items-center gap-2 rounded-full bg-white px-4 text-[14px] font-bold text-indigo-700 transition active:scale-[0.97]">
         {copied ? <Copy className="h-4 w-4" aria-hidden /> : <Share2 className="h-4 w-4" aria-hidden />}
         {copied ? "Link copied" : "Share Profile & Get Paid"}
@@ -360,7 +360,7 @@ function CreatorOverview({ settings, bounds, onChange, onCompose, onWithdraw }: 
         </div>
         <div className="mt-3 flex gap-2">
           <button type="button" onClick={onCompose} className={cn(primaryPill, "flex-1 justify-center")}>
-            <Plus className="h-4 w-4" aria-hidden /> New SUB post
+            <Plus className="h-4 w-4" aria-hidden /> New private post
           </button>
           <button type="button" onClick={toggleOpen} aria-expanded={open} aria-controls="sub-dashboard" className={cn(quietPill, "flex-1 justify-center")}>
             {open ? "Hide dashboard" : "See dashboard"}

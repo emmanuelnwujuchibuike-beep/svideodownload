@@ -136,11 +136,11 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
   const field = FIELD;
 
   return createPortal(
-    <div role="dialog" aria-modal="true" aria-label="Withdraw SUB earnings" className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 sm:items-center" onClick={(ev) => ev.target === ev.currentTarget && !busy && onClose()}>
+    <div role="dialog" aria-modal="true" aria-label="Withdraw private post earnings" className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 sm:items-center" onClick={(ev) => ev.target === ev.currentTarget && !busy && onClose()}>
       <div className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-[28px] bg-background p-4 sm:rounded-[28px]" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="inline-flex items-center gap-2 text-[17px] font-bold">
-            <Wallet className="h-4 w-4 text-emerald-600" aria-hidden /> Withdraw SUB earnings
+            <Wallet className="h-4 w-4 text-emerald-600" aria-hidden /> Withdraw private post earnings
           </h2>
           <button type="button" aria-label="Close" onClick={onClose} disabled={busy} className="inline-flex h-10 w-10 items-center justify-center rounded-full transition active:bg-black/[0.06]">
             <X className="h-5 w-5" aria-hidden />
@@ -148,7 +148,7 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
         </div>
 
         {!data ? (
-          failed ? <p className="py-6 text-center text-[14px] text-muted-foreground">Couldn&apos;t load your SUB balance. Try again in a moment.</p> : <div className="h-40 animate-pulse rounded-2xl bg-black/[0.05] motion-reduce:animate-none" aria-busy="true" />
+          failed ? <p className="py-6 text-center text-[14px] text-muted-foreground">Couldn&apos;t load your private post balance. Try again in a moment.</p> : <div className="h-40 animate-pulse rounded-2xl bg-black/[0.05] motion-reduce:animate-none" aria-busy="true" />
         ) : (
           <>
             <div className={cn("grid grid-cols-2 gap-2 rounded-[22px] p-3", GLASS)}>
@@ -158,11 +158,11 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
               {e!.debtCents > 0 ? <Stat label="Owed back (refunds)" value={usd(e!.debtCents)} /> : null}
             </div>
             <p className="mt-2 text-[12.5px] text-muted-foreground">
-              SUB money is separate from AI credits. A {rules!.withdrawalFeePercent}% withdrawal fee applies. Minimum {usd(rules!.minWithdrawalCents)}. {where === "intl" ? "Outside Nigeria, our team pays it after a quick review." : rules!.autoPayout ? "Paid out through Paystack straight away." : "Paid through Paystack after a quick review."}
+              Private post money is separate from AI credits. A {rules!.withdrawalFeePercent}% withdrawal fee applies. Minimum {usd(rules!.minWithdrawalCents)}. {where === "intl" ? "Outside Nigeria, our team pays it after a quick review." : rules!.autoPayout ? "Paid out through Paystack straight away." : "Paid through Paystack after a quick review."}
             </p>
 
             {!rules!.withdrawalsEnabled ? (
-              <p className="mt-3 rounded-2xl bg-amber-500/10 px-3 py-2 text-[13px] font-medium text-amber-800 dark:text-amber-300">SUB withdrawals are paused right now. Your balance is safe.</p>
+              <p className="mt-3 rounded-2xl bg-amber-500/10 px-3 py-2 text-[13px] font-medium text-amber-800 dark:text-amber-300">Private post withdrawals are paused right now. Your balance is safe.</p>
             ) : open ? (
               <p className="mt-3 rounded-2xl bg-sky-500/10 px-3 py-2 text-[13px] font-medium text-sky-800 dark:text-sky-300">You have a withdrawal in progress. You can request another once it&apos;s finished.</p>
             ) : null}

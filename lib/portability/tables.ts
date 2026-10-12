@@ -90,7 +90,7 @@ export const NOT_EXPORTED: Record<string, string> = {
   media_assets: "Shared media records, not owned by one member.",
   asset_usage: "Links assets to places they appear. Not personal data.",
   post_media: "Attachments belonging to a post; the post itself is exported.",
-  sub_balances: "Your SUB balance is a running total of sub_ledger, which is exported; it is not a separate fact.",
+  sub_balances: "Your private post balance is a running total of sub_ledger, which is exported; it is not a separate fact.",
   memory_people: "The friends on each of your memories. Exported inside each memory (memories.people) rather than as raw ids.",
   memory_media: "References from your memories to existing posts and media. Exported inside each memory.",
   memory_versions: "Earlier versions of your memories. Exported through the Memories export on /memories; the current version is in memories.",
@@ -308,7 +308,7 @@ export const OWNER_COLUMN: Record<string, string> = {
   memory_collections: "owner_id", // 0229: your memory collections
   memory_reminder_dismissals: "owner_id", // 0229: "on this day" cards and suggestions you dismissed
   sub_purchases: "subscriber_id", // 0227: SUB subscriptions you bought, with price, fee and total
-  sub_ledger: "creator_id", // 0227: every change to your SUB earnings
+  sub_ledger: "creator_id", // 0227: every change to your private post earnings
   sub_payout_accounts: "creator_id", // 0227: your saved payout account and auto-withdrawal setting
   sub_posts: "creator_id", // 0227: your subscriber-only posts (captions and dates; files stay in private storage)
   creator_notes: "creator_id", // 0227: notes you wrote for your members

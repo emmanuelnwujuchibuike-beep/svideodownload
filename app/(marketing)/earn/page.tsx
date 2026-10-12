@@ -13,7 +13,7 @@ import { SITE_URL } from "@/lib/site";
 /*
   /earn — the public creator-monetization page (owner SEO brief 2026-10-11).
 
-  Static, exactly like /profile: the SUB rules (fees, price bounds, minimum
+  Static, exactly like /profile: the private post rules (fees, price bounds, minimum
   withdrawal) are read through the service-role settings read at build — no
   cookie, no request data, no per-visit query — and an admin save of those
   settings regenerates every page (`revalidatePath("/", "layout")` in
@@ -68,7 +68,7 @@ export default async function EarnPage() {
   const FAQ: { q: string; a: string }[] = [
     {
       q: "How can I earn money from my content on Frenzsave?",
-      a: `Turn on SUB, Frenzsave's paid subscriptions. You set a monthly price, post photos and videos that only your paying subscribers can open, and share your subscribe link with your followers. Each payment gives a subscriber ${sub.periodDays} days of access, and the money goes into your SUB balance, which you withdraw to your bank.`,
+      a: `Turn on Private Posts, Frenzsave's paid subscriptions. You set a monthly price, post photos and videos that only your paying subscribers can open, and share your subscribe link with your followers. Each payment gives a subscriber ${sub.periodDays} days of access, and the money goes into your private post balance, which you withdraw to your bank.`,
     },
     {
       q: "How do Frenzsave paid subscriptions work?",
@@ -76,15 +76,15 @@ export default async function EarnPage() {
     },
     {
       q: "What does Frenzsave charge?",
-      a: `Two fees, each charged once. Your subscriber pays a ${pct(buyFee)} service fee on top of your price, so the full price you set goes into your SUB balance. When you withdraw, a ${pct(outFee)} withdrawal fee is taken from the amount you withdraw. In total you keep ${pct(keep)} of the price you set. Refunds and payment disputes can reverse earnings.`,
+      a: `Two fees, each charged once. Your subscriber pays a ${pct(buyFee)} service fee on top of your price, so the full price you set goes into your private post balance. When you withdraw, a ${pct(outFee)} withdrawal fee is taken from the amount you withdraw. In total you keep ${pct(keep)} of the price you set. Refunds and payment disputes can reverse earnings.`,
     },
     {
       q: "How much do I receive from a $10 subscription?",
-      a: `If your price is $10.00, your subscriber pays ${usd(ten.charge.totalCents)} (${usd(ten.charge.feeCents)} of that is the service fee) and ${usd(1000)} goes into your SUB balance. When you withdraw it, the ${pct(outFee)} withdrawal fee is ${usd(ten.out.feeCents)}, and ${usd(ten.out.netCents)} is paid to your bank. This is an illustration of the fee arithmetic, not a promise of earnings.`,
+      a: `If your price is $10.00, your subscriber pays ${usd(ten.charge.totalCents)} (${usd(ten.charge.feeCents)} of that is the service fee) and ${usd(1000)} goes into your private post balance. When you withdraw it, the ${pct(outFee)} withdrawal fee is ${usd(ten.out.feeCents)}, and ${usd(ten.out.netCents)} is paid to your bank. This is an illustration of the fee arithmetic, not a promise of earnings.`,
     },
     {
       q: "Can I publish exclusive posts just for subscribers?",
-      a: "Yes. SUB posts are photos and videos stored privately and kept apart from your public posts. They never appear in the feed, search or reels, have no public link, and can't be reposted or shared. A subscriber's access is checked by the server every time a post is opened, and the media links expire after a few minutes. Anyone who isn't subscribed sees only the cover you choose, if any.",
+      a: "Yes. Private posts are photos and videos stored privately and kept apart from your public posts. They never appear in the feed, search or reels, have no public link, and can't be reposted or shared. A subscriber's access is checked by the server every time a post is opened, and the media links expire after a few minutes. Anyone who isn't subscribed sees only the cover you choose, if any.",
     },
     {
       q: "Can subscribers screenshot my private posts?",
@@ -92,11 +92,11 @@ export default async function EarnPage() {
     },
     {
       q: "Do I need an account to set up subscriptions?",
-      a: "You need a free Frenzsave account to set a price, publish SUB posts and receive payouts. You can read everything on this page without one. When you tap Start Earning, you sign in or create an account and land straight on your setup.",
+      a: "You need a free Frenzsave account to set a price, publish private posts and receive payouts. You can read everything on this page without one. When you tap Start Earning, you sign in or create an account and land straight on your setup.",
     },
     {
       q: "How do I get paid?",
-      a: `Save a bank account once and withdraw from your SUB balance. In Nigeria, payouts go straight to your bank through Paystack, and you can turn on automatic withdrawal so new earnings are sent as they arrive. Outside Nigeria, withdraw to a bank account (with its SWIFT code) or PayPal, and our team sends it after a quick review. The minimum withdrawal is ${usd(sub.minWithdrawalCents)}.`,
+      a: `Save a bank account once and withdraw from your private post balance. In Nigeria, payouts go straight to your bank through Paystack, and you can turn on automatic withdrawal so new earnings are sent as they arrive. Outside Nigeria, withdraw to a bank account (with its SWIFT code) or PayPal, and our team sends it after a quick review. The minimum withdrawal is ${usd(sub.minWithdrawalCents)}.`,
     },
     {
       q: "Are subscription earnings guaranteed?",
@@ -104,14 +104,14 @@ export default async function EarnPage() {
     },
     {
       q: "How is Frenzsave different from other creator subscription platforms?",
-      a: "Many creators compare platforms such as Patreon or OnlyFans. Their fees and rules change, so we don't publish comparisons of other services. What Frenzsave charges is stated in full on this page. Your SUB page also sits inside a social app your followers already use, alongside your public posts, reels and chat. All content must follow Frenzsave's terms.",
+      a: "Many creators compare platforms such as Patreon or OnlyFans. Their fees and rules change, so we don't publish comparisons of other services. What Frenzsave charges is stated in full on this page. Your private posts page also sits inside a social app your followers already use, alongside your public posts, reels and chat. All content must follow Frenzsave's terms.",
     },
   ];
 
   const features = [
     { icon: Lock, title: "Subscriber-only posts", body: "Photos and videos kept in private storage and opened only by paying subscribers." },
     { icon: Wallet, title: "Your own monthly price", body: `Choose any price from ${usd(sub.minPriceCents)} to ${usd(sub.maxPriceCents)}. Each payment gives ${sub.periodDays} days of access.` },
-    { icon: Link2, title: "A link to share", body: "Your subscribe link opens your SUB page on your profile. Share it anywhere you have followers." },
+    { icon: Link2, title: "A link to share", body: "Your subscribe link opens your private posts page on your profile. Share it anywhere you have followers." },
     { icon: Bell, title: "New-subscriber alerts", body: "A notification and an email each time someone subscribes or joins your community." },
     { icon: Landmark, title: "Withdraw to your bank", body: "Paid out through Paystack to a saved account, with optional automatic withdrawal." },
     { icon: Eye, title: "Deterrents against copying", body: "No saving or downloading, a cover when the app is hidden, and a watermark with the viewer's @handle." },
@@ -119,10 +119,10 @@ export default async function EarnPage() {
 
   const steps = [
     { title: "Create an account or sign in", body: "Free, with the Frenzsave account you already have or a new one." },
-    { title: "Open your SUB setup", body: "Start Earning takes you straight to it on your profile." },
+    { title: "Open your private post setup", body: "Start Earning takes you straight to it on your profile." },
     { title: "Set your monthly price", body: "Your subscribers see your price plus the service fee before they pay." },
-    { title: "Post subscriber-only content", body: "Add photos and videos to SUB POSTS. Only paying subscribers can open them." },
-    { title: "Get paid", body: "Share your link. Payments land in your SUB balance, ready to withdraw." },
+    { title: "Post subscriber-only content", body: "Add photos and videos to PRIVATE POSTS. Only paying subscribers can open them." },
+    { title: "Get paid", body: "Share your link. Payments land in your private post balance, ready to withdraw." },
   ];
 
   const structured = [
@@ -163,7 +163,7 @@ export default async function EarnPage() {
         <div className="mx-auto w-full max-w-3xl px-4 pb-24 pt-[calc(var(--frenz-safe-top)+5.5rem)] sm:px-6 sm:pt-[calc(var(--frenz-safe-top)+7rem)]">
           {/* ── Hero ── */}
           <p className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-[12px] font-semibold text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200">
-            <Lock className="h-3.5 w-3.5" aria-hidden /> Frenzsave SUB · Creator subscriptions
+            <Lock className="h-3.5 w-3.5" aria-hidden /> Frenzsave Private Posts · Creator subscriptions
           </p>
           <h1 className="mt-4 font-brand text-[clamp(2.1rem,9vw,3.4rem)] font-extrabold leading-[1.02] tracking-[-0.045em]">
             Earn Money From Your Content With{" "}
@@ -206,7 +206,7 @@ export default async function EarnPage() {
                 <li className="flex gap-2.5">
                   <span aria-hidden className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-600" />
                   <span>
-                    <strong className="font-semibold">Your subscriber pays a {pct(buyFee)} service fee on top of your price.</strong> The full price you set goes into your SUB balance.
+                    <strong className="font-semibold">Your subscriber pays a {pct(buyFee)} service fee on top of your price.</strong> The full price you set goes into your private post balance.
                   </span>
                 </li>
                 <li className="flex gap-2.5">
@@ -297,7 +297,7 @@ export default async function EarnPage() {
                   Private means private
                 </h2>
                 <p className="mt-1 text-[13.5px] leading-relaxed text-muted-foreground">
-                  SUB posts are never in search, the feed or this page, and there is no public link to one. Access is checked by our server each time a post is opened, and media links expire within minutes. No website can stop every screenshot, and we don&apos;t claim to. The FAQ below explains what we do instead.
+                  Private posts are never in search, the feed or this page, and there is no public link to one. Access is checked by our server each time a post is opened, and media links expire within minutes. No website can stop every screenshot, and we don&apos;t claim to. The FAQ below explains what we do instead.
                 </p>
               </div>
             </div>

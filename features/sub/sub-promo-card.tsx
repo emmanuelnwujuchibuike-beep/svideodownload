@@ -73,7 +73,7 @@ export function SubPromoCard({ handle, live, onOpen, onClose }: { handle: string
       {live ? (
         <>
           <h2 className="relative mt-4 text-[1.5rem] font-extrabold leading-tight tracking-[-0.03em]">Your Content. Your Earnings.</h2>
-          <p className="relative mt-1.5 text-[14.5px] leading-relaxed text-white/85">Share your profile so people can subscribe to your SUB POSTS.</p>
+          <p className="relative mt-1.5 text-[14.5px] leading-relaxed text-white/85">Share your profile so people can subscribe to your PRIVATE POSTS.</p>
           <button type="button" onClick={() => void share()} className="relative mt-4 inline-flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-full bg-white text-[15px] font-bold text-indigo-700 shadow-sm transition active:scale-[0.97]">
             <Share2 className="h-[18px] w-[18px]" aria-hidden /> Share Profile &amp; Get Paid
           </button>

@@ -96,7 +96,7 @@ export const NOTIFICATIONS = [
   { id: "member_joined", label: "Joined your membership", category: "social" },
   { id: "membership_update", label: "Membership update", category: "social" },
   // 0227 (owner 2026-10-11): a viewer pressed a screenshot shortcut on a subscriber-only post. Pushes; Block or Ignore on the card.
-  { id: "sub_capture", label: "Screenshot of your SUB post", category: "social" },
+  { id: "sub_capture", label: "Screenshot of your private post", category: "social" },
   { id: "message", label: "New message", category: "social", group: "conversation", countsToBadge: false },
   { id: "message_reaction", label: "Reacted to your message", category: "social", group: "conversation", countsToBadge: false },
   { id: "message_mention", label: "Mentioned you in chat", category: "social", group: "conversation" },

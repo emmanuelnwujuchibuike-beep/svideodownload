@@ -158,7 +158,7 @@ export const GRAPH_EDGES: readonly EdgeSpec[] = [
     disclosure: "participants",
     consent: "one-sided",
     status: "live",
-    blurb: "Someone with a paid SUB subscription to your content.",
+    blurb: "Someone with a paid subscription to your private posts.",
   },
   {
     key: "customer",

@@ -194,9 +194,9 @@ function NotificationCardImpl({
   };
 
   /*
-    A screenshot of a SUB post (0227, owner 2026-10-11: "then they decide to block
+    A screenshot of a private post (0227, owner 2026-10-11: "then they decide to block
     or ignore"). Block answers on the tap and is put back if the server refuses;
-    a block also ends the viewer's SUB access (lib/sub/server.ts hasActiveSub).
+    a block also ends the viewer's private post access (lib/sub/server.ts hasActiveSub).
     Ignore simply clears the alert.
   */
   const blockActor = async (e: React.MouseEvent) => {
@@ -424,7 +424,7 @@ function NotificationCardImpl({
           <div className="mt-2 flex items-center gap-2">
             {actionState === "blocked" ? (
               <span className="flex items-center gap-1 text-xs font-semibold text-rose-600">
-                <UserX className="h-3.5 w-3.5" /> Blocked · their SUB access has ended
+                <UserX className="h-3.5 w-3.5" /> Blocked · their private post access has ended
               </span>
             ) : (
               <>

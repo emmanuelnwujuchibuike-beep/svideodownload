@@ -153,7 +153,7 @@ export function verbFor(type: NotificationType): string {
     case "member_joined":
       return "joined your membership";
     case "sub_capture":
-      return "took a screenshot of your SUB post";
+      return "took a screenshot of your private post";
     case "membership_update":
       return "— your membership couldn't renew. Top up to keep it";
     case "message":

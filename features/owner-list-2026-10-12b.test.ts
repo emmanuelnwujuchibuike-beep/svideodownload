@@ -34,7 +34,7 @@ describe("media lock — no iOS lift on feed or chat media", () => {
   });
 });
 
-describe("SUB posts (owner, 2026-10-12)", () => {
+describe("Private posts (owner, 2026-10-12)", () => {
   it("the tiled watermark says frenzsave.com, not Frenz", () => {
     const g = code("features/sub/sub-gallery.tsx");
     expect(g).toContain("{data.watermark} · frenzsave.com");

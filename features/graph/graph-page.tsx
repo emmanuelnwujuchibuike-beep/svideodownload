@@ -29,7 +29,7 @@ const ACTIONS: [string, string][] = [
   ["view_friends", "See their friends"],
   ["add_to_memory", "Add to a memory"],
   ["invite_collaborator", "Invite to collaborate"],
-  ["view_sub_posts", "See their SUB POSTS"],
+  ["view_sub_posts", "See their PRIVATE POSTS"],
 ];
 
 export function GraphPage({ trust, growth }: { trust: (TrustResult & { signals: TrustSignals }) | null; growth: GraphGrowth }) {

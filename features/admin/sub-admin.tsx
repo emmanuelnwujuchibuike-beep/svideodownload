@@ -153,14 +153,14 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
 
   return (
     <section className="rounded-3xl border border-border bg-card px-3 py-6 shadow-card sm:px-6">
-      <h2 className="font-semibold">SUB — paid subscriptions</h2>
-      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Real money through Paystack, separate from AI credits. The subscriber pays the creator&apos;s price plus the purchase fee; a SUB withdrawal pays out less the withdrawal fee.</p>
+      <h2 className="font-semibold">Private posts — paid subscriptions</h2>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Real money through Paystack, separate from AI credits. The subscriber pays the creator&apos;s price plus the purchase fee; a private post withdrawal pays out less the withdrawal fee.</p>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
         <Switch k="purchasesEnabled" label="New subscriptions can be bought" />
-        <Switch k="withdrawalsEnabled" label="SUB withdrawals are open" />
+        <Switch k="withdrawalsEnabled" label="Private post withdrawals are open" />
         <Switch k="autoPayout" label="Pay withdrawals through Paystack at once (no admin step)" />
-        <Switch k="requireQualification" label="Require the reward qualification to withdraw SUB" />
+        <Switch k="requireQualification" label="Require the reward qualification to withdraw private post earnings" />
         <Switch k="watermark" label="Watermark subscriber-only media with the viewer's @handle" />
       </div>
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -174,7 +174,7 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <button type="button" onClick={() => void save()} disabled={saving} className={cn("btn-lux bg-foreground text-background", saving && "opacity-60")}>
-          {saving ? "Saving…" : "Save SUB rules"}
+          {saving ? "Saving…" : "Save private post rules"}
         </button>
         {saved ? <p className={cn("text-sm", saved.ok ? "text-emerald-600" : "text-rose-600")}>{saved.text}</p> : null}
       </div>
@@ -185,7 +185,7 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
       ) : !data.ready ? (
         <p className="mt-2 text-sm text-muted-foreground">Arrives with migration 0227.</p>
       ) : data.purchases.length === 0 ? (
-        <p className="mt-2 text-sm text-muted-foreground">No SUB purchases yet.</p>
+        <p className="mt-2 text-sm text-muted-foreground">No private post purchases yet.</p>
       ) : (
         <>
           <p className="mt-2 text-sm">

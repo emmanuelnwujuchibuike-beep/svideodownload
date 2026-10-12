@@ -63,7 +63,7 @@ export async function notifySubscribed(reference: string): Promise<void> {
         creatorId,
         {
           title: sub.name,
-          body: `subscribed to your SUB POSTS · You earned ${earned}`,
+          body: `subscribed to your PRIVATE POSTS · You earned ${earned}`,
           genericBody: "You have a new subscriber.",
           url: sub.handle ? `/u/${sub.handle}` : "/members",
           icon: sub.avatarUrl ?? undefined,
@@ -77,9 +77,9 @@ export async function notifySubscribed(reference: string): Promise<void> {
       emailMember(creatorId, {
         subject: `${sub.name} subscribed to your content`,
         heading: "You have a new subscriber",
-        intro: `${sub.name} just subscribed to your SUB POSTS for ${Number(p.period_days ?? 30)} days.`,
+        intro: `${sub.name} just subscribed to your PRIVATE POSTS for ${Number(p.period_days ?? 30)} days.`,
         person: { name: sub.name, handle: sub.handle, avatarUrl: sub.avatarUrl },
-        body: `You earned ${earned}. It's in your SUB balance now, and if auto-withdrawal is on it is on its way to your saved bank account.`,
+        body: `You earned ${earned}. It's in your private post balance now, and if auto-withdrawal is on it is on its way to your saved bank account.`,
         ctaLabel: "See your members",
         ctaPath: "/members",
       }),

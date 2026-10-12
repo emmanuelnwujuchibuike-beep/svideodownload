@@ -203,7 +203,7 @@ export function AnonymousProfile({ earn, cashOut, sub, wallpapers }: AnonymousPr
             <dl className="mt-2 grid gap-2 text-[13px] sm:grid-cols-3">
               <Kind icon={Sparkles} term="AI credits">Spend on any Frenz AI tool. Bought credits and rewards both land here.</Kind>
               <Kind icon={Coins} term="Cashable credits">{cashOut}</Kind>
-              <Kind icon={Crown} term="SUB earnings">Money your subscribers pay you. Kept apart from AI credits and paid out through Paystack.</Kind>
+              <Kind icon={Crown} term="Private post earnings">Money your subscribers pay you. Kept apart from AI credits and paid out through Paystack.</Kind>
             </dl>
           </div>
           <Link prefetch={false} href="/rewards" className={cn(QUIET, "mt-4")}>
@@ -284,7 +284,7 @@ export function AnonymousProfile({ earn, cashOut, sub, wallpapers }: AnonymousPr
           <Entry icon={Download} title="Video downloader" href="/" />
           <Entry icon={Images} title="Wallpapers" href="/wallpapers" />
           <Entry icon={Crown} title="Creator subscriptions" href="/members" />
-          <Entry icon={Lock} title="SUB posts" href="/members" />
+          <Entry icon={Lock} title="Private posts" href="/members" />
           <Entry icon={Gift} title="Rewards and referrals" href="/rewards" />
           <Entry icon={Target} title="Quests" href="/quests" />
           <Entry icon={Users} title="Friends" href="/friends" />

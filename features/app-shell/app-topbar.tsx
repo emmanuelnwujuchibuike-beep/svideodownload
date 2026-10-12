@@ -18,6 +18,7 @@ import { UserMenu } from "@/features/auth/user-menu";
 import { CreateActionSheet } from "@/features/create/create-action-sheet";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
+import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { useTopAdPresent } from "@/lib/dom/top-ad-present";
 import { useScrollDirection } from "@/lib/dom/use-scroll-direction";
 import { cn } from "@/lib/utils";
@@ -461,15 +462,20 @@ export function AppTopbar() {
           Built inline — importing the AI credit strip module would pull the wallet code into every page's first load.
         */}
         {pathname === "/downloads" && !searchActive && !!handle ? (
-          <Link
+          // the same tap as Promote (owner 2026-10-12: "the earn button no longer responds on tap like the promote
+          // button"): it answers on the first frame (pressed + spinner) and its page is warmed once the page is idle
+          <TapOnceLink
             href="/quests"
             prefetch={false}
+            warmOnIdle
+            spinner={false}
             aria-label="Earn credits"
-            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 px-3 text-[12.5px] font-bold text-white shadow-[0_6px_14px_-8px_rgba(249,115,22,0.9)] transition-transform active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 motion-reduce:active:scale-100"
+            className="group inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 px-3 text-[12.5px] font-bold text-white shadow-[0_6px_14px_-8px_rgba(249,115,22,0.9)] transition-transform active:scale-95 data-[pending]:scale-95 data-[pending]:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 motion-reduce:transition-none"
           >
-            <IoLogoUsd className="h-3.5 w-3.5" aria-hidden />
+            <IoLogoUsd className="h-3.5 w-3.5 group-data-[pending]:hidden" aria-hidden />
+            <span aria-hidden className="hidden h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent group-data-[pending]:inline-block motion-reduce:animate-none" />
             Earn
-          </Link>
+          </TapOnceLink>
         ) : null}
 
         <span className={searchActive ? "hidden" : "lg:hidden"}>

@@ -72,6 +72,14 @@
        into a scroll container — which would break `position: sticky` on the app
        sidebars (they'd scroll away and leave empty space). */
     overflow-x: clip;
+    /*
+      🔴 NO RUBBER-BAND PAGE (owner, 2026-10-12, profile screenshot: "I don't want the page to slide
+      down and show that white background — only the refresh"). The viewport's overscroll is read
+      from the ROOT element; the rule below on <body> never reached it, so iOS kept bouncing the
+      whole page and showing the white behind it. Pull-to-refresh is our own (features/ui/
+      pull-to-refresh.tsx, touch deltas + scrollY) and draws over the page, so it keeps working.
+    */
+    overscroll-behavior-y: none;
   }
 
   :target {

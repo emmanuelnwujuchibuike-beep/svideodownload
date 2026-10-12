@@ -392,8 +392,11 @@ describe("ONE physical slot → ONE provider (slots addendum)", () => {
     expect(creative).toContain('const backdrop = fit === "contain" && withBackdrop ? (ad.mediaType === "video" ? ad.thumb : ad.media) : null;');
     // 2026-10-10: only the CARD drops the backdrop, because its box IS the creative's ratio (cardMediaBox)
     const banner = src("features/ads-platform/serve/self-ad-banner.tsx");
-    expect(banner.match(/backdrop: false/g)?.length).toBe(1);
-    expect(banner).toContain("const box = cardMediaBox(current.w, current.h);");
+    // 2026-10-12: …except a VIDEO in the download-result card, which takes that slot's 320 × 200 and gets the backdrop back
+    expect(banner).toContain("backdrop: fixedVideo })");
+    expect(banner).toContain('const fixedVideo = current.mediaType === "video" && placement === "download_result_banner";');
+    expect(banner).toContain("const box = fixedVideo ? RESULT_VIDEO_BOX : cardMediaBox(current.w, current.h);");
+    expect(src("lib/ads-platform/media-spec.ts")).toContain("export const RESULT_VIDEO_BOX = { width: 320, height: 200 } as const;");
     expect(banner).toContain("aspectRatio: `${box.width} / ${box.height}`");
     expect(src("features/ads-platform/serve/self-ad-banner.tsx")).not.toMatch(/fit=\{variant === "strip" \? "contain" : "cover"\}/);
   });

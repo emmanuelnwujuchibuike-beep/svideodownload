@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { EligibleAd, FormatRules } from "@/lib/ads-platform/eligibility";
-import { cardMediaBox, topStripBox } from "@/lib/ads-platform/media-spec";
+import { cardMediaBox, RESULT_VIDEO_BOX, topStripBox } from "@/lib/ads-platform/media-spec";
 import { dwellSeconds, VIDEO_MIN_DWELL_SECONDS } from "@/lib/ads-platform/rotation";
 
 /** How far outside the viewport a tile/card keeps its media mounted — about a screen, so scrolling meets a ready ad. */
@@ -209,7 +209,14 @@ export function SelfAdBanner({
     resize it, which is what "not a fixed size" asks for.
   */
   if (variant === "card") {
-    const box = cardMediaBox(current.w, current.h);
+    /*
+      A VIDEO in the download-result card is the result slot's own 320 × 200, like the image
+      creatives there (owner 2026-10-12: "shorten the height and width of video ad so it fits
+      in the download result card like 320 200"). Still never cropped: shown whole, over a
+      soft blur of its own poster where the shapes differ (FIT_RULE).
+    */
+    const fixedVideo = current.mediaType === "video" && placement === "download_result_banner";
+    const box = fixedVideo ? RESULT_VIDEO_BOX : cardMediaBox(current.w, current.h);
     return (
       <a
         ref={hostRef}
@@ -229,7 +236,7 @@ export function SelfAdBanner({
       >
         <span className="relative block w-full bg-muted" style={{ aspectRatio: `${box.width} / ${box.height}` }}>
           {label}
-          {creative({ className: "h-full w-full animate-in fade-in duration-300 motion-reduce:animate-none", backdrop: false })}
+          {creative({ className: "h-full w-full animate-in fade-in duration-300 motion-reduce:animate-none", backdrop: fixedVideo })}
         </span>
         <span className="flex items-center gap-3 px-3.5 py-2.5 text-left">
           <span className="min-w-0 flex-1">

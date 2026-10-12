@@ -30,6 +30,9 @@ export const FIT_RULE = "contain" as const;
  */
 export const CARD_MAX = { width: 320, height: 500 } as const;
 
+/** A video creative in the download-result card: the slot's own 320 × 200, shown whole (owner 2026-10-12). */
+export const RESULT_VIDEO_BOX = { width: 320, height: 200 } as const;
+
 /** The card's media box for a w × h creative: its ratio, as large as fits inside CARD_MAX. Unknown size → the old 320 × 200. */
 export function cardMediaBox(w: number | null | undefined, h: number | null | undefined, max: { width: number; height: number } = CARD_MAX): { width: number; height: number } {
   if (!w || !h || !(w > 0) || !(h > 0)) return { width: max.width, height: Math.round((max.width * 200) / 320) };

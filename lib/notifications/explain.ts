@@ -34,6 +34,8 @@ export function holdLabel(reasons: readonly string[]): string | null {
 export function explainDelivery(decision: DeliveryDecision | null, reasons: readonly string[]): string {
   if (!decision) return "Shown here in your Activity Center. Any push for it followed your notification settings.";
   const r = reasons[0] ?? "";
+  if (decision === "held" && r === "rule_summary") return "Held for your hourly summary, as one of your delivery rules asks.";
+  if (decision === "in_app" && r === "rule_in_app") return "Kept in the app, as one of your delivery rules asks.";
   if (decision === "held") return `Held from your lock screen because ${holdLabel(reasons) ?? "a hold"} was on. It waited here for you.`;
   if (decision === "in_app") {
     if (r === "burst_cap") return "Kept off your lock screen because you'd had a lot of notifications in the last hour.";
@@ -41,6 +43,7 @@ export function explainDelivery(decision: DeliveryDecision | null, reasons: read
     if (r === "push_off" || r === "master_off") return "Kept off your lock screen because push notifications are off in your settings.";
     return "Shown here only.";
   }
+  if (r === "rule_immediate") return "Sent right away, as one of your delivery rules asks.";
   if (r === "critical") return "Sent right away. Security and payment alerts always reach you, even in Do Not Disturb.";
   if (r === "favorite_through_quiet") return "Sent during quiet hours because it's from a favourite friend, as your settings allow.";
   if (r === "category_always") return "Sent during quiet hours because this category is set to always deliver.";

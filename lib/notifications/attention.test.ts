@@ -56,6 +56,21 @@ describe("unchanged rules", () => {
   });
 });
 
+describe("Part 5: delivery rules", () => {
+  it("a rule never beats DND or a focus mode, or the member's own off switches", () => {
+    expect(decideDelivery(base({ rule: "immediate", hold: { holds: true, dnd: true, focus: null } })).decision).toBe("held");
+    expect(decideDelivery(base({ rule: "immediate", settings: settings({ pushEnabled: false }) })).decision).toBe("in_app");
+  });
+  it("immediate pushes through quiet hours; summary holds; in_app keeps it in the app", () => {
+    expect(decideDelivery(base({ rule: "immediate", settings: quiet, quietHour: 23 }))).toEqual({ decision: "push", reasons: ["rule_immediate"] });
+    expect(decideDelivery(base({ rule: "summary" }))).toEqual({ decision: "held", reasons: ["rule_summary"] });
+    expect(decideDelivery(base({ rule: "in_app", priority: "high" }))).toEqual({ decision: "in_app", reasons: ["rule_in_app"] });
+  });
+  it("critical is untouched by any rule (teeth)", () => {
+    expect(decideDelivery(base({ priority: "critical", rule: "in_app" })).decision).toBe("push");
+  });
+});
+
 describe("new in Feature 20", () => {
   it("a favourite gets through quiet hours ONLY when the member allows it", () => {
     expect(decideDelivery(base({ settings: quiet, quietHour: 23, favorite: true })).decision).toBe("held");

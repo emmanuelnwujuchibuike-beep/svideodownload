@@ -111,7 +111,10 @@ var SWX = (self.SWX = self.SWX || {});
 // URLs too. AVATAR_CACHE no longer carries VERSION: an avatar URL is versioned
 // itself, so its cache never goes stale, and naming it after the SW version
 // threw every face away on each deploy (iPhone: "nothing changed"). Must bump.
-SWX.VERSION = "v27";
+// v28 (2026-10-12): push.js badge is /badge-96.png — a white F on transparent. Android
+// draws the status-bar badge as a one-colour SILHOUETTE, so the full-colour square icon
+// was a plain white square. A submodule change; must bump.
+SWX.VERSION = "v28";
 SWX.STATIC_CACHE = `frenz-static-${SWX.VERSION}`;
 SWX.IMAGE_CACHE = `frenz-img-${SWX.VERSION}`;
 SWX.PAGE_CACHE = `frenz-pages-${SWX.VERSION}`;

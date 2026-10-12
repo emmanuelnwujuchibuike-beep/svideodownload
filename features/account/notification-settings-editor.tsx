@@ -17,6 +17,12 @@ const CATEGORY_META: Record<NotificationCategory, { label: string; icon: typeof 
   system: { label: "System & announcements", icon: Wrench },
 };
 const CATEGORIES = Object.keys(CATEGORY_META) as NotificationCategory[];
+const LOCK_SCREEN_LABEL = { full: "Show all", no_preview: "No preview", hidden: "Hide all" } as const;
+const LOCK_SCREEN_HINT = {
+  full: "Who it's from and what they said.",
+  no_preview: 'Who it\'s from, but "New message" instead of the text.',
+  hidden: 'Just "You have a new notification" — no name, text or photo.',
+} as const;
 const DEFAULT_PREF: CategoryPref = { enabled: true, push: true };
 
 /** Local-clock hour (0-23) ↔ UTC hour — the reading BEFORE 0233, kept for a saved
@@ -80,7 +86,8 @@ export function NotificationSettingsEditor({ initial }: { initial: NotificationS
     setBusy(true);
     setMsg(null);
     try {
-      const { lastDigestSentAt: _system, ...editable } = settings;
+      // rules are saved by the Control Center below, tap by tap — never overwritten from this form's copy
+      const { lastDigestSentAt: _system, rules: _rules, hidePushPreview: _derived, ...editable } = settings;
       const res = await fetch("/api/notification-settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -211,13 +218,32 @@ export function NotificationSettingsEditor({ initial }: { initial: NotificationS
           onToggle={() => setSettings((p) => ({ ...p, favoritesBypassQuiet: !p.favoritesBypassQuiet }))}
         />
 
-        <Toggle
-          icon={EyeOff}
-          title="Hide message previews in push"
-          desc={'Push shows "New message" instead of the actual text'}
-          on={settings.hidePushPreview}
-          onToggle={() => setSettings((p) => ({ ...p, hidePushPreview: !p.hidePushPreview }))}
-        />
+        {/* Part 5 lock-screen privacy: one three-way choice replaces the old "hide previews" switch (same column underneath) */}
+        <div className="rounded-2xl border border-border/60 bg-secondary/15 p-3.5">
+          <span className="flex items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
+              <EyeOff className="h-4 w-4" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-medium">On the lock screen</span>
+              <span className="block text-xs text-muted-foreground">{LOCK_SCREEN_HINT[settings.lockScreen]}</span>
+            </span>
+          </span>
+          <div role="radiogroup" aria-label="On the lock screen" className="mt-3 grid grid-cols-3 gap-1.5">
+            {(["full", "no_preview", "hidden"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                role="radio"
+                aria-checked={settings.lockScreen === v}
+                onClick={() => setSettings((p) => ({ ...p, lockScreen: v, hidePushPreview: v !== "full" }))}
+                className={cn("min-h-11 rounded-xl px-2 text-[12.5px] font-semibold transition", settings.lockScreen === v ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground")}
+              >
+                {LOCK_SCREEN_LABEL[v]}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <Toggle
           icon={Mail}

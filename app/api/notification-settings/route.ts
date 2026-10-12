@@ -41,6 +41,9 @@ const schema = z.object({
   quietHoursTz: z.string().min(1).max(64).nullable().optional(),
   heldSummaryEnabled: z.boolean().optional(),
   favoritesBypassQuiet: z.boolean().optional(),
+  // Feature 20 Part 5 (0236): Delivery Rules (re-validated by cleanRules) and lock-screen privacy
+  rules: z.array(z.unknown()).max(30).optional(),
+  lockScreen: z.enum(["full", "no_preview", "hidden"]).optional(),
 });
 
 /** PATCH /api/notification-settings — update one or more settings (merges into existing category_prefs). */
@@ -63,6 +66,18 @@ export async function PATCH(request: Request) {
   const parsed = schema.safeParse(json);
   if (!parsed.success) return NextResponse.json({ error: "Invalid settings." }, { status: 400 });
 
+  /*
+    Part 5 "Reset to defaults": every switch back to the default, every category the member
+    had changed back to on, no rules — one write. (A plain patch merges categories, so the
+    reset names each one the member had set.)
+  */
+  if ((json as { reset?: unknown } | null)?.reset === true) {
+    const current = await getNotificationSettings(user.id);
+    const { lastDigestSentAt: _system, categoryPrefs: _c, ...defaults } = DEFAULT_NOTIFICATION_SETTINGS;
+    const categoryPrefs = Object.fromEntries(Object.keys(current.categoryPrefs).map((k) => [k, { enabled: true, push: true }]));
+    const out = await setNotificationSettings(user.id, { ...defaults, categoryPrefs });
+    return out.ok || out.pending ? NextResponse.json({ ok: true }) : NextResponse.json({ error: "Couldn't reset." }, { status: 500 });
+  }
   const res = await setNotificationSettings(user.id, parsed.data);
   if (res.pending) return NextResponse.json({ error: "Smart delivery arrives with the next update." }, { status: 503 });
   if (!res.ok) return NextResponse.json({ error: "Couldn't save." }, { status: 500 });

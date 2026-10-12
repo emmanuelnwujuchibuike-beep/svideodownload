@@ -1,3 +1,4 @@
+import { cleanRules, type DeliveryRule, type LockScreen } from "@/lib/notifications/rules";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { NotificationCategory, NotificationType } from "@/lib/social/notifications";
 
@@ -55,6 +56,10 @@ export interface NotificationSettings {
   heldSummaryEnabled: boolean;
   /** 0233: favourite friends reach the lock screen during quiet hours — never DND or a focus mode. */
   favoritesBypassQuiet: boolean;
+  /** 0236 (Feature 20 Part 5): the member's Delivery Rules, first match wins */
+  rules: DeliveryRule[];
+  /** 0236: what a push may show on a locked screen */
+  lockScreen: LockScreen;
 }
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
@@ -71,9 +76,13 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   quietHoursTz: null,
   heldSummaryEnabled: true,
   favoritesBypassQuiet: false,
+  rules: [],
+  lockScreen: "full",
 };
 
 interface Row {
+  rules?: unknown;
+  lock_screen?: string | null;
   quiet_hours_tz?: string | null;
   held_summary_enabled?: boolean | null;
   favorites_bypass_quiet?: boolean | null;
@@ -104,6 +113,9 @@ function fromRow(r: Row): NotificationSettings {
     quietHoursTz: r.quiet_hours_tz ?? null,
     heldSummaryEnabled: r.held_summary_enabled ?? true,
     favoritesBypassQuiet: r.favorites_bypass_quiet ?? false,
+    rules: cleanRules(r.rules),
+    // "hide push preview" (Part 6) is the older switch for the same thing; the stricter of the two wins
+    lockScreen: r.lock_screen === "hidden" ? "hidden" : r.lock_screen === "no_preview" || r.hide_push_preview ? "no_preview" : "full",
   };
 }
 
@@ -169,12 +181,15 @@ const BASE_COLS =
   "master_enabled, push_enabled, in_app_enabled, category_prefs, quiet_hours_enabled, quiet_hours_start_utc, quiet_hours_end_utc, hide_push_preview, digest_enabled, last_digest_sent_at";
 // 0233's columns — the owner applies migrations by hand, so the read falls back to the older shape until they exist
 const DELIVERY_COLS = "quiet_hours_tz, held_summary_enabled, favorites_bypass_quiet";
-const NEW_COLUMNS = new Set(DELIVERY_COLS.split(", "));
+// 0236's columns — the same fallback, one step further
+const CONTROL_COLS = "rules, lock_screen";
+const NEW_COLUMNS = new Set([...DELIVERY_COLS.split(", "), ...CONTROL_COLS.split(", ")]);
 
 export async function getNotificationSettings(userId: string): Promise<NotificationSettings> {
   try {
     const db = createAdminClient();
-    let res = await db.from("notification_settings").select(`${BASE_COLS}, ${DELIVERY_COLS}`).eq("user_id", userId).maybeSingle();
+    let res = await db.from("notification_settings").select(`${BASE_COLS}, ${DELIVERY_COLS}, ${CONTROL_COLS}`).eq("user_id", userId).maybeSingle();
+    if (res.error) res = (await db.from("notification_settings").select(`${BASE_COLS}, ${DELIVERY_COLS}`).eq("user_id", userId).maybeSingle()) as typeof res;
     if (res.error) res = (await db.from("notification_settings").select(BASE_COLS).eq("user_id", userId).maybeSingle()) as typeof res;
     return res.data ? fromRow(res.data as Row) : DEFAULT_NOTIFICATION_SETTINGS;
   } catch {
@@ -196,6 +211,8 @@ export interface NotificationSettingsPatch {
   quietHoursTz?: string | null;
   heldSummaryEnabled?: boolean;
   favoritesBypassQuiet?: boolean;
+  rules?: unknown;
+  lockScreen?: LockScreen;
 }
 
 /** `pending`: only 0233's columns were asked for and they don't exist yet — the caller says so in words. */
@@ -220,6 +237,12 @@ export async function setNotificationSettings(userId: string, patch: Notificatio
     if (patch.quietHoursTz !== undefined) clean.quiet_hours_tz = patch.quietHoursTz === null ? null : cleanTimeZone(patch.quietHoursTz);
     if (typeof patch.heldSummaryEnabled === "boolean") clean.held_summary_enabled = patch.heldSummaryEnabled;
     if (typeof patch.favoritesBypassQuiet === "boolean") clean.favorites_bypass_quiet = patch.favoritesBypassQuiet;
+    if (patch.rules !== undefined) clean.rules = cleanRules(patch.rules);
+    if (patch.lockScreen === "full" || patch.lockScreen === "no_preview" || patch.lockScreen === "hidden") {
+      clean.lock_screen = patch.lockScreen;
+      // keep the older switch in step, so an older reader of it agrees
+      clean.hide_push_preview = patch.lockScreen !== "full";
+    }
     if (Object.keys(clean).length === 0) return { ok: true };
     const write = (cols: Record<string, unknown>) =>
       db.from("notification_settings").upsert({ user_id: userId, ...cols, updated_at: new Date().toISOString() }, { onConflict: "user_id" });

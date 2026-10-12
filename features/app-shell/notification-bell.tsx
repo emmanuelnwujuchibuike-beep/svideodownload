@@ -12,7 +12,7 @@ import {
   type FlatNotifications as NotifData,
 } from "@/features/notifications/data";
 import { hrefFor, iconFor, tintFor, timeAgo, verbFor } from "@/features/notifications/meta";
-import { onNotificationInsert } from "@/features/notifications/notif-stream";
+import { announceNotificationSync, onNotificationInsert, onNotificationSync } from "@/features/notifications/notif-stream";
 import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
@@ -66,6 +66,8 @@ export function NotificationBell() {
       }),
     [],
   );
+  // Part 6: read on another of my devices → this badge catches up
+  useEffect(() => onNotificationSync(() => void revalidate(KEY, loadNotifications, 0).catch(() => {})), []);
 
   const toggle = async () => {
     haptic("light");
@@ -76,7 +78,8 @@ export function NotificationBell() {
       // Optimistically mark everything read.
       mutate<NotifData>(KEY, (prev) => ({ items: (prev?.items ?? []).map((i) => ({ ...i, read: true })), unread: 0 }));
       try {
-        await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: "{}" });
+        const r = await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: "{}" });
+        if (r.ok) announceNotificationSync();
       } catch {
         /* ignore */
       }

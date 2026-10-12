@@ -21,10 +21,11 @@ const body = (src: string, name: string) => {
 describe("the referral banner after a download", () => {
   const trigger = code("features/rewards/referral-banner-trigger.tsx");
   const banner = code("features/rewards/referral-banner.tsx");
-  it("one listener for every kind of download, from the 3rd on, guests included (a per-browser count)", () => {
+  it("one listener for every kind of download, once a day on the first of the day, guests included (a per-browser count)", () => {
     expect(trigger).toContain("window.addEventListener(DOWNLOAD_COMPLETED_EVENT, onCompleted);");
-    expect(trigger).toContain("const AFTER = 3;");
-    expect(trigger).toContain("localStorage.setItem(COUNT_KEY, String(count));");
+    expect(trigger).toContain("const next = countDownload(readDaily(localStorage.getItem(DAILY_KEY)), new Date());");
+    expect(trigger).toContain("localStorage.setItem(DAILY_KEY, JSON.stringify(next.state));");
+    expect(trigger).not.toContain("const AFTER = 3;");
     expect(code("features/app-shell/deferred-shell.tsx")).toContain("<ReferralBannerTrigger />");
   });
   it("never on top of the download-complete ad — it waits for the ad to close", () => {

@@ -225,3 +225,54 @@ lookup.
   "open = seen, tap = read".
 - **Wallpaper uploads** don't fan out to subscribers yet (uploads are operator-reviewed
   before they publish). Planned with the review step.
+
+---
+
+# Parts 5–6 — Control Center, delivery rules, devices (2026-10-12)
+
+Built on what Parts 1–4 left, nothing parallel. Migration **0236** (`notification_settings.rules`,
+`notification_settings.lock_screen`, `push_subscriptions.label`) must be applied by the owner;
+until then every read falls back to the 0233 columns and the new controls say so in words.
+
+| Brief ask | Where it lives |
+|---|---|
+| Notification Control Center | `/account/notifications`: the existing switches, then `NotificationControlCenter` and `PushDevices` below them |
+| Delivery rules ("family → immediate", "likes → summary") | `lib/notifications/rules.ts`, read by the Attention Engine (`attention.ts`, reason codes `rule_*`); first match wins; never security or critical; never through DND or a focus mode |
+| Contact priorities | a rule's "from": favourite friends (`friend_favorites`) or close friends (`social_circles` kind `close_friends`) — looked up only when a rule names them |
+| Smart filters / "AI suggestions" | `lib/notifications/suggestions.ts`: a counting rule over the member's own week, shown with the number. Not AI, and labelled as such |
+| Notification profiles | the focus modes that already exist (`/account/presence`), linked |
+| Lock-screen privacy | Show all / No preview / Hide all (`lockScreenPayload`) — replaces the old single switch, same column underneath |
+| Export / import / reset | client JSON file; import goes through the same validated PATCH; reset = defaults, every changed category back on, rules cleared |
+| Sounds and haptics | per device, already in the inbox sound picker; a web app cannot set the OS push sound (iOS and Android both refuse) |
+| Device manager | `app/api/push/devices` + `features/notifications/push-devices.tsx`: name, label, last delivery and 7-day counts from `push_delivery_log`; rename, test one device, remove |
+| Multi-device sync | one `sync` broadcast on the existing `notifications:<uid>` channel after a read/archive/clear — never row UPDATE events |
+| Retries, dead endpoints, duplicates | already in `lib/push/web-push.ts` (one retry, prune on 404/410, collapse by tag/topic); `sendPushToDevice` reuses the same sender |
+
+Planned, not built: routing to the "active" device only, native APNs/FCM, watch/car surfaces,
+email/SMS failover.
+
+# Notifications Part 1 — the incoming banner (2026-10-12)
+
+Audit: the centre, categories, grouping, thumbnails, Accept/Decline, pagination, per-person
+"notify me" (the profile bell), block/mute/visibility filtering and the single event pipeline
+(`sendSmartPush` → row + push) already existed from Parts 1–4. The real gap was the banner.
+
+`features/notifications/live-toast.tsx` (same mount, upgraded, `bannerFor` in `banner.ts`):
+Instagram's arrangement — round sender avatar with a Frenz badge, name on its own line, the
+message under it, "now", the post thumbnail — swipe up to dismiss, bursts drawn as a stacked
+edge with a count, a replayed insert never re-shows, held rows (DND, focus, quiet hours) never
+banner, the open conversation never banners. Reads the newest five rows only; CSS motion only.
+
+# Notifications Part 2 — outside the app (2026-10-12)
+
+Audited platforms, honestly:
+
+| Platform | What it is | Sender photo | Notes |
+|---|---|---|---|
+| Android | the Play Store app is a **TWA** (Chrome Web Push); no Flutter/native source in this repo | yes — the large icon | title = sender, body = action; the status-bar badge is now a white F silhouette (`public/badge-96.png`; SW v28) instead of a white square |
+| iPhone / iPad | installed PWA (Web Push, iOS 16.4+) | **no** — iOS always draws the app icon | "<name> from <app>" and the photo-with-app-badge look are iOS rules; the photo needs a native app (Communication Notifications) |
+| Desktop browsers | Web Push | yes (icon) | |
+
+Changed: push icons are the sender's 192 px avatar render (`avatarSrc`), never the original
+upload; message previews follow the Part 5 lock-screen setting. Not possible without a native
+app: MessagingStyle conversations, Android channels, iOS communication notifications.

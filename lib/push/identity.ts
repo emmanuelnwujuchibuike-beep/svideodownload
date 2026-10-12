@@ -1,3 +1,4 @@
+import { avatarSrc } from "@/lib/media/avatar-url";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -30,7 +31,9 @@ export async function pushPerson(userId: string | null | undefined): Promise<Pus
     return {
       name: ((r?.display_name || (handle ? `@${handle}` : "")) || "Someone").slice(0, 60),
       handle,
-      icon: avatar && /^https:\/\/[^\s"'<>]+$/.test(avatar) ? avatar : undefined,
+      // a 192 px render, not the original upload: Android draws the large icon at ~64 dp, and a
+      // multi-megabyte photo slows the notification on mobile data (notifications Part 2)
+      icon: avatar && /^https:\/\/[^\s"'<>]+$/.test(avatar) ? avatarSrc(avatar, 96) : undefined,
     };
   } catch {
     return { name: "Someone", handle: null, icon: undefined };

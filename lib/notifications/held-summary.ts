@@ -47,12 +47,13 @@ const NOUN: Partial<Record<NotificationType, [string, string]>> = {
 };
 
 /** Pure: "3 messages, 2 comments and 1 other update". Null when nothing counts. */
-export function summarizeHeld(types: readonly NotificationType[]): string | null {
+export function summarizeHeld(types: readonly NotificationType[], everyPriority = false): string | null {
   const counts = new Map<string, { n: number; forms: [string, string] }>();
   let other = 0;
   for (const t of types) {
     const p = defaultPriorityFor(t);
-    if (p !== "high" && p !== "medium") continue;
+    // a member's "summary" rule asked for these — every priority counts then
+    if (!everyPriority && p !== "high" && p !== "medium") continue;
     const forms = NOUN[t];
     if (!forms) {
       other += 1;
@@ -117,8 +118,9 @@ export async function runHeldSummaries(now = new Date()): Promise<{ users: numbe
       out.skipped += 1;
       continue;
     }
-    // still held? wait for the next hour
-    if ((await presenceHold(userId, now)).holds) {
+    const ruled = fresh.every((r) => r.delivery_reason === "rule_summary");
+    // still held? wait for the next hour (a rule's hourly summary has no hold to wait for)
+    if (!ruled && (await presenceHold(userId, now)).holds) {
       out.waiting += 1;
       continue;
     }
@@ -127,7 +129,7 @@ export async function runHeldSummaries(now = new Date()): Promise<{ users: numbe
       continue;
     }
 
-    const body = summarizeHeld(fresh.map((r) => r.type));
+    const body = summarizeHeld(fresh.map((r) => r.type), ruled);
     await stamp(fresh.map((r) => r.id));
     if (!body) {
       out.skipped += 1;
@@ -135,8 +137,9 @@ export async function runHeldSummaries(now = new Date()): Promise<{ users: numbe
     }
     // the low-level sender, so "hide push preview" is applied here (sendSmartPush would do it, but would also record a row)
     await sendPushToUser(userId, {
-      title: summaryTitle(fresh.map((r) => r.delivery_reason)),
-      body: settings.hidePushPreview ? "You have updates waiting." : `${body}. Tap to catch up.`,
+      title: ruled ? "Your hourly summary" : summaryTitle(fresh.map((r) => r.delivery_reason)),
+      body: settings.lockScreen !== "full" ? "You have updates waiting." : `${body}. Tap to catch up.`,
+      ...(settings.lockScreen === "hidden" ? { title: "Frenz" } : {}),
       url: "/notifications?view=held",
       tag: "held-summary",
     }).catch(() => null);

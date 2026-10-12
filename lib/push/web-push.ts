@@ -258,7 +258,16 @@ export async function sendPushToAnon(anonId: string, payload: PushPayload): Prom
   return sendPushToIdentity({ kind: "anon", id: anonId }, payload);
 }
 
-type PushIdentity = { kind: "user" | "anon"; id: string };
+/**
+ * ONE of the member's devices (Feature 20 Part 6, the Device Manager's "Test" button):
+ * the same sender — retry, pruning, the delivery log — limited to that subscription,
+ * and only if it belongs to the member. Never a second sender.
+ */
+export async function sendPushToDevice(userId: string, subscriptionId: string, payload: PushPayload): Promise<void> {
+  return sendPushToIdentity({ kind: "user", id: userId, subscriptionId }, payload);
+}
+
+type PushIdentity = { kind: "user" | "anon"; id: string; subscriptionId?: string };
 
 async function sendPushToIdentity(identity: PushIdentity, payload: PushPayload): Promise<void> {
   const userId = identity.kind === "user" ? identity.id : null;
@@ -266,10 +275,12 @@ async function sendPushToIdentity(identity: PushIdentity, payload: PushPayload):
   if (!ensureConfigured()) return;
   try {
     const db = createAdminClient();
-    const { data } = await db
+    let q = db
       .from("push_subscriptions")
       .select("id, endpoint, p256dh, auth")
       .eq(identity.kind === "user" ? "user_id" : "anon_id", identity.id);
+    if (identity.subscriptionId) q = q.eq("id", identity.subscriptionId);
+    const { data } = await q;
     const subs = (data as SubRow[]) ?? [];
     if (subs.length === 0) return;
 

@@ -1,5 +1,7 @@
 import { capMatters, decideDelivery, type AttentionResult, type PresenceHold, type PushPriority, quietHourNow } from "@/lib/notifications/attention";
 import { isOverPushFrequencyCap } from "@/lib/notifications/frequency-limit";
+import { lockScreenPayload, matchRule, rulesNeed } from "@/lib/notifications/rules";
+import { smartCategoryOf, type SmartCategory } from "@/lib/notifications/smart-category";
 import { getNotificationSettings, type NotificationSettings } from "@/lib/social/notification-settings";
 import type { NotificationCategory } from "@/lib/social/notifications";
 import { presenceHold } from "@/lib/social/presence/server";
@@ -122,6 +124,26 @@ async function stampRecorded(userId: string, match: { type: NotificationType; co
   }
 }
 
+/** Is the actor in the recipient's Close friends circle (0217 social_circles kind close_friends)? Read only when a rule asks. */
+async function isCloseFriend(userId: string, actorId: string): Promise<boolean> {
+  try {
+    const db = createAdminClient();
+    const { data: circles } = await db.from("social_circles").select("id").eq("owner_id", userId).eq("kind", "close_friends").limit(1);
+    const id = (circles as { id: string }[] | null)?.[0]?.id;
+    if (!id) return false;
+    const { data } = await db.from("circle_members").select("member_id").eq("circle_id", id).eq("member_id", actorId).maybeSingle();
+    return !!data;
+  } catch {
+    return false;
+  }
+}
+
+/** The smart group for a rule: from the type when known, else from the category. */
+function groupOf(type: NotificationType | null, category: NotificationCategory): SmartCategory {
+  if (type) return smartCategoryOf(type, category);
+  return category === "news" ? "content" : category === "premium" ? "earnings" : category;
+}
+
 async function isFavorite(userId: string, actorId: string): Promise<boolean> {
   try {
     const { data } = await createAdminClient().from("friend_favorites").select("friend_id").eq("user_id", userId).eq("friend_id", actorId).maybeSingle();
@@ -136,10 +158,17 @@ async function isFavorite(userId: string, actorId: string): Promise<boolean> {
  * what held it and the member allows favourites through; the burst-cap COUNT runs
  * only when the answer would otherwise be a medium/low push.
  */
-export async function decideFor(userId: string, priority: PushPriority, category: NotificationCategory, actorId: string | null, settings?: NotificationSettings, now = new Date()): Promise<AttentionResult> {
+export async function decideFor(userId: string, priority: PushPriority, category: NotificationCategory, actorId: string | null, settings?: NotificationSettings, now = new Date(), type: NotificationType | null = null): Promise<AttentionResult> {
   const s = settings ?? (await getNotificationSettings(userId));
   const hold: PresenceHold = priority === "critical" ? { holds: false } : await presenceHold(userId, now);
-  const base = { priority, category, settings: s, hold, quietHour: quietHourNow(now, s.quietHoursTz), favorite: false, overCap: false };
+  // Part 5: the member's Delivery Rules — relationship lookups only when a rule actually names one
+  let rule: ReturnType<typeof matchRule> = null;
+  if (s.rules.length && priority !== "critical" && !hold.holds) {
+    const need = rulesNeed(s.rules);
+    const [fav, close] = await Promise.all([need.favorites && actorId ? isFavorite(userId, actorId) : false, need.closeFriends && actorId ? isCloseFriend(userId, actorId) : false]);
+    rule = matchRule(s.rules, { group: groupOf(type, category), critical: false, favorite: fav, closeFriend: close });
+  }
+  const base = { priority, category, settings: s, hold, quietHour: quietHourNow(now, s.quietHoursTz), favorite: false, overCap: false, rule: rule?.then ?? null };
   let out = decideDelivery(base);
   if (out.reasons[0] === "quiet_hours" && s.favoritesBypassQuiet && actorId && (await isFavorite(userId, actorId))) {
     base.favorite = true;
@@ -161,7 +190,8 @@ export async function sendSmartPush(
 ): Promise<void> {
   const settings = await getNotificationSettings(userId);
   const actorId = (typeof record === "object" && "recorded" in record ? record.recorded.actorId : typeof record === "object" ? record.actorId : null) ?? payload.actorId ?? null;
-  const outcome = await decideFor(userId, priority, category, actorId, settings);
+  const type = typeof record === "object" ? ("recorded" in record ? record.recorded.type : record.type) : null;
+  const outcome = await decideFor(userId, priority, category, actorId, settings, new Date(), type);
 
   if (record !== "already-recorded") {
     if ("recorded" in record) await stampRecorded(userId, record.recorded, outcome);
@@ -169,7 +199,7 @@ export async function sendSmartPush(
   }
   if (outcome.decision !== "push") return;
 
-  // "Hide push preview" (Part 6 privacy toggle) — the caller's generic body instead of the real text.
-  const deliver: PushPayload = settings.hidePushPreview && payload.genericBody ? { ...payload, body: payload.genericBody } : payload;
+  // Lock-screen privacy (Part 5): full, no preview (the caller's generic text), or hidden (no sender, text or photo)
+  const deliver: PushPayload = lockScreenPayload(payload, settings.lockScreen);
   await sendPushToUser(userId, deliver);
 }

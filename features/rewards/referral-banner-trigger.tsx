@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { isPlayerOpen, onPlayerChange, SAVED_TO_DEVICE_EVENT } from "@/features/downloads/player-store";
 import { DOWNLOAD_COMPLETED_EVENT } from "@/lib/downloads/completion-event";
+import { countDownload, DAILY_KEY, readDaily } from "@/features/rewards/referral-daily";
 import { sharedToday } from "@/features/rewards/referral-shared-today";
 import { anotherModalOpen } from "@/lib/ui/modal-open";
 
@@ -42,14 +43,29 @@ const ReferralBanner = dynamic(() => import("@/features/rewards/referral-banner"
  *    closing. Event-driven — no timer runs while it waits;
  *  · once the link was shared or copied today, nothing shows until tomorrow
  *    (referral-shared-today.ts).
+ *
+ * 2026-10-12 (owner: "show once a day to users or when a user has downloaded 4 times
+ * that day", then "it should show on the first download of the day"): no longer every
+ * download from the 3rd on. ONCE a day, on the first completed download of that day
+ * (referral-daily.ts).
  */
-const COUNT_KEY = "frenz:downloads-completed";
-const AFTER = 3;
 const BURST_MS = 20_000;
 
 export function ReferralBannerTrigger() {
-  const [show, setShow] = useState(false);
-  const close = useCallback(() => setShow(false), []);
+  const [show, setShowState] = useState(false);
+  const close = useCallback(() => setShowState(false), []);
+  // the day's one showing is spent only when the modal really opens
+  const setShow = useCallback((v: boolean) => {
+    if (v) {
+      try {
+        const cur = readDaily(localStorage.getItem(DAILY_KEY));
+        if (cur) localStorage.setItem(DAILY_KEY, JSON.stringify({ ...cur, shown: true }));
+      } catch {
+        /* no storage — nothing to remember */
+      }
+    }
+    setShowState(v);
+  }, []);
   useEffect(() => {
     let lastShown = 0;
     let waitTimer: number | null = null;
@@ -57,14 +73,15 @@ export function ReferralBannerTrigger() {
     // ANY full-screen dialog (an ad, a sheet) — never stack on it (lib/ui/modal-open.ts)
     const adOpen = () => anotherModalOpen();
     const onCompleted = () => {
-      let count = 0;
+      let due = false;
       try {
-        count = (Number(localStorage.getItem(COUNT_KEY)) || 0) + 1;
-        localStorage.setItem(COUNT_KEY, String(count));
+        const next = countDownload(readDaily(localStorage.getItem(DAILY_KEY)), new Date());
+        localStorage.setItem(DAILY_KEY, JSON.stringify(next.state));
+        due = next.due;
       } catch {
         return; // no storage (private mode, sandboxed embed) — no counting, no banner
       }
-      if (count < AFTER || Date.now() - lastShown < BURST_MS || sharedToday()) return;
+      if (!due || Date.now() - lastShown < BURST_MS || sharedToday()) return;
       lastShown = Date.now();
       const started = Date.now();
       // give the ad a moment to open first, then wait for it to close
@@ -106,6 +123,6 @@ export function ReferralBannerTrigger() {
       if (waitTimer !== null) window.clearTimeout(waitTimer);
       stopWaiting?.();
     };
-  }, []);
+  }, [setShow]);
   return show ? <ReferralBanner onClose={close} /> : null;
 }

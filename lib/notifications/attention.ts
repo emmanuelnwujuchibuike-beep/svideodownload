@@ -1,6 +1,7 @@
 import type { NotificationSettings } from "@/lib/social/notification-settings";
 import { getCategoryPref, isWithinQuietHours } from "@/lib/social/notification-settings";
 import type { NotificationCategory } from "@/lib/platform/notifications-registry";
+import type { RuleAction } from "@/lib/notifications/rules";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -45,6 +46,9 @@ export type ReasonCode =
   | "push_off"
   | "category_off"
   | "burst_cap"
+  | "rule_immediate"
+  | "rule_summary"
+  | "rule_in_app"
   | "allowed";
 
 /** Why pushes are held right now, if they are. `focus` is a focus-mode key (sleep, meeting…). */
@@ -61,6 +65,8 @@ export interface AttentionInput {
   favorite: boolean;
   /** the recipient is over the hourly burst cap (checked only when it can matter) */
   overCap: boolean;
+  /** Part 5: the member's first matching Delivery Rule (never one for security / critical — see rules.ts) */
+  rule?: RuleAction | null;
 }
 
 export interface AttentionResult {
@@ -80,6 +86,14 @@ export function decideDelivery(i: AttentionInput): AttentionResult {
   if (!s.pushEnabled) return { decision: "in_app", reasons: ["push_off"] };
   const pref = getCategoryPref(s, i.category);
   if (!pref.enabled || !pref.push) return { decision: "in_app", reasons: ["category_off"] };
+
+  // Part 5: the member's own rule, after DND / focus and the off switches — never above them
+  if (i.rule === "in_app") return { decision: "in_app", reasons: ["rule_in_app"] };
+  if (i.rule === "summary") return { decision: "held", reasons: ["rule_summary"] };
+  if (i.rule === "immediate") {
+    if (i.overCap && i.priority !== "high") return { decision: "in_app", reasons: ["burst_cap"] };
+    return { decision: "push", reasons: ["rule_immediate"] };
+  }
 
   if (i.priority === "high") {
     // a DM is what quiet hours are meant to let through; DND above is the switch for silencing it

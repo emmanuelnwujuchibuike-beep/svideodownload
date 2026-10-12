@@ -19,7 +19,7 @@ self.addEventListener("push", (event) => {
   const options = {
     body: data.body || "",
     icon: data.icon || "/icon.png",
-    badge: "/icon.png",
+    badge: "/badge-96.png",
     tag: data.tag || undefined,
     renotify: !!data.tag,
     // actorId/conversationId ride along so an action button (Accept/Decline
@@ -143,7 +143,7 @@ async function respondToFriendRequestFromPush(actorId, action, tag) {
       await self.registration.showNotification(action === "accept" ? "Friend request accepted" : "Request declined", {
         tag, // replaces the original request notification rather than stacking
         icon: "/icon.png",
-        badge: "/icon.png",
+        badge: "/badge-96.png",
         silent: true,
       });
     }

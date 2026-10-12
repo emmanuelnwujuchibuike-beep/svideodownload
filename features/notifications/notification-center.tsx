@@ -18,7 +18,7 @@ import {
 import { verbFor } from "@/features/notifications/meta";
 import { NotificationCard, type OrganizeAction } from "@/features/notifications/notification-card";
 import { toast } from "@/features/ui/toast";
-import { onNotificationInsert } from "@/features/notifications/notif-stream";
+import { announceNotificationSync, onNotificationInsert, onNotificationSync } from "@/features/notifications/notif-stream";
 import { PushToggle } from "@/features/notifications/push-toggle";
 import { PullToRefresh } from "@/features/ui/pull-to-refresh";
 import { haptic } from "@/lib/motion/haptics";
@@ -82,6 +82,7 @@ const empty: GroupedNotificationsResult = { groups: [], unread: 0 };
 const send = (ids: string[], action: OrganizeAction, labels?: string[]) =>
   fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids, action, labels }) }).then(async (r) => {
     if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "Couldn't update that.");
+    announceNotificationSync();
   });
 
 function dayLabel(iso: string): string {
@@ -151,6 +152,8 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
       }),
     [],
   );
+  // Part 6: read / archived / cleared on another of my devices → this list catches up
+  useEffect(() => onNotificationSync(() => void revalidate(KEY, loadGrouped, 0).catch(() => {})), []);
   const showNew = () => {
     haptic("selection");
     setArrived(0);
@@ -321,7 +324,8 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
   const markRead = useCallback((g: NotificationGroup) => {
     mutate<GroupedNotificationsResult>(KEY, (prev) => ({ ...(prev ?? empty), groups: (prev?.groups ?? []).map((x) => (x.id === g.id ? { ...x, read: true } : x)), unread: prev?.unread ?? 0 }));
     fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: g.notificationIds }) })
-      .then(() => {
+      .then((r) => {
+        if (r.ok) announceNotificationSync();
         void revalidate(KEY, loadGrouped, 0).catch(() => {});
         void revalidate(BELL_KEY, loadFlatNotifications, 0).catch(() => {});
       })
@@ -437,7 +441,10 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
     if (unread === 0) return;
     mutate<GroupedNotificationsResult>(KEY, (prev) => ({ ...(prev ?? empty), groups: (prev?.groups ?? []).map((x) => ({ ...x, read: true })), unread: 0 }));
     fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: "{}" })
-      .then(() => void revalidate(BELL_KEY, loadFlatNotifications, 0).catch(() => {}))
+      .then((r) => {
+        if (r.ok) announceNotificationSync();
+        void revalidate(BELL_KEY, loadFlatNotifications, 0).catch(() => {});
+      })
       .catch(() => {});
   };
 
@@ -457,7 +464,10 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
     setClearing(true);
     mutate<GroupedNotificationsResult>(KEY, () => ({ ...empty }));
     fetch("/api/notifications", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ all: true }) })
-      .then(() => refresh(true))
+      .then((r) => {
+        if (r.ok) announceNotificationSync();
+        return refresh(true);
+      })
       .catch(() => {})
       .finally(() => setClearing(false));
   };

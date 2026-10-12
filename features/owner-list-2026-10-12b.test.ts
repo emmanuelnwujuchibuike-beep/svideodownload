@@ -104,10 +104,13 @@ describe("SUB tiles load a small preview, not the original", () => {
     expect(p).toContain("[m.object_key, m.thumb_key]");
     expect(p).toContain("if (opening && isCreator) {");
   });
-  it("the tile shows the preview before anything else private", () => {
+  it("cover first: a tile shows the cover or preview and never loads the original media", () => {
     const g = code("features/sub/sub-gallery.tsx");
-    expect(g.indexOf("p.thumbUrl ? (")).toBeGreaterThan(0);
-    expect(g.indexOf("p.thumbUrl ? (")).toBeLessThan(g.indexOf('p.open?.media[0]?.kind === "image" ? ('));
+    expect(g).toContain("p.thumbUrl ? (");
+    expect(g).not.toContain("src={p.open.media[0].url}");
+    expect(g).not.toContain("p.open.media[0].url}#t=0.1");
+    // the first post's first photo is pre-loaded only once the browser is idle
+    expect(g).toContain("window.requestIdleCallback(go, { timeout: 2500 })");
   });
 });
 

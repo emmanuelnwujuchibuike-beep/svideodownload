@@ -83,6 +83,26 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
     };
   }, [creatorId]);
 
+  /*
+    Once the covers are on screen and the browser is idle, the FIRST post's first photo is fetched
+    into the cache, so opening it is instant — one file, never the whole gallery.
+  */
+  useEffect(() => {
+    const first = state?.posts[0]?.open?.media[0];
+    if (!first || first.kind !== "image") return;
+    const go = () => {
+      const img = new Image();
+      img.decoding = "async";
+      img.src = first.url;
+    };
+    if ("requestIdleCallback" in window) {
+      const id = window.requestIdleCallback(go, { timeout: 2500 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const t = setTimeout(go, 1200);
+    return () => clearTimeout(t);
+  }, [state?.posts]);
+
   const more = async () => {
     if (!state?.next || loadingMore) return;
     setLoadingMore(true);
@@ -190,12 +210,11 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
                 ) : p.thumbUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- a five-minute private link to the small preview
                   <img src={p.thumbUrl} alt="" loading={idx < 9 ? "eager" : "lazy"} decoding="async" draggable={false} onContextMenu={(e) => e.preventDefault()} className="pointer-events-none h-full w-full object-cover" />
-                ) : p.open?.media[0]?.kind === "image" ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- a subscriber's five-minute private link; next/image would cache it on our server
-                  <img src={p.open.media[0].url} alt="" loading={idx < 9 ? "eager" : "lazy"} decoding="async" draggable={false} onContextMenu={(e) => e.preventDefault()} className="pointer-events-none h-full w-full object-cover" />
-                ) : p.open?.media[0]?.kind === "video" ? (
-                  <video src={`${p.open.media[0].url}#t=0.1`} muted playsInline preload="metadata" disablePictureInPicture className="pointer-events-none h-full w-full object-cover" />
                 ) : null}
+                {/* 🔴 COVER FIRST (owner 2026-10-12: "not supposed to load the media when loading the cover"):
+                    a tile shows the public cover or the small private preview and NEVER the original photo or
+                    video — the media loads when the post is opened (and the first one is pre-loaded once the
+                    covers are up, below). */}
                 {!state.access ? (
                   <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/35 text-white backdrop-blur-[2px]">
                     <Lock className="h-5 w-5" aria-hidden />

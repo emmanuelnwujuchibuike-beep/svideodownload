@@ -19,6 +19,7 @@ import { UserMenu } from "@/features/auth/user-menu";
 import { CreateActionSheet } from "@/features/create/create-action-sheet";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
+import { useScrollDirection } from "@/lib/dom/use-scroll-direction";
 import { cn } from "@/lib/utils";
 
 export function AppTopbar() {
@@ -116,10 +117,23 @@ export function AppTopbar() {
   // nothing translates it out of view any more. Broadcast a constant "visible"
   // so any far-away sticky element that keyed off the topbar's hidden state
   // stays put rather than compensating for a hide that never happens.
+  /*
+    🔴 THE ONE EXCEPTION — the Download page (owner, 2026-10-12: "make the top header in
+    the Download page hide so the top banner shows full when scrolling down, and appear
+    when scrolling up"). There the sticky top ad sits right under this bar and was half
+    covered by it. On /downloads only, on a phone, scrolling DOWN slides the whole bar
+    away — a plain strip the height of the safe area stays over the status bar, so
+    nothing scrolls under the clock and the ad pins right below it — and scrolling UP
+    brings it back. Every other page keeps the 2026-08-02 rule.
+    It reuses the app's single scroll-direction store (the bottom nav reads the same
+    one), so no listener is added; near the top of the page the bar always shows.
+  */
+  const scrollDir = useScrollDirection();
+  const slideAway = pathname === "/downloads" && scrollDir === "down" && !searchActive;
   useEffect(() => {
-    setTopbarHidden(false);
-    return () => setTopbarHidden(false);
-  }, []);
+    setTopbarHidden(slideAway);
+  }, [slideAway]);
+  useEffect(() => () => setTopbarHidden(false), []);
 
   /*
     🔴 WARM /search FROM EVERY PAGE THAT OFFERS IT (owner, 2026-08-24: "the
@@ -152,6 +166,9 @@ export function AppTopbar() {
   };
 
   return (
+    <>
+    {/* the status-bar strip that stays while the Download page's bar is slid away (zero tall in a browser tab) */}
+    {pathname === "/downloads" ? <div aria-hidden className="pointer-events-none fixed inset-x-0 top-0 z-40 h-[var(--frenz-safe-top)] bg-background lg:hidden" /> : null}
     <header
       className={cn(
         // pt safe-area: with viewport-fit=cover the installed app draws under
@@ -183,6 +200,9 @@ export function AppTopbar() {
         // was built, reshaped twice for seam/intensity issues, and then
         // explicitly removed in one conversation.
         "border-b border-border/20 bg-background",
+        // the Download page's slide-away (see above): transform only — no layout shift, GPU-cheap
+        "transition-transform duration-300 ease-out motion-reduce:transition-none lg:translate-y-0",
+        slideAway && "-translate-y-full",
         (onMessagesIndex || searchActive) && "hidden lg:flex",
       )}
     >
@@ -452,5 +472,6 @@ export function AppTopbar() {
           portals to <body>, so this header's own stacking can't trap it. */}
       <CreateActionSheet open={createOpen} onClose={() => setCreateOpen(false)} />
     </header>
+    </>
   );
 }

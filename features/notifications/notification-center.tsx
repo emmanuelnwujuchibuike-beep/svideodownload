@@ -7,23 +7,37 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { mutate, revalidate, useQuery } from "@/features/data";
 import {
+  NOTIF_ARCHIVED_KEY as ARCHIVED_KEY,
   NOTIF_GROUPED_KEY as KEY,
   NOTIF_KEY as BELL_KEY,
+  loadArchivedNotifications as loadArchived,
   loadFlatNotifications,
   loadGroupedNotifications as loadGrouped,
 } from "@/features/notifications/data";
-import { NotificationCard } from "@/features/notifications/notification-card";
+import { verbFor } from "@/features/notifications/meta";
+import { NotificationCard, type OrganizeAction } from "@/features/notifications/notification-card";
+import { toast } from "@/features/ui/toast";
 import { onNotificationInsert } from "@/features/notifications/notif-stream";
 import { PushToggle } from "@/features/notifications/push-toggle";
 import { PullToRefresh } from "@/features/ui/pull-to-refresh";
 import type { GroupedNotificationsResult, NotificationCategory, NotificationGroup } from "@/lib/social/notifications";
 import { cn } from "@/lib/utils";
 
-type Tab = "all" | "unread" | NotificationCategory;
+/*
+  Feature 20 Activity Center views (owner brief 2026-10-11): Priority (critical + high, the
+  push path's own table), Pinned, Held (kept off the lock screen by DND, a focus mode or
+  quiet hours — "Scheduled" in the brief) and Archived (fetched only when opened).
+*/
+type View = "priority" | "pinned" | "held" | "archived";
+type Tab = "all" | "unread" | View | NotificationCategory;
 
 const TAB_LABEL: Record<Tab, string> = {
   all: "All",
   unread: "Unread",
+  priority: "Priority",
+  pinned: "Pinned",
+  held: "Held",
+  archived: "Archived",
   social: "Social",
   downloads: "Downloads",
   community: "Communities",
@@ -34,11 +48,28 @@ const TAB_LABEL: Record<Tab, string> = {
 };
 const CATEGORY_ORDER: NotificationCategory[] = ["social", "downloads", "community", "news", "premium", "security", "system"];
 
+const isPriority = (g: NotificationGroup) => g.priority === "critical" || g.priority === "high";
+const EMPTY: Partial<Record<Tab, string>> = { unread: "You're all caught up", priority: "Nothing urgent", pinned: "Nothing pinned", held: "Nothing held", archived: "Nothing archived" };
+const EMPTY_HINT: Partial<Record<Tab, string>> = {
+  priority: "Security alerts, payments, messages and requests show here.",
+  pinned: "Pin a notification from its ⋯ menu to keep it at the top.",
+  held: "Notifications kept off your lock screen by Do Not Disturb, a focus mode or quiet hours wait here.",
+  archived: "Archive a notification from its ⋯ menu to put it away without deleting it.",
+};
+
 export function NotificationCenter({ initial }: { initial: GroupedNotificationsResult }) {
   const { data } = useQuery<GroupedNotificationsResult>(KEY, loadGrouped, { initialData: initial });
   const groups = data?.groups ?? initial.groups;
   const unread = data?.unread ?? initial.unread;
   const [tab, setTab] = useState<Tab>("all");
+  const organizable = data?.activity ?? initial.activity ?? false;
+  // the held-summary push opens /notifications?view=held
+  useEffect(() => {
+    const v = new URLSearchParams(window.location.search).get("view");
+    if (v === "held" || v === "pinned" || v === "priority" || v === "archived") setTab(v);
+  }, []);
+  // Archived is read only while its tab is open
+  const archived = useQuery<GroupedNotificationsResult>(ARCHIVED_KEY, loadArchived, { enabled: tab === "archived", revalidateOnFocus: false });
   const [query, setQuery] = useState("");
   const [moreOpen, setMoreOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -49,21 +80,74 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
   // Tabs shown = All + Unread + whichever categories actually have notifications.
   const tabs = useMemo<Tab[]>(() => {
     const present = new Set(groups.map((g) => g.category));
-    return ["all", "unread", ...CATEGORY_ORDER.filter((c) => present.has(c))];
-  }, [groups]);
+    const views: Tab[] = [];
+    if (groups.some(isPriority)) views.push("priority");
+    if (groups.some((g) => g.pinned)) views.push("pinned");
+    if (groups.some((g) => g.delivery === "held")) views.push("held");
+    const out: Tab[] = ["all", "unread", ...views, ...CATEGORY_ORDER.filter((c) => present.has(c))];
+    if (organizable) out.push("archived");
+    // a tab opened from a link stays visible even when it is empty
+    if (!out.includes(tab)) out.splice(2, 0, tab);
+    return out;
+  }, [groups, organizable, tab]);
 
   const visible = useMemo(() => {
-    let list = tab === "all" ? groups : tab === "unread" ? groups.filter((g) => !g.read) : groups.filter((g) => g.category === tab);
+    const source = tab === "archived" ? (archived.data?.groups ?? []) : groups;
+    let list =
+      tab === "all" || tab === "archived"
+        ? source
+        : tab === "unread"
+          ? source.filter((g) => !g.read)
+          : tab === "priority"
+            ? source.filter(isPriority)
+            : tab === "pinned"
+              ? source.filter((g) => g.pinned)
+              : tab === "held"
+                ? source.filter((g) => g.delivery === "held")
+                : source.filter((g) => g.category === tab);
     const q = query.trim().toLowerCase();
     if (q) {
-      list = list.filter(
-        (g) =>
-          (g.postTitle ?? "").toLowerCase().includes(q) ||
-          g.actors.some((a) => a.displayName.toLowerCase().includes(q) || a.handle.toLowerCase().includes(q)),
+      // the Universal Inbox: who, the post, the notification's own words, and what kind it is
+      list = list.filter((g) =>
+        [g.postTitle, g.content?.title, g.content?.body, g.broadcast?.title, g.broadcast?.body, verbFor(g.type), ...g.actors.flatMap((a) => [a.displayName, a.handle])].some((t) => (t ?? "").toLowerCase().includes(q)),
       );
     }
+    // pinned first in the inbox views; otherwise newest first, as the server sent it
+    if (tab !== "archived" && tab !== "pinned") list = [...list.filter((g) => g.pinned), ...list.filter((g) => !g.pinned)];
     return list;
-  }, [groups, tab, query]);
+  }, [groups, archived.data, tab, query]);
+
+  /*
+    Pin / archive: drawn on the tap, the server confirms, put back if it refuses (owner
+    rule: every button responds on tap). Archiving also marks read on the server, so the
+    unread count drops with it.
+  */
+  const organize = useCallback((g: NotificationGroup, action: OrganizeAction) => {
+    const flip = (x: NotificationGroup): NotificationGroup => (x.id !== g.id ? x : { ...x, pinned: action === "pin" });
+    if (action === "archive") {
+      mutate<GroupedNotificationsResult>(KEY, (prev) => ({ ...(prev ?? { groups: [], unread: 0 }), groups: (prev?.groups ?? []).filter((x) => x.id !== g.id), unread: Math.max(0, (prev?.unread ?? 0) - (g.read ? 0 : 1)) }));
+    } else if (action === "unarchive") {
+      mutate<GroupedNotificationsResult>(ARCHIVED_KEY, (prev) => ({ ...(prev ?? { groups: [], unread: 0 }), groups: (prev?.groups ?? []).filter((x) => x.id !== g.id) }));
+    } else {
+      mutate<GroupedNotificationsResult>(KEY, (prev) => ({ ...(prev ?? { groups: [], unread: 0 }), groups: (prev?.groups ?? []).map(flip) }));
+    }
+    const done = action === "pin" ? "Pinned" : action === "unpin" ? "Unpinned" : action === "archive" ? "Archived" : "Moved to your inbox";
+    fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: g.notificationIds, action }) })
+      .then(async (r) => {
+        if (!r.ok) {
+          const j = (await r.json().catch(() => ({}))) as { error?: string };
+          throw new Error(j.error ?? "Couldn't update that.");
+        }
+        toast(done, "success");
+      })
+      .catch((e: unknown) => toast(e instanceof Error ? e.message : "Couldn't update that.", "error"))
+      .finally(() => {
+        // the server's answer replaces the drawn one either way — a refusal puts it back
+        void revalidate(KEY, loadGrouped, 0).catch(() => {});
+        if (action === "archive" || action === "unarchive") void revalidate(ARCHIVED_KEY, loadArchived, 0).catch(() => {});
+        if (action === "archive") void revalidate(BELL_KEY, loadFlatNotifications, 0).catch(() => {});
+      });
+  }, []);
 
   // Stable identities so the memoized NotificationCard rows below don't all
   // re-render whenever one row's read/delete state changes.
@@ -137,7 +221,7 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
   };
 
   return (
-    <PullToRefresh onRefresh={async () => { await revalidate(KEY, loadGrouped, 0); }}>
+    <PullToRefresh onRefresh={async () => { await (tab === "archived" ? revalidate(ARCHIVED_KEY, loadArchived, 0) : revalidate(KEY, loadGrouped, 0)); }}>
       {/* Premium glass hero header */}
       <div className="relative mb-5 overflow-hidden rounded-3xl border border-border/70 bg-card/70 p-5 shadow-sm backdrop-blur-xl">
         <div aria-hidden className="pointer-events-none absolute -right-14 -top-14 h-44 w-44 rounded-full bg-gradient-to-br from-blue-500/25 to-violet-500/25 blur-3xl" />
@@ -250,14 +334,14 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
           <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-3xl bg-secondary text-muted-foreground">
             <BellRing className="h-6 w-6" />
           </span>
-          <p className="text-sm font-medium">{query ? "No matches" : tab === "unread" ? "You're all caught up" : "No notifications yet"}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{query ? "Try a different name or search term." : "When people interact with you, it shows up here."}</p>
+          <p className="text-sm font-medium">{query ? "No matches" : tab === "archived" && archived.data === undefined && !archived.error ? "Loading…" : (EMPTY[tab] ?? "No notifications yet")}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{query ? "Try a different name or search term." : tab === "archived" && archived.error ? "Couldn't load your archive. Pull down to try again." : (EMPTY_HINT[tab] ?? "When people interact with you, it shows up here.")}</p>
         </div>
       ) : (
         <div className="space-y-2.5">
           <AnimatePresence initial={false}>
             {visible.map((g) => (
-              <NotificationCard key={g.id} group={g} onMarkRead={markRead} onDelete={remove} />
+              <NotificationCard key={g.id} group={g} onMarkRead={markRead} onDelete={remove} onOrganize={organizable ? organize : undefined} />
             ))}
           </AnimatePresence>
         </div>

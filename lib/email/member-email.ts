@@ -17,7 +17,7 @@ function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
 }
 
-export async function emailMember(userId: string, opts: { subject: string; heading: string; intro: string; body?: string; ctaLabel?: string; ctaPath?: string }): Promise<void> {
+export async function emailMember(userId: string, opts: { subject: string; heading: string; intro: string; body?: string; ctaLabel?: string; ctaPath?: string; person?: { name: string; handle: string | null; avatarUrl: string | null } }): Promise<void> {
   try {
     const { data } = await createAdminClient().from("profiles").select("email").eq("id", userId).maybeSingle();
     const to = (data as { email?: string | null } | null)?.email;
@@ -29,6 +29,7 @@ export async function emailMember(userId: string, opts: { subject: string; headi
       body: opts.body ? esc(opts.body) : undefined,
       ctaLabel: opts.ctaLabel ? esc(opts.ctaLabel) : undefined,
       ctaHref: opts.ctaPath ? `${SITE_URL}${opts.ctaPath}` : undefined,
+      person: opts.person ? { name: esc(opts.person.name), handle: opts.person.handle ? esc(opts.person.handle) : null, avatarUrl: opts.person.avatarUrl } : undefined,
     });
   } catch (e) {
     console.error("[email/member] failed", { userId, subject: opts.subject, error: String(e).slice(0, 160) });

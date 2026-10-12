@@ -297,8 +297,9 @@ async function notifyMembers(
           },
           priority,
           "social",
-          // `lib/social/messages.ts` already inserted the message/mention rows.
-          "already-recorded",
+          // `lib/social/messages.ts` already inserted the message/mention rows — a held or
+          // in-app-only decision is stamped on that row (Feature 20: summary + "Why this?")
+          { recorded: { type: mentioned ? "message_mention" : "message", conversationId, actorId: senderId } },
         );
       }),
     );

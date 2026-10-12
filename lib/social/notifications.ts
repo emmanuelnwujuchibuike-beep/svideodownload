@@ -1,4 +1,6 @@
 import { hrefForNotification } from "@/lib/notifications/destinations";
+import { defaultPriorityFor } from "@/lib/notifications/priority";
+import type { DeliveryDecision } from "@/lib/notifications/explain";
 import { getNotificationSettings, mutedTypesFor } from "@/lib/social/notification-settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -65,9 +67,21 @@ export interface NotificationItem {
    * the Notification Center is a link (owner, 2026-08-26).
    */
   href: string;
+  /** Feature 20 (0233) — false/null before the migration runs. */
+  pinned: boolean;
+  archived: boolean;
+  /** critical | high | medium | low — the same table the push path uses (lib/notifications/priority.ts). */
+  priority: "critical" | "high" | "medium" | "low";
+  /** What the Attention Engine decided for its push; null when no decision was recorded. */
+  delivery: DeliveryDecision | null;
+  deliveryReason: string | null;
 }
 
 interface Row {
+  pinned_at?: string | null;
+  archived_at?: string | null;
+  delivery?: string | null;
+  delivery_reason?: string | null;
   id: string;
   actor_id: string | null;
   type: NotificationType;
@@ -82,13 +96,31 @@ interface Row {
 // instance and only select it when present, so a lagging migration never breaks
 // the whole notifications read.
 let dataColumnKnown: boolean | null = null;
+// 0233 (Feature 20): pinned / archived / delivery — same once-per-instance probe, same reason
+let activityColumnsKnown: boolean | null = null;
 async function selectCols(db: ReturnType<typeof createAdminClient>): Promise<string> {
   const cols = "id, actor_id, type, post_id, conversation_id, read, created_at";
   if (dataColumnKnown === null) {
     const { error } = await db.from("notifications").select("data").limit(1);
     dataColumnKnown = !error;
   }
-  return dataColumnKnown ? `${cols}, data` : cols;
+  await hasActivityColumns(db);
+  return `${cols}${dataColumnKnown ? ", data" : ""}${activityColumnsKnown ? ", pinned_at, archived_at, delivery, delivery_reason" : ""}`;
+}
+
+/** Are 0233's columns live? Probed once per server instance. */
+export async function hasActivityColumns(db: ReturnType<typeof createAdminClient>): Promise<boolean> {
+  if (activityColumnsKnown === null) {
+    const { error } = await db.from("notifications").select("pinned_at, archived_at, delivery, delivery_reason").limit(1);
+    activityColumnsKnown = !error;
+  }
+  return activityColumnsKnown;
+}
+
+const DECISIONS = new Set(["pushed", "held", "in_app"]);
+function deliveryOf(v: string | null | undefined): DeliveryDecision | null {
+  if (!v || !DECISIONS.has(v)) return null;
+  return v === "pushed" ? "push" : (v as DeliveryDecision);
 }
 
 /**
@@ -155,6 +187,11 @@ async function enrichRows(db: ReturnType<typeof createAdminClient>, rows: Row[])
     broadcast: broadcastOf(r),
     content: contentOf(r),
     href: hrefForNotification(r.type, r.data?.url),
+    pinned: !!r.pinned_at,
+    archived: !!r.archived_at,
+    priority: defaultPriorityFor(r.type),
+    delivery: deliveryOf(r.delivery),
+    deliveryReason: r.delivery_reason ?? null,
   }));
 }
 
@@ -190,6 +227,10 @@ export async function listNotifications(userId: string, limit = 20): Promise<Not
       .eq("read", false);
     if (muted.length > 0) listQuery = listQuery.not("type", "in", `(${muted.join(",")})`);
     countQuery = countQuery.not("type", "in", `(${excluded.join(",")})`);
+    if (await hasActivityColumns(db)) {
+      listQuery = listQuery.is("archived_at", null);
+      countQuery = countQuery.is("archived_at", null);
+    }
     const [{ data }, { count }] = await Promise.all([listQuery, countQuery]);
     const items = await enrichRows(db, (data as unknown as Row[]) ?? []);
     return { items, unread: count ?? 0 };
@@ -223,12 +264,26 @@ export interface NotificationGroup {
   content: { title: string; body: string } | null;
   /** Where tapping the card goes — never null. See NotificationItem. */
   href: string;
+  /** Feature 20: any member pinned / every member archived */
+  pinned: boolean;
+  archived: boolean;
+  /** the highest priority among the members */
+  priority: NotificationItem["priority"];
+  /** the NEWEST member's delivery decision and reason ("Why this?") */
+  delivery: NotificationItem["delivery"];
+  deliveryReason: string | null;
 }
 
 export interface GroupedNotificationsResult {
   groups: NotificationGroup[];
   unread: number;
+  /** 0233 is live — the Activity Center offers Pin / Archive only then */
+  activity?: boolean;
 }
+
+/** Inbox = everything not archived (the default). Archived = only what the member put away. */
+export type ActivityView = "inbox" | "archived";
+const RANK = { critical: 3, high: 2, medium: 1, low: 0 } as const;
 
 // Post-scoped actions collapse per post; relationship signals collapse together;
 // message notifications collapse per conversation (many new messages from the
@@ -249,7 +304,7 @@ function groupKey(it: NotificationItem): string {
  * collapses spammy duplicates so the list stays calm and premium. Rows come newest
  * first, so the first row seen for a group sets its (most-recent) timestamp.
  */
-export async function listGroupedNotifications(userId: string, limit = 60): Promise<GroupedNotificationsResult> {
+export async function listGroupedNotifications(userId: string, limit = 60, view: ActivityView = "inbox"): Promise<GroupedNotificationsResult> {
   if (!hasSupabase) return { groups: [], unread: 0 };
   try {
     const db = createAdminClient();
@@ -270,6 +325,14 @@ export async function listGroupedNotifications(userId: string, limit = 60): Prom
     if (muted.length > 0) {
       listQuery = listQuery.not("type", "in", `(${muted.join(",")})`);
       countQuery = countQuery.not("type", "in", `(${muted.join(",")})`);
+    }
+    const activity = await hasActivityColumns(db);
+    if (activity) {
+      // the unread count is always the inbox's; the list follows the view
+      countQuery = countQuery.is("archived_at", null);
+      listQuery = view === "archived" ? listQuery.not("archived_at", "is", null) : listQuery.is("archived_at", null);
+    } else if (view === "archived") {
+      return { groups: [], unread: 0, activity };
     }
     const [{ data }, { count }] = await Promise.all([listQuery, countQuery]);
     const items = await enrichRows(db, (data as unknown as Row[]) ?? []);
@@ -300,6 +363,11 @@ export async function listGroupedNotifications(userId: string, limit = 60): Prom
           // The group takes the NEWEST member's destination (rows arrive newest
           // first), so a collapsed group opens the most recent thing in it.
           href: it.href,
+          pinned: false,
+          archived: it.archived,
+          priority: it.priority,
+          delivery: it.delivery,
+          deliveryReason: it.deliveryReason,
         };
         byKey.set(key, g);
         seenActors.set(key, new Set());
@@ -307,6 +375,9 @@ export async function listGroupedNotifications(userId: string, limit = 60): Prom
       }
       g.notificationIds.push(it.id);
       if (!it.read) g.read = false;
+      if (it.pinned) g.pinned = true;
+      if (!it.archived) g.archived = false;
+      if (RANK[it.priority] > RANK[g.priority]) g.priority = it.priority;
       const actors = seenActors.get(key)!;
       if (it.actor && !actors.has(it.actor.handle)) {
         actors.add(it.actor.handle);
@@ -321,7 +392,7 @@ export async function listGroupedNotifications(userId: string, limit = 60): Prom
       return g;
     });
 
-    return { groups, unread: count ?? 0 };
+    return { groups, unread: count ?? 0, activity };
   } catch {
     return { groups: [], unread: 0 };
   }

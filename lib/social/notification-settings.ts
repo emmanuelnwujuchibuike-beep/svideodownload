@@ -46,6 +46,15 @@ export interface NotificationSettings {
   digestEnabled: boolean;
   /** System-managed — set by the digest cron, never by the settings API. */
   lastDigestSentAt: string | null;
+  /**
+   * 0233 (Feature 20): the IANA zone the quiet-hours window is read in. Null = the
+   * hours are UTC, as before 0233 — nobody's window moves until they save a zone.
+   */
+  quietHoursTz: string | null;
+  /** 0233: one summary push when a hold (DND, focus mode, quiet hours) ends. */
+  heldSummaryEnabled: boolean;
+  /** 0233: favourite friends reach the lock screen during quiet hours — never DND or a focus mode. */
+  favoritesBypassQuiet: boolean;
 }
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
@@ -59,9 +68,15 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   hidePushPreview: false,
   digestEnabled: true,
   lastDigestSentAt: null,
+  quietHoursTz: null,
+  heldSummaryEnabled: true,
+  favoritesBypassQuiet: false,
 };
 
 interface Row {
+  quiet_hours_tz?: string | null;
+  held_summary_enabled?: boolean | null;
+  favorites_bypass_quiet?: boolean | null;
   master_enabled: boolean;
   push_enabled: boolean;
   in_app_enabled: boolean;
@@ -86,7 +101,37 @@ function fromRow(r: Row): NotificationSettings {
     hidePushPreview: r.hide_push_preview,
     digestEnabled: r.digest_enabled,
     lastDigestSentAt: r.last_digest_sent_at,
+    quietHoursTz: r.quiet_hours_tz ?? null,
+    heldSummaryEnabled: r.held_summary_enabled ?? true,
+    favoritesBypassQuiet: r.favorites_bypass_quiet ?? false,
   };
+}
+
+/** An hour on the clock in `tz` (today's offset) as a UTC hour. Whole-hour precision, as quiet hours are. */
+export function zoneHourToUtc(hour: number, tz: string, now = new Date()): number {
+  try {
+    const local = Number.parseInt(new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", hourCycle: "h23" }).format(now), 10);
+    let offset = local - now.getUTCHours();
+    // across midnight (01:00 there, 23:00 UTC) the raw difference is a day off
+    if (offset > 14) offset -= 24;
+    if (offset < -12) offset += 24;
+    return (((hour - offset) % 24) + 24) % 24;
+  } catch {
+    return hour;
+  }
+}
+
+/** A real IANA zone, or null. Anything the runtime can't format in is refused rather than stored. */
+export function cleanTimeZone(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const tz = v.trim();
+  if (!tz || tz.length > 64) return null;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return tz;
+  } catch {
+    return null;
+  }
 }
 
 export function getCategoryPref(settings: NotificationSettings, category: NotificationCategory): CategoryPref {
@@ -120,17 +165,18 @@ export function computeShouldShowInApp(settings: NotificationSettings, category:
   return getCategoryPref(settings, category).enabled;
 }
 
+const BASE_COLS =
+  "master_enabled, push_enabled, in_app_enabled, category_prefs, quiet_hours_enabled, quiet_hours_start_utc, quiet_hours_end_utc, hide_push_preview, digest_enabled, last_digest_sent_at";
+// 0233's columns — the owner applies migrations by hand, so the read falls back to the older shape until they exist
+const DELIVERY_COLS = "quiet_hours_tz, held_summary_enabled, favorites_bypass_quiet";
+const NEW_COLUMNS = new Set(DELIVERY_COLS.split(", "));
+
 export async function getNotificationSettings(userId: string): Promise<NotificationSettings> {
   try {
     const db = createAdminClient();
-    const { data } = await db
-      .from("notification_settings")
-      .select(
-        "master_enabled, push_enabled, in_app_enabled, category_prefs, quiet_hours_enabled, quiet_hours_start_utc, quiet_hours_end_utc, hide_push_preview, digest_enabled, last_digest_sent_at",
-      )
-      .eq("user_id", userId)
-      .maybeSingle();
-    return data ? fromRow(data as Row) : DEFAULT_NOTIFICATION_SETTINGS;
+    let res = await db.from("notification_settings").select(`${BASE_COLS}, ${DELIVERY_COLS}`).eq("user_id", userId).maybeSingle();
+    if (res.error) res = (await db.from("notification_settings").select(BASE_COLS).eq("user_id", userId).maybeSingle()) as typeof res;
+    return res.data ? fromRow(res.data as Row) : DEFAULT_NOTIFICATION_SETTINGS;
   } catch {
     return DEFAULT_NOTIFICATION_SETTINGS;
   }
@@ -146,9 +192,14 @@ export interface NotificationSettingsPatch {
   quietHoursEndUtc?: number;
   hidePushPreview?: boolean;
   digestEnabled?: boolean;
+  /** null clears it (back to UTC hours) */
+  quietHoursTz?: string | null;
+  heldSummaryEnabled?: boolean;
+  favoritesBypassQuiet?: boolean;
 }
 
-export async function setNotificationSettings(userId: string, patch: NotificationSettingsPatch): Promise<{ ok: boolean }> {
+/** `pending`: only 0233's columns were asked for and they don't exist yet — the caller says so in words. */
+export async function setNotificationSettings(userId: string, patch: NotificationSettingsPatch): Promise<{ ok: boolean; pending?: boolean }> {
   try {
     const db = createAdminClient();
     const clean: Record<string, unknown> = {};
@@ -166,11 +217,28 @@ export async function setNotificationSettings(userId: string, patch: Notificatio
     if (typeof patch.quietHoursEndUtc === "number") clean.quiet_hours_end_utc = Math.max(0, Math.min(23, Math.round(patch.quietHoursEndUtc)));
     if (typeof patch.hidePushPreview === "boolean") clean.hide_push_preview = patch.hidePushPreview;
     if (typeof patch.digestEnabled === "boolean") clean.digest_enabled = patch.digestEnabled;
+    if (patch.quietHoursTz !== undefined) clean.quiet_hours_tz = patch.quietHoursTz === null ? null : cleanTimeZone(patch.quietHoursTz);
+    if (typeof patch.heldSummaryEnabled === "boolean") clean.held_summary_enabled = patch.heldSummaryEnabled;
+    if (typeof patch.favoritesBypassQuiet === "boolean") clean.favorites_bypass_quiet = patch.favoritesBypassQuiet;
     if (Object.keys(clean).length === 0) return { ok: true };
-    const { error } = await db
-      .from("notification_settings")
-      .upsert({ user_id: userId, ...clean, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
-    return { ok: !error };
+    const write = (cols: Record<string, unknown>) =>
+      db.from("notification_settings").upsert({ user_id: userId, ...cols, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+    const { error } = await write(clean);
+    if (!error) return { ok: true };
+    // before 0233: save everything else, and say plainly that the new switches aren't ready
+    if (/column|schema cache/i.test(error.message)) {
+      const older = Object.fromEntries(Object.entries(clean).filter(([k]) => !NEW_COLUMNS.has(k)));
+      // hours sent in a zone can't be stored with it yet — store them as UTC, the pre-0233 meaning
+      const tz = typeof clean.quiet_hours_tz === "string" ? clean.quiet_hours_tz : null;
+      if (tz) {
+        if (typeof older.quiet_hours_start_utc === "number") older.quiet_hours_start_utc = zoneHourToUtc(older.quiet_hours_start_utc, tz);
+        if (typeof older.quiet_hours_end_utc === "number") older.quiet_hours_end_utc = zoneHourToUtc(older.quiet_hours_end_utc, tz);
+      }
+      if (Object.keys(older).length === 0) return { ok: false, pending: true };
+      const retry = await write(older);
+      return retry.error ? { ok: false } : { ok: true };
+    }
+    return { ok: false };
   } catch {
     return { ok: false };
   }

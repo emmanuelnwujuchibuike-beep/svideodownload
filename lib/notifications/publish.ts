@@ -49,35 +49,11 @@ export interface PublishNotificationInput {
 export async function publishNotification(input: PublishNotificationInput): Promise<void> {
   const category = categoryForType(input.type);
 
-  // Best-effort DB row — `.then()` is load-bearing (Supabase's query builder
-  // is a lazy thenable; see the [[sw-swx-duplicate-const-bug]] memory), and a
-  // failed insert must never block the push below.
-  try {
-    const db = createAdminClient();
-    await db
-      .from("notifications")
-      .insert({
-        user_id: input.userId,
-        actor_id: input.actorId ?? null,
-        type: input.type,
-        post_id: input.postId ?? null,
-        conversation_id: input.conversationId ?? null,
-        /*
-          The push's own text and destination, so the Notification Center card
-          shows what was actually sent and the tap lands on the exact page
-          rather than the type's generic default (owner, 2026-08-26). Same
-          shape `sendSmartPush` writes for callers that do not come through
-          here — see recordInApp there.
-        */
-        data: input.push
-          ? { title: input.push.title, body: input.push.body, url: input.push.url ?? null }
-          : null,
-      })
-      .then(undefined, () => {});
-  } catch {
-    /* best-effort */
-  }
-
+  /*
+    Feature 20: with a push, the row is written by sendSmartPush itself, carrying
+    the Attention Engine's decision (pushed / held / in_app and why) — one insert
+    path, so a held push can be summarised later and explained on its card.
+  */
   if (input.push) {
     const priority = input.priority ?? defaultPriorityFor(input.type);
     await sendSmartPush(
@@ -95,8 +71,28 @@ export async function publishNotification(input: PublishNotificationInput): Prom
       },
       priority,
       category,
-      // This function inserted the row itself, above.
-      "already-recorded",
+      { type: input.type, actorId: input.actorId ?? null, postId: input.postId ?? null, conversationId: input.conversationId ?? null },
     );
+    return;
+  }
+
+  // In-app only — best-effort DB row — `.then()` is load-bearing (Supabase's query builder
+  // is a lazy thenable; see the [[sw-swx-duplicate-const-bug]] memory), and a
+  // failed insert must never break the caller.
+  try {
+    const db = createAdminClient();
+    await db
+      .from("notifications")
+      .insert({
+        user_id: input.userId,
+        actor_id: input.actorId ?? null,
+        type: input.type,
+        post_id: input.postId ?? null,
+        conversation_id: input.conversationId ?? null,
+        data: null,
+      })
+      .then(undefined, () => {});
+  } catch {
+    /* best-effort */
   }
 }

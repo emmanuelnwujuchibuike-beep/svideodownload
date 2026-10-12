@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Check, Loader2, MoreHorizontal, Trash2, UserPlus, UserRound, UserX, X } from "lucide-react";
+import { Archive, ArchiveRestore, Check, Info, Loader2, MoreHorizontal, Pin, PinOff, Trash2, UserPlus, UserRound, UserX, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { memo, useState } from "react";
@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 
 import { iconFor, isActorType, tintFor, timeAgo, verbFor } from "@/features/notifications/meta";
 import { haptic } from "@/lib/motion/haptics";
+import { explainDelivery } from "@/lib/notifications/explain";
 import type { NotificationGroup } from "@/lib/social/notifications";
 import { cn } from "@/lib/utils";
 
@@ -51,22 +52,29 @@ function hrefFor(g: NotificationGroup): string {
   return g.href;
 }
 
+/** Feature 20 (0233): pin / archive. Absent until the migration is live — the menu then offers neither. */
+export type OrganizeAction = "pin" | "unpin" | "archive" | "unarchive";
+
 function NotificationCardImpl({
   group,
   onMarkRead,
   onDelete,
+  onOrganize,
 }: {
   group: NotificationGroup;
   onMarkRead: (g: NotificationGroup) => void;
   onDelete: (g: NotificationGroup) => void;
+  onOrganize?: (g: NotificationGroup, action: OrganizeAction) => void;
 }) {
   const [menu, setMenu] = useState(false);
+  // "Why this?" — the Attention Engine's reason, private to this member, opened from the menu
+  const [why, setWhy] = useState(false);
   // Portal-rendered + position computed on open, not a plain `absolute right-2
   // top-11` sibling — a card near the bottom of the Notification Center's
   // scrollable list had this menu clipped by the list's own overflow, same
   // class of bug as conversation-list.tsx's row menu.
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
-  const MENU_WIDTH = 160; // w-40
+  const MENU_WIDTH = 184;
   const toggleMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
     if (menu) {
       setMenu(false);
@@ -74,7 +82,7 @@ function NotificationCardImpl({
     }
     const rect = e.currentTarget.getBoundingClientRect();
     const margin = 8;
-    const menuHeight = (group.read ? 1 : 2) * 44 + 8;
+    const menuHeight = ((group.read ? 2 : 3) + (onOrganize ? 2 : 0)) * 44 + 8;
     const left = Math.min(Math.max(rect.right - MENU_WIDTH, margin), window.innerWidth - MENU_WIDTH - margin);
     const spaceBelow = window.innerHeight - rect.bottom;
     const top = spaceBelow >= menuHeight + margin ? rect.bottom + 4 : Math.max(margin, rect.top - menuHeight - 4);
@@ -178,7 +186,7 @@ function NotificationCardImpl({
       </div>
 
       {/* Text */}
-      <div className="min-w-0 flex-1 pr-1">
+      <div className="min-w-0 flex-1 pr-7 [@media(hover:hover)]:pr-1">
         {group.broadcast ? (
           /* An admin broadcast / AD shows its OWN content + a clear "Ad" label,
              never a generic "Frenz announcement" that reads like a message. */
@@ -214,9 +222,24 @@ function NotificationCardImpl({
           </p>
         )}
         {/* Relative time differs by a second between server render + hydration. */}
-        <p className="mt-1 text-[11px] font-medium text-muted-foreground" suppressHydrationWarning>
+        <p className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground" suppressHydrationWarning>
+          {group.pinned ? (
+            <span className="inline-flex items-center gap-0.5 font-semibold text-indigo-600 dark:text-indigo-300">
+              <Pin className="h-3 w-3" aria-hidden /> Pinned ·
+            </span>
+          ) : null}
+          {group.delivery === "held" ? <span className="font-semibold text-amber-700 dark:text-amber-400">Held ·</span> : null}
           {timeAgo(group.createdAt)} ago
         </p>
+        {why ? (
+          <p className="mt-2 flex items-start gap-1.5 rounded-xl bg-secondary/70 px-2.5 py-2 text-[12px] leading-snug text-muted-foreground" role="note">
+            <Info className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span>
+              {explainDelivery(group.delivery, group.deliveryReason ? [group.deliveryReason] : [])}
+              {group.notificationIds.length > 1 ? ` Grouped with ${group.notificationIds.length - 1} similar ${group.notificationIds.length === 2 ? "notification" : "notifications"}.` : ""}
+            </span>
+          </p>
+        ) : null}
 
         {group.type === "friend_request" && canActInline ? (
           <div className="mt-2 flex items-center gap-2">
@@ -292,7 +315,7 @@ function NotificationCardImpl({
 
       {/* Unread dot */}
       {!group.read ? (
-        <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 shadow-[0_0_10px_theme(colors.violet.500)]" />
+        <span className="mt-11 h-2.5 w-2.5 shrink-0 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 shadow-[0_0_10px_theme(colors.violet.500)] [@media(hover:hover)]:mt-1.5" aria-label="Unread" />
       ) : null}
     </div>
   );
@@ -324,10 +347,14 @@ function NotificationCardImpl({
       </Link>
 
       {/* Quick actions (hover / focus) */}
-      <div className="pointer-events-none absolute right-2 top-2 flex items-center gap-1 opacity-0 transition group-hover:pointer-events-auto group-hover:opacity-100">
+      {/* Always reachable on touch (there is no hover on a phone — it used to be invisible there);
+          on a mouse it appears on hover or keyboard focus. */}
+      <div className="absolute right-2 top-2 flex items-center gap-1 transition [@media(hover:hover)]:pointer-events-none [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:focus-within:pointer-events-auto [@media(hover:hover)]:focus-within:opacity-100 [@media(hover:hover)]:group-hover:pointer-events-auto [@media(hover:hover)]:group-hover:opacity-100">
         <button
           type="button"
-          aria-label="More"
+          aria-label="More options"
+          aria-haspopup="menu"
+          aria-expanded={menu}
           onClick={toggleMenu}
           className="flex h-8 w-8 items-center justify-center rounded-full bg-background/80 text-muted-foreground backdrop-blur transition hover:text-foreground"
         >
@@ -346,11 +373,52 @@ function NotificationCardImpl({
               />
               <div
                 style={{ top: menuPos.top, left: menuPos.left, width: MENU_WIDTH }}
+                role="menu"
                 className="fixed z-50 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-elevated"
               >
+                {onOrganize ? (
+                  <>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        haptic("selection");
+                        onOrganize(group, group.pinned ? "unpin" : "pin");
+                        setMenu(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm transition hover:bg-secondary"
+                    >
+                      {group.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />} {group.pinned ? "Unpin" : "Pin"}
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        haptic("selection");
+                        onOrganize(group, group.archived ? "unarchive" : "archive");
+                        setMenu(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm transition hover:bg-secondary"
+                    >
+                      {group.archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />} {group.archived ? "Move to inbox" : "Archive"}
+                    </button>
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setWhy((v) => !v);
+                    setMenu(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm transition hover:bg-secondary"
+                >
+                  <Info className="h-4 w-4" /> {why ? "Hide why" : "Why this?"}
+                </button>
                 {!group.read ? (
                   <button
                     type="button"
+                    role="menuitem"
                     onClick={() => {
                       onMarkRead(group);
                       setMenu(false);
@@ -362,6 +430,7 @@ function NotificationCardImpl({
                 ) : null}
                 <button
                   type="button"
+                  role="menuitem"
                   onClick={() => {
                     onDelete(group);
                     setMenu(false);

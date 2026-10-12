@@ -28,11 +28,18 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 type Row = Record<string, unknown>;
 
-async function who(id: string): Promise<{ name: string; handle: string | null }> {
-  const { data } = await createAdminClient().from("profiles").select("display_name, handle").eq("id", id).maybeSingle();
+async function who(id: string): Promise<{ id: string; name: string; handle: string | null; avatarUrl: string | null }> {
+  const { data } = await createAdminClient().from("profiles").select("display_name, handle, avatar_url").eq("id", id).maybeSingle();
   const r = data as Row | null;
   const handle = (r?.handle as string | null) ?? null;
-  return { name: ((r?.display_name as string | null) || (handle ? `@${handle}` : "Someone")).slice(0, 60), handle };
+  const avatar = (r?.avatar_url as string | null) ?? null;
+  return {
+    id,
+    name: ((r?.display_name as string | null) || (handle ? `@${handle}` : "Someone")).slice(0, 60),
+    handle,
+    // only a real https photo travels in a push or an email; anything else falls back to the app icon / an initial
+    avatarUrl: avatar && /^https:\/\//.test(avatar) ? avatar : null,
+  };
 }
 
 /** A paid SUB subscription was just settled. */
@@ -45,11 +52,33 @@ export async function notifySubscribed(reference: string): Promise<void> {
     const sub = await who(p.subscriber_id as string);
     const earned = usd(Number(p.price_cents ?? 0));
     await Promise.allSettled([
-      sendSmartPush(creatorId, { title: "New subscriber", body: `${sub.name} subscribed to your SUB POSTS. You earned ${earned}.`, url: "/members", tag: `sub-${reference}` }, "high", categoryForType("member_joined"), "already-recorded"),
+      /*
+        Owner 2026-10-11: "the push should carry the user avatar, name, title, just like a
+        proper high grade social media app". The subscriber is the title and the photo
+        (the push icon — Android and desktop show it; iOS web push always shows the app
+        icon, a platform rule), the body says what happened and what it earned, and the
+        tap opens the subscriber's profile. The in-app row is written by settle_sub_purchase.
+      */
+      sendSmartPush(
+        creatorId,
+        {
+          title: sub.name,
+          body: `subscribed to your SUB POSTS · You earned ${earned}`,
+          genericBody: "You have a new subscriber.",
+          url: sub.handle ? `/u/${sub.handle}` : "/members",
+          icon: sub.avatarUrl ?? undefined,
+          tag: `sub-${reference}`,
+          actorId: sub.id,
+        },
+        "high",
+        categoryForType("member_joined"),
+        { recorded: { type: "member_joined", actorId: sub.id } },
+      ),
       emailMember(creatorId, {
         subject: `${sub.name} subscribed to your content`,
         heading: "You have a new subscriber",
         intro: `${sub.name} just subscribed to your SUB POSTS for ${Number(p.period_days ?? 30)} days.`,
+        person: { name: sub.name, handle: sub.handle, avatarUrl: sub.avatarUrl },
         body: `You earned ${earned}. It's in your SUB balance now, and if auto-withdrawal is on it is on its way to your saved bank account.`,
         ctaLabel: "See your members",
         ctaPath: "/members",
@@ -65,11 +94,18 @@ export async function notifyJoinedFree(creatorId: string, memberId: string): Pro
   try {
     const m = await who(memberId);
     await Promise.allSettled([
-      sendSmartPush(creatorId, { title: "New member", body: `${m.name} joined your community.`, url: "/members", tag: `join-${memberId}` }, "medium", categoryForType("member_joined"), "already-recorded"),
+      sendSmartPush(
+        creatorId,
+        { title: m.name, body: "joined your community", genericBody: "You have a new member.", url: m.handle ? `/u/${m.handle}` : "/members", icon: m.avatarUrl ?? undefined, tag: `join-${memberId}`, actorId: m.id },
+        "medium",
+        categoryForType("member_joined"),
+        { recorded: { type: "member_joined", actorId: m.id } },
+      ),
       emailMember(creatorId, {
         subject: `${m.name} joined your community`,
         heading: "You have a new member",
         intro: `${m.name} joined your free community on Frenz.`,
+        person: { name: m.name, handle: m.handle, avatarUrl: m.avatarUrl },
         ctaLabel: "See your members",
         ctaPath: "/members",
       }),

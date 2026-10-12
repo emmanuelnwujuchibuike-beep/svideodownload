@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, BellOff, Download, EyeOff, Loader2, Mail, MessageCircle, Moon, Newspaper, ShieldCheck, Sparkles, Users2, Wrench } from "lucide-react";
+import { Bell, BellOff, Download, EyeOff, Heart, Inbox, Loader2, Mail, MessageCircle, Moon, Newspaper, ShieldCheck, Sparkles, Users2, Wrench } from "lucide-react";
 import { useState } from "react";
 
 import type { CategoryPref, NotificationSettings } from "@/lib/social/notification-settings";
@@ -19,14 +19,19 @@ const CATEGORY_META: Record<NotificationCategory, { label: string; icon: typeof 
 const CATEGORIES = Object.keys(CATEGORY_META) as NotificationCategory[];
 const DEFAULT_PREF: CategoryPref = { enabled: true, push: true };
 
-/** Local-clock hour (0-23) ↔ UTC hour — the server has no reliable timezone
- * for a background push send, so the browser does this conversion once at
- * save/load time (see notification-settings.ts's column comment). */
+/** Local-clock hour (0-23) ↔ UTC hour — the reading BEFORE 0233, kept for a saved
+ * window that has no zone yet. Feature 20: a save now stores the member's own hours
+ * WITH their IANA zone, so the window follows them through daylight saving and travel
+ * (the server converts to UTC itself while 0233 isn't live). */
 function utcHourToLocal(h: number): number {
   return (h - new Date().getTimezoneOffset() / 60 + 24) % 24;
 }
-function localHourToUtc(h: number): number {
-  return (h + new Date().getTimezoneOffset() / 60 + 24) % 24;
+function browserZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
 }
 function hourLabel(h: number): string {
   const d = new Date();
@@ -52,7 +57,12 @@ function hourLabel(h: number): string {
  * surface for no functional gain.
  */
 export function NotificationSettingsEditor({ initial }: { initial: NotificationSettings }) {
-  const [settings, setSettings] = useState<NotificationSettings>(initial);
+  // the window as the member's own clock hours: saved with a zone they already are; without one they were UTC
+  const [settings, setSettings] = useState<NotificationSettings>(() =>
+    initial.quietHoursTz
+      ? initial
+      : { ...initial, quietHoursStartUtc: Math.round(utcHourToLocal(initial.quietHoursStartUtc)), quietHoursEndUtc: Math.round(utcHourToLocal(initial.quietHoursEndUtc)) },
+  );
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -70,12 +80,15 @@ export function NotificationSettingsEditor({ initial }: { initial: NotificationS
     setBusy(true);
     setMsg(null);
     try {
+      const { lastDigestSentAt: _system, ...editable } = settings;
       const res = await fetch("/api/notification-settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
+        // the hours are the member's own clock; the zone tells the server which clock that is
+        body: JSON.stringify({ ...editable, quietHoursTz: settings.quietHoursTz ?? browserZone() }),
       });
-      setMsg(res.ok ? { ok: true, text: "Notification settings saved." } : { ok: false, text: "Couldn't save." });
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      setMsg(res.ok ? { ok: true, text: "Notification settings saved." } : { ok: false, text: j.error ?? "Couldn't save." });
     } catch {
       setMsg({ ok: false, text: "Network error." });
     } finally {
@@ -165,17 +178,38 @@ export function NotificationSettingsEditor({ initial }: { initial: NotificationS
             <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border/60 pt-3">
               <TimeField
                 label="From"
-                valueHour={Math.round(utcHourToLocal(settings.quietHoursStartUtc))}
-                onChange={(h) => setSettings((p) => ({ ...p, quietHoursStartUtc: Math.round(localHourToUtc(h)) }))}
+                valueHour={settings.quietHoursStartUtc}
+                onChange={(h) => setSettings((p) => ({ ...p, quietHoursStartUtc: h, quietHoursTz: browserZone() }))}
               />
               <TimeField
                 label="Until"
-                valueHour={Math.round(utcHourToLocal(settings.quietHoursEndUtc))}
-                onChange={(h) => setSettings((p) => ({ ...p, quietHoursEndUtc: Math.round(localHourToUtc(h)) }))}
+                valueHour={settings.quietHoursEndUtc}
+                onChange={(h) => setSettings((p) => ({ ...p, quietHoursEndUtc: h, quietHoursTz: browserZone() }))}
               />
+              {settings.quietHoursTz ? <span className="w-full text-[11.5px] text-muted-foreground">Your time · {settings.quietHoursTz.replace(/_/g, " ")}</span> : null}
             </div>
           ) : null}
         </div>
+
+        {/*
+          Feature 20 — Smart delivery. Both are about the lock screen only; everything still lands
+          in the Activity Center. Favourites never get through Do Not Disturb or a focus mode.
+        */}
+        <p className="pt-2 text-xs font-semibold text-muted-foreground">Smart delivery</p>
+        <Toggle
+          icon={Inbox}
+          title="Catch me up when a hold ends"
+          desc="When Do Not Disturb, a focus mode or quiet hours end, get one push summing up the messages, comments and requests that waited. Likes are never summarised."
+          on={settings.heldSummaryEnabled}
+          onToggle={() => setSettings((p) => ({ ...p, heldSummaryEnabled: !p.heldSummaryEnabled }))}
+        />
+        <Toggle
+          icon={Heart}
+          title="Favourites can reach me in quiet hours"
+          desc="Updates from friends you've starred as favourites still push during quiet hours. Never during Do Not Disturb or a focus mode."
+          on={settings.favoritesBypassQuiet}
+          onToggle={() => setSettings((p) => ({ ...p, favoritesBypassQuiet: !p.favoritesBypassQuiet }))}
+        />
 
         <Toggle
           icon={EyeOff}

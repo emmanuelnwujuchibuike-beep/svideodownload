@@ -35,6 +35,12 @@ const schema = z.object({
   quietHoursStartUtc: z.number().int().min(0).max(23).optional(),
   quietHoursEndUtc: z.number().int().min(0).max(23).optional(),
   hidePushPreview: z.boolean().optional(),
+  // was missing: the Daily digest switch on /account never saved (zod drops unknown keys)
+  digestEnabled: z.boolean().optional(),
+  // Feature 20 (0233): Smart delivery
+  quietHoursTz: z.string().min(1).max(64).nullable().optional(),
+  heldSummaryEnabled: z.boolean().optional(),
+  favoritesBypassQuiet: z.boolean().optional(),
 });
 
 /** PATCH /api/notification-settings — update one or more settings (merges into existing category_prefs). */
@@ -58,6 +64,7 @@ export async function PATCH(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid settings." }, { status: 400 });
 
   const res = await setNotificationSettings(user.id, parsed.data);
+  if (res.pending) return NextResponse.json({ error: "Smart delivery arrives with the next update." }, { status: 503 });
   if (!res.ok) return NextResponse.json({ error: "Couldn't save." }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

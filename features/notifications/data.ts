@@ -34,5 +34,15 @@ export async function loadGroupedNotifications(): Promise<GroupedNotificationsRe
   const res = await fetch("/api/notifications?grouped=1&limit=80");
   if (!res.ok) return { groups: [], unread: 0 };
   const d = (await res.json()) as GroupedNotificationsResult;
-  return { groups: d.groups ?? [], unread: d.unread ?? 0 };
+  return { groups: d.groups ?? [], unread: d.unread ?? 0, activity: d.activity };
+}
+
+/** Feature 20: the Archived tab — read only when that tab is opened, never with the inbox. */
+export const NOTIF_ARCHIVED_KEY = "notifications:archived";
+export async function loadArchivedNotifications(): Promise<GroupedNotificationsResult> {
+  if (!hasAuthCookie()) return { groups: [], unread: 0 };
+  const res = await fetch("/api/notifications?grouped=1&limit=80&view=archived");
+  if (!res.ok) throw new Error(String(res.status));
+  const d = (await res.json()) as GroupedNotificationsResult;
+  return { groups: d.groups ?? [], unread: d.unread ?? 0, activity: d.activity };
 }

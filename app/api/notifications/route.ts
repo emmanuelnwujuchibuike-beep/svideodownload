@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { listGroupedNotifications, listNotifications } from "@/lib/social/notifications";
+import { hasActivityColumns, listGroupedNotifications, listNotifications } from "@/lib/social/notifications";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -25,13 +26,25 @@ export async function GET(request: Request) {
     return NextResponse.json(grouped ? { groups: [], unread: 0 } : { items: [], unread: 0 }, { status: 200 });
   }
 
+  // Feature 20: ?view=archived reads only what the member put away (fetched when that tab opens, never otherwise)
+  const view = url.searchParams.get("view") === "archived" ? "archived" : "inbox";
   const result = grouped
-    ? await listGroupedNotifications(user.id, limit)
+    ? await listGroupedNotifications(user.id, limit, view)
     : await listNotifications(user.id, limit);
   return NextResponse.json(result, { headers: { "Cache-Control": "private, no-store" } });
 }
 
-/** PATCH /api/notifications — mark read. Body: { id? } | { ids?[] } | {} (all). RLS-scoped. */
+const ACTIONS = ["pin", "unpin", "archive", "unarchive"] as const;
+type Action = (typeof ACTIONS)[number];
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * PATCH /api/notifications — mark read. Body: { id? } | { ids?[] } | {} (all). RLS-scoped.
+ *
+ * Feature 20: { ids, action: "pin" | "unpin" | "archive" | "unarchive" } — always an
+ * explicit list (never "all"), always only the caller's own rows. Archiving also marks
+ * read, so an archived card never holds the unread count up. 503 before 0233 is live.
+ */
 export async function PATCH(request: Request) {
   const supabase = await createClient();
   const {
@@ -41,12 +54,31 @@ export async function PATCH(request: Request) {
 
   let id: string | undefined;
   let ids: string[] | undefined;
+  let action: Action | null = null;
   try {
-    const body = (await request.json()) as { id?: string; ids?: string[] };
+    const body = (await request.json()) as { id?: string; ids?: string[]; action?: string };
     id = body?.id;
     ids = Array.isArray(body?.ids) ? body.ids.filter((x) => typeof x === "string").slice(0, 200) : undefined;
+    if (body?.action !== undefined) {
+      if (!(ACTIONS as readonly string[]).includes(body.action)) return NextResponse.json({ error: "Unknown action." }, { status: 400 });
+      action = body.action as Action;
+    }
   } catch {
     /* no body → mark all */
+  }
+
+  if (action) {
+    const list = (ids?.length ? ids : id ? [id] : []).filter((x) => UUID.test(x));
+    if (!list.length) return NextResponse.json({ error: "Choose a notification." }, { status: 400 });
+    const db = createAdminClient();
+    if (!(await hasActivityColumns(db))) return NextResponse.json({ error: "Pin and archive arrive with the next update." }, { status: 503 });
+    const now = new Date().toISOString();
+    const cols: Record<string, unknown> =
+      action === "pin" ? { pinned_at: now } : action === "unpin" ? { pinned_at: null } : action === "archive" ? { archived_at: now, read: true, pinned_at: null } : { archived_at: null };
+    // the service role, so the write is explicit about whose rows: only the signed-in member's
+    const { error } = await db.from("notifications").update(cols).eq("user_id", user.id).in("id", list);
+    if (error) return NextResponse.json({ error: "Couldn't update." }, { status: 500 });
+    return NextResponse.json({ ok: true });
   }
 
   let q = supabase.from("notifications").update({ read: true }).eq("user_id", user.id).eq("read", false);

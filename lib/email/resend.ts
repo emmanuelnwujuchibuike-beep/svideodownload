@@ -127,9 +127,35 @@ export function sendOtpEmail(to: string, code: string): Promise<boolean> {
  */
 export function sendProductEmail(
   to: string,
-  opts: { subject: string; heading: string; intro: string; body?: string; ctaLabel?: string; ctaHref?: string },
+  opts: {
+    subject: string;
+    heading: string;
+    intro: string;
+    body?: string;
+    ctaLabel?: string;
+    ctaHref?: string;
+    /**
+     * The person this is about, shown as a photo + name + @handle row (owner 2026-10-11:
+     * "like a proper high grade social media app"). ALREADY ESCAPED by the caller;
+     * `avatarUrl` must be an https URL or it is left out (the initial shows instead).
+     */
+    person?: { name: string; handle: string | null; avatarUrl: string | null };
+  },
 ): Promise<boolean> {
   const year = new Date().getFullYear();
+  const pp = opts.person;
+  const avatar = pp?.avatarUrl && /^https:\/\/[^\s"'<>]+$/.test(pp.avatarUrl)
+    ? `<img src="${pp.avatarUrl}" width="56" height="56" alt="" style="display:block;margin:0 auto;width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid #ece9fb;">`
+    : pp
+      ? `<div style="margin:0 auto;width:56px;height:56px;border-radius:50%;background:#6C4DFF;color:#ffffff;font-family:${FONT};font-size:22px;font-weight:800;line-height:56px;text-align:center;">${pp.name.replace(/^@/, "").charAt(0).toUpperCase() || "F"}</div>`
+      : "";
+  const personRow = pp
+    ? `<tr><td style="padding:22px 40px 0;text-align:center;font-family:${FONT};">
+        ${avatar}
+        <p style="margin:10px 0 0;font-size:15px;font-weight:700;color:#111116;">${pp.name}</p>
+        ${pp.handle ? `<p style="margin:2px 0 0;font-size:13px;color:#8a8a96;">@${pp.handle}</p>` : ""}
+      </td></tr>`
+    : "";
   const cta =
     opts.ctaLabel && opts.ctaHref
       ? `<tr><td style="padding:24px 40px 0;text-align:center;">
@@ -160,6 +186,7 @@ export function sendProductEmail(
           <p style="margin:0;font-size:19px;font-weight:800;color:#111116;">${opts.heading}</p>
           <p style="margin:8px 0 0;font-size:14px;line-height:1.6;color:#6b6b76;">${opts.intro}</p>
         </td></tr>
+        ${personRow}
         ${body}
         ${cta}
         <tr><td style="padding:28px 40px 32px;font-family:${FONT};">

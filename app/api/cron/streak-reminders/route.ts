@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { cronAuthorized } from "@/lib/cron/auth";
+import { runHeldSummaries } from "@/lib/notifications/held-summary";
 import { runStreakReminders } from "@/lib/streaks/reminders";
 
 export const runtime = "nodejs";
@@ -30,7 +31,15 @@ async function run(request: Request) {
   if (!(await cronAuthorized(request))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  return NextResponse.json(await runStreakReminders());
+  const streaks = await runStreakReminders();
+  /*
+    Feature 20 "deliver later": the held-push summary rides on this SAME hourly
+    invocation rather than a cron of its own — zero added function invocations
+    (hard law: nothing may cost money while nobody is looking). Isolated: a
+    failure here never changes the streak result.
+  */
+  const held = await runHeldSummaries().catch(() => null);
+  return NextResponse.json({ ...streaks, heldSummaries: held });
 }
 
 export const GET = run;

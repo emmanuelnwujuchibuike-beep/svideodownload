@@ -85,15 +85,26 @@ export async function getOwnPresence(userId: string, now = new Date()): Promise<
 
 /** Should pushes wait right now? Do Not Disturb, or a focus mode (chosen or scheduled) that holds them. Fails open to the old DND-only rule. */
 export async function presenceHoldsPush(userId: string, now = new Date()): Promise<boolean> {
+  return (await presenceHold(userId, now)).holds;
+}
+
+/**
+ * The same answer with its reason (Feature 20: "Held because Sleep focus was on"):
+ * Do Not Disturb wins when both are on, since it is the one the member chose outright.
+ */
+export async function presenceHold(userId: string, now = new Date()): Promise<{ holds: false } | { holds: true; dnd: boolean; focus: string | null }> {
   const db = createAdminClient();
   const full = await db.from("user_presence_status").select("user_id, status, updated_at, custom_text, custom_until, focus_mode, focus_until, auto_reply, open_to, audience").eq("user_id", userId).maybeSingle();
   if (full.error) {
     const base = await db.from("user_presence_status").select("status").eq("user_id", userId).maybeSingle();
-    return (base.data as { status?: string } | null)?.status === "dnd";
+    return (base.data as { status?: string } | null)?.status === "dnd" ? { holds: true, dnd: true, focus: null } : { holds: false };
   }
   const row = full.data ? toPresenceRow(full.data as Parameters<typeof toPresenceRow>[0]) : BLANK_ROW;
   const schedules = (await schedulesFor(db, [userId])).get(userId) ?? [];
-  return effectivePresence(row, schedules, now).holdsPush;
+  const eff = effectivePresence(row, schedules, now);
+  if (!eff.holdsPush) return { holds: false };
+  const dnd = eff.status === "dnd";
+  return { holds: true, dnd, focus: dnd ? null : (eff.focus?.mode ?? null) };
 }
 
 // ─── Saving ─────────────────────────────────────────────────────────────────

@@ -196,8 +196,9 @@ async function pushShared(senderId: string, recipientId: string, conversationId:
       .maybeSingle();
     const name = (sender?.display_name as string) || (sender?.handle ? `@${sender.handle as string}` : "Someone");
     await sendPushToUser(recipientId, {
-      title: `${name} shared a post`,
-      body: note ? (note.length > 120 ? `${note.slice(0, 120)}…` : note) : "Tap to see it",
+      // rich identity (2026-10-12): the sender is the title, like a chat app
+      title: name,
+      body: note ? `Shared a post: ${note.length > 120 ? `${note.slice(0, 120)}…` : note}` : "Shared a post with you",
       url: `/messages/${conversationId}`,
       icon: (sender?.avatar_url as string | null) ?? undefined,
       tag: `msg:${conversationId}`,

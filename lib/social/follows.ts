@@ -57,9 +57,12 @@ async function areFriends(db: Db, a: string, b: string): Promise<boolean> {
 
 async function notify(db: Db, actorId: string, recipientId: string, verb: string, body: string, url: string, tag: string): Promise<void> {
   try {
+    // rich identity: the person is the title and the photo, what happened is the text (2026-10-12)
     const { data: a } = await db.from("profiles").select("display_name, handle, avatar_url").eq("id", actorId).maybeSingle();
     const name = (a?.display_name as string) || (a?.handle ? `@${a.handle as string}` : "Someone");
-    await sendPushToUser(recipientId, { title: `${name} ${verb}`, body, url, icon: (a?.avatar_url as string | null) ?? undefined, tag });
+    const avatar = (a?.avatar_url as string | null) ?? null;
+    const said = verb.charAt(0).toUpperCase() + verb.slice(1);
+    await sendPushToUser(recipientId, { title: name, body: body ? `${said} · ${body}` : said, url, icon: avatar && avatar.startsWith("https://") ? avatar : undefined, tag, actorId });
   } catch {
     /* a push is never the action */
   }

@@ -126,3 +126,54 @@ Each is `planned` in the registry, never implied as done:
 | Upgraded "new subscriber" / "new member" push and email: the person's name as the title, their photo as the icon (iOS web push always shows the app icon — a platform rule), what happened and what it earned as the body, tap → their profile; the email shows photo, name and @handle | `lib/sub/notify.ts`, `lib/email/resend.ts` | built |
 | Fixed on the way: the Daily digest switch never saved (the API schema dropped `digestEnabled`) | `app/api/notification-settings/route.ts` | fixed |
 | Fixed on the way: a card's ⋯ menu was hover-only, so unreachable on phones | `features/notifications/notification-card.tsx` | fixed |
+
+
+---
+
+# Parts 3 and 4 — Universal Inbox, Interactive Notifications (owner briefs 2026-10-12)
+
+## Design, mapped onto what exists
+
+| Brief | Here | Why this shape |
+|---|---|---|
+| Unread / Read / Pinned / Archived / Dismissed / Scheduled / Muted | All, Unread, Pinned, Archived (Parts 1–2), delete with Undo, Held, category switches | already one inbox; no second store |
+| Hidden / Recovered | Archive *is* hide-and-recover: out of the inbox, still searchable, one tap back | one concept is easier to understand than two |
+| Bookmarks | Pin | a second "save" that behaves like pin would be the same list twice |
+| Notification Search / AI Search Assistant | `lib/notifications/search.ts`: "messages from chris", "security last week", "unread downloads", "payments this month", own labels by name. The reading shows as chips. Instant over the loaded list; **Search all history** runs the same parse on the server, archive included | a rule parser is explainable by construction; nothing is guessed in secret |
+| Advanced filters | the parser's vocabulary + tabs + the label row | filters are words, not a form |
+| Smart / Custom categories, Labels | the registry's categories (automatic) + **private labels** (0234): up to five per notification, filter row, searchable | custom categories and labels are the same thing to a member |
+| Multi-select | Select: Read, Unread, Pin, Archive / Restore, Label, Delete | the only bulk actions with a real endpoint |
+| Undo | Archive → Undo (unarchive). Delete → the card leaves at once and the DELETE waits six seconds; Undo cancels it; leaving the page sends it (keepalive) | a delete the member meant is never lost, one they didn't is never final |
+| Timeline / Cards / Compact | three layouts, remembered on the device; the timeline groups by day | a calendar view is planned |
+| Universal history | each card's **Details & why**: received, pushed / held / kept in-app (and why), read at (0234 trigger), pinned at, archived at | from the row itself, no event log to keep in step |
+| Smart Cleanup | two plain suggestions (read and over 30 days, passive and over 7 days), shown at 10 or more, each **archives** (never deletes), pinned untouched | "AI suggests" would overclaim two rules |
+| Export | `/api/notifications/export` now carries labels, pinned, archived, delivery and read time | portable history |
+| Sync engine | every state lives on the row, so every device reads the same thing | nothing to sync separately |
+| Smart Action Engine | `lib/notifications/actions.ts`: Reply (chats, not secret chats), Accept / Decline / View profile, Follow back, Block / Ignore | every action is an endpoint that already exists |
+| Inline replies | Reply on the card → `POST /api/messages` with an idempotency key | a retry never sends twice |
+| Rich identity (owner, same day) | `lib/push/identity.ts`: name as the title, photo as the icon, the action as the text — chats, post engagement, wallpapers, follows, friend requests, shares, story replies, new subscribers. System notifications wear the Frenz logo in the card, the bell and the toast | iOS web push always shows the app icon (a platform rule); Android and desktop show the photo |
+| Social pushes and the Attention Engine | likes, comments, follows, saves, reposts used to go straight to the device past DND, focus modes, quiet hours and the category switches; they now go through `sendSmartPush` | the owner's rule is that DND is absolute |
+
+## Honestly planned (Parts 3–4)
+
+- **Live Activities, Dynamic Island, lock-screen widgets, rich media pushes, watch and voice actions, secure Face ID actions** — native-only; Frenz is a PWA plus a TWA.
+- **Push-button inline reply** (typing a reply on the lock screen) — Web Push text actions aren't reliable across browsers; the in-app Reply is real.
+- **Animated avatars and 3-second profile videos in a push** — no push platform shows video in the icon.
+- **Universal Preview** (a mini story or listing without opening) — planned.
+- **Multi-step notification workflows** (approve → sign → complete) — there's no contract or approval product yet.
+- **Calendar view, AI digest history (weekly or monthly overviews), search history sync** — planned; the daily digest and the held summary are the real summaries.
+- **Action history as its own log** — the row's own timestamps cover read, pinned and archived; a full per-action log is planned.
+
+## Build ledger (Parts 3–4)
+
+| Piece | Where | State |
+|---|---|---|
+| Schema: labels (≤ 5), read_at | `0234_inbox_labels_history.sql` (+ trigger in `0235`, on its own: DDL after a dollar block is skipped) | built, **owner applies** |
+| Search parser, labels | `lib/notifications/search.ts` | built, tested |
+| Smart actions | `lib/notifications/actions.ts` | built, tested |
+| Whole-history search, labels, read / unread / label actions | `lib/social/notifications.ts`, `/api/notifications` | built |
+| Smart Cleanup | `/api/notifications/cleanup` | built |
+| Activity Center: chips, Search all history, label row, Select + bulk bar, Undo, layouts, cleanup card | `features/notifications/notification-center.tsx` | built |
+| Card: labels, Details & why (history), label editor, inline Reply, Mark unread, selectable | `features/notifications/notification-card.tsx` | built |
+| Rich identity pushes; Frenz logo for system in card, bell, toast; social pushes through the Attention Engine | `lib/push/identity.ts`, `lib/push/social-push.ts`, `lib/social/follows.ts`, `lib/social/friends.ts`, `lib/wallpapers-notify.ts`, share and story routes, `features/app-shell/notification-bell.tsx`, `live-toast.tsx` | built |
+| Export with history | `/api/notifications/export` | built |

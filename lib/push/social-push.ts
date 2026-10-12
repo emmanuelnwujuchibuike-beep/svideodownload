@@ -1,4 +1,6 @@
-import { sendPushToUser } from "@/lib/push/web-push";
+import { defaultPriorityFor } from "@/lib/notifications/priority";
+import { sendSmartPush } from "@/lib/notifications/smart-delivery";
+import { pushPerson } from "@/lib/push/identity";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -54,24 +56,36 @@ export async function pushSocialEvent(opts: {
     // Never push your own action back to you.
     if (!recipientId || recipientId === opts.actorId) return;
 
-    const { data: actor } = await db
-      .from("profiles")
-      .select("display_name, handle, avatar_url")
-      .eq("id", opts.actorId)
-      .maybeSingle();
-    const name =
-      (actor?.display_name as string) || (actor?.handle ? `@${actor.handle as string}` : "Someone");
-
-    await sendPushToUser(recipientId, {
-      title: `${name} ${VERB[opts.type]}`,
-      body: postTitle ?? (opts.type === "follow" ? "Tap to see their profile" : ""),
-      url: opts.postId ? `/p/${opts.postId}` : actor?.handle ? `/u/${actor.handle as string}` : "/notifications",
-      // The actor's profile picture becomes the notification's circular icon.
-      icon: (actor?.avatar_url as string | null) ?? undefined,
-      // Collapse repeats (e.g. a like-unlike-like burst) into one notification.
-      tag: opts.postId ? `${opts.type}:${opts.postId}` : `follow:${opts.actorId}`,
-    });
+    /*
+      Rich identity (owner 2026-10-12: "just like WhatsApp and Instagram"): the PERSON is
+      the title and the icon, what they did is the body. And it now goes through the
+      Attention Engine like every other push — before, these went straight to the device,
+      past Do Not Disturb, focus modes, quiet hours and the member's category switches.
+      The in-app row was written by the database trigger; a held push is stamped on it.
+    */
+    const who = await pushPerson(opts.actorId);
+    await sendSmartPush(
+      recipientId,
+      {
+        title: who.name,
+        body: cap(postTitle ? `${VERB[opts.type]} · ${postTitle}` : VERB[opts.type]),
+        genericBody: "New activity on Frenz",
+        url: opts.postId ? `/p/${opts.postId}` : who.handle ? `/u/${who.handle}` : "/notifications",
+        icon: who.icon,
+        // Collapse repeats (e.g. a like-unlike-like burst) into one notification.
+        tag: opts.postId ? `${opts.type}:${opts.postId}` : `follow:${opts.actorId}`,
+        actorId: opts.actorId,
+      },
+      defaultPriorityFor(opts.type),
+      "social",
+      { recorded: { type: opts.type, actorId: opts.actorId } },
+    );
   } catch {
     /* push is best-effort */
   }
+}
+
+/** "commented on your post" → "Commented on your post" — the body starts a sentence now the name is the title. */
+function cap(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }

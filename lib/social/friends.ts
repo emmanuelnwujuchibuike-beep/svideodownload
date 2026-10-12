@@ -325,7 +325,7 @@ export async function sendFriendRequest(
       after(() =>
         notifyPush(db, senderId, receiverId, {
           verb: "sent you a friend request",
-          body: trimmed ?? "Open Frenz to accept.",
+          body: trimmed ?? "",
           url: "/friends",
           tag: `friend-req:${senderId}`,
           actionable: true,
@@ -426,7 +426,7 @@ export async function respondToFriendRequest(
     after(() =>
       notifyPush(db, userId, otherId, {
         verb: "accepted your friend request 🎉",
-        body: "You're now friends on Frenz.",
+        body: "",
         url: `/messages/new/${userId}`,
         tag: `friend-acc:${userId}`,
       }),
@@ -725,8 +725,9 @@ async function notifyPush(
     const name =
       (actor?.display_name as string) || (actor?.handle ? `@${actor.handle as string}` : "Someone");
     await sendPushToUser(recipientId, {
-      title: `${name} ${opts.verb}`,
-      body: opts.body,
+      // rich identity (2026-10-12): the person is the title, what happened is the text
+      title: name,
+      body: `${opts.verb.charAt(0).toUpperCase()}${opts.verb.slice(1)}${opts.body ? ` · ${opts.body}` : ""}`,
       url: opts.url,
       icon: (actor?.avatar_url as string | null) ?? undefined,
       tag: opts.tag,

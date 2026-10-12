@@ -155,6 +155,10 @@ export function NotificationLiveToast() {
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={avatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-violet-500/30" />
+            ) : item.kind === "notif" && !item.n.actor ? (
+              // a system notification wears the Frenz logo (owner 2026-10-12)
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src="/icon.png" alt="" className="h-10 w-10 shrink-0 rounded-2xl object-cover" />
             ) : (
               <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full", tint)}>
                 <Icon className="h-5 w-5" />

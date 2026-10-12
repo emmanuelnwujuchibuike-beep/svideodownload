@@ -1,6 +1,7 @@
 import "server-only";
 
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
+import { pushPerson } from "@/lib/push/identity";
 import type { NotificationType } from "@/lib/platform/notifications-registry";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -77,19 +78,16 @@ export async function notifyWallpaperEngagement(opts: {
     const copy = COPY[opts.action];
     const title = (wallpaper?.title as string | null) || "your wallpaper";
 
-    let who = "Someone";
-    if (opts.actorId) {
-      const { data: actor } = await admin.from("profiles").select("handle, display_name").eq("id", opts.actorId).maybeSingle();
-      const handle = (actor?.handle as string | null) || null;
-      const name = (actor?.display_name as string | null) || null;
-      who = handle ? `@${handle}` : name || "Someone";
-    }
+    // rich identity (owner 2026-10-12): the person is the title and the photo, the action is the text
+    const person = await pushPerson(opts.actorId ?? null);
 
     await sendSmartPush(
       uploaderId,
       {
-        title: `${copy.emoji} ${who} ${copy.verb} your wallpaper`,
-        body: title,
+        title: person.name,
+        body: `${copy.emoji} ${copy.verb} your wallpaper${title ? ` · ${title}` : ""}`,
+        icon: person.icon,
+        actorId: opts.actorId ?? undefined,
         url: `/wallpapers?w=${encodeURIComponent(opts.wallpaperId)}`,
         /*
           One tag per wallpaper per action, so a wallpaper collecting likes

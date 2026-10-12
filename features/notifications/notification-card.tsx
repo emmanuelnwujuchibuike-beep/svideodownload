@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Archive, ArchiveRestore, Check, Info, Loader2, MoreHorizontal, Pin, PinOff, Trash2, UserPlus, UserRound, UserX, X } from "lucide-react";
+import { Archive, ArchiveRestore, Check, CircleDot, Info, Loader2, MoreHorizontal, Pin, PinOff, Send, Tag, Trash2, UserPlus, UserRound, UserX, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { memo, useState } from "react";
@@ -9,7 +9,9 @@ import { createPortal } from "react-dom";
 
 import { iconFor, isActorType, tintFor, timeAgo, verbFor } from "@/features/notifications/meta";
 import { haptic } from "@/lib/motion/haptics";
+import { actionsFor } from "@/lib/notifications/actions";
 import { explainDelivery } from "@/lib/notifications/explain";
+import { cleanLabels } from "@/lib/notifications/search";
 import type { NotificationGroup } from "@/lib/social/notifications";
 import { cn } from "@/lib/utils";
 
@@ -53,22 +55,51 @@ function hrefFor(g: NotificationGroup): string {
 }
 
 /** Feature 20 (0233): pin / archive. Absent until the migration is live — the menu then offers neither. */
-export type OrganizeAction = "pin" | "unpin" | "archive" | "unarchive";
+export type OrganizeAction = "pin" | "unpin" | "archive" | "unarchive" | "read" | "unread" | "label_add" | "label_remove";
+
+/** When something happened, in the member's own clock — the card's history lines. */
+function when(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+}
 
 function NotificationCardImpl({
   group,
   onMarkRead,
   onDelete,
   onOrganize,
+  onLabel,
+  labelsEnabled = false,
+  selecting = false,
+  selected = false,
+  onToggleSelect,
+  compact = false,
 }: {
   group: NotificationGroup;
   onMarkRead: (g: NotificationGroup) => void;
   onDelete: (g: NotificationGroup) => void;
   onOrganize?: (g: NotificationGroup, action: OrganizeAction) => void;
+  /** Part 3: add or remove one private label (0234) */
+  onLabel?: (g: NotificationGroup, label: string, add: boolean) => void;
+  labelsEnabled?: boolean;
+  /** Part 3 multi-select: a tap selects instead of opening */
+  selecting?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (g: NotificationGroup) => void;
+  /** the Compact view: one line of text, smaller avatar */
+  compact?: boolean;
 }) {
   const [menu, setMenu] = useState(false);
   // "Why this?" — the Attention Engine's reason, private to this member, opened from the menu
   const [why, setWhy] = useState(false);
+  // Part 3: the private label editor, opened from the menu
+  const [labeling, setLabeling] = useState(false);
+  const [labelDraft, setLabelDraft] = useState("");
+  // Part 4 Smart Actions: an inline reply for a chat notification (POST /api/messages, idempotent clientId)
+  const [replying, setReplying] = useState(false);
+  const [reply, setReply] = useState("");
+  const [replyState, setReplyState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
   // Portal-rendered + position computed on open, not a plain `absolute right-2
   // top-11` sibling — a card near the bottom of the Notification Center's
   // scrollable list had this menu clipped by the list's own overflow, same
@@ -82,7 +113,7 @@ function NotificationCardImpl({
     }
     const rect = e.currentTarget.getBoundingClientRect();
     const margin = 8;
-    const menuHeight = ((group.read ? 2 : 3) + (onOrganize ? 2 : 0)) * 44 + 8;
+    const menuHeight = (3 + (onOrganize ? 3 : 0) + (labelsEnabled ? 1 : 0)) * 44 + 8;
     const left = Math.min(Math.max(rect.right - MENU_WIDTH, margin), window.innerWidth - MENU_WIDTH - margin);
     const spaceBelow = window.innerHeight - rect.bottom;
     const top = spaceBelow >= menuHeight + margin ? rect.bottom + 4 : Math.max(margin, rect.top - menuHeight - 4);
@@ -93,7 +124,27 @@ function NotificationCardImpl({
   const actor = group.actors[0] ?? null;
   const href = hrefFor(group);
   const summary = actorSummary(group);
-  const actorLed = isActorType(group.type);
+  // a person leads only when there IS one — a withdrawal update or a deposit has no actor and is a system card
+  const actorLed = isActorType(group.type) && !!actor;
+  const smart = actionsFor({ type: group.type, totalActors: group.totalActors, hasActor: !!actor, conversationId: group.conversationId, secretChat: group.href.startsWith("/messages/secret") });
+  const sendReply = async () => {
+    const text = reply.trim();
+    if (!text || !group.conversationId || replyState === "sending") return;
+    haptic("selection");
+    setReplyState("sending");
+    const res = await fetch("/api/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conversationId: group.conversationId, body: text, clientId: `notif-${group.id}-${text.length}-${text.slice(0, 16)}` }) }).catch(() => null);
+    if (res?.ok) {
+      setReplyState("sent");
+      setReply("");
+      if (!group.read) onMarkRead(group);
+    } else setReplyState("failed");
+  };
+  const addLabel = () => {
+    const [l] = cleanLabels([labelDraft]);
+    if (!l || !onLabel) return;
+    onLabel(group, l, true);
+    setLabelDraft("");
+  };
 
   // Direct actions ON the card (owner bug 2026-07-12: "users can't even
   // accept request or follow back") — a friend_request used to only LINK to
@@ -174,19 +225,17 @@ function NotificationCardImpl({
             </span>
           )
         ) : (
-          <span className={cn("flex h-12 w-12 items-center justify-center rounded-2xl", tintFor(group.category, group.type))}>
-            <Icon className="h-5 w-5" />
-          </span>
+          /* System notifications (withdrawals, deposits, security, downloads…) wear the Frenz logo,
+             like a verified account in a chat list (owner 2026-10-12); the badge says what kind it is. */
+          <Image src="/icon.png" alt="" width={48} height={48} className="h-12 w-12 rounded-2xl object-cover ring-1 ring-border/60" />
         )}
-        {actorLed ? (
-          <span className={cn("absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-card", tintFor(group.category, group.type))}>
-            <Icon className="h-3.5 w-3.5" />
-          </span>
-        ) : null}
+        <span className={cn("absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-card", tintFor(group.category, group.type))}>
+          <Icon className="h-3.5 w-3.5" />
+        </span>
       </div>
 
       {/* Text */}
-      <div className="min-w-0 flex-1 pr-7 [@media(hover:hover)]:pr-1">
+      <div className={cn("min-w-0 flex-1 pr-7 [@media(hover:hover)]:pr-1", compact && "[&>p]:line-clamp-1")}>
         {group.broadcast ? (
           /* An admin broadcast / AD shows its OWN content + a clear "Ad" label,
              never a generic "Frenz announcement" that reads like a message. */
@@ -231,14 +280,104 @@ function NotificationCardImpl({
           {group.delivery === "held" ? <span className="font-semibold text-amber-700 dark:text-amber-400">Held ·</span> : null}
           {timeAgo(group.createdAt)} ago
         </p>
+        {group.labels.length ? (
+          <span className="mt-1.5 flex flex-wrap gap-1" aria-label="Labels">
+            {group.labels.map((l) => (
+              <span key={l} className="inline-flex items-center gap-0.5 rounded-full bg-indigo-600/10 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 dark:text-indigo-300">
+                <Tag className="h-2.5 w-2.5" aria-hidden /> {l}
+              </span>
+            ))}
+          </span>
+        ) : null}
         {why ? (
-          <p className="mt-2 flex items-start gap-1.5 rounded-xl bg-secondary/70 px-2.5 py-2 text-[12px] leading-snug text-muted-foreground" role="note">
-            <Info className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
-            <span>
-              {explainDelivery(group.delivery, group.deliveryReason ? [group.deliveryReason] : [])}
-              {group.notificationIds.length > 1 ? ` Grouped with ${group.notificationIds.length - 1} similar ${group.notificationIds.length === 2 ? "notification" : "notifications"}.` : ""}
-            </span>
-          </p>
+          /* Part 3 history + Part 2 explanation: private to this member, from the row itself */
+          <div className="mt-2 rounded-xl bg-secondary/70 px-2.5 py-2 text-[12px] leading-snug text-muted-foreground" role="note" onClick={(e) => e.preventDefault()}>
+            <p className="flex items-start gap-1.5">
+              <Info className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span>
+                {explainDelivery(group.delivery, group.deliveryReason ? [group.deliveryReason] : [])}
+                {group.notificationIds.length > 1 ? ` Grouped with ${group.notificationIds.length - 1} similar ${group.notificationIds.length === 2 ? "notification" : "notifications"}.` : ""}
+              </span>
+            </p>
+            <ul className="mt-1.5 space-y-0.5 border-t border-border/60 pt-1.5" aria-label="History">
+              <li>Received · {when(group.createdAt)}</li>
+              {group.delivery ? <li>{group.delivery === "push" ? "Pushed to your devices" : group.delivery === "held" ? "Held from your lock screen" : "Kept in the app"}</li> : null}
+              {group.readAt ? <li>Read · {when(group.readAt)}</li> : null}
+              {group.pinnedAt ? <li>Pinned · {when(group.pinnedAt)}</li> : null}
+              {group.archivedAt ? <li>Archived · {when(group.archivedAt)}</li> : null}
+            </ul>
+          </div>
+        ) : null}
+        {labeling && onLabel ? (
+          <div className="mt-2 rounded-xl bg-secondary/70 p-2" onClick={(e) => e.preventDefault()}>
+            <div className="flex items-center gap-1.5">
+              <input
+                value={labelDraft}
+                onChange={(e) => setLabelDraft(e.target.value.slice(0, 24))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addLabel();
+                  }
+                }}
+                placeholder="Add a label, e.g. Urgent"
+                aria-label="New label"
+                maxLength={24}
+                className="min-w-0 flex-1 rounded-lg bg-background px-2.5 py-1.5 text-[13px] outline-none ring-1 ring-border focus:ring-2 focus:ring-indigo-400"
+              />
+              <button type="button" onClick={addLabel} disabled={!labelDraft.trim() || group.labels.length >= 5} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white disabled:opacity-40">
+                Add
+              </button>
+              <button type="button" onClick={() => setLabeling(false)} aria-label="Close labels" className="rounded-lg p-1.5 text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {group.labels.length ? (
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {group.labels.map((l) => (
+                  <button key={l} type="button" onClick={() => onLabel(group, l, false)} className="inline-flex items-center gap-1 rounded-full bg-background px-2 py-0.5 text-[11.5px] font-semibold ring-1 ring-border" aria-label={`Remove label ${l}`}>
+                    {l} <X className="h-3 w-3" aria-hidden />
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1 text-[11.5px] text-muted-foreground">Private to you. Up to five per notification.</p>
+            )}
+          </div>
+        ) : null}
+        {smart.includes("reply") && !compact ? (
+          <div className="mt-2" onClick={(e) => e.preventDefault()}>
+            {replyState === "sent" ? (
+              <span className="flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                <Check className="h-3.5 w-3.5" /> Reply sent
+              </span>
+            ) : replying ? (
+              <div className="flex items-center gap-1.5">
+                <input
+                  autoFocus
+                  value={reply}
+                  onChange={(e) => setReply(e.target.value.slice(0, 2000))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void sendReply();
+                    }
+                  }}
+                  placeholder="Write a reply…"
+                  aria-label="Reply"
+                  className="min-w-0 flex-1 rounded-full bg-background px-3.5 py-2 text-[13.5px] outline-none ring-1 ring-border focus:ring-2 focus:ring-indigo-400"
+                />
+                <button type="button" onClick={() => void sendReply()} disabled={!reply.trim() || replyState === "sending"} aria-label="Send reply" className="bg-brand flex h-9 w-9 items-center justify-center rounded-full text-white disabled:opacity-40">
+                  {replyState === "sending" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </button>
+              </div>
+            ) : (
+              <button type="button" onClick={(e) => { e.stopPropagation(); setReplying(true); }} className="flex items-center gap-1.5 rounded-full border border-border/70 px-4 py-1.5 text-xs font-semibold text-foreground transition hover:bg-secondary">
+                <Send className="h-3.5 w-3.5" /> Reply
+              </button>
+            )}
+            {replyState === "failed" ? <p className="mt-1 text-[12px] font-medium text-rose-600">Couldn&apos;t send. Open the chat to reply.</p> : null}
+          </div>
         ) : null}
 
         {group.type === "friend_request" && canActInline ? (
@@ -328,7 +467,9 @@ function NotificationCardImpl({
       exit={{ opacity: 0, x: -24, transition: { duration: 0.18 } }}
       transition={{ type: "spring", stiffness: 380, damping: 30 }}
       className={cn(
-        "group relative overflow-hidden rounded-3xl border p-3.5 transition-colors",
+        "group relative overflow-hidden rounded-3xl border transition-colors",
+        compact ? "p-2.5" : "p-3.5",
+        selected && "ring-2 ring-indigo-500",
         group.read
           ? "border-border/60 bg-card/60"
           : "border-violet-500/25 bg-gradient-to-br from-blue-500/[0.06] to-violet-500/[0.06] shadow-[0_0_0_1px_rgba(124,58,237,0.06)]",
@@ -342,13 +483,37 @@ function NotificationCardImpl({
           branch is also what silently swallowed the mark-as-read, since it
           carried no onClick: an un-linkable notification could never be
           marked read by opening it. */}
-      <Link href={href} onClick={() => !group.read && onMarkRead(group)} className="block">
-        {body}
-      </Link>
+      {selecting ? (
+        /* a div with the button role, not a <button>: the card holds buttons of its own (Follow back…) and buttons can't nest */
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => onToggleSelect?.(group)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onToggleSelect?.(group);
+            }
+          }}
+          aria-pressed={selected}
+          aria-label={selected ? "Selected" : "Select"}
+          className="block w-full cursor-pointer text-left [&_button]:pointer-events-none"
+        >
+          <span aria-hidden className={cn("absolute left-2 top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full ring-2", selected ? "bg-indigo-600 text-white ring-indigo-600" : "bg-background ring-border")}>
+            {selected ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
+          </span>
+          {body}
+        </div>
+      ) : (
+        <Link href={href} onClick={() => !group.read && onMarkRead(group)} className="block">
+          {body}
+        </Link>
+      )}
 
       {/* Quick actions (hover / focus) */}
       {/* Always reachable on touch (there is no hover on a phone — it used to be invisible there);
           on a mouse it appears on hover or keyboard focus. */}
+      <div className={selecting ? "hidden" : undefined}>
       <div className="absolute right-2 top-2 flex items-center gap-1 transition [@media(hover:hover)]:pointer-events-none [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:focus-within:pointer-events-auto [@media(hover:hover)]:focus-within:opacity-100 [@media(hover:hover)]:group-hover:pointer-events-auto [@media(hover:hover)]:group-hover:opacity-100">
         <button
           type="button"
@@ -360,6 +525,7 @@ function NotificationCardImpl({
         >
           <MoreHorizontal className="h-4 w-4" />
         </button>
+      </div>
       </div>
 
       {menu && menuPos
@@ -413,8 +579,34 @@ function NotificationCardImpl({
                   }}
                   className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm transition hover:bg-secondary"
                 >
-                  <Info className="h-4 w-4" /> {why ? "Hide why" : "Why this?"}
+                  <Info className="h-4 w-4" /> {why ? "Hide details" : "Details & why"}
                 </button>
+                {labelsEnabled && onLabel ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setLabeling(true);
+                      setMenu(false);
+                    }}
+                    className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm transition hover:bg-secondary"
+                  >
+                    <Tag className="h-4 w-4" /> Label
+                  </button>
+                ) : null}
+                {group.read && onOrganize ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      onOrganize(group, "unread");
+                      setMenu(false);
+                    }}
+                    className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm transition hover:bg-secondary"
+                  >
+                    <CircleDot className="h-4 w-4" /> Mark unread
+                  </button>
+                ) : null}
                 {!group.read ? (
                   <button
                     type="button"

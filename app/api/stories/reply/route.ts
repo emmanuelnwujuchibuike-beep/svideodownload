@@ -55,8 +55,9 @@ export async function POST(request: Request) {
         .maybeSingle();
       const name = (actor?.display_name as string) || (actor?.handle ? `@${actor.handle as string}` : "Someone");
       await sendPushToUser(toUserId, {
-        title: `${name} replied to your story`,
-        body: text,
+        // rich identity (2026-10-12): the person is the title, like a chat app
+        title: name,
+        body: `Replied to your story: ${text}`,
         url: `/messages/${conv.id}`,
         icon: (actor?.avatar_url as string | null) ?? undefined,
         tag: `story-reply:${user.id}`,

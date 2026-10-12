@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { hasActivityColumns, listGroupedNotifications, listNotifications } from "@/lib/social/notifications";
+import { cleanLabels } from "@/lib/notifications/search";
+import { hasActivityColumns, hasInboxColumns, listGroupedNotifications, listNotifications } from "@/lib/social/notifications";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -28,13 +29,19 @@ export async function GET(request: Request) {
 
   // Feature 20: ?view=archived reads only what the member put away (fetched when that tab opens, never otherwise)
   const view = url.searchParams.get("view") === "archived" ? "archived" : "inbox";
+  // Part 3: ?q= searches the member's WHOLE history (archive included) with the same parser the center shows as chips
+  const search = url.searchParams.get("q");
   const result = grouped
-    ? await listGroupedNotifications(user.id, limit, view)
+    ? await listGroupedNotifications(user.id, search ? 100 : limit, view, search)
     : await listNotifications(user.id, limit);
   return NextResponse.json(result, { headers: { "Cache-Control": "private, no-store" } });
 }
 
-const ACTIONS = ["pin", "unpin", "archive", "unarchive"] as const;
+/*
+  Part 3 adds read / unread (bulk) and private labels. Every action names its rows
+  explicitly (never "all"), and only the caller's own rows are ever touched.
+*/
+const ACTIONS = ["pin", "unpin", "archive", "unarchive", "read", "unread", "label_add", "label_remove"] as const;
 type Action = (typeof ACTIONS)[number];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -55,8 +62,10 @@ export async function PATCH(request: Request) {
   let id: string | undefined;
   let ids: string[] | undefined;
   let action: Action | null = null;
+  let labels: string[] = [];
   try {
-    const body = (await request.json()) as { id?: string; ids?: string[]; action?: string };
+    const body = (await request.json()) as { id?: string; ids?: string[]; action?: string; labels?: unknown };
+    labels = cleanLabels(body?.labels);
     id = body?.id;
     ids = Array.isArray(body?.ids) ? body.ids.filter((x) => typeof x === "string").slice(0, 200) : undefined;
     if (body?.action !== undefined) {
@@ -71,6 +80,32 @@ export async function PATCH(request: Request) {
     const list = (ids?.length ? ids : id ? [id] : []).filter((x) => UUID.test(x));
     if (!list.length) return NextResponse.json({ error: "Choose a notification." }, { status: 400 });
     const db = createAdminClient();
+    if (action === "read" || action === "unread") {
+      const { error } = await db.from("notifications").update({ read: action === "read" }).eq("user_id", user.id).in("id", list);
+      return error ? NextResponse.json({ error: "Couldn't update." }, { status: 500 }) : NextResponse.json({ ok: true });
+    }
+    if (action === "label_add" || action === "label_remove") {
+      if (!labels.length) return NextResponse.json({ error: "Name the label." }, { status: 400 });
+      if (!(await hasInboxColumns(db))) return NextResponse.json({ error: "Labels arrive with the next update." }, { status: 503 });
+      const { data: rows, error: readErr } = await db.from("notifications").select("id, labels").eq("user_id", user.id).in("id", list);
+      if (readErr) return NextResponse.json({ error: "Couldn't update." }, { status: 500 });
+      // rows that end up with the same label set are written together
+      const byNext = new Map<string, { next: string[]; ids: string[] }>();
+      for (const r of (rows ?? []) as { id: string; labels: string[] | null }[]) {
+        const cur = r.labels ?? [];
+        const lower = labels.map((l) => l.toLowerCase());
+        const next = action === "label_add" ? cleanLabels([...cur, ...labels]) : cur.filter((l) => !lower.includes(l.toLowerCase()));
+        const key = JSON.stringify(next);
+        const g = byNext.get(key) ?? { next, ids: [] };
+        g.ids.push(r.id);
+        byNext.set(key, g);
+      }
+      for (const g of byNext.values()) {
+        const { error } = await db.from("notifications").update({ labels: g.next }).eq("user_id", user.id).in("id", g.ids);
+        if (error) return NextResponse.json({ error: error.message.includes("labels_max") ? "Up to five labels each." : "Couldn't update." }, { status: error.message.includes("labels_max") ? 400 : 500 });
+      }
+      return NextResponse.json({ ok: true });
+    }
     if (!(await hasActivityColumns(db))) return NextResponse.json({ error: "Pin and archive arrive with the next update." }, { status: 503 });
     const now = new Date().toISOString();
     const cols: Record<string, unknown> =

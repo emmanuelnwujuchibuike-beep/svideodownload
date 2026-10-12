@@ -129,12 +129,30 @@ export function NotificationBell() {
                         onClick={() => setOpen(false)}
                         className={cn("flex items-start gap-3 px-4 py-3 transition hover:bg-secondary", !n.read && "bg-primary/[0.04]")}
                       >
-                        <span className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", tintFor(categoryForType(n.type), n.type))}>
-                          <Icon className="h-4 w-4" />
+                        {/* a person → their photo; a system notification → the Frenz logo (owner 2026-10-12) */}
+                        <span className="relative mt-0.5 shrink-0">
+                          {n.actor?.avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={n.actor.avatarUrl} alt="" className="h-8 w-8 rounded-full object-cover" />
+                          ) : n.actor ? (
+                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-xs font-bold text-white">{n.actor.displayName.replace(/^@/, "").charAt(0).toUpperCase()}</span>
+                          ) : (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src="/icon.png" alt="" className="h-8 w-8 rounded-xl object-cover" />
+                          )}
+                          <span className={cn("absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full ring-2 ring-card", tintFor(categoryForType(n.type), n.type))}>
+                            <Icon className="h-2.5 w-2.5" />
+                          </span>
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="text-sm leading-snug">
-                            <span className="font-semibold">{n.actor?.displayName ?? "Someone"}</span> {verbFor(n.type)}
+                            {n.actor ? (
+                              <>
+                                <span className="font-semibold">{n.actor.displayName}</span> {verbFor(n.type)}
+                              </>
+                            ) : (
+                              <span className="font-semibold">{n.content?.title ?? n.broadcast?.title ?? verbFor(n.type)}</span>
+                            )}
                             {n.postTitle ? <span className="text-muted-foreground"> · {n.postTitle}</span> : null}
                           </span>
                           <span className="mt-0.5 block text-[11px] text-muted-foreground">{timeAgo(n.createdAt)} ago</span>

@@ -28,12 +28,16 @@ export async function GET() {
   const { success } = await trackLimiter.limit(`notif-export:${user.id}`);
   if (!success) return NextResponse.json({ error: "Too many requests." }, { status: 429 });
 
-  const { data, error } = await supabase
-    .from("notifications")
-    .select("id, type, actor_id, post_id, conversation_id, read, created_at")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(MAX_EXPORT_ROWS);
+  /*
+    Feature 20 Part 3 — the history travels too: labels, pinned / archived, the delivery
+    decision and when it was read. Falls back to the older shape until 0233/0234 run.
+  */
+  const run = (cols: string) =>
+    supabase.from("notifications").select(cols).eq("user_id", user.id).order("created_at", { ascending: false }).limit(MAX_EXPORT_ROWS);
+  const BASE = "id, type, actor_id, post_id, conversation_id, read, created_at";
+  let res = await run(`${BASE}, read_at, pinned_at, archived_at, labels, delivery, delivery_reason`);
+  if (res.error) res = await run(BASE);
+  const { data, error } = res;
   if (error) return NextResponse.json({ error: "Couldn't export." }, { status: 500 });
 
   const payload = { exportedAt: new Date().toISOString(), userId: user.id, count: data?.length ?? 0, notifications: data ?? [] };

@@ -1,6 +1,7 @@
 import { hrefForNotification } from "@/lib/notifications/destinations";
 import { defaultPriorityFor } from "@/lib/notifications/priority";
 import type { DeliveryDecision } from "@/lib/notifications/explain";
+import { parseActivityQuery } from "@/lib/notifications/search";
 import { getNotificationSettings, mutedTypesFor } from "@/lib/social/notification-settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -75,9 +76,16 @@ export interface NotificationItem {
   /** What the Attention Engine decided for its push; null when no decision was recorded. */
   delivery: DeliveryDecision | null;
   deliveryReason: string | null;
+  /** Feature 20 Part 3 (0234): private labels, and the notification's own history */
+  labels: string[];
+  readAt: string | null;
+  pinnedAt: string | null;
+  archivedAt: string | null;
 }
 
 interface Row {
+  labels?: string[] | null;
+  read_at?: string | null;
   pinned_at?: string | null;
   archived_at?: string | null;
   delivery?: string | null;
@@ -98,6 +106,7 @@ interface Row {
 let dataColumnKnown: boolean | null = null;
 // 0233 (Feature 20): pinned / archived / delivery — same once-per-instance probe, same reason
 let activityColumnsKnown: boolean | null = null;
+let inboxColumnsKnown: boolean | null = null;
 async function selectCols(db: ReturnType<typeof createAdminClient>): Promise<string> {
   const cols = "id, actor_id, type, post_id, conversation_id, read, created_at";
   if (dataColumnKnown === null) {
@@ -105,7 +114,17 @@ async function selectCols(db: ReturnType<typeof createAdminClient>): Promise<str
     dataColumnKnown = !error;
   }
   await hasActivityColumns(db);
-  return `${cols}${dataColumnKnown ? ", data" : ""}${activityColumnsKnown ? ", pinned_at, archived_at, delivery, delivery_reason" : ""}`;
+  await hasInboxColumns(db);
+  return `${cols}${dataColumnKnown ? ", data" : ""}${activityColumnsKnown ? ", pinned_at, archived_at, delivery, delivery_reason" : ""}${inboxColumnsKnown ? ", labels, read_at" : ""}`;
+}
+
+/** Are 0234's columns (labels, read_at) live? Probed once per server instance. */
+export async function hasInboxColumns(db: ReturnType<typeof createAdminClient>): Promise<boolean> {
+  if (inboxColumnsKnown === null) {
+    const { error } = await db.from("notifications").select("labels, read_at").limit(1);
+    inboxColumnsKnown = !error;
+  }
+  return inboxColumnsKnown;
 }
 
 /** Are 0233's columns live? Probed once per server instance. */
@@ -192,6 +211,10 @@ async function enrichRows(db: ReturnType<typeof createAdminClient>, rows: Row[])
     priority: defaultPriorityFor(r.type),
     delivery: deliveryOf(r.delivery),
     deliveryReason: r.delivery_reason ?? null,
+    labels: Array.isArray(r.labels) ? r.labels : [],
+    readAt: r.read_at ?? null,
+    pinnedAt: r.pinned_at ?? null,
+    archivedAt: r.archived_at ?? null,
   }));
 }
 
@@ -272,6 +295,11 @@ export interface NotificationGroup {
   /** the NEWEST member's delivery decision and reason ("Why this?") */
   delivery: NotificationItem["delivery"];
   deliveryReason: string | null;
+  /** every label on any member; the newest member's history */
+  labels: string[];
+  readAt: string | null;
+  pinnedAt: string | null;
+  archivedAt: string | null;
 }
 
 export interface GroupedNotificationsResult {
@@ -279,6 +307,10 @@ export interface GroupedNotificationsResult {
   unread: number;
   /** 0233 is live — the Activity Center offers Pin / Archive only then */
   activity?: boolean;
+  /** 0234 is live — labels and read history */
+  inbox?: boolean;
+  /** a search over the whole history ran (archived included) */
+  searched?: boolean;
 }
 
 /** Inbox = everything not archived (the default). Archived = only what the member put away. */
@@ -304,7 +336,7 @@ function groupKey(it: NotificationItem): string {
  * collapses spammy duplicates so the list stays calm and premium. Rows come newest
  * first, so the first row seen for a group sets its (most-recent) timestamp.
  */
-export async function listGroupedNotifications(userId: string, limit = 60, view: ActivityView = "inbox"): Promise<GroupedNotificationsResult> {
+export async function listGroupedNotifications(userId: string, limit = 60, view: ActivityView = "inbox", search?: string | null): Promise<GroupedNotificationsResult> {
   if (!hasSupabase) return { groups: [], unread: 0 };
   try {
     const db = createAdminClient();
@@ -327,12 +359,40 @@ export async function listGroupedNotifications(userId: string, limit = 60, view:
       countQuery = countQuery.not("type", "in", `(${muted.join(",")})`);
     }
     const activity = await hasActivityColumns(db);
+    const inbox = await hasInboxColumns(db);
+    const q = search?.trim() ? parseActivityQuery(search.slice(0, 200), new Date()) : null;
     if (activity) {
-      // the unread count is always the inbox's; the list follows the view
+      // the unread count is always the inbox's; the list follows the view — a search covers everything, archive included
       countQuery = countQuery.is("archived_at", null);
-      listQuery = view === "archived" ? listQuery.not("archived_at", "is", null) : listQuery.is("archived_at", null);
-    } else if (view === "archived") {
+      if (!q) listQuery = view === "archived" ? listQuery.not("archived_at", "is", null) : listQuery.is("archived_at", null);
+    } else if (view === "archived" && !q) {
       return { groups: [], unread: 0, activity };
+    }
+    if (q) {
+      /*
+        Feature 20 Part 3 — the Universal Inbox search, over the whole history. The same
+        parse the Activity Center shows as chips; every value below comes from the parser's
+        own vocabulary or is reduced to letters and digits before it reaches a filter.
+      */
+      const types = [...new Set([...q.types, ...(Object.entries(CATEGORY_BY_TYPE) as [NotificationType, NotificationCategory][]).filter(([, c]) => q.categories.includes(c)).map(([t]) => t)])];
+      if (q.types.length || q.categories.length) listQuery = types.length ? listQuery.in("type", types) : listQuery.eq("id", "00000000-0000-0000-0000-000000000000");
+      if (q.since) listQuery = listQuery.gte("created_at", q.since.toISOString());
+      if (q.until) listQuery = listQuery.lt("created_at", q.until.toISOString());
+      if (q.unread) listQuery = listQuery.eq("read", false);
+      if (q.pinned && activity) listQuery = listQuery.not("pinned_at", "is", null);
+      if (q.held && activity) listQuery = listQuery.eq("delivery", "held");
+      if (q.from) {
+        const who = q.from.replace(/[^\p{L}\p{N}._-]/gu, "").slice(0, 40);
+        const { data: people } = who ? await db.from("profiles").select("id").or(`handle.ilike.%${who}%,display_name.ilike.%${who}%`).limit(25) : { data: [] };
+        const ids = ((people ?? []) as { id: string }[]).map((x) => x.id);
+        if (!ids.length) return { groups: [], unread: 0, activity, inbox, searched: true };
+        listQuery = listQuery.in("actor_id", ids);
+      }
+      for (const raw of q.words.slice(0, 4)) {
+        const w = raw.replace(/[^\p{L}\p{N}._-]/gu, "").slice(0, 40);
+        if (!w) continue;
+        listQuery = listQuery.or(`data->>title.ilike.%${w}%,data->>body.ilike.%${w}%${inbox ? `,labels.cs.{${w}}` : ""}`);
+      }
     }
     const [{ data }, { count }] = await Promise.all([listQuery, countQuery]);
     const items = await enrichRows(db, (data as unknown as Row[]) ?? []);
@@ -368,6 +428,10 @@ export async function listGroupedNotifications(userId: string, limit = 60, view:
           priority: it.priority,
           delivery: it.delivery,
           deliveryReason: it.deliveryReason,
+          labels: [],
+          readAt: it.readAt,
+          pinnedAt: it.pinnedAt,
+          archivedAt: it.archivedAt,
         };
         byKey.set(key, g);
         seenActors.set(key, new Set());
@@ -376,6 +440,7 @@ export async function listGroupedNotifications(userId: string, limit = 60, view:
       g.notificationIds.push(it.id);
       if (!it.read) g.read = false;
       if (it.pinned) g.pinned = true;
+      for (const l of it.labels) if (!g.labels.includes(l)) g.labels.push(l);
       if (!it.archived) g.archived = false;
       if (RANK[it.priority] > RANK[g.priority]) g.priority = it.priority;
       const actors = seenActors.get(key)!;
@@ -392,7 +457,7 @@ export async function listGroupedNotifications(userId: string, limit = 60, view:
       return g;
     });
 
-    return { groups, unread: count ?? 0, activity };
+    return { groups, unread: count ?? 0, activity, inbox, searched: !!q };
   } catch {
     return { groups: [], unread: 0 };
   }

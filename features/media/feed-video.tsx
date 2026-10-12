@@ -181,31 +181,6 @@ export function FeedVideo({
   // element on `loadedmetadata` otherwise. Same function on both paths, so the
   // two cannot disagree and resize the card for no reason.
   const [ratio, setRatio] = useState<number | null>(() => clampRatio(width, height));
-  /*
-    🔴 FILL WHEN THE SHAPES AGREE (owner, 2026-10-08: "make feed video card not
-    to … show this black background line in the video"). The box is capped at
-    60vh, and a stored or measured ratio can differ from the box by a few
-    pixels, so `object-contain` left thin black bars down the sides or across
-    the ends — the wrapper's `bg-black` showing through. When the box and the
-    clip agree within 6%, the clip FILLS the box (`object-cover` crops at most
-    a sliver no one can see); when they truly differ (a tall clip under the
-    height cap), it stays `contain` and the gap shows the clip's own frame,
-    blurred, instead of black. Measured with one ResizeObserver, no polling.
-  */
-  const [fills, setFills] = useState(false);
-  useEffect(() => {
-    const el = wrap.current;
-    if (!el || !ratio) return;
-    const check = () => {
-      const r = el.getBoundingClientRect();
-      if (!r.width || !r.height) return;
-      setFills(Math.abs(r.width / r.height - ratio) / ratio < 0.06);
-    };
-    check();
-    const ro = new ResizeObserver(check);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ratio]);
   const inViewRef = useRef(false);
   const readyRef = useRef(false);
 
@@ -649,7 +624,7 @@ export function FeedVideo({
           the page whose stillness is load-bearing, and the pause indicator
           already gives the gesture unambiguous feedback.
         */
-        className={cn("pointer-events-none h-full max-h-[60vh] w-full", fills ? "object-cover" : "object-contain", "lg:h-auto lg:max-h-[60vh] lg:w-auto")}
+        className="pointer-events-none h-full max-h-[60vh] w-full object-cover lg:h-auto lg:max-h-[60vh] lg:w-auto"
         draggable={false}
         // Keyboard access (owner spec, 2026-08-17: "Keyboard users can still
         // open media") — purely additive: Enter/Space opens directly,
@@ -664,7 +639,14 @@ export function FeedVideo({
           // here (a stored dimension can be stale or wrong, and by now we
           // have the real thing); tallness is bounded only by the max-h
           // safety net on the wrapper/element, not by this value.
-          setRatio(clampRatio(v.videoWidth, v.videoHeight));
+          /*
+            🔴 THE FRAME NEVER CHANGES SIZE ONCE DRAWN (owner 2026-10-12: "medias should never
+            shrink or expand when tapped"). A stored shape wins; the measured one is used only
+            when nothing was stored. The clip always FILLS the frame (object-cover, poster and
+            video alike), so playing, pausing or tapping can never swap "fill" for a smaller
+            letterboxed picture.
+          */
+          setRatio((cur) => cur ?? clampRatio(v.videoWidth, v.videoHeight));
           // Resume where this post's video last stopped (tab switch, viewer
           // close, remount) — the feed never "restarts from the top".
           const resumeAt = getPlaybackPosition(postId);
@@ -702,7 +684,7 @@ export function FeedVideo({
           src={poster}
           alt=""
           aria-hidden
-          className={cn("pointer-events-none absolute inset-0 h-full w-full", fills ? "object-cover" : "object-contain")}
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover"
           onError={() => setPosterBroken(true)}
         />
       ) : null}

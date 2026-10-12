@@ -55,3 +55,16 @@ describe("SUB posts (owner, 2026-10-12)", () => {
     expect(code("features/profile/profile-tabs.tsx")).toContain("onPointerDown={s.key === SUB_TAB_KEY ? () => void loadSubPosts(ownerId)");
   });
 });
+
+// owner, 2026-10-12: "medias should never shrink or expand when tapped"
+describe("a feed video never changes size", () => {
+  it("always fills its frame, and a stored shape is never replaced by the measured one", () => {
+    const v = code("features/media/feed-video.tsx");
+    expect(v).not.toContain("setFills");
+    expect(v).not.toMatch(/fills \? "object-cover" : "object-contain"/);
+    expect(v).toContain("setRatio((cur) => cur ?? clampRatio(v.videoWidth, v.videoHeight));");
+  });
+  it("no hover growth on the feed card", () => {
+    expect(code("features/feed/feed-post-card.tsx")).not.toContain("group-hover:scale-105");
+  });
+});

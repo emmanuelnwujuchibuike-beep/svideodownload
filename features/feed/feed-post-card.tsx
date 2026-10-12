@@ -653,7 +653,7 @@ function FeedPostCardImpl({
       <div className="flex gap-2 px-2 sm:px-3">
         <Link
           href={`/u/${item.publisher.handle}`}
-          className="shrink-0 self-start rounded-full bg-gradient-to-br from-primary/70 to-accent/70 p-[2px] transition-transform duration-300 group-hover:scale-105"
+          className="shrink-0 self-start rounded-full bg-gradient-to-br from-primary/70 to-accent/70 p-[2px] "
         >
           {item.publisher.avatarUrl ? (
             <Image src={item.publisher.avatarUrl} alt="" width={36} height={36} className="h-9 w-9 rounded-full object-cover ring-2 ring-card" />

@@ -4,9 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import { repairViewport } from "./resume-viewport";
 
-function fakeWindow(y: number) {
+function fakeWindow(y: number, viewportHeight = 800) {
   const calls: [number, number][] = [];
-  return { calls, win: { scrollX: 0, scrollY: y, scrollTo: vi.fn((x: number, yy: number) => void calls.push([x, yy])) as unknown as Window["scrollTo"] } };
+  return { calls, win: { scrollX: 0, scrollY: y, innerHeight: 800, visualViewport: { height: viewportHeight }, scrollTo: vi.fn((x: number, yy: number) => void calls.push([x, yy])) as unknown as Window["scrollTo"] } };
 }
 
 describe("resume viewport repair", () => {
@@ -24,6 +24,26 @@ describe("resume viewport repair", () => {
     repairViewport(win, { activeElement: null });
     expect(calls.at(-1)).toEqual([0, 0]);
     expect(calls.length).toBe(2);
+  });
+
+  // owner 2026-10-12: nav floating mid-screen, header gone, after returning to a minimised tab/PWA
+  it("a text field left focused with NO keyboard up is stale focus — dropped on resume", () => {
+    const { win } = fakeWindow(0, 790);
+    const blur = vi.fn();
+    repairViewport(win, { activeElement: { tagName: "INPUT", type: "url", blur } as unknown as Element });
+    expect(blur).toHaveBeenCalledTimes(1);
+  });
+  it("someone really typing (keyboard up) keeps their focus", () => {
+    const { win } = fakeWindow(0, 420);
+    const blur = vi.fn();
+    repairViewport(win, { activeElement: { tagName: "TEXTAREA", blur } as unknown as Element });
+    expect(blur).not.toHaveBeenCalled();
+  });
+  it("a focused button is not a text field and is left alone", () => {
+    const { win } = fakeWindow(0, 800);
+    const blur = vi.fn();
+    repairViewport(win, { activeElement: { tagName: "BUTTON", blur } as unknown as Element });
+    expect(blur).not.toHaveBeenCalled();
   });
 
   it("the bottom nav mounts the repair, so it runs on every page with the nav", () => {

@@ -18,16 +18,27 @@ const initialState: State = { status: "idle", metadata: null, error: null };
 export function useDownloader() {
   const [state, setState] = useState<State>(initialState);
   const abortRef = useRef<AbortController | null>(null);
+  const inflightUrl = useRef<string | null>(null);
 
   const reset = useCallback(() => {
     abortRef.current?.abort();
+    inflightUrl.current = null;
     setState(initialState);
   }, []);
 
+  /*
+    🔴 ONE FETCH PER LINK (owner 2026-10-12: "fetching a tiktok video still delays … check if it is
+    fetching a lot in the background"). Measured on production: a pasted link auto-starts the fetch,
+    then the Save tap started it AGAIN and aborted the first — but an abort only cancels the browser's
+    side; the worker kept extracting the first one, so the same TikTok link was extracted twice on
+    Railway. The same link while it is already in flight now joins that fetch instead.
+  */
   const fetchMetadata = useCallback(async (url: string) => {
+    if (inflightUrl.current === url && abortRef.current && !abortRef.current.signal.aborted) return;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    inflightUrl.current = url;
 
     setState({ status: "fetching", metadata: null, error: null });
     try {
@@ -36,10 +47,13 @@ export function useDownloader() {
       if (!res.ok || json.ok === false) {
         const err = json as ApiError;
         setState({ status: "error", metadata: null, error: err.error ?? "Failed to fetch." });
+        inflightUrl.current = null;
         return;
       }
       setState({ status: "ready", metadata: json.data as VideoMetadata, error: null });
+      inflightUrl.current = null;
     } catch (err) {
+      if (inflightUrl.current === url) inflightUrl.current = null;
       if (controller.signal.aborted) return;
       setState({
         status: "error",

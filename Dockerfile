@@ -70,7 +70,7 @@ EXPOSE 3000
 ENV PORT=3000 HOSTNAME=0.0.0.0 YTDLP_PATH=/usr/local/bin/yt-dlp ARIA2C_PATH=/usr/bin/aria2c
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD curl -fsS http://localhost:3000/api/health || exit 1
+  CMD curl -fsS "http://localhost:3000/api/health?live=1" || exit 1
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["node", "server.js"]

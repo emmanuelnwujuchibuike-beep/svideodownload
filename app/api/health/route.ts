@@ -75,7 +75,17 @@ function whoami(request: Request) {
 }
 
 export async function GET(request: Request) {
-  if (new URL(request.url).searchParams.get("whoami") === "1") return whoami(request);
+  const params = new URL(request.url).searchParams;
+  /*
+    🔴 LIVENESS ONLY (owner, 2026-10-12: "nothing should consume Railway memory or any usage
+    irregularly"). The container's own HEALTHCHECK runs every 30 s, around the clock. It used
+    to hit the full report below — an Upstash write + read, a Cloudflare Stream API call, a
+    Supabase count and a yt-dlp (Python) spawn every other time: ~2,880 runs a day with nobody
+    on the site. A liveness probe only needs "the server answers": no network, no database,
+    no child process. The full report stays for a person who asks for it.
+  */
+  if (params.get("live") === "1") return NextResponse.json({ status: "ok" }, { headers: { "Cache-Control": "no-store" } });
+  if (params.get("whoami") === "1") return whoami(request);
   const probeKey = `health:probe:${Date.now()}`;
   const token = Math.random().toString(36).slice(2);
   let live = false;

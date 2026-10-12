@@ -33,7 +33,7 @@ primary_region = "iad"
   timeout = "5s"
   grace_period = "20s"
   method = "GET"
-  path = "/api/health"
+  path = "/api/health?live=1"
 
 # ffmpeg transcoding is memory-hungry; give it headroom.
 [[vm]]

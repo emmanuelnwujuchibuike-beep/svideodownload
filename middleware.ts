@@ -16,6 +16,9 @@ import { sessionIsComfortablyFresh } from "@/lib/supabase/session-cookie";
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
+  // The container's 30 s health check: no session, no guards, no work (owner 2026-10-12 — no idle usage)
+  if (path === "/api/health") return NextResponse.next();
+
   // Public API + extension endpoints: enable CORS and skip session work.
   if (path.startsWith("/api/v1") || path === "/api/me") {
     if (request.method === "OPTIONS") {

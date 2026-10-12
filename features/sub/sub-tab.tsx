@@ -79,6 +79,8 @@ export function SubTab({
   const [composing, setComposing] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   const [galleryKey, setGalleryKey] = useState(0);
+  // a subscriber sees "You're subscribed" from the gallery instead of the paid-only notice
+  const [subscribed, setSubscribed] = useState(false);
   const loginNext = `/u/${handle}?tab=sub`;
 
   if (isOwner && s && !s.setupCompleted) {
@@ -92,10 +94,10 @@ export function SubTab({
           <ShareCard handle={handle} />
           <CreatorOverview settings={s} bounds={bounds} onChange={setS} onCompose={() => setComposing(true)} onWithdraw={() => setWithdrawing(true)} />
         </>
-      ) : (
+      ) : subscribed ? null : (
         <SubNotice />
       )}
-      <SubGallery key={galleryKey} creatorId={creatorId} creatorName={creatorName} quote={isOwner ? null : quote} signedIn={signedIn} loginNext={loginNext} onCompose={isOwner ? () => setComposing(true) : undefined} />
+      <SubGallery key={galleryKey} creatorId={creatorId} creatorName={creatorName} quote={isOwner ? null : quote} signedIn={signedIn} loginNext={loginNext} onCompose={isOwner ? () => setComposing(true) : undefined} onAccess={setSubscribed} />
       {composing ? <SubComposer onClose={() => setComposing(false)} onPosted={() => setGalleryKey((k) => k + 1)} /> : null}
       {withdrawing ? <SubWithdrawSheet onClose={() => setWithdrawing(false)} /> : null}
     </div>

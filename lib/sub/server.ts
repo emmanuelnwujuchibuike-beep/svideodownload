@@ -238,6 +238,60 @@ export async function confirmSubPayment(reference: string): Promise<{ ok: boolea
   return { ok: false, status: r?.reason === "amount_mismatch" ? "mismatch" : "unknown" };
 }
 
+/**
+ * Purchases still `initiated` — re-asked of Paystack (owner, 2026-10-12: "after paying it
+ * still shows these posts are for paid subscribers… and the balance wasn't added").
+ *
+ * A paid charge settles from two places, and BOTH can miss: the webhook may never be
+ * delivered, and the return page used to demand a sign-in before confirming — but
+ * Paystack sends the payer back in the BROWSER, where an installed-app member is
+ * usually signed out, so they met a login page and the payment was never confirmed.
+ * This runs every 10 minutes inside the existing ai-reconcile invocation (no new
+ * cron), bounded, and only touches rows Paystack has an answer for. One indexed read
+ * when nothing is pending. Settling is idempotent in SQL, so a race with a late
+ * webhook only ever answers "duplicate".
+ */
+export async function reconcilePendingSubPurchases(limit = 20): Promise<{ checked: number; paid: number; failed: number }> {
+  const out = { checked: 0, paid: 0, failed: 0 };
+  const now = Date.now();
+  const { data, error } = await createAdminClient()
+    .from("sub_purchases")
+    .select("reference")
+    .eq("status", "initiated")
+    .not("checkout_url", "is", null)
+    // a checkout younger than 2 minutes may still be on Paystack's page; older than 2 days is abandoned
+    .lte("created_at", new Date(now - 2 * 60_000).toISOString())
+    .gte("created_at", new Date(now - 2 * 86_400_000).toISOString())
+    .order("created_at", { ascending: true })
+    .limit(limit);
+  if (error || !data?.length) return out;
+  for (const row of data as { reference: string }[]) {
+    out.checked += 1;
+    const r = await confirmSubPayment(row.reference).catch(() => null);
+    if (r?.status === "paid") out.paid += 1;
+    else if (r?.status === "failed") out.failed += 1;
+  }
+  return out;
+}
+
+/** The viewer's own unsettled purchase for this creator, confirmed now (the SUB tab heals itself on view). */
+export async function settleOwnPendingSub(subscriberId: string, creatorId: string): Promise<boolean> {
+  const { data } = await createAdminClient()
+    .from("sub_purchases")
+    .select("reference")
+    .eq("subscriber_id", subscriberId)
+    .eq("creator_id", creatorId)
+    .eq("status", "initiated")
+    .not("checkout_url", "is", null)
+    .gte("created_at", new Date(Date.now() - 2 * 86_400_000).toISOString())
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const ref = (data as { reference?: string } | null)?.reference;
+  if (!ref) return false;
+  return (await confirmSubPayment(ref).catch(() => null))?.status === "paid";
+}
+
 /** A refund, chargeback or admin reversal. */
 export async function reverseSub(reference: string, status: "refunded" | "disputed" | "reversed", actorId: string | null, note: string): Promise<Result<{ debtAfter: number }>> {
   const { data, error } = await createAdminClient().rpc("reverse_sub_purchase", { p_reference: reference, p_status: status, p_actor: actorId, p_note: note });

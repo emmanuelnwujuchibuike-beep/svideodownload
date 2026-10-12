@@ -20,7 +20,17 @@ export async function GET(req: Request) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const out = await listSubPosts(creator, user?.id ?? null, before);
+  let out = await listSubPosts(creator, user?.id ?? null, before);
+  /*
+    Self-heal (2026-10-12): a signed-in viewer without access who has their OWN unsettled
+    purchase for this creator — paid at Paystack, but the webhook and the return page both
+    missed it — is confirmed with Paystack right now, so the tab they're looking at unlocks
+    instead of asking them to pay again. One indexed read when there is nothing pending.
+  */
+  if (user && !out.access && !out.isCreator && !before) {
+    const { settleOwnPendingSub } = await import("@/lib/sub/server");
+    if (await settleOwnPendingSub(user.id, creator).catch(() => false)) out = await listSubPosts(creator, user.id, before);
+  }
   // per viewer: what a subscriber sees must never be cached for anyone else
   return NextResponse.json(out, { headers: { "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex, nofollow" } });
 }

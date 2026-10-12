@@ -95,12 +95,18 @@ export interface SubPostCard {
 }
 
 /** The SUB POSTS gallery. A viewer without access sees covers and counts, nothing private. Cursor-paged. */
-export async function listSubPosts(creatorId: string, viewerId: string | null, before?: string | null): Promise<{ posts: SubPostCard[]; access: boolean; isCreator: boolean; next: string | null; ready: boolean }> {
+export async function listSubPosts(creatorId: string, viewerId: string | null, before?: string | null): Promise<{ posts: SubPostCard[]; access: boolean; isCreator: boolean; next: string | null; ready: boolean; accessUntil?: string | null }> {
   const db = createAdminClient();
   const isCreator = viewerId === creatorId;
   let q = db.from("sub_posts").select("id, caption, cover_url, created_at").eq("creator_id", creatorId).eq("status", "published").order("created_at", { ascending: false }).limit(PAGE + 1);
   if (before) q = q.lt("created_at", before);
   const [postsR, access] = await Promise.all([q, hasActiveSub(viewerId, creatorId)]);
+  // a subscriber sees that they ARE one, and until when (2026-10-12) — read only for a subscriber
+  let accessUntil: string | null = null;
+  if (access && viewerId && !isCreator) {
+    const { data: m } = await db.from("creator_memberships").select("period_end").eq("creator_id", creatorId).eq("member_id", viewerId).eq("status", "active").eq("billing", "sub").order("period_end", { ascending: false }).limit(1).maybeSingle();
+    accessUntil = ((m as Row | null)?.period_end as string | null) ?? null;
+  }
   if (postsR.error) return { posts: [], access, isCreator, next: null, ready: !MISSING(postsR.error.message) };
   const rows = (postsR.data ?? []) as Row[];
   const page = rows.slice(0, PAGE);
@@ -119,6 +125,7 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
     isCreator,
     next: rows.length > PAGE ? (page[page.length - 1]!.created_at as string) : null,
     ready: true,
+    accessUntil,
   };
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { EyeOff, Film, Images, Loader2, Lock, Plus, Trash2, X } from "lucide-react";
+import { BadgeCheck, EyeOff, Film, Images, Loader2, Lock, Plus, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -47,8 +47,12 @@ export interface SubQuoteView {
   periodDays: number;
 }
 
-export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext, onCompose }: { creatorId: string; creatorName: string; quote: SubQuoteView | null; signedIn: boolean; loginNext: string; onCompose?: () => void }) {
-  const [state, setState] = useState<{ posts: Card[]; access: boolean; isCreator: boolean; next: string | null; ready: boolean } | null>(null);
+export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext, onCompose, onAccess }: { creatorId: string; creatorName: string; quote: SubQuoteView | null; signedIn: boolean; loginNext: string; onCompose?: () => void; onAccess?: (subscribed: boolean) => void }) {
+  const [state, setState] = useState<{ posts: Card[]; access: boolean; isCreator: boolean; next: string | null; ready: boolean; accessUntil?: string | null } | null>(null);
+  // the tab's "for paid subscribers only" notice gives way to "You're subscribed" (2026-10-12)
+  useEffect(() => {
+    if (state) onAccess?.(state.access && !state.isCreator);
+  }, [state, onAccess]);
   const [loadingMore, setLoadingMore] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
@@ -102,6 +106,21 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
 
   return (
     <div>
+      {/* a subscriber is told so, and until when (owner 2026-10-12: "indicating he is a paid subscriber") */}
+      {state.access && !state.isCreator ? (
+        <div className="mb-3 flex items-center gap-3 rounded-[22px] border border-emerald-500/25 bg-emerald-500/[0.08] px-4 py-3.5">
+          <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-500 text-white">
+            <BadgeCheck className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[15px] font-bold leading-tight">You&apos;re subscribed to {creatorName}</p>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">
+              {state.accessUntil ? `Your access runs until ${new Date(state.accessUntil).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}. ` : ""}Tap any post to open it.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       {/* the price and the subscribe action, for anyone without access */}
       {!state.access && quote ? (
         <div className={cn("mb-3 rounded-[22px] px-4 py-3.5", GLASS)}>

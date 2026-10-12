@@ -526,9 +526,12 @@ export async function probeAndPublish(db: Db, cr: { id: string; storage_path: st
       Stream transcodes it from a signed URL of the locked copy (media-processing.ts).
       The creative stays pending until the processed MP4 is ready; the poster is
       published now so the advertiser sees their video meanwhile.
+      Since 2026-10-12 EVERY video takes this path when processing is available
+      (the worker's 480p MP4 + JPEG cover), not only an oversized one: an in-spec
+      upload used to be served whole, with no cache header and a PNG cover.
     */
     let publishedPoster: string | null = null; // the Stream fallback below has already published the poster
-    if (facts!.mediaType === "video" && videoNeedsProcessing(facts!.width!, facts!.height!, size, specOf(f), facts!.mime)) {
+    if (facts!.mediaType === "video" && (Boolean(limits.videoProcessing) || videoNeedsProcessing(facts!.width!, facts!.height!, size, specOf(f), facts!.mime))) {
       let posterUrl: string | null = null;
       if (posterOk) {
         const { error } = await staging.copy(lockedPoster, poster, { destinationBucket: PUBLIC_BUCKET });
@@ -605,7 +608,7 @@ export async function probeAndPublish(db: Db, cr: { id: string; storage_path: st
     running ad, so it must be published and checked before it is answered.
   */
   if (kind === "draft") {
-    const willProcess = facts!.mediaType === "video" && videoNeedsProcessing(facts!.width!, facts!.height!, size, specOf(f), facts!.mime);
+    const willProcess = facts!.mediaType === "video" && (Boolean(limits.videoProcessing) || videoNeedsProcessing(facts!.width!, facts!.height!, size, specOf(f), facts!.mime));
     await writeCreative(db, cr.id, { ...factCols, mime_type: facts!.mime, validation_status: "pending", validation_errors: [], validated_at: now }, { moderation_status: "review", moderation_labels: ["moderation_pending"] });
     after(async () => {
       const r = await publishAll().catch(() => null);

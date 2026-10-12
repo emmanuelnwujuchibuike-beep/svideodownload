@@ -11,8 +11,8 @@ import type { ReadableStream as WebReadableStream } from "node:stream/web";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { buildAdTranscodeArgs } from "@/lib/ads-platform/ad-transcode-plan";
-import { PUBLIC_BUCKET, STAGING_BUCKET } from "@/lib/ads-platform/advertiser-server";
+import { buildAdPosterArgs, buildAdTranscodeArgs } from "@/lib/ads-platform/ad-transcode-plan";
+import { posterPath, PUBLIC_BUCKET, STAGING_BUCKET } from "@/lib/ads-platform/advertiser-server";
 import { WORKER_TRANSCODE, fail, publishProcessed, type ProcessingState, type Row } from "@/lib/ads-platform/media-processing";
 
 const FFMPEG = process.env.FFMPEG_PATH || "ffmpeg";
@@ -69,9 +69,19 @@ export async function runAdVideoTranscode(db: SupabaseClient, creativeId: string
       return fail(db, r, "processing_failed");
     }
     const mediaUrl = db.storage.from(PUBLIC_BUCKET).getPublicUrl(dest).data.publicUrl;
-    return (
-      (await publishProcessed(db, r, { mediaUrl, thumbnailUrl: r.thumbnail_url, durationSeconds: probe.durationSeconds, width: probe.width, height: probe.height })) ?? { state: "skipped" }
-    );
+
+    // the cover, from the result: a ~20–40 KB JPEG that paints at once (a missing one keeps the browser's, never fails the video)
+    const posterDest = dest.replace(/\.mp4$/, ".jpg");
+    const posterFile = join(dir, "poster.jpg");
+    const poster = await run(FFMPEG, buildAdPosterArgs(output, posterFile), 30_000)
+      .then(async () => (await db.storage.from(PUBLIC_BUCKET).upload(posterDest, await readFile(posterFile), { contentType: "image/jpeg", upsert: true, cacheControl: "31536000" })).error)
+      .then((err) => (err ? null : db.storage.from(PUBLIC_BUCKET).getPublicUrl(posterDest).data.publicUrl))
+      .catch(() => null);
+
+    const out = await publishProcessed(db, r, { mediaUrl, thumbnailUrl: poster ?? r.thumbnail_url, durationSeconds: probe.durationSeconds, width: probe.width, height: probe.height });
+    // nothing kept twice: the browser's cover was published only to show while this ran
+    if (out && poster) await db.storage.from(PUBLIC_BUCKET).remove([posterPath(r.storage_path)]).catch(() => {});
+    return out ?? { state: "skipped" };
   } catch (e) {
     console.error("[ads] transcode failed", e instanceof Error ? e.message.slice(0, 300) : "error");
     return fail(db, r, "processing_failed");

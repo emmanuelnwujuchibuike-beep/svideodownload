@@ -235,8 +235,8 @@ describe("one preparation for every upload, off the main thread", () => {
     expect(w).toContain('imageOrientation: "from-image"');
     expect(w).toContain('type: "image/webp"');
   });
-  it("transcoding is used only when Stream AND migration 0208 exist", () => {
-    expect(code("lib/ads-platform/server.ts")).toContain("videoProcessing: hasStream && f.delivery_long_edge !== undefined,");
+  it("transcoding is used only when the worker or Stream AND migration 0208 exist", () => {
+    expect(code("lib/ads-platform/server.ts")).toContain("videoProcessing: (hasWorker || hasStream) && f.delivery_long_edge !== undefined,");
   });
 });
 

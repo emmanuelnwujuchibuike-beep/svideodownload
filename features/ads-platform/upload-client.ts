@@ -61,7 +61,7 @@ export function readLocalMedia(file: File, timeoutMs = 15_000): Promise<LocalMed
   });
 }
 
-/** One frame of a local video as a small WebP (PNG where WebP encoding is missing). */
+/** One frame of a local video as a small WebP (JPEG where WebP encoding is missing). */
 export function posterFromVideo(file: File, maxWidth = 640): Promise<Blob | null> {
   const url = URL.createObjectURL(file);
   return new Promise<Blob | null>((resolve) => {
@@ -88,7 +88,8 @@ export function posterFromVideo(file: File, maxWidth = 640): Promise<Blob | null
       const ctx = c.getContext("2d");
       if (!ctx) return finish(null);
       ctx.drawImage(v, 0, 0, c.width, c.height);
-      c.toBlob((b) => finish(b), "image/webp", 0.75);
+      // Safari cannot encode WebP and silently hands back a PNG (a live cover was 418 KB, 2026-10-12): JPEG instead
+      c.toBlob((b) => (b && b.type === "image/webp" ? finish(b) : c.toBlob((j) => finish(j), "image/jpeg", 0.8)), "image/webp", 0.75);
     };
     v.onerror = () => finish(null);
     v.src = url;

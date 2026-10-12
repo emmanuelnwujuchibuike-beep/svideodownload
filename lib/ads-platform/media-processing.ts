@@ -55,42 +55,45 @@ export async function startVideoProcessing(
   maxDurationSeconds: number | null,
   cols: Record<string, unknown>,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  // a signed URL Stream can fetch for an hour — long enough for the copy to start
-  const { data: signed } = await db.storage.from(STAGING_BUCKET).createSignedUrl(lockedPath, 3600);
-  let uid = signed?.signedUrl ? await copyAdVideoToStream(signed.signedUrl, cr.id, maxDurationSeconds) : null;
-  /*
-    Stream refused (2026-10-10: its storage is FULL) → the worker compresses the
-    video to 480p with ffmpeg and publishes it from Supabase Storage (owner: "a
-    1080px video must be compressed to 480"). The row is marked first, so the
-    worker finds it waiting; if the worker cannot be reached either, this is
-    still "processing_unavailable" and the caller decides.
-  */
-  const viaWorker = !uid && hasWorker;
-  if (viaWorker) uid = WORKER_TRANSCODE;
-  if (!uid) return { ok: false, error: "processing_unavailable" };
   const { data: prev } = await db.from("ad_creatives").select("processing_attempts").eq("id", cr.id).maybeSingle();
   // Part 8's moderation columns are written on their own: a database without 0206 refuses an update naming them
   const moderation = Object.fromEntries(Object.entries(cols).filter(([k]) => k.startsWith("moderat")));
   const core = Object.fromEntries(Object.entries(cols).filter(([k]) => !k.startsWith("moderat")));
   if (Object.keys(moderation).length) await db.from("ad_creatives").update(moderation).eq("id", cr.id);
-  await db
-    .from("ad_creatives")
-    .update({
-      ...core,
-      validation_status: "pending",
-      validation_errors: [],
-      processing_status: "processing",
-      processing_kind: kind,
-      processing_error: null,
-      stream_uid: uid,
-      processing_started_at: new Date().toISOString(),
-      processing_attempts: Number(prev?.processing_attempts ?? 0) + 1,
-    })
-    .eq("id", cr.id);
-  if (viaWorker && !(await dispatchWorkerTranscode(cr.id))) {
+  const mark = (uid: string) =>
+    db
+      .from("ad_creatives")
+      .update({
+        ...core,
+        validation_status: "pending",
+        validation_errors: [],
+        processing_status: "processing",
+        processing_kind: kind,
+        processing_error: null,
+        stream_uid: uid,
+        processing_started_at: new Date().toISOString(),
+        processing_attempts: Number(prev?.processing_attempts ?? 0) + 1,
+      })
+      .eq("id", cr.id);
+
+  /*
+    🔴 THE WORKER FIRST (owner, 2026-10-12: result-card ad videos played the
+    advertiser's original upload — "use railway to compress video to 480p, but
+    nothing should be duplicated"). Every ad video is encoded ONCE, by the
+    worker, to a 480p MP4 plus a small JPEG cover (server/services/ad-video-
+    transcode.ts); nothing is kept in Stream beside it. The row is marked first,
+    so the worker finds it waiting.
+  */
+  if (hasWorker) {
+    await mark(WORKER_TRANSCODE);
+    if (await dispatchWorkerTranscode(cr.id)) return { ok: true };
     await db.from("ad_creatives").update({ processing_status: "none", stream_uid: null, processing_started_at: null }).eq("id", cr.id);
-    return { ok: false, error: "processing_unavailable" };
   }
+  // the worker is unreachable: Stream, from a signed URL it can fetch for an hour (2026-10-10: its storage is FULL, so this usually refuses too)
+  const { data: signed } = await db.storage.from(STAGING_BUCKET).createSignedUrl(lockedPath, 3600);
+  const uid = signed?.signedUrl ? await copyAdVideoToStream(signed.signedUrl, cr.id, maxDurationSeconds) : null;
+  if (!uid) return { ok: false, error: "processing_unavailable" };
+  await mark(uid);
   return { ok: true };
 }
 

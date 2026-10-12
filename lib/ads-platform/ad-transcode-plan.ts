@@ -34,6 +34,15 @@ export function adFallbackSize(w: number, h: number): { width: number; height: n
   return { width: outW, height: even((h * outW) / w) };
 }
 
+/**
+ * The cover: one frame of the 480p RESULT (already scaled and rotated) as a small
+ * JPEG — every browser decodes it, and it paints before the video has loaded.
+ * A browser-made cover could come out a ~400 KB PNG (Safari cannot encode WebP).
+ */
+export function buildAdPosterArgs(video: string, output: string): string[] {
+  return ["-hide_banner", "-loglevel", "error", "-y", "-ss", "0.1", "-i", video, "-frames:v", "1", "-q:v", "5", "-map_metadata", "-1", output];
+}
+
 export function buildAdTranscodeArgs(input: string, output: string): string[] {
   return [
     "-hide_banner", "-loglevel", "error", "-y",

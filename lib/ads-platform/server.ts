@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { hasStream } from "@/lib/media/stream";
 import { cdnBucket } from "@/lib/net/cdn-bucket";
+import { hasWorker } from "@/lib/worker";
 
 import type { CampaignStatus } from "./catalog";
 import { checkDestinationUrl, validateCreative, type CreativeLimits } from "./creative-validation";
@@ -192,8 +193,8 @@ export function formatLimits(f: FormatRow): CreativeLimits {
     aspectRatio: f.aspect_ratio === null ? null : Number(f.aspect_ratio),
     aspectTolerance: f.aspect_tolerance === null ? null : Number(f.aspect_tolerance),
     maxUploadBytes: uploadBytesOf(f),
-    // transcoding needs Stream AND 0208 (its columns): before the migration runs, oversized videos are refused as before
-    videoProcessing: hasStream && f.delivery_long_edge !== undefined,
+    // transcoding needs the worker or Stream AND 0208 (its columns): before the migration runs, oversized videos are refused as before
+    videoProcessing: (hasWorker || hasStream) && f.delivery_long_edge !== undefined,
   };
 }
 

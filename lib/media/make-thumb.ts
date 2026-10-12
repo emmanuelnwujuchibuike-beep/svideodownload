@@ -59,3 +59,40 @@ export async function makeThumb(file: File): Promise<{ blob: Blob | null; width:
   }
   return { blob: null, width: null, height: null };
 }
+
+/**
+ * The same preview from a video already uploaded (a private five-minute link) — for posts made
+ * before previews existed. Needs the bucket to allow this site's GET (CORS); without it the canvas
+ * is tainted and this returns null, and nothing else changes.
+ */
+export async function makeThumbFromVideoUrl(url: string): Promise<{ blob: Blob | null; width: number | null; height: number | null }> {
+  try {
+    const v = document.createElement("video");
+    v.crossOrigin = "anonymous";
+    v.muted = true;
+    v.playsInline = true;
+    v.preload = "auto";
+    v.src = url;
+    await new Promise<void>((resolve, reject) => {
+      const t = window.setTimeout(() => reject(new Error("timeout")), 12000);
+      v.onloadeddata = () => {
+        v.currentTime = Math.min(0.1, (v.duration || 1) / 2);
+      };
+      v.onseeked = () => {
+        window.clearTimeout(t);
+        resolve();
+      };
+      v.onerror = () => {
+        window.clearTimeout(t);
+        reject(new Error("decode"));
+      };
+    });
+    const blob = await draw(v, v.videoWidth, v.videoHeight);
+    const out = { blob, width: v.videoWidth || null, height: v.videoHeight || null };
+    v.removeAttribute("src");
+    v.load();
+    return out;
+  } catch {
+    return { blob: null, width: null, height: null };
+  }
+}

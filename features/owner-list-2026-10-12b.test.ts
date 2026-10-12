@@ -40,8 +40,18 @@ describe("SUB posts (owner, 2026-10-12)", () => {
     expect(g).toContain("{data.watermark} · frenzsave.com");
     expect(g).not.toContain("{data.watermark} · Frenz");
   });
-  it("the viewer is full width", () => {
-    expect(code("features/sub/sub-gallery.tsx")).toContain('width: "100cqw", height: `min(100cqh, calc(100cqw / ${ratio}))`');
+  it("the viewer is full width: each slide is the whole stage, the media fills it unless its measured shape is truly different", () => {
+    const g = code("features/sub/sub-gallery.tsx");
+    expect(g).toContain('<div key={i} className="relative h-full w-full shrink-0 snap-center overflow-hidden">');
+    expect(g).toContain("Math.abs(r - stageRatio) / stageRatio <= 0.28");
+    expect(g).toContain("onLoadedMetadata={(e) => measure(e.currentTarget.videoWidth, e.currentTarget.videoHeight)}");
+    // teeth: the letterboxing container-query box is gone
+    expect(g).not.toContain("[container-type:size]");
+  });
+  it("older video posts get a preview from the creator's own browser, once", () => {
+    const g = code("features/sub/sub-gallery.tsx");
+    expect(g).toContain("if (!state?.isCreator || backfilling.current) return;");
+    expect(code("app/api/sub/posts/[id]/route.ts")).toMatch(/export async function PATCH[\s\S]*\.is\("thumb_key", null\)/);
   });
   it("saving a price shows Saving…, waits for the server, then refreshes the cached profile", () => {
     const t = code("features/sub/sub-tab.tsx");

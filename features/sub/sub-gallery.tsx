@@ -103,6 +103,40 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
     return () => clearTimeout(t);
   }, [state?.posts]);
 
+  /*
+    Older VIDEO posts have no preview (only a browser can draw a video's first frame — no ffmpeg on
+    Vercel, nothing on the worker). When the CREATOR opens their own tab, once idle, their browser makes
+    one per such post, uploads it privately and saves it — once; every tile then loads instantly for
+    everyone. Shown at once here from the local image.
+  */
+  const backfilling = useRef(false);
+  useEffect(() => {
+    if (!state?.isCreator || backfilling.current) return;
+    const todo = state.posts.filter((p) => !p.thumbUrl && !p.coverUrl && p.open?.media[0]?.kind === "video");
+    if (!todo.length) return;
+    backfilling.current = true;
+    const run = async () => {
+      const { makeThumbFromVideoUrl } = await import("@/lib/media/make-thumb");
+      for (const p of todo) {
+        const media = p.open!.media[0]!;
+        const t = await makeThumbFromVideoUrl(media.url);
+        if (!t.blob) continue;
+        const plan = await fetch("/api/sub/posts/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "image", ext: "jpg" }) }).then((r) => r.json()).catch(() => null);
+        if (!plan?.ok) continue;
+        const put = await fetch(plan.uploadUrl as string, { method: "PUT", body: t.blob, headers: { "Content-Type": "image/jpeg", "Cache-Control": "private, no-store" } }).catch(() => null);
+        if (!put?.ok) continue;
+        const saved = await fetch(`/api/sub/posts/${p.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idx: 0, thumbKey: plan.key, width: t.width, height: t.height }) }).catch(() => null);
+        if (!saved?.ok) continue;
+        const local = URL.createObjectURL(t.blob);
+        setState((cur) => (cur ? { ...cur, posts: cur.posts.map((x) => (x.id === p.id ? { ...x, thumbUrl: local } : x)) } : cur));
+        forgetSubPosts(creatorId);
+      }
+    };
+    const go = () => void run().catch(() => {});
+    if ("requestIdleCallback" in window) window.requestIdleCallback(go, { timeout: 4000 });
+    else setTimeout(go, 1500);
+  }, [state, creatorId]);
+
   const more = async () => {
     if (!state?.next || loadingMore) return;
     setLoadingMore(true);
@@ -258,6 +292,18 @@ function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }: { pos
   // already opened by the gallery (or earlier in this tab) and still valid: shown at once, no second check
   const [data, setData] = useState<Opened | null>(() => (fresh(openedCache.get(postId)) ? openedCache.get(postId)! : fresh(initial) ? initial : null));
   const [index, setIndex] = useState(0);
+  // each item's real shape (measured on load) and the stage's — decides fill vs show-whole
+  const [shapes, setShapes] = useState<Record<number, number>>({});
+  const [stageRatio, setStageRatio] = useState<number | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const read = () => el.clientHeight && setStageRatio(el.clientWidth / el.clientHeight);
+    read();
+    window.addEventListener("resize", read);
+    return () => window.removeEventListener("resize", read);
+  }, [data]);
   const [error, setError] = useState<string | null>(null);
   const [covered, setCovered] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -366,7 +412,7 @@ function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }: { pos
   */
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label="Subscriber post" className="fixed inset-0 z-[80] bg-black text-white" onContextMenu={block}>
-      <div className="absolute inset-x-0 bottom-[env(safe-area-inset-bottom)] top-[var(--frenz-safe-top,0px)] select-none overflow-hidden [-webkit-touch-callout:none] [-webkit-user-select:none]" onDragStart={block}>
+      <div ref={stageRef} className="absolute inset-x-0 bottom-[env(safe-area-inset-bottom)] top-[var(--frenz-safe-top,0px)] select-none overflow-hidden [-webkit-touch-callout:none] [-webkit-user-select:none]" onDragStart={block}>
         {error ? (
           <p className="flex h-full items-center justify-center px-6 text-center text-[14px] text-white/80">{error}</p>
         ) : !data ? (
@@ -383,31 +429,39 @@ function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }: { pos
             }}
           >
             {data.media.map((m, i) => {
-              const ratio = m.width && m.height ? m.width / m.height : null;
+              /*
+                FULL WIDTH, LIKE THE HISTORY PLAYER (owner 2026-10-12: "this viewer isn't showing in full width").
+                The slide is the whole stage; the media FILLS it (object-cover) when its shape is close to the
+                screen's — a phone video, a portrait photo — and is shown whole (contain) only when it is truly
+                different (a landscape clip). The shape is MEASURED from the media itself once it loads, so a
+                post with no stored size (every older video) is never letterboxed by a guess.
+              */
+              const known = m.width && m.height ? m.width / m.height : null;
+              const r = shapes[i] ?? known;
+              const fill = !r || !stageRatio || Math.abs(r - stageRatio) / stageRatio <= 0.28;
+              const fit = fill ? "object-cover" : "object-contain";
+              const measure = (w: number, h: number) => w && h && setShapes((cur) => (cur[i] ? cur : { ...cur, [i]: w / h }));
               return (
-                <div key={i} className="flex h-full w-full shrink-0 snap-center items-center justify-center [container-type:size]">
-                  {/* sized to the media's own shape, so the creator's mark sits on the media's bottom edge */}
-                  <div className="relative max-h-full max-w-full" style={ratio ? { width: "100cqw", height: `min(100cqh, calc(100cqw / ${ratio}))` } : { width: "100%", height: "100%" }}>
-                    {m.kind === "image" ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- a five-minute private link; next/image would cache it on our server
-                      <img src={m.url} alt={data.caption ?? "Subscriber photo"} draggable={false} onContextMenu={block} className={cn("pointer-events-none h-full w-full", ratio ? "object-cover" : "object-contain")} />
-                    ) : (
-                      <video src={m.url} controls playsInline autoPlay={i === 0} preload="metadata" controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture disableRemotePlayback onContextMenu={block} className={cn("h-full w-full bg-black", ratio ? "object-cover" : "object-contain")} />
-                    )}
-                    {/*
-                      The creator's address along the bottom edge (owner 2026-10-12, "like onlyfans.com/<user>"):
-                      a screenshot that leaves Frenz still says where to find them — their PUBLIC profile, never
-                      this private post. Above a video's controls, so it never covers them.
-                    */}
-                    {data.creatorHandle ? (
-                      <a
-                        href={`/u/${encodeURIComponent(data.creatorHandle)}`}
-                        className={cn("absolute right-3 z-[2] select-none text-[12.5px] font-semibold tracking-[0.01em] text-white/85 [text-shadow:0_1px_3px_rgba(0,0,0,0.75)]", m.kind === "video" ? "bottom-14" : "bottom-2.5")}
-                      >
-                        frenzsave.com/u/{data.creatorHandle}
-                      </a>
-                    ) : null}
-                  </div>
+                <div key={i} className="relative h-full w-full shrink-0 snap-center overflow-hidden">
+                  {m.kind === "image" ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- a five-minute private link; next/image would cache it on our server
+                    <img src={m.url} alt={data.caption ?? "Subscriber photo"} draggable={false} onContextMenu={block} onLoad={(e) => measure(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)} className={cn("pointer-events-none absolute inset-0 h-full w-full", fit)} />
+                  ) : (
+                    <video src={m.url} controls playsInline autoPlay={i === 0} preload="metadata" controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture disableRemotePlayback onContextMenu={block} onLoadedMetadata={(e) => measure(e.currentTarget.videoWidth, e.currentTarget.videoHeight)} className={cn("absolute inset-0 h-full w-full bg-black", fit)} />
+                  )}
+                  {/*
+                    The creator's address along the bottom edge (owner 2026-10-12, "like onlyfans.com/<user>"):
+                    a screenshot that leaves Frenz still says where to find them — their PUBLIC profile, never
+                    this private post. Above a video's controls, so it never covers them.
+                  */}
+                  {data.creatorHandle ? (
+                    <a
+                      href={`/u/${encodeURIComponent(data.creatorHandle)}`}
+                      className={cn("absolute right-3 z-[2] select-none text-[12.5px] font-semibold tracking-[0.01em] text-white/85 [text-shadow:0_1px_3px_rgba(0,0,0,0.75)]", m.kind === "video" ? "bottom-16" : "bottom-3")}
+                    >
+                      frenzsave.com/u/{data.creatorHandle}
+                    </a>
+                  ) : null}
                 </div>
               );
             })}

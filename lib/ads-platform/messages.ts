@@ -20,6 +20,10 @@ export interface MessageFacts {
   maxHeight?: number | null;
   mediaType?: string | null;
   reason?: string | null;
+  /** 0240: the views bounds of a refused target */
+  min?: number | null;
+  max?: number | null;
+  step?: number | null;
 }
 
 const secs = (s: number) => `${Math.round(s * 10) / 10} seconds`;
@@ -147,6 +151,27 @@ export function adMessage(code: string, f: MessageFacts = {}): string {
       return "We couldn't find that payment.";
     case "payment_not_started":
       return "Payment could not be started. Your campaign has not been charged.";
+    /* ── 0240: views-based campaigns ── */
+    case "views_pricing_disabled":
+      return "Buying by views isn't available right now. You can still buy a campaign by days.";
+    case "views_not_offered":
+      return "This placement isn't sold by views. Choose another placement or buy it by days.";
+    case "target_too_small":
+      return `The smallest views campaign is ${f.min ? f.min.toLocaleString("en-US") : "larger"} views.`;
+    case "target_too_large":
+      return `The largest views campaign is ${f.max ? f.max.toLocaleString("en-US") : "smaller"} views.`;
+    case "target_step":
+      return `Views are bought in steps of ${f.step ? f.step.toLocaleString("en-US") : "a fixed size"}.`;
+    case "target_invalid":
+      return "Enter the number of views as a whole number.";
+    case "pricing_model_invalid":
+      return "Choose to buy by days or by views.";
+    case "over_capacity":
+      return "We can't deliver that many views on this placement in a reasonable time. Try fewer views or another placement.";
+    case "currency_unsupported":
+      return "Views campaigns are priced in US dollars only.";
+    case "views_extend_free":
+      return "A views campaign is never charged for more time. If its period ends short, it keeps running free until your views are delivered.";
     /* ── Part 6: managing a paid campaign ── */
     case "stale":
       return "This campaign changed in another tab or window. We've reloaded it — please make your change again.";

@@ -25,6 +25,7 @@ export function actionsFor(status: string): ModerationAction[] {
     case "paused":
       return ["resume", "remove"];
     case "expired":
+    case "completed":
     case "rejected":
     case "cancelled":
     case "draft":

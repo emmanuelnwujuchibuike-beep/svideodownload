@@ -24,6 +24,7 @@ import {
   loadHistory,
   loadPayments,
   loadStats,
+  loadViewsTerms,
   manage,
   num,
   pct,
@@ -36,6 +37,7 @@ import {
   type ExtensionRow,
   type PaymentRow,
   type StatRow,
+  type ViewsTerms,
 } from "./dashboard-data";
 import { TestModeNote } from "./test-mode-note";
 import { refreshAdDashboard, useDash } from "./use-dash";
@@ -70,6 +72,9 @@ const HISTORY_TEXT: Record<string, string> = {
   removed: "Removed by Frenzsave",
   rejected: "Not approved",
   awaiting_payment: "Ready for payment",
+  delivery_extended: "Extended free to reach your views",
+  target_reached: "Views target reached",
+  delivery_shortfall: "Ended short of its views",
 };
 
 export function CampaignDetail({ id, onBack }: { id: string; onBack: () => void }) {
@@ -105,6 +110,8 @@ function Body({ c, reload }: { c: CampaignRow; reload: () => void }) {
   const blocked = cr?.validation_status === "blocked" || c.status === "removed";
   const editable = EDITABLE.includes(c.status) && !ended && !blocked;
   const [flash, setFlash] = useState<{ tone: "emerald" | "rose" | "amber"; text: string } | null>(null);
+  // 0240: null for a fixed-period campaign (and on a database without 0240)
+  const views = useDash<ViewsTerms | null>(`views:${c.id}`, () => loadViewsTerms(c.id)).data ?? null;
 
   return (
     <div className="space-y-4">
@@ -136,14 +143,15 @@ function Body({ c, reload }: { c: CampaignRow; reload: () => void }) {
         {flash ? <div className="mt-3"><Notice icon={flash.tone === "emerald" ? Play : Pause} tone={flash.tone}>{flash.text}</Notice></div> : null}
       </AiPanel>
 
-      {editable ? <Actions c={c} reload={reload} setFlash={setFlash} /> : null}
+      {views ? <Delivery c={c} v={views} /> : null}
+      {editable ? <Actions c={c} reload={reload} setFlash={setFlash} viewsBased={!!views} /> : null}
       {c.status === "draft" || c.status === "awaiting_payment" ? (
         <AiPanel>
           <p className="text-[14px] font-semibold">Finish this ad</p>
           <TapOnceLink href="/advertise/create" className="mt-2 inline-flex min-h-[2.75rem] items-center text-[13.5px] font-semibold text-indigo-700 dark:text-indigo-300">Continue →</TapOnceLink>
         </AiPanel>
       ) : null}
-      {ended || c.status === "expired" ? (
+      {(ended || c.status === "expired") && c.status !== "completed" && !views ? (
         <AiPanel>
           <p className="text-[14px] font-semibold">This campaign has ended</p>
           <p className="mt-1 text-[13px] text-muted-foreground">Ended campaigns can&apos;t be edited or extended. Create a new campaign to run this ad again.</p>
@@ -188,11 +196,55 @@ function Preview({ c }: { c: CampaignRow }) {
   );
 }
 
+/* ─────────────────────────────── guaranteed views (0240) ─────────────────────────────── */
+
+/**
+ * How far a views campaign has come — the database's own count of qualifying
+ * views (at least half the ad on screen for a second, after the traffic
+ * checks), never an estimate. Once the target is reached the campaign stops
+ * and the advertiser is offered a new one; it never renews by itself.
+ */
+function Delivery({ c, v }: { c: CampaignRow; v: ViewsTerms }) {
+  const d = v.delivery;
+  const done = d?.deliveredViews ?? 0;
+  const share = Math.min(1, done / v.targetViews);
+  const left = Math.max(0, v.targetViews - done);
+  return (
+    <AiPanel>
+      <p className="text-[14px] font-semibold">Guaranteed views</p>
+      <p className="mt-1 text-[13px] text-muted-foreground">
+        {num(done)} of {num(v.targetViews)} delivered
+      </p>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-secondary" role="progressbar" aria-valuemin={0} aria-valuemax={v.targetViews} aria-valuenow={done} aria-label="Views delivered">
+        <div className="h-full rounded-full bg-indigo-600 dark:bg-indigo-400" style={{ width: `${share * 100}%` }} />
+      </div>
+      <div className="mt-3">
+        {!d ? (
+          <p className="text-[13px] text-muted-foreground">Delivery starts when your ad goes live.</p>
+        ) : d.phase === "initial" ? (
+          <p className="text-[13px] text-muted-foreground">Delivering in your planned period{d.initialEndAt ? ` (until ${date(d.initialEndAt)})` : ""}. If {num(left)} views are still left then, delivery continues free until they are.</p>
+        ) : d.phase === "extended" ? (
+          <Notice icon={CalendarPlus} tone="indigo">Extended delivery, free of charge: {num(left)} views to go. Your original payment covers it.</Notice>
+        ) : d.phase === "fulfilled" ? (
+          <>
+            <Notice icon={Play} tone="emerald">Target reached{d.fulfilledAt ? ` on ${date(d.fulfilledAt)}` : ""}. This campaign has stopped and will not renew or charge you again.</Notice>
+            <TapOnceLink href="/advertise/create" className="mt-2 inline-flex min-h-[2.75rem] items-center text-[13.5px] font-semibold text-indigo-700 dark:text-indigo-300">Launch another campaign →</TapOnceLink>
+          </>
+        ) : (
+          <Notice icon={Pause} tone="amber">
+            Delivery ended {num(d.shortfallViews ?? left)} views short of your target. {c.status_reason === "delivery_suspended" ? "It was paused by Frenzsave when it ended." : ""} Our team will refund the undelivered share.
+          </Notice>
+        )}
+      </div>
+    </AiPanel>
+  );
+}
+
 /* ─────────────────────────────── actions ─────────────────────────────── */
 
 type Flash = (f: { tone: "emerald" | "rose" | "amber"; text: string } | null) => void;
 
-function Actions({ c, reload, setFlash }: { c: CampaignRow; reload: () => void; setFlash: Flash }) {
+function Actions({ c, reload, setFlash, viewsBased }: { c: CampaignRow; reload: () => void; setFlash: Flash; viewsBased: boolean }) {
   const [open, setOpen] = useState<"details" | "replace" | "extend" | null>(null);
   const [busy, setBusy] = useState(false);
   const live = c.status === "active";
@@ -212,7 +264,8 @@ function Actions({ c, reload, setFlash }: { c: CampaignRow; reload: () => void; 
       <div className="mt-2 flex flex-wrap gap-2">
         <ActionButton icon={Upload} label="Replace image or video" active={open === "replace"} onClick={() => setOpen(open === "replace" ? null : "replace")} />
         <ActionButton icon={Pencil} label="Edit text & link" active={open === "details"} onClick={() => setOpen(open === "details" ? null : "details")} />
-        {live || c.status === "paused" ? <ActionButton icon={CalendarPlus} label="Extend" active={open === "extend"} onClick={() => setOpen(open === "extend" ? null : "extend")} /> : null}
+        {/* a views campaign is never sold more time: its delivery extends free until the target is met */}
+        {(live || c.status === "paused") && !viewsBased ? <ActionButton icon={CalendarPlus} label="Extend" active={open === "extend"} onClick={() => setOpen(open === "extend" ? null : "extend")} /> : null}
         {live || pausedByMe ? (
           <button type="button" disabled={busy} onClick={() => void toggle()} className="inline-flex min-h-[2.75rem] items-center gap-1.5 rounded-full bg-secondary px-4 text-[13px] font-semibold disabled:opacity-60">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : live ? <Pause className="h-4 w-4" aria-hidden /> : <Play className="h-4 w-4" aria-hidden />}

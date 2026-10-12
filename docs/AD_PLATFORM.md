@@ -920,3 +920,123 @@ Owner: "the system rejects them because their dimensions do not exactly match th
 - Stream's MP4 rendition is its highest quality — the output resolution is Stream's choice, not `delivery_long_edge`.
 - An image uploaded straight to the API (not through the app) above the caps is refused rather than resized: the server never decodes images.
 - If the background content check never runs (a crashed function), the creative stays held in review for an admin.
+
+---
+
+# Part 9 — views-based pricing and guaranteed delivery (2026-10-12)
+
+Brief: "FRENZSAVE ADVERTISING SYSTEM UPGRADE, Part 1". Migration:
+`supabase/migrations/0240_ad_views_pricing.sql`. A campaign is sold either for a
+fixed period (unchanged) or for a number of **qualifying views**, delivered in a
+planned period and **extended free** until the target is met.
+
+## Audit — reused, not rebuilt
+
+| Need | Already there | What 0240 did |
+|---|---|---|
+| Price | `ad_campaign_quote` → `ad_price_for` (0198), locked at submit, quote row checked by `ad_payment_begin` | `ad_campaign_quote` branches on `pricing_model`; `ad_views_price_for` is the views rule. Submit, quotes, begin and settle are unchanged. |
+| Payment | Paystack + Bachs, signed webhooks, idempotent `ad_payment_settle` | untouched — a views campaign pays exactly like a fixed one |
+| Counting | `track_ad_events`: ≥50 % on screen for 1 s in a visible tab, risk rules, event-id dedupe, daily counters | a qualifying impression of a views campaign is credited once to `ad_campaign_delivery` |
+| Lifecycle | `ad_campaigns_sync_lifecycle` on a serving CDN miss; hourly housekeeping | `ad_views_deadlines` runs in both |
+| Refund owed | `ad_refund_owed` (time share), admin pays or waives | views branch: the undelivered share |
+| Notices | `notifyAdvertiser` (push + in-app + email) | three new kinds, sent once from housekeeping |
+
+Nothing new was added for tracking, payments, slots or serving. One new table
+(`ad_campaign_delivery`, the contract counter) and one new status (`completed`).
+
+## Pricing
+
+`price = target × rate ÷ 1,000`, rate in **US cents per 1,000 views**, integer
+arithmetic, rounded down to the cent. At the default $0.30: 1,000 → $0.30,
+50,000 → $15.00, 1,000,000 → $300.00. The server refuses: views not sold, a
+placement or period not offered for views, a target below the minimum, above the
+maximum or off the step, a non-USD quote, a malformed target (the draft route
+accepts only a whole positive number), and an over-capacity target under the
+`block` policy. The browser estimate (`lib/ads-platform/views-pricing.ts`)
+follows the same rules; the database decides. The quote snapshot keeps the rate,
+target, extension terms and capacity estimate — a later admin change never
+touches a priced campaign. Promotions are **not** applied to views campaigns.
+
+**Admin, no deploy** (Admin → Ads → Self-serve rules → Views-based campaigns):
+on/off, **minimum views**, maximum, step, default rate, a rate per placement (or
+the default), which placements and which planned periods sell views, free
+extension length, the most free extensions, the capacity policy and its window.
+`views_enabled` is **off** by default — selling a guarantee is an obligation, so
+the owner switches it on.
+
+## Delivery lifecycle
+
+```
+paid → activate → active ── delivered = target ──────────────→ completed (fulfilled)
+                     │
+                     └─ deadline, short ─ eligible → end + N days (free, extensions_used+1) → …
+                                         └ not eligible → expired, phase shortfall, refund owed
+```
+
+- **Target reached early:** fulfilled the moment the last view is credited,
+  status `completed`, out of the serving snapshot, never renewed or recharged.
+  The advertiser gets "Views target reached" and a "Launch another campaign" link.
+- **Deadline short:** extended by `extension_days`, no payment of any kind.
+- **Free extension only when:** auto-extend on, extensions left, advertiser
+  active, a valid creative with an unblocked link, and the campaign live or
+  paused **by the advertiser**. An admin pause, an advertiser suspension or a
+  policy block never earns one — that campaign closes short at its deadline, so
+  a suspension can never extend a campaign without bound.
+- **Advertiser pause:** the deadline does not move (the existing rule); a pause
+  that reaches the deadline earns an extension that counts toward the cap.
+- **Closed short:** the undelivered share is recorded as owed
+  (`refund_status = owed`); the admin pays it in the provider dashboard or waives
+  it, as in Part 7.
+- **Paid extensions** (0198) are refused for views campaigns (`views_extend_free`).
+
+## Counting, races and late events
+
+- Credit = `update … set delivered_views = delivered_views + 1 where … and
+  delivered_views < target_views` under the row lock, plus a CHECK that
+  delivered never exceeds the target. Concurrent batches serialise on the row.
+- The event id dedupe (0195) runs first, so a replayed event credits nothing.
+- Fulfilment and deadlines are idempotent and lock the delivery row first.
+- **Late events:** a completed campaign keeps the existing 15-minute grace, so an
+  in-flight batch is still recorded in the daily stats — but never credited.
+- **What the advertiser sees:** "N of T delivered" is the credited count, the
+  database's own; the admin ×10 sample mode never touches it.
+- Requests, impressions, qualifying views: the platform counts qualifying
+  impressions (every counted impression is viewable, Part 8). It does **not**
+  claim unique people.
+
+## Capacity
+
+`ad_views_capacity` reads the placement's completed UTC days of daily counters
+(new index `(placement_code, day)`) and the open guarantees. Estimated days =
+(outstanding + target) ÷ measured daily views. Shown as an estimate, never a
+date. Policy: `review` (default) — an unknown or over-capacity target is sold
+and then held for an admin (`capacity_review`; the admin's activation is the
+approval); `block` — over capacity is refused, unknown is held; `allow` — sold.
+Computed only at quote time.
+
+## Verified
+
+- **PGlite, real Postgres:** 0240 on the real 0149–0219 ad and payment
+  migrations, 71 checks: the price table, bounds, disabled periods and
+  placements, fixed campaigns unchanged and expiring, a rate change sparing a
+  priced campaign (and its delivery terms), a changed amount refused, a short
+  payment never live, a repeated webhook (one payment, one delivery), early
+  fulfilment out of serving, extension then fulfilment, replay credited once, a
+  burst capped at the target, another campaign's creative and a bot never
+  credited, the browser denied the credit function, admin pause → shortfall +
+  16 of 20 cents owed, advertiser pause → extension, the cap, the target frozen
+  after payment, capacity review and block, RLS by owner, and 0240 applied twice.
+  Six mutants each failed it. The harness is not committed (needs PGlite).
+- `lib/ads-platform/views-pricing.test.ts` (34) and the updated contract test.
+
+## Gap Ledger (Part 9)
+
+| Item | Status |
+|---|---|
+| Advertiser wizard step "buy by days / buy by views" | **planned** (the brief's next part). The draft API already takes `pricingModel` + `targetViews`. |
+| True concurrency (two connections) | not testable in PGlite; relies on the row lock + CHECK |
+| Promotions on views campaigns | not applied |
+| Notices arrive within the hour (housekeeping), not instantly | by design: the ingest runs in the browser's RPC |
+| Capacity assumes the whole placement's views are available to guarantees | an estimate; fixed campaigns share the rotation |
+| A campaign whose deadline passes between two serving misses keeps not serving until the next one (≤ 5 min) | known |
+| 0240 applied to production | owner runs it, then a live probe |

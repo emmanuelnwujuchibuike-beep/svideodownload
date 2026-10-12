@@ -24,6 +24,13 @@ const fn = (name: string) => {
   expect(start, name).toBeGreaterThan(-1);
   return SQL.slice(start, SQL.indexOf("$$;", start));
 };
+/** 0240 re-created the status list and the transition map (completed): the LATEST definitions are compared */
+const M240 = readFileSync(join(process.cwd(), "supabase/migrations/0240_ad_views_pricing.sql"), "utf8");
+const fn240 = (name: string) => {
+  const start = M240.indexOf(`create or replace function public.${name}(`);
+  expect(start, name).toBeGreaterThan(-1);
+  return M240.slice(start, M240.indexOf("$;", start));
+};
 const quoted = (s: string) => [...s.matchAll(/'([a-z_A-Z]+)'/g)].map((m) => m[1]!);
 
 const TABLES = [
@@ -33,12 +40,12 @@ const TABLES = [
 
 describe("TS ⇄ SQL: one vocabulary", () => {
   it("campaign statuses", () => {
-    const chk = SQL.slice(SQL.indexOf("constraint ad_campaigns_status_chk"), SQL.indexOf("constraint ad_campaigns_name_chk"));
+    const chk = M240.slice(M240.indexOf("add constraint ad_campaigns_status_chk"), M240.indexOf("create table if not exists public.ad_campaign_delivery"));
     expect(quoted(chk).sort()).toEqual([...CAMPAIGN_STATUSES].sort());
   });
 
   it("the transition map, edge for edge", () => {
-    const body = fn("ad_campaign_transition_allowed");
+    const body = fn240("ad_campaign_transition_allowed");
     const sqlMap: Record<string, string[]> = {};
     for (const m of body.matchAll(/when '([a-z_]+)'\s+then p_to in \(([^)]*)\)/g)) sqlMap[m[1]!] = quoted(m[2]!).sort();
     const tsMap = Object.fromEntries(Object.entries(CAMPAIGN_TRANSITIONS).filter(([, to]) => to.length > 0).map(([k, v]) => [k, [...v].sort()]));
@@ -47,7 +54,7 @@ describe("TS ⇄ SQL: one vocabulary", () => {
 
   it("nothing but activate_ad_campaign can reach active", () => {
     for (const from of CAMPAIGN_STATUSES) expect(canTransition(from, "active" as CampaignStatus), from).toBe(false);
-    expect(fn("ad_campaign_transition_allowed")).not.toMatch(/'active'\s*[,)]/);
+    expect(fn240("ad_campaign_transition_allowed")).not.toMatch(/'active'\s*[,)]/);
     // teeth: the parser does see edges
     expect(Object.keys(CAMPAIGN_TRANSITIONS)).toHaveLength(CAMPAIGN_STATUSES.length);
   });

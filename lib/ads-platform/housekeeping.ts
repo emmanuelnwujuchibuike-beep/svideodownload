@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { alertEmailHtml, sendAdminAlertOnce } from "@/lib/notify";
 import { SITE_URL } from "@/lib/site";
 
+import { notifyAdvertiser } from "./ad-notify";
 import { PUBLIC_BUCKET, STAGING_BUCKET } from "./advertiser-server";
 import { reconcilePendingAdPayments } from "./payment-server";
 
@@ -25,6 +26,11 @@ import { reconcilePendingAdPayments } from "./payment-server";
  *   4. alerts       open high and medium flags not yet alerted → ONE deduped
  *                   admin email per run (sendAdminAlertOnce). A decision
  *                   never waits on this: flags already act in the database.
+ *   5. views        (0240) every views campaign at its deadline is fulfilled,
+ *                   extended free or closed short (the serving route does the
+ *                   same on a CDN miss; this covers quiet hours), then each
+ *                   delivery change is told to its advertiser ONCE (claimed in
+ *                   the database before it is sent).
  */
 
 type Db = SupabaseClient;
@@ -43,7 +49,23 @@ export async function runAdHousekeeping(db: Db, now: number = Date.now()) {
   out.alerts = await alertOpenFlags(db).catch((e: unknown) => ({ error: String(e).slice(0, 160) }));
   // 2026-10-09: a paid checkout whose webhook never arrived is confirmed with the provider here too
   out.payments = await reconcilePendingAdPayments(db, now).catch((e: unknown) => ({ error: String(e).slice(0, 160) }));
+  out.views = await runViewsDelivery(db).catch((e: unknown) => ({ error: String(e).slice(0, 160) }));
   return out;
+}
+
+/** 0240: deadlines, then one notice per delivery change (claimed before it is sent, so never twice). */
+async function runViewsDelivery(db: Db) {
+  const deadlines = await db.rpc("ad_views_deadlines");
+  // before 0240 runs the function is missing: nothing to do
+  if (deadlines.error) return { skipped: deadlines.error.code === "PGRST202" ? "needs_0240" : deadlines.error.message };
+  const claimed = await db.rpc("ad_views_claim_notices", { p_limit: 50 });
+  const rows = (claimed.data ?? []) as { campaign_id: string; phase: string; target_views: number; delivered_views: number; shortfall_views: number | null; end_at: string | null; refund_owed: boolean }[];
+  for (const r of rows) {
+    if (r.phase === "fulfilled") await notifyAdvertiser(db, r.campaign_id, { kind: "target_reached", views: r.target_views });
+    else if (r.phase === "extended") await notifyAdvertiser(db, r.campaign_id, { kind: "delivery_extended", remaining: Math.max(0, r.target_views - r.delivered_views), endAt: r.end_at });
+    else if (r.phase === "shortfall") await notifyAdvertiser(db, r.campaign_id, { kind: "delivery_shortfall", shortfall: r.shortfall_views ?? Math.max(0, r.target_views - r.delivered_views), refundOwed: r.refund_owed });
+  }
+  return { deadlines: deadlines.data, notices: rows.length };
 }
 
 async function cleanAssets(db: Db, now: number) {
@@ -57,7 +79,11 @@ async function cleanAssets(db: Db, now: number) {
     .limit(50);
   const rows = (removed ?? []) as { id: string; storage_path: string }[];
   if (rows.length) {
-    const paths = rows.flatMap((r) => [r.storage_path, r.storage_path.replace(/\.[a-z0-9]+$/, "-poster.webp")]);
+    const paths = rows.flatMap((r) => {
+      const base = r.storage_path.replace(/\.[a-z0-9]+$/, "");
+      // the worker's 480p file and its JPEG cover go with the creative (2026-10-12: nothing kept twice)
+      return [r.storage_path, `${base}-poster.webp`, `${base}-480.mp4`, `${base}-480.jpg`];
+    });
     await db.storage.from(PUBLIC_BUCKET).remove(paths);
     await db.storage.from(STAGING_BUCKET).remove(paths.flatMap((p) => [p, `${p}.checked`]));
     await db.from("ad_creatives").update({ storage_path: null }).in("id", rows.map((r) => r.id));

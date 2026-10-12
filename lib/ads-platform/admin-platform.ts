@@ -58,6 +58,8 @@ export interface PlatformState {
   blocked: { domain: string; reason: string; createdAt: string }[];
   /** 0208: every creative format's media limits, for the admin to tune */
   formats: Record<string, unknown>[];
+  /** 0240: views-based pricing (null until the migration runs) */
+  views: ViewsAdmin | null;
 }
 
 /*
@@ -110,12 +112,91 @@ export async function saveFormat(db: Db, patch: z.infer<typeof formatPatchSchema
 
 export class AdminFormatError extends Error {}
 
+/*
+  ── VIEWS-BASED PRICING (0240, owner 2026-10-12: "minimum applicable per views
+  should be able to be set by admin") ──
+  The rate per 1,000 views, the minimum / maximum / step of a target, the free
+  extension rule and the capacity policy are all columns: a change applies to
+  the NEXT quote, never to a campaign already priced (its snapshot holds the
+  terms it was sold on). Read on its own so the panel still loads before 0240.
+*/
+const VIEWS_COLUMNS =
+  "views_enabled, views_rate_per_1000_minor, views_min_target, views_max_target, views_target_step, views_auto_extend, views_extension_days, views_max_extensions, views_capacity_policy, views_capacity_window_days";
+
+export const viewsSettingsSchema = z
+  .object({
+    views_enabled: z.boolean(),
+    views_rate_per_1000_minor: z.number().int().min(1).max(10_000_000),
+    views_min_target: z.number().int().min(1).max(100_000_000),
+    views_max_target: z.number().int().min(1).max(100_000_000),
+    views_target_step: z.number().int().min(1).max(1_000_000),
+    views_auto_extend: z.boolean(),
+    views_extension_days: z.number().int().min(1).max(90),
+    views_max_extensions: z.number().int().min(0).max(52),
+    views_capacity_policy: z.enum(["allow", "review", "block"]),
+    views_capacity_window_days: z.number().int().min(1).max(90),
+  })
+  .partial()
+  .strict();
+
+export const viewsPatchSchema = z
+  .object({
+    settings: viewsSettingsSchema.optional(),
+    /** a placement's own rate (null = the default) and whether it sells views */
+    placement: z.object({ code: z.string().regex(/^[a-z][a-z0-9_]{1,63}$/), views_enabled: z.boolean().optional(), views_rate_per_1000_minor: z.number().int().min(1).max(10_000_000).nullable().optional() }).strict().optional(),
+    /** whether a campaign period may be chosen for a views campaign */
+    duration: z.object({ id: z.string().uuid(), views_enabled: z.boolean() }).strict().optional(),
+  })
+  .strict();
+
+export interface ViewsAdmin {
+  settings: Record<string, unknown>;
+  placements: { code: string; name: string; views_enabled: boolean; views_rate_per_1000_minor: number | null }[];
+  durations: { id: string; name: string; duration_days: number; enabled: boolean; views_enabled: boolean }[];
+}
+
+/** null before 0240 runs: the panel says so instead of failing. */
+export async function loadViewsAdmin(db: Db): Promise<ViewsAdmin | null> {
+  const [s, pl, du] = await Promise.all([
+    db.from("ad_platform_settings").select(VIEWS_COLUMNS).eq("id", true).maybeSingle(),
+    db.from("ad_placements").select("code, name, views_enabled, views_rate_per_1000_minor").order("sort_order", { ascending: true }),
+    db.from("ad_durations").select("id, name, duration_days, enabled, views_enabled").order("duration_days", { ascending: true }),
+  ]);
+  if (s.error || pl.error || du.error || !s.data) return null;
+  return { settings: s.data as Record<string, unknown>, placements: (pl.data ?? []) as ViewsAdmin["placements"], durations: (du.data ?? []) as ViewsAdmin["durations"] };
+}
+
+export async function saveViews(db: Db, adminId: string, patch: z.infer<typeof viewsPatchSchema>): Promise<ViewsAdmin | null> {
+  const now = new Date().toISOString();
+  if (patch.settings && Object.keys(patch.settings).length) {
+    const cur = await loadViewsAdmin(db);
+    if (!cur) throw new AdminFormatError("Views pricing needs migration 0240 — run it, then save again.");
+    const next = { ...cur.settings, ...patch.settings } as { views_min_target: number; views_max_target: number };
+    if (next.views_min_target > next.views_max_target) throw new AdminFormatError("The minimum views are above the maximum.");
+    const { error } = await db.from("ad_platform_settings").update({ ...patch.settings, updated_by: adminId, updated_at: now }).eq("id", true);
+    if (error) throw new AdminFormatError("The database refused that value.");
+  }
+  if (patch.placement) {
+    const { code, ...fields } = patch.placement;
+    const { data, error } = await db.from("ad_placements").update({ ...fields, updated_at: now }).eq("code", code).select("code");
+    if (error) throw new AdminFormatError("The database refused that value.");
+    if (!data?.length) throw new AdminFormatError("No such placement.");
+  }
+  if (patch.duration) {
+    const { data, error } = await db.from("ad_durations").update({ views_enabled: patch.duration.views_enabled, updated_at: now }).eq("id", patch.duration.id).select("id");
+    if (error) throw new AdminFormatError("The database refused that value.");
+    if (!data?.length) throw new AdminFormatError("No such campaign length.");
+  }
+  return loadViewsAdmin(db);
+}
+
 export async function loadPlatform(db: Db): Promise<PlatformState> {
-  const [settings, controls, blocked, formats] = await Promise.all([
+  const [settings, controls, blocked, formats, views] = await Promise.all([
     db.from("ad_platform_settings").select(SETTINGS_COLUMNS).eq("id", true).maybeSingle(),
     loadControls(db),
     db.from("ad_blocked_domains").select("domain, reason, created_at").order("created_at", { ascending: false }).limit(500),
     loadFormats(db).catch(() => [] as Record<string, unknown>[]),
+    loadViewsAdmin(db).catch(() => null),
   ]);
   if (settings.error) throw new Error(`ad settings: ${settings.error.message}`);
   return {
@@ -123,6 +204,7 @@ export async function loadPlatform(db: Db): Promise<PlatformState> {
     controls,
     blocked: ((blocked.data ?? []) as { domain: string; reason: string; created_at: string }[]).map((b) => ({ domain: b.domain, reason: b.reason, createdAt: b.created_at })),
     formats,
+    views,
   };
 }
 

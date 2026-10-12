@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { addBlockedDomain, AdminFormatError, controlsSchema, formatPatchSchema, loadPlatform, normalizeBlockedDomain, platformSettingsSchema, removeBlockedDomain, saveControls, saveFormat, saveSettings } from "@/lib/ads-platform/admin-platform";
+import { addBlockedDomain, AdminFormatError, controlsSchema, formatPatchSchema, loadPlatform, normalizeBlockedDomain, platformSettingsSchema, removeBlockedDomain, saveControls, saveFormat, saveSettings, saveViews, viewsPatchSchema } from "@/lib/ads-platform/admin-platform";
 import { requireAdminApi } from "@/lib/admin/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * /api/admin/ads/platform — Ad Platform Part 7, the self-serve switches.
  *
  * GET                          ad_platform_settings + advertiser controls + blocked domains
- * PATCH { settings?, controls? }  partial: only the fields sent change
+ * PATCH { settings?, controls?, format?, views? }  partial: only the fields sent change (views = 0240 pricing)
  * POST  { domain, reason }     block a destination (a host and every subdomain)
  * DELETE ?domain=              unblock it
  *
@@ -29,18 +29,19 @@ export async function GET() {
   }
 }
 
-const patchSchema = z.object({ settings: platformSettingsSchema.optional(), controls: controlsSchema.optional(), format: formatPatchSchema.optional() }).strict();
+const patchSchema = z.object({ settings: platformSettingsSchema.optional(), controls: controlsSchema.optional(), format: formatPatchSchema.optional(), views: viewsPatchSchema.optional() }).strict();
 
 export async function PATCH(request: Request) {
   const gate = await requireAdminApi();
   if (!gate.ok) return gate.response;
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success || (!parsed.data.settings && !parsed.data.controls && !parsed.data.format)) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  if (!parsed.success || (!parsed.data.settings && !parsed.data.controls && !parsed.data.format && !parsed.data.views)) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   const db = createAdminClient();
   try {
     const out: Record<string, unknown> = {};
     // 0208: one creative format's media limits
     if (parsed.data.format) out.format = await saveFormat(db, parsed.data.format);
+    if (parsed.data.views) out.views = await saveViews(db, gate.user.id, parsed.data.views);
     if (parsed.data.settings && Object.keys(parsed.data.settings).length) out.settings = await saveSettings(db, gate.user.id, parsed.data.settings);
     if (parsed.data.controls && Object.keys(parsed.data.controls).length) out.controls = await saveControls(db, parsed.data.controls);
     console.info("[admin/ads/platform] saved", { by: gate.user.id, settings: Object.keys(parsed.data.settings ?? {}), controls: Object.keys(parsed.data.controls ?? {}) });

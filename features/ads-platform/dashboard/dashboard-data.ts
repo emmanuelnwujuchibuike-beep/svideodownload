@@ -194,6 +194,46 @@ export async function loadCampaign(id: string): Promise<CampaignRow | null> {
   return (data as unknown as CampaignRow | null) ?? null;
 }
 
+/** 0240: a campaign bought as a number of views, and how far its delivery has come. */
+export interface ViewsTerms {
+  targetViews: number;
+  delivery: {
+    deliveredViews: number;
+    phase: "initial" | "extended" | "fulfilled" | "shortfall";
+    extensionsUsed: number;
+    maxExtensions: number;
+    initialEndAt: string | null;
+    fulfilledAt: string | null;
+    shortfallViews: number | null;
+  } | null;
+}
+
+/**
+ * The views terms of one campaign, or null for a fixed-period one. Read on its
+ * own, never in CAMPAIGN_COLUMNS, so the dashboard keeps loading on a database
+ * that has not run 0240 (this read then fails open to null). The delivered
+ * count is the database's real one — the admin test-mode scaling never
+ * touches it.
+ */
+export async function loadViewsTerms(campaignId: string): Promise<ViewsTerms | null> {
+  const sb = await getClient();
+  const { data: c, error } = await sb.from("ad_campaigns").select("pricing_model, target_views").eq("id", campaignId).maybeSingle();
+  const row = c as { pricing_model?: string; target_views?: number | null } | null;
+  if (error || row?.pricing_model !== "views_based" || !row.target_views) return null;
+  const { data: d } = await sb
+    .from("ad_campaign_delivery")
+    .select("delivered_views, phase, extensions_used, max_extensions, initial_end_at, fulfilled_at, shortfall_views")
+    .eq("campaign_id", campaignId)
+    .maybeSingle();
+  const r = d as { delivered_views: number; phase: NonNullable<ViewsTerms["delivery"]>["phase"]; extensions_used: number; max_extensions: number; initial_end_at: string | null; fulfilled_at: string | null; shortfall_views: number | null } | null;
+  return {
+    targetViews: row.target_views,
+    delivery: r
+      ? { deliveredViews: r.delivered_views, phase: r.phase, extensionsUsed: r.extensions_used, maxExtensions: r.max_extensions, initialEndAt: r.initial_end_at, fulfilledAt: r.fulfilled_at, shortfallViews: r.shortfall_views }
+      : null,
+  };
+}
+
 /** Daily aggregate rows for some campaigns (all of mine when `ids` is null), from a day on. */
 export async function loadStats(ids: readonly string[] | null, fromDay: string | null): Promise<StatRow[]> {
   return applyBoost(await loadStatsRaw(ids, fromDay));
@@ -329,7 +369,7 @@ export async function manage<T>(body: Record<string, unknown>): Promise<{ ok: tr
 }
 
 /** 0213: what the advertiser may take off their list — unpaid drafts (cancelled) and finished campaigns (hidden). */
-export const REMOVABLE_STATUSES: readonly string[] = ["draft", "awaiting_payment", "expired", "rejected", "removed"];
+export const REMOVABLE_STATUSES: readonly string[] = ["draft", "awaiting_payment", "expired", "completed", "rejected", "removed"];
 
 /* ─────────────────────────────── display ─────────────────────────────── */
 
@@ -357,7 +397,10 @@ export function statusLabel(c: Pick<CampaignRow, "status" | "status_reason" | "s
     case "paused":
       return { text: c.status_reason === "advertiser_paused" ? "Paused" : "Paused by Frenzsave", tone: "amber" };
     case "expired":
-      return { text: "Expired", tone: "slate" };
+      return { text: c.status_reason?.startsWith("delivery_") ? "Ended short of target" : "Expired", tone: "slate" };
+    // 0240: a views campaign that reached its target
+    case "completed":
+      return { text: "Target reached", tone: "emerald" };
     case "rejected":
       return { text: "Failed checks", tone: "rose" };
     default:

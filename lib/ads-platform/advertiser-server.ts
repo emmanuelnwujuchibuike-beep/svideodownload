@@ -18,6 +18,7 @@ import { maxPlacements, offeredDurations, offeredPlacements, parseCatalog, type 
 import { ADVERTISING_RULES_VERSION } from "./rules";
 import { createQuote } from "./payment-server";
 import { checkDestination, formatLimits, transitionCampaign, type FormatRow } from "./server";
+import { offeredViewsDurations, targetProblem, viewsRateFor, viewsTermsOf, type PricingModel } from "./views-pricing";
 
 /**
  * The advertiser application, server side (Part 2).
@@ -122,6 +123,10 @@ export interface DraftInput {
   durationId: string;
   name?: string;
   businessName?: string;
+  /** 0240: absent = fixed period (every client before 0240) */
+  pricingModel?: PricingModel;
+  /** 0240: the views bought — required for views_based, parsed strictly by the route */
+  targetViews?: number | null;
 }
 
 /** Check a format + placements + duration against the CURRENT catalog. Returns the placement ids. */
@@ -133,7 +138,16 @@ async function resolveChoice(db: Db, cat: AdCatalog, input: DraftInput): Promise
   if (codes.length > maxPlacements(cat)) return refuse("too_many_placements");
   const offered = new Set(offeredPlacements(cat, format.code).map((p) => p.code));
   if (!codes.every((c) => offered.has(c))) return refuse("placement_unavailable");
-  if (!offeredDurations(cat, codes).some((d) => d.id === input.durationId)) return refuse("duration_unavailable");
+  if (input.pricingModel === "views_based") {
+    // 0240: the database re-checks every one of these when it prices the campaign
+    const terms = viewsTermsOf(cat);
+    if (!terms) return refuse("views_pricing_disabled");
+    if (!codes.every((c) => viewsRateFor(cat, terms, c) !== null)) return refuse("views_not_offered");
+    if (!offeredViewsDurations(cat).some((d) => d.id === input.durationId)) return refuse("duration_unavailable");
+    if (!input.targetViews) return refuse("target_invalid");
+    const problem = targetProblem(terms, input.targetViews);
+    if (problem) return refuse(problem, 400, { min: terms.minTarget, max: terms.maxTarget, step: terms.step });
+  } else if (!offeredDurations(cat, codes).some((d) => d.id === input.durationId)) return refuse("duration_unavailable");
   const { data } = await db.from("ad_placements").select("id, code").in("code", codes);
   const placementIds = new Map(((data ?? []) as { id: string; code: string }[]).map((p) => [p.code, p.id]));
   if (placementIds.size !== codes.length) return refuse("placement_unavailable");
@@ -155,6 +169,11 @@ export async function saveDraft(db: Db, userId: string, input: DraftInput): Prom
   if (advertiser.status !== "active") refuse("advertiser_not_active", 403);
   const fmt = cat.formats.find((f) => f.code === input.formatCode)!;
   const name = sanitizeText(input.name ?? "", TEXT_LIMITS.name) || `${fmt.name} campaign`;
+  // 0240: the model and target travel with every campaign of the application; on a database without 0240 nothing is sent
+  const model: Record<string, unknown> =
+    input.pricingModel === "views_based" ? { pricing_model: "views_based", target_views: input.targetViews }
+    : cat.settings.views_enabled !== undefined ? { pricing_model: "fixed_period", target_views: null }
+    : {};
 
   if (!input.campaignId) {
     const { count } = await db
@@ -173,6 +192,7 @@ export async function saveDraft(db: Db, userId: string, input: DraftInput): Prom
       placement_id: placementIds.get(code)!,
       duration_id: input.durationId,
       status: "draft",
+      ...model,
     }));
     const { error } = await db.from("ad_campaigns").insert(rows);
     if (error) throw new Error(`ad_campaigns insert: ${error.message}`);
@@ -192,17 +212,17 @@ export async function saveDraft(db: Db, userId: string, input: DraftInput): Prom
     await db.from("ad_creatives").update({ status: "removed" }).eq("campaign_id", app.primary.id).neq("status", "removed");
   }
 
-  await db.from("ad_campaigns").update({ name, placement_id: placementIds.get(codes[0]!)!, duration_id: input.durationId }).eq("id", app.primary.id);
+  await db.from("ad_campaigns").update({ name, placement_id: placementIds.get(codes[0]!)!, duration_id: input.durationId, ...model }).eq("id", app.primary.id);
   const wanted = new Set(codes.slice(1));
   const keep = app.siblings.filter((s) => [...wanted].some((c) => placementIds.get(c) === s.placement_id));
   const drop = app.siblings.filter((s) => !keep.includes(s));
   if (drop.length) await db.from("ad_campaigns").delete().in("id", drop.map((d) => d.id)).in("status", EDITABLE);
-  for (const s of keep) await db.from("ad_campaigns").update({ name, duration_id: input.durationId }).eq("id", s.id);
+  for (const s of keep) await db.from("ad_campaigns").update({ name, duration_id: input.durationId, ...model }).eq("id", s.id);
   const have = new Set(keep.map((k) => k.placement_id));
   const add = [...wanted].filter((c) => !have.has(placementIds.get(c)!));
   if (add.length) {
     const { error } = await db.from("ad_campaigns").insert(
-      add.map((code) => ({ id: randomUUID(), application_id: app.primary.id, advertiser_id: app.advertiser.id, name, placement_id: placementIds.get(code)!, duration_id: input.durationId, status: "draft" })),
+      add.map((code) => ({ id: randomUUID(), application_id: app.primary.id, advertiser_id: app.advertiser.id, name, placement_id: placementIds.get(code)!, duration_id: input.durationId, status: "draft", ...model })),
     );
     if (error) throw new Error(`ad_campaigns insert: ${error.message}`);
   }
@@ -648,7 +668,11 @@ export interface LockedQuote {
   expiresAt: string;
   currency: string;
   total: number;
-  lines: { campaignId: string; placementCode: string; list: number; discountPercent: number; total: number; durationDays: number; extraDays: number; promotionId: string | null }[];
+  lines: {
+    campaignId: string; placementCode: string; list: number; discountPercent: number; total: number; durationDays: number; extraDays: number; promotionId: string | null;
+    /** 0240: a views line — the views bought, the rate it was sold at, and the delivery estimate (never a promise) */
+    views?: { targetViews: number; ratePer1000Minor: number; estimatedDays: number | null; heldForReview: boolean };
+  }[];
 }
 
 /**
@@ -723,7 +747,10 @@ export async function submitApplication(db: Db, userId: string, input: SubmitInp
   for (const r of all) {
     const { data: q, error } = await db.rpc("ad_campaign_quote", { p_campaign: r.id, p_currency: cat.settings.display_currency });
     if (error) throw new Error(`ad_campaign_quote: ${error.message}`);
-    const quote = q as { ok: boolean; reason?: string; total: number; list_price: number; discount_percent: number; duration_days: number; extra_days: number; pricing_plan_id: string; promotion_id: string | null };
+    const quote = q as {
+      ok: boolean; reason?: string; total: number; list_price: number; discount_percent: number; duration_days: number; extra_days: number; pricing_plan_id: string | null; promotion_id: string | null;
+      pricing_model?: string; target_views?: number; rate_per_1000_minor?: number; capacity?: { estimated_days: number | null; decision: string };
+    };
     if (!quote.ok) refuse(quote.reason ?? "no_price", 409);
     const { error: uErr } = await db.from("ad_campaigns").update({
       name,
@@ -743,6 +770,9 @@ export async function submitApplication(db: Db, userId: string, input: SubmitInp
     lines.push({
       campaignId: r.id, placementCode: codeOf.get(r.placement_id) ?? "", list: Number(quote.list_price), discountPercent: Number(quote.discount_percent),
       total: Number(quote.total), durationDays: Number(quote.duration_days), extraDays: Number(quote.extra_days), promotionId: quote.promotion_id,
+      ...(quote.pricing_model === "views_based"
+        ? { views: { targetViews: Number(quote.target_views), ratePer1000Minor: Number(quote.rate_per_1000_minor), estimatedDays: quote.capacity?.estimated_days ?? null, heldForReview: quote.capacity?.decision === "review" } }
+        : {}),
     });
   }
   for (const r of all.filter((x) => x.status === "draft")) {

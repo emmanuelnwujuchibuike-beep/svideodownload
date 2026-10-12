@@ -30,7 +30,11 @@ export type AdNotice =
   /* Part 7: the admin's decisions */
   | { kind: "paused_by_frenzsave" }
   | { kind: "rejected"; reason: string | null; refundOwed: boolean }
-  | { kind: "removed"; reason: string | null; refundOwed: boolean };
+  | { kind: "removed"; reason: string | null; refundOwed: boolean }
+  /* 0240: guaranteed views */
+  | { kind: "target_reached"; views: number }
+  | { kind: "delivery_extended"; remaining: number; endAt: string | null }
+  | { kind: "delivery_shortfall"; shortfall: number; refundOwed: boolean };
 
 const day = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : null);
 
@@ -60,6 +64,12 @@ function words(n: AdNotice, name: string): { title: string; body: string; money:
       return { title: "Ad not approved", body: `“${name}” wasn't approved${n.reason ? `: ${n.reason}` : "."}${n.refundOwed ? " Your payment will be refunded." : ""}`, money: n.refundOwed };
     case "removed":
       return { title: "Ad removed", body: `“${name}” was removed${n.reason ? `: ${n.reason}` : "."}${n.refundOwed ? " The unused part of your payment will be refunded." : ""}`, money: n.refundOwed };
+    case "target_reached":
+      return { title: "Views target reached", body: `“${name}” delivered all ${n.views.toLocaleString("en-US")} views and has stopped. It won't renew or charge you again — launch another campaign any time.`, money: false };
+    case "delivery_extended":
+      return { title: "Delivery extended, free", body: `“${name}” has ${n.remaining.toLocaleString("en-US")} views to go, so it keeps running${day(n.endAt) ? ` until ${day(n.endAt)}` : ""} at no extra charge.`, money: false };
+    case "delivery_shortfall":
+      return { title: "Delivery ended short", body: `“${name}” ended ${n.shortfall.toLocaleString("en-US")} views short of its target.${n.refundOwed ? " The undelivered share of your payment will be refunded." : ""}`, money: n.refundOwed };
   }
 }
 

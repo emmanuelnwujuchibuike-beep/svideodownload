@@ -280,7 +280,7 @@ export async function extensionQuote(db: Db, userId: string, input: { campaignId
 /** unpaid: cancelled (0195 allows it). Payment in flight: never touched. */
 const CANCELLABLE = ["draft", "awaiting_payment"];
 /** finished: hidden from the advertiser only — the records stay (0213) */
-const HIDEABLE = ["expired", "rejected", "cancelled", "removed"];
+const HIDEABLE = ["expired", "completed", "rejected", "cancelled", "removed"];
 
 /**
  * 0213: the advertiser removes a draft or finished campaign from their list.

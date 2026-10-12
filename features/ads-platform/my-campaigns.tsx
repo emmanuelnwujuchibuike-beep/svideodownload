@@ -316,7 +316,7 @@ const FILTERS: { label: string; statuses: string[] | null }[] = [
   { label: "Needs payment", statuses: ["draft", "awaiting_payment", "payment_processing"] },
   { label: "Validating", statuses: ["paid", "validating"] },
   { label: "Paused", statuses: ["paused"] },
-  { label: "Ended", statuses: ["expired", "rejected", "removed"] },
+  { label: "Ended", statuses: ["expired", "completed", "rejected", "removed"] },
 ];
 
 const NO_TOTALS: Totals = { views: 0, clicks: 0, ctr: null, videoPlays: 0, videoCompletes: 0, rewardCompletes: 0, conversions: 0, outbounds: 0, filtered: 0 };

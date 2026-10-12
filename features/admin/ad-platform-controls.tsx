@@ -31,6 +31,8 @@ interface Platform {
   controls: Controls;
   blocked: { domain: string; reason: string; createdAt: string }[];
   formats?: FormatRow[];
+  /** 0240: null until the migration runs */
+  views?: ViewsAdmin | null;
 }
 /** 0208: a creative format's media limits (columns added by 0208 are absent until it runs) */
 interface FormatRow {
@@ -194,6 +196,11 @@ export function AdPlatformControls() {
         </section>
       ) : null}
 
+      {p?.views ? (
+        <ViewsPricing v={p.views} busy={busy} setBusy={setBusy} setNote={setNote} onSaved={(views) => setP((x) => (x ? { ...x, views } : x))} />
+      ) : p ? (
+        <p className="text-xs text-muted-foreground">Views-based campaigns appear here once migration 0240 has run.</p>
+      ) : null}
       {p?.formats?.length ? <CreativeFormats formats={p.formats} busy={busy} send={send} reload={load} /> : null}
       {p ? <BlockedDomains list={p.blocked} busy={busy} send={send} reload={load} /> : null}
       {pr ? <Prices pr={pr} busy={busy} send={send} reload={load} /> : null}
@@ -484,6 +491,117 @@ function Promotions({ pr, busy, send, reload }: { pr: Pricing; busy: boolean; se
           </li>
         ))}
         {pr.promotions.length === 0 ? <li className="py-2 text-xs text-muted-foreground">No promotions.</li> : null}
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * Views-based campaigns (0240): sold as qualifying views, delivered in a planned
+ * period and extended free until the target is met. Every number applies to the
+ * NEXT quote only — a campaign already priced keeps the terms it was sold on.
+ * Rates are US cents per 1,000 views (owner 2026-10-12: the minimum views are
+ * the admin's to set).
+ */
+interface ViewsAdmin {
+  settings: {
+    views_enabled: boolean;
+    views_rate_per_1000_minor: number;
+    views_min_target: number;
+    views_max_target: number;
+    views_target_step: number;
+    views_auto_extend: boolean;
+    views_extension_days: number;
+    views_max_extensions: number;
+    views_capacity_policy: "allow" | "review" | "block";
+    views_capacity_window_days: number;
+  };
+  placements: { code: string; name: string; views_enabled: boolean; views_rate_per_1000_minor: number | null }[];
+  durations: { id: string; name: string; duration_days: number; enabled: boolean; views_enabled: boolean }[];
+}
+type ViewsPatch = {
+  settings?: Partial<ViewsAdmin["settings"]>;
+  placement?: { code: string; views_enabled?: boolean; views_rate_per_1000_minor?: number | null };
+  duration?: { id: string; views_enabled: boolean };
+};
+type Note = { tone: "ok" | "bad"; text: string } | null;
+
+function ViewsPricing({ v, busy, setBusy, setNote, onSaved }: { v: ViewsAdmin; busy: boolean; setBusy: (b: boolean) => void; setNote: (n: Note) => void; onSaved: (next: ViewsAdmin) => void }) {
+  const s = v.settings;
+  const save = async (patch: ViewsPatch, label: string) => {
+    setBusy(true);
+    setNote(null);
+    const res = await fetch("/api/admin/ads/platform", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ views: patch }) }).catch(() => null);
+    const j = (await res?.json().catch(() => null)) as { views?: ViewsAdmin | null; error?: string } | null;
+    setBusy(false);
+    if (res?.ok && j?.views) {
+      onSaved(j.views);
+      setNote({ tone: "ok", text: `Saved: ${label}.` });
+    } else setNote({ tone: "bad", text: j?.error ?? "Couldn't save that. Nothing changed." });
+  };
+  const smallest = Math.floor((s.views_min_target * s.views_rate_per_1000_minor) / 1000);
+  return (
+    <section className={box}>
+      <h3 className="text-sm font-semibold">Views-based campaigns</h3>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        Sold as qualifying views (at least half the ad on screen for a second, after the traffic checks). If the planned period ends short, delivery is extended free. Changes apply to new quotes only.
+      </p>
+      <div className="mt-2 flex items-center gap-3">
+        <span className="flex-1 text-sm font-medium">Sell views-based campaigns</span>
+        <Switch on={s.views_enabled} label="Sell views-based campaigns" disabled={busy} onChange={(on) => void save({ settings: { views_enabled: on } }, "views-based campaigns")} />
+      </div>
+      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+        <NumberField label="Minimum views per campaign" min={1} max={100000000} value={s.views_min_target} disabled={busy} onSave={(n) => void save({ settings: { views_min_target: n } }, "minimum views")} />
+        <NumberField label="Maximum views per campaign" min={1} max={100000000} value={s.views_max_target} disabled={busy} onSave={(n) => void save({ settings: { views_max_target: n } }, "maximum views")} />
+        <NumberField label="Views are bought in steps of" min={1} max={1000000} value={s.views_target_step} disabled={busy} onSave={(n) => void save({ settings: { views_target_step: n } }, "views step")} />
+        <NumberField label="Default rate per 1,000 views (US cents)" min={1} max={10000000} value={s.views_rate_per_1000_minor} disabled={busy} onSave={(n) => void save({ settings: { views_rate_per_1000_minor: n } }, "default rate")} />
+        <NumberField label="Free extension length (days)" min={1} max={90} value={s.views_extension_days} disabled={busy} onSave={(n) => void save({ settings: { views_extension_days: n } }, "extension length")} />
+        <NumberField label="Most free extensions per campaign" min={0} max={52} value={s.views_max_extensions} disabled={busy} onSave={(n) => void save({ settings: { views_max_extensions: n } }, "extension limit")} />
+        <NumberField label="Capacity estimate looks back (days)" min={1} max={90} value={s.views_capacity_window_days} disabled={busy} onSave={(n) => void save({ settings: { views_capacity_window_days: n } }, "capacity window")} />
+        <label className="text-[11.5px] text-muted-foreground">
+          When a target may not fit the measured views →
+          <select value={s.views_capacity_policy} disabled={busy} onChange={(e) => void save({ settings: { views_capacity_policy: e.target.value as ViewsAdmin["settings"]["views_capacity_policy"] } }, "capacity policy")} className="mt-1 block w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground">
+            <option value="review">Sell it, then hold it for an admin</option>
+            <option value="block">Refuse it (no history yet: hold for an admin)</option>
+            <option value="allow">Sell it anyway</option>
+          </select>
+        </label>
+      </div>
+      <div className="mt-2 flex items-center gap-3">
+        <span className="flex-1 text-sm">Extend free until the target is met</span>
+        <Switch on={s.views_auto_extend} label="Extend free until the target is met" disabled={busy} onChange={(on) => void save({ settings: { views_auto_extend: on } }, "free extension")} />
+      </div>
+      <p className="mt-2 text-[11.5px] text-muted-foreground">The smallest campaign costs ${(smallest / 100).toFixed(2)} at the default rate.</p>
+
+      <h4 className="mt-4 text-xs font-semibold">Per placement (no own rate = the default)</h4>
+      <ul className="mt-1 divide-y divide-border/60">
+        {v.placements.map((p) => (
+          <li key={p.code} className="flex flex-wrap items-end gap-3 py-2">
+            <span className="min-w-[8rem] flex-1 text-sm">{p.name}</span>
+            <div className="w-48">
+              <NumberField label="Rate (US cents / 1,000 views)" min={1} max={10000000} value={p.views_rate_per_1000_minor ?? s.views_rate_per_1000_minor} disabled={busy} onSave={(n) => void save({ placement: { code: p.code, views_rate_per_1000_minor: n } }, `${p.name} rate`)} />
+            </div>
+            {p.views_rate_per_1000_minor !== null ? (
+              <button type="button" disabled={busy} onClick={() => void save({ placement: { code: p.code, views_rate_per_1000_minor: null } }, `${p.name} rate`)} className="min-h-[2rem] rounded-lg border border-border px-2.5 text-xs font-semibold disabled:opacity-40">
+                Use default
+              </button>
+            ) : null}
+            <Switch on={p.views_enabled} label={`${p.name} sells views`} disabled={busy} onChange={(on) => void save({ placement: { code: p.code, views_enabled: on } }, p.name)} />
+          </li>
+        ))}
+      </ul>
+
+      <h4 className="mt-4 text-xs font-semibold">Planned periods advertisers may choose</h4>
+      <ul className="mt-1 divide-y divide-border/60">
+        {v.durations.map((d) => (
+          <li key={d.id} className="flex items-center gap-3 py-2">
+            <span className="flex-1 text-sm">
+              {d.name}
+              {d.enabled ? "" : " (length switched off)"}
+            </span>
+            <Switch on={d.views_enabled} label={`${d.name} for views campaigns`} disabled={busy} onChange={(on) => void save({ duration: { id: d.id, views_enabled: on } }, d.name)} />
+          </li>
+        ))}
       </ul>
     </section>
   );

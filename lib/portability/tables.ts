@@ -78,6 +78,7 @@ export const NOT_EXPORTED: Record<string, string> = {
   ad_creatives: "The images, videos and links of your campaigns — tied to the campaign, see ad_campaigns.",
   ad_campaign_events: "The status history of your campaigns — tied to the campaign, see ad_campaigns.",
   ad_campaign_daily_stats: "Daily view and click counts of your campaigns — tied to the campaign, see ad_campaigns.",
+  ad_campaign_delivery: "How many guaranteed views a views-based campaign has delivered — tied to the campaign, see ad_campaigns.",
   /* Part 8 (0206): traffic-quality internals. None is keyed by a member, and none holds an IP. */
   ad_invalid_daily: "Counts of filtered ad traffic per campaign and day. Not personal data.",
   ad_ingest_counters: "Short-lived counters (kept for minutes) that rate-limit ad events. Not personal data.",

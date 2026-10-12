@@ -52,12 +52,17 @@ export interface CatalogPlacement {
   description: string | null;
   format_code: string;
   page_scope: string[];
+  /** 0240 (absent before it runs) */
+  views_enabled?: boolean;
+  views_rate_per_1000_minor?: number | null;
 }
 
 export interface CatalogDuration {
   id: string;
   name: string;
   days: number;
+  /** 0240: may a views campaign choose this period (absent before it runs) */
+  views_enabled?: boolean;
 }
 
 export interface CatalogPrice {
@@ -88,6 +93,15 @@ export interface AdCatalog {
     max_placements_per_application: number;
     display_currency: Currency;
     default_slot_count: number;
+    /** 0240 views-based pricing — every field absent before the migration runs (= not sold) */
+    views_enabled?: boolean;
+    views_rate_per_1000_minor?: number;
+    views_min_target?: number;
+    views_max_target?: number;
+    views_target_step?: number;
+    views_auto_extend?: boolean;
+    views_extension_days?: number;
+    views_max_extensions?: number;
   };
   formats: CatalogFormat[];
   placements: CatalogPlacement[];

@@ -296,7 +296,7 @@ describe("2026-10-09: advertisers remove drafts and finished campaigns from thei
   const fn = lib.slice(lib.indexOf("export async function removeFromList"));
   it("drafts are cancelled through the audited transition; finished ones are only hidden, never deleted", () => {
     expect(lib).toContain(`const CANCELLABLE = ["draft", "awaiting_payment"]`);
-    expect(lib).toContain(`const HIDEABLE = ["expired", "rejected", "cancelled", "removed"]`);
+    expect(lib).toContain(`const HIDEABLE = ["expired", "completed", "rejected", "cancelled", "removed"]`);
     expect(fn).toContain(`to: "cancelled"`);
     expect(fn).toContain("advertiser_hidden_at");
     expect(fn).not.toMatch(/\.delete\(/);

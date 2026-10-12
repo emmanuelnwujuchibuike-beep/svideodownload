@@ -103,6 +103,8 @@ export const CAMPAIGN_STATUSES = [
   "active",
   "paused",
   "expired",
+  /** 0240: a views campaign that reached its target */
+  "completed",
   "rejected",
   "cancelled",
   "removed",
@@ -110,7 +112,7 @@ export const CAMPAIGN_STATUSES = [
 export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
 
 /**
- * The allowed moves — the SAME map as `ad_campaign_transition_allowed` in 0195
+ * The allowed moves — the SAME map as `ad_campaign_transition_allowed` (0195, last re-created in 0240)
  * (a test parses the SQL and compares). `active` is reachable from nowhere here:
  * only `activate_ad_campaign` may go there, after checking payment, advertiser,
  * creatives, placement and a free slot.
@@ -121,9 +123,10 @@ export const CAMPAIGN_TRANSITIONS: Readonly<Record<CampaignStatus, readonly Camp
   payment_processing: ["awaiting_payment", "cancelled", "removed"],
   paid: ["validating", "rejected", "removed"],
   validating: ["rejected", "removed"],
-  active: ["paused", "expired", "removed"],
-  paused: ["expired", "removed"],
+  active: ["paused", "expired", "completed", "removed"],
+  paused: ["expired", "completed", "removed"],
   expired: ["removed"],
+  completed: ["removed"],
   rejected: ["removed"],
   cancelled: ["removed"],
   removed: [],

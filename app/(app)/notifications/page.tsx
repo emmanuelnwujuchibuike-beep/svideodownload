@@ -26,7 +26,8 @@ export default async function NotificationsPage() {
 
   // Seed the grouped list server-side so the center paints instantly, then the
   // client revalidates + subscribes to realtime.
-  const initial = await listGroupedNotifications(user.id, 80);
+  // a small first page; older ones load on request (Load older)
+  const initial = await listGroupedNotifications(user.id, 40);
 
   return (
     <AppContent>

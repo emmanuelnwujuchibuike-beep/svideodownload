@@ -52,6 +52,15 @@ export interface NotificationItem {
   actor: NotificationActor | null;
   postId: string | null;
   postTitle: string | null;
+  /**
+   * Premium brief (2026-10-12): a small picture of what it's about — the post's own
+   * poster or the wallpaper's thumbnail (never the full media). Null when there is none.
+   */
+  thumbUrl: string | null;
+  /** The post was deleted, taken down or made private — the card says so instead of linking to a 404. */
+  postGone: boolean;
+  /** A comment / reply notification's own words, one short line (hidden or removed comments never) */
+  commentText: string | null;
   conversationId: string | null;
   /** Present on admin_broadcast rows — the ad/announcement content + sponsored flag. */
   broadcast: NotificationBroadcast | null;
@@ -84,6 +93,7 @@ export interface NotificationItem {
 }
 
 interface Row {
+  comment_id?: string | null;
   labels?: string[] | null;
   read_at?: string | null;
   pinned_at?: string | null;
@@ -108,7 +118,7 @@ let dataColumnKnown: boolean | null = null;
 let activityColumnsKnown: boolean | null = null;
 let inboxColumnsKnown: boolean | null = null;
 async function selectCols(db: ReturnType<typeof createAdminClient>): Promise<string> {
-  const cols = "id, actor_id, type, post_id, conversation_id, read, created_at";
+  const cols = "id, actor_id, type, post_id, comment_id, conversation_id, read, created_at";
   if (dataColumnKnown === null) {
     const { error } = await db.from("notifications").select("data").limit(1);
     dataColumnKnown = !error;
@@ -169,18 +179,28 @@ export interface NotificationsResult {
 }
 
 /** Hydrate raw rows with actor profile + post title. */
-async function enrichRows(db: ReturnType<typeof createAdminClient>, rows: Row[]): Promise<NotificationItem[]> {
+/** "/wallpapers?w=<uuid>" → the wallpaper id a notification is about. */
+const WALLPAPER_IN_URL = /[?&]w=([0-9a-f-]{36})/i;
+const httpsOnly = (u: unknown): string | null => (typeof u === "string" && /^https:\/\/[^\s"'<>]+$/.test(u) ? u : null);
+
+async function enrichRows(db: ReturnType<typeof createAdminClient>, rows: Row[], recipientId: string): Promise<NotificationItem[]> {
   if (rows.length === 0) return [];
   const actorIds = [...new Set(rows.map((r) => r.actor_id).filter(Boolean) as string[])];
   const postIds = [...new Set(rows.map((r) => r.post_id).filter(Boolean) as string[])];
-  const [{ data: profs }, { data: posts }] = await Promise.all([
+  const commentIds = [...new Set(rows.map((r) => (r.type === "comment" || r.type === "reply" ? r.comment_id : null)).filter(Boolean) as string[])];
+  const wallpaperIds = [...new Set(rows.map((r) => (r.type.startsWith("wallpaper_") ? WALLPAPER_IN_URL.exec(r.data?.url ?? "")?.[1] : null)).filter(Boolean) as string[])];
+  // one read per kind for the whole page — never one per notification
+  const [{ data: profs }, { data: posts }, { data: walls }, { data: comments }] = await Promise.all([
     actorIds.length
       ? db.from("profiles").select("id, handle, display_name, avatar_url").in("id", actorIds)
       : Promise.resolve({ data: [] as Record<string, unknown>[] }),
     postIds.length
-      ? db.from("posts").select("id, title").in("id", postIds)
-      : Promise.resolve({ data: [] as { id: string; title: string }[] }),
+      ? db.from("posts").select("id, title, thumbnail_url, status, visibility, publisher_id").in("id", postIds)
+      : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+    wallpaperIds.length ? db.from("wallpapers").select("id, thumb_url").in("id", wallpaperIds) : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+    commentIds.length ? db.from("post_comments").select("id, body, status").in("id", commentIds) : Promise.resolve({ data: [] as Record<string, unknown>[] }),
   ]);
+  const commentById = new Map(((comments ?? []) as { id: string; body: string; status: string }[]).filter((c) => c.status === "visible").map((c) => [c.id, c.body.replace(/\s+/g, " ").trim().slice(0, 90)]));
 
   const actorById = new Map<string, NotificationActor>();
   for (const p of (profs ?? []) as Record<string, unknown>[]) {
@@ -192,7 +212,11 @@ async function enrichRows(db: ReturnType<typeof createAdminClient>, rows: Row[])
       avatarUrl: (p.avatar_url as string) ?? null,
     });
   }
-  const titleById = new Map(((posts ?? []) as { id: string; title: string }[]).map((p) => [p.id, p.title]));
+  type PostRow = { id: string; title: string | null; thumbnail_url: string | null; status: string; visibility: string; publisher_id: string };
+  const postById = new Map(((posts ?? []) as PostRow[]).map((p) => [p.id, p]));
+  // a post this member may no longer see is "gone" to them: removed, under review, or made private by someone else
+  const visible = (p: PostRow | undefined) => !!p && p.status === "published" && (p.visibility !== "private" || p.publisher_id === recipientId);
+  const wallThumb = new Map(((walls ?? []) as { id: string; thumb_url: string | null }[]).map((w) => [w.id, httpsOnly(w.thumb_url)]));
 
   return rows.map((r) => ({
     id: r.id,
@@ -201,7 +225,16 @@ async function enrichRows(db: ReturnType<typeof createAdminClient>, rows: Row[])
     createdAt: r.created_at,
     actor: r.actor_id ? actorById.get(r.actor_id) ?? null : null,
     postId: r.post_id,
-    postTitle: r.post_id ? titleById.get(r.post_id) ?? null : null,
+    postTitle: r.post_id && visible(postById.get(r.post_id)) ? (postById.get(r.post_id)?.title ?? null) : null,
+    thumbUrl: r.post_id
+      ? visible(postById.get(r.post_id))
+        ? httpsOnly(postById.get(r.post_id)?.thumbnail_url)
+        : null
+      : r.type.startsWith("wallpaper_")
+        ? (wallThumb.get(WALLPAPER_IN_URL.exec(r.data?.url ?? "")?.[1] ?? "") ?? null)
+        : null,
+    postGone: !!r.post_id && !visible(postById.get(r.post_id)),
+    commentText: r.comment_id && visible(postById.get(r.post_id ?? "")) ? (commentById.get(r.comment_id) ?? null) : null,
     conversationId: r.conversation_id,
     broadcast: broadcastOf(r),
     content: contentOf(r),
@@ -255,7 +288,7 @@ export async function listNotifications(userId: string, limit = 20): Promise<Not
       countQuery = countQuery.is("archived_at", null);
     }
     const [{ data }, { count }] = await Promise.all([listQuery, countQuery]);
-    const items = await enrichRows(db, (data as unknown as Row[]) ?? []);
+    const items = await enrichRows(db, (data as unknown as Row[]) ?? [], userId);
     return { items, unread: count ?? 0 };
   } catch {
     return { items: [], unread: 0 };
@@ -279,6 +312,9 @@ export interface NotificationGroup {
   totalActors: number;
   postId: string | null;
   postTitle: string | null;
+  thumbUrl: string | null;
+  postGone: boolean;
+  commentText: string | null;
   conversationId: string | null;
   notificationIds: string[];
   /** Present on admin_broadcast groups — the ad/announcement content. */
@@ -311,6 +347,8 @@ export interface GroupedNotificationsResult {
   inbox?: boolean;
   /** a search over the whole history ran (archived included) */
   searched?: boolean;
+  /** pagination (premium brief): the created_at to ask "older than" next, or null when this was the last page */
+  nextBefore?: string | null;
 }
 
 /** Inbox = everything not archived (the default). Archived = only what the member put away. */
@@ -336,7 +374,7 @@ function groupKey(it: NotificationItem): string {
  * collapses spammy duplicates so the list stays calm and premium. Rows come newest
  * first, so the first row seen for a group sets its (most-recent) timestamp.
  */
-export async function listGroupedNotifications(userId: string, limit = 60, view: ActivityView = "inbox", search?: string | null): Promise<GroupedNotificationsResult> {
+export async function listGroupedNotifications(userId: string, limit = 60, view: ActivityView = "inbox", search?: string | null, before?: string | null): Promise<GroupedNotificationsResult> {
   if (!hasSupabase) return { groups: [], unread: 0 };
   try {
     const db = createAdminClient();
@@ -358,6 +396,8 @@ export async function listGroupedNotifications(userId: string, limit = 60, view:
       listQuery = listQuery.not("type", "in", `(${muted.join(",")})`);
       countQuery = countQuery.not("type", "in", `(${muted.join(",")})`);
     }
+    // older pages: a cursor on created_at (indexed with user_id), never an offset
+    if (before && !Number.isNaN(Date.parse(before))) listQuery = listQuery.lt("created_at", new Date(before).toISOString());
     const activity = await hasActivityColumns(db);
     const inbox = await hasInboxColumns(db);
     const q = search?.trim() ? parseActivityQuery(search.slice(0, 200), new Date()) : null;
@@ -395,7 +435,9 @@ export async function listGroupedNotifications(userId: string, limit = 60, view:
       }
     }
     const [{ data }, { count }] = await Promise.all([listQuery, countQuery]);
-    const items = await enrichRows(db, (data as unknown as Row[]) ?? []);
+    const raw = (data as unknown as Row[]) ?? [];
+    const nextBefore = raw.length >= limit ? (raw[raw.length - 1]?.created_at ?? null) : null;
+    const items = await enrichRows(db, raw, userId);
 
     const byKey = new Map<string, NotificationGroup>();
     const seenActors = new Map<string, Set<string>>();
@@ -416,6 +458,9 @@ export async function listGroupedNotifications(userId: string, limit = 60, view:
           totalActors: 0,
           postId: it.postId,
           postTitle: it.postTitle,
+          thumbUrl: it.thumbUrl,
+          postGone: it.postGone,
+          commentText: it.commentText,
           conversationId: it.conversationId,
           notificationIds: [],
           broadcast: it.broadcast,
@@ -457,7 +502,7 @@ export async function listGroupedNotifications(userId: string, limit = 60, view:
       return g;
     });
 
-    return { groups, unread: count ?? 0, activity, inbox, searched: !!q };
+    return { groups, unread: count ?? 0, activity, inbox, searched: !!q, nextBefore };
   } catch {
     return { groups: [], unread: 0 };
   }

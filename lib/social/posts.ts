@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { createHash, randomUUID } from "node:crypto";
 
 import type { PostMediaKind } from "@/types";
@@ -276,9 +277,14 @@ export async function publishPost(
       Deferring it also means the push stack is never parsed on the far more
       common read paths through this module; only an actual publish pays for it.
     */
-    void import("./creator-notify-emit")
-      .then((m) => m.notifyNewPost(publisherId, id, input.title))
-      .catch(() => {});
+    // after(), not a bare void: a serverless function may freeze the moment the response is sent,
+    // cutting a fan-out off half way (2026-10-12). Outside a request (a script) it simply runs now.
+    const fanOut = () => import("./creator-notify-emit").then((m) => m.notifyNewPost(publisherId, id, input.title)).catch(() => {});
+    try {
+      after(fanOut);
+    } catch {
+      void fanOut();
+    }
 
     /*
       ── 🔴 FRESHNESS IS AN EVENT, NOT A CLOCK (2026-10-05) ───────────

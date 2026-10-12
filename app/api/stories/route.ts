@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { cacheDelete, getCached } from "@/lib/cache";
@@ -149,7 +149,9 @@ export async function POST(request: Request) {
        (owner, 2026-08-23). Opt-in only, so this is a no-op unless someone
        deliberately turned it on. Fire-and-forget — a story must never fail to
        post because a notification could not be delivered. */
-    void notifyNewStory(user.id).catch(() => {});
+    // after(): the fan-out finishes even though the response has gone (a bare void could be frozen mid-way)
+    const sid = storyId;
+    after(() => notifyNewStory(user.id, sid).catch(() => {}));
   }
 
   // Publish a public post backed by the upload (photo or video).

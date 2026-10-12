@@ -41,7 +41,9 @@ function actorSummary(g: NotificationGroup): string {
  */
 function hrefFor(g: NotificationGroup): string {
   if ((g.type === "message" || g.type === "message_reaction") && g.conversationId) return `/messages/${g.conversationId}`;
-  if (g.postId) return `/p/${g.postId}`;
+  // a post that's gone (deleted, taken down, made private) never links to a dead page
+  if (g.postId && !g.postGone) return `/p/${g.postId}`;
+  if (g.postId) return "/notifications";
   if (g.type === "friend_request") return "/friends";
   const first = g.actors[0];
   if (
@@ -56,6 +58,8 @@ function hrefFor(g: NotificationGroup): string {
 
 /** Feature 20 (0233): pin / archive. Absent until the migration is live — the menu then offers neither. */
 export type OrganizeAction = "pin" | "unpin" | "archive" | "unarchive" | "read" | "unread" | "label_add" | "label_remove";
+
+const lowerFirst = (t: string) => (t ? t.charAt(0).toLowerCase() + t.slice(1) : t);
 
 /** When something happened, in the member's own clock — the card's history lines. */
 function when(iso: string | null): string {
@@ -264,11 +268,15 @@ function NotificationCardImpl({
             ) : null}
           </>
         ) : (
-          <p className="text-sm leading-snug text-foreground">
-            {actorLed ? <span className="font-semibold">{summary}</span> : null}{" "}
-            <span className={cn(actorLed ? "text-muted-foreground" : "font-semibold")}>{verbFor(group.type)}</span>
-            {group.postTitle ? <span className="text-muted-foreground"> · {group.postTitle}</span> : null}
-          </p>
+          <>
+            <p className="text-sm leading-snug text-foreground">
+              {actorLed ? <span className="font-semibold">{summary}</span> : null}{" "}
+              {/* a new post / story from someone you follow says what it was ("shared a new reel"), from the push's own words */}
+              <span className={cn(actorLed ? "text-muted-foreground" : "font-semibold")}>{group.type === "news_following" && group.content?.body ? lowerFirst(group.content.body.split(" · ")[0] ?? "") : verbFor(group.type)}</span>
+              {group.commentText ? <span className="text-foreground/80">: “{group.commentText}”</span> : group.postTitle ? <span className="text-muted-foreground"> · {group.postTitle}</span> : null}
+            </p>
+            {group.postGone ? <p className="mt-0.5 text-[12px] italic text-muted-foreground">This post is no longer available.</p> : null}
+          </>
         )}
         {/* Relative time differs by a second between server render + hydration. */}
         <p className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground" suppressHydrationWarning>
@@ -452,6 +460,11 @@ function NotificationCardImpl({
         ) : null}
       </div>
 
+      {/* A small picture of what it's about — the poster, never the full media; fixed size, so nothing shifts as it loads */}
+      {group.thumbUrl && !compact ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={group.thumbUrl} alt="" width={48} height={48} loading="lazy" decoding="async" className="mr-6 h-12 w-12 shrink-0 rounded-xl bg-secondary object-cover ring-1 ring-border/60 [@media(hover:hover)]:mr-0" />
+      ) : null}
       {/* Unread dot */}
       {!group.read ? (
         <span className="mt-11 h-2.5 w-2.5 shrink-0 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 shadow-[0_0_10px_theme(colors.violet.500)] [@media(hover:hover)]:mt-1.5" aria-label="Unread" />

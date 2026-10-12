@@ -99,7 +99,8 @@ export function NotificationBell() {
           {unread > 0 ? <IoNotifications className="h-[26px] w-[26px]" /> : <IoNotificationsOutline className="h-[26px] w-[26px]" />}
         </IconTile>
         {unread > 0 ? (
-          <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-gradient-to-br from-rose-500 to-pink-600 px-1 text-[10px] font-bold text-white shadow-sm shadow-rose-500/40 ring-2 ring-background">
+          // keyed by the count: a new arrival re-mounts it, so it pops once (never on a timer; reduced motion skips it)
+          <span key={unread} className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-gradient-to-br from-rose-500 to-pink-600 px-1 text-[10px] font-bold text-white shadow-sm shadow-rose-500/40 ring-2 ring-background motion-safe:animate-scale-in">
             {unread > 9 ? "9+" : unread}
           </span>
         ) : null}

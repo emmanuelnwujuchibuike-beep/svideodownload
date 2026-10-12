@@ -221,7 +221,8 @@ export function verbFor(type: NotificationType): string {
     case "news_trending":
       return "Trending now";
     case "news_following":
-      return "News you follow";
+      // read after the person's name: "Sarah shared something new" (was "News you follow")
+      return "shared something new";
     case "news_recommended":
       return "Recommended for you";
     case "subscription_activated":
@@ -285,7 +286,8 @@ export function isActorType(type: NotificationType): boolean {
   return (
     !type.startsWith("download") &&
     !type.startsWith("security") &&
-    !type.startsWith("news") &&
+    // news_following IS about a person (Sarah shared a new reel) — the other news types are not
+    (!type.startsWith("news") || type === "news_following") &&
     type !== "subscription_activated" &&
     type !== "payment_successful" &&
     type !== "ai_deposit_successful" &&

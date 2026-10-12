@@ -49,6 +49,33 @@ export function PushDeliveryMonitor({ stats }: { stats: PushDeliveryStats }) {
           <p className="mt-3 border-t border-border/60 pt-3 text-xs text-muted-foreground">No delivery failures logged in the last 7 days.</p>
         )}
       </div>
+
+      {/* Feature 20: what was created and what the Attention Engine decided — counts only, nothing anyone said */}
+      <div className="mt-4 rounded-2xl border border-border/60 bg-secondary/25 p-4">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium">Notifications created (24h)</span>
+          <span className="text-lg font-bold tracking-tight">
+            {formatCompactNumber(stats.notifications24h)}
+            {stats.notificationsCapped ? "+" : ""}
+          </span>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+          <span>Pushed · <b>{formatCompactNumber(stats.decisions.pushed)}</b></span>
+          <span>Held (DND, focus, quiet) · <b>{formatCompactNumber(stats.decisions.held)}</b></span>
+          <span>Kept in-app · <b>{formatCompactNumber(stats.decisions.inApp)}</b></span>
+          <span className="text-muted-foreground">In-app only / not tracked · {formatCompactNumber(stats.decisions.untracked)}</span>
+        </div>
+        {stats.topTypes.length ? (
+          <ul className="mt-3 space-y-1 border-t border-border/60 pt-3">
+            {stats.topTypes.map((t) => (
+              <li key={t.type} className="flex items-center justify-between gap-3 text-xs">
+                <span className="truncate font-mono text-muted-foreground">{t.type}</span>
+                <span className="shrink-0 font-medium">{formatCompactNumber(t.count)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
     </section>
   );
 }

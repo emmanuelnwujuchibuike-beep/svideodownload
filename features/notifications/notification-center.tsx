@@ -2,7 +2,7 @@
 
 import { AnimatePresence } from "framer-motion";
 import { allowWindowOpen } from "@/lib/monetization/popunder-guard";
-import { Archive, ArchiveRestore, BellRing, CheckCheck, CheckSquare, CircleDot, Download, History, LayoutList, MoreHorizontal, Pin, Rows3, Search, Sparkles, Tag, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowUp, BellRing, CheckCheck, CheckSquare, CircleDot, Download, History, LayoutList, MoreHorizontal, Pin, Rows3, Search, Sparkles, Tag, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { mutate, revalidate, useQuery } from "@/features/data";
@@ -13,6 +13,7 @@ import {
   loadArchivedNotifications as loadArchived,
   loadFlatNotifications,
   loadGroupedNotifications as loadGrouped,
+  loadOlderNotifications,
 } from "@/features/notifications/data";
 import { verbFor } from "@/features/notifications/meta";
 import { NotificationCard, type OrganizeAction } from "@/features/notifications/notification-card";
@@ -22,7 +23,8 @@ import { PushToggle } from "@/features/notifications/push-toggle";
 import { PullToRefresh } from "@/features/ui/pull-to-refresh";
 import { haptic } from "@/lib/motion/haptics";
 import { cleanLabels, isEmptyQuery, matchesQuery, parseActivityQuery } from "@/lib/notifications/search";
-import type { GroupedNotificationsResult, NotificationCategory, NotificationGroup } from "@/lib/social/notifications";
+import { SMART_CATEGORY_LABEL, SMART_CATEGORY_ORDER, smartCategoryOf, type SmartCategory } from "@/lib/notifications/smart-category";
+import type { GroupedNotificationsResult, NotificationGroup } from "@/lib/social/notifications";
 import { cn } from "@/lib/utils";
 
 /*
@@ -50,7 +52,8 @@ import { cn } from "@/lib/utils";
   every button responds on tap); a refusal puts it back and says so.
 */
 type View = "priority" | "pinned" | "held" | "archived";
-type Tab = "all" | "unread" | View | NotificationCategory;
+// the everyday tabs are the smart categories (Social, Content, Messages, Earnings…), premium brief 2026-10-12
+type Tab = "all" | "unread" | View | SmartCategory;
 type Layout = "cards" | "compact" | "timeline";
 
 const TAB_LABEL: Record<Tab, string> = {
@@ -60,15 +63,9 @@ const TAB_LABEL: Record<Tab, string> = {
   pinned: "Pinned",
   held: "Held",
   archived: "Archived",
-  social: "Social",
-  downloads: "Downloads",
-  community: "Communities",
-  news: "News",
-  premium: "Payments",
-  security: "Security",
-  system: "System",
+  ...SMART_CATEGORY_LABEL,
 };
-const CATEGORY_ORDER: NotificationCategory[] = ["social", "downloads", "community", "news", "premium", "security", "system"];
+const smartOf = (g: NotificationGroup) => smartCategoryOf(g.type, g.category);
 const LAYOUT_KEY = "frenz:activity-layout";
 const DELETE_GRACE_MS = 6000;
 
@@ -140,18 +137,60 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
   };
 
   // Live: a new notification row for me → refresh the center (the bell refreshes itself).
-  useEffect(() => onNotificationInsert(() => void revalidate(KEY, loadGrouped, 0).catch(() => {})), []);
+  /*
+    Live (premium brief: "preserve scroll position when new notifications arrive"): near the
+    top the list simply refreshes; further down a "New notifications" pill appears instead, so
+    nothing shifts under someone reading. One per-user realtime stream, already shared.
+  */
+  const [arrived, setArrived] = useState(0);
+  useEffect(
+    () =>
+      onNotificationInsert(() => {
+        if (window.scrollY > 320) setArrived((n) => n + 1);
+        else void revalidate(KEY, loadGrouped, 0).catch(() => {});
+      }),
+    [],
+  );
+  const showNew = () => {
+    haptic("selection");
+    setArrived(0);
+    void revalidate(KEY, loadGrouped, 0).catch(() => {});
+    window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  };
+
+  // Older pages, appended below; a group that spans pages keeps its first card (its ids are merged)
+  const [older, setOlder] = useState<{ groups: NotificationGroup[]; next: string | null } | null>(null);
+  const [olderBusy, setOlderBusy] = useState(false);
+  const firstNext = data?.nextBefore ?? initial.nextBefore ?? null;
+  const nextCursor = older ? older.next : firstNext;
+  const loadOlder = async () => {
+    if (!nextCursor || olderBusy) return;
+    setOlderBusy(true);
+    try {
+      const page = await loadOlderNotifications(nextCursor);
+      // immutable: a group already on screen keeps its card; the older page only adds new ones
+      setOlder((o) => {
+        const have = new Set([...groups, ...(o?.groups ?? [])].map((g) => g.id));
+        return { groups: [...(o?.groups ?? []), ...page.groups.filter((g) => !have.has(g.id))], next: page.nextBefore ?? null };
+      });
+    } catch {
+      toast("Couldn't load older notifications. Try again.", "error");
+    } finally {
+      setOlderBusy(false);
+    }
+  };
+
 
   const ownLabels = useMemo(() => [...new Set(groups.flatMap((g) => g.labels))].sort((a, b) => a.localeCompare(b)), [groups]);
 
   // Tabs shown = All + Unread + whichever views and categories actually have notifications.
   const tabs = useMemo<Tab[]>(() => {
-    const present = new Set(groups.map((g) => g.category));
+    const present = new Set(groups.map(smartOf));
     const views: Tab[] = [];
     if (groups.some(isPriority)) views.push("priority");
     if (groups.some((g) => g.pinned)) views.push("pinned");
     if (groups.some((g) => g.delivery === "held")) views.push("held");
-    const out: Tab[] = ["all", "unread", ...views, ...CATEGORY_ORDER.filter((c) => present.has(c))];
+    const out: Tab[] = ["all", "unread", ...SMART_CATEGORY_ORDER.filter((c) => present.has(c)), ...views];
     if (organizable) out.push("archived");
     // a tab opened from a link stays visible even when it is empty
     if (!out.includes(tab)) out.splice(2, 0, tab);
@@ -181,7 +220,7 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
 
   const visible = useMemo(() => {
     if (history) return history.groups;
-    const source = tab === "archived" ? (archived.data?.groups ?? []) : groups;
+    const source = tab === "archived" ? (archived.data?.groups ?? []) : older ? [...groups, ...older.groups] : groups;
     let list =
       tab === "all" || tab === "archived"
         ? source
@@ -193,7 +232,7 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
               ? source.filter((g) => g.pinned)
               : tab === "held"
                 ? source.filter((g) => g.delivery === "held")
-                : source.filter((g) => g.category === tab);
+                : source.filter((g) => smartOf(g) === tab);
     if (labelFilter) list = list.filter((g) => g.labels.includes(labelFilter));
     if (searching) {
       list = list.filter((g) =>
@@ -216,7 +255,7 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
     // pinned first in the inbox views; otherwise newest first, as the server sent it
     if (tab !== "archived" && tab !== "pinned") list = [...list.filter((g) => g.pinned), ...list.filter((g) => !g.pinned)];
     return list;
-  }, [groups, archived.data, tab, labelFilter, searching, parsed, history]);
+  }, [groups, older, archived.data, tab, labelFilter, searching, parsed, history]);
 
   const refresh = (archiveToo = false) => {
     void revalidate(KEY, loadGrouped, 0).catch(() => {});
@@ -670,6 +709,22 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
           <AnimatePresence initial={false}>{cards(visible)}</AnimatePresence>
         </div>
       )}
+
+      {/* Load older (cursor pagination) */}
+      {!history && tab !== "archived" && nextCursor && visible.length > 0 ? (
+        <div className="mt-5 flex justify-center">
+          <button type="button" onClick={() => void loadOlder()} disabled={olderBusy} className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-full border border-border/70 bg-card px-5 text-[13.5px] font-semibold transition hover:bg-secondary disabled:opacity-60">
+            {olderBusy ? "Loading…" : "Load older"}
+          </button>
+        </div>
+      ) : null}
+
+      {/* New arrivals while scrolled down — a pill, never a jump */}
+      {arrived > 0 ? (
+        <button type="button" onClick={showNew} className="fixed left-1/2 z-40 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2 text-[13px] font-semibold text-white shadow-lg motion-safe:animate-scale-in" style={{ top: "calc(var(--frenz-header-bottom, 4rem) + 0.75rem)" }}>
+          <ArrowUp className="h-4 w-4" aria-hidden /> {arrived === 1 ? "New notification" : `${arrived} new notifications`}
+        </button>
+      ) : null}
 
       {/* Bulk actions — above the bottom nav while selecting */}
       {selecting ? (

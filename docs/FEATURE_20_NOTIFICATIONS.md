@@ -177,3 +177,51 @@ Each is `planned` in the registry, never implied as done:
 | Card: labels, Details & why (history), label editor, inline Reply, Mark unread, selectable | `features/notifications/notification-card.tsx` | built |
 | Rich identity pushes; Frenz logo for system in card, bell, toast; social pushes through the Attention Engine | `lib/push/identity.ts`, `lib/push/social-push.ts`, `lib/social/follows.ts`, `lib/social/friends.ts`, `lib/wallpapers-notify.ts`, share and story routes, `features/app-shell/notification-bell.tsx`, `live-toast.tsx` | built |
 | Export with history | `/api/notifications/export` | built |
+
+
+---
+
+# Premium Smart Notification System (owner brief 2026-10-12, after Part 4)
+
+## Audit — most of it already existed after Parts 1–4
+
+Avatars and names, grouping ("Sarah and 4 others liked your post"), Accept / Decline inline, mark read / all read, delete with Undo, realtime, Web Push with deep links, settings with quiet hours and per-category push, the 9+ badge, and **per-person "Notify me when Sarah posts"** (0129, `creator_notification_prefs`: posts / stories / reposts, opt-in, with a bell button and sheet on every profile). The work below closes the gaps the audit found.
+
+## What changed
+
+| Gap found | Fix |
+|---|---|
+| The new-post fan-out never checked who may SEE the post — a followers-only post went to any subscriber; blocks and mutes were ignored; nothing prevented a second notification for the same post | `lib/social/creator-notify-emit.ts`: published, not scheduled, not private (checked against the row); followers-only → only subscribers who follow; blocked either way or muting → never; already told → skipped. Each signal is one batched query. Reads that fail **fail closed** (nobody is told), including before 0232's `expires_at` exists |
+| The fan-out ran as a bare `void` in the publish path — a serverless function can freeze the moment the response is sent, cutting it half way | `after()` in `lib/social/posts.ts` and the stories route |
+| Story fan-out could notify on every one of five stories in a row | one "added to their story" per person per hour |
+| Pushes said "@sarah posted" | rich identity: the person's name and photo; the text says what it was ("Shared a new reel · …", "Shared a new AI video") |
+| The card read "Sarah News you follow" | "Sarah shared a new reel" from the push's own words |
+| No picture of what a notification is about | the post's poster or the wallpaper's thumbnail, 48 px, lazy, fixed size (no layout shift), https only; never the full media |
+| Comments showed only the post title | the comment's own words ("commented: 'This looks amazing!'"), visible comments only |
+| A deleted, taken-down or now-private post linked to a dead page and could show its title | "This post is no longer available", no title, no picture, no link |
+| Tabs followed internal categories | Social · Content · Messages · Earnings first (`lib/notifications/smart-category.ts`), then Downloads / Communities / Security / System, then the views |
+| The whole first 80 rows loaded at once, no way to see older | a 40-row first page and **Load older** by a created_at cursor (indexed), never an offset |
+| A live arrival refreshed the list under someone reading it | near the top it refreshes; further down a "New notifications" pill appears — nothing jumps |
+| The badge never reacted | it pops once when the count rises (reduced motion skips it) |
+| Admin saw push delivery only | the same monitor adds notifications created in 24 h, the busiest types and the Attention Engine's decisions (pushed / held / kept in-app) — counts only, computed when an admin opens the page |
+
+## Relevance — what is deliberately NOT used
+
+Opting in to a person is the only relevance signal for new-content notifications, plus the
+privacy rules above. No interaction history, online status, reply speed or viewing behaviour
+is read to decide who hears about what — the brief's own warning, kept.
+
+## Scale
+
+A creator's fan-out is bounded at 2,000 opted-in subscribers per post, in batches of 25,
+inside `after()`. Past that it needs a queue. That is a real future need, not hidden.
+Only explicit opt-ins fan out, so a popular account with no subscribers costs one indexed
+lookup.
+
+## Still open — owner's call
+
+- Opening the **bell dropdown** marks everything read (an earlier product choice). The brief
+  says not to unless chosen deliberately. Left as is; say the word and it becomes
+  "open = seen, tap = read".
+- **Wallpaper uploads** don't fan out to subscribers yet (uploads are operator-reviewed
+  before they publish). Planned with the review step.

@@ -31,8 +31,10 @@ export async function GET(request: Request) {
   const view = url.searchParams.get("view") === "archived" ? "archived" : "inbox";
   // Part 3: ?q= searches the member's WHOLE history (archive included) with the same parser the center shows as chips
   const search = url.searchParams.get("q");
+  // older pages (premium brief): ?before=<created_at of the oldest row already shown>
+  const before = url.searchParams.get("before");
   const result = grouped
-    ? await listGroupedNotifications(user.id, search ? 100 : limit, view, search)
+    ? await listGroupedNotifications(user.id, search ? 100 : limit, view, search, before)
     : await listNotifications(user.id, limit);
   return NextResponse.json(result, { headers: { "Cache-Control": "private, no-store" } });
 }

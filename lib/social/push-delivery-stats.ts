@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { paginatedSelect } from "@/lib/supabase/paginate";
 
 /**
  * Real, computed push-delivery health for the admin dashboard — genuine
@@ -16,6 +17,15 @@ export interface PushDeliveryStats {
   pruned7d: number;
   failureRate7d: number;
   topErrors: { error: string; count: number }[];
+  /**
+   * Feature 20 / premium brief: notification VOLUME (every in-app row, pushed or not) in the
+   * last 24 h, the busiest types, and what the Attention Engine decided. Counts only — never a
+   * recipient, a message or anything a notification says.
+   */
+  notifications24h: number;
+  notificationsCapped: boolean;
+  topTypes: { type: string; count: number }[];
+  decisions: { pushed: number; held: number; inApp: number; untracked: number };
 }
 
 const EMPTY: PushDeliveryStats = {
@@ -27,7 +37,34 @@ const EMPTY: PushDeliveryStats = {
   pruned7d: 0,
   failureRate7d: 0,
   topErrors: [],
+  notifications24h: 0,
+  notificationsCapped: false,
+  topTypes: [],
+  decisions: { pushed: 0, held: 0, inApp: 0, untracked: 0 },
 };
+
+/** Volume by type and delivery decision over 24 h — read when an admin opens the page, never on a timer. */
+async function notificationVolume(db: ReturnType<typeof createAdminClient>, since: string): Promise<Pick<PushDeliveryStats, "notifications24h" | "notificationsCapped" | "topTypes" | "decisions">> {
+  // with 0233's delivery column when it exists, without it before
+  const run = (cols: string) => paginatedSelect<{ type: string; delivery?: string | null }>((from, to) => db.from("notifications").select(cols).gte("created_at", since).order("created_at", { ascending: false }).range(from, to) as never, 20_000);
+  let res = await run("type, delivery");
+  if (res.error && !res.rows.length) res = await run("type");
+  const byType = new Map<string, number>();
+  const decisions = { pushed: 0, held: 0, inApp: 0, untracked: 0 };
+  for (const r of res.rows) {
+    byType.set(r.type, (byType.get(r.type) ?? 0) + 1);
+    if (r.delivery === "pushed") decisions.pushed += 1;
+    else if (r.delivery === "held") decisions.held += 1;
+    else if (r.delivery === "in_app") decisions.inApp += 1;
+    else decisions.untracked += 1;
+  }
+  return {
+    notifications24h: res.rows.length,
+    notificationsCapped: res.capped,
+    topTypes: [...byType.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([type, count]) => ({ type, count })),
+    decisions,
+  };
+}
 
 export async function fetchPushDeliveryStats(): Promise<PushDeliveryStats> {
   const hasSupabase = !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -56,6 +93,7 @@ export async function fetchPushDeliveryStats(): Promise<PushDeliveryStats> {
       db.from("push_delivery_log").select("id", { head: true, count: "exact" }).eq("status", "pruned").gte("created_at", sevenDaysAgo),
       db.from("push_delivery_log").select("error").eq("status", "failed").gte("created_at", sevenDaysAgo).not("error", "is", null).limit(2_000),
     ]);
+    const volume = await notificationVolume(db, oneDayAgo).catch(() => ({ notifications24h: 0, notificationsCapped: false, topTypes: [], decisions: EMPTY.decisions }));
 
     const errorCounts = new Map<string, number>();
     for (const r of (errorRows ?? []) as { error: string | null }[]) {
@@ -81,6 +119,7 @@ export async function fetchPushDeliveryStats(): Promise<PushDeliveryStats> {
       pruned7d: pruned7d ?? 0,
       failureRate7d,
       topErrors,
+      ...volume,
     };
   } catch {
     return EMPTY;

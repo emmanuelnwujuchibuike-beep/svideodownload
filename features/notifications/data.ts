@@ -31,10 +31,18 @@ export async function loadFlatNotifications(): Promise<FlatNotifications> {
 
 export async function loadGroupedNotifications(): Promise<GroupedNotificationsResult> {
   if (!hasAuthCookie()) return { groups: [], unread: 0 };
-  const res = await fetch("/api/notifications?grouped=1&limit=80");
+  const res = await fetch("/api/notifications?grouped=1&limit=40");
   if (!res.ok) return { groups: [], unread: 0 };
   const d = (await res.json()) as GroupedNotificationsResult;
-  return { groups: d.groups ?? [], unread: d.unread ?? 0, activity: d.activity };
+  return { groups: d.groups ?? [], unread: d.unread ?? 0, activity: d.activity, inbox: d.inbox, nextBefore: d.nextBefore ?? null };
+}
+
+/** An older page of the inbox (premium brief): rows created before `before`. */
+export async function loadOlderNotifications(before: string, view: "inbox" | "archived" = "inbox"): Promise<GroupedNotificationsResult> {
+  const res = await fetch(`/api/notifications?grouped=1&limit=40&before=${encodeURIComponent(before)}${view === "archived" ? "&view=archived" : ""}`);
+  if (!res.ok) throw new Error(String(res.status));
+  const d = (await res.json()) as GroupedNotificationsResult;
+  return { groups: d.groups ?? [], unread: d.unread ?? 0, nextBefore: d.nextBefore ?? null };
 }
 
 /** Feature 20: the Archived tab — read only when that tab is opened, never with the inbox. */
@@ -44,5 +52,5 @@ export async function loadArchivedNotifications(): Promise<GroupedNotificationsR
   const res = await fetch("/api/notifications?grouped=1&limit=80&view=archived");
   if (!res.ok) throw new Error(String(res.status));
   const d = (await res.json()) as GroupedNotificationsResult;
-  return { groups: d.groups ?? [], unread: d.unread ?? 0, activity: d.activity };
+  return { groups: d.groups ?? [], unread: d.unread ?? 0, activity: d.activity, inbox: d.inbox, nextBefore: d.nextBefore ?? null };
 }

@@ -4,6 +4,7 @@ import { MapPin, Play } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
+import { SmartThumb } from "@/components/ui/smart-thumb";
 import { DiscoveryDeck } from "@/features/friends/discovery-deck";
 import type { DiscoveryItem } from "@/lib/social/discovery";
 
@@ -38,19 +39,23 @@ export function NearbyDiscovery({ items, nextOffset }: { items: DiscoveryItem[];
           <div key={it.id} className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card shadow-soft">
             <button type="button" onClick={() => setOpenId(it.id)} className="block w-full text-left" aria-label={it.mediaKind === "video" ? "Play video" : "View photo"}>
               <div className="relative aspect-square overflow-hidden bg-neutral-900">
-                {it.thumbnailUrl || (it.mediaKind === "image" && it.mediaUrl) ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={it.thumbnailUrl || it.mediaUrl || ""}
-                    alt=""
-                    loading="lazy"
-                    className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-600/25 to-violet-600/25 text-white/40">
-                    <Play className="h-8 w-8" />
-                  </div>
-                )}
+                {/*
+                  A broken or expired thumbnail never shows the browser's "?" (owner 2026-10-12): SmartThumb
+                  falls back — to the video's own first frame when it is a video, else a clean tile. No hover
+                  zoom: media never moves under a finger.
+                */}
+                <SmartThumb
+                  src={it.thumbnailUrl || (it.mediaKind === "image" ? it.mediaUrl : null)}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  fallback={
+                    it.mediaKind === "video" && it.mediaUrl ? (
+                      <video src={`${it.mediaUrl}#t=0.1`} muted playsInline preload="metadata" disablePictureInPicture className="pointer-events-none h-full w-full object-cover" />
+                    ) : (
+                      <Play className="h-8 w-8" />
+                    )
+                  }
+                />
                 {it.mediaKind === "video" ? (
                   <span className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur">
                     <Play className="h-3 w-3 fill-current" />

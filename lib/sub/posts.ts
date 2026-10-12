@@ -1,5 +1,8 @@
 import "server-only";
 
+import { after } from "next/server";
+
+import { makeSizedWebp } from "@/lib/media/thumbnail";
 import { deletePrivate, hasPrivateR2, presignPrivateGet, presignPrivatePut } from "@/lib/storage/r2";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -58,7 +61,7 @@ function validCover(url: string | null | undefined): string | null | false {
   }
 }
 
-export async function createSubPost(creatorId: string, input: { caption?: string | null; coverUrl?: string | null; media: { key: string; kind: string; width?: number | null; height?: number | null }[] }): Promise<{ ok: true; id: string } | Fail> {
+export async function createSubPost(creatorId: string, input: { caption?: string | null; coverUrl?: string | null; media: { key: string; kind: string; width?: number | null; height?: number | null; thumbKey?: string | null }[] }): Promise<{ ok: true; id: string } | Fail> {
   if (!hasPrivateR2) return fail("Private storage isn't set up yet.", 503);
   const db = createAdminClient();
   const { data: s } = await db.from("creator_membership_settings").select("sub_price_cents").eq("creator_id", creatorId).maybeSingle();
@@ -72,11 +75,16 @@ export async function createSubPost(creatorId: string, input: { caption?: string
   const prefix = `sub/${creatorId}/`;
   for (const m of input.media) {
     if (!m.key.startsWith(prefix) || m.key.includes("..") || !/^[A-Za-z0-9/._-]+$/.test(m.key) || (m.kind !== "image" && m.kind !== "video")) return fail("One of the files isn't yours to post.", 403);
+    // the preview obeys the same rule: the creator's OWN private folder, a jpg, nothing else
+    if (m.thumbKey && (!m.thumbKey.startsWith(prefix) || m.thumbKey.includes("..") || !/^[A-Za-z0-9/._-]+\.jpg$/.test(m.thumbKey))) return fail("One of the files isn't yours to post.", 403);
   }
   const { data: post, error } = await db.from("sub_posts").insert({ creator_id: creatorId, caption, cover_url: cover }).select("id").single();
   if (error) return MISSING(error.message) ? fail("Subscriber posts arrive with the next update.", 503) : fail("Couldn't post that.", 500);
   const id = (post as Row).id as string;
-  const { error: mErr } = await db.from("sub_post_media").insert(input.media.map((m, idx) => ({ post_id: id, idx, media_kind: m.kind, object_key: m.key, width: m.width ?? null, height: m.height ?? null })));
+  const rowsOf = (withThumb: boolean) => input.media.map((m, idx) => ({ post_id: id, idx, media_kind: m.kind, object_key: m.key, width: m.width ?? null, height: m.height ?? null, ...(withThumb ? { thumb_key: m.thumbKey ?? null } : {}) }));
+  let { error: mErr } = await db.from("sub_post_media").insert(rowsOf(true));
+  // 0237 (thumb_key) not applied yet: post without previews rather than fail
+  if (mErr && MISSING(mErr.message)) ({ error: mErr } = await db.from("sub_post_media").insert(rowsOf(false)));
   if (mErr) {
     await db.from("sub_posts").delete().eq("id", id);
     return fail("Couldn't post that.", 500);
@@ -123,6 +131,8 @@ export interface SubPostCard {
    * after that the viewer asks /api/sub/posts/[id], which checks access again.
    */
   open?: SubPostOpen;
+  /** a subscriber's / the creator's small private preview (0237), signed like the media — the tile loads this first */
+  thumbUrl?: string | null;
   /** null for a viewer without access: the caption is part of the paid content */
   caption: string | null;
   coverUrl: string | null;
@@ -149,8 +159,15 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
   const page = rows.slice(0, PAGE);
   const ids = page.map((r) => r.id as string);
   const opening = access && !!viewerId && hasPrivateR2;
+  const mediaRead = async (): Promise<{ data: Row[] | null }> => {
+    if (!ids.length) return { data: [] };
+    if (!opening) return (await db.from("sub_post_media").select("post_id, media_kind").in("post_id", ids).order("idx")) as { data: Row[] | null };
+    const withThumb = await db.from("sub_post_media").select("post_id, idx, media_kind, object_key, width, height, thumb_key").in("post_id", ids).order("idx");
+    if (!withThumb.error) return withThumb as { data: Row[] | null };
+    return (await db.from("sub_post_media").select("post_id, idx, media_kind, object_key, width, height").in("post_id", ids).order("idx")) as { data: Row[] | null };
+  };
   const [{ data: media }, mk, until] = await Promise.all([
-    ids.length ? db.from("sub_post_media").select(opening ? "post_id, idx, media_kind, object_key, width, height" : "post_id, media_kind").in("post_id", ids).order("idx") : Promise.resolve({ data: [] as Row[] }),
+    mediaRead(),
     opening && ids.length ? marks(viewerId!, creatorId) : Promise.resolve(null),
     untilRead,
   ]);
@@ -163,19 +180,29 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
     counts.set(m.post_id as string, c);
   }
   // a subscriber's page arrives opened (access already checked above, once)
+  // older photos without a preview: the creator's own visit makes them, once each, after the response
+  if (opening && isCreator) {
+    const missing = ((media ?? []) as Row[]).filter((m) => m.media_kind === "image" && "thumb_key" in m && !m.thumb_key);
+    if (missing.length) after(() => backfillThumbs(creatorId, missing.slice(0, 6)));
+  }
   const opened = new Map<string, SubPostOpen>();
+  const thumbs = new Map<string, string>();
   if (opening && mk) {
     const expiresAt = new Date(Date.now() + SIGNED_TTL_SECONDS * 1000).toISOString();
     const byPost = new Map<string, Row[]>();
     for (const m of (media ?? []) as Row[]) byPost.set(m.post_id as string, [...(byPost.get(m.post_id as string) ?? []), m]);
     await Promise.all(
       page.map(async (r) => {
-        opened.set(r.id as string, { caption: (r.caption as string | null) ?? null, media: await signMedia(byPost.get(r.id as string) ?? []), expiresAt, ...mk });
+        const list = byPost.get(r.id as string) ?? [];
+        const firstThumb = list[0]?.thumb_key as string | null | undefined;
+        const [signed, thumb] = await Promise.all([signMedia(list), firstThumb ? presignPrivateGet(firstThumb, SIGNED_TTL_SECONDS) : Promise.resolve(null)]);
+        opened.set(r.id as string, { caption: (r.caption as string | null) ?? null, media: signed, expiresAt, ...mk });
+        if (thumb) thumbs.set(r.id as string, thumb);
       }),
     );
   }
   return {
-    posts: page.map((r) => ({ id: r.id as string, caption: access ? ((r.caption as string | null) ?? null) : null, coverUrl: (r.cover_url as string | null) ?? null, items: counts.get(r.id as string)?.n ?? 0, hasVideo: counts.get(r.id as string)?.video ?? false, createdAt: r.created_at as string, ...(opened.has(r.id as string) ? { open: opened.get(r.id as string) } : {}) })),
+    posts: page.map((r) => ({ id: r.id as string, caption: access ? ((r.caption as string | null) ?? null) : null, coverUrl: (r.cover_url as string | null) ?? null, items: counts.get(r.id as string)?.n ?? 0, hasVideo: counts.get(r.id as string)?.video ?? false, createdAt: r.created_at as string, ...(opened.has(r.id as string) ? { open: opened.get(r.id as string) } : {}), ...(thumbs.has(r.id as string) ? { thumbUrl: thumbs.get(r.id as string) } : {}) })),
     access,
     isCreator,
     next: rows.length > PAGE ? (page[page.length - 1]!.created_at as string) : null,
@@ -203,10 +230,40 @@ export async function openSubPost(postId: string, viewerId: string | null): Prom
 
 export async function deleteSubPost(creatorId: string, postId: string): Promise<{ ok: true } | Fail> {
   const db = createAdminClient();
-  const { data: media } = await db.from("sub_post_media").select("object_key, sub_posts!inner(creator_id)").eq("post_id", postId).eq("sub_posts.creator_id", creatorId);
+  const withThumb = await db.from("sub_post_media").select("object_key, thumb_key, sub_posts!inner(creator_id)").eq("post_id", postId).eq("sub_posts.creator_id", creatorId);
+  // before 0237 there is no thumb_key — the originals are still removed
+  const media: Row[] | null = withThumb.error
+    ? ((await db.from("sub_post_media").select("object_key, sub_posts!inner(creator_id)").eq("post_id", postId).eq("sub_posts.creator_id", creatorId)).data as Row[] | null)
+    : (withThumb.data as Row[] | null);
   const { data, error } = await db.from("sub_posts").delete().eq("id", postId).eq("creator_id", creatorId).select("id");
   if (error) return fail("Couldn't delete that.", 500);
   if (!(data ?? []).length) return fail("Not found.", 404);
-  await Promise.all(((media ?? []) as Row[]).map((m) => deletePrivate(m.object_key as string)));
+  // the private previews go with their originals
+  await Promise.all(((media ?? []) as Row[]).flatMap((m) => [m.object_key, m.thumb_key].filter((k): k is string => typeof k === "string" && !!k).map((k) => deletePrivate(k))));
   return { ok: true };
+}
+
+/**
+ * Previews for photos posted before the composer made them (0237). Runs on Vercel after the
+ * creator's own gallery response — never on a timer, never on Railway, at most six per visit,
+ * once per file (a row that has a thumb_key is never touched again). Best effort.
+ */
+async function backfillThumbs(creatorId: string, rows: Row[]): Promise<void> {
+  const db = createAdminClient();
+  for (const m of rows) {
+    try {
+      const res = await fetch(await presignPrivateGet(m.object_key as string, 120));
+      if (!res.ok) continue;
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      if (bytes.byteLength > 25 * 1024 * 1024) continue;
+      const thumb = await makeSizedWebp(bytes, { maxWidth: 480, quality: 70 });
+      if (!thumb) continue;
+      const key = `sub/${creatorId}/${crypto.randomUUID()}-thumb.webp`;
+      const put = await fetch(await presignPrivatePut(key, 120), { method: "PUT", body: new Uint8Array(thumb.buffer), headers: { "Content-Type": "image/webp", "Cache-Control": "private, no-store" } });
+      if (!put.ok) continue;
+      await db.from("sub_post_media").update({ thumb_key: key }).eq("post_id", m.post_id as string).eq("idx", m.idx as number).is("thumb_key", null);
+    } catch {
+      /* the tile keeps using the original */
+    }
+  }
 }

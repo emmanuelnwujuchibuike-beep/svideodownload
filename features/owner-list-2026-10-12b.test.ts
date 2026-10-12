@@ -89,3 +89,36 @@ describe("no ad loads while a link or a file is downloading", () => {
     expect(r).toContain('"mx-auto mt-8 w-full max-w-2xl"');
   });
 });
+
+// owner, 2026-10-12: "sub post still takes ages to show the cover … cover should load instantly"
+describe("SUB tiles load a small preview, not the original", () => {
+  it("the composer makes and uploads a ~480 px preview beside each file", () => {
+    const c = code("features/sub/sub-composer.tsx");
+    expect(c).toContain("const thumb = await makeThumb(it.file);");
+    expect(code("lib/media/make-thumb.ts")).toContain("export const THUMB_EDGE = 480;");
+  });
+  it("the server only accepts a preview from the creator's own folder, signs it for those with access, and deletes it with the post", () => {
+    const p = code("lib/sub/posts.ts");
+    expect(p).toMatch(/m\.thumbKey && \(!m\.thumbKey\.startsWith\(prefix\)/);
+    expect(p).toContain("firstThumb ? presignPrivateGet(firstThumb, SIGNED_TTL_SECONDS)");
+    expect(p).toContain("[m.object_key, m.thumb_key]");
+    expect(p).toContain("if (opening && isCreator) {");
+  });
+  it("the tile shows the preview before anything else private", () => {
+    const g = code("features/sub/sub-gallery.tsx");
+    expect(g.indexOf("p.thumbUrl ? (")).toBeGreaterThan(0);
+    expect(g.indexOf("p.thumbUrl ? (")).toBeLessThan(g.indexOf('p.open?.media[0]?.kind === "image" ? ('));
+  });
+});
+
+// owner, 2026-10-12: Discover video tiles showed the browser's "?" instead of a thumbnail
+describe("no broken-image glyph, no moving media in discovery", () => {
+  it("the Discover people tile falls back instead of showing '?'", () => {
+    const d = code("features/friends/nearby-discovery.tsx");
+    expect(d).toContain("<SmartThumb");
+    expect(d).not.toContain("group-hover:scale-105");
+  });
+  it("a search card holding media never shrinks on press", () => {
+    expect(code("app/globals.css")).toContain(".srch-press:not(:has(img, video, picture, canvas)):active {");
+  });
+});

@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import { primaryPill, quietPill } from "@/features/friends/ui";
 import { haptic } from "@/lib/motion/haptics";
 import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
+import { makeThumb } from "@/lib/media/make-thumb";
 import { presignUpload, uploadWithPlan } from "@/lib/storage/client-upload";
 import { cn } from "@/lib/utils";
 
@@ -60,7 +61,7 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
     setError(null);
     const end = beginCriticalActivity();
     try {
-      const media: { key: string; kind: "image" | "video"; width: number | null; height: number | null }[] = [];
+      const media: { key: string; kind: "image" | "video"; width: number | null; height: number | null; thumbKey?: string }[] = [];
       for (let i = 0; i < items.length; i++) {
         const it = items[i]!;
         setBusy(`Uploading ${i + 1} of ${items.length}…`);
@@ -68,7 +69,17 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
         if (!plan?.ok) throw new Error(plan?.error ?? "Couldn't upload.");
         const put = await fetch(plan.uploadUrl as string, { method: "PUT", body: it.file, headers: { "Content-Type": it.file.type || "application/octet-stream", "Cache-Control": "private, no-store" } });
         if (!put.ok) throw new Error("The upload didn't finish. Try again.");
-        media.push({ key: plan.key as string, kind: it.kind, width: it.width, height: it.height });
+        // a ~480 px preview beside it, so the gallery tile loads instantly (best-effort: never blocks the post)
+        let thumbKey: string | undefined;
+        const thumb = await makeThumb(it.file);
+        if (thumb.blob) {
+          const tp = await fetch("/api/sub/posts/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "image", ext: "jpg" }) }).then((r) => r.json()).catch(() => null);
+          if (tp?.ok) {
+            const tput = await fetch(tp.uploadUrl as string, { method: "PUT", body: thumb.blob, headers: { "Content-Type": "image/jpeg", "Cache-Control": "private, no-store" } }).catch(() => null);
+            if (tput?.ok) thumbKey = tp.key as string;
+          }
+        }
+        media.push({ key: plan.key as string, kind: it.kind, width: it.width ?? thumb.width, height: it.height ?? thumb.height, ...(thumbKey ? { thumbKey } : {}) });
       }
       let coverUrl: string | null = null;
       if (cover) {

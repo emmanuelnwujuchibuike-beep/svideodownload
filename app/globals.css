@@ -2754,7 +2754,8 @@ body:has(.frenz-canvas-page) {
     transform 150ms var(--ease-out),
     opacity 150ms var(--ease-out);
 }
-.srch-press:active {
+/* never a card that holds a photo or video — media never moves under a finger (owner 2026-10-12) */
+.srch-press:not(:has(img, video, picture, canvas)):active {
   transform: scale(0.97);
 }
 

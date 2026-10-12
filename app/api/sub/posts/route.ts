@@ -39,7 +39,7 @@ const body = z
   .object({
     caption: z.string().max(4400).nullable().optional(),
     coverUrl: z.string().max(600).nullable().optional(),
-    media: z.array(z.object({ key: z.string().max(300), kind: z.enum(["image", "video"]), width: z.number().int().positive().max(20000).nullable().optional(), height: z.number().int().positive().max(20000).nullable().optional() }).strict()).min(1).max(10),
+    media: z.array(z.object({ key: z.string().max(300), kind: z.enum(["image", "video"]), width: z.number().int().positive().max(20000).nullable().optional(), height: z.number().int().positive().max(20000).nullable().optional(), thumbKey: z.string().max(300).optional() }).strict()).min(1).max(10),
   })
   .strict();
 

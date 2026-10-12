@@ -179,6 +179,10 @@ function DiscoverySlide({ item, isActive }: { item: DiscoveryItem; isActive: boo
           src={item.thumbnailUrl}
           alt=""
           aria-hidden
+          // a broken thumbnail never shows the browser's "?" — the backdrop simply goes
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+          }}
           className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-2xl"
         />
       ) : null}

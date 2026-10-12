@@ -41,6 +41,8 @@ interface Card {
   createdAt: string;
   /** a subscriber's page arrives already opened — a tap shows the post at once (2026-10-12) */
   open?: Opened;
+  /** the ~480 px private preview (0237) — what the tile loads, instead of the original */
+  thumbUrl?: string | null;
 }
 
 /**
@@ -185,6 +187,9 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
                 {p.coverUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- the creator's PUBLIC cover, never the private file
                   <img src={p.coverUrl} alt="" loading={idx < 9 ? "eager" : "lazy"} decoding="async" draggable={false} className="h-full w-full object-cover" />
+                ) : p.thumbUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- a five-minute private link to the small preview
+                  <img src={p.thumbUrl} alt="" loading={idx < 9 ? "eager" : "lazy"} decoding="async" draggable={false} onContextMenu={(e) => e.preventDefault()} className="pointer-events-none h-full w-full object-cover" />
                 ) : p.open?.media[0]?.kind === "image" ? (
                   // eslint-disable-next-line @next/next/no-img-element -- a subscriber's five-minute private link; next/image would cache it on our server
                   <img src={p.open.media[0].url} alt="" loading={idx < 9 ? "eager" : "lazy"} decoding="async" draggable={false} onContextMenu={(e) => e.preventDefault()} className="pointer-events-none h-full w-full object-cover" />

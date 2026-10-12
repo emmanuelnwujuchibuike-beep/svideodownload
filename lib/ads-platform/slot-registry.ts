@@ -90,6 +90,21 @@ export function providerOrder(slot: SlotSpec, configured: Record<string, unknown
 }
 
 /**
+ * Will an "All slots" creative show badly in the TOP BANNER? (owner 2026-10-12: an ad set
+ * for all pages and taller than the 32 px strip should tell the advertiser it may not show
+ * there because of its size.) The strip shows every creative whole (FIT_RULE: contain, see
+ * creativeFitsSlot), so a creative far from the strip's wide shape is shrunk until it is
+ * barely readable. Judged by SHAPE, not pixels: a proper 1600 × 160 strip is 160 px tall
+ * as a file and is exactly right. Unknown size → no warning.
+ */
+export function tallForTopBanner(placementCodes: readonly string[], w: number | null | undefined, h: number | null | undefined): boolean {
+  if (!placementCodes.includes("all_slots") || !w || !h) return false;
+  const top = slotById("top_banner")?.aspect;
+  if (!top) return false;
+  return w / h < top.ratio * (1 - top.tolerance);
+}
+
+/**
  * Can a paid creative be shown in this physical box? (addendum §55)
  *
  * 🔴 0208 (owner, 2026-10-09): ANY real creative can — it is shown whole

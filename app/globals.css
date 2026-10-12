@@ -2871,6 +2871,35 @@ body:has(.frenz-canvas-page) {
     -webkit-touch-callout: default;
   }
 
+  /*
+    🔴 MEDIA LOCK — feed cards and chat threads (owner, 2026-10-12: "medias in feed should
+    never hover, lock media hover in feed and chat, they should use the option button").
+
+    What the owner kept seeing: a held finger on a feed or chat photo/video shrank JUST the
+    media inside its frame (our overlays stayed put). That is iOS's own long-press LIFT —
+    the drag / link-preview interaction — which WebKit only starts on an image, a video, a
+    link or selected text under the finger. The callout and selection rules above stop the
+    menus, not the lift.
+
+    So inside a locked area the media element is never under a finger: it does not take
+    pointer events, and the plain box around it (the role="button" frame, or the <button>
+    a chat photo sits in) takes the tap instead. Nothing liftable, nothing to shrink. Every
+    action lives on the options button. A full-screen viewer opened from here (a
+    role="dialog") keeps native controls — it is excluded.
+  */
+  [data-media-lock] :is(img, video, picture, canvas):not([role="dialog"] *) {
+    pointer-events: none;
+  }
+  [data-media-lock],
+  [data-media-lock] * {
+    -webkit-touch-callout: none;
+    -webkit-user-drag: none;
+  }
+  [data-media-lock] :is(a, button, [role="button"]) {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
   /* The escape hatch, for a surface that genuinely wants the native menu. */
   [data-media-unprotected],
   [data-media-unprotected] img,

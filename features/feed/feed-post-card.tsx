@@ -540,6 +540,8 @@ function FeedPostCardImpl({
   return (
     <motion.article
       ref={articleRef}
+      // media lock (globals.css): a held photo or video never lifts or shrinks — options live on the ⋯ button
+      data-media-lock
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.98 }}

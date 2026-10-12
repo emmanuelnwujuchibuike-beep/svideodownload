@@ -17,6 +17,7 @@ import {
   Lock,
   MapPin,
   Mic,
+  MoreHorizontal,
   Pencil,
   Pin,
   PinOff,
@@ -1741,6 +1742,8 @@ export function ConversationRoom({
           // drifting away from the bubble it belongs to.
           if (openMenuId) setOpenMenuId(null);
         }}
+        // media lock (globals.css): no iOS lift on a held photo or video — the ⋯ button opens its menu
+        data-media-lock
         className={cn(
           "frenz-thread-scroll flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto overscroll-y-none p-4",
           // Owner ask, 2026-07-14: "i want it to save and full screen, top 0
@@ -1990,6 +1993,19 @@ export function ConversationRoom({
                     the bubble simply fills it (`max-w-full`). `min-w-0` keeps
                     long unbroken URLs wrapping instead of forcing an overflow. */}
                 <div className={cn("flex max-w-[80%] items-end gap-1", m.mine ? "flex-row-reverse" : "flex-row")}>
+                  {canAct && hasMediaAttachment ? (
+                    <button
+                      type="button"
+                      aria-label="Message options"
+                      onClick={(e) => {
+                        const bubble = e.currentTarget.parentElement?.querySelector<HTMLElement>("[data-message-id]");
+                        toggleMessageMenu(m.id, bubble ?? e.currentTarget);
+                      }}
+                      className="order-last mb-1 inline-flex h-9 w-9 shrink-0 items-center justify-center self-center rounded-full bg-black/25 text-white backdrop-blur-sm"
+                    >
+                      <MoreHorizontal className="h-4 w-4" aria-hidden />
+                    </button>
+                  ) : null}
                   <div
                     // Press-and-hold target (owner, 2026-07-16). `data-message-id`
                     // is how the single shared hook above knows WHICH bubble was
@@ -1997,7 +2013,8 @@ export function ConversationRoom({
                     // so a deleted/optimistic bubble stays inert rather than
                     // opening an empty menu.
                     data-message-id={m.id}
-                    {...(canAct ? holdBubble : {})}
+                    // a media bubble has no hold (owner 2026-10-12): its menu is the ⋯ button beside it
+                    {...(canAct && !hasMediaAttachment ? holdBubble : {})}
                     style={m.mine && !deleted && chatAppearance.bubbleColor ? { backgroundImage: "none", backgroundColor: chatAppearance.bubbleColor } : undefined}
                     className={cn(
                       "frenz-message-bubble min-w-0 max-w-full overflow-hidden whitespace-pre-wrap break-words leading-relaxed",

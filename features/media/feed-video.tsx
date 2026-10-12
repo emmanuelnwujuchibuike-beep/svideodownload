@@ -419,6 +419,7 @@ export function FeedVideo({
   //   • double tap   → Wow the post (heart burst), stays inline
   //   • press-hold   → pause (while held); release resumes
   // Guarded so a graze, drag, hover, or scroll-tail never triggers any of them.
+  const onControl = (e: React.SyntheticEvent) => !!(e.target as HTMLElement).closest?.("button, a, [data-control]");
   const onPointerDown = (e: React.PointerEvent) => {
     holding.current = false;
     moved.current = false;
@@ -518,6 +519,29 @@ export function FeedVideo({
   return (
     <div
       ref={wrap}
+      /*
+        🔴 THE FRAME TAKES THE TOUCH, NEVER THE <video> (owner 2026-10-12: "when I hover on a
+        media … it shrinks the media inside the container" — iOS's own long-press LIFT of a
+        media element, which shrinks just the video inside its box while our overlays stay).
+        iOS only lifts images, videos, links and selected text: with the video
+        `pointer-events-none`, a finger lands on this plain box and there is nothing to lift.
+        Actions live on the post's options button. Same handlers as before, one level up.
+      */
+      role="button"
+      tabIndex={0}
+      aria-label="Open video"
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+        e.preventDefault();
+        onExpand?.();
+      }}
+      // the play/pause and mute buttons sit inside this frame — a press on THEM is theirs alone
+      onPointerDown={(e) => !onControl(e) && onPointerDown(e)}
+      onPointerMove={onPointerMove}
+      onPointerUp={(e) => !onControl(e) && endHold()}
+      onPointerLeave={onPointerLeaveCancel}
+      onPointerCancel={onPointerLeaveCancel}
+      onContextMenu={(e) => e.preventDefault()}
       // The "we don't know yet" placeholder — before metadata (or a
       // server-known width/height) arrives, 4/5 is just a reasonable guess,
       // never a ceiling applied to a KNOWN ratio (see aspect.ts's 2026-08-17
@@ -534,7 +558,7 @@ export function FeedVideo({
         // `isolate`: the blurred backdrop below is `-z-10`; without its own
         // stacking context it rendered BEHIND this box's black and was never
         // seen — the side bars stayed black (owner, 2026-10-08).
-        "group relative isolate select-none overflow-hidden rounded-2xl bg-black [-webkit-touch-callout:none]",
+        "group relative isolate touch-pan-y select-none overflow-hidden rounded-2xl bg-black [-webkit-touch-callout:none] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
         // Twitter-style: full width, the media's OWN true aspect ratio — a
         // HEIGHT ceiling, never a ratio clamp, so it can't disagree with the
         // clip's true shape (no letterboxing/cropping). A same-day tightening
@@ -625,21 +649,14 @@ export function FeedVideo({
           the page whose stillness is load-bearing, and the pause indicator
           already gives the gesture unambiguous feedback.
         */
-        className={cn("h-full max-h-[60vh] w-full touch-pan-y focus-visible:outline-none", fills ? "object-cover" : "object-contain", "focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset lg:h-auto lg:max-h-[60vh] lg:w-auto")}
+        className={cn("pointer-events-none h-full max-h-[60vh] w-full", fills ? "object-cover" : "object-contain", "lg:h-auto lg:max-h-[60vh] lg:w-auto")}
+        draggable={false}
         // Keyboard access (owner spec, 2026-08-17: "Keyboard users can still
         // open media") — purely additive: Enter/Space opens directly,
         // bypassing the tap/double-tap/hold pointer state machine above
         // entirely rather than routing through it, since there's no
         // keyboard analog for "hold" or "double-press" here. Wow already has
         // its own independent, keyboard-reachable button in the action row.
-        role="button"
-        tabIndex={0}
-        aria-label="Open video"
-        onKeyDown={(e) => {
-          if (e.key !== "Enter" && e.key !== " ") return;
-          e.preventDefault();
-          onExpand?.();
-        }}
         onLoadedMetadata={() => {
           const v = video.current;
           if (!v || !v.videoWidth || !v.videoHeight) return;
@@ -671,11 +688,6 @@ export function FeedVideo({
           setCovered(false);
           if (postId) recordView(postId);
         }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endHold}
-        onPointerLeave={onPointerLeaveCancel}
-        onPointerCancel={onPointerLeaveCancel}
       />
 
       {/* Cover — shows the poster until the first frame actually plays, so a

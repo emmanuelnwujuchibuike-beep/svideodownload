@@ -139,20 +139,22 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
   if (before) q = q.lt("created_at", before);
   const [postsR, access] = await Promise.all([q, hasActiveSub(viewerId, creatorId)]);
   // a subscriber sees that they ARE one, and until when (2026-10-12) — read only for a subscriber
-  let accessUntil: string | null = null;
-  if (access && viewerId && !isCreator) {
-    const { data: m } = await db.from("creator_memberships").select("period_end").eq("creator_id", creatorId).eq("member_id", viewerId).eq("status", "active").eq("billing", "sub").order("period_end", { ascending: false }).limit(1).maybeSingle();
-    accessUntil = ((m as Row | null)?.period_end as string | null) ?? null;
-  }
-  if (postsR.error) return { posts: [], access, isCreator, next: null, ready: !MISSING(postsR.error.message) };
+  // (read alongside the media below, not before it — one round trip fewer on every open)
+  const untilRead =
+    access && viewerId && !isCreator
+      ? db.from("creator_memberships").select("period_end").eq("creator_id", creatorId).eq("member_id", viewerId).eq("status", "active").eq("billing", "sub").order("period_end", { ascending: false }).limit(1).maybeSingle()
+      : Promise.resolve({ data: null });
+  if (postsR.error) return { posts: [], access, isCreator, next: null, ready: !MISSING(postsR.error.message), accessUntil: (((await untilRead).data as Row | null)?.period_end as string | null) ?? null };
   const rows = (postsR.data ?? []) as Row[];
   const page = rows.slice(0, PAGE);
   const ids = page.map((r) => r.id as string);
   const opening = access && !!viewerId && hasPrivateR2;
-  const [{ data: media }, mk] = await Promise.all([
+  const [{ data: media }, mk, until] = await Promise.all([
     ids.length ? db.from("sub_post_media").select(opening ? "post_id, idx, media_kind, object_key, width, height" : "post_id, media_kind").in("post_id", ids).order("idx") : Promise.resolve({ data: [] as Row[] }),
     opening && ids.length ? marks(viewerId!, creatorId) : Promise.resolve(null),
+    untilRead,
   ]);
+  const accessUntil = ((until.data as Row | null)?.period_end as string | null) ?? null;
   const counts = new Map<string, { n: number; video: boolean }>();
   for (const m of (media ?? []) as Row[]) {
     const c = counts.get(m.post_id as string) ?? { n: 0, video: false };

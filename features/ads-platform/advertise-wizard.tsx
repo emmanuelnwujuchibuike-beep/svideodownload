@@ -37,6 +37,7 @@ import {
   STRIP_GUIDANCE,
   type AdCatalog,
 } from "@/lib/ads-platform/offer";
+import { tallForTopBanner } from "@/lib/ads-platform/slot-registry";
 import { ADVERTISING_RULES, ADVERTISING_RULES_VERSION, AUTOMATED_VALIDATION_NOTICE, RULES_CHECKBOX_TEXT } from "@/lib/ads-platform/rules";
 import { cn } from "@/lib/utils";
 
@@ -654,6 +655,14 @@ export function AdvertiseWizard() {
               recommended={recommendedSize(format)}
             />
           )}
+          {/* All slots + a creative taller than the 32 px top strip allows (owner 2026-10-12) */}
+          {tallForTopBanner(form.placementCodes, form.creative?.width, form.creative?.height) ? (
+            <div className="mt-3">
+              <Notice icon={CircleAlert} tone="amber">
+                This ad may not show in the top banner because of its size. The top banner is a thin strip, 32 px tall, so a creative this tall is shrunk until it is hard to read. It still runs in every other slot. For the top banner too, upload a wide image, about 10 times wider than tall (for example 1600 × 160).
+              </Notice>
+            </div>
+          ) : null}
           <div className="mt-5">
             <HowItLooks>
               {previewCreative ? (
@@ -778,6 +787,7 @@ export function AdvertiseWizard() {
                         ))
                       : null}
                     <Row muted label="Creative" value={form.creative ? `${form.creative.mediaType === "video" ? "Video" : "Image"}${form.creative.width ? ` · ${form.creative.width} × ${form.creative.height}` : ""}${form.creative.durationSeconds ? ` · ${Math.round(form.creative.durationSeconds)} s` : ""}` : "—"} />
+                    {tallForTopBanner(form.placementCodes, form.creative?.width, form.creative?.height) ? <Row muted label="Top banner" value="May not show: too tall for the 32 px strip" /> : null}
                     <Row muted label="Destination" value={host ?? "—"} />
                   </div>
                 }

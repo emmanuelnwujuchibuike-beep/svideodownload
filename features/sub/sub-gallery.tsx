@@ -10,6 +10,8 @@ import { haptic } from "@/lib/motion/haptics";
 import { usd } from "@/lib/creator/membership/engine";
 import { cn } from "@/lib/utils";
 
+import { forgetSubPosts, loadSubPosts } from "./sub-posts-cache";
+
 /**
  * SUB POSTS — a creator's subscriber-only gallery and the private viewer
  * (owner briefs 2026-10-11).
@@ -68,12 +70,11 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
   const [paying, setPaying] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
-  // lazily, once, when the tab is opened (no prefetch, no polling)
+  // once per creator, shared with the tab warm-up and kept four minutes (sub-posts-cache.ts) — no polling
   useEffect(() => {
     let cancelled = false;
-    void fetch(`/api/sub/posts?creator=${creatorId}`)
-      .then((r) => r.json())
-      .then((j) => !cancelled && setState(j))
+    void loadSubPosts(creatorId)
+      .then((j) => !cancelled && setState(j as NonNullable<typeof state>))
       .catch(() => !cancelled && setState({ posts: [], access: false, isCreator: false, next: null, ready: false }));
     return () => {
       cancelled = true;
@@ -102,7 +103,10 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
     setNote(j?.error ?? "Couldn't open the payment. Try again.");
   };
 
-  const removed = useCallback((id: string) => setState((s) => (s ? { ...s, posts: s.posts.filter((p) => p.id !== id) } : s)), []);
+  const removed = useCallback((id: string) => {
+    forgetSubPosts(creatorId);
+    setState((s) => (s ? { ...s, posts: s.posts.filter((p) => p.id !== id) } : s));
+  }, [creatorId]);
 
   if (!state) {
     return (
@@ -170,7 +174,7 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
         <p className="py-8 text-center text-[13px] text-muted-foreground">Subscriber posts arrive with the next update.</p>
       ) : state.posts.length ? (
         <ul className="grid grid-cols-3 gap-1.5">
-          {state.posts.map((p) => (
+          {state.posts.map((p, idx) => (
             <li key={p.id}>
               <button
                 type="button"
@@ -180,10 +184,10 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
               >
                 {p.coverUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- the creator's PUBLIC cover, never the private file
-                  <img src={p.coverUrl} alt="" loading="lazy" decoding="async" draggable={false} className="h-full w-full object-cover" />
+                  <img src={p.coverUrl} alt="" loading={idx < 9 ? "eager" : "lazy"} decoding="async" draggable={false} className="h-full w-full object-cover" />
                 ) : p.open?.media[0]?.kind === "image" ? (
                   // eslint-disable-next-line @next/next/no-img-element -- a subscriber's five-minute private link; next/image would cache it on our server
-                  <img src={p.open.media[0].url} alt="" loading="lazy" decoding="async" draggable={false} onContextMenu={(e) => e.preventDefault()} className="pointer-events-none h-full w-full object-cover" />
+                  <img src={p.open.media[0].url} alt="" loading={idx < 9 ? "eager" : "lazy"} decoding="async" draggable={false} onContextMenu={(e) => e.preventDefault()} className="pointer-events-none h-full w-full object-cover" />
                 ) : p.open?.media[0]?.kind === "video" ? (
                   <video src={`${p.open.media[0].url}#t=0.1`} muted playsInline preload="metadata" disablePictureInPicture className="pointer-events-none h-full w-full object-cover" />
                 ) : null}
@@ -329,7 +333,9 @@ function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }: { pos
 
   /*
     Shown like the History player (owner 2026-10-12): the media fills the screen edge to edge,
-    `object-contain` so nothing is cropped, but it starts BELOW the safe area (status bar,
+    full WIDTH always (owner 2026-10-12: "supposed to reach full width"), its height from
+    its own shape up to the screen — a very tall photo is trimmed top and bottom rather than
+    shrunk into side bars. It starts BELOW the safe area (status bar,
     Dynamic Island) and ends above the home indicator — it never goes behind them. The top
     bar floats over the media; several items swipe sideways like a carousel. The viewer's
     tiled watermark and the creator's bottom-edge mark ride on the media itself.
@@ -357,12 +363,12 @@ function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }: { pos
               return (
                 <div key={i} className="flex h-full w-full shrink-0 snap-center items-center justify-center [container-type:size]">
                   {/* sized to the media's own shape, so the creator's mark sits on the media's bottom edge */}
-                  <div className="relative max-h-full max-w-full" style={ratio ? { width: `min(100cqw, calc(100cqh * ${ratio}))`, aspectRatio: String(ratio) } : { width: "100%", height: "100%" }}>
+                  <div className="relative max-h-full max-w-full" style={ratio ? { width: "100cqw", height: `min(100cqh, calc(100cqw / ${ratio}))` } : { width: "100%", height: "100%" }}>
                     {m.kind === "image" ? (
                       // eslint-disable-next-line @next/next/no-img-element -- a five-minute private link; next/image would cache it on our server
-                      <img src={m.url} alt={data.caption ?? "Subscriber photo"} draggable={false} onContextMenu={block} className="pointer-events-none h-full w-full object-contain" />
+                      <img src={m.url} alt={data.caption ?? "Subscriber photo"} draggable={false} onContextMenu={block} className={cn("pointer-events-none h-full w-full", ratio ? "object-cover" : "object-contain")} />
                     ) : (
-                      <video src={m.url} controls playsInline autoPlay={i === 0} preload="metadata" controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture disableRemotePlayback onContextMenu={block} className="h-full w-full bg-black object-contain" />
+                      <video src={m.url} controls playsInline autoPlay={i === 0} preload="metadata" controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture disableRemotePlayback onContextMenu={block} className={cn("h-full w-full bg-black", ratio ? "object-cover" : "object-contain")} />
                     )}
                     {/*
                       The creator's address along the bottom edge (owner 2026-10-12, "like onlyfans.com/<user>"):
@@ -388,7 +394,7 @@ function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }: { pos
             <div className="absolute -inset-1/2 flex rotate-[-24deg] flex-wrap content-start gap-x-16 gap-y-20 opacity-[0.12]">
               {Array.from({ length: 40 }, (_, i) => (
                 <span key={i} className="whitespace-nowrap text-[13px] font-semibold text-white">
-                  {data.watermark} · Frenz
+                  {data.watermark} · frenzsave.com
                 </span>
               ))}
             </div>

@@ -29,6 +29,7 @@ import { type ComponentType, type ReactNode, useMemo, useRef, useState } from "r
 import { WowOutline } from "@/components/brand/wow-icon";
 
 import { ProfileMediaGrid } from "@/features/social/profile-media-grid";
+import { loadSubPosts } from "@/features/sub/sub-posts-cache";
 import { useStickyState } from "@/features/ui/use-sticky-state";
 import type { PostCard } from "@/lib/social/posts";
 import { cn } from "@/lib/utils";
@@ -240,6 +241,8 @@ export function ProfileTabs({
                 key={s.key}
                 type="button"
                 onClick={() => select(s.key)}
+                // SUB POSTS: start loading the moment a finger lands, so the gallery opens already filled
+                onPointerDown={s.key === SUB_TAB_KEY ? () => void loadSubPosts(ownerId).catch(() => {}) : undefined}
                 aria-pressed={isActive}
                 title={s.label}
                 className={cn(

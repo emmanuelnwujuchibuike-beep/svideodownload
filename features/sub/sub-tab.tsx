@@ -1,11 +1,13 @@
 "use client";
 
-import { ArrowRight, Check, ChevronDown, Copy, Lock, Pause, Pencil, Play, Plus, Share2, ShieldCheck, Wallet } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, Copy, Loader2, Lock, Pause, Pencil, Play, Plus, Share2, ShieldCheck, Wallet } from "lucide-react";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { GLASS, primaryPill, quietPill } from "@/features/friends/ui";
 import { SubGallery, type SubQuoteView } from "@/features/sub/sub-gallery";
+import { forgetSubPosts } from "@/features/sub/sub-posts-cache";
 import { useSubEarnings } from "@/features/sub/sub-withdraw";
 import { subscriptionCharge, usd } from "@/lib/creator/membership/engine";
 import { haptic } from "@/lib/motion/haptics";
@@ -98,7 +100,10 @@ export function SubTab({
         <SubNotice />
       )}
       <SubGallery key={galleryKey} creatorId={creatorId} creatorName={creatorName} quote={isOwner ? null : quote} signedIn={signedIn} loginNext={loginNext} onAccess={setSubscribed} />
-      {composing ? <SubComposer onClose={() => setComposing(false)} onPosted={() => setGalleryKey((k) => k + 1)} /> : null}
+      {composing ? <SubComposer onClose={() => setComposing(false)} onPosted={() => {
+            forgetSubPosts(creatorId);
+            setGalleryKey((k) => k + 1);
+          }} /> : null}
       {withdrawing ? <SubWithdrawSheet onClose={() => setWithdrawing(false)} /> : null}
     </div>
   );
@@ -289,6 +294,14 @@ function CreatorOverview({ settings, bounds, onChange, onCompose, onWithdraw }: 
   const [editing, setEditing] = useState(false);
   const [price, setPrice] = useState(settings.priceCents ? (settings.priceCents / 100).toFixed(2) : "");
   const [note, setNote] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
+  /*
+    The profile is a server render the app keeps cached for the session, and it is where
+    these settings come from — so after a save the cached copy is refreshed, or coming
+    back to the profile showed the OLD price as if nothing had saved (owner 2026-10-12).
+  */
+  const router = useRouter();
   const e = data?.earnings;
   const cents = Math.round(Number(price) * 100);
   const priceOk = Number.isInteger(cents) && cents >= bounds.minPriceCents && cents <= bounds.maxPriceCents;
@@ -301,21 +314,26 @@ function CreatorOverview({ settings, bounds, onChange, onCompose, onWithdraw }: 
       if (!r.ok) {
         onChange(prev);
         setNote(r.error ?? null);
-      }
+      } else router.refresh();
     });
   };
-  const savePrice = () => {
-    if (!priceOk) return;
+  // the button answers on tap with "Saving…", and says "Saved" only once the server has it
+  const savePrice = async () => {
+    if (!priceOk || saving) return;
     haptic("selection");
-    const prev = settings;
+    setNote(null);
+    setSaved(null);
+    setSaving(true);
+    const r = await saveSettings({ priceCents: cents });
+    setSaving(false);
+    if (!r.ok) {
+      setNote(r.error ?? "Couldn't save the price. Try again.");
+      return;
+    }
     onChange({ ...settings, priceCents: cents });
     setEditing(false);
-    void saveSettings({ priceCents: cents }).then((r) => {
-      if (!r.ok) {
-        onChange(prev);
-        setNote(r.error ?? null);
-      }
-    });
+    setSaved(`Price saved: new subscribers pay ${usd(cents)} a month.`);
+    router.refresh();
   };
 
   const toggleOpen = () => {
@@ -376,8 +394,9 @@ function CreatorOverview({ settings, bounds, onChange, onCompose, onWithdraw }: 
               </label>
               <div className="mt-1 flex gap-2">
                 <input id="sub-price-edit" inputMode="decimal" value={price} onChange={(ev) => setPrice(ev.target.value.replace(/[^0-9.]/g, "").slice(0, 8))} className="w-full rounded-2xl border border-border bg-background px-3 py-2 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-primary/40" />
-                <button type="button" onClick={savePrice} disabled={!priceOk} className={cn(primaryPill, "shrink-0")}>
-                  Save
+                <button type="button" onClick={() => void savePrice()} disabled={!priceOk || saving} aria-busy={saving} className={cn(primaryPill, "shrink-0")}>
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+                  {saving ? "Saving…" : "Save"}
                 </button>
               </div>
               {!priceOk && price ? <p className="mt-1 text-[12.5px] text-rose-600">Choose from {usd(bounds.minPriceCents)} to {usd(bounds.maxPriceCents)}.</p> : null}
@@ -401,6 +420,11 @@ function CreatorOverview({ settings, bounds, onChange, onCompose, onWithdraw }: 
         </p>
       ) : null}
       {note ? <p className="px-4 pb-3 text-[13px] font-medium text-rose-600">{note}</p> : null}
+      {saved ? (
+        <p role="status" className="flex items-center gap-1.5 px-4 pb-3 text-[13px] font-medium text-emerald-600 dark:text-emerald-400">
+          <Check className="h-4 w-4" aria-hidden /> {saved}
+        </p>
+      ) : null}
     </div>
   );
 }

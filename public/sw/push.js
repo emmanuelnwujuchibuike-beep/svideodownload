@@ -110,6 +110,21 @@ self.addEventListener("push", (event) => {
       }
     }
     await self.registration.showNotification(title, inApp ? { ...options, silent: true, renotify: false } : options);
+    /*
+      Credits earned (tag "reward-…", owner 2026-10-12: "make credit earn notification not show
+      when a user is in the app; it should show as push when the user is outside the app"). In
+      the app, it is still SHOWN (a push that shows nothing is a silent push, and iOS revokes the
+      subscription for those) and then closed at once, so nothing stays on screen; the Activity
+      Center still has it. Outside the app it is an ordinary push.
+    */
+    if (inApp && typeof data.tag === "string" && data.tag.indexOf("reward-") === 0) {
+      try {
+        const shown = await self.registration.getNotifications({ tag: data.tag });
+        for (const n of shown) n.close();
+      } catch (e) {
+        /* nothing to close */
+      }
+    }
   }
 
   event.waitUntil(

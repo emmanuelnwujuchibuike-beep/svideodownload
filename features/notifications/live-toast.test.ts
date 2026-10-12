@@ -53,6 +53,11 @@ describe("bannerFor — the incoming banner's words", () => {
   it("held by Do Not Disturb, a focus mode or quiet hours → no banner", () => {
     expect(bannerFor({ ...base, delivery: "held" } as NotificationItem)).toBeNull();
   });
+  it("credits earned never banner inside the app (they push when the member is away)", () => {
+    expect(bannerFor({ ...base, type: "reward_earned", actor: null } as unknown as NotificationItem)).toBeNull();
+    expect(bannerFor({ ...base, type: "referral_reward", actor: null } as unknown as NotificationItem)).toBeNull();
+    expect(bannerFor(base)).not.toBeNull();
+  });
   it("a deleted post shows no thumbnail", () => {
     expect(bannerFor({ ...base, postGone: true } as NotificationItem)!.thumb).toBeNull();
   });

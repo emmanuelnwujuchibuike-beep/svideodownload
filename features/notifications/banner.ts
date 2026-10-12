@@ -26,11 +26,17 @@ export interface Banner {
 
 
 const sentence = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+/** Notifications that never banner inside the app — they arrive as a push when the member is away. */
+export const QUIET_IN_APP: ReadonlySet<string> = new Set(["reward_earned", "referral_reward"]);
+
 export const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 /** One notification row → the banner's words, the same facts the Activity Center card shows. */
 export function bannerFor(n: NotificationItem): Banner | null {
   if (n.delivery === "held") return null;
+  // credits earned: no banner while the member is in the app (owner 2026-10-12) — the push covers
+  // them outside it, and the row is still in the Activity Center
+  if (QUIET_IN_APP.has(n.type)) return null;
   const Icon = iconFor(n.type);
   const tint = tintFor(categoryForType(n.type), n.type);
   const base = { key: n.id, thumb: n.postGone ? null : n.thumbUrl, href: hrefFor(n), Icon, tint };

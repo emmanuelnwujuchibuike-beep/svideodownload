@@ -22,6 +22,6 @@ describe("tallForTopBanner", () => {
   it("the wizard shows it under the upload and in the review", () => {
     const w = readFileSync("features/ads-platform/advertise-wizard.tsx", "utf8");
     expect(w.match(/tallForTopBanner\(form\.placementCodes, form\.creative\?\.width, form\.creative\?\.height\)/g)?.length).toBe(2);
-    expect(w).toContain("This ad may not show in the top banner because of its size.");
+    expect(w).toContain("This ad will not show in the top banner because of its size");
   });
 });

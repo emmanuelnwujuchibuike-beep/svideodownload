@@ -382,7 +382,12 @@ describe("ONE physical slot → ONE provider (slots addendum)", () => {
     const card = slotById("under_download")!;
     expect(creativeFitsSlot(card, 640, 400)).toBe(true);
     expect(creativeFitsSlot(card, 1080, 1920)).toBe(true); // portrait in a landscape card: letterboxed, not dropped
-    expect(creativeFitsSlot(slotById("top_banner")!, 640, 400)).toBe(true);
+    // 2026-10-12: the TOP BANNER is the exception — a tall creative is blocked there (owner), shown everywhere else
+    expect(creativeFitsSlot(slotById("top_banner")!, 640, 400)).toBe(false);
+    expect(creativeFitsSlot(slotById("downloads_top")!, 1080, 1080)).toBe(false);
+    expect(creativeFitsSlot(slotById("top_banner")!, null, null)).toBe(false);
+    expect(creativeFitsSlot(slotById("top_banner")!, 1600, 160)).toBe(true);
+    expect(creativeFitsSlot(slotById("feed_inline")!, 1080, 1080)).toBe(true);
     // teeth: nonsense dimensions are still refused
     expect(creativeFitsSlot(card, 0, 400)).toBe(false);
     expect(creativeFitsSlot(card, 640, -1)).toBe(false);

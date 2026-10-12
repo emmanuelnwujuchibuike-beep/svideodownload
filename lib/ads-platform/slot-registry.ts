@@ -114,7 +114,19 @@ export function tallForTopBanner(placementCodes: readonly string[], w: number | 
  * filter. Only nonsense dimensions are refused. Unknown size = trust the
  * format check.
  */
-export function creativeFitsSlot(_slot: SlotSpec, w: number | null, h: number | null): boolean {
+export function creativeFitsSlot(slot: SlotSpec, w: number | null, h: number | null): boolean {
+  /*
+    🔴 THE TOP BANNER IS BLOCKED TO TALL CREATIVES (owner, 2026-10-12, with a screenshot of
+    a square "All pages" ad in the header: "people who applied for all pages ad with the
+    size that is more than 32px height shouldn't show on top header, it should be blocked,
+    but show on other places"). The two top-banner slots take only a strip-shaped creative
+    (within the slot's own 10:1 ± 35 %, i.e. at least 6.5 : 1); anything taller — or of
+    unknown size — never enters them. Every other slot still shows it, whole.
+  */
+  if (slot.paidPlacement === "global_top_banner") {
+    if (!w || !h || !slot.aspect) return false;
+    return w / h >= slot.aspect.ratio * (1 - slot.aspect.tolerance);
+  }
   if (w == null || h == null) return true;
   return w > 0 && h > 0;
 }

@@ -311,6 +311,8 @@ export const OWNER_COLUMN: Record<string, string> = {
   sub_ledger: "creator_id", // 0227: every change to your private post earnings
   sub_payout_accounts: "creator_id", // 0227: your saved payout account and auto-withdrawal setting
   sub_posts: "creator_id", // 0227: your subscriber-only posts (captions and dates; files stay in private storage)
+  sub_post_likes: "user_id", // 0239: the private posts you liked
+  sub_post_comments: "user_id", // 0239: your comments on private posts
   creator_notes: "creator_id", // 0227: notes you wrote for your members
   creator_recognitions: "creator_id", // 0227: recognitions you gave
   creator_sponsors: "creator_id", // 0227: sponsors you disclosed

@@ -183,6 +183,8 @@ export const DATA_DOMAINS: DataDomain[] = [
       "financial_audit_log",
       "sub_posts",
       "sub_post_media",
+      "sub_post_likes",
+      "sub_post_comments",
       "creator_notes",
       "creator_recognitions",
       "creator_sponsors",

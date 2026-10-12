@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, EyeOff, Film, Images, Loader2, Lock, Plus, Trash2, X } from "lucide-react";
+import { BadgeCheck, EyeOff, Film, Heart, Images, Loader2, Lock, MessageCircle, Plus, Send, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -511,6 +511,8 @@ function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }: { pos
           </div>
         ) : null}
 
+        {/* likes and comments — subscribers and the creator only (0239); there is no save for a private post */}
+        {data ? <PrivateInteractions postId={postId} isCreator={isCreator} /> : null}
         {covered ? (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black">
             <EyeOff className="h-6 w-6 text-white/70" aria-hidden />
@@ -520,5 +522,157 @@ function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }: { pos
       </div>
     </div>,
     document.body,
+  );
+}
+
+interface PrivateComment {
+  id: string;
+  body: string;
+  createdAt: string;
+  mine: boolean;
+  author: { name: string; handle: string | null; avatarUrl: string | null };
+}
+
+/**
+ * Like and comment on a private post (owner 2026-10-12: "like and comment like a public post, but only
+ * subscribers — not save"). The server checks access on every read and write; the heart answers on the
+ * tap and is put back if the server refuses. One summary read when the post opens; comments load only
+ * when the panel is opened.
+ */
+function PrivateInteractions({ postId, isCreator }: { postId: string; isCreator: boolean }) {
+  const [sum, setSum] = useState<{ likes: number; liked: boolean; comments: number } | null>(null);
+  const [panel, setPanel] = useState(false);
+  const [comments, setComments] = useState<PrivateComment[] | null>(null);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void fetch(`/api/sub/posts/${postId}/like`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { likes?: number; liked?: boolean; comments?: number } | null) => alive && j && setSum({ likes: j.likes ?? 0, liked: !!j.liked, comments: j.comments ?? 0 }))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [postId]);
+
+  const toggleLike = () => {
+    if (!sum) return;
+    haptic("selection");
+    const prev = sum;
+    const next = { ...sum, liked: !sum.liked, likes: sum.likes + (sum.liked ? -1 : 1) };
+    setSum(next);
+    void fetch(`/api/sub/posts/${postId}/like`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ like: next.liked }) })
+      .then((r) => !r.ok && setSum(prev))
+      .catch(() => setSum(prev));
+  };
+
+  const openPanel = () => {
+    haptic("selection");
+    setPanel(true);
+    if (comments) return;
+    void fetch(`/api/sub/posts/${postId}/comments`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { comments?: PrivateComment[]; error?: string }) => {
+        setComments(j.comments ?? []);
+        if (j.error) setNote(j.error);
+      })
+      .catch(() => setComments([]));
+  };
+
+  const send = async () => {
+    const text = draft.trim();
+    if (!text || sending) return;
+    setSending(true);
+    setNote(null);
+    const res = await fetch(`/api/sub/posts/${postId}/comments`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body: text }) }).catch(() => null);
+    const j = (await res?.json().catch(() => null)) as { id?: string; error?: string } | null;
+    setSending(false);
+    if (!res?.ok || !j?.id) return setNote(j?.error ?? "Couldn't post that.");
+    setDraft("");
+    setComments((c) => [...(c ?? []), { id: j.id!, body: text, createdAt: new Date().toISOString(), mine: true, author: { name: "You", handle: null, avatarUrl: null } }]);
+    setSum((s0) => (s0 ? { ...s0, comments: s0.comments + 1 } : s0));
+  };
+
+  const remove = (c: PrivateComment) => {
+    const prev = comments;
+    setComments((list) => (list ?? []).filter((x) => x.id !== c.id));
+    setSum((s0) => (s0 ? { ...s0, comments: Math.max(0, s0.comments - 1) } : s0));
+    void fetch(`/api/sub/posts/${postId}/comments`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ commentId: c.id }) })
+      .then((r) => !r.ok && setComments(prev))
+      .catch(() => setComments(prev));
+  };
+
+  if (!sum) return null;
+  return (
+    <>
+      <div className="absolute bottom-28 right-3 z-[4] flex flex-col items-center gap-4">
+        <button type="button" onClick={toggleLike} aria-pressed={sum.liked} aria-label={sum.liked ? "Unlike" : "Like"} className="flex flex-col items-center gap-0.5 text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.6)]">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm">
+            <Heart className={cn("h-6 w-6", sum.liked && "fill-rose-500 text-rose-500")} aria-hidden />
+          </span>
+          <span className="text-[12px] font-semibold tabular-nums">{sum.likes}</span>
+        </button>
+        <button type="button" onClick={openPanel} aria-label="Comments" className="flex flex-col items-center gap-0.5 text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.6)]">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm">
+            <MessageCircle className="h-6 w-6" aria-hidden />
+          </span>
+          <span className="text-[12px] font-semibold tabular-nums">{sum.comments}</span>
+        </button>
+      </div>
+      {panel ? (
+        <div className="absolute inset-x-0 bottom-0 z-[6] flex max-h-[65%] flex-col rounded-t-3xl bg-zinc-950/95 text-white backdrop-blur-xl">
+          <div className="flex items-center justify-between px-4 pb-2 pt-3">
+            <p className="text-[14px] font-semibold">Comments · {sum.comments}</p>
+            <button type="button" aria-label="Close comments" onClick={() => setPanel(false)} className="inline-flex h-10 w-10 items-center justify-center rounded-full">
+              <X className="h-5 w-5" aria-hidden />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-2">
+            {comments === null ? (
+              <Loader2 className="mx-auto h-5 w-5 animate-spin text-white/60" aria-label="Loading" />
+            ) : comments.length === 0 ? (
+              <p className="py-6 text-center text-[13px] text-white/60">No comments yet. Be the first.</p>
+            ) : (
+              comments.map((c) => (
+                <div key={c.id} className="flex items-start gap-2.5">
+                  {c.author.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={c.author.avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                  ) : (
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-[12px] font-bold">{c.author.name.charAt(0).toUpperCase()}</span>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12.5px] font-semibold">{c.author.name}</p>
+                    <p className="whitespace-pre-line break-words text-[13.5px] text-white/90">{c.body}</p>
+                  </div>
+                  {c.mine || isCreator ? (
+                    <button type="button" aria-label="Delete comment" onClick={() => remove(c)} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/60">
+                      <Trash2 className="h-4 w-4" aria-hidden />
+                    </button>
+                  ) : null}
+                </div>
+              ))
+            )}
+          </div>
+          {note ? <p className="px-4 pb-1 text-[12.5px] text-rose-400">{note}</p> : null}
+          <div className="flex items-center gap-2 border-t border-white/10 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2">
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value.slice(0, 1000))}
+              onKeyDown={(e) => e.key === "Enter" && void send()}
+              placeholder="Add a comment"
+              aria-label="Add a comment"
+              className="min-h-11 min-w-0 flex-1 rounded-full bg-white/10 px-4 text-[14px] text-white outline-none placeholder:text-white/50"
+            />
+            <button type="button" onClick={() => void send()} disabled={!draft.trim() || sending} aria-label="Post comment" className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-50">
+              {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }

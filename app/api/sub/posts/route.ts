@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { trackLimiter } from "@/lib/rate-limit";
@@ -55,5 +55,7 @@ export async function POST(req: Request) {
   const parsed = body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ ok: false, error: "Invalid request." }, { status: 400 });
   const out = await createSubPost(user.id, parsed.data);
+  // everyone who asked to hear about this creator's private posts — after the response, never in its way
+  if (out.ok) after(() => import("@/lib/sub/private-notify").then((m) => m.notifyNewPrivatePost(user.id)));
   return out.ok ? NextResponse.json(out) : NextResponse.json({ ok: false, error: out.error }, { status: out.status });
 }

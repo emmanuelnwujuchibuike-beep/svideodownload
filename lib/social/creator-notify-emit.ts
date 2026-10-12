@@ -68,7 +68,7 @@ async function withExpiry<T>(ids: readonly string[], full: (c: string[]) => Prom
 }
 
 /** Blocked either way, or muting the publisher (an expired temporary block or mute no longer counts). */
-async function excludedFor(db: Db, publisherId: string, viewers: readonly string[]): Promise<Set<string>> {
+export async function excludedFor(db: Db, publisherId: string, viewers: readonly string[]): Promise<Set<string>> {
   const now = new Date().toISOString();
   const live = <R extends { expires_at?: string | null }>(r: R) => !r.expires_at || r.expires_at > now;
   // any read that still fails throws — the caller then notifies nobody (fail closed)

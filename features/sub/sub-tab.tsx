@@ -1,9 +1,9 @@
 "use client";
 
-import { ArrowRight, Check, ChevronDown, Copy, Loader2, Lock, Pause, Pencil, Play, Plus, Share2, ShieldCheck, Wallet } from "lucide-react";
+import { ArrowRight, Bell, Check, ChevronDown, Copy, Loader2, Lock, Pause, Pencil, Play, Plus, Share2, ShieldCheck, Wallet } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { GLASS, primaryPill, quietPill } from "@/features/friends/ui";
 import { SubGallery, type SubQuoteView } from "@/features/sub/sub-gallery";
@@ -99,12 +99,77 @@ export function SubTab({
       ) : subscribed ? null : (
         <SubNotice />
       )}
+      {!isOwner && signedIn ? <PrivatePostAlerts creatorId={creatorId} /> : null}
       <SubGallery key={galleryKey} creatorId={creatorId} creatorName={creatorName} quote={isOwner ? null : quote} signedIn={signedIn} loginNext={loginNext} onAccess={setSubscribed} />
       {composing ? <SubComposer onClose={() => setComposing(false)} onPosted={() => {
             forgetSubPosts(creatorId);
             setGalleryKey((k) => k + 1);
           }} /> : null}
       {withdrawing ? <SubWithdrawSheet onClose={() => setWithdrawing(false)} /> : null}
+    </div>
+  );
+}
+
+const ALERT_LABELS = { off: "Off", push: "Push", email: "Email", both: "Push and email" } as const;
+type AlertMode = keyof typeof ALERT_LABELS;
+
+/**
+ * "Tell me when they post a private post" (owner 2026-10-12) — push, email, or both. Answers on the
+ * tap; the server confirms; a refused save puts the old choice back.
+ */
+function PrivatePostAlerts({ creatorId }: { creatorId: string }) {
+  const [mode, setMode] = useState<AlertMode | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void fetch(`/api/sub/notify?creator=${creatorId}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { mode?: AlertMode }) => alive && setMode(j.mode ?? "off"))
+      .catch(() => alive && setMode("off"));
+    return () => {
+      alive = false;
+    };
+  }, [creatorId]);
+  const choose = (next: AlertMode) => {
+    if (next === mode) return;
+    haptic("selection");
+    const prev = mode;
+    setMode(next);
+    setNote(null);
+    void fetch("/api/sub/notify", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ creator: creatorId, mode: next }) })
+      .then(async (r) => {
+        if (r.ok) return;
+        const j = (await r.json().catch(() => ({}))) as { error?: string };
+        setMode(prev);
+        setNote(j.error ?? "Couldn't save that.");
+      })
+      .catch(() => {
+        setMode(prev);
+        setNote("Couldn't save that.");
+      });
+  };
+  return (
+    <div className={cn("mb-3 rounded-[22px] p-3.5", GLASS)}>
+      <p className="flex items-center gap-2 text-[14px] font-semibold">
+        <Bell className="h-4 w-4 text-primary" aria-hidden /> New private posts
+      </p>
+      <p className="mt-0.5 text-[12.5px] text-muted-foreground">Get told when they post something new here.</p>
+      <div role="radiogroup" aria-label="How to tell you about new private posts" className="mt-2.5 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+        {(Object.keys(ALERT_LABELS) as AlertMode[]).map((m) => (
+          <button
+            key={m}
+            type="button"
+            role="radio"
+            aria-checked={mode === m}
+            disabled={mode === null}
+            onClick={() => choose(m)}
+            className={cn("min-h-11 rounded-xl px-2 text-[12.5px] font-semibold transition", mode === m ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground")}
+          >
+            {ALERT_LABELS[m]}
+          </button>
+        ))}
+      </div>
+      {note ? <p className="mt-2 text-[12.5px] text-rose-600">{note}</p> : null}
     </div>
   );
 }

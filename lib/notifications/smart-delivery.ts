@@ -65,7 +65,7 @@ const missingColumn = (m: string | undefined) => !!m && /column|schema cache/i.t
  * the app to be, the more it keeps for them, never less). Best-effort: a failed
  * insert must never cost the push.
  */
-async function recordInApp(userId: string, payload: PushPayload, record: Exclude<NotificationRecord, "already-recorded" | { recorded: unknown }>, outcome: AttentionResult): Promise<void> {
+async function recordInApp(userId: string, payload: PushPayload, record: Exclude<NotificationRecord, "already-recorded" | { recorded: unknown }>, outcome: AttentionResult, ref: string | null = null): Promise<void> {
   try {
     const db = createAdminClient();
     const base = {
@@ -79,7 +79,7 @@ async function recordInApp(userId: string, payload: PushPayload, record: Exclude
         was actually sent rather than a generic label off the type, and so the
         tap lands on the exact page (see lib/notifications/destinations.ts).
       */
-      data: { title: payload.title, body: payload.body, url: payload.url ?? null },
+      data: { title: payload.title, body: payload.body, url: payload.url ?? null, ...(ref ? { ref } : {}) },
     };
     if (deliveryColumns !== false) {
       const { error } = await db.from("notifications").insert({ ...base, delivery: outcome.decision === "push" ? "pushed" : outcome.decision, delivery_reason: outcome.reasons[0] ?? null });
@@ -181,6 +181,13 @@ export async function decideFor(userId: string, priority: PushPriority, category
   return out;
 }
 
+/** FZ- and 8 characters a person can read back without confusing 0/O or 1/I. */
+export function securityRef(): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  return `FZ-${Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("")}`;
+}
+
 export async function sendSmartPush(
   userId: string,
   payload: PushPayload,
@@ -193,9 +200,18 @@ export async function sendSmartPush(
   const type = typeof record === "object" ? ("recorded" in record ? record.recorded.type : record.type) : null;
   const outcome = await decideFor(userId, priority, category, actorId, settings, new Date(), type);
 
+  /*
+    NOTIFICATION AUTHENTICITY (Feature 20 Part 7): every security notification carries a
+    reference code, stored on the member's own row and shown in the push. Only Frenz can put a
+    row in someone's account, so "Verify an alert" (/account/security) tells a member whether a
+    message claiming to be a Frenz security alert really is one.
+  */
+  const ref = type && type.startsWith("security_") ? securityRef() : null;
+  if (ref) payload = { ...payload, body: `${payload.body} Ref ${ref}` };
+
   if (record !== "already-recorded") {
     if ("recorded" in record) await stampRecorded(userId, record.recorded, outcome);
-    else await recordInApp(userId, payload, record, outcome);
+    else await recordInApp(userId, payload, record, outcome, ref);
   }
   if (outcome.decision !== "push") return;
 

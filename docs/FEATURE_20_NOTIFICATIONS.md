@@ -276,3 +276,29 @@ Audited platforms, honestly:
 Changed: push icons are the sender's 192 px avatar render (`avatarSrc`), never the original
 upload; message previews follow the Part 5 lock-screen setting. Not possible without a native
 app: MessagingStyle conversations, Android channels, iOS communication notifications.
+
+---
+
+# Part 7 — Security notifications (2026-10-12)
+
+Audit first: most of the brief's "Security Notification Center" already existed on
+`/account/security` — security score with recommendations, two-factor, recovery codes,
+passkeys, a security PIN, step-up re-authentication for sensitive actions, active sessions,
+the Connected Devices hub with trust levels, the append-only `security_audit_log` (0053) and
+eight `security_*` notification types (critical: they reach the member through Do Not Disturb).
+
+Built on it:
+
+| Brief ask | Where |
+|---|---|
+| Suspicious Activity Engine | `lib/security/suspicious.ts` (rules) + `suspicious-run.ts`, run after every sign-in / failed check from `writeAuditLog`: new country (30 d), two countries in 6 h, 5+ failed checks in an hour, PIN lockout. Each alert names the rule and the facts. Not AI. |
+| Approximate region | the edge's own country header saved with each audit event — no IP lookup, raw IPs never stored |
+| Notification Authenticity | a reference `FZ-XXXXXXXX` on every security notification (stored + in the push); **Verify an alert** on `/account/security` |
+| Security Timeline | the existing activity list: device, country, warning marks, search, full history paging |
+| Phishing Protection | `lib/security/link-warning.ts` — links that imitate Frenz, use look-alike characters, are bare IPs or hide their address are flagged in messages and captions |
+
+Planned, honestly not built: credential-stuffing / bot detection beyond the existing rate
+limits (needs auth-provider logs Frenz does not receive), impossible travel at city level
+(needs IP geolocation), cryptographic signatures a member could check offline, family /
+organisation / guardian roles and their audit consoles (those account types do not exist),
+breach monitoring, OS-level emergency alerts (web push cannot override silent mode at all).

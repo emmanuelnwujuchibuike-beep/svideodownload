@@ -1,6 +1,7 @@
 import { after } from "next/server";
 
 import { parseDevice } from "@/lib/auth/device-label";
+import { securityRef } from "@/lib/notifications/smart-delivery";
 import { sendPushToUser } from "@/lib/push/web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -109,16 +110,20 @@ export async function checkNewDevice(
     if (recentAlert) return false;
 
     const { label } = parseDevice(currentUserAgent);
+    // Part 7 authenticity: the alert carries a reference the member can verify on /account/security
+    const ref = securityRef();
+    const title = "New device signed in";
+    const body = `A sign-in from ${label} was detected. Wasn't you? Review your active sessions. Ref ${ref}`;
     const { error: insertError } = await db
       .from("notifications")
-      .insert({ user_id: userId, actor_id: null, type: "security_new_device" });
+      .insert({ user_id: userId, actor_id: null, type: "security_new_device", data: { title, body, url: "/account/security#sessions", ref } });
     if (insertError) return false;
 
     // after(), not bare void — see lib/social/messages.ts's sendMessage() for why.
     after(() =>
       sendPushToUser(userId, {
-        title: "New device signed in",
-        body: `A sign-in from ${label} was detected. Wasn't you? Review your active sessions.`,
+        title,
+        body,
         url: "/account/security#sessions",
         tag: "security-new-device",
       }),

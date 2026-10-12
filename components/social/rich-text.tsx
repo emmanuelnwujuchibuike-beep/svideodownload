@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { LINK_WARNING_TEXT, linkWarning } from "@/lib/security/link-warning";
 import { cn } from "@/lib/utils";
 
 /**
@@ -62,6 +63,16 @@ export function RichText({
           {token}
         </a>,
       );
+      // Phishing protection (Feature 20 Part 7): a link that imitates Frenz, hides its address
+      // or is a bare number says so right beside it, before anyone taps it
+      const warn = linkWarning(token);
+      if (warn) {
+        nodes.push(
+          <span key={`w${key++}`} role="note" className="ml-1 inline-flex items-center rounded-md bg-red-500/12 px-1.5 py-0.5 align-middle text-[11px] font-semibold not-italic text-red-600 dark:text-red-400">
+            ⚠ {LINK_WARNING_TEXT[warn]}
+          </span>,
+        );
+      }
       if (trailing) nodes.push(trailing);
     }
     last = start + m[0].length;

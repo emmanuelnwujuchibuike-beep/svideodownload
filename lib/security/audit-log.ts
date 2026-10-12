@@ -1,7 +1,11 @@
 import { createHmac } from "node:crypto";
 
+import { after } from "next/server";
+
 import { clientId } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
+
+import { cleanCountry } from "./suspicious";
 
 /**
  * Append-only security audit trail (migration 0053). event_type is
@@ -62,6 +66,8 @@ export async function writeAuditLog(params: {
   const { userId, eventType, request, metadata, actorUserId, targetType, targetId } = params;
   try {
     const ip = request ? clientId(request.headers) : null;
+    // Part 7: the approximate country from the edge's own header (no IP lookup, no raw IP kept)
+    const country = request ? cleanCountry(request.headers.get("cf-ipcountry") || request.headers.get("x-vercel-ip-country")) : null;
     const db = createAdminClient();
     await db.from("security_audit_log").insert({
       user_id: userId,
@@ -71,8 +77,17 @@ export async function writeAuditLog(params: {
       target_id: targetId ?? null,
       ip_hash: ip && ip !== "anonymous" ? hashIp(ip) : null,
       user_agent: request?.headers.get("user-agent") ?? null,
-      metadata: metadata ?? {},
+      metadata: { ...(metadata ?? {}), ...(country ? { country } : {}) },
     });
+    // Suspicious Activity Engine (Part 7): after the response, never in its way
+    if (eventType === "login" || eventType === "pin_lockout" || eventType === "recovery_code_failed" || eventType === "stepup_failed") {
+      const run = () => import("./suspicious-run").then((m) => m.runSuspicionChecks(userId, eventType, country));
+      try {
+        after(run);
+      } catch {
+        await run(); // outside a request scope (a script) — run inline
+      }
+    }
   } catch {
     // Never let an audit-log write failure surface as (or cause) a real
     // security-flow error — the same fail-silent stance device-check.ts

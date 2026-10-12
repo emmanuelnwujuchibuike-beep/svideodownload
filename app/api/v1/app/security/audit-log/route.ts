@@ -23,7 +23,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await createAdminClient()
     .from("security_audit_log")
-    .select("id, event_type, user_agent, created_at")
+    .select("id, event_type, user_agent, created_at, metadata")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
 
   return noStore(
     ok(
-      { events: rows.map((r) => ({ id: r.id, type: r.event_type, userAgent: r.user_agent, createdAt: r.created_at })) },
+      { events: rows.map((r) => ({ id: r.id, type: r.event_type, userAgent: r.user_agent, country: ((r.metadata as { country?: string } | null)?.country ?? null), createdAt: r.created_at })) },
       { nextCursor },
     ),
   );

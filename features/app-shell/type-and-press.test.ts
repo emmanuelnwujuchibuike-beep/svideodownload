@@ -23,7 +23,10 @@ describe("🔴 an undefined font variable can never fall back to Times", () => {
 describe("every button answers a tap", () => {
   const css = code("app/globals.css");
   it("press feedback through the independent scale property (never transform — positioned buttons stay put)", () => {
-    expect(css).toMatch(/:where\(button, \[role="button"\], a\.ai-btn, a\.ai-strip-cta, summary\):not\(:disabled\):not\(\[aria-disabled="true"\]\):active \{\n  scale: 0\.95;/);
+    expect(css).toMatch(/:where\(button, \[role="button"\], a\.ai-btn, a\.ai-strip-cta, summary\):not\(:disabled\):not\(\[aria-disabled="true"\]\):not\(:has\(img, video, picture, canvas\)\):active \{\n  scale: 0\.95;/);
+    // 2026-10-12: anything holding a photo or video never scales (media never moves under a finger)
+    const pressRules = css.match(/[^{}]*:active \{\n  scale: 0\.95;/g) ?? [];
+    for (const r of pressRules) expect(r).toContain(":not(:has(img, video, picture, canvas))");
   });
   it("a disabled button does not move, and reduced motion drops the movement", () => {
     expect(css).toContain(':where(html[data-a11y-motion="reduce"]) :where(button, [role="button"], a.ai-btn, a.ai-strip-cta, summary):active {\n  scale: none;');

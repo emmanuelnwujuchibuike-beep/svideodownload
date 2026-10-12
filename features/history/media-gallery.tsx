@@ -165,6 +165,15 @@ const CAPTION_PREVIEW_CHARS = 40;
 
 const VIEW_KEY = "frenz:gallery-view";
 const COLS_KEY = "frenz:gallery-cols";
+/** A saved view preference, read synchronously (client-only: this gallery paints only after the local history loads). */
+function readPref(key: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
 const SORT_KEY = "frenz:gallery-sort";
 
 /** `137` → `2:17`. Used for the duration chip on a history tile. */
@@ -276,7 +285,7 @@ export function MediaGallery({
     };
   }, []);
 
-  const [view, setView] = useState<ViewMode>("grid");
+  const [view, setView] = useState<ViewMode>(() => (readPref(VIEW_KEY) === "list" ? "list" : "grid"));
   /*
     TWO columns by default (owner, 2026-08-09: "make the grid cols selectable,
     grid cols 2 as default").
@@ -288,8 +297,19 @@ export function MediaGallery({
     picker is right there for anyone who wants to see more at once, and the
     choice persists per browser.
   */
-  const [cols, setCols] = useState<number>(2);
-  const [sort, setSort] = useState<SortKey>("time");
+  /*
+    The saved choice is read BEFORE the first paint (owner 2026-10-12: "I set up the history
+    for grid 3 and each time I enter it shows 2 grid for a while"). It used to be read in an
+    effect after mount, so every entry painted the default first and then jumped.
+  */
+  const [cols, setCols] = useState<number>(() => {
+    const c = Number(readPref(COLS_KEY));
+    return COLUMN_CHOICES.includes(c as (typeof COLUMN_CHOICES)[number]) ? c : 2;
+  });
+  const [sort, setSort] = useState<SortKey>(() => {
+    const v = readPref(SORT_KEY);
+    return v && SORTS.some((o) => o.key === v) ? (v as SortKey) : "time";
+  });
   const [limit, setLimit] = useState(initialGrid);
   // Feature 15 Part 7 — one sheet instance for the whole gallery (grid + list
   // both open it via the same handler), rather than one per tile.
@@ -298,20 +318,6 @@ export function MediaGallery({
      use-gated-retry.ts. One instance for the whole gallery. */
   const retry = useGatedRetry();
 
-  // Load persisted view prefs after mount (client-only — the panels this renders
-  // in only paint after the local history loads, so there is no SSR mismatch).
-  useEffect(() => {
-    try {
-      const v = localStorage.getItem(VIEW_KEY);
-      if (v === "grid" || v === "list") setView(v);
-      const c = Number(localStorage.getItem(COLS_KEY));
-      if (COLUMN_CHOICES.includes(c as (typeof COLUMN_CHOICES)[number])) setCols(c);
-      const s = localStorage.getItem(SORT_KEY);
-      if (s && SORTS.some((o) => o.key === s)) setSort(s as SortKey);
-    } catch {
-      /* storage blocked — defaults are fine */
-    }
-  }, []);
 
   const persist = (key: string, value: string) => {
     try {
@@ -322,6 +328,14 @@ export function MediaGallery({
   };
 
   const sorted = useMemo(() => sortItems(items, sort), [items, sort]);
+  /*
+    The first screenful loads EAGERLY (owner 2026-10-12: grey tiles "for a while" on every
+    entry). Lazy images wait for layout + an intersection pass before they even ask the
+    (already warm) cache, which on iOS is a visible beat of grey. Only the first rows —
+    what is on screen at entry — skip that; everything below stays lazy, section by
+    section (the 2026-10-09 rule: never load the whole history at once).
+  */
+  const eagerIds = useMemo(() => new Set(sorted.slice(0, cols * 5).map((r) => r.id)), [sorted, cols]);
   const initial = view === "grid" ? initialGrid : initialList;
   const shown = sorted.slice(0, limit);
 
@@ -567,6 +581,7 @@ export function MediaGallery({
                       <GalleryTile
                         key={item.id}
                         item={item}
+                        eager={eagerIds.has(item.id)}
                         onOpen={() => openAt(sorted.indexOf(item))}
                         onToggleFavorite={() => onToggleFavorite(item.id)}
                         onRemove={() => onRemove(item.id)}
@@ -641,7 +656,7 @@ export function MediaGallery({
         <div className="grid gap-1.5 sm:gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
           {withGridAds(
             shown.map((item, i) => (
-              <GalleryTile key={item.id} item={item} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} onRemove={() => onRemove(item.id)} onPublishSound={() => setPublishTarget(item)} onRetry={() => retry.begin(item)} selection={selection} />
+              <GalleryTile key={item.id} item={item} eager={i < cols * 5} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} onRemove={() => onRemove(item.id)} onPublishSound={() => setPublishTarget(item)} onRetry={() => retry.begin(item)} selection={selection} />
             )),
             gridAds,
           )}
@@ -718,6 +733,7 @@ export function MediaGallery({
  */
 function GalleryTile({
   item,
+  eager = false,
   onOpen,
   onToggleFavorite,
   onRemove,
@@ -726,6 +742,8 @@ function GalleryTile({
   selection,
 }: {
   item: DownloadRecord;
+  /** on screen at entry — the thumbnail loads now, not after an intersection pass */
+  eager?: boolean;
   onOpen: () => void;
   onToggleFavorite: () => void;
   onRemove: () => void;
@@ -787,7 +805,7 @@ function GalleryTile({
         aria-pressed={selecting ? picked : undefined}
         className="absolute inset-0 h-full w-full"
       >
-        <SmartThumb src={item.thumbnail} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]" fallback={<KindIcon className="h-7 w-7" />} />
+        <SmartThumb src={item.thumbnail} alt="" eager={eager} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]" fallback={<KindIcon className="h-7 w-7" />} />
         <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent px-2 pb-1.5 pt-10">
           {/* The duration chip sits ABOVE the title, as in the reference. */}
           <span className="mb-1 flex items-center gap-1 text-[11px] font-semibold text-white/90">

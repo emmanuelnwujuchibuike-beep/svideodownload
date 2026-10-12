@@ -71,11 +71,37 @@ export async function bumpSuggestionVersion(viewerId: string): Promise<void> {
 
 export async function peopleYouMayKnow(
   viewerId: string,
-  opts: { filter?: SuggestionFilter; limit?: number; userClient?: SupabaseClient | null } = {},
+  opts: { filter?: SuggestionFilter; limit?: number; userClient?: SupabaseClient | null; shuffle?: boolean; exclude?: readonly string[] } = {},
 ): Promise<PersonSuggestion[]> {
   if (!hasSupabase) return [];
   const filter = opts.filter ?? "all";
   const limit = Math.min(50, Math.max(1, opts.limit ?? 24));
+  /*
+    "Reset" reshuffles (owner 2026-10-12: "it's supposed to reshuffle and show other friends
+    on Frenzsave, and reset changes them again"). A wider pool, ranked as always, minus the
+    people already on screen; a random sample of it, kept in rank order so the strongest
+    reasons still lead. Uncached — every tap is a new draw. Too few left → the shown ones
+    come back, reshuffled, so the list still changes.
+  */
+  if (opts.shuffle) {
+    try {
+      const ranked = (await rankForViewer(createAdminClient(), viewerId, filter, 200, opts.userClient ?? null, true)).map(({ score: _s, confidence: _c, ...p }) => p);
+      const shown = new Set(opts.exclude ?? []);
+      const fresh = ranked.filter((p) => !shown.has(p.id));
+      const pick = (arr: PersonSuggestion[], n: number) => {
+        const a = arr.map((p, i) => ({ p, i }));
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [a[i], a[j]] = [a[j]!, a[i]!];
+        }
+        return a.slice(0, n).sort((x, y) => x.i - y.i).map((x) => x.p);
+      };
+      const out = pick(fresh, limit);
+      return out.length >= limit ? out : [...out, ...pick(ranked.filter((p) => shown.has(p.id)), limit - out.length)];
+    } catch {
+      return [];
+    }
+  }
   const version = (await cacheGet<number>(VERSION_KEY(viewerId)).catch(() => null)) ?? 0;
   return getCached(`pymk:${viewerId}:${filter}:${limit}:${version}`, 60, async () => {
     try {
@@ -92,7 +118,7 @@ type Row = Record<string, unknown>;
 const ids = (rows: unknown, col: string): string[] => ((rows ?? []) as Row[]).map((r) => r[col] as string).filter(Boolean);
 
 /** Exported for tests: the whole pipeline over a database client. */
-export async function rankForViewer(db: Db, viewer: string, filter: SuggestionFilter, limit: number, userClient: SupabaseClient | null): Promise<RankedInternal[]> {
+export async function rankForViewer(db: Db, viewer: string, filter: SuggestionFilter, limit: number, userClient: SupabaseClient | null, wide = false): Promise<RankedInternal[]> {
   // ── 1 · the viewer's own graph ─────────────────────────────────────────────
   const [friendsRes, followingRes, followersRes, requestsRes, feedbackRes, meRes, contactsRes] = await Promise.all([
     db.from("friendships").select("user_low, user_high").or(`user_low.eq.${viewer},user_high.eq.${viewer}`).limit(1000),
@@ -129,7 +155,7 @@ export async function rankForViewer(db: Db, viewer: string, filter: SuggestionFi
       ? db.from("friendships").select("user_low, user_high").or(`user_low.in.(${friendIds.join(",")}),user_high.in.(${friendIds.join(",")})`).limit(5000)
       : Promise.resolve({ data: [] as Row[] }),
     followIds.length ? db.from("follows").select("follower_id, following_id").in("follower_id", followIds).limit(5000) : Promise.resolve({ data: [] as Row[] }),
-    db.from("profiles").select("id").not("handle", "is", null).eq("is_suspended", false).order("followers_count", { ascending: false }).limit(60),
+    db.from("profiles").select("id").not("handle", "is", null).eq("is_suspended", false).order("followers_count", { ascending: false }).limit(wide ? 300 : 60),
   ]);
   for (const f of (fofRes.data ?? []) as { user_low: string; user_high: string }[]) {
     // an edge friend–X where friend is mine: X is a friend of a friend, through that friend

@@ -509,7 +509,7 @@ export function ExoClickSticky({
     };
   }, [slot]);
 
-  const { showAds, ready } = useShowAds();
+  const { showAds, ready } = useShowAds(slot);
   const host = useRef<HTMLDivElement | null>(null);
   const [mounted, setMounted] = useState(false);
   /*

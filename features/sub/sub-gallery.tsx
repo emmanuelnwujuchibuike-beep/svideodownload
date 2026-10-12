@@ -37,7 +37,17 @@ interface Card {
   items: number;
   hasVideo: boolean;
   createdAt: string;
+  /** a subscriber's page arrives already opened — a tap shows the post at once (2026-10-12) */
+  open?: Opened;
 }
+
+/**
+ * Posts opened in this tab, kept until their links are about to expire: reopening a post,
+ * or one fetched on its own after the page's links ran out, never waits on the server again.
+ * Memory only — never storage, so nothing private outlives the tab.
+ */
+const openedCache = new Map<string, Opened>();
+const fresh = (o: Opened | undefined | null): o is Opened => !!o && Date.parse(o.expiresAt) - Date.now() > 30_000;
 
 export interface SubQuoteView {
   priceCents: number;
@@ -171,6 +181,11 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
                 {p.coverUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- the creator's PUBLIC cover, never the private file
                   <img src={p.coverUrl} alt="" loading="lazy" decoding="async" draggable={false} className="h-full w-full object-cover" />
+                ) : p.open?.media[0]?.kind === "image" ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- a subscriber's five-minute private link; next/image would cache it on our server
+                  <img src={p.open.media[0].url} alt="" loading="lazy" decoding="async" draggable={false} onContextMenu={(e) => e.preventDefault()} className="pointer-events-none h-full w-full object-cover" />
+                ) : p.open?.media[0]?.kind === "video" ? (
+                  <video src={`${p.open.media[0].url}#t=0.1`} muted playsInline preload="metadata" disablePictureInPicture className="pointer-events-none h-full w-full object-cover" />
                 ) : null}
                 {!state.access ? (
                   <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/35 text-white backdrop-blur-[2px]">
@@ -196,7 +211,7 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
         </button>
       ) : null}
 
-      {open ? <PrivateViewer postId={open} isCreator={state.isCreator} onClose={() => setOpen(null)} onDeleted={(id) => { removed(id); setOpen(null); }} /> : null}
+      {open ? <PrivateViewer postId={open} initial={state.posts.find((p) => p.id === open)?.open ?? null} isCreator={state.isCreator} onClose={() => setOpen(null)} onDeleted={(id) => { removed(id); setOpen(null); }} /> : null}
     </div>
   );
 }
@@ -211,8 +226,10 @@ interface Opened {
 }
 
 /** The private viewer: a portal with no URL, no share action, covered whenever the app is not in front. */
-function PrivateViewer({ postId, isCreator, onClose, onDeleted }: { postId: string; isCreator: boolean; onClose: () => void; onDeleted: (id: string) => void }) {
-  const [data, setData] = useState<Opened | null>(null);
+function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }: { postId: string; initial: Opened | null; isCreator: boolean; onClose: () => void; onDeleted: (id: string) => void }) {
+  // already opened by the gallery (or earlier in this tab) and still valid: shown at once, no second check
+  const [data, setData] = useState<Opened | null>(() => (fresh(openedCache.get(postId)) ? openedCache.get(postId)! : fresh(initial) ? initial : null));
+  const [index, setIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [covered, setCovered] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -229,12 +246,22 @@ function PrivateViewer({ postId, isCreator, onClose, onDeleted }: { postId: stri
       setError(j?.error ?? "This post couldn't be opened.");
       return;
     }
+    openedCache.set(postId, j);
     setData(j);
   }, [postId]);
 
   useEffect(() => {
-    void load();
+    if (!dataRef.current) void load();
   }, [load]);
+
+  // lock the page behind the viewer while it is open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
 
   // cover on hide / blur; on return, uncover — and fetch fresh links if these expired
   useEffect(() => {
@@ -298,57 +325,62 @@ function PrivateViewer({ postId, isCreator, onClose, onDeleted }: { postId: stri
 
   const block = (e: React.SyntheticEvent) => e.preventDefault();
 
+  const many = (data?.media.length ?? 0) > 1;
+
+  /*
+    Shown like the History player (owner 2026-10-12): the media fills the screen edge to edge,
+    `object-contain` so nothing is cropped, but it starts BELOW the safe area (status bar,
+    Dynamic Island) and ends above the home indicator — it never goes behind them. The top
+    bar floats over the media; several items swipe sideways like a carousel. The viewer's
+    tiled watermark and the creator's bottom-edge mark ride on the media itself.
+  */
   return createPortal(
-    <div role="dialog" aria-modal="true" aria-label="Subscriber post" className="fixed inset-0 z-[80] flex flex-col bg-black text-white" onContextMenu={block}>
-      <div className="flex items-center justify-between px-3 py-2" style={{ paddingTop: "calc(var(--frenz-safe-top, 0px) + 0.5rem)" }}>
-        <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-white/70">
-          <Lock className="h-3.5 w-3.5" aria-hidden /> Subscriber only
-        </span>
-        <span className="flex items-center gap-1">
-          {isCreator ? (
-            <button type="button" aria-label="Delete this post" disabled={deleting} onClick={() => void del()} className="inline-flex h-11 w-11 items-center justify-center rounded-full transition active:bg-white/10">
-              {deleting ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <Trash2 className="h-5 w-5" aria-hidden />}
-            </button>
-          ) : null}
-          <button type="button" aria-label="Close" onClick={onClose} className="inline-flex h-11 w-11 items-center justify-center rounded-full transition active:bg-white/10">
-            <X className="h-5 w-5" aria-hidden />
-          </button>
-        </span>
-      </div>
-      <div className="relative min-h-0 flex-1 select-none overflow-y-auto [-webkit-touch-callout:none] [-webkit-user-select:none]" onDragStart={block}>
+    <div role="dialog" aria-modal="true" aria-label="Subscriber post" className="fixed inset-0 z-[80] bg-black text-white" onContextMenu={block}>
+      <div className="absolute inset-x-0 bottom-[env(safe-area-inset-bottom)] top-[var(--frenz-safe-top,0px)] select-none overflow-hidden [-webkit-touch-callout:none] [-webkit-user-select:none]" onDragStart={block}>
         {error ? (
-          <p className="px-6 py-16 text-center text-[14px] text-white/80">{error}</p>
+          <p className="flex h-full items-center justify-center px-6 text-center text-[14px] text-white/80">{error}</p>
         ) : !data ? (
           <div className="flex h-full items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-white/60" aria-label="Loading" />
           </div>
         ) : (
-          <div className="mx-auto w-full max-w-xl space-y-2 pb-6">
-            {data.media.map((m, i) => (
-              <div key={i} className="relative">
-                {m.kind === "image" ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- a five-minute private link; next/image would cache it on our server
-                  <img src={m.url} alt={data.caption ?? "Subscriber photo"} draggable={false} onContextMenu={block} className="pointer-events-none w-full" style={m.width && m.height ? { aspectRatio: `${m.width} / ${m.height}` } : undefined} />
-                ) : (
-                  <video src={m.url} controls playsInline preload="metadata" controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture disableRemotePlayback onContextMenu={block} className="w-full bg-black" />
-                )}
-                {/*
-                  The creator's address along the bottom edge (owner 2026-10-12, "like onlyfans.com/<user>"):
-                  a screenshot that leaves Frenz still says where to find them — their PUBLIC profile, never
-                  this private post. Above a video's controls, so it never covers them.
-                */}
-                {data.creatorHandle ? (
-                  <a
-                    href={`/u/${encodeURIComponent(data.creatorHandle)}`}
-                    className={cn("absolute right-3 select-none text-[12.5px] font-semibold tracking-[0.01em] text-white/85 [text-shadow:0_1px_3px_rgba(0,0,0,0.75)]", m.kind === "video" ? "bottom-14" : "bottom-2.5")}
-                  >
-                    frenzsave.com/u/{data.creatorHandle}
-                  </a>
-                ) : null}
-              </div>
-            ))}
-            {data.caption ? <p className="whitespace-pre-line px-4 pt-2 text-[15px] leading-relaxed text-white/90">{data.caption}</p> : null}
-            {!isCreator ? <p className="px-4 pt-3 text-center text-[11.5px] text-white/45">Private to subscribers. Screenshots taken with a keyboard shortcut are reported to the creator.</p> : null}
+          <div
+            className="flex h-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              const i = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
+              if (i !== index) setIndex(i);
+            }}
+          >
+            {data.media.map((m, i) => {
+              const ratio = m.width && m.height ? m.width / m.height : null;
+              return (
+                <div key={i} className="flex h-full w-full shrink-0 snap-center items-center justify-center [container-type:size]">
+                  {/* sized to the media's own shape, so the creator's mark sits on the media's bottom edge */}
+                  <div className="relative max-h-full max-w-full" style={ratio ? { width: `min(100cqw, calc(100cqh * ${ratio}))`, aspectRatio: String(ratio) } : { width: "100%", height: "100%" }}>
+                    {m.kind === "image" ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- a five-minute private link; next/image would cache it on our server
+                      <img src={m.url} alt={data.caption ?? "Subscriber photo"} draggable={false} onContextMenu={block} className="pointer-events-none h-full w-full object-contain" />
+                    ) : (
+                      <video src={m.url} controls playsInline autoPlay={i === 0} preload="metadata" controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture disableRemotePlayback onContextMenu={block} className="h-full w-full bg-black object-contain" />
+                    )}
+                    {/*
+                      The creator's address along the bottom edge (owner 2026-10-12, "like onlyfans.com/<user>"):
+                      a screenshot that leaves Frenz still says where to find them — their PUBLIC profile, never
+                      this private post. Above a video's controls, so it never covers them.
+                    */}
+                    {data.creatorHandle ? (
+                      <a
+                        href={`/u/${encodeURIComponent(data.creatorHandle)}`}
+                        className={cn("absolute right-3 z-[2] select-none text-[12.5px] font-semibold tracking-[0.01em] text-white/85 [text-shadow:0_1px_3px_rgba(0,0,0,0.75)]", m.kind === "video" ? "bottom-14" : "bottom-2.5")}
+                      >
+                        frenzsave.com/u/{data.creatorHandle}
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
         {data?.watermark ? (
@@ -362,6 +394,39 @@ function PrivateViewer({ postId, isCreator, onClose, onDeleted }: { postId: stri
             </div>
           </div>
         ) : null}
+
+        {/* the top bar floats over the media, inside the safe area like the History player */}
+        <div className="absolute inset-x-0 top-0 z-[3] flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent px-3 pb-6 pt-2">
+          <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-white/80 [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]">
+            <Lock className="h-3.5 w-3.5" aria-hidden /> Subscriber only
+            {many ? <span className="ml-1 rounded-full bg-black/45 px-2 py-0.5 text-[11px] normal-case tracking-normal">{index + 1} / {data!.media.length}</span> : null}
+          </span>
+          <span className="flex items-center gap-1">
+            {isCreator ? (
+              <button type="button" aria-label="Delete this post" disabled={deleting} onClick={() => void del()} className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/35 transition active:bg-white/10">
+                {deleting ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <Trash2 className="h-5 w-5" aria-hidden />}
+              </button>
+            ) : null}
+            <button type="button" aria-label="Close" onClick={onClose} className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/35 transition active:bg-white/10">
+              <X className="h-5 w-5" aria-hidden />
+            </button>
+          </span>
+        </div>
+
+        {/* caption over the media's foot, out of a video's controls */}
+        {data?.caption ? (
+          <div className={cn("pointer-events-none absolute inset-x-0 bottom-0 z-[3] bg-gradient-to-t from-black/70 to-transparent px-4 pt-10", data.media[index]?.kind === "video" ? "pb-20" : "pb-10")}>
+            {data.caption ? <p className="max-h-[30vh] overflow-y-auto whitespace-pre-line text-[14.5px] leading-relaxed text-white/95 [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]">{data.caption}</p> : null}
+          </div>
+        ) : null}
+        {data && many ? (
+          <div className="pointer-events-none absolute inset-x-0 bottom-3 z-[3] flex justify-center gap-1.5">
+            {data.media.map((_, i) => (
+              <span key={i} className={cn("h-1.5 rounded-full transition-all", i === index ? "w-4 bg-white" : "w-1.5 bg-white/45")} />
+            ))}
+          </div>
+        ) : null}
+
         {covered ? (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black">
             <EyeOff className="h-6 w-6 text-white/70" aria-hidden />

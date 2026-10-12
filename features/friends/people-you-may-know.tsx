@@ -8,6 +8,7 @@ import { VerifiedTick } from "@/components/badges/identity-badges";
 import { FollowChip } from "@/features/friends/follow-chip";
 import { GLASS, GlassGroup, iconButton, PersonAvatar, primaryPill, quietPill, SectionHeader } from "@/features/friends/ui";
 import { usePresence } from "@/features/friends/use-presence";
+import { haptic } from "@/lib/motion/haptics";
 import type { SuggestionFilter } from "@/lib/social/graph/suggestions";
 import type { PersonSuggestion } from "@/lib/social/people/engine";
 import { cn } from "@/lib/utils";
@@ -85,13 +86,14 @@ export function PeopleYouMayKnow({ initial }: { initial: PersonSuggestion[] }) {
       return next;
     });
 
-  const load = async (f: SuggestionFilter, force = false) => {
+  const load = async (f: SuggestionFilter, force = false, shuffleFrom: PersonSuggestion[] | null = null) => {
     setFilter(f);
     setFailed(false);
     if (!force && lists[f]) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/people/suggestions?filter=${f}`);
+      const q = shuffleFrom ? `&shuffle=1&exclude=${shuffleFrom.slice(0, 100).map((p) => p.id).join(",")}` : "";
+      const res = await fetch(`/api/people/suggestions?filter=${f}${q}`);
       if (!res.ok) throw new Error(String(res.status));
       const j = (await res.json()) as { people?: PersonSuggestion[] };
       update((m) => ({ ...m, [f]: j.people ?? [] }));
@@ -128,14 +130,30 @@ export function PeopleYouMayKnow({ initial }: { initial: PersonSuggestion[] }) {
     void fetch(`/api/people/suggestions/feedback?subjectId=${person.id}`, { method: "DELETE" }).catch(() => {});
   };
 
+  /*
+    Reset = a new draw (owner 2026-10-12): one tap reshuffles to OTHER people on Frenz,
+    and every further tap draws again. Bringing back people you hid is a separate,
+    two-tap action below, since it undoes choices you made.
+  */
   const reset = async () => {
-    if (resetState !== "armed") {
-      setResetState("armed");
+    if (resetState === "busy") return;
+    haptic("selection");
+    setResetState("busy");
+    setUndo(null);
+    const shown = list;
+    update((m) => ({ [filter]: m[filter] }) as Lists);
+    await load(filter, true, shown);
+    setResetState("idle");
+  };
+  const [restoreState, setRestoreState] = useState<"idle" | "armed" | "busy" | "done">("idle");
+  const restoreHidden = async () => {
+    if (restoreState !== "armed") {
+      setRestoreState("armed");
       return;
     }
-    setResetState("busy");
+    setRestoreState("busy");
     const res = await fetch("/api/people/suggestions/feedback", { method: "DELETE" }).catch(() => null);
-    setResetState(res?.ok ? "done" : "idle");
+    setRestoreState(res?.ok ? "done" : "idle");
     setUndo(null);
     update(() => ({}));
     void load(filter, true);
@@ -213,14 +231,23 @@ export function PeopleYouMayKnow({ initial }: { initial: PersonSuggestion[] }) {
         </GlassGroup>
       )}
 
-      <div className="mt-3 flex justify-center">
+      <div className="mt-3 flex flex-col items-center gap-0.5">
         <button
           type="button"
           onClick={() => void reset()}
           disabled={resetState === "busy"}
-          className="min-h-[2.75rem] rounded-full px-3 text-[12.5px] font-medium text-muted-foreground hover:text-foreground"
+          className={cn(quietPill, "min-h-[2.75rem] justify-center")}
         >
-          {resetState === "armed" ? "Tap again to bring back everyone you hid" : resetState === "done" ? "Suggestions reset" : resetState === "busy" ? "Resetting…" : "Reset suggestions"}
+          <RotateCw className={cn("h-4 w-4", resetState === "busy" && "animate-spin motion-reduce:animate-none")} aria-hidden />
+          {resetState === "busy" ? "Finding new people…" : "Reset suggestions"}
+        </button>
+        <button
+          type="button"
+          onClick={() => void restoreHidden()}
+          disabled={restoreState === "busy"}
+          className="min-h-[2.75rem] rounded-full px-3 text-[12px] font-medium text-muted-foreground hover:text-foreground"
+        >
+          {restoreState === "armed" ? "Tap again to bring back everyone you hid" : restoreState === "done" ? "Everyone you hid is back" : restoreState === "busy" ? "Bringing them back…" : "Show people I hid"}
         </button>
       </div>
     </section>

@@ -21,11 +21,14 @@ export function SmartThumb({
   alt,
   className,
   fallback,
+  eager = false,
 }: {
   src: string | null | undefined;
   alt: string;
   className?: string;
   fallback: ReactNode;
+  /** The first screenful only (History, 2026-10-12): skip the lazy intersection wait. */
+  eager?: boolean;
 }) {
   const [broken, setBroken] = useState(false);
   const [lastSrc, setLastSrc] = useState(src);
@@ -76,7 +79,7 @@ export function SmartThumb({
     <img
       src={src}
       alt={alt}
-      loading="lazy"
+      loading={eager ? "eager" : "lazy"}
       decoding={isImageSeen(src) ? "sync" : "async"}
       onLoad={(e) => markImageSeen(src, e.currentTarget)}
       onError={() => setBroken(true)}

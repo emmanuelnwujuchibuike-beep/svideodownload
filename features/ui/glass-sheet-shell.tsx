@@ -62,6 +62,13 @@ export function GlassSheetShell({
    * fixed-`defaultHeightVh` behavior unless it explicitly opts in.
    */
   fitContent = false,
+  /**
+   * Opens and closes with NO animation (owner 2026-10-12, the comment sheets in
+   * Feed and Reels: "it should open instantly not slowly or any frame animation").
+   * No slide, no height easing while it fits its content. Dragging still follows
+   * the finger and snaps back as before.
+   */
+  instant = false,
   children,
 }: {
   open: boolean;
@@ -75,6 +82,7 @@ export function GlassSheetShell({
   backdropZ?: number;
   panelZ?: number;
   fitContent?: boolean;
+  instant?: boolean;
   children: React.ReactNode;
 }) {
   const [mounted, setMounted] = useState(false);
@@ -206,16 +214,16 @@ export function GlassSheetShell({
           <motion.div
             ref={panelRef}
             tabIndex={-1}
-            initial={{ y: "100%" }}
+            initial={instant ? false : { y: "100%" }}
             animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", stiffness: 380, damping: 36 }}
+            exit={instant ? { opacity: 0, transition: { duration: 0 } } : { y: "100%" }}
+            transition={instant ? { duration: 0 } : { type: "spring", stiffness: 380, damping: 36 }}
             className="fixed inset-x-0 bottom-0 mx-auto flex w-full max-w-2xl flex-col rounded-t-3xl border-t border-white/10 bg-card/95 shadow-[0_-8px_40px_rgba(0,0,0,0.35)] backdrop-blur-2xl outline-none"
             style={{
               zIndex: panelZ,
               height: `${heightVh}vh`,
               transform: dragY ? `translateY(${dragY}px)` : undefined,
-              transition: dragging ? "none" : "transform 220ms var(--ease-out), height 260ms var(--ease-out)",
+              transition: dragging ? "none" : instant ? "transform 220ms var(--ease-out)" : "transform 220ms var(--ease-out), height 260ms var(--ease-out)",
             }}
           >
             {overlay ? <div className="absolute inset-0 z-10">{overlay}</div> : null}

@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import { getAdsForZone } from "@/lib/monetization/ads";
 import { getUserPlan } from "@/lib/monetization/plan";
+import { planSeesAd } from "@/lib/monetization/plan-ads";
+import type { BillingPlan } from "@/lib/monetization/types";
 import { allowedFilter, withHilltopZone, withSharedExoClick } from "@/lib/monetization/zone-resolution";
 import { createClient } from "@/lib/supabase/server";
 
@@ -26,7 +28,9 @@ const ZONES: ReadonlySet<string> = new Set<string>(AD_ZONES);
  * scripts like pop-unders / social bars); otherwise a single weighted slot.
  */
 /**
- * Premium visitors never see ads. No session is treated as free.
+ * The visitor's plan; no session is treated as free. Which zones a plan sees is
+ * lib/monetization/plan-ads.ts (owner 2026-10-12): Pro keeps the result, History,
+ * Feed and Reels ads; Business sees none.
  *
  * ── The fast path, which is the common one ────────────────────────────────────
  *
@@ -40,19 +44,19 @@ const ZONES: ReadonlySet<string> = new Set<string>(AD_ZONES);
  * it is absent. This is a LATENCY optimisation, not an authorisation one — a
  * forged cookie only causes the real check to run, and that check is unchanged.
  */
-async function isPremium(request: Request): Promise<boolean> {
+async function visitorPlan(request: Request): Promise<BillingPlan> {
   const cookies = request.headers.get("cookie") ?? "";
   // Supabase SSR names its auth cookies `sb-<project-ref>-auth-token[.N]`.
-  if (!/(^|;\s*)sb-[^=]*-auth-token/.test(cookies)) return false;
+  if (!/(^|;\s*)sb-[^=]*-auth-token/.test(cookies)) return "free";
 
   try {
     const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    return (await getUserPlan(user?.id)) !== "free";
+    return await getUserPlan(user?.id);
   } catch {
-    return false;
+    return "free";
   }
 }
 
@@ -84,7 +88,8 @@ export async function GET(request: Request) {
 
     if (zones.length === 0) return NextResponse.json({ ads: {} }, { status: 400 });
 
-    if (await isPremium(request)) {
+    const plan = await visitorPlan(request);
+    if (plan !== "free" && !zones.some((z) => planSeesAd(plan, z))) {
       return NextResponse.json({ ads: Object.fromEntries(zones.map((z) => [z, null])) });
     }
 
@@ -94,7 +99,7 @@ export async function GET(request: Request) {
         async (z) =>
           [
             z,
-            await withSharedExoClick(
+            !planSeesAd(plan, z) ? null : await withSharedExoClick(
               z,
               await withHilltopZone(
                 z,
@@ -114,7 +119,7 @@ export async function GET(request: Request) {
     return NextResponse.json(all ? { ads: [] } : { ad: null }, { status: 400 });
   }
 
-  if (await isPremium(request)) return NextResponse.json(all ? { ads: [] } : { ad: null });
+  if (!planSeesAd(await visitorPlan(request), zone)) return NextResponse.json(all ? { ads: [] } : { ad: null });
 
   const allowed = await allowedFilter();
   const ads = (await getAdsForZone(zone)).filter((a) => allowed(a, zone));

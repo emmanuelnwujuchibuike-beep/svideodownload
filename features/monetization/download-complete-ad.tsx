@@ -90,7 +90,7 @@ export function DownloadCompleteAd({
   open: boolean;
   onClose: () => void;
 }) {
-  const { showAds, ready } = useShowAds();
+  const { showAds, ready } = useShowAds("download_complete");
   const [hasAd, setHasAd] = useState<boolean | null>(null);
   const [config, setConfig] = useState<{ skippable: boolean; skipAfter: number } | null>(null);
   /** Reset per opening, so a second download does not inherit the first's answer. */

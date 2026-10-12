@@ -553,7 +553,7 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
           onKeyDown={(e) => {
             if (e.key === "Enter") void searchHistory();
           }}
-          placeholder="Try “messages from chris” or “security last week”"
+          placeholder="Search notifications"
           aria-label="Search notifications"
           className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
         />

@@ -16,10 +16,13 @@ export async function GET(req: Request) {
   if (!user) return NextResponse.json({ people: [] }, { status: 401 });
   const url = new URL(req.url);
   const f = url.searchParams.get("filter");
+  const exclude = (url.searchParams.get("exclude") ?? "").split(",").filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 100);
   const people = await peopleYouMayKnow(user.id, {
     filter: isSuggestionFilter(f) ? f : "all",
     limit: Number(url.searchParams.get("limit")) || 24,
     userClient: supabase,
+    shuffle: url.searchParams.get("shuffle") === "1",
+    exclude,
   });
   return NextResponse.json({ people }, { headers: { "Cache-Control": "private, no-store" } });
 }

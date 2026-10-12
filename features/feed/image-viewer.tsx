@@ -632,6 +632,7 @@ function ImageStage({
           <GlassSheetShell
             open={showComments}
             onClose={() => setShowComments(false)}
+            instant
             title={`Comments${item.commentsCount > 0 ? ` · ${formatCompactNumber(item.commentsCount)}` : ""}`}
           >
             {comments ? (

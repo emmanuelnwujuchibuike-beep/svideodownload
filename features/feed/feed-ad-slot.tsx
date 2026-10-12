@@ -70,7 +70,7 @@ export function FeedAdSlot({
   slotId: string;
   className?: string;
 }) {
-  const { showAds, ready } = useShowAds();
+  const { showAds, ready } = useShowAds("feed_inline");
   const host = useRef<HTMLDivElement | null>(null);
   /**
    * 🔴 ONE-WAY LATCH (§10: "An ad slot must only initialize once").

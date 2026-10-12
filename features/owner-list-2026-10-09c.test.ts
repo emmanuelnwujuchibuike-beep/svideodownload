@@ -122,13 +122,20 @@ describe("admin pushes for referrals", () => {
 
 // owner, 2026-10-09: "History Medias and the Frenz logo at the top reloads on every page entry"
 describe("no flash on page entry", () => {
-  it("every history tile is LAZY (section by section); a seen one decodes sync once it loads on screen", () => {
+  it("history tiles load section by section — only the FIRST SCREENFUL is eager; a seen one decodes sync", () => {
     const t = code("components/ui/smart-thumb.tsx");
-    // owner, later the same day: "the medias shouldn't load at once … section by section" — never eager
-    expect(t).toContain('loading="lazy"');
-    expect(t).not.toMatch(/loading=\{[^}]*"eager"/);
+    // owner, later the same day: "the medias shouldn't load at once … section by section"
+    // 2026-10-12 ("shows grey for a while on every entry"): the first rows only may skip the lazy wait —
+    // eager is opt-in per tile, lazy stays the default, and the gallery bounds it to cols × 5 tiles
+    expect(t).toContain('loading={eager ? "eager" : "lazy"}');
+    expect(t).toContain("eager = false");
     expect(t).toContain('decoding={isImageSeen(src) ? "sync" : "async"}');
     expect(t).toContain("onLoad={(e) => markImageSeen(src, e.currentTarget)}");
+    const g = code("features/history/media-gallery.tsx");
+    expect(g).toContain("sorted.slice(0, cols * 5)");
+    expect(g).toContain("eager={i < cols * 5}");
+    // never "everything eager": no tile is eager without the bound
+    expect(g).not.toMatch(/eager=\{true\}|<(GalleryTile|SmartThumb)\b[^>]*\seager[\s/>]/);
   });
 
   it("the Frenz logo is eager and decoded synchronously", () => {

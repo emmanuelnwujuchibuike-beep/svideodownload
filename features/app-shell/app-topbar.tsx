@@ -18,6 +18,7 @@ import { UserMenu } from "@/features/auth/user-menu";
 import { CreateActionSheet } from "@/features/create/create-action-sheet";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
+import { useTopAdPresent } from "@/lib/dom/top-ad-present";
 import { useScrollDirection } from "@/lib/dom/use-scroll-direction";
 import { cn } from "@/lib/utils";
 
@@ -128,7 +129,9 @@ export function AppTopbar() {
     one), so no listener is added; near the top of the page the bar always shows.
   */
   const scrollDir = useScrollDirection();
-  const slideAway = pathname === "/downloads" && scrollDir === "down" && !searchActive;
+  // …and only when there IS a banner to make room for (owner 2026-10-12: no ad, e.g. Pro → the bar stays)
+  const topAd = useTopAdPresent();
+  const slideAway = pathname === "/downloads" && topAd && scrollDir === "down" && !searchActive;
   useEffect(() => {
     setTopbarHidden(slideAway);
   }, [slideAway]);

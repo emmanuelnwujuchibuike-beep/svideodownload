@@ -239,7 +239,11 @@ const nextConfig: NextConfig = {
     // mount/visibility-triggered revalidation (features/feed/smart-feed.tsx)
     // exists for, so navigation can stay unconditionally instant while content
     // still catches up invisibly. Tune here, not per-page.
-    staleTimes: { dynamic: 21600, static: 300 },
+    // static: 300 → 21600 (owner 2026-10-12, History "refreshes on every entry and is slow"):
+    // a static page left the cache after 5 minutes, and the next tap waited on a ~2 s
+    // Cloudflare revalidation behind the loading skeleton (measured on production). A static
+    // page changes only with a deploy, and a deploy reloads the app (register-sw.tsx).
+    staleTimes: { dynamic: 21600, static: 21600 },
     scrollRestoration: true,
   },
   images: {

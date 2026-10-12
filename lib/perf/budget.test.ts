@@ -532,8 +532,16 @@ function landingChunks(): string[] {
  * (SelfAdBanner) and the paid engine stay behind dynamic imports. Signed-in
  * route, never a cold visit. ENTRY_CEILING untouched (landing measured
  * 216,534 of 218 kB).
+ *
+ * ── 2026-10-12 (Pro ad rule + instant comment sheets): → 374 kB (/(app)/home measured 381,993) ──
+ *
+ * +41 B over 373 kB, measured with gzip over the manifest. Two owner asks, both in
+ * shared chunks /home loads: the plan → placement ad rule (lib/monetization/plan-ads.ts,
+ * shipped as one regex rather than a list) called by useShowAds, and the `instant`
+ * mode of GlassSheetShell for the Feed and Reels comment sheets. Signed-in route,
+ * never a cold visit; the cold-entry ratchets passed unchanged.
  */
-const GLOBAL_CEILING = 373 * 1024;
+const GLOBAL_CEILING = 374 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

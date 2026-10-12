@@ -86,7 +86,7 @@ export function AdSurface({
    */
   onResolved?: (hasAd: boolean) => void;
 }) {
-  const { showAds, ready } = useShowAds();
+  const { showAds, ready } = useShowAds(zone);
   const [hasAd, setHasAd] = useState<boolean | null>(null);
   /*
     Ad Platform Part 5 — ONE physical slot, ONE provider (owner, 2026-10-08:

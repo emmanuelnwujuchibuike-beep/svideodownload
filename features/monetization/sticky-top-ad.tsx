@@ -2,10 +2,11 @@
 
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useSlotProvider } from "@/features/ads-platform/serve/use-slot-provider";
 
+import { setTopAdPresent } from "@/lib/dom/top-ad-present";
 import { cn } from "@/lib/utils";
 
 import { AdSlot } from "./ad-slot";
@@ -40,6 +41,12 @@ export function StickyTopAd() {
   const paid = occupant.status === "ready" && occupant.provider === "frenzsave" ? occupant : null;
   const network = occupant.status === "ready" && occupant.provider === "network";
   const shown = !!paid || (network && hasAd === true);
+  // the topbar slides away for this banner only while it is really on screen
+  const onScreen = ready && showAds && shown;
+  useEffect(() => {
+    setTopAdPresent(onScreen);
+  }, [onScreen]);
+  useEffect(() => () => setTopAdPresent(false), []);
 
   if (!ready || !showAds) return null;
 

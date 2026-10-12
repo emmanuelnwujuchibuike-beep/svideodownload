@@ -411,7 +411,7 @@ export function ReelDeck({
     can point at something not rendered is what produced "the reels get stuck
     after scrolling on 3 videos or 4" (see the clamp note in `onScroll`).
   */
-  const { showAds, ready: adsReady } = useShowAds();
+  const { showAds, ready: adsReady } = useShowAds("reels_interstitial");
   /**
    * Whether the reels zone has a row at all. Null until answered.
    *
@@ -2841,6 +2841,7 @@ function ReelCard({
           open={showComments}
           onClose={closeComments}
           onOpen={loadComments}
+          instant
           title={`Comments${item.commentsCount > 0 ? ` · ${formatCompactNumber(item.commentsCount)}` : ""}`}
           headerExtra={
             <button

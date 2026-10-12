@@ -56,7 +56,7 @@ export function LazyAdSurface({
   fullBleed?: boolean;
   rootMargin?: string;
 }) {
-  const { showAds, ready } = useShowAds();
+  const { showAds, ready } = useShowAds(zone);
   const host = useRef<HTMLDivElement | null>(null);
   /**
    * One-way latch: false → true, never back. Scrolling away and returning must

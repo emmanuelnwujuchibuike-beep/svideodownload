@@ -31,7 +31,7 @@ export type SlotState =
  * the network unit reports it did not fill, `networkEmpty()` hands the slot on.
  */
 export function useSlotProvider(slotId: string, page: AdPageContext | null): { state: SlotState; networkEmpty: () => void } {
-  const { showAds, ready } = useShowAds();
+  const { showAds, ready } = useShowAds(slotId);
   const [state, setState] = useState<SlotState>({ status: "pending" });
   const [empty, setEmpty] = useState(false);
 

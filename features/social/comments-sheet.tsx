@@ -76,6 +76,7 @@ export function CommentsSheet({
         its real comment count needs, up to the same ceiling it always had.
       */
       fitContent
+      instant
     >
       {data ? (
         <Comments

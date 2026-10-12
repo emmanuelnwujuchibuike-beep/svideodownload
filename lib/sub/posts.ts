@@ -84,8 +84,45 @@ export async function createSubPost(creatorId: string, input: { caption?: string
   return { ok: true, id };
 }
 
+/** An opened post: the caption, five-minute links and the two marks. Only ever built AFTER an access check. */
+export interface SubPostOpen {
+  caption: string | null;
+  media: { kind: "image" | "video"; url: string; width: number | null; height: number | null }[];
+  expiresAt: string;
+  watermark: string | null;
+  creatorHandle: string | null;
+}
+
+/**
+ * The viewer's handle (the tiled watermark) and the creator's (the bottom-edge mark),
+ * read together. The watermark names the VIEWER by public handle only: never an email,
+ * phone or payout detail; the creator's mark points to their PUBLIC profile, never to a
+ * private post, which has no URL at all (owner 2026-10-12).
+ */
+async function marks(viewerId: string, creatorId: string): Promise<{ watermark: string | null; creatorHandle: string | null }> {
+  const db = createAdminClient();
+  const [cfg, viewer, creator] = await Promise.all([
+    subConfig(),
+    viewerId === creatorId ? Promise.resolve({ data: null }) : db.from("profiles").select("handle").eq("id", viewerId).maybeSingle(),
+    db.from("profiles").select("handle").eq("id", creatorId).maybeSingle(),
+  ]);
+  const handle = (viewer.data as Row | null)?.handle as string | undefined;
+  return { watermark: cfg.watermark && viewerId !== creatorId && handle ? `@${handle}` : null, creatorHandle: ((creator.data as Row | null)?.handle as string | undefined) ?? null };
+}
+
+async function signMedia(rows: Row[]): Promise<SubPostOpen["media"]> {
+  return Promise.all(rows.map(async (m) => ({ kind: m.media_kind as "image" | "video", url: await presignPrivateGet(m.object_key as string, SIGNED_TTL_SECONDS), width: (m.width as number | null) ?? null, height: (m.height as number | null) ?? null })));
+}
+
 export interface SubPostCard {
   id: string;
+  /**
+   * For a viewer WITH access (owner 2026-10-12, "it shouldn't be verifying every entry"):
+   * the gallery's one access check also opens the page's posts, so a tap shows the post at
+   * once instead of a fresh check + a spinner per post. Links still expire in five minutes;
+   * after that the viewer asks /api/sub/posts/[id], which checks access again.
+   */
+  open?: SubPostOpen;
   /** null for a viewer without access: the caption is part of the paid content */
   caption: string | null;
   coverUrl: string | null;
@@ -111,7 +148,11 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
   const rows = (postsR.data ?? []) as Row[];
   const page = rows.slice(0, PAGE);
   const ids = page.map((r) => r.id as string);
-  const { data: media } = ids.length ? await db.from("sub_post_media").select("post_id, media_kind").in("post_id", ids) : { data: [] };
+  const opening = access && !!viewerId && hasPrivateR2;
+  const [{ data: media }, mk] = await Promise.all([
+    ids.length ? db.from("sub_post_media").select(opening ? "post_id, idx, media_kind, object_key, width, height" : "post_id, media_kind").in("post_id", ids).order("idx") : Promise.resolve({ data: [] as Row[] }),
+    opening && ids.length ? marks(viewerId!, creatorId) : Promise.resolve(null),
+  ]);
   const counts = new Map<string, { n: number; video: boolean }>();
   for (const m of (media ?? []) as Row[]) {
     const c = counts.get(m.post_id as string) ?? { n: 0, video: false };
@@ -119,8 +160,20 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
     if (m.media_kind === "video") c.video = true;
     counts.set(m.post_id as string, c);
   }
+  // a subscriber's page arrives opened (access already checked above, once)
+  const opened = new Map<string, SubPostOpen>();
+  if (opening && mk) {
+    const expiresAt = new Date(Date.now() + SIGNED_TTL_SECONDS * 1000).toISOString();
+    const byPost = new Map<string, Row[]>();
+    for (const m of (media ?? []) as Row[]) byPost.set(m.post_id as string, [...(byPost.get(m.post_id as string) ?? []), m]);
+    await Promise.all(
+      page.map(async (r) => {
+        opened.set(r.id as string, { caption: (r.caption as string | null) ?? null, media: await signMedia(byPost.get(r.id as string) ?? []), expiresAt, ...mk });
+      }),
+    );
+  }
   return {
-    posts: page.map((r) => ({ id: r.id as string, caption: access ? ((r.caption as string | null) ?? null) : null, coverUrl: (r.cover_url as string | null) ?? null, items: counts.get(r.id as string)?.n ?? 0, hasVideo: counts.get(r.id as string)?.video ?? false, createdAt: r.created_at as string })),
+    posts: page.map((r) => ({ id: r.id as string, caption: access ? ((r.caption as string | null) ?? null) : null, coverUrl: (r.cover_url as string | null) ?? null, items: counts.get(r.id as string)?.n ?? 0, hasVideo: counts.get(r.id as string)?.video ?? false, createdAt: r.created_at as string, ...(opened.has(r.id as string) ? { open: opened.get(r.id as string) } : {}) })),
     access,
     isCreator,
     next: rows.length > PAGE ? (page[page.length - 1]!.created_at as string) : null,
@@ -130,30 +183,20 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
 }
 
 /** Opens one post for a viewer who may see it: the caption and five-minute links. Anyone else gets 403 and nothing. */
-export async function openSubPost(postId: string, viewerId: string | null): Promise<{ ok: true; caption: string | null; media: { kind: "image" | "video"; url: string; width: number | null; height: number | null }[]; expiresAt: string; watermark: string | null; creatorHandle: string | null } | Fail> {
+export async function openSubPost(postId: string, viewerId: string | null): Promise<({ ok: true } & SubPostOpen) | Fail> {
   if (!viewerId) return fail("Sign in to view this.", 401);
   const db = createAdminClient();
-  const { data: post } = await db.from("sub_posts").select("id, creator_id, caption, status").eq("id", postId).maybeSingle();
+  // the reads run together; the links are minted only after access says yes
+  const [{ data: post }, { data: media }] = await Promise.all([
+    db.from("sub_posts").select("id, creator_id, caption, status").eq("id", postId).maybeSingle(),
+    db.from("sub_post_media").select("idx, media_kind, object_key, width, height").eq("post_id", postId).order("idx"),
+  ]);
   const p = post as Row | null;
   if (!p || p.status !== "published") return fail("This post isn't available.", 404);
-  if (!(await hasActiveSub(viewerId, p.creator_id as string))) return fail("Subscribe to see this post.", 403);
+  const [access, mk] = await Promise.all([hasActiveSub(viewerId, p.creator_id as string), marks(viewerId, p.creator_id as string)]);
+  if (!access) return fail("Subscribe to see this post.", 403);
   if (!hasPrivateR2) return fail("Private storage isn't available right now.", 503);
-  const { data: media } = await db.from("sub_post_media").select("idx, media_kind, object_key, width, height").eq("post_id", postId).order("idx");
-  const items = await Promise.all(((media ?? []) as Row[]).map(async (m) => ({ kind: m.media_kind as "image" | "video", url: await presignPrivateGet(m.object_key as string, SIGNED_TTL_SECONDS), width: (m.width as number | null) ?? null, height: (m.height as number | null) ?? null })));
-  // the watermark names the VIEWER by public handle only: never an email, phone or payout detail
-  /*
-    Plus the CREATOR's public handle (owner 2026-10-12): the media carries "frenzsave.com/u/<handle>"
-    along its bottom edge, so a screenshot that travels points back to their PUBLIC profile — never
-    to this private post, which has no URL at all.
-  */
-  const [cfg, viewer, creator] = await Promise.all([
-    subConfig(),
-    db.from("profiles").select("handle").eq("id", viewerId).maybeSingle(),
-    db.from("profiles").select("handle").eq("id", p.creator_id as string).maybeSingle(),
-  ]);
-  const handle = (viewer.data as Row | null)?.handle as string | undefined;
-  const creatorHandle = ((creator.data as Row | null)?.handle as string | undefined) ?? null;
-  return { ok: true, caption: (p.caption as string | null) ?? null, media: items, expiresAt: new Date(Date.now() + SIGNED_TTL_SECONDS * 1000).toISOString(), watermark: cfg.watermark && viewerId !== p.creator_id && handle ? `@${handle}` : null, creatorHandle };
+  return { ok: true, caption: (p.caption as string | null) ?? null, media: await signMedia((media ?? []) as Row[]), expiresAt: new Date(Date.now() + SIGNED_TTL_SECONDS * 1000).toISOString(), ...mk };
 }
 
 export async function deleteSubPost(creatorId: string, postId: string): Promise<{ ok: true } | Fail> {

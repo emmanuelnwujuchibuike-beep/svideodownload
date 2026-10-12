@@ -225,6 +225,8 @@ function FeedPostCardImpl({
       ([entry]) => {
         if (entry?.isIntersecting) {
           prefetchPostComments(item.id);
+          // …and the sheet code itself (one shared chunk, fetched once), so the first tap opens instantly
+          void import("@/features/social/comments-sheet").catch(() => {});
           obs.disconnect();
         }
       },

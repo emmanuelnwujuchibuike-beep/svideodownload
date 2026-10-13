@@ -199,7 +199,7 @@ export interface ViewsTerms {
   targetViews: number;
   delivery: {
     deliveredViews: number;
-    phase: "initial" | "extended" | "fulfilled" | "shortfall";
+    phase: "initial" | "extended" | "review" | "fulfilled" | "shortfall";
     extensionsUsed: number;
     maxExtensions: number;
     initialEndAt: string | null;
@@ -211,9 +211,12 @@ export interface ViewsTerms {
 /**
  * The views terms of one campaign, or null for a fixed-period one. Read on its
  * own, never in CAMPAIGN_COLUMNS, so the dashboard keeps loading on a database
- * that has not run 0240 (this read then fails open to null). The delivered
- * count is the database's real one — the admin test-mode scaling never
- * touches it.
+ * that has not run 0240 (this read then fails open to null).
+ *
+ * Owner 2026-10-12: the admin x10 sample mode (stats_multiplier) applies here
+ * too, like every other figure on this dashboard — display only, capped at the
+ * target so it never reads past what was bought. The stored count, the
+ * fulfilment, the extensions and the refund all use the real number.
  */
 export async function loadViewsTerms(campaignId: string): Promise<ViewsTerms | null> {
   const sb = await getClient();
@@ -229,7 +232,7 @@ export async function loadViewsTerms(campaignId: string): Promise<ViewsTerms | n
   return {
     targetViews: row.target_views,
     delivery: r
-      ? { deliveredViews: r.delivered_views, phase: r.phase, extensionsUsed: r.extensions_used, maxExtensions: r.max_extensions, initialEndAt: r.initial_end_at, fulfilledAt: r.fulfilled_at, shortfallViews: r.shortfall_views }
+      ? { deliveredViews: Math.min(row.target_views, r.delivered_views * ((await loadBoosts()).get(campaignId) ?? 1)), phase: r.phase, extensionsUsed: r.extensions_used, maxExtensions: r.max_extensions, initialEndAt: r.initial_end_at, fulfilledAt: r.fulfilled_at, shortfallViews: r.shortfall_views }
       : null,
   };
 }

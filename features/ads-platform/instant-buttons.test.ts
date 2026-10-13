@@ -31,8 +31,10 @@ describe("every advertising button answers the first tap", () => {
       expect(src(f), f).not.toMatch(/<Link[\s>]/);
     }
     const wiz = src("features/ads-platform/advertise-wizard.tsx");
-    expect(wiz.match(/<Link[\s>]/g) ?? []).toHaveLength(1);
-    expect(wiz).toContain('<Link href="/advertise/rules" target="_blank"');
+    // the rules, and (0240) the views delivery terms beside the price — both open a new tab
+    const links = [...wiz.matchAll(/<Link[\s>][^>]*>/g)].map((m) => m[0]);
+    expect(links).toHaveLength(2);
+    for (const l of links) expect(l).toMatch(/href="\/advertise\/rules(#views-delivery)?" target="_blank"/);
     // 2026-10-09: the promote door is a fixed TapOnceLink — it goes once and stays pressed while the page comes
     const promote = src("features/downloads/promote-button.tsx");
     expect(promote).toContain("<TapOnceLink");

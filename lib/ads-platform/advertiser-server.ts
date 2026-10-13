@@ -743,6 +743,20 @@ export async function submitApplication(db: Db, userId: string, input: SubmitInp
   // lock the price, per campaign, from the database
   const { data: pls } = await db.from("ad_placements").select("id, code").in("id", all.map((r) => r.placement_id));
   const codeOf = new Map(((pls ?? []) as { id: string; code: string }[]).map((p) => [p.id, p.code]));
+
+  /*
+    0241 (owner 2026-10-12): a placement whose slots are all taken is refused
+    HERE, before payment — activation used to find it after the advertiser had
+    paid. Fails open on a database without 0241 (activation still guards).
+  */
+  const { data: avail, error: availErr } = await db.rpc("ad_slot_availability");
+  if (!availErr) {
+    const rows = (avail as { placements?: { code: string; capacity: number; taken: number; next_free_at: string | null }[] } | null)?.placements ?? [];
+    for (const r of all) {
+      const a = rows.find((x) => x.code === codeOf.get(r.placement_id));
+      if (a && a.capacity > 0 && a.taken >= a.capacity) refuse("placement_full", 409, { placementCode: a.code, nextFreeAt: a.next_free_at });
+    }
+  }
   const lines: LockedQuote["lines"] = [];
   for (const r of all) {
     const { data: q, error } = await db.rpc("ad_campaign_quote", { p_campaign: r.id, p_currency: cat.settings.display_currency });

@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { alertEmailHtml, sendAdminAlertOnce } from "@/lib/notify";
 import { SITE_URL } from "@/lib/site";
 
-import { notifyAdvertiser } from "./ad-notify";
+import { notifyAdvertiser, notifySlotOpen } from "./ad-notify";
 import { PUBLIC_BUCKET, STAGING_BUCKET } from "./advertiser-server";
 import { reconcilePendingAdPayments } from "./payment-server";
 
@@ -50,6 +50,7 @@ export async function runAdHousekeeping(db: Db, now: number = Date.now()) {
   // 2026-10-09: a paid checkout whose webhook never arrived is confirmed with the provider here too
   out.payments = await reconcilePendingAdPayments(db, now).catch((e: unknown) => ({ error: String(e).slice(0, 160) }));
   out.views = await runViewsDelivery(db).catch((e: unknown) => ({ error: String(e).slice(0, 160) }));
+  out.slots = await runSlotAlerts(db).catch((e: unknown) => ({ error: String(e).slice(0, 160) }));
   return out;
 }
 
@@ -65,7 +66,24 @@ async function runViewsDelivery(db: Db) {
     else if (r.phase === "extended") await notifyAdvertiser(db, r.campaign_id, { kind: "delivery_extended", remaining: Math.max(0, r.target_views - r.delivered_views), endAt: r.end_at });
     else if (r.phase === "shortfall") await notifyAdvertiser(db, r.campaign_id, { kind: "delivery_shortfall", shortfall: r.shortfall_views ?? Math.max(0, r.target_views - r.delivered_views), refundOwed: r.refund_owed });
   }
-  return { deadlines: deadlines.data, notices: rows.length };
+  // 0241: one "planned period ends soon" notice, a day ahead, for a campaign still short
+  const soon = await db.rpc("ad_views_deadline_notices", { p_hours: 24 });
+  const soonRows = (soon.error ? [] : (soon.data ?? [])) as { campaign_id: string; remaining: number; end_at: string | null; free_extension: boolean }[];
+  for (const r of soonRows) await notifyAdvertiser(db, r.campaign_id, { kind: "deadline_soon", remaining: r.remaining, endAt: r.end_at, freeExtension: r.free_extension });
+  return { deadlines: deadlines.data, notices: rows.length, deadlineSoon: soonRows.length };
+}
+
+/** 0241 (owner 2026-10-12): members waiting for a full placement are told by push AND email when a slot opens — once. */
+async function runSlotAlerts(db: Db) {
+  const due = await db.rpc("ad_slot_waitlist_due", { p_limit: 100 });
+  if (due.error) return { skipped: due.error.code === "PGRST202" ? "needs_0241" : due.error.message };
+  const rows = (due.data ?? []) as { user_id: string; placement_name: string }[];
+  for (const r of rows) await notifySlotOpen(db, r.user_id, r.placement_name);
+  // owner 2026-10-12: a live fixed-period ad is told about a day before it ends (once per end date)
+  const ending = await db.rpc("ad_expiring_notices", { p_hours: 24 });
+  const endingRows = (ending.error ? [] : (ending.data ?? [])) as { campaign_id: string; end_at: string | null }[];
+  for (const r of endingRows) await notifyAdvertiser(db, r.campaign_id, { kind: "expiring_soon", endAt: r.end_at });
+  return { told: rows.length, endingSoon: endingRows.length };
 }
 
 async function cleanAssets(db: Db, now: number) {

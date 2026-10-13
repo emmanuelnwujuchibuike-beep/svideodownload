@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, BadgeCheck, CalendarClock, CircleAlert, Clock, FileCheck2, Gift, Globe, Info, LoaderCircle, Lock, LogIn, RefreshCw, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, CalendarClock, CircleAlert, Clock, Eye, FileCheck2, Gift, Globe, Info, LoaderCircle, Lock, LogIn, RefreshCw, ShieldCheck } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -36,8 +36,10 @@ import {
   recommendedSize,
   STRIP_GUIDANCE,
   type AdCatalog,
+  type Estimate,
 } from "@/lib/ads-platform/offer";
 import { tallForTopBanner } from "@/lib/ads-platform/slot-registry";
+import { offeredViewsDurations, snapTarget, viewsRateFor, viewsTermsOf, type PricingModel, type ViewsTerms } from "@/lib/ads-platform/views-pricing";
 import { ADVERTISING_RULES, ADVERTISING_RULES_VERSION, AUTOMATED_VALIDATION_NOTICE, RULES_CHECKBOX_TEXT } from "@/lib/ads-platform/rules";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +50,8 @@ import { loadReach, reachLabel, type Reach } from "./reach-client";
 import type { UploadedCreative } from "./creative-step";
 import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { loadMyApplications, type MyApplication } from "./my-applications-client";
+import { freeAlternatives, isFull, loadSlotAvailability, nextFreeLabel, type SlotAvailability } from "./slot-availability-client";
+import { guaranteeText, ViewsPicker, viewsEstimate } from "./views-picker";
 
 /**
  * The advertiser application — eight steps on one page.
@@ -91,9 +95,14 @@ interface Form {
   headline: string;
   description: string;
   destination: string;
+  /** Part 2 (0240): bought by days (the original product) or by views */
+  pricingModel: PricingModel;
+  targetViews: number | null;
 }
 
 const EMPTY: Form = {
+  pricingModel: "fixed_period",
+  targetViews: null,
   step: "format",
   formatCode: null,
   placementCodes: [],
@@ -117,7 +126,21 @@ function readStored(): Form | null {
   }
 }
 
-const choiceKey = (f: Pick<Form, "formatCode" | "placementCodes" | "durationId">) => JSON.stringify([f.formatCode, f.placementCodes, f.durationId]);
+const choiceKey = (f: Pick<Form, "formatCode" | "placementCodes" | "durationId" | "pricingModel" | "targetViews">) =>
+  // a fixed-period draft keeps its old key, so drafts saved before Part 2 are not re-sent for nothing
+  JSON.stringify(f.pricingModel === "views_based" ? [f.formatCode, f.placementCodes, f.durationId, "views", f.targetViews] : [f.formatCode, f.placementCodes, f.durationId]);
+
+/** Durations this form may choose: the views periods for a views campaign, the priced ones otherwise. */
+function durationsFor(f: Pick<Form, "pricingModel" | "placementCodes">, cat: AdCatalog) {
+  return f.pricingModel === "views_based" ? offeredViewsDurations(cat) : offeredDurations(cat, f.placementCodes);
+}
+
+/** Every chosen placement's views rate, or null when one of them doesn't sell views. */
+function viewsRates(cat: AdCatalog, terms: ViewsTerms | null, codes: readonly string[]): number[] | null {
+  if (!terms || codes.length === 0) return null;
+  const rates = codes.map((c) => viewsRateFor(cat, terms, c));
+  return rates.every((r): r is number => r !== null) ? rates : null;
+}
 
 type ApiResult<T> = { ok: true; data: T } | { ok: false; code: string; message: string };
 
@@ -146,7 +169,14 @@ function reconcile(form: Form, cat: AdCatalog): { form: Form; notes: string[] } 
     if (kept.length !== f.placementCodes.length) notes.push(adMessage("placement_unavailable"));
     f.placementCodes = kept;
   }
-  if (f.durationId && !offeredDurations(cat, f.placementCodes).some((d) => d.id === f.durationId)) {
+  // Part 2: a views campaign whose terms are gone (switched off, placement opted out) goes back to days
+  const terms = viewsTermsOf(cat);
+  if (f.pricingModel === "views_based" && !viewsRates(cat, terms, f.placementCodes)) {
+    if (f.placementCodes.length) notes.push(adMessage(terms ? "views_not_offered" : "views_pricing_disabled"));
+    f.pricingModel = terms ? f.pricingModel : "fixed_period";
+  }
+  if (f.pricingModel === "views_based" && terms) f.targetViews = snapTarget(terms, f.targetViews ?? terms.minTarget);
+  if (f.durationId && !durationsFor(f, cat).some((d) => d.id === f.durationId)) {
     notes.push(adMessage("duration_unavailable"));
     f.durationId = null;
   }
@@ -164,6 +194,11 @@ export function AdvertiseWizard() {
   const [reach, setReach] = useState<Reach | null>(null);
   useEffect(() => {
     void loadReach().then(setReach);
+  }, []);
+  // 0241: free slots per placement — one cached read per visit (null = unknown, the wizard behaves as before)
+  const [slots, setSlots] = useState<Map<string, SlotAvailability> | null>(null);
+  useEffect(() => {
+    void loadSlotAvailability().then(setSlots);
   }, []);
   const [hydrated, setHydrated] = useState(false);
   const [notes, setNotes] = useState<string[]>([]);
@@ -271,8 +306,19 @@ export function AdvertiseWizard() {
 
   const format = cat.formats.find((f) => f.code === form.formatCode) ?? null;
   const placements = format ? offeredPlacements(cat, format.code) : [];
-  const durations = offeredDurations(cat, form.placementCodes);
-  const est = form.durationId ? estimate(cat, form.placementCodes, form.durationId) : null;
+  // Part 2: views terms from the live catalog (null = views not sold, or the database has no 0240)
+  const terms = viewsTermsOf(cat);
+  const rates = viewsRates(cat, terms, form.placementCodes);
+  const views = form.pricingModel === "views_based";
+  const durations = durationsFor(form, cat);
+  const target = views && terms ? snapTarget(terms, form.targetViews ?? terms.minTarget) : null;
+  const est: Estimate | null = !form.durationId
+    ? null
+    : views
+      ? rates && target !== null && durations.some((d) => d.id === form.durationId)
+        ? { currency: cat.settings.display_currency, lines: [], subtotal: viewsEstimate(target, rates), discount: 0, total: viewsEstimate(target, rates) }
+        : null
+      : estimate(cat, form.placementCodes, form.durationId);
   const stepIndex = APPLICATION_STEPS.indexOf(form.step);
   const multi = maxPlacements(cat) > 1;
   const dest = normalizeDestination(form.destination);
@@ -292,6 +338,8 @@ export function AdvertiseWizard() {
       durationId: form.durationId,
       name: form.name,
       businessName: form.businessName,
+      // Part 2: only a views draft names its model, so a fixed one is sent exactly as before
+      ...(form.pricingModel === "views_based" ? { pricingModel: "views_based", targetViews: target } : {}),
     });
     setBusy(null);
     if (!r.ok) {
@@ -438,6 +486,7 @@ export function AdvertiseWizard() {
 
   const resume = (a: MyApplication) => {
     const c = a.creative;
+    const model: Pick<Form, "pricingModel" | "targetViews"> = a.targetViews ? { pricingModel: "views_based", targetViews: a.targetViews } : { pricingModel: "fixed_period", targetViews: null };
     const merged: Form = {
       ...EMPTY,
       step: c ? "details" : "creative",
@@ -445,7 +494,8 @@ export function AdvertiseWizard() {
       placementCodes: a.placementCodes,
       durationId: a.durationId,
       campaignId: a.id,
-      savedKey: choiceKey({ formatCode: a.formatCode, placementCodes: a.placementCodes, durationId: a.durationId }),
+      savedKey: choiceKey({ formatCode: a.formatCode, placementCodes: a.placementCodes, durationId: a.durationId, ...model }),
+      ...model,
       creative: c && c.media_url
         ? { id: c.id, mediaType: c.media_type, mediaUrl: c.media_url, thumbnailUrl: c.thumbnail_url, width: c.width, height: c.height, durationSeconds: c.duration_seconds === null ? null : Number(c.duration_seconds), sizeBytes: c.file_size_bytes }
         : null,
@@ -463,8 +513,8 @@ export function AdvertiseWizard() {
 
   const canContinue: Record<ApplicationStep, boolean> = {
     format: !!format,
-    placement: form.placementCodes.length > 0,
-    duration: !!form.durationId && durations.some((d) => d.id === form.durationId),
+    placement: form.placementCodes.length > 0 && !form.placementCodes.some((c) => isFull(slots?.get(c))),
+    duration: !!form.durationId && durations.some((d) => d.id === form.durationId) && (!views || (!!rates && target !== null)),
     creative: !!form.creative,
     details: destOk && Object.keys(problems).length === 0,
     preview: true,
@@ -556,36 +606,109 @@ export function AdvertiseWizard() {
           <div className="mt-4 space-y-2.5" role={multi ? "group" : "radiogroup"} aria-label="Placement">
             {placements.map((p) => {
               const on = form.placementCodes.includes(p.code);
-              const full = multi && !on && form.placementCodes.length >= maxPlacements(cat);
+              const atLimit = multi && !on && form.placementCodes.length >= maxPlacements(cat);
+              // 0241 (owner 2026-10-12): every slot taken — not bookable now; say when one should open
+              const a = slots?.get(p.code);
+              const noSlot = isFull(a);
               return (
-                <OptionCard
-                  key={p.code}
-                  multi={multi}
-                  title={p.name}
-                  selected={on}
-                  disabled={full}
-                  onSelect={() => {
-                    const codes = multi ? (on ? form.placementCodes.filter((c) => c !== p.code) : [...form.placementCodes, p.code]) : [p.code];
-                    const stillPriced = offeredDurations(cat, codes).some((d) => d.id === form.durationId);
-                    update({ placementCodes: codes, durationId: stillPriced ? form.durationId : null });
-                  }}
-                >
-                  {p.description}
-                  {/* 0211: the measured reach of each place, and what All slots adds — or nothing when there is not enough data */}
-                  {p.code === "all_slots" ? (
-                    <span className="mt-1 block text-[12.5px] font-semibold text-indigo-700 dark:text-indigo-300">Most reach — guaranteed more than any single slot.</span>
-                  ) : null}
-                  {reachLabel(reach, p.code) ? <span className="mt-0.5 block text-[12px] text-muted-foreground">{reachLabel(reach, p.code)}</span> : null}
-                </OptionCard>
+                <div key={p.code}>
+                  <OptionCard
+                    multi={multi}
+                    title={p.name}
+                    selected={on}
+                    disabled={atLimit || (noSlot && !on)}
+                    badge={noSlot ? <Chip tone="amber">All {a!.capacity} slots taken</Chip> : null}
+                    onSelect={() => {
+                      const codes = multi ? (on ? form.placementCodes.filter((c) => c !== p.code) : [...form.placementCodes, p.code]) : [p.code];
+                      const stillPriced = durationsFor({ pricingModel: form.pricingModel, placementCodes: codes }, cat).some((d) => d.id === form.durationId);
+                      update({ placementCodes: codes, durationId: stillPriced ? form.durationId : null });
+                    }}
+                  >
+                    {p.description}
+                    {/* 0211: the measured reach of each place, and what All slots adds — or nothing when there is not enough data */}
+                    {p.code === "all_slots" ? (
+                      <span className="mt-1 block text-[12.5px] font-semibold text-indigo-700 dark:text-indigo-300">Most reach — guaranteed more than any single slot.</span>
+                    ) : null}
+                    {reachLabel(reach, p.code) ? <span className="mt-0.5 block text-[12px] text-muted-foreground">{reachLabel(reach, p.code)}</span> : null}
+                    {noSlot && nextFreeLabel(a) ? <span className="mt-1 block text-[12px] font-semibold text-amber-800 dark:text-amber-200">Next slot expected {nextFreeLabel(a)}</span> : null}
+                  </OptionCard>
+                  {noSlot ? <SlotAlert placementCode={p.code} signedIn={!!user} /> : null}
+                </div>
               );
             })}
           </div>
+          {/* a full placement already chosen (a draft from before it filled): point at the ones with room */}
+          {form.placementCodes.some((c) => isFull(slots?.get(c))) ? (
+            <div className="mt-3">
+              <Notice icon={CircleAlert} tone="amber">
+                {adMessage("placement_full")}
+                {freeAlternatives(slots, placements.map((p) => p.code), form.placementCodes).length ? (
+                  <>
+                    {" "}Available now:{" "}
+                    {freeAlternatives(slots, placements.map((p) => p.code), form.placementCodes)
+                      .map((c) => cat.placements.find((p) => p.code === c)?.name ?? c)
+                      .join(", ")}
+                    .
+                  </>
+                ) : null}
+              </Notice>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
       {/* ── 3 · duration ── */}
       {form.step === "duration" ? (
         <section>
+          {/* Part 2: two ways to buy, side by side, only when the admin sells views */}
+          {terms ? (
+            <>
+              <StepTitle title="How do you want to buy?" sub="Pay for the views you want, or for the days your ad runs." />
+              <div className="mt-4 grid gap-2.5 sm:grid-cols-2" role="radiogroup" aria-label="Campaign type">
+                <OptionCard
+                  icon={Eye}
+                  title="Choose Your Views"
+                  badge={<Chip tone="indigo">Reach</Chip>}
+                  selected={views}
+                  disabled={!rates}
+                  onSelect={() => {
+                    if (views) return;
+                    const ok = offeredViewsDurations(cat).some((d) => d.id === form.durationId);
+                    update({ pricingModel: "views_based", targetViews: snapTarget(terms, form.targetViews ?? terms.minTarget), durationId: ok ? form.durationId : null });
+                  }}
+                >
+                  {rates ? "Set your target reach and pay for the views you want." : adMessage("views_not_offered")}
+                </OptionCard>
+                <OptionCard
+                  icon={CalendarClock}
+                  title="Choose Your Duration"
+                  badge={<Chip>Time</Chip>}
+                  selected={!views}
+                  onSelect={() => {
+                    if (!views) return;
+                    const ok = offeredDurations(cat, form.placementCodes).some((d) => d.id === form.durationId);
+                    update({ pricingModel: "fixed_period", durationId: ok ? form.durationId : null });
+                  }}
+                >
+                  Keep your ad running for the campaign period you choose.
+                </OptionCard>
+              </div>
+            </>
+          ) : null}
+          {views && terms && rates ? (
+            <ViewsPicker
+              cat={cat}
+              terms={terms}
+              rates={rates}
+              placementNames={form.placementCodes.map((c) => cat.placements.find((p) => p.code === c)?.name ?? c)}
+              durations={durations}
+              target={target ?? terms.minTarget}
+              durationId={form.durationId}
+              onTarget={(n) => update({ targetViews: n })}
+              onDuration={(id) => update({ durationId: id })}
+            />
+          ) : (
+          <>
           <StepTitle title="How long should it run?" sub="You're buying campaign time: your ad stays eligible to be shown for this many days." />
           <div className="mt-3">
             <Notice icon={Clock}>
@@ -626,6 +749,8 @@ export function AdvertiseWizard() {
             })}
           </div>
           {form.placementCodes[0] && form.durationId ? <PromoLine cat={cat} placement={form.placementCodes[0]} durationId={form.durationId} /> : null}
+          </>
+          )}
           {!userLoading && !user ? (
             <div className="mt-4">
               <Notice icon={LogIn}>Next you&apos;ll upload your creative. You&apos;ll need to sign in to your Frenzsave account for that — your choices are kept.</Notice>
@@ -775,12 +900,23 @@ export function AdvertiseWizard() {
                 name={form.name}
                 placements={form.placementCodes.map((c) => cat.placements.find((p) => p.code === c)?.name ?? c)}
                 format={format.name}
-                runtime={runtimeLabel(duration?.days, extra)}
+                runtime={
+                  views && target !== null
+                    ? `${target.toLocaleString("en-US")} views · ${duration?.name ?? "—"} planned period`
+                    : runtimeLabel(duration?.days, extra)
+                }
                 promotion={promo ? `${promo.name}${est && est.discount > 0 ? ` · ${formatMoney(est.discount, est.currency)} off` : ""}` : null}
                 total={total}
                 was={!locked && est && est.discount > 0 ? formatMoney(est.subtotal, est.currency) : null}
                 details={
                   <div className="space-y-0.5">
+                    {views && rates ? (
+                      <>
+                        <Row muted label="Pricing" value="By views" />
+                        <Row muted label="Price per 1,000 views" value={rates.map((r) => formatMoney(r, cat.settings.display_currency)).join(" · ")} />
+                        <Row muted label="Currency" value={cat.settings.display_currency} />
+                      </>
+                    ) : null}
                     {est && est.lines.length > 1
                       ? est.lines.map((l) => (
                           <Row key={l.placementCode} muted label={cat.placements.find((p) => p.code === l.placementCode)?.name ?? l.placementCode} value={formatMoney(l.list, est.currency)} />
@@ -794,6 +930,16 @@ export function AdvertiseWizard() {
               />
             );
           })()}
+          {views && terms ? (
+            <div className="mt-3">
+              <Notice icon={ShieldCheck}>
+                <strong>Delivery protection.</strong> {guaranteeText(terms)} It covers qualifying ad views — not clicks, sales or unique people.{" "}
+                <Link href="/advertise/rules#views-delivery" target="_blank" rel="noopener" prefetch={false} className="font-semibold underline underline-offset-2">
+                  Delivery terms
+                </Link>
+              </Notice>
+            </div>
+          ) : null}
           {!est ? (
             <div className="mt-3">
               <Notice icon={CircleAlert} tone="rose">
@@ -1044,6 +1190,65 @@ function Drafts({ apps, cat, onResume }: { apps: MyApplication[]; cat: AdCatalog
         })}
       </div>
     </div>
+  );
+}
+
+const SLOT_ALERTS = "frenz.ads.slot-alerts.v1";
+const alertsAsked = (): string[] => {
+  try {
+    return JSON.parse(sessionStorage.getItem(SLOT_ALERTS) ?? "[]") as string[];
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * 0241 (owner 2026-10-12): "turn on push and email notifications to get
+ * notified when the slot is open". One tap: the answer shows at once, the
+ * browser is asked for push inside that tap (it must be), and the server
+ * records the request — email is sent either way. Remembered for the visit,
+ * so a back-swipe shows the same state without asking again.
+ */
+function SlotAlert({ placementCode, signedIn }: { placementCode: string; signedIn: boolean }) {
+  const [state, setState] = useState<"idle" | "on" | "failed">(() => (typeof window !== "undefined" && alertsAsked().includes(placementCode) ? "on" : "idle"));
+  const [pushNote, setPushNote] = useState<string | null>(null);
+  if (!signedIn) {
+    return (
+      <TapOnceLink href={`/login?next=${encodeURIComponent("/advertise/create")}`} className="ml-4 mt-1.5 inline-flex min-h-[2.5rem] items-center text-[12.5px] font-semibold text-indigo-700 dark:text-indigo-300">
+        Sign in to be told when a slot opens →
+      </TapOnceLink>
+    );
+  }
+  if (state === "on") {
+    return (
+      <p className="ml-4 mt-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold text-emerald-700 dark:text-emerald-300" role="status">
+        <BadgeCheck className="h-4 w-4" aria-hidden /> We&apos;ll tell you by email{pushNote ?? " and push"} when a slot opens.
+      </p>
+    );
+  }
+  const ask = () => {
+    setState("on"); // drawn first; the server confirms
+    // push permission has to be asked inside the tap itself
+    void import("@/features/notifications/push")
+      .then((m) => m.enablePush())
+      .then((s) => setPushNote(s === "subscribed" ? null : " (push is off on this device)"))
+      .catch(() => setPushNote(" (push is off on this device)"));
+    void fetch("/api/ads/advertiser/slot-alert", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ placementCode }) })
+      .then((r) => {
+        if (!r.ok && r.status !== 409) throw new Error(String(r.status));
+        try {
+          sessionStorage.setItem(SLOT_ALERTS, JSON.stringify([...new Set([...alertsAsked(), placementCode])]));
+        } catch {
+          /* private mode: the answer still shows for this page */
+        }
+      })
+      .catch(() => setState("failed"));
+  };
+  return (
+    <button type="button" onClick={ask} className="ml-4 mt-1.5 inline-flex min-h-[2.5rem] items-center gap-1.5 text-[12.5px] font-semibold text-indigo-700 dark:text-indigo-300">
+      <Clock className="h-4 w-4" aria-hidden />
+      {state === "failed" ? "Couldn't set that up — try again" : "Notify me by push and email when a slot opens"}
+    </button>
   );
 }
 

@@ -170,6 +170,13 @@ export function adMessage(code: string, f: MessageFacts = {}): string {
       return "We can't deliver that many views on this placement in a reasonable time. Try fewer views or another placement.";
     case "currency_unsupported":
       return "Views campaigns are priced in US dollars only.";
+    /* ── 0241: slots ── */
+    case "placement_full":
+      return "All ad slots in this placement are taken right now. Choose another placement, or ask us to tell you when a slot opens.";
+    case "slot_available":
+      return "This placement has a free slot right now — you can book it.";
+    case "slot_alert_unavailable":
+      return "We couldn't set up that alert right now. Please try again in a moment.";
     case "views_extend_free":
       return "A views campaign is never charged for more time. If its period ends short, it keeps running free until your views are delivered.";
     /* ── Part 6: managing a paid campaign ── */

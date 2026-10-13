@@ -82,8 +82,11 @@ describe("no server call per tap or keystroke", () => {
     const sites = [...wiz.matchAll(/await api(?:<[^>]*>)?\("([^"]+)", "(POST|DELETE)"/g)].map((m) => `${m[2]} ${m[1]}`);
     // 2026-10-10: + the admin-only "Publish as test (no charge)" — one tap, refused (404) for anyone not an admin
     expect(sites.sort()).toEqual(["DELETE /api/ads/advertiser/draft", "POST /api/ads/advertiser/draft", "POST /api/ads/advertiser/submit", "POST /api/ads/advertiser/test-publish", "POST /api/ads/payment/create"]);
-    // inside api(), plus ONE read on mount: is the viewer an admin (whether to show that button)
-    expect(wiz.match(/\bfetch\(/g)).toHaveLength(2);
+    // inside api(), plus ONE read on mount: is the viewer an admin (whether to show that button),
+    // plus 0241 "notify me when a slot opens" — only inside that button's own tap
+    expect(wiz.match(/\bfetch\(/g)).toHaveLength(3);
+    const ask = wiz.slice(wiz.indexOf("const ask = () => {"), wiz.indexOf("const ask = () => {") + 900);
+    expect(ask).toContain('void fetch("/api/ads/advertiser/slot-alert"');
     expect(wiz).toContain('void fetch("/api/ads/advertiser/viewer")');
   });
 

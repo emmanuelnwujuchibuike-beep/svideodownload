@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { viewsPatchSchema, viewsSettingsSchema } from "./admin-platform";
 import type { AdCatalog } from "./offer";
+import * as slider from "./views-pricing";
 import { offeredViewsDurations, parseTargetViews, targetProblem, viewsPriceMinor, viewsRateFor, viewsTermsOf, type ViewsTerms } from "./views-pricing";
 
 /**
@@ -144,5 +145,56 @@ describe("the admin may set every views term (owner 2026-10-12: the minimum view
     expect(viewsSettingsSchema.safeParse({ views_min_target: 1000.5 }).success).toBe(false);
     expect(viewsSettingsSchema.safeParse({ views_min_target: 0 }).success).toBe(false);
     expect(viewsSettingsSchema.safeParse({ views_price: 1 }).success).toBe(false);
+  });
+});
+
+describe("Part 2 — the views slider", () => {
+  it("both ends are reachable and every value is a whole step inside the bounds", () => {
+    const { sliderToTarget, targetToSlider, snapTarget, targetRange } = slider;
+    const { lo, hi } = targetRange(TERMS);
+    expect(sliderToTarget(TERMS, 0)).toBe(lo);
+    expect(sliderToTarget(TERMS, 1)).toBe(hi);
+    for (let f = 0; f <= 1; f += 0.01) {
+      const v = sliderToTarget(TERMS, f);
+      expect(v % TERMS.step).toBe(0);
+      expect(v).toBeGreaterThanOrEqual(lo);
+      expect(v).toBeLessThanOrEqual(hi);
+    }
+    expect(targetToSlider(TERMS, lo)).toBe(0);
+    expect(targetToSlider(TERMS, hi)).toBe(1);
+    expect(snapTarget(TERMS, 1499)).toBe(1000);
+    expect(snapTarget(TERMS, 9e12)).toBe(hi);
+  });
+
+  it("log scale: small campaigns are not squeezed into the bottom of the track", () => {
+    // 10,000 of 1,000 → 1,000,000 sits a third of the way up, not at 1 %
+    expect(slider.targetToSlider(TERMS, 10_000)).toBeCloseTo(1 / 3, 2);
+    expect(slider.sliderToTarget(TERMS, 0.5)).toBeGreaterThanOrEqual(30_000);
+    expect(slider.sliderToTarget(TERMS, 0.5)).toBeLessThanOrEqual(33_000);
+  });
+
+  it("the track only ever moves up as the finger moves up (monotonic)", () => {
+    let prev = 0;
+    for (let f = 0; f <= 1.0001; f += 0.002) {
+      const v = slider.sliderToTarget(TERMS, f);
+      expect(v).toBeGreaterThanOrEqual(prev);
+      prev = v;
+    }
+  });
+
+  it("a key press always moves at least one buyable step, and stops at the ends", () => {
+    expect(slider.nudgeTarget(TERMS, 1000, 1)).toBeGreaterThan(1000);
+    expect(slider.nudgeTarget(TERMS, 1000, -1)).toBe(1000);
+    expect(slider.nudgeTarget(TERMS, 1_000_000, 1)).toBe(1_000_000);
+    expect(slider.nudgeTarget(TERMS, 50_000, 10)).toBeGreaterThan(slider.nudgeTarget(TERMS, 50_000, 1));
+  });
+
+  it("presets follow the admin's bounds (a 5,000 minimum starts at 5K)", () => {
+    expect(slider.presetTargets(TERMS)[0]).toBe(1000);
+    const t = { ...TERMS, minTarget: 5000, maxTarget: 200_000 };
+    const p = slider.presetTargets(t);
+    expect(p[0]).toBe(5000);
+    expect(p.at(-1)).toBe(200_000);
+    expect(p.every((v) => v >= 5000 && v <= 200_000 && v % t.step === 0)).toBe(true);
   });
 });

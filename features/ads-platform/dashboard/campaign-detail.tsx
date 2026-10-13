@@ -209,14 +209,42 @@ function Delivery({ c, v }: { c: CampaignRow; v: ViewsTerms }) {
   const done = d?.deliveredViews ?? 0;
   const share = Math.min(1, done / v.targetViews);
   const left = Math.max(0, v.targetViews - done);
+  // the share is floored: 99.6 % reads 99 %, never "100 %" before the target is really reached
+  const pctDone = Math.floor(share * 100);
+  const phase = !d ? "Waiting to go live" : d.phase === "initial" ? "Planned period" : d.phase === "extended" ? "Extended delivery" : d.phase === "fulfilled" ? "Target reached" : "Ended short";
+  const extDays = d?.phase === "extended" && d.initialEndAt ? Math.max(0, Math.floor((Date.now() - Date.parse(d.initialEndAt)) / 86_400_000)) : null;
   return (
     <AiPanel>
-      <p className="text-[14px] font-semibold">Guaranteed views</p>
-      <p className="mt-1 text-[13px] text-muted-foreground">
-        {num(done)} of {num(v.targetViews)} delivered
-      </p>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-secondary" role="progressbar" aria-valuemin={0} aria-valuemax={v.targetViews} aria-valuenow={done} aria-label="Views delivered">
-        <div className="h-full rounded-full bg-indigo-600 dark:bg-indigo-400" style={{ width: `${share * 100}%` }} />
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[14px] font-semibold">Guaranteed views</p>
+        <Chip tone={d?.phase === "fulfilled" ? "emerald" : d?.phase === "extended" ? "indigo" : d?.phase === "shortfall" ? "amber" : "slate"}>{phase}</Chip>
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+        {[
+          ["Purchased", num(v.targetViews)],
+          ["Delivered", num(done)],
+          ["Remaining", num(left)],
+        ].map(([k, val]) => (
+          <div key={k} className="rounded-2xl bg-secondary/60 px-2 py-2.5">
+            <p className="font-brand text-[1.15rem] font-bold tabular-nums leading-tight">{val}</p>
+            <p className="text-[11.5px] text-muted-foreground">{k}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-secondary" role="progressbar" aria-valuemin={0} aria-valuemax={v.targetViews} aria-valuenow={done} aria-valuetext={`${num(done)} of ${num(v.targetViews)} views, ${pctDone}%`} aria-label="Views delivered">
+          <div className="h-full rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-500" style={{ width: `${share * 100}%` }} />
+        </div>
+        <span className="text-[13px] font-bold tabular-nums">{pctDone}%</span>
+      </div>
+      <div className="mt-3">
+        <Row label={!d || d.phase === "initial" ? "Planned period ends" : "Planned period ended"} value={d?.initialEndAt ? date(d.initialEndAt) : "—"} />
+        {extDays !== null ? <Row label="In extension for" value={`${extDays} ${extDays === 1 ? "day" : "days"} (extension ${d!.extensionsUsed} of ${d!.maxExtensions})`} /> : null}
+        <Row label="Additional delivery fee" value={usd(0)} />
+        <Row label="Campaign price" value={c.payment_verified_at ? usd(c.total_amount_minor) : "Not paid"} />
+        <Row label="Placement" value={c.ad_placements?.name ?? "—"} />
+        <Row label="Created" value={date(c.created_at)} />
+        {d?.fulfilledAt ? <Row label="Completed" value={date(d.fulfilledAt)} /> : null}
       </div>
       <div className="mt-3">
         {!d ? (

@@ -45,6 +45,8 @@ export interface MyApplication {
   placementCodes: string[];
   durationId: string;
   creative: MyCreative | null;
+  /** 0240: a draft bought by views (absent on a database without 0240) */
+  targetViews?: number | null;
 }
 
 export async function loadMyApplications(): Promise<{ applications: MyApplication[]; businessName: string | null }> {
@@ -62,6 +64,12 @@ export async function loadMyApplications(): Promise<{ applications: MyApplicatio
       sb.from("advertisers").select("business_name").maybeSingle(),
     ]);
     const rows = (campaigns.data ?? []) as unknown as MyCampaign[];
+    // 0240: the views target, read on its own so the list still loads before the migration runs
+    const views = new Map<string, number>();
+    if (rows.length) {
+      const { data: v, error: vErr } = await sb.from("ad_campaigns").select("id, pricing_model, target_views").in("id", rows.map((r) => r.id));
+      if (!vErr) for (const x of (v ?? []) as { id: string; pricing_model: string; target_views: number | null }[]) if (x.pricing_model === "views_based" && x.target_views) views.set(x.id, x.target_views);
+    }
     const byApp = new Map<string, MyCampaign[]>();
     for (const r of rows) {
       const key = r.application_id ?? r.id;
@@ -79,6 +87,7 @@ export async function loadMyApplications(): Promise<{ applications: MyApplicatio
         placementCodes: [head, ...group.filter((g) => g !== head)].map((g) => g.ad_placements?.code).filter((c): c is string => !!c),
         durationId: head.duration_id,
         creative: head.ad_creatives.find((c) => c.status === "active" && c.validation_status === "valid") ?? null,
+        targetViews: views.get(head.id) ?? null,
       });
     }
     return { applications, businessName: (advertiser.data as { business_name?: string } | null)?.business_name ?? null };

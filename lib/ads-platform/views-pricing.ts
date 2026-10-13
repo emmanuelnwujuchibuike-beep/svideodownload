@@ -75,3 +75,64 @@ export function targetProblem(terms: ViewsTerms, target: number): "target_too_sm
 export function viewsPriceMinor(target: number, ratePer1000Minor: number): number {
   return Math.floor((target * ratePer1000Minor) / 1000);
 }
+
+/* ───────────────────── the views slider (Part 2) ─────────────────────
+   A logarithmic scale: 1,000 → 1,000,000 is three decades, so a linear track
+   would put every small campaign in its bottom 1 %. Every value the slider
+   gives is a whole multiple of the step inside the bounds; the number field
+   reaches any exact target. */
+
+/** The smallest and largest targets that are whole steps inside the bounds. */
+export function targetRange(t: ViewsTerms): { lo: number; hi: number } {
+  const lo = Math.ceil(t.minTarget / t.step) * t.step;
+  const hi = Math.max(lo, Math.floor(t.maxTarget / t.step) * t.step);
+  return { lo, hi };
+}
+
+/** Any number → the nearest buyable target (whole step, inside the bounds). */
+export function snapTarget(t: ViewsTerms, v: number): number {
+  const { lo, hi } = targetRange(t);
+  if (!Number.isFinite(v)) return lo;
+  return Math.min(hi, Math.max(lo, Math.round(v / t.step) * t.step));
+}
+
+/** A round number near v (2 significant figures), then snapped — what a drag lands on. */
+function roundish(t: ViewsTerms, v: number): number {
+  const mag = 10 ** Math.max(0, Math.floor(Math.log10(Math.max(1, v))) - 1);
+  return snapTarget(t, Math.round(v / mag) * mag);
+}
+
+/** Track position (0 = bottom, 1 = top) → target. */
+export function sliderToTarget(t: ViewsTerms, frac: number): number {
+  const { lo, hi } = targetRange(t);
+  const f = Math.min(1, Math.max(0, frac));
+  if (f <= 0) return lo;
+  if (f >= 1) return hi;
+  return roundish(t, lo * (hi / lo) ** f);
+}
+
+/** Target → track position. */
+export function targetToSlider(t: ViewsTerms, target: number): number {
+  const { lo, hi } = targetRange(t);
+  if (hi <= lo) return 0;
+  return Math.min(1, Math.max(0, Math.log(snapTarget(t, target) / lo) / Math.log(hi / lo)));
+}
+
+/** One keyboard step along the track (a PageUp is ten), always moving at least one buyable step. */
+export function nudgeTarget(t: ViewsTerms, target: number, notches: number): number {
+  const cur = snapTarget(t, target);
+  const next = sliderToTarget(t, targetToSlider(t, cur) + notches / 100);
+  if (next !== cur) return next;
+  return snapTarget(t, cur + Math.sign(notches) * t.step);
+}
+
+/** Round shortcuts inside the bounds (1K, 5K, 10K, 25K …) — no dragging for the common sizes. */
+export function presetTargets(t: ViewsTerms): number[] {
+  const { lo, hi } = targetRange(t);
+  const out = new Set<number>([lo]);
+  for (const v of [1_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000, 5_000_000, 10_000_000]) {
+    if (v > lo && v <= hi) out.add(snapTarget(t, v));
+  }
+  out.add(hi);
+  return [...out].sort((a, b) => a - b).slice(0, 8);
+}

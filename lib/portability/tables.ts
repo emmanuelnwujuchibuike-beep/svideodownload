@@ -368,6 +368,8 @@ export const OWNER_COLUMN: Record<string, string> = {
   ad_payment_quotes: "user_id",
   // 0198: extra days you bought for a running campaign
   ad_campaign_extensions: "user_id",
+  // 0241: placements you asked to be told about when a slot opens
+  ad_slot_waitlist: "user_id",
   affiliate_clicks: "user_id",
   gateway_impressions: "user_id",
   api_keys: "user_id",

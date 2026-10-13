@@ -1040,3 +1040,90 @@ Computed only at quote time.
 | Capacity assumes the whole placement's views are available to guarantees | an estimate; fixed campaigns share the rotation |
 | A campaign whose deadline passes between two serving misses keeps not serving until the next one (≤ 5 min) | known |
 | 0240 applied to production | owner runs it, then a live probe |
+
+---
+
+# Part 10 — the views experience, slot availability and notices (2026-10-12)
+
+Brief: "FRENZSAVE ADVERTISING SYSTEM UPGRADE, Part 2" plus the owner's notes the
+same day (slots, alerts, "ends soon"). Migration: `0241_ad_slot_availability.sql`.
+
+## Advertiser flow (the existing wizard, no new step)
+
+The duration step becomes **"How do you want to buy?"** when the admin sells
+views: two equal cards, **Choose Your Views** (Reach) and **Choose Your
+Duration** (Time — the existing packages, unchanged). The views card is
+disabled only when a chosen placement doesn't sell views (the admin's switch),
+with the reason.
+
+**Views picker** (`features/ads-platform/views-picker.tsx`):
+- a vertical `role="slider"` on a **log scale** (1K→1M: 10K sits a third of the
+  way up), pointer-captured drag for touch and mouse, arrows / Page Up/Down /
+  Home / End, every value a whole step inside the admin's bounds;
+- preset sizes (1K, 5K, 10K, 25K …) clamped to the bounds, and an exact
+  number field (fractions, signs and exponents refused in plain words);
+- the planned delivery period from the admin's enabled periods, worded as a
+  plan, not a run;
+- a live **Your campaign** card: target, rate per 1,000, period, placement,
+  estimated cost, and the delivery protection in the admin's **actual** terms
+  (`guaranteeText`: with free extension on, or the refund wording when off),
+  linking to `/advertise/rules#views-delivery`.
+
+Nothing is sent while the slider moves (one update a frame, priced locally by
+`views-pricing.ts`). The draft carries `pricingModel` + `targetViews`; the
+server prices at submit, and the review's existing "the price was updated"
+stop applies if the estimate and the server differ. The review card shows the
+model, target, planned period, rate, currency and the guarantee.
+
+## Slots: full placements, alerts
+
+- `ad_slot_availability()` (public, counts and a date only) uses activation's
+  own rule: live slot holders, disabled slots excluded, plus campaigns paying
+  or paid that still need a slot.
+- The placement step shows **All 10 slots taken** and **Next slot expected …**
+  (prefixed "about" when a views campaign holds a slot), disables booking it,
+  lists placements with room, and offers **Notify me by push and email when a
+  slot opens** (asks for push inside the tap; email always).
+- **Submit refuses a full placement before payment** (`placement_full`).
+  Before 0241, a full placement was only found at activation, after payment.
+- `ad_slot_waitlist` + `ad_slot_waitlist_due` (claimed once) → the hourly
+  housekeeping sends push + email (`notifySlotOpen`).
+
+## Notices (existing push + in-app + email, each sent once)
+
+| Notice | When | Idempotency |
+|---|---|---|
+| Your ad is live | activation (existing) | — |
+| **Your ad ends soon** | a live fixed-period campaign, ≤ 24 h before its end | `ad_campaigns.expiry_notified_for` = the end it warned about; an extension warns again |
+| Planned period ends soon | a views campaign still short, ≤ 24 h before its planned end | `ad_campaign_delivery.deadline_notified_at` |
+| Delivery extended, free / Views target reached / Delivery ended short | 0240 phase changes | `notified_key` |
+| Paused / paused by Frenzsave | existing | — |
+| A slot is open | waitlist | `notified_at` |
+
+## Dashboard
+
+The campaign page's **Guaranteed views** panel: purchased / delivered /
+remaining, a progress bar with the floored percentage, the phase chip, the
+planned end, days in extension (n of max), additional delivery fee $0, price,
+placement, created and completed dates, and "Launch another campaign" once the
+target is reached. A views campaign shows no paid "Extend".
+
+## Verified
+
+- PGlite: 0241 on 0149–0240: 16 checks (capacity, full, next free, disabled
+  slots, waiting paid campaigns, one alert per member, told once, browser may
+  read availability but not claim, ends-soon once per end date). The 0240
+  suite still passes 71/71 with 0241 applied.
+- `lib/ads-platform/views-pricing.test.ts`: 39 (slider ends, monotonic, log
+  placement, key steps, presets in bounds).
+- Real production build, Playwright, the live catalog with the 0240 terms and a
+  full placement injected at the network layer: 390 px, 320 px dark, 1280 px —
+  no horizontal overflow, no page errors; drag → 89,000, End → 1,000,000, Home →
+  1,000, typed 50,000 → $15, "1500.5" refused.
+
+## Not verified (honest)
+
+- The review step, upload and the dashboard panel with a real signed-in
+  advertiser and live data: production has neither 0240 nor 0241.
+- Push permission on an iPhone.
+- The hourly notices against a live database.

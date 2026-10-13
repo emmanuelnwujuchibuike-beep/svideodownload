@@ -34,7 +34,10 @@ export type AdNotice =
   /* 0240: guaranteed views */
   | { kind: "target_reached"; views: number }
   | { kind: "delivery_extended"; remaining: number; endAt: string | null }
-  | { kind: "delivery_shortfall"; shortfall: number; refundOwed: boolean };
+  | { kind: "delivery_shortfall"; shortfall: number; refundOwed: boolean }
+  | { kind: "deadline_soon"; remaining: number; endAt: string | null; freeExtension: boolean }
+  /* 0241: a live fixed-period campaign, a day before its end */
+  | { kind: "expiring_soon"; endAt: string | null };
 
 const day = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : null);
 
@@ -68,8 +71,43 @@ function words(n: AdNotice, name: string): { title: string; body: string; money:
       return { title: "Views target reached", body: `“${name}” delivered all ${n.views.toLocaleString("en-US")} views and has stopped. It won't renew or charge you again — launch another campaign any time.`, money: false };
     case "delivery_extended":
       return { title: "Delivery extended, free", body: `“${name}” has ${n.remaining.toLocaleString("en-US")} views to go, so it keeps running${day(n.endAt) ? ` until ${day(n.endAt)}` : ""} at no extra charge.`, money: false };
+    case "expiring_soon":
+      return { title: "Your ad ends soon", body: `“${name}” stops showing${day(n.endAt) ? ` on ${day(n.endAt)}` : " soon"}. Extend it from your campaign page to keep it running.`, money: false };
+    case "deadline_soon":
+      return {
+        title: "Planned period ends soon",
+        body: `“${name}” has ${n.remaining.toLocaleString("en-US")} views to go${day(n.endAt) ? ` and its planned period ends ${day(n.endAt)}` : ""}.${n.freeExtension ? " If it ends short, delivery continues free until your target is met." : " If it ends short, the undelivered share is refunded."}`,
+        money: false,
+      };
     case "delivery_shortfall":
       return { title: "Delivery ended short", body: `“${name}” ended ${n.shortfall.toLocaleString("en-US")} views short of its target.${n.refundOwed ? " The undelivered share of your payment will be refunded." : ""}`, money: n.refundOwed };
+  }
+}
+
+/**
+ * 0241 (owner 2026-10-12): a member asked to be told when a full placement has
+ * a free slot — push AND email, once (the waitlist row is claimed before this
+ * runs). Best effort, each channel on its own, like notifyAdvertiser.
+ */
+export async function notifySlotOpen(db: SupabaseClient, userId: string, placementName: string): Promise<void> {
+  const title = "An ad slot is open";
+  const body = `A slot is free in “${placementName}”. Slots go to whoever pays first — create your campaign now.`;
+  const href = `${SITE_URL}/advertise/create`;
+  try {
+    await sendSmartPush(
+      userId,
+      { title, body, url: "/advertise/create", genericBody: "An ad slot you asked about is open.", tag: `ad-slot-${placementName}` },
+      "medium",
+      "system",
+      { type: "system" },
+    ).catch((e: unknown) => console.warn("[ads-platform] slot push failed", { error: String(e).slice(0, 160) }));
+    const { data: p } = await db.from("profiles").select("email").eq("id", userId).maybeSingle();
+    const to = (p as { email?: string | null } | null)?.email;
+    if (typeof to === "string" && to.includes("@")) {
+      await sendProductEmail(to, { subject: title, heading: esc(title), intro: esc(body), ctaLabel: "Create your campaign", ctaHref: href });
+    }
+  } catch (e) {
+    console.warn("[ads-platform] slot notification failed", { error: String(e).slice(0, 160) });
   }
 }
 

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { AiButtonLink } from "@/features/ai/design/ai-button";
-import { ADVERTISING_RULES, ADVERTISING_RULES_VERSION, AUTOMATED_VALIDATION_NOTICE, TRAFFIC_QUALITY_NOTE, TRAFFIC_QUALITY_POLICY } from "@/lib/ads-platform/rules";
+import { ADVERTISING_RULES, ADVERTISING_RULES_VERSION, AUTOMATED_VALIDATION_NOTICE, TRAFFIC_QUALITY_NOTE, TRAFFIC_QUALITY_POLICY, VIEWS_DELIVERY_TERMS } from "@/lib/ads-platform/rules";
 
 export const dynamic = "force-static";
 
@@ -58,6 +58,20 @@ export default function AdvertisingRulesPage() {
               ))}
             </dl>
             <p className="mt-3 text-[13.5px] leading-relaxed text-muted-foreground">{TRAFFIC_QUALITY_NOTE}</p>
+          </section>
+          {/* 0240: the terms of a views campaign - linked from the campaign summary */}
+          <section id="views-delivery" aria-labelledby="views-delivery-title" className="mt-6 rounded-[1.4rem] bg-card p-5 ring-1 ring-inset ring-black/[0.07] dark:ring-white/10">
+            <h2 id="views-delivery-title" className="text-[1.1rem] font-bold tracking-[-0.02em]">
+              Views campaigns: delivery terms
+            </h2>
+            <dl className="mt-3 space-y-2.5 text-[14px] leading-relaxed">
+              {VIEWS_DELIVERY_TERMS.map((t) => (
+                <div key={t.term}>
+                  <dt className="font-semibold">{t.term}</dt>
+                  <dd className="text-muted-foreground">{t.meaning}</dd>
+                </div>
+              ))}
+            </dl>
           </section>
           <div className="mt-10">
             <AiButtonLink tapOnce href="/advertise/create" prefetch={false}>

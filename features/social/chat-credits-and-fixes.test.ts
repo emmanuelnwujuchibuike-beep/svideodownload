@@ -16,7 +16,9 @@ describe("send credits from a chat", () => {
   });
   it("the sheet loads only when tapped — the chat bundle does not carry it", () => {
     for (const f of ["features/social/conversation-room.tsx", "features/social/thread-options-sheet.tsx"]) {
-      expect(code(f), f).toContain('dynamicImport(() => import("@/features/ai/wallet/chat-send-credits")');
+      // a dynamic import(), directly or through the menu's shared warm-up loader (2026-10-14)
+      expect(code(f), f).toContain('import("@/features/ai/wallet/chat-send-credits")');
+      expect(code(f), f).toMatch(/dynamicImport\(\(\) => (import\("@\/features\/ai\/wallet\/chat-send-credits"\)|loadSendCredits\(\))/);
       expect(code(f), f).not.toMatch(/from "@\/features\/ai\/wallet\/(chat-send-credits|transfer-panel)"/);
     }
   });

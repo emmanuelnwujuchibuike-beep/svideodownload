@@ -70,7 +70,11 @@ async function patchWithRetry(url: string, body: Record<string, unknown>): Promi
  * action, reachable from inside the thread too.
  */
 // the send sheet loads only when Send credits is tapped (2026-10-07)
-const ChatSendCredits = dynamicImport(() => import("@/features/ai/wallet/chat-send-credits").then((m) => m.ChatSendCredits), { ssr: false });
+const loadSendCredits = () => import("@/features/ai/wallet/chat-send-credits");
+const ChatSendCredits = dynamicImport(() => loadSendCredits().then((m) => m.ChatSendCredits), { ssr: false });
+// 2026-10-14 (owner: "respond instantly like the promote button"): the sheet's code and the wallet read are
+// warmed while this menu is idle, and kept for the tab, so the tap paints the sheet at once
+const warmSendCredits = () => void loadSendCredits().then((m) => m.prefetchSendCredits()).catch(() => {});
 
 export function ThreadOptionsSheet({
   conversationId,
@@ -143,6 +147,16 @@ export function ThreadOptionsSheet({
   const [blockSheetOpen, setBlockSheetOpen] = useState(false);
   const [sendCreditsOpen, setSendCreditsOpen] = useState(false);
   const closeSendCredits = useCallback(() => setSendCreditsOpen(false), []);
+  useEffect(() => {
+    if (!open || !otherUserId) return;
+    const w = window as Window & { requestIdleCallback?: (cb: () => void) => number; cancelIdleCallback?: (id: number) => void };
+    if (w.requestIdleCallback) {
+      const id = w.requestIdleCallback(warmSendCredits);
+      return () => w.cancelIdleCallback?.(id);
+    }
+    const t = window.setTimeout(warmSendCredits, 300);
+    return () => window.clearTimeout(t);
+  }, [open, otherUserId]);
   const [appearanceSheetOpen, setAppearanceSheetOpen] = useState(false);
 
   const patch = async (body: Record<string, unknown>) => {
@@ -330,6 +344,7 @@ export function ThreadOptionsSheet({
                   {otherUserId ? (
                     <button
                       type="button"
+                      onPointerDown={warmSendCredits}
                       onClick={() => {
                         haptic("light");
                         setSendCreditsOpen(true);

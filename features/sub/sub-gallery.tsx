@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
 import { GLASS, primaryPill, quietPill } from "@/features/friends/ui";
 import { haptic } from "@/lib/motion/haptics";
 import { usd } from "@/lib/creator/membership/engine";
-import { cn } from "@/lib/utils";
+import { cn, formatCompactNumber } from "@/lib/utils";
 
 import { forgetSubPosts, loadSubPosts } from "./sub-posts-cache";
 
@@ -546,6 +546,7 @@ function PrivateInteractions({ postId, isCreator }: { postId: string; isCreator:
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const commentsRequested = useRef(false);
 
   useEffect(() => {
     let alive = true;
@@ -569,17 +570,30 @@ function PrivateInteractions({ postId, isCreator }: { postId: string; isCreator:
       .catch(() => setSum(prev));
   };
 
-  const openPanel = () => {
-    haptic("selection");
-    setPanel(true);
-    if (comments) return;
+  const loadComments = useCallback(() => {
+    if (commentsRequested.current) return;
+    commentsRequested.current = true;
     void fetch(`/api/sub/posts/${postId}/comments`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j: { comments?: PrivateComment[]; error?: string }) => {
         setComments(j.comments ?? []);
         if (j.error) setNote(j.error);
       })
-      .catch(() => setComments([]));
+      .catch(() => {
+        commentsRequested.current = false;
+        setComments([]);
+      });
+  }, [postId]);
+
+  // a post with comments has them read in the background as it opens, so the tray opens already filled
+  useEffect(() => {
+    if (sum && sum.comments > 0) loadComments();
+  }, [sum, loadComments]);
+
+  const openPanel = () => {
+    haptic("selection");
+    setPanel(true);
+    loadComments();
   };
 
   const send = async () => {
@@ -608,71 +622,138 @@ function PrivateInteractions({ postId, isCreator }: { postId: string; isCreator:
   if (!sum) return null;
   return (
     <>
+      {/* the engagement rail — frosted discs with a hairline ring, the reels rail's look */}
       <div className="absolute bottom-28 right-3 z-[4] flex flex-col items-center gap-4">
-        <button type="button" onClick={toggleLike} aria-pressed={sum.liked} aria-label={sum.liked ? "Unlike" : "Like"} className="flex flex-col items-center gap-0.5 text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.6)]">
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm">
-            <Heart className={cn("h-6 w-6", sum.liked && "fill-rose-500 text-rose-500")} aria-hidden />
+        <button type="button" onClick={toggleLike} aria-pressed={sum.liked} aria-label={sum.liked ? "Unlike" : "Like"} className="group flex flex-col items-center gap-1 text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.6)]">
+          <span className={cn("flex h-12 w-12 items-center justify-center rounded-full bg-black/30 ring-1 ring-inset ring-white/15 backdrop-blur-md transition group-active:scale-90 motion-reduce:transition-none", sum.liked && "bg-rose-500/20 ring-rose-400/40")}>
+            <Heart className={cn("h-6 w-6 transition-transform motion-reduce:transition-none", sum.liked && "scale-110 fill-rose-500 text-rose-500")} aria-hidden />
           </span>
-          <span className="text-[12px] font-semibold tabular-nums">{sum.likes}</span>
+          <span className="text-[12px] font-semibold tabular-nums">{formatCompactNumber(sum.likes)}</span>
         </button>
-        <button type="button" onClick={openPanel} aria-label="Comments" className="flex flex-col items-center gap-0.5 text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.6)]">
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm">
+        <button type="button" onClick={openPanel} aria-label="Comments" className="group flex flex-col items-center gap-1 text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.6)]">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/30 ring-1 ring-inset ring-white/15 backdrop-blur-md transition group-active:scale-90 motion-reduce:transition-none">
             <MessageCircle className="h-6 w-6" aria-hidden />
           </span>
-          <span className="text-[12px] font-semibold tabular-nums">{sum.comments}</span>
+          <span className="text-[12px] font-semibold tabular-nums">{formatCompactNumber(sum.comments)}</span>
         </button>
       </div>
       {panel ? (
-        <div className="absolute inset-x-0 bottom-0 z-[6] flex max-h-[65%] flex-col rounded-t-3xl bg-zinc-950/95 text-white backdrop-blur-xl">
-          <div className="flex items-center justify-between px-4 pb-2 pt-3">
-            <p className="text-[14px] font-semibold">Comments · {sum.comments}</p>
-            <button type="button" aria-label="Close comments" onClick={() => setPanel(false)} className="inline-flex h-10 w-10 items-center justify-center rounded-full">
-              <X className="h-5 w-5" aria-hidden />
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-2">
-            {comments === null ? (
-              <Loader2 className="mx-auto h-5 w-5 animate-spin text-white/60" aria-label="Loading" />
-            ) : comments.length === 0 ? (
-              <p className="py-6 text-center text-[13px] text-white/60">No comments yet. Be the first.</p>
-            ) : (
-              comments.map((c) => (
-                <div key={c.id} className="flex items-start gap-2.5">
-                  {c.author.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={c.author.avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
-                  ) : (
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-[12px] font-bold">{c.author.name.charAt(0).toUpperCase()}</span>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[12.5px] font-semibold">{c.author.name}</p>
-                    <p className="whitespace-pre-line break-words text-[13.5px] text-white/90">{c.body}</p>
+        <>
+          {/* a tap above the tray closes it, like the reels and feed sheets */}
+          <button type="button" aria-label="Close comments" tabIndex={-1} onClick={() => setPanel(false)} className="absolute inset-0 z-[5] cursor-default bg-black/40" />
+          {/* 2026-10-14 (owner): the same height as the reels and feed comment sheets, not a small strip */}
+          <section aria-label="Comments" className="absolute inset-x-0 bottom-0 z-[6] flex h-[68%] flex-col overflow-hidden rounded-t-[28px] bg-zinc-950/[0.97] text-white shadow-[0_-24px_60px_-20px_rgba(0,0,0,0.9)] ring-1 ring-inset ring-white/[0.08] backdrop-blur-2xl">
+            {/* a hairline of gold across the top edge — the private, members-only mark */}
+            <span aria-hidden className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/60 to-transparent" />
+            <span aria-hidden className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-white/25" />
+            <header className="flex items-center justify-between gap-3 px-5 pb-3 pt-2.5">
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 text-[16px] font-bold tracking-tight">
+                  Comments
+                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11.5px] font-semibold tabular-nums text-white/80">{formatCompactNumber(sum.comments)}</span>
+                </p>
+                <p className="mt-0.5 flex items-center gap-1 text-[11.5px] font-medium text-amber-200/80">
+                  <Lock className="h-3 w-3" aria-hidden />
+                  Only subscribers can see these
+                </p>
+              </div>
+              <button type="button" aria-label="Close comments" onClick={() => setPanel(false)} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.08] transition active:scale-90 motion-reduce:active:scale-100">
+                <X className="h-5 w-5" aria-hidden />
+              </button>
+            </header>
+            <div className="h-px shrink-0 bg-white/[0.07]" />
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
+              {comments === null ? (
+                <ul className="space-y-5" aria-busy="true" aria-label="Loading comments">
+                  {[0, 1, 2].map((k) => (
+                    <li key={k} className="flex items-start gap-3">
+                      <span className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-white/10 motion-reduce:animate-none" />
+                      <span className="flex-1 space-y-2 pt-1">
+                        <span className="block h-3 w-24 animate-pulse rounded-full bg-white/10 motion-reduce:animate-none" />
+                        <span className="block h-3 w-3/4 animate-pulse rounded-full bg-white/[0.07] motion-reduce:animate-none" />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : comments.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center gap-3 py-8 text-center">
+                  <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300/20 to-rose-400/20 ring-1 ring-inset ring-white/10">
+                    <MessageCircle className="h-6 w-6 text-amber-200" aria-hidden />
+                  </span>
+                  <div>
+                    <p className="text-[15px] font-semibold">No comments yet</p>
+                    <p className="mt-1 text-[13px] text-white/55">Be the first to say something.</p>
                   </div>
-                  {c.mine || isCreator ? (
-                    <button type="button" aria-label="Delete comment" onClick={() => remove(c)} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/60">
-                      <Trash2 className="h-4 w-4" aria-hidden />
-                    </button>
-                  ) : null}
                 </div>
-              ))
-            )}
-          </div>
-          {note ? <p className="px-4 pb-1 text-[12.5px] text-rose-400">{note}</p> : null}
-          <div className="flex items-center gap-2 border-t border-white/10 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2">
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value.slice(0, 1000))}
-              onKeyDown={(e) => e.key === "Enter" && void send()}
-              placeholder="Add a comment"
-              aria-label="Add a comment"
-              className="min-h-11 min-w-0 flex-1 rounded-full bg-white/10 px-4 text-[14px] text-white outline-none placeholder:text-white/50"
-            />
-            <button type="button" onClick={() => void send()} disabled={!draft.trim() || sending} aria-label="Post comment" className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-50">
-              {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}
-            </button>
-          </div>
-        </div>
+              ) : (
+                <ul className="space-y-5">
+                  {comments.map((c) => (
+                    <li key={c.id} className="flex items-start gap-3">
+                      <span className="shrink-0 rounded-full bg-gradient-to-br from-amber-300 via-rose-400 to-violet-500 p-[1.5px]">
+                        {c.author.avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={c.author.avatarUrl} alt="" className="h-10 w-10 rounded-full border-2 border-zinc-950 object-cover" />
+                        ) : (
+                          <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-zinc-950 bg-zinc-800 text-[14px] font-bold">{c.author.name.charAt(0).toUpperCase()}</span>
+                        )}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-baseline gap-2 text-[13px]">
+                          <span className="truncate font-semibold">{c.author.name}</span>
+                          <span className="shrink-0 text-[11.5px] text-white/45">{shortAgo(c.createdAt)}</span>
+                        </p>
+                        <p className="mt-0.5 whitespace-pre-line break-words text-[14.5px] leading-snug text-white/90">{c.body}</p>
+                      </div>
+                      {c.mine || isCreator ? (
+                        <button type="button" aria-label="Delete comment" onClick={() => remove(c)} className="-mr-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/45 transition active:bg-white/10 active:text-rose-400">
+                          <Trash2 className="h-4 w-4" aria-hidden />
+                        </button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {note ? <p role="alert" className="px-5 pb-1 text-[12.5px] font-medium text-rose-400">{note}</p> : null}
+            <div className="shrink-0 border-t border-white/[0.07] bg-zinc-950 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
+              {/* one-tap reactions — the quickest way to answer a post */}
+              <div className="mb-3 flex justify-between px-1">
+                {QUICK_REACTIONS.map((e) => (
+                  <button key={e} type="button" aria-label={`Add ${e}`} onClick={() => setDraft((d) => (d + e).slice(0, 1000))} className="flex h-10 w-10 items-center justify-center rounded-full text-[22px] transition active:scale-90 active:bg-white/10 motion-reduce:active:scale-100">
+                    {e}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 rounded-full bg-white/[0.08] p-1.5 pl-4 ring-1 ring-inset ring-white/10 focus-within:ring-white/25">
+                <input
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value.slice(0, 1000))}
+                  onKeyDown={(e) => e.key === "Enter" && void send()}
+                  placeholder="Add a comment…"
+                  aria-label="Add a comment"
+                  enterKeyHint="send"
+                  className="min-h-10 min-w-0 flex-1 bg-transparent text-[15px] text-white outline-none placeholder:text-white/45"
+                />
+                <button type="button" onClick={() => void send()} disabled={!draft.trim() || sending} aria-label="Post comment" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-[0_6px_18px_-6px_rgba(124,58,237,0.8)] transition active:scale-90 disabled:from-white/15 disabled:to-white/15 disabled:shadow-none motion-reduce:active:scale-100">
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}
+                </button>
+              </div>
+            </div>
+          </section>
+        </>
       ) : null}
     </>
   );
+}
+
+const QUICK_REACTIONS = ["❤️", "🔥", "😍", "👏", "😂", "🙌", "💯"] as const;
+
+/** "now", "5m", "3h", "2d", "4w" — the compact stamp comment lists use. */
+function shortAgo(iso: string): string {
+  const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
+  if (!Number.isFinite(s) || s < 60) return "now";
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86_400) return `${Math.floor(s / 3600)}h`;
+  if (s < 604_800) return `${Math.floor(s / 86_400)}d`;
+  return `${Math.floor(s / 604_800)}w`;
 }

@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { toast } from "@/features/ui/toast";
+import { TransferResultModal, type TransferResult } from "@/features/ai/wallet/transfer-result-modal";
 import { formatKind, KIND_NAME, KindSymbol, type WalletKind } from "@/features/ai/wallet/wallet-kinds";
 import { transferFeeFor } from "@/lib/ai/credits/wallet-config";
 import { haptic } from "@/lib/motion/haptics";
@@ -328,6 +329,8 @@ export function SendSheet({
   const [kind, setKind] = useState<TransferKind>("usable");
   const [busy, setBusy] = useState<"lookup" | "send" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // the answer as a modal: an animated tick, or why it was refused (owner 2026-10-14)
+  const [result, setResult] = useState<TransferResult | null>(null);
   // ONE key per transfer attempt (minted when the sheet opens) — a retry is the same transfer
   const key = useRef(newKey());
 
@@ -373,14 +376,15 @@ export function SendSheet({
       });
       const j = (await r.json().catch(() => ({}))) as { amount?: number; fee?: number; error?: string };
       if (!r.ok) {
-        setError(j.error ?? "Couldn't send that.");
+        setResult({ ok: false, title: "Transfer declined", message: j.error ?? "Couldn't send that. Nothing was taken from your balance.", canRetry: true });
         return;
       }
-      toast(`Sent ${formatKind(j.amount ?? n, kind)} to ${who.name}.`, "success");
+      const sentFee = j.fee ?? fee;
+      setResult({ ok: true, amountLabel: formatKind(j.amount ?? n, kind), feeLabel: sentFee > 0 ? formatKind(sentFee, kind) : null, to: who.name });
       key.current = newKey();
-      onSent();
     } catch {
-      setError("Network error — your transfer may still go through. Check your history before trying again.");
+      // the key is kept: a retry is the same transfer, never a second one
+      setResult({ ok: false, title: "Couldn't confirm", message: "The connection dropped. Your transfer may still have gone through, so check your history before trying again.", canRetry: true });
     } finally {
       setBusy(null);
     }
@@ -487,6 +491,14 @@ export function SendSheet({
           </p>
         ) : null}
       </div>
+      {result ? (
+        <TransferResultModal
+          result={result}
+          z={(panelZ ?? 96) + 10}
+          onDone={result.ok ? onSent : onClose}
+          onRetry={() => setResult(null)}
+        />
+      ) : null}
     </GlassSheetShell>
   );
 }

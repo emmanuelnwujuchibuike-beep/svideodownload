@@ -181,14 +181,8 @@ export const REPOST_DESTINATIONS: readonly DestinationSpec[] = [
   { key: "chat", label: "Send in chat", blurb: "To a person or a group conversation.", live: true },
   { key: "save", label: "Save for later", blurb: "Into one of your collections.", live: true },
   { key: "copy", label: "Copy link", blurb: "", live: true },
-  {
-    key: "story",
-    label: "Repost to your story",
-    blurb: "",
-    live: false,
-    needs:
-      "There is no post→story path. `reshare-rules.ts` defines ReshareSource as message|story only, so a POST has no route to a story — resharing was built for chat media and other people's stories, not for feed posts. Needs a story composer that accepts a post as its source.",
-  },
+  // 2026-10-14: live — a post now reaches a story through /api/reshare (source "post")
+  { key: "story", label: "Repost to your story", blurb: "Add it to your story for 24 hours.", live: true },
   {
     key: "community" as RepostDestination,
     label: "Repost to a community",

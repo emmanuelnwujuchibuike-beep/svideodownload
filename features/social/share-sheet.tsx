@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Link2, Mail, MessageSquareText, QrCode, Repeat2, Search, Send, Share2, Users } from "lucide-react";
+import { Check, CirclePlus, Link2, Mail, MessageSquareText, QrCode, Repeat2, Search, Send, Share2, Users } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { GlassSheetShell } from "@/features/ui/glass-sheet-shell";
@@ -9,6 +9,7 @@ import { loadGroups, loadPeople, PeoplePickerGrid, type Group, type Person } fro
 import { toast } from "@/features/ui/toast";
 import { haptic, hapticPattern } from "@/lib/motion/haptics";
 import { attributionLink, shareTitle, type ShareKind } from "@/lib/referrals/share-client";
+import { shareToStory } from "@/lib/social/share-to-story";
 import { cn } from "@/lib/utils";
 
 /**
@@ -29,7 +30,10 @@ export function ShareSheet({
   onQrCode,
   isOwner = false,
   kind = "post",
+  mediaIndex = 0,
 }: {
+  /** Which item of an album the viewer is on — the one "Add to story" shares. */
+  mediaIndex?: number;
   postId: string;
   title?: string;
   /** The viewer published this — their links carry their referral attribution (lib/referrals/share-client.ts). */
@@ -320,6 +324,16 @@ export function ShareSheet({
 
       {/* Other ways to share */}
       <div className="grid grid-cols-3 gap-2 border-t border-border/60 py-4">
+        {/* 2026-10-14 (owner): a feed post or reel onto your own story, one tap */}
+        <SheetAction
+          icon={CirclePlus}
+          label="Add to story"
+          onClick={() => {
+            haptic("selection");
+            onClose();
+            void shareToStory(postId, mediaIndex);
+          }}
+        />
         <SheetAction icon={Link2} label="Copy link" onClick={copyLink} />
         <SheetAction icon={Share2} label="Share via…" onClick={shareExternal} />
         <SheetAction icon={Mail} label="Email" onClick={shareEmail} />

@@ -808,6 +808,7 @@ function ImageStage({
             open={shareOpen}
             onClose={() => setShareOpen(false)}
             onQrCode={() => setQrOpen(true)}
+            mediaIndex={slide}
           />
           <ShareQrSheet postId={item.id} url={`${typeof window !== "undefined" ? window.location.origin : ""}/p/${item.id}`} open={qrOpen} onClose={() => setQrOpen(false)} />
         </>

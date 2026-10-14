@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Bookmark, Check, Link as LinkIcon, MessageSquareQuote, Send, Users, X } from "lucide-react";
+import { Bookmark, Check, CirclePlus, Link as LinkIcon, MessageSquareQuote, Send, Users, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -17,6 +17,7 @@ import {
   type RepostDestination,
 } from "@/lib/social/repost/audience";
 import { toggleRepost } from "@/lib/social/repost-store";
+import { shareToStory } from "@/lib/social/share-to-story";
 import { cn } from "@/lib/utils";
 
 import { RepostActionButton } from "./repost-button";
@@ -157,6 +158,10 @@ export function RepostSheet({
       case "copy":
         void copyLink();
         break;
+      case "story":
+        onClose();
+        void shareToStory(postId);
+        break;
     }
   };
 
@@ -168,6 +173,7 @@ export function RepostSheet({
     chat: Send,
     save: Bookmark,
     copy: LinkIcon,
+    story: CirclePlus,
   };
 
   return createPortal(

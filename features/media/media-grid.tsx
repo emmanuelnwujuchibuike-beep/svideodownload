@@ -114,6 +114,26 @@ function GridCell({
     },
   });
   const thumb = media.thumbnailUrl ?? (media.kind === "image" ? media.url : null);
+  // a video cell without a stored cover loads its first frame once it is about a screen away
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    if (thumb || media.kind !== "video" || near) return;
+    const el = cellRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setNear(true);
+      return;
+    }
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        setNear(true);
+        obs.disconnect();
+      },
+      { rootMargin: "600px 0px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [thumb, media.kind, near]);
 
   return (
     <div
@@ -122,7 +142,14 @@ function GridCell({
       aria-label={media.kind === "video" ? "Watch video" : "Open photo"}
       tabIndex={0}
       className={cn(
-        "relative overflow-hidden bg-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
+        /*
+          🔴 NEVER MOVES UNDER A FINGER (owner, 2026-10-14: "multiple posts in feed didn't take
+          part in the hover movement fix"). The global press scale (globals.css) skips a
+          role="button" only when it HOLDS an img/video, and a video cell with no stored cover
+          held a plain gradient, so it shrank to 95 % on every press. `![scale:1]` pins it
+          whatever it holds; the callout/select rules match the feed's media lock.
+        */
+        "relative select-none overflow-hidden bg-neutral-900 ![scale:1] [-webkit-touch-callout:none] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
         spanRows && "row-span-2",
       )}
       // Keyboard: Enter/Space opens directly (spec's accessibility section) —
@@ -142,6 +169,24 @@ function GridCell({
       {thumb ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={thumb} alt="" loading="lazy" decoding="async" className="pointer-events-none h-full w-full object-cover" />
+      ) : media.kind === "video" && near ? (
+        /*
+          🔴 A VIDEO WITH NO STORED COVER SHOWS ITS OWN FIRST FRAME (owner, 2026-10-14:
+          "multiple videos doesn't show cover"). Album videos uploaded without a captured
+          poster had only the gradient below. A muted, never-playing <video> with a `#t=`
+          fragment paints the frame at that time, iOS included, and `preload="metadata"`
+          fetches only what that needs. Loaded when the cell nears the screen, not before.
+        */
+        <video
+          src={`${media.url}#t=0.1`}
+          muted
+          playsInline
+          preload="metadata"
+          disablePictureInPicture
+          aria-hidden
+          tabIndex={-1}
+          className="pointer-events-none h-full w-full object-cover"
+        />
       ) : (
         <div className="pointer-events-none h-full w-full bg-gradient-to-br from-blue-600/25 to-violet-600/25" />
       )}

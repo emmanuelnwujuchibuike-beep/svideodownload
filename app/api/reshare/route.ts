@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const postSchema = z.object({
-  source: z.enum(["message", "story"]),
+  source: z.enum(["message", "story", "post"]),
   sourceId: z.string().regex(UUID),
   /** Which attachment of the message — required when source = "message". */
   attachmentId: z.string().regex(UUID).optional(),
@@ -19,6 +19,8 @@ const postSchema = z.object({
   caption: z.string().trim().max(300).optional(),
   /** Required when destination = "chat". */
   conversationId: z.string().regex(UUID).optional(),
+  /** source = "post": which item of an album. */
+  mediaIndex: z.number().int().min(0).max(19).optional(),
 });
 
 const patchSchema = z.object({
@@ -28,7 +30,7 @@ const patchSchema = z.object({
 });
 
 /**
- * POST /api/reshare — reshare chat media or a story.
+ * POST /api/reshare — reshare chat media or a story, or put a feed post / reel on your story.
  *
  * Every rule (who may reshare what, and where it may go) is decided in
  * lib/social/reshare.ts, never here and never in the UI: a story may only reach

@@ -3122,6 +3122,8 @@ function ReelCard({
             onQrCode={() => setQrOpen(true)}
             isOwner={!!item.isOwner}
             kind={item.contentType === "ai_video" ? "ai_video" : "reel"}
+            // `slide` counts the album's videos only; the server numbers every item (post_media.idx)
+            mediaIndex={isAlbum ? Math.max(0, (item.mediaItems ?? []).indexOf(albumVideos[slide]!)) : 0}
           />
           <ShareQrSheet postId={item.id} url={`${typeof window !== "undefined" ? window.location.origin : ""}/p/${item.id}`} open={qrOpen} onClose={() => setQrOpen(false)} />
         </>

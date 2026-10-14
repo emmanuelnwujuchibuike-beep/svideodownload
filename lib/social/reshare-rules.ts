@@ -14,7 +14,7 @@
  */
 
 /** Where a reshare came FROM. */
-export type ReshareSource = "message" | "story";
+export type ReshareSource = "message" | "story" | "post";
 /** Where a reshare is going TO. `chat` = forwarded into a private conversation. */
 export type ReshareDestination = "post" | "reel" | "story" | "chat";
 
@@ -33,6 +33,10 @@ export const RESHARE_DESTINATIONS: readonly ReshareDestination[] = ["post", "ree
 export const ALLOWED_DESTINATIONS: Record<ReshareSource, readonly ReshareDestination[]> = {
   message: ["post", "reel", "story"],
   story: ["story", "chat"],
+  // 2026-10-14 (owner: "share feed and reels post to their story"): a feed post or a reel goes
+  // to the viewer's own story only — every other way out of a post already exists (Repost,
+  // send in a message, the link)
+  post: ["story"],
 };
 
 export function canReshareTo(source: ReshareSource, destination: ReshareDestination): boolean {

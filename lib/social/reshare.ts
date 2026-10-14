@@ -143,6 +143,46 @@ async function resolveStoryMedia(viewerId: string, storyId: string): Promise<Sou
   };
 }
 
+/**
+ * Resolve a feed post or reel the viewer may put on their story (owner, 2026-10-14). The same
+ * audience the post already has decides it, never wider: a public post, a followers-only post
+ * when the viewer follows its author, or the viewer's own post. Drafts, removed posts and a
+ * block in either direction fail closed. An album shares the item the viewer was on
+ * (`mediaIndex`, from post_media), else its cover media.
+ */
+async function resolvePostMedia(viewerId: string, postId: string, mediaIndex?: number): Promise<SourceMedia | { error: ReshareResult }> {
+  const db = createAdminClient();
+  const { data: post } = await db
+    .from("posts")
+    .select("id, publisher_id, status, visibility, media_kind, media_url, thumbnail_url")
+    .eq("id", postId)
+    .maybeSingle();
+  if (!post || post.status !== "published") return { error: { ok: false, reason: "not-found" } };
+  const authorId = post.publisher_id as string;
+  if (authorId !== viewerId) {
+    if (post.visibility === "private") return { error: { ok: false, reason: "forbidden" } };
+    const { data: block } = await db
+      .from("blocks")
+      .select("blocker_id")
+      .or(`and(blocker_id.eq.${viewerId},blocked_id.eq.${authorId}),and(blocker_id.eq.${authorId},blocked_id.eq.${viewerId})`)
+      .limit(1);
+    if ((block ?? []).length > 0) return { error: { ok: false, reason: "forbidden" } };
+    if (post.visibility === "followers") {
+      const { data: follow } = await db.from("follows").select("follower_id").eq("follower_id", viewerId).eq("following_id", authorId).maybeSingle();
+      if (!follow) return { error: { ok: false, reason: "forbidden" } };
+    }
+  }
+  let media = { url: post.media_url as string | null, kind: post.media_kind as string | null, thumb: post.thumbnail_url as string | null };
+  if (mediaIndex !== undefined && mediaIndex > 0) {
+    // by POSITION in idx order, which is how the feed numbers an album (home-feed.ts), not by the raw idx value
+    const { data: rows } = await db.from("post_media").select("media_kind, media_url, thumbnail_url").eq("post_id", postId).order("idx", { ascending: true }).range(mediaIndex, mediaIndex);
+    const item = (rows ?? [])[0] as { media_kind: string; media_url: string; thumbnail_url: string | null } | undefined;
+    if (item) media = { url: item.media_url as string, kind: item.media_kind as string, thumb: (item.thumbnail_url as string | null) ?? null };
+  }
+  if (!media.url) return { error: { ok: false, reason: "not-found" } };
+  return { mediaUrl: media.url, mediaKind: media.kind === "video" ? "video" : "image", thumbnailUrl: media.thumb, authorId };
+}
+
 export interface ReshareInput {
   viewerId: string;
   source: ReshareSource;
@@ -154,6 +194,8 @@ export interface ReshareInput {
   caption?: string;
   /** Required for destination="chat". */
   conversationId?: string;
+  /** source="post": which item of an album (0 = the post's own media). */
+  mediaIndex?: number;
 }
 
 /**
@@ -208,7 +250,7 @@ async function notifyAuthorOfReshare(opts: {
       `genericBody` is unchanged and still carries no name — that is the
       hide-push-preview path, and naming somebody there would defeat it.
     */
-    const what = opts.source === "story" ? "story" : "media";
+    const what = opts.source === "story" ? "story" : opts.source === "post" ? "post" : "media";
     await publishNotification({
       userId: opts.authorId,
       type: "reshare",
@@ -237,7 +279,9 @@ export async function reshare(input: ReshareInput): Promise<ReshareResult> {
       ? input.attachmentId
         ? await resolveMessageMedia(viewerId, sourceId, input.attachmentId)
         : ({ error: { ok: false as const, reason: "not-found" as const } } as const)
-      : await resolveStoryMedia(viewerId, sourceId);
+      : source === "post"
+        ? await resolvePostMedia(viewerId, sourceId, input.mediaIndex)
+        : await resolveStoryMedia(viewerId, sourceId);
   if ("error" in resolved) return resolved.error;
 
   if (destination === "reel" && !isValidReelMedia(resolved.mediaKind)) {
@@ -267,9 +311,13 @@ export async function reshare(input: ReshareInput): Promise<ReshareResult> {
         media_url: resolved.mediaUrl,
         media_kind: resolved.mediaKind,
         caption: caption?.trim() || null,
+        // a reshared video keeps its cover (0083), so the story ring and viewer never show a blank frame
+        ...(resolved.thumbnailUrl ? { thumbnail_url: resolved.thumbnailUrl } : {}),
         ...(source === "story"
           ? { reshared_from_story_id: sourceId, reshared_from_user_id: resolved.authorId }
-          : {}),
+          : source === "post"
+            ? { reshared_from_user_id: resolved.authorId }
+            : {}),
       })
       .select("id")
       .maybeSingle();
@@ -338,7 +386,8 @@ export async function setReshareAllowed(
   sourceId: string,
   allowed: boolean,
 ): Promise<{ ok: boolean }> {
-  if (!hasSupabase) return { ok: false };
+  // a post's reach is its own visibility setting, not this switch
+  if (!hasSupabase || source === "post") return { ok: false };
   const db = createAdminClient();
   const table = source === "message" ? "messages" : "stories";
   const ownerColumn = source === "message" ? "sender_id" : "user_id";

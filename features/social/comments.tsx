@@ -1051,6 +1051,10 @@ function Composer({
   );
 }
 
+/** Two taps within this long, and this close together, are a double tap. */
+const DOUBLE_TAP_MS = 300;
+const DOUBLE_TAP_SLOP_PX = 30;
+
 /**
  * A comment's ⋯ menu (and the pin picker), drawn on the page's top layer next to its button
  * (owner, 2026-10-14: "comment option hides under an invisible overlay"). As an absolute child it
@@ -1283,6 +1287,31 @@ function CommentItemImpl({
   const [zoom, setZoom] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuAnchorRef = useRef<HTMLButtonElement | null>(null);
+  /*
+    Double tap a comment to like it (owner, 2026-10-14). Like Instagram's double tap on a post:
+    it adds the heart and never takes one away (the reaction button still toggles). A comment
+    already carrying another reaction keeps it; the heart still floats as the acknowledgement.
+    A tap on a link, button or field inside the bubble is that control's own, never half of a
+    double tap, and a single tap waits for nothing (no delay on anything).
+  */
+  const lastBubbleTap = useRef<{ at: number; x: number; y: number } | null>(null);
+  const onBubblePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!loggedIn || (e.pointerType === "mouse" && e.button !== 0)) return;
+    if ((e.target as HTMLElement).closest("a, button, textarea, input, video, audio, [role='button']")) {
+      lastBubbleTap.current = null;
+      return;
+    }
+    const now = Date.now();
+    const prev = lastBubbleTap.current;
+    if (prev && now - prev.at < DOUBLE_TAP_MS && Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < DOUBLE_TAP_SLOP_PX) {
+      lastBubbleTap.current = null;
+      haptic("selection");
+      floatReaction(e.clientX, e.clientY, "❤️");
+      if (!node.viewerReaction) onReact(node.id, "❤️");
+      return;
+    }
+    lastBubbleTap.current = { at: now, x: e.clientX, y: e.clientY };
+  };
   const [pinPickerOpen, setPinPickerOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReady, setReportReady] = useState(false);
@@ -1431,8 +1460,10 @@ function CommentItemImpl({
             per the brief's "without overwhelming the interface"). */}
         <div
           id={`comment-${node.id}`}
+          onPointerUp={onBubblePointerUp}
           className={cn(
-            "rounded-3xl rounded-tl-lg border px-3.5 py-2.5 shadow-soft backdrop-blur-sm transition",
+            // touch-manipulation: a double tap here likes the comment, it never zooms the page
+            "touch-manipulation rounded-3xl rounded-tl-lg border px-3.5 py-2.5 shadow-soft backdrop-blur-sm transition",
             node.isBest
               ? "border-emerald-500/40 bg-emerald-500/[0.06] ring-1 ring-emerald-500/20"
               : a?.isFriend

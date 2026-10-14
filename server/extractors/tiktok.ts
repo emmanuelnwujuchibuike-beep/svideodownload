@@ -794,6 +794,10 @@ async function nativeExtract(
     if (!res.ok) throw new ExtractionError(`TikTok responded ${res.status}`);
     html = await res.text();
     pageCookie = cookieFromSetCookie(res.headers.getSetCookie?.() ?? []);
+  } catch (e) {
+    // our own deadline, named — a bare "This operation was aborted" hid it
+    if (controller.signal.aborted) throw new ExtractionError(`TikTok page timed out after ${TIKTOK_TIMEOUT_MS}ms`);
+    throw e;
   } finally {
     clearTimeout(timer);
   }
@@ -869,10 +873,29 @@ export const tiktokExtractor: Extractor = {
       /* keep the original; TikWM handles most short links itself */
     }
 
+    /*
+      🔴 EVERY FETCH SAYS HOW EACH ROUTE DID (owner, 2026-10-14: "Tiktok post
+      find it difficult to fetch … my railway always show native tiktok fail
+      then it use the fall back tikwm"). Native's REASON was only logged when
+      both routes failed, so a native that failed on every request behind a
+      working TikWM left no trace of why — and "why" decides the fix: a
+      stateless 200 page (datacenter IP not trusted), a 403/429, or the 8 s
+      timeout each need a different one. One line per route, with its time.
+    */
+    const t0 = Date.now();
+    const tag = { url: canonical.slice(0, 120) };
     const viaApi = tikwmExtract(canonical, platform).then(
       (r) => r ?? Promise.reject(new ExtractionError("TikWM returned no usable media")),
     );
     const viaNative = nativeExtract(canonical, platform);
+    viaApi.then(
+      () => console.info("[tiktok] tikwm ok", { ms: Date.now() - t0, ...tag }),
+      (e: unknown) => console.warn("[tiktok] tikwm failed", { ms: Date.now() - t0, reason: e instanceof Error ? e.message.slice(0, 200) : String(e), ...tag }),
+    );
+    viaNative.then(
+      () => console.info("[tiktok] native ok", { ms: Date.now() - t0, ...tag }),
+      (e: unknown) => console.warn("[tiktok] native failed", { ms: Date.now() - t0, reason: e instanceof Error ? e.message.slice(0, 200) : String(e), ...tag }),
+    );
 
     try {
       // The rule and its measurements: `preferTikTokRoute` above (2026-10-08; it

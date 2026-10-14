@@ -77,6 +77,7 @@ const LEDGER_COPY: Record<LedgerKind, { label: string; Icon: typeof Sparkles; to
 };
 
 // 2026-10-07 (owner): the subscription celebration + optional survey — its chunk loads only when there is a plan to celebrate
+const WithdrawEligibilityNote = dynamic(() => import("@/features/ai/wallet/withdraw-eligibility-note").then((m) => m.WithdrawEligibilityNote), { ssr: false });
 const WithdrawChooser = dynamic(() => import("@/features/ai/wallet/withdraw-chooser").then((m) => m.WithdrawChooser), { ssr: false });
 const PlanCelebration = dynamic(() => import("@/features/ai/credits/plan-celebration").then((m) => m.PlanCelebration), { ssr: false });
 
@@ -312,6 +313,8 @@ export function FrenzAIUsagePage({
                   />
                 </dl>
               ) : null}
+              {/* 2026-10-14 (owner): not qualified for withdrawals yet → what credits are for until then */}
+              <WithdrawEligibilityNote uid={uid} />
               {notice ? (
                 <p role="status" className="relative mt-3 rounded-xl bg-white/15 px-3 py-2 text-[12.5px] font-medium ring-1 ring-inset ring-white/20">
                   {notice}

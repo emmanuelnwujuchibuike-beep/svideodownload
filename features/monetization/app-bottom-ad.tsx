@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { isAdFreeRoute } from "@/lib/monetization/ad-free-routes";
 
 /**
  * The docked bottom banner, mounted ONCE for the whole app.
@@ -90,7 +91,8 @@ const EXCLUDED_PREFIXES = [
 ];
 
 function isExcluded(pathname: string): boolean {
-  return EXCLUDED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  // the site-wide ad-free pages (sign-in, profiles) first — lib/monetization/ad-free-routes.ts
+  return isAdFreeRoute(pathname) || EXCLUDED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 export function AppBottomAd() {

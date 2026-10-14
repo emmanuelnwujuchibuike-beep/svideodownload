@@ -2,6 +2,7 @@
 
 import { loadAdInventory } from "@/features/monetization/ad-inventory-client";
 import { anyVast, mayServeVast } from "@/lib/monetization/ad-inventory-shape";
+import { isAdFreeRoute } from "@/lib/monetization/ad-free-routes";
 import { loadAdsConfig } from "@/lib/monetization/ads-config-client";
 import { track } from "@/lib/analytics/client";
 import type { VastCreative } from "@/lib/monetization/vast";
@@ -710,6 +711,8 @@ export function warmCreativeFor(trigger: InterstitialTrigger): void {
 export async function requestVastInterstitial(
   trigger: InterstitialTrigger = "download",
 ): Promise<InterstitialResult> {
+  // never over the sign-in or profile pages (owner 2026-10-14) — an idle or return moment there is simply skipped
+  if (typeof window !== "undefined" && isAdFreeRoute(window.location.pathname)) return { shown: false, reason: "disabled" };
   // Duplicate guard: two Download taps, a batch finishing eight files at once,
   // or a double-fire must not open two overlays or make two VAST requests.
   if (phase !== "idle") {

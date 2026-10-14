@@ -1,6 +1,9 @@
 "use client";
 
+import { usePathname } from "next/navigation";
+
 import { useEntitlements } from "@/features/auth/use-entitlements";
+import { isAdFreeRoute } from "@/lib/monetization/ad-free-routes";
 import { planSeesAd } from "@/lib/monetization/plan-ads";
 
 /**
@@ -14,5 +17,8 @@ import { planSeesAd } from "@/lib/monetization/plan-ads";
  */
 export function useShowAds(placement?: string | null) {
   const { showAds, ready, plan } = useEntitlements();
+  // 2026-10-14 (owner): no ad of any kind on the sign-in or profile pages (lib/monetization/ad-free-routes.ts)
+  const pathname = usePathname();
+  if (isAdFreeRoute(pathname)) return { showAds: false, ready };
   return { showAds: showAds || planSeesAd(plan, placement ?? null), ready };
 }

@@ -1,3 +1,5 @@
+import { isAdFreeRoute } from "./ad-free-routes";
+
 /**
  * Monetag — the ad-type registry, snippet parser and tag resolver.
  *
@@ -195,6 +197,8 @@ export function monetagAllowedOnPath(
   pathname: string,
   scope: { monetagAllPages: boolean; monetagSurfaces: string[] },
 ): boolean {
+  // never on the sign-in or profile pages, whatever the scope (owner 2026-10-14)
+  if (isAdFreeRoute(pathname)) return false;
   if (scope.monetagAllPages) return true;
   const surface = resolveMonetagSurface(pathname);
   return surface !== null && (scope.monetagSurfaces ?? []).includes(surface);

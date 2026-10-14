@@ -158,12 +158,22 @@ export function GlassSheetShell({
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    /*
+      🔴 overflowY, the SAME property every other lock in this app uses (owner, 2026-10-14: after
+      closing the comments of a profile post, the profile's floating buttons came back OVER the
+      video viewer). This saved and restored the `overflow` SHORTHAND. With an overlay below
+      already holding `overflowY: hidden` (the reel viewer), the shorthand reads back "" (it
+      can't express "Y hidden, X unset"), so closing the sheet wrote "" and wiped the viewer's
+      lock too. lib/dom/scroll-lock.ts then said "nothing covers the page" and the page chrome
+      (profile-cover-controls.tsx) reappeared above the still-open viewer. Saving and restoring
+      overflowY itself leaves whatever was under the sheet exactly as it was.
+    */
+    const prevOverflowY = document.body.style.overflowY;
+    document.body.style.overflowY = "hidden";
     const focusTimer = window.setTimeout(() => panelRef.current?.focus(), 50);
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
+      document.body.style.overflowY = prevOverflowY;
       window.clearTimeout(focusTimer);
     };
   }, [open, onClose]);

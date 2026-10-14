@@ -244,12 +244,16 @@ export function StoryViewer({
   startGroup,
   onClose,
   onGroupSeen,
+  quickReactions = true,
 }: {
   groups: StoryGroup[];
   startGroup: number;
   onClose: () => void;
   /** Fired once per group after it's marked seen (ring-state refresh in the row). */
   onGroupSeen?: () => void;
+  /** The one-tap emoji row above the reply box. Off when opened from a chat,
+   *  where only the reply box shows (owner, 2026-10-14). */
+  quickReactions?: boolean;
 }) {
   /*
     Stories the author deleted from here (owner, 2026-10-08). Filtered locally
@@ -877,7 +881,10 @@ export function StoryViewer({
           "pointer-events-none absolute inset-x-0 bottom-0 z-0 flex items-center justify-center",
           isOwn
             ? "[.pwa-standalone_&]:bottom-[calc(env(safe-area-inset-bottom)+4.5rem)]"
-            : "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)]",
+            : quickReactions
+              ? "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)]"
+              : // no emoji row → the band is just the reply box
+                "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+3.25rem)]",
         )}
         style={{ top: "var(--frenz-safe-top, 0px)" }}
       >
@@ -917,7 +924,11 @@ export function StoryViewer({
           className={cn(
             "pointer-events-none absolute inset-x-0 bottom-28 z-[15] px-6 text-center text-sm text-white/95 drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] transition-opacity duration-150",
             // in the PWA the caption sits on the media, just above the band
-            isOwn ? "[.pwa-standalone_&]:bottom-[calc(env(safe-area-inset-bottom)+5.5rem)]" : "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+6.75rem)]",
+            isOwn
+              ? "[.pwa-standalone_&]:bottom-[calc(env(safe-area-inset-bottom)+5.5rem)]"
+              : quickReactions
+                ? "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+6.75rem)]"
+                : "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.25rem)]",
             holding && "opacity-0",
           )}
         >
@@ -931,13 +942,28 @@ export function StoryViewer({
           held thumb resting near the bottom of the screen must not land on a
           text field it can no longer see. */}
       {isOwn || holding ? null : (
-        <StoryReplyBar toUserId={group.userId} name={group.displayName.split(" ")[0] || group.displayName} onFocusChange={setReplying} />
+        <StoryReplyBar
+          toUserId={group.userId}
+          name={group.displayName.split(" ")[0] || group.displayName}
+          onFocusChange={setReplying}
+          quickReactions={quickReactions}
+        />
       )}
     </motion.div>
   );
 }
 
-function StoryReplyBar({ toUserId, name, onFocusChange }: { toUserId: string; name: string; onFocusChange: (v: boolean) => void }) {
+function StoryReplyBar({
+  toUserId,
+  name,
+  onFocusChange,
+  quickReactions,
+}: {
+  toUserId: string;
+  name: string;
+  onFocusChange: (v: boolean) => void;
+  quickReactions: boolean;
+}) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -970,7 +996,7 @@ function StoryReplyBar({ toUserId, name, onFocusChange }: { toUserId: string; na
     <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/70 to-transparent px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-5 [.pwa-standalone_&]:bg-black [.pwa-standalone_&]:bg-none [.pwa-standalone_&]:pt-3">
       {sent ? (
         <p className="mb-2 text-center text-xs font-semibold text-emerald-300">Sent to {name} ✓</p>
-      ) : (
+      ) : quickReactions ? (
         <div className="mb-2 flex justify-center gap-2">
           {QUICK_EMOJI.map((e) => (
             <button key={e} type="button" onClick={() => send(e)} className="text-2xl transition active:scale-125" aria-label={`React ${e}`}>
@@ -978,7 +1004,7 @@ function StoryReplyBar({ toUserId, name, onFocusChange }: { toUserId: string; na
             </button>
           ))}
         </div>
-      )}
+      ) : null}
 
       {stickers ? (
         <div className="mx-auto mb-2 grid max-w-md grid-cols-6 gap-1 rounded-2xl bg-white/10 p-2 backdrop-blur">

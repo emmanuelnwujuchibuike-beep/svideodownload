@@ -1792,9 +1792,21 @@ export function ConversationRoom({
             <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
           </button>
         ) : null}
-        {storyViewerOpen && liveOtherStoryGroup ? (
-          <StoryViewer groups={[liveOtherStoryGroup]} startGroup={0} onClose={() => setStoryViewerOpen(false)} />
-        ) : null}
+        {/*
+          Portalled to <body> (owner, 2026-10-14: "remove the bottom nav … from
+          our visitors story view from message page"). Rendered in place it sat
+          inside the thread's scroll container, whose stacking context trapped
+          the viewer's z-[95] UNDER the z-40 bottom nav — the nav covered the
+          reply box. From <body> it stacks like the feed's viewer does. No
+          quick-emoji row here: a chat already IS the reply thread, so only the
+          reply box (WhatsApp's shape) — reshare/options/close are untouched.
+        */}
+        {storyViewerOpen && liveOtherStoryGroup
+          ? createPortal(
+              <StoryViewer groups={[liveOtherStoryGroup]} startGroup={0} quickReactions={false} onClose={() => setStoryViewerOpen(false)} />,
+              document.body,
+            )
+          : null}
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 py-10 text-center">
             <span className="bg-brand brand-glow flex h-14 w-14 items-center justify-center rounded-full">

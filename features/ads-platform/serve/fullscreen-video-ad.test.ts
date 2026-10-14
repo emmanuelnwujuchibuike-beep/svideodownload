@@ -45,3 +45,12 @@ describe("full-screen video ads", () => {
     expect(code("features/ads-platform/serve/self-ad-card.tsx")).not.toContain("FullscreenVideoAd");
   });
 });
+
+describe("the Ad tag never covers the creative", () => {
+  it("🔴 the card and the History tile carry it in their text row; only the 32 px strip overlays it", () => {
+    const s = code("features/ads-platform/serve/self-ad-banner.tsx");
+    expect(s).toContain('{variant === "strip" ? label : null}');
+    expect(s.match(/\{label\}/g) ?? []).toHaveLength(0);
+    expect(s).toMatch(/>Ad<\/span>\s*<span className="truncate">Sponsored · \{current\.sponsor\}/);
+  });
+});

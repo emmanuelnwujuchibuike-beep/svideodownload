@@ -168,7 +168,10 @@ export function SelfAdBanner({
   const caption =
     variant === "tile" ? (
       <span className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/80 via-black/25 to-transparent px-2 pb-1.5 pt-10">
-        <span className="block text-[10px] font-semibold uppercase tracking-[0.06em] text-white/70">Sponsored · {current.sponsor}</span>
+        <span className="flex min-w-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-white/70">
+          <span className="shrink-0 rounded-[3px] bg-white/90 px-1 text-[8.5px] font-extrabold text-black">Ad</span>
+          <span className="truncate">Sponsored · {current.sponsor}</span>
+        </span>
         {current.headline ? <span className="line-clamp-1 text-left text-[11px] font-medium text-white/95">{current.headline}</span> : null}
       </span>
     ) : null;
@@ -235,12 +238,17 @@ export function SelfAdBanner({
         )}
       >
         <span className="relative block w-full bg-muted" style={{ aspectRatio: `${box.width} / ${box.height}` }}>
-          {label}
+          {/* 🔴 no "Ad" tag over the media (owner, 2026-10-14: "the ad label is covering the sponsored
+              name") — it covered whatever the creative has in that corner, often the brand itself.
+              The tag sits in the row below instead, where it covers nothing. */}
           {creative({ className: "h-full w-full animate-in fade-in duration-300 motion-reduce:animate-none", backdrop: fixedVideo })}
         </span>
         <span className="flex items-center gap-3 px-3.5 py-2.5 text-left">
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[12px] font-semibold text-muted-foreground">Sponsored · {current.sponsor}</span>
+            <span className="flex min-w-0 items-center gap-1.5 text-[12px] font-semibold text-muted-foreground">
+              <span className="shrink-0 rounded-[4px] bg-foreground px-1 py-px text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-background">Ad</span>
+              <span className="truncate">Sponsored · {current.sponsor}</span>
+            </span>
             {current.headline ? <span className="line-clamp-2 text-[14px] font-bold leading-tight text-foreground">{current.headline}</span> : null}
             {current.body ? <span className="line-clamp-1 text-[12px] text-muted-foreground">{current.body}</span> : null}
           </span>
@@ -272,7 +280,7 @@ export function SelfAdBanner({
         className,
       )}
     >
-      {label}
+      {variant === "strip" ? label : null}
       {caption}
       {creative({ className: "h-full w-full animate-in fade-in duration-300 motion-reduce:animate-none", backdrop: variant === "strip" ? false : undefined })}
     </a>

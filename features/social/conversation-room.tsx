@@ -2291,11 +2291,16 @@ export function ConversationRoom({
                                 // on first contact, before any scroll-gesture
                                 // arbitration, so the backdrop reliably wins.
                                 onPointerDown={() => setOpenMenuId(null)}
-                                className="fixed inset-0 z-40 cursor-default"
+                                // 🔴 z-[60], not z-40 (owner, 2026-10-14: "users should be able to close
+                                // this chat option by tapping on the chat background"). This is portaled
+                                // to <body>, and on a phone the thread itself is `fixed z-50` (messages/
+                                // [id]/page.tsx), so a z-40 backdrop sat UNDER the whole thread and a tap
+                                // on the chat never reached it. Above the thread, under the toasts (z-100).
+                                className="fixed inset-0 z-[60] cursor-default"
                               />
                               <div
                                 style={{ top: menuPos.top, left: menuPos.left, width: MENU_WIDTH }}
-                                className="glass-strong animate-scale-in fixed z-50 overflow-hidden rounded-2xl py-1"
+                                className="glass-strong animate-scale-in fixed z-[61] overflow-hidden rounded-2xl py-1"
                               >
                                 <MenuItem icon={ReplyIcon} label="Reply" onClick={() => startReply(m)} />
                                 <MenuItem

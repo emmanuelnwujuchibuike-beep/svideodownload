@@ -33,7 +33,8 @@ import {
 import { VerifiedTick } from "@/components/badges/identity-badges";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { RichText } from "@/components/social/rich-text";
@@ -1050,6 +1051,57 @@ function Composer({
   );
 }
 
+/**
+ * A comment's ⋯ menu (and the pin picker), drawn on the page's top layer next to its button
+ * (owner, 2026-10-14: "comment option hides under an invisible overlay"). As an absolute child it
+ * was clipped by the comment list's `overflow-x-hidden` and the sheet's scroll box, so only the
+ * first rows showed. Portaled to <body> it can't be clipped. It opens below the button, or above
+ * it when there isn't room, and stays inside the screen. z-[98]/[99]: over the comment sheets
+ * (GlassSheetShell's 95/96) and under the toasts (z-[100]).
+ */
+function AnchoredMenu({ anchor, onClose, children }: { anchor: React.RefObject<HTMLElement | null>; onClose: () => void; children: ReactNode }) {
+  const panel = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const place = () => {
+      const a = anchor.current?.getBoundingClientRect();
+      const h = panel.current?.offsetHeight ?? 0;
+      if (!a) return;
+      const gap = 4;
+      const edge = 8;
+      const below = a.bottom + gap;
+      const top = below + h <= window.innerHeight - edge ? below : Math.max(edge, a.top - gap - h);
+      setPos({ top, right: Math.max(edge, window.innerWidth - a.right) });
+    };
+    place();
+    // a lazily loaded panel (the pin picker) has no height on the first pass: place again once it has
+    const ro = typeof ResizeObserver === "undefined" || !panel.current ? null : new ResizeObserver(place);
+    if (ro && panel.current) ro.observe(panel.current);
+    // the sheet scrolling, or the keyboard closing as the ⋯ is tapped, moves the button: the menu follows it
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    window.visualViewport?.addEventListener("resize", place);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+      window.visualViewport?.removeEventListener("resize", place);
+    };
+  }, [anchor]);
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <>
+      <button type="button" aria-label="Close" onClick={onClose} className="fixed inset-0 z-[98] cursor-default" />
+      <div ref={panel} className="fixed z-[99]" style={pos ? { top: pos.top, right: pos.right } : { top: 0, right: 0, visibility: "hidden" }}>
+        {children}
+      </div>
+    </>,
+    document.body,
+  );
+}
+
 function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -1230,6 +1282,7 @@ function CommentItemImpl({
   const [replying, setReplying] = useState(false);
   const [zoom, setZoom] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuAnchorRef = useRef<HTMLButtonElement | null>(null);
   const [pinPickerOpen, setPinPickerOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReady, setReportReady] = useState(false);
@@ -1406,12 +1459,11 @@ function CommentItemImpl({
             </span>
 
             <div className="relative ml-auto">
-              <button type="button" onClick={() => setMenuOpen((v) => !v)} aria-label="Comment actions" className="-mr-1 rounded-full p-1 text-muted-foreground transition hover:bg-secondary hover:text-foreground"><MoreHorizontal className="h-4 w-4" /></button>
+              <button ref={menuAnchorRef} type="button" onClick={() => setMenuOpen((v) => !v)} aria-label="Comment actions" className="-mr-1 rounded-full p-1 text-muted-foreground transition hover:bg-secondary hover:text-foreground"><MoreHorizontal className="h-4 w-4" /></button>
               <AnimatePresence>
                 {menuOpen ? (
-                  <>
-                    <button type="button" aria-label="Close" onClick={() => setMenuOpen(false)} className="fixed inset-0 z-40 cursor-default" />
-                    <motion.div initial={{ opacity: 0, scale: 0.95, y: -4 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.12 }} className="absolute right-0 z-50 mt-1 w-48 overflow-hidden rounded-2xl border border-border/60 bg-card/95 py-1 shadow-elevated backdrop-blur-xl">
+                  <AnchoredMenu key="menu" anchor={menuAnchorRef} onClose={() => setMenuOpen(false)}>
+                    <motion.div initial={{ opacity: 0, scale: 0.95, y: -4 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.12 }} className="w-48 overflow-hidden rounded-2xl border border-border/60 bg-card/95 py-1 shadow-elevated backdrop-blur-xl">
                       {node.canModerate ? (
                         <>
                           <MenuRow
@@ -1438,7 +1490,7 @@ function CommentItemImpl({
                       {loggedIn && !node.canDelete ? <MenuRow icon={Flag} label="Report" danger onClick={openReport} /> : null}
                       {node.canDelete ? <MenuRow icon={Trash2} label="Delete" danger onClick={del} /> : null}
                     </motion.div>
-                  </>
+                  </AnchoredMenu>
                 ) : null}
               </AnimatePresence>
 
@@ -1447,10 +1499,9 @@ function CommentItemImpl({
                   thread's top can't become entirely pins. Code-split (see the
                   dynamic import above): post-owner-only, rarely opened. */}
               {pinPickerOpen ? (
-                <>
-                  <button type="button" aria-label="Close" onClick={() => setPinPickerOpen(false)} className="fixed inset-0 z-40 cursor-default" />
+                <AnchoredMenu anchor={menuAnchorRef} onClose={() => setPinPickerOpen(false)}>
                   <PinLabelPicker onPick={(label) => { setPinPickerOpen(false); onModerate(node.id, "pin", true, label); }} />
-                </>
+                </AnchoredMenu>
               ) : null}
             </div>
           </div>

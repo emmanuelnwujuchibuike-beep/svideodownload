@@ -943,21 +943,14 @@ function Composer({
           onCancel={() => setShowVoiceRecorder(false)}
         />
       ) : (
-      <div className="group flex items-center gap-1 rounded-3xl border border-border/60 bg-card/70 p-2 shadow-soft backdrop-blur-xl transition focus-within:border-primary/50 focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.15),0_8px_30px_-12px_rgba(124,58,237,0.5)]">
+      <div className="group flex flex-col rounded-3xl border border-border/60 bg-card/70 p-2 shadow-soft backdrop-blur-xl transition focus-within:border-primary/50 focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.15),0_8px_30px_-12px_rgba(124,58,237,0.5)]">
         {/*
-          🔴 `items-center` above, not `items-end` (owner: "arrange this
-          comment placeholder in to align in a straight line with the other
-          icons"). Both the icon buttons and the textarea land on the same
-          36px height in the common single-line state (`p-2` + `h-5 w-5` =
-          36px; the textarea's own `min-h-[36px]`), so bottom-alignment and
-          center-alignment SHOULD coincide exactly — but a textarea's
-          internal line-height/font metrics position its placeholder text
-          slightly differently than an icon centered in equal padding, which
-          is what read as "not lining up". Centering on a shared axis is
-          forgiving of that sub-pixel mismatch in a way bottom-alignment
-          isn't; it also degrades reasonably once the textarea grows past
-          one line, same as before.
+          🔴 Two rows (owner, 2026-10-14: "text in comment placeholder should go below the icon
+          buttons, not flex by the side of it"). In one row the six icons left the text a narrow
+          strip, so a few words already wrapped. The tools now sit on their own row and the text
+          gets the full width below them, beside the send button.
         */}
+        <div className="flex items-center gap-1">
         <button type="button" onClick={() => setShowStickers((s) => !s)} aria-label="Stickers" className={cn("shrink-0 rounded-full p-2 transition hover:bg-secondary", showStickers ? "text-primary" : "text-muted-foreground")}>
           <Smile className="h-5 w-5" />
         </button>
@@ -982,8 +975,10 @@ function Composer({
             <Mic className="h-5 w-5" />
           </button>
         ) : null}
+        </div>
         <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => pickImage(e.target.files?.[0])} />
-        <div className="relative min-w-0 flex-1">
+        <div className="flex items-end gap-1 border-t border-border/50 pt-1.5">
+        <div className="relative min-w-0 flex-1 pl-2">
           <textarea
             ref={textareaRef}
             value={body}
@@ -1044,6 +1039,7 @@ function Composer({
         <motion.button type="button" onClick={submit} disabled={!canSend} whileTap={{ scale: 0.88 }} aria-label={parentId ? "Reply" : "Comment"} className="shrink-0 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 p-2 text-white shadow-md shadow-violet-500/30 transition hover:opacity-95 disabled:opacity-40 disabled:shadow-none">
           {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
         </motion.button>
+        </div>
       </div>
       )}
       <div className="mt-1.5 flex items-center gap-3 pl-1">

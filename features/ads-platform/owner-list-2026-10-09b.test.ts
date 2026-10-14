@@ -9,11 +9,13 @@ import { AD_EVENT_TYPES } from "@/lib/ads-platform/catalog";
 const code = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 
 describe("a tapped ad opens its details on the same page", () => {
-  const SURFACES = ["self-ad-banner.tsx", "self-interstitial.tsx", "self-story-card.tsx"];
+  // 2026-10-14: the interstitial and the story card are the shared full-screen layout (fullscreen-video-ad.tsx), which owns their call to action
+  const SURFACES = ["self-ad-banner.tsx", "fullscreen-video-ad.tsx"];
   /** Every surface opens the detail instead of leaving — a function so the teeth can run it on a broken copy. */
   const opensDetail = (src: string) => /onClick=\{\(e\) => \{\s*e\.preventDefault\(\);\s*openAdDetail\(/.test(src) && !src.includes("trackAdClick(");
   it("banner, interstitial and story card all open the detail sheet", () => {
     for (const f of SURFACES) expect(opensDetail(code(`features/ads-platform/serve/${f}`)), f).toBe(true);
+    for (const f of ["self-interstitial.tsx", "self-story-card.tsx"]) expect(code(`features/ads-platform/serve/${f}`), f).toContain("<FullscreenAd");
   });
   it("teeth: a surface that still links straight out fails", () => {
     const b = code("features/ads-platform/serve/self-ad-banner.tsx");

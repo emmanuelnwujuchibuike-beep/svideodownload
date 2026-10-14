@@ -188,7 +188,12 @@ describe("background work stops when nobody is looking", () => {
   });
   it("story progress re-renders in 2 % steps, not every frame", () => {
     expect(code("features/app-shell/dashboard/stories-row.tsx")).toMatch(/0\.02|2 ?%|\* ?50/);
-    expect(code("features/ads-platform/serve/self-story-card.tsx")).toMatch(/0\.02|2 ?%|\* ?50/);
+    // 2026-10-14: the paid story card is the shared full-screen layout, whose image progress is ONE CSS
+    // transition — no re-render at all while it fills (better than 2 % steps), and no rAF loop
+    const full = code("features/ads-platform/serve/fullscreen-video-ad.tsx");
+    expect(code("features/ads-platform/serve/self-story-card.tsx")).toContain("<FullscreenAd");
+    expect(full).toContain("transitionDuration: `${imageMs}ms`");
+    expect(full).not.toMatch(/requestAnimationFrame\(tick\)/);
   });
   it("videos release their decoder on unmount (stable ref callback)", () => {
     const v = code("features/media/smart-video.tsx");

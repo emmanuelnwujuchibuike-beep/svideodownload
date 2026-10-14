@@ -12,11 +12,15 @@ import type { AdView } from "../ad-events-client";
 import { openAdDetail } from "./ad-detail-store";
 import { destinationHost, SelfAdCreative } from "./self-ad-creative";
 
+/** How long an IMAGE ad's progress line takes to fill, as a Snapchat image Snap does. */
+const IMAGE_MS = 5_000;
+
 /** When the call-to-action bar fills with colour, as TikTok's does a moment into the ad. */
 const CTA_HIGHLIGHT_MS = 2500;
 
 /**
- * A VIDEO ad, full screen, in the language people already know from TikTok and Snapchat
+ * A full-screen ad — VIDEO or IMAGE (2026-10-14, owner: "image too should be full screen except
+ * the one on a card") — in the language people already know from TikTok and Snapchat
  * (owner, 2026-10-14: "make the ad like tiktok and snapchat ads"; earlier the same day: full
  * screen everywhere but the download-result and feed cards, inside the safe areas, full width,
  * text overlaid on the video).
@@ -37,7 +41,8 @@ const CTA_HIGHLIGHT_MS = 2500;
  * Presentation only. The caller owns what happens around it — the interstitial's skip
  * countdown and focus trap, the Story card's side taps, the Reels deck's swipe — through
  * `topRight`, `footer` and `children` (drawn over the media, under the rail and the text).
- * Image ads keep their own layouts.
+ * An IMAGE takes the same layout: shown whole across the width over a blur of itself, its
+ * progress line filling over `imageMs` like a Snapchat image Snap; it has no sound or pause.
  */
 export function FullscreenVideoAd({
   ad,
@@ -52,8 +57,14 @@ export function FullscreenVideoAd({
   onEnded,
   onFail,
   header = true,
+  imageMs = IMAGE_MS,
+  imageEnds = false,
   className,
 }: {
+  /** an IMAGE ad's on-screen time: its progress line fills over this */
+  imageMs?: number;
+  /** an image calls onEnded when its time is up (the Stories card moves on); an interstitial's never does */
+  imageEnds?: boolean;
   /** false where the surface already has its own top chrome (the Reels deck's tabs): "Ad" moves to the caption */
   header?: boolean;
   ad: EligibleAd;
@@ -79,6 +90,18 @@ export function FullscreenVideoAd({
   const [expanded, setExpanded] = useState(false);
   const [ctaLit, setCtaLit] = useState(false);
   const video = useRef<HTMLVideoElement | null>(null);
+  const captionRef = useRef<HTMLSpanElement | null>(null);
+  const [clipped, setClipped] = useState(false);
+  useEffect(() => {
+    const el = captionRef.current;
+    if (!el) return;
+    const measure = () => setClipped(el.scrollHeight - el.clientHeight > 1);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ad.cr]);
   const host = destinationHost(ad.url);
   const initial = ad.sponsor.trim().charAt(0).toUpperCase() || "A";
 
@@ -86,6 +109,20 @@ export function FullscreenVideoAd({
     const t = window.setTimeout(() => setCtaLit(true), CTA_HIGHLIGHT_MS);
     return () => window.clearTimeout(t);
   }, [ad.cr]);
+
+  // an IMAGE has no clock of its own: the progress line runs over `imageMs` (one CSS transition, no loop)
+  const isVideo = ad.mediaType === "video";
+  const endedRef = useRef(onEnded);
+  endedRef.current = onEnded;
+  useEffect(() => {
+    if (isVideo) return;
+    const start = window.requestAnimationFrame(() => setProgress(1));
+    const done = imageEnds ? window.setTimeout(() => endedRef.current?.(), imageMs) : 0;
+    return () => {
+      window.cancelAnimationFrame(start);
+      window.clearTimeout(done);
+    };
+  }, [isVideo, imageMs, imageEnds, ad.cr]);
 
   const open = () => openAdDetail(ad, view);
 
@@ -154,7 +191,7 @@ export function FullscreenVideoAd({
           onFail={onFail}
         />
         {/* tap to pause / play, as on TikTok — under the caller's tap zones, the rail and the text */}
-        <button type="button" aria-label={paused ? "Play the ad" : "Pause the ad"} onClick={togglePause} className="absolute inset-0 z-[5] cursor-default" />
+        {isVideo ? <button type="button" aria-label={paused ? "Play the ad" : "Pause the ad"} onClick={togglePause} className="absolute inset-0 z-[5] cursor-default" /> : null}
         {paused ? (
           <span className="pointer-events-none absolute left-1/2 top-1/2 z-[6] flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm animate-in zoom-in-75 fade-in duration-150 motion-reduce:animate-none" aria-hidden>
             <Play className="ml-1 h-8 w-8 fill-white text-white" />
@@ -180,7 +217,7 @@ export function FullscreenVideoAd({
       {header ? (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 bg-gradient-to-b from-black/60 via-black/25 to-transparent pb-10 pt-[calc(env(safe-area-inset-top)+0.5rem)]">
           <div className="mx-2 h-[2.5px] overflow-hidden rounded-full bg-white/30" aria-hidden>
-            <div className="h-full origin-left rounded-full bg-white transition-transform duration-200 ease-linear motion-reduce:transition-none" style={{ transform: `scaleX(${progress})` }} />
+            <div className="h-full origin-left rounded-full bg-white transition-transform duration-200 ease-linear motion-reduce:transition-none" style={{ transform: `scaleX(${progress})`, ...(isVideo ? {} : { transitionDuration: `${imageMs}ms` }) }} />
           </div>
           <div className="mt-2.5 flex items-center gap-2.5 px-3">
             {brandBadge("sm")}
@@ -210,12 +247,13 @@ export function FullscreenVideoAd({
               aria-expanded={expanded}
               className="mt-1 block w-full text-left text-[14px] leading-snug text-white/95 [text-shadow:0_1px_2px_rgba(0,0,0,0.55)]"
             >
-              <span className={expanded ? undefined : "line-clamp-2"}>
+              <span ref={captionRef} className={expanded ? undefined : "line-clamp-2"}>
                 {ad.headline ? <span className="font-semibold">{ad.headline}</span> : null}
                 {ad.headline && ad.body ? " " : null}
                 {ad.body}
               </span>
-              {!expanded && (ad.body?.length ?? 0) + (ad.headline?.length ?? 0) > 70 ? <span className="font-semibold text-white/70">more</span> : null}
+              {/* "more" only when the two lines really cut the text off — measured, not guessed */}
+              {!expanded && clipped ? <span className="font-semibold text-white/70">more</span> : null}
             </button>
           ) : null}
           <span className="mt-2 inline-flex items-center gap-1 rounded-[4px] bg-white/20 px-1.5 py-0.5 text-[11px] font-semibold text-white/90 backdrop-blur-sm">
@@ -231,8 +269,8 @@ export function FullscreenVideoAd({
           rel="sponsored noopener noreferrer"
           onClick={(e) => {
             e.preventDefault();
+            openAdDetail(ad, view);
             haptic("selection");
-            open();
           }}
           className={cn(
             "pointer-events-auto relative mt-3 flex min-h-[2.875rem] w-full items-center justify-between overflow-hidden rounded-lg px-4 text-[15px] font-semibold transition-[background-color,box-shadow] duration-500 active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100",
@@ -247,3 +285,6 @@ export function FullscreenVideoAd({
     </div>
   );
 }
+
+/** The same layout under its general name — it shows images as well as videos. */
+export const FullscreenAd = FullscreenVideoAd;

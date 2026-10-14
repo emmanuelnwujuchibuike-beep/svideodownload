@@ -540,8 +540,20 @@ function landingChunks(): string[] {
  * shipped as one regex rather than a list) called by useShowAds, and the `instant`
  * mode of GlassSheetShell for the Feed and Reels comment sheets. Signed-in route,
  * never a cold visit; the cold-entry ratchets passed unchanged.
+ *
+ * ── 2026-10-14 (feed position, album covers, empty ad slots, ad-free pages): → 375 kB (/(app)/home measured 383,259) ──
+ *
+ * +283 B over 374 kB, measured with routeWeights() on the rebased tree (origin/main alone
+ * measured 382,753, so this batch adds ~506 B to /home). All owner asks that run on the feed
+ * /home renders: the feed keeps its scroll position across the bottom nav and reopens an
+ * in-feed Reels (smart-feed.tsx); album videos show their first frame and album cells never
+ * move under a finger (media-grid.tsx); feed ad slots never sit empty and the Hilltop feed unit
+ * follows the plan rule (feed-ad-slot.tsx, hilltop-feed-ad.tsx, ad-surface.tsx); no ad on the
+ * sign-in or profile pages (lib/monetization/ad-free-routes.ts, one regex, via useShowAds).
+ * The full-screen video ad and the paid Reels slide were moved behind dynamic imports for this
+ * same budget. Signed-in route, never a cold visit; the cold-entry ratchets passed unchanged.
  */
-const GLOBAL_CEILING = 374 * 1024;
+const GLOBAL_CEILING = 375 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

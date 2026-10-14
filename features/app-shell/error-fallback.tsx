@@ -5,29 +5,18 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { logError } from "@/lib/observability/log-error";
+import { BAKED_APP_BUILD, fetchServerBuild } from "@/lib/pwa/app-version";
 
-/**
- * 🔴 A stale tab's #1 source of "something went wrong" (owner report: the
- * comment sheet in BOTH feed and reels — two unrelated features whose only
- * common thread is that each lazy-loads its comments UI via `next/dynamic`,
- * see reel-viewer.tsx and feed-post-card.tsx). Every deploy ships new chunk
- * hashes; a tab left open from before the deploy still has the OLD manifest,
- * so the first `import()` for a not-yet-visited chunk (comments is opened on
- * demand, never on initial load) 404s. That throws mid-render, the nearest
- * `error.tsx` catches it, and both feed/reels fall through to the SAME
- * `app/(app)/error.tsx` — matching the identical wording in both places.
- * `reset()` alone can't fix this: it re-renders the segment against the
- * SAME stale manifest already in memory, so it fails again identically.
- * Only a real navigation (fetching a fresh HTML document + manifest) does.
+import { CHUNK_RELOAD_KEY, isChunkLoadError, isNewDeploy, shouldAutoReload } from "./chunk-error";
+
+/*
+ * 🔴 A stale tab's #1 source of "something went wrong": every deploy ships new
+ * chunk hashes, and a tab opened before the deploy 404s on the first lazy
+ * `import()` (e.g. the comments sheet in feed and reels). `reset()` can't fix
+ * that because it re-renders against the same stale manifest. Only a real
+ * reload does. The same error also comes from a plain network drop (an iOS
+ * resume), so see ./chunk-error.ts for how the two are told apart.
  */
-function isChunkLoadError(error: Error): boolean {
-  return (
-    error.name === "ChunkLoadError" ||
-    /loading chunk|loading css chunk|failed to fetch dynamically imported module|importing a module script failed/i.test(
-      error.message ?? "",
-    )
-  );
-}
 
 /**
  * Shared body for every route-segment `error.tsx` — before this only
@@ -56,11 +45,13 @@ export function ErrorFallback({
   logLabel?: string;
 }) {
   const chunkError = isChunkLoadError(error);
-  // One silent auto-reload per stale tab, not a loop — a session flag survives
-  // the reload itself (sessionStorage, not a plain ref) so a genuinely broken
-  // deploy shows the real error screen on the second hit instead of refreshing
-  // forever. Cleared naturally on tab close, so the next visit gets a fresh try.
+  // One silent auto-reload per failure, guarded by a timestamp in sessionStorage
+  // (it survives the reload), so a broken deploy shows the screen on the second
+  // hit instead of refreshing forever.
   const [autoRecovering, setAutoRecovering] = useState(false);
+  // "A new version is ready" only when the server confirms a different build.
+  // Otherwise it was a connection blip (see chunk-error.ts).
+  const [newDeploy, setNewDeploy] = useState(false);
 
   useEffect(() => {
     logError(logLabel, error);
@@ -68,32 +59,53 @@ export function ErrorFallback({
 
   useEffect(() => {
     if (!chunkError) return;
-    const key = "frenz:chunk-error-reload";
     // The fallback itself must never throw — a boundary that throws re-enters
     // the boundary. `sessionStorage` throws in a sandboxed embed (2026-09-13),
     // so a refused read means "do not auto-reload", and the real screen shows.
-    let triedAlready = true;
+    let reload = false;
     try {
-      triedAlready = !!sessionStorage.getItem(key);
-      if (!triedAlready) sessionStorage.setItem(key, "1");
+      reload = shouldAutoReload(sessionStorage.getItem(CHUNK_RELOAD_KEY), Date.now());
+      if (reload) sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()));
     } catch {
-      triedAlready = true;
+      reload = false;
     }
-    if (triedAlready) return; // already tried once this tab — show the real screen
-    setAutoRecovering(true);
-    window.location.reload();
+    if (reload) {
+      setAutoRecovering(true);
+      // Offline (e.g. still waking from the background): reloading now would only
+      // land on the offline page, so reload when the connection is back.
+      if (navigator.onLine) {
+        window.location.reload();
+        return;
+      }
+      const onOnline = () => window.location.reload();
+      window.addEventListener("online", onOnline, { once: true });
+      return () => window.removeEventListener("online", onOnline);
+    }
+    let cancelled = false;
+    void fetchServerBuild().then((server) => {
+      if (!cancelled) setNewDeploy(isNewDeploy(BAKED_APP_BUILD, server));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [chunkError]);
 
-  if (autoRecovering) return null; // reloading — nothing to flash on screen
+  if (autoRecovering && navigator.onLine) return null; // reloading — nothing to flash on screen
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-6 text-center">
       <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/10 text-red-500">
         <AlertTriangle className="h-7 w-7" />
       </span>
-      <h1 className="text-xl font-bold">{chunkError ? "A new version is ready" : title}</h1>
+      <h1 className="text-xl font-bold">{chunkError ? (newDeploy ? "A new version is ready" : autoRecovering ? "You're offline" : "Couldn't load this part") : title}</h1>
       <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-        {chunkError ? "This tab was open before an update. Refresh to pick it up." : message}
+        {chunkError
+          ? newDeploy
+            ? "This tab was open before an update. Refresh to pick it up."
+            : autoRecovering
+              ? "This will reload when you're back online."
+              : "The connection dropped while it was loading. Refresh to try again."
+          : message}
       </p>
       {/* 2026-10-09: a short code the owner can screenshot - the server digest, or the first words
           of a browser error - so a production failure can be traced without logs access */}

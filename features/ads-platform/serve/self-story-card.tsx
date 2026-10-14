@@ -1,6 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 
 import type { EligibleAd } from "@/lib/ads-platform/eligibility";
@@ -8,6 +9,9 @@ import type { EligibleAd } from "@/lib/ads-platform/eligibility";
 import { trackAdEvent, type AdView } from "../ad-events-client";
 import { openAdDetail } from "./ad-detail-store";
 import { destinationHost, SelfAdCreative } from "./self-ad-creative";
+
+// loaded only when a VIDEO ad opens — an image ad, and every page that never shows one, never fetch it
+const FullscreenVideoAd = dynamic(() => import("./fullscreen-video-ad").then((m) => m.FullscreenVideoAd), { ssr: false });
 
 /** How long an IMAGE card stays before the stories continue on their own. */
 const IMAGE_MS = 5_000;
@@ -49,6 +53,36 @@ export function SelfStoryCard({ ad, onDone }: { ad: EligibleAd; onDone: () => vo
   }, [isVideo, started, onDone]);
 
   const host = destinationHost(ad.url);
+
+  // 2026-10-14 (owner): a VIDEO card is the shared full-screen layout — text over the video's foot,
+  // the video between the safe areas. The sides still move on; the X continues.
+  if (isVideo) {
+    return (
+      <div className="absolute inset-0 z-30" role="group" aria-label={`Sponsored story from ${ad.sponsor}`}>
+        <FullscreenVideoAd
+          ad={ad}
+          placement="stories_card"
+          page="stories"
+          loop={false}
+          topRight={
+            <button type="button" onClick={onDone} aria-label="Continue to the next story" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-inset ring-white/20 backdrop-blur-md">
+              <X className="h-[18px] w-[18px]" aria-hidden />
+            </button>
+          }
+          onView={(v) => {
+            view.current = v;
+            trackAdEvent(v, "interstitial_view");
+          }}
+          onEnded={onDone}
+          onFail={onDone}
+        >
+          {/* the two sides continue (the middle is left to the video); the button at the foot opens the advertiser */}
+          <button type="button" aria-label="Next story" onClick={onDone} className="absolute inset-y-0 left-0 w-[30%]" />
+          <button type="button" aria-label="Next story" onClick={onDone} className="absolute inset-y-0 right-0 w-[30%]" />
+        </FullscreenVideoAd>
+      </div>
+    );
+  }
 
   return (
     <div className="absolute inset-0 z-30 flex flex-col bg-black pb-[env(safe-area-inset-bottom)] pt-[var(--frenz-safe-top,0px)]" role="group" aria-label={`Sponsored story from ${ad.sponsor}`}>

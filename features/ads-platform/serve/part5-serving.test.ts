@@ -324,9 +324,13 @@ describe("cost: nothing until a campaign is live", () => {
   });
 
   it("every paid renderer in a shared container is a dynamic import", () => {
-    for (const f of ["features/monetization/ad-surface.tsx", "features/monetization/result-ad.tsx", "features/monetization/reels-ad-slide.tsx", "features/ads-platform/serve/self-ad-slot.tsx"]) {
+    for (const f of ["features/monetization/ad-surface.tsx", "features/monetization/result-ad.tsx", "features/ads-platform/serve/self-ad-slot.tsx"]) {
       expect(src(f), f).toMatch(/const SelfAdCard = dynamic\(/);
     }
+    // 2026-10-14: the Reels deck's paid slide (card or full-screen video) is one dynamic module, and the deck imports none of it statically
+    const reels = src("features/monetization/reels-ad-slide.tsx");
+    expect(reels).toMatch(/const PaidReelsSlide = dynamic\(/);
+    expect(reels).not.toMatch(/from "@\/features\/ads-platform\/serve\/|from "@\/lib\/ads-platform\/serving-state"/);
     for (const f of ["features/monetization/top-page-banner-ad.tsx", "features/monetization/sticky-top-ad.tsx"]) expect(src(f), f).toMatch(/const SelfTopCreative = dynamic\(/);
     expect(src("features/app-shell/dashboard/stories-row.tsx")).toMatch(/const SelfStoryCard = dynamic\(/);
   });

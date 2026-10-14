@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowUpRight, X } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -12,6 +13,9 @@ import { cn } from "@/lib/utils";
 import { trackAdEvent, type AdView } from "../ad-events-client";
 import { openAdDetail } from "./ad-detail-store";
 import { destinationHost, SelfAdCreative } from "./self-ad-creative";
+
+// loaded only when a VIDEO ad opens — an image ad, and every page that never shows one, never fetch it
+const FullscreenVideoAd = dynamic(() => import("./fullscreen-video-ad").then((m) => m.FullscreenVideoAd), { ssr: false });
 
 /**
  * A full-screen paid ad — INTERSTITIAL, DOWNLOAD_COMPLETED_INTERSTITIAL, and
@@ -119,6 +123,97 @@ export function SelfInterstitial({
 
   if (typeof document === "undefined") return null;
 
+  // the one place a reward completes — only on the video's real end, never on close or skip
+  const handleEnded = () => {
+    if (reward && view.current) trackAdEvent(view.current, "reward_video_complete");
+    if (reward) onRewardComplete?.();
+    setEnded(true);
+  };
+
+  // the skip countdown, then the close button — the same control in both layouts
+  const skipControl = (dark: boolean) =>
+    canSkip ? (
+      <button
+        ref={closeBtn}
+        type="button"
+        onClick={onClose}
+        aria-label={reward ? "Close the sponsored video" : "Close the ad"}
+        className={cn(
+          "inline-flex h-9 w-9 items-center justify-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",
+          dark ? "bg-black/45 text-white backdrop-blur-md ring-1 ring-inset ring-white/20 hover:bg-black/60" : "bg-muted text-foreground hover:bg-muted/70",
+        )}
+      >
+        <X className="h-[18px] w-[18px]" aria-hidden />
+      </button>
+    ) : (
+      <span
+        role="status"
+        aria-live="polite"
+        className={cn(
+          "inline-flex h-9 items-center rounded-full px-3 text-[12px] font-semibold tabular-nums",
+          dark ? "bg-black/45 text-white/90 backdrop-blur-md ring-1 ring-inset ring-white/20" : "bg-muted text-muted-foreground",
+        )}
+      >
+        Skip in {left}
+      </span>
+    );
+
+  /*
+    🔴 A VIDEO goes full screen (owner, 2026-10-14: "make video ad … show in full screen like the
+    history viewer"). The same dialog — skip countdown, Escape, focus and scroll lock above —
+    around the shared full-screen layout. An image keeps the sheet below.
+  */
+  if (ad.mediaType === "video") {
+    return createPortal(
+      <div
+        className="fixed inset-0 z-[96] bg-black animate-in fade-in duration-200 motion-reduce:animate-none"
+        role="dialog"
+        aria-modal="true"
+        data-paid-ad=""
+        data-ad-slot={slot}
+        data-ad-provider="frenzsave"
+        aria-label={reward ? `Sponsored video from ${ad.sponsor}` : `Advertisement from ${ad.sponsor}`}
+        ref={dialog}
+        tabIndex={-1}
+      >
+        <FullscreenVideoAd
+          ad={ad}
+          placement={placement}
+          page={page}
+          loop={!reward}
+          topRight={skipControl(true)}
+          note={
+            reward
+              ? rewardText
+                ? ended
+                  ? "Unlocked. Thanks for watching."
+                  : rewardText
+                : `Your video is saving. ${ended ? "Thanks for watching." : "A short message from our sponsor while it does."}`
+              : undefined
+          }
+          footer={
+            reward ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="mt-2.5 flex min-h-[2.75rem] w-full items-center justify-center rounded-full bg-white/15 text-[14px] font-semibold text-white ring-1 ring-inset ring-white/25 backdrop-blur-md transition active:scale-[0.98] motion-reduce:active:scale-100"
+              >
+                Continue
+              </button>
+            ) : null
+          }
+          onView={(v) => {
+            view.current = v;
+            trackAdEvent(v, reward ? "reward_video_start" : "interstitial_view");
+          }}
+          onEnded={handleEnded}
+          onFail={onClose}
+        />
+      </div>,
+      document.body,
+    );
+  }
+
   return createPortal(
     <div
       className="fixed inset-0 z-[96] flex items-end justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 motion-reduce:animate-none sm:items-center"
@@ -143,21 +238,7 @@ export function SelfInterstitial({
         <div className="flex items-center gap-2 px-4 pb-2 pt-3.5">
           <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Ad</span>
           <p className="min-w-0 flex-1 truncate text-[13px] font-semibold">{ad.sponsor}</p>
-          {canSkip ? (
-            <button
-              ref={closeBtn}
-              type="button"
-              onClick={onClose}
-              aria-label={reward ? "Close the sponsored video" : "Close the ad"}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-muted text-foreground transition hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-            >
-              <X className="h-[18px] w-[18px]" aria-hidden />
-            </button>
-          ) : (
-            <span role="status" aria-live="polite" className="inline-flex h-9 items-center rounded-full bg-muted px-3 text-[12px] font-semibold tabular-nums text-muted-foreground">
-              Skip in {left}
-            </span>
-          )}
+          {skipControl(false)}
         </div>
 
         {reward ? (
@@ -178,11 +259,7 @@ export function SelfInterstitial({
             view.current = v;
             trackAdEvent(v, reward ? "reward_video_start" : "interstitial_view");
           }}
-          onEnded={() => {
-            if (reward && view.current) trackAdEvent(view.current, "reward_video_complete");
-            if (reward) onRewardComplete?.();
-            setEnded(true);
-          }}
+          onEnded={handleEnded}
           onFail={onClose}
         />
 

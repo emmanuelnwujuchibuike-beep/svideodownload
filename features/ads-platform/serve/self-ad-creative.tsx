@@ -43,7 +43,13 @@ export function SelfAdCreative({
   onPlaying,
   onView,
   onSize,
+  onProgress,
+  soundAt = "bottom",
 }: {
+  /** the video's played fraction, 0–1 (the full-screen layout's progress line) */
+  onProgress?: (fraction: number) => void;
+  /** where the sound control sits: the corner of a card, or under the full-screen layout's top row */
+  soundAt?: "bottom" | "top";
   ad: EligibleAd;
   placement: string;
   page: string;
@@ -196,8 +202,13 @@ export function SelfAdCreative({
             trackAdEvent(view, "video_start");
             onPlaying?.();
           }}
+          onTimeUpdate={onProgress ? (e) => {
+            const v = e.currentTarget;
+            if (v.duration > 0 && Number.isFinite(v.duration)) onProgress(Math.min(1, v.currentTime / v.duration));
+          } : undefined}
           onEnded={() => {
             trackAdEvent(view, "video_complete");
+            onProgress?.(1);
             onEnded?.();
           }}
           onError={fail}
@@ -223,7 +234,11 @@ export function SelfAdCreative({
           onClick={toggleSound}
           aria-label={soundOn && !soundBlocked ? "Mute ad" : "Turn ad sound on"}
           aria-pressed={!(soundOn && !soundBlocked)}
-          className="absolute bottom-2 right-2 z-20 inline-flex min-h-[2.25rem] items-center gap-1 rounded-full bg-black/55 px-2.5 text-[11px] font-semibold text-white backdrop-blur-sm transition hover:bg-black/70"
+          className={cn(
+            "absolute right-2 z-20 inline-flex min-h-[2.25rem] items-center gap-1 rounded-full bg-black/55 px-2.5 text-[11px] font-semibold text-white backdrop-blur-sm transition hover:bg-black/70",
+            // "top": below the full-screen layout's top row (its media box already starts under the safe area)
+            soundAt === "top" ? "right-3 top-16 z-30" : "bottom-2",
+          )}
         >
           {soundOn && !soundBlocked ? <Volume2 className="h-4 w-4" aria-hidden /> : <VolumeX className="h-4 w-4" aria-hidden />}
           {soundBlocked ? "Tap for sound" : null}

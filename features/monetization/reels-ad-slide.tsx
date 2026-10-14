@@ -36,7 +36,8 @@ import { AdSlot } from "./ad-slot";
   only branch has been removed is a prop that will be wired to the wrong
   thing later.
 */
-const SelfAdCard = dynamic(() => import("@/features/ads-platform/serve/self-ad-card").then((m) => m.SelfAdCard), { ssr: false });
+// the paid slide (card, or a video full screen) — its own chunk, loaded only when a paid slide is in the deck
+const PaidReelsSlide = dynamic(() => import("@/features/ads-platform/serve/paid-reels-slide").then((m) => m.PaidReelsSlide), { ssr: false });
 
 export function ReelsAdSlide({
   paid = null,
@@ -64,16 +65,7 @@ export function ReelsAdSlide({
    */
   const [filled, setFilled] = useState<boolean | null>(null);
 
-  if (paid?.ads.length) {
-    return (
-      <div data-ad-slot="reels_interstitial" data-ad-provider="frenzsave" className="relative flex h-full w-full flex-col items-center justify-center gap-4 bg-black px-6">
-        <SelfAdCard ads={paid.ads} rules={paid.rules} placement="reels_banner" page={paid.page} className="[&>p]:text-white/60" />
-        <p className="flex items-center gap-1.5 text-xs text-white/50">
-          <ChevronUp className="h-3.5 w-3.5" aria-hidden /> Swipe up for the next reel
-        </p>
-      </div>
-    );
-  }
+  if (paid?.ads.length) return <PaidReelsSlide paid={paid} />;
 
   return (
     <div

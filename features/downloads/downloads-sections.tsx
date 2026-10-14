@@ -102,15 +102,22 @@ export function DownloadsHero({ trailing, headline = true, subtitle = true }: { 
           {headline ? (
             <>
               <div className="flex items-center justify-between gap-2">
-                <h1 className="flex flex-nowrap items-baseline gap-[0.3em] text-[clamp(1.05rem,5.2vw,2.25rem)] font-extrabold leading-[1.1] tracking-[-0.035em] text-slate-900 dark:text-white">
-                  <span className="whitespace-nowrap">Save.</span>
-                  <span className="whitespace-nowrap bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-blue-400 dark:via-violet-400 dark:to-fuchsia-400">
-                    Discover.
+                {/*
+                  "Create and earn." (owner 2026-10-14) is longer, and on /downloads the line shares its row
+                  with Earn or Promote. So the H1 takes the space left beside them (flex-1, a size
+                  container) and the words are sized to that width (cqw): one line, never under the
+                  button. Below a readable floor (a 320px phone beside Earn) "Create and earn." wraps to a second
+                  line rather than overflow. Older browsers without container units keep the viewport-based size.
+                */}
+                <h1 className="min-w-0 flex-1 [container-type:inline-size]">
+                  <span className="flex flex-wrap items-baseline gap-x-[0.3em] text-[clamp(1rem,4.2vw,2.25rem)] font-extrabold leading-[1.1] tracking-[-0.035em] text-slate-900 [@supports(width:1cqw)]:text-[clamp(1rem,calc(100cqw/15.6),2.25rem)] dark:text-white">
+                    <span className="whitespace-nowrap">Save.</span>
+                    <span className="whitespace-nowrap bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-blue-400 dark:via-violet-400 dark:to-fuchsia-400">
+                      Discover.
+                    </span>
+                    {/* the third words name Frenz AI and the credits people earn (Landing + Download brief §4, owner 2026-10-08 / 2026-10-14) */}
+                    <span className="whitespace-nowrap">Create and earn.</span>
                   </span>
-                  {/* "Create." (Landing + Download brief §4, owner 2026-10-08): the concept stays
-                      Save · Discover, and the third word now names Frenz AI. Shorter than
-                      "Explore.", so the one-line clamp above still holds at 320px. */}
-                  <span className="whitespace-nowrap">Create.</span>
                 </h1>
                 {/* inset to the header's right-hand controls above it (owner, 2026-10-08: "shift too far out of the edge") */}
                 {trailing ? <div className="mr-3 shrink-0">{trailing}</div> : null}

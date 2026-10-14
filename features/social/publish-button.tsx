@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { useUser } from "@/features/auth/use-user";
 import { CATEGORIES, categoryLabel } from "@/lib/social/categories";
+import { markJustPublished } from "@/lib/social/just-published";
 import { cn } from "@/lib/utils";
 import type { MediaKind, VideoMetadata } from "@/types";
 
@@ -87,6 +88,7 @@ export function PublishButton({ metadata, highlight = false }: { metadata: Video
         return;
       }
       setDoneId(json.id as string);
+      markJustPublished(json.id as string); // the Home feed opens with it on top
       // Store the media so it plays natively & Pro users can download it
       // (best-effort, server-side; large files fall back to on-demand download).
       void fetch(`/api/posts/${json.id}/store-media`, { method: "POST" }).catch(() => {});

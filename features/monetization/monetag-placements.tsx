@@ -6,6 +6,7 @@ import { useEffect, useRef } from "react";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { reportMonetagMomentRequested } from "@/features/monetization/monetag-report";
 import { MONETAG_MOMENT_EVENTS } from "@/lib/monetization/monetag-events";
+import { RETURN_INTERSTITIAL_ENABLED } from "@/lib/monetization/return-interstitial";
 import {
   monetagAllowedOnPath,
   type MonetagPlacementId,
@@ -234,7 +235,8 @@ export function MonetagPlacements({
         }
         const away = hiddenAt.t ? Date.now() - hiddenAt.t : 0;
         hiddenAt.t = null;
-        if (hasReturn && away >= AWAY_MS) run("return");
+        // off since 2026-10-14 (lib/monetization/return-interstitial.ts)
+        if (RETURN_INTERSTITIAL_ENABLED && hasReturn && away >= AWAY_MS) run("return");
         else arm();
       };
       for (const e of ACTIVITY) window.addEventListener(e, arm, { passive: true });

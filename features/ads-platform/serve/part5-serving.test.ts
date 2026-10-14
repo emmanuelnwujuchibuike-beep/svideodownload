@@ -272,7 +272,7 @@ describe("one ad per moment — paid first, the network stands down", () => {
     expect(src("features/monetization/download-complete-ad.tsx")).toContain('if (open && momentClaimed("download-complete")) close();');
     const idle = src("features/monetization/idle-interstitial.tsx");
     expect(idle).toContain('if (momentClaimed("return")) return false;');
-    expect(idle).toContain("if (away >= AWAY_MS) window.setTimeout(show, 0);");
+    expect(idle).toContain("if (RETURN_INTERSTITIAL_ENABLED && away >= AWAY_MS) window.setTimeout(show, 0);");
     expect(src("features/monetization/top-page-banner-ad.tsx")).toContain("const visible = allowedPath && (!!paid || (network && hasAd === true));");
   });
 

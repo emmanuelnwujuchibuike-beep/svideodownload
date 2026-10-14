@@ -23,6 +23,7 @@ import { SparkCard } from "@/features/feed/spark-card";
 import { FEED_AD_INTERVAL } from "@/lib/feed/ad-slots";
 import { haptic } from "@/lib/motion/haptics";
 import { acceptFeedItems, dedupeFeedItems, mediaIdentity, seenFromItems } from "@/lib/social/feed-dedupe";
+import { hoistById, takeJustPublished } from "@/lib/social/just-published";
 import type { FeedItem, HomeFeedSort } from "@/lib/social/home-feed";
 
 // The full-screen overlays are interaction-only — code-split so the entire reels
@@ -613,6 +614,35 @@ export function SmartFeed({
     }
     // Only on first mount — compares against the *previous* visit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ── Your new post, on top ───────────────────────────────────────────
+     Owner, 2026-10-14: "When a user create a post it should appear instantly
+     on the feed after post have successfully uploaded, he don't need to be
+     looking for the post." The composer marks the post (just-published.ts);
+     here For You reloads page 0 with `pinNew` and the post hoisted to the top,
+     at scroll 0. Runs AFTER the continuity restore above (source order) so it
+     wins over the saved tab and scroll, and BEFORE "alive on return" below,
+     whose silent un-pinned refetch it pre-empts by stamping `lastFeedFetchAt`. */
+  useEffect(() => {
+    const postId = takeJustPublished();
+    if (!postId) return;
+    lastFeedFetchAt = Date.now();
+    seedRef.current = newFeedSeed();
+    setFreshCount(0);
+    sortRef.current = "for_you";
+    setSort("for_you");
+    restoreScrollFor.current = null;
+    scrollPosRef.current.for_you = 0;
+    window.scrollTo({ top: 0 });
+    void fetchPage("for_you", 0, true, false, true).then(() => {
+      const entry = cacheRef.current?.for_you;
+      if (!entry) return;
+      entry.items = hoistById(entry.items, postId);
+      if (sortRef.current === "for_you") setItems(entry.items);
+      persistContinuity();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per mount, like the restore above
   }, []);
 
   /* ── "New posts" pill ─────────────────────────────────────────────────

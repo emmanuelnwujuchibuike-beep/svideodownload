@@ -11,6 +11,7 @@ import {
 
 import { isPlayerOpen } from "@/features/downloads/player-store";
 import { momentClaimed } from "@/lib/ads-platform/moment-events";
+import { RETURN_INTERSTITIAL_ENABLED } from "@/lib/monetization/return-interstitial";
 
 import { FullscreenInterstitial } from "./fullscreen-interstitial";
 import { useShowAds } from "./use-show-ads";
@@ -169,7 +170,8 @@ export function IdleInterstitial() {
       const away = hiddenAt.current ? Date.now() - hiddenAt.current : 0;
       hiddenAt.current = null;
       // next tick: the paid layer hears the same visibilitychange and claims first
-      if (away >= AWAY_MS) window.setTimeout(show, 0);
+      // off since 2026-10-14 (lib/monetization/return-interstitial.ts)
+      if (RETURN_INTERSTITIAL_ENABLED && away >= AWAY_MS) window.setTimeout(show, 0);
       else arm(); // short flick away — just restart the idle timer
     };
 

@@ -12,6 +12,7 @@ import { MOMENT_SLOTS } from "@/lib/ads-platform/slot-moments";
 import { providerOrder, resolveSlotProvider } from "@/lib/ads-platform/slot-registry";
 import { DOWNLOAD_COMPLETED_EVENT } from "@/lib/downloads/completion-event";
 import { mayServeSlot } from "@/lib/monetization/ad-inventory-shape";
+import { RETURN_INTERSTITIAL_ENABLED } from "@/lib/monetization/return-interstitial";
 import { anotherModalOpen } from "@/lib/ui/modal-open";
 import { peekAdInventory } from "@/features/monetization/ad-inventory-client";
 
@@ -197,8 +198,10 @@ export function SelfMoments() {
     };
   }, [pick, open]);
 
-  // Back after ≥5 s away → the interstitial, within the admin's gap
+  // Back after ≥5 s away → the interstitial, within the admin's gap.
+  // Off since 2026-10-14 (lib/monetization/return-interstitial.ts) — not even warmed.
   useEffect(() => {
+    if (!RETURN_INTERSTITIAL_ENABLED) return;
     let hiddenAt: number | null = null;
     const onVis = () => {
       if (document.visibilityState === "hidden") {

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { NEUTRAL_EDIT, type PhotoEdit } from "@/features/create/photo-editor";
 import { captureVideoPoster } from "@/lib/media/video-poster";
 import { readImageSize } from "@/lib/media/read-image-size";
+import { markJustPublished } from "@/lib/social/just-published";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { createClient } from "@/lib/supabase/client";
 
@@ -374,6 +375,8 @@ export async function publishComposition({
   if (!res.ok) throw new Error(json.error ?? "Couldn't publish.");
 
   const postId = json.postId ?? null;
+  // the Home feed opens with this post on top (lib/social/just-published.ts)
+  if (postId) markJustPublished(postId);
   return {
     postId,
     storyId: json.storyId ?? null,

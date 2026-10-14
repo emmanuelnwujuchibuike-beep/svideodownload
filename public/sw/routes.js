@@ -147,9 +147,12 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Images — stale-while-revalidate, capped (config.js LIMITS).
+  // Images — a kept history thumbnail first (config.js HISTORY_THUMB_CACHE),
+  // otherwise stale-while-revalidate, capped (config.js LIMITS).
   if (isImage) {
-    event.respondWith(SWX.staleWhileRevalidate(req, SWX.IMAGE_CACHE));
+    event.respondWith(
+      SWX.fromHistoryThumbs(req).then((hit) => hit || SWX.staleWhileRevalidate(req, SWX.IMAGE_CACHE)),
+    );
     return;
   }
 

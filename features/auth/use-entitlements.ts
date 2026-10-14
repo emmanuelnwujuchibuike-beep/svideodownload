@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
 import { readIdentity, writeIdentity } from "@/lib/auth/identity-cache";
@@ -152,5 +152,26 @@ export function useEntitlements(): Entitlements {
     };
   }, []);
 
+  /*
+    🔴 THE HYDRATION PASS RENDERS WHAT THE SERVER DID (owner, 2026-10-14: "the
+    history page white flash on first entry is still happening").
+
+    The server always renders FREE with `ready` false — it has no `cache`. But
+    `cache` is module state: on a cold load the shell outside a page's Suspense
+    boundary hydrates first, its effect fills `cache`, and a component inside
+    the boundary then hydrated with `ready` already true. On /history that made
+    the download-history ad render a <div> where the server HTML had none —
+    React error #418 — and React threw the server HTML away and re-rendered the
+    page: the content blinked out on entry. `useSyncExternalStore`'s server
+    snapshot is used exactly for the hydration pass, so that pass matches the
+    server; React re-renders with the real values right after. A component
+    mounted by a client navigation never takes this path and stays instant.
+  */
+  const hydrating = useSyncExternalStore(noopSubscribe, notHydrating, isHydrating);
+  if (hydrating) return { ...FREE, ready: false };
   return { ...value, ready };
 }
+
+const noopSubscribe = () => () => {};
+const notHydrating = () => false;
+const isHydrating = () => true;

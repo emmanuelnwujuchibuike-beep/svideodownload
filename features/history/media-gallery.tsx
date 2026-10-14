@@ -42,6 +42,7 @@ import { PLATFORMS } from "@/lib/platforms";
 import { cn, formatBytes } from "@/lib/utils";
 import type { DownloadRecord, MediaKind } from "@/types";
 import { RotatingAdStack } from "@/features/monetization/rotating-ad-stack";
+import { keepHistoryThumb } from "@/features/history/thumb-keep";
 
 /**
  * A story ad after every N media (owner: "after 3 media").
@@ -805,7 +806,7 @@ function GalleryTile({
         aria-pressed={selecting ? picked : undefined}
         className="absolute inset-0 h-full w-full"
       >
-        <SmartThumb src={item.thumbnail} alt="" eager={eager} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]" fallback={<KindIcon className="h-7 w-7" />} />
+        <SmartThumb src={item.thumbnail} alt="" eager={eager} onLoaded={keepHistoryThumb} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]" fallback={<KindIcon className="h-7 w-7" />} />
         <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent px-2 pb-1.5 pt-10">
           {/* The duration chip sits ABOVE the title, as in the reference. */}
           <span className="mb-1 flex items-center gap-1 text-[11px] font-semibold text-white/90">
@@ -1109,7 +1110,7 @@ function ListRow({ item, onOpen, onToggleFavorite, onRemove, onPublishSound, onR
         aria-pressed={selecting ? picked : undefined}
         className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-black/40 sm:h-16 sm:w-16"
       >
-        <SmartThumb src={item.thumbnail} alt="" className="h-full w-full object-cover" fallback={<KindIcon className="h-5 w-5" />} />
+        <SmartThumb src={item.thumbnail} alt="" onLoaded={keepHistoryThumb} className="h-full w-full object-cover" fallback={<KindIcon className="h-5 w-5" />} />
         <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/25 group-hover:opacity-100">
           <Play className="h-5 w-5 fill-white text-white drop-shadow" />
         </span>

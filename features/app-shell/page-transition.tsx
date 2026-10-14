@@ -124,6 +124,14 @@ function noSlideFor(pathname: string): boolean {
     transition, which is what makes the group feel native to move around in.
   */
   if (pathname === "/") return true;
+  /*
+    History doesn't fade in either (owner, 2026-10-14: "the history page white
+    flash on first entry is still happening"). The 120ms fade starts the page at
+    opacity 0, and on a busy phone that transparent first frame holds while the
+    page hydrates, so a light theme shows white. Measured on a throttled phone
+    tapping History: the page sat almost invisible for ~300ms.
+  */
+  if (pathname === "/history") return true;
   return pathname === "/messages" || pathname.startsWith("/messages/");
 }
 

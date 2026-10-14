@@ -130,7 +130,8 @@ describe("no flash on page entry", () => {
     expect(t).toContain('loading={eager ? "eager" : "lazy"}');
     expect(t).toContain("eager = false");
     expect(t).toContain('decoding={isImageSeen(src) ? "sync" : "async"}');
-    expect(t).toContain("onLoad={(e) => markImageSeen(src, e.currentTarget)}");
+    // 2026-10-14: the handler also hands the src to History's keeper (features/history/thumb-keep.ts)
+    expect(t).toMatch(/onLoad=\{\(e\) => \{\s*markImageSeen\(src, e\.currentTarget\);/);
     const g = code("features/history/media-gallery.tsx");
     expect(g).toContain("sorted.slice(0, cols * 5)");
     expect(g).toContain("eager={i < cols * 5}");

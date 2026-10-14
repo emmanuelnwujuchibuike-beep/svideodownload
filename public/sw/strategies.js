@@ -36,6 +36,18 @@ SWX.cacheFirst = async function cacheFirst(request, cacheName) {
   return res;
 };
 
+// A history thumbnail the page already kept (config.js HISTORY_THUMB_CACHE).
+// Null on a miss — or on any Cache Storage error — so the caller's normal
+// strategy runs exactly as before.
+SWX.fromHistoryThumbs = async function fromHistoryThumbs(request) {
+  try {
+    const hit = await (await caches.open(SWX.HISTORY_THUMB_CACHE)).match(request);
+    return SWX.canServe(hit, request) ? hit : null;
+  } catch {
+    return null;
+  }
+};
+
 // Stale-while-revalidate: for content that DOES change, but where showing
 // last time's version for one extra load is a fine trade for an instant
 // paint — thumbnails/avatars, and (once allowlisted) genuinely public API

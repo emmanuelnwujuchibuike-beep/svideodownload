@@ -103,6 +103,8 @@ var SWX = (self.SWX = self.SWX || {});
 // navigation's RSC payload the way v21 revalidates a document — the "A new
 // version is ready" screen that stuck for two hours after a deploy. A
 // submodule change; must bump.
+// v30 (2026-10-14): HISTORY_THUMB_CACHE — history thumbnails are answered from
+// their own device cache first (routes.js), so they stop reloading every visit.
 // v26 (2026-10-10): avatars get their own cache-first AVATAR_CACHE (routes.js)
 // — the 80-entry IMAGE_CACHE was evicting them behind feed thumbnails, so the
 // chat avatars re-fetched (~1 s each from storage) on every entry. Must bump.
@@ -116,13 +118,24 @@ var SWX = (self.SWX = self.SWX || {});
 // was a plain white square. A submodule change; must bump.
 // v29 (2026-10-12): push.js closes a credits-earned notification at once while the app is
 // open and focused (still shown first — iOS revokes silent pushes). Must bump.
-SWX.VERSION = "v29";
+SWX.VERSION = "v30";
 SWX.STATIC_CACHE = `frenz-static-${SWX.VERSION}`;
 SWX.IMAGE_CACHE = `frenz-img-${SWX.VERSION}`;
 SWX.PAGE_CACHE = `frenz-pages-${SWX.VERSION}`;
 SWX.API_CACHE = `frenz-api-${SWX.VERSION}`;
 SWX.AVATAR_CACHE = "frenz-avatar-stable-1";
-SWX.KEEP = [SWX.STATIC_CACHE, SWX.IMAGE_CACHE, SWX.PAGE_CACHE, SWX.API_CACHE, SWX.AVATAR_CACHE];
+/*
+  History thumbnails, kept on the device (owner, 2026-10-14: "medias should be
+  save in local storage so it doesn't load each time"). The page writes this
+  cache (features/history/thumb-keep.ts) once a tile loads; the image route
+  answers from it first. Not versioned, so a deploy doesn't wipe it; the
+  `frenz-img-` prefix means sign-out (lib/auth/sign-out.ts) still deletes it,
+  so what one account downloaded never shows for the next. Apart from
+  IMAGE_CACHE because feed thumbnails filled those 80 slots and pushed every
+  history thumbnail out.
+*/
+SWX.HISTORY_THUMB_CACHE = "frenz-img-history-1";
+SWX.KEEP = [SWX.STATIC_CACHE, SWX.IMAGE_CACHE, SWX.PAGE_CACHE, SWX.API_CACHE, SWX.AVATAR_CACHE, SWX.HISTORY_THUMB_CACHE];
 
 // Every runtime cache that can grow unboundedly gets trimmed (oldest-
 // inserted-first) after each write. Fixes the PAGE_CACHE gap found in the

@@ -143,7 +143,14 @@ export function HilltopSlot({
   lazy = false,
   className,
   autoHideAfterMs,
+  placement,
 }: {
+  /**
+   * The plan-rule placement this unit serves (lib/monetization/plan-ads.ts). The feed
+   * unit passes `feed_inline`, so Pro sees it like the other feed ad (owner 2026-10-14).
+   * Without one, only the free plan sees it, as before.
+   */
+  placement?: string;
   /**
    * Retire the whole placement this long after it appears.
    *
@@ -198,7 +205,7 @@ export function HilltopSlot({
   lazy?: boolean;
   className?: string;
 }) {
-  const { showAds, ready } = useShowAds();
+  const { showAds, ready } = useShowAds(placement);
   const [tag, setTag] = useState<HilltopTag | null>(null);
   const [config, setConfig] = useState<HilltopConfig>(DEFAULT_HILLTOP);
   const host = useRef<HTMLDivElement | null>(null);

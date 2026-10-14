@@ -61,6 +61,8 @@ import { cn } from "@/lib/utils";
  * ad fails to load" half of the same requirement.
  */
 const RESERVED_MIN_HEIGHT = "min-h-[250px] sm:min-h-[280px]";
+/** How long an eligible slot keeps its reserved box waiting for the unit's answer. */
+const RESERVE_FOR_MS = 6000;
 
 export function FeedAdSlot({
   slotId,
@@ -114,6 +116,16 @@ export function FeedAdSlot({
     return () => obs.disconnect();
   }, [eligible, ready, showAds]);
 
+  // 🔴 A unit that never answers (an AdSense script an ad blocker stopped, a network that never
+  // fills) used to hold the 250px reservation open for good: the empty slot the owner saw in the
+  // feed (2026-10-14). After RESERVE_FOR_MS without an answer the box collapses. A late ad
+  // still paints (AdSurface shows its card the moment it has one), only the empty hold is gone.
+  useEffect(() => {
+    if (!eligible || filled !== null) return;
+    const t = window.setTimeout(() => setFilled((f) => (f === null ? false : f)), RESERVE_FOR_MS);
+    return () => window.clearTimeout(t);
+  }, [eligible, filled]);
+
   // Premium members and an unresolved plan render NOTHING — not even the
   // reserved box. `ready` matters: rendering before the plan resolves would
   // flash an ad-shaped hole at a paying subscriber on every feed load.
@@ -124,7 +136,8 @@ export function FeedAdSlot({
       ref={host}
       data-feed-ad-slot={slotId}
       className={cn(
-        "my-4 first:mt-0",
+        // no spacing around a slot that turned out empty
+        filled !== false && "my-4 first:mt-0",
         /*
           The reserved box applies only while the outcome is unknown. Once the
           zone reports back, an unfilled slot collapses to nothing (no label, no

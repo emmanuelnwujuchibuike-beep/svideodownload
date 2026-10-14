@@ -109,6 +109,13 @@ export function AdSurface({
     if (paid) onResolved?.(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!paid]);
+  // A slot the resolver gave to nobody renders nothing, so it must SAY so: a parent holding a
+  // reserved box open until the answer (the feed) otherwise kept an empty gap (owner 2026-10-14).
+  const noProvider = !!slot && occupant.status !== "pending" && !paid && occupant.provider === null;
+  useEffect(() => {
+    if (noProvider) onResolved?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noProvider]);
 
   // `ready` guards the premium check: rendering before the plan resolves would
   // flash an ad frame at a paying user.

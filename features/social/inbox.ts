@@ -125,6 +125,8 @@ const MAX_PATCH_IDS = 20;
  */
 /** How long a burst of inbox events waits for quiet before the one refetch it becomes. */
 export const INBOX_COALESCE_MS = 350;
+/** A resume after at least this long in the background refreshes the inbox (events were likely missed). */
+export const RESUME_REFRESH_AFTER_MS = 30_000;
 
 export function useInboxRealtime(): void {
   useEffect(() => {
@@ -164,6 +166,7 @@ export function useInboxRealtime(): void {
       swallowed: it schedules one more pass, so the list ends on the latest state.
     */
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let subscribedOnce = false;
     let running = false;
     const dirty = new Set<string>();
     let fullNeeded = false;
@@ -213,7 +216,12 @@ export function useInboxRealtime(): void {
             { event: "*", schema: "public", table: "conversation_members", filter: `user_id=eq.${uid}` },
             onChange,
           )
-          .subscribe();
+          // a RE-subscribe means the socket dropped (a phone asleep, a tunnel) and events were missed
+          .subscribe((status) => {
+            if (status !== "SUBSCRIBED") return;
+            if (subscribedOnce) bump();
+            subscribedOnce = true;
+          });
         // Unmounted while `getUser()` was in flight — the subscribe above still
         // happened, so tear it down rather than leak the channel.
         if (cancelled) {
@@ -237,10 +245,32 @@ export function useInboxRealtime(): void {
     // connectivity transition, never on a plain back-swipe.
     window.addEventListener("online", bump);
 
+    /*
+      🔴 2026-10-14 (owner: "when I receive a message it doesn't show … I have to
+      go out of the message page and come back"): iOS suspends the socket while
+      the app is in the background, and postgres_changes has no replay, so a
+      message that arrived then never reached the inbox. A resume after a REAL
+      absence (hidden for RESUME_REFRESH_AFTER_MS or more) now refreshes it
+      quietly. A back-swipe or a quick app switch is far shorter, so the
+      2026-07-21 rule above (no reload on back-swipe) still holds, and the
+      refresh replaces rows in place: nothing blanks or shows a loader.
+    */
+    let hiddenAt = 0;
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now();
+        return;
+      }
+      if (hiddenAt && Date.now() - hiddenAt >= RESUME_REFRESH_AFTER_MS) bump();
+      hiddenAt = 0;
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
       window.removeEventListener("online", bump);
+      document.removeEventListener("visibilitychange", onVisibility);
       if (channel && supabase) void supabase.removeChannel(channel);
     };
   }, []);

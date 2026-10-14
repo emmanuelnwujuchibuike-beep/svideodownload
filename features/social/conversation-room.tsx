@@ -43,7 +43,7 @@ import { ContactPickerSheet } from "@/features/social/contact-picker-sheet";
 import { DocumentAttachmentCard } from "@/features/social/document-attachment-card";
 import { EmojiPickerButton } from "@/features/social/emoji-picker-button";
 import { ForwardSheet } from "@/features/social/forward-sheet";
-import { cacheThread, getCachedThread } from "@/features/social/thread-cache";
+import { cacheThread, getCachedThread, mergeMissing } from "@/features/social/thread-cache";
 import { ReshareSheet } from "@/features/social/reshare-sheet";
 import { saveMediaToDevice } from "@/lib/media/save-to-device";
 import { INBOX_KEY, loadInbox } from "@/features/social/inbox";
@@ -104,6 +104,8 @@ const COMPOSER_MAX_HEIGHT = 128;
 const DRAFT_PREFIX = "frenz-draft:";
 // Voice hold-to-record gesture thresholds (owner mockup).
 const MIC_HOLD_COMMIT_MS = 200;
+/** How far before the last sync a catch-up asks from — see `resync`. */
+const RESYNC_OVERLAP_MS = 30_000;
 const MIC_CANCEL_PX = 80;
 const MIC_LOCK_PX = 80;
 
@@ -261,7 +263,12 @@ export function ConversationRoom({
   // `initial` payload — see the `threadCache` doc comment above. Read once
   // per mount (this component remounts on every `/messages/[id]` navigation,
   // same or different id, since the route is force-dynamic).
-  const cachedThread = getCachedThread(conversationId);
+  // The server's `initial` can be newer than the session copy (it is fetched on
+  // this navigation), so rows only it has are merged in rather than ignored.
+  const [cachedThread] = useState(() => {
+    const c = getCachedThread(conversationId);
+    return c ? { ...c, messages: mergeMissing(c.messages, initial) } : undefined;
+  });
   const [messages, setMessages] = useState<MessageItem[]>(cachedThread?.messages ?? initial);
   // Theme/wallpaper now come from the shared ThreadAppearanceProvider (wraps
   // this component + ThreadHeader together) instead of this component's own
@@ -690,7 +697,11 @@ export function ConversationRoom({
   // keyboard opens/closes (its height changes the thread's own scroll
   // height even though no new message arrived), so the latest bubble never
   // ends up hidden behind the keyboard the moment the composer is focused.
-  const { height: viewportHeight } = useVisualViewport();
+  const { height: viewportHeight, keyboardOpen } = useVisualViewport();
+  // 🔴 2026-10-14 (owner: "too much gap between the placeholder and the keyboard"): iOS keeps
+  // env(safe-area-inset-bottom) (~34px, the home-bar strip) while the keyboard is up, but the keyboard
+  // already covers that strip, so the padding showed as an empty band above it. Drop it while typing.
+  const composerBottomPad = keyboardOpen ? "pb-2" : "pb-[calc(0.75rem+env(safe-area-inset-bottom))]";
   // useLayoutEffect, not useEffect (owner, 2026-07-16: "make the chat page open
   // from the botton on any entry so users dont need to scroll down to see new
   // messages"): a plain effect runs AFTER the browser paints, so every entry
@@ -756,12 +767,31 @@ export function ConversationRoom({
   // advances on a CONFIRMED successful response, so a dropped connection
   // never silently skips a gap — the next successful call still asks for
   // everything since the last point we know we actually saw.
+  //
+  // 🔴 Overlap (owner, 2026-10-14: "a new message doesn't show when I enter the
+  // chat, I have to go out and come back twice"). `syncedAt` is the APP
+  // server's clock, while `updated_at` is stamped by Postgres `now()`, which is
+  // the time its transaction STARTED. A message whose insert began a moment
+  // before the read (or any skew between the two clocks) carries an
+  // `updated_at` earlier than the `since` we send, so the delta skipped it, and
+  // every later delta asked from an even later point: the message stayed
+  // missing until a full load. The delta now asks from RESYNC_OVERLAP_MS
+  // earlier. The merge below is keyed by id and ignores unchanged rows, so the
+  // overlap costs a few repeated rows and never a repaint.
+  //
+  // A trigger that arrives while a resync is running (the subscribe landing,
+  // the app resuming) is no longer dropped: it runs once more after it.
   const resyncing = useRef(false);
+  const resyncAgain = useRef(false);
   const resync = useCallback(async () => {
-    if (resyncing.current) return;
+    if (resyncing.current) {
+      resyncAgain.current = true;
+      return;
+    }
     resyncing.current = true;
     try {
-      const res = await fetch(`/api/messages/${conversationId}?since=${encodeURIComponent(lastSyncedAt.current)}`, { cache: "no-store" });
+      const since = new Date(Date.parse(lastSyncedAt.current) - RESYNC_OVERLAP_MS).toISOString();
+      const res = await fetch(`/api/messages/${conversationId}?since=${encodeURIComponent(since)}`, { cache: "no-store" });
       if (!res.ok) return;
       const d = (await res.json()) as { messages: MessageItem[]; syncedAt?: string };
       if (!d.messages) return;
@@ -840,8 +870,22 @@ export function ConversationRoom({
       /* offline — the next resume/reconnect retries */
     } finally {
       resyncing.current = false;
+      if (resyncAgain.current) {
+        resyncAgain.current = false;
+        void resyncRef.current();
+      }
     }
   }, [conversationId]);
+  const resyncRef = useRef(resync);
+  resyncRef.current = resync;
+
+  // Catch up the moment the thread opens, not only once the live channel has
+  // subscribed: on a phone just back from the background the subscribe can be
+  // slow or fail, and the thread painted from the session cache would sit there
+  // without the message that brought the user in.
+  useEffect(() => {
+    void resync();
+  }, [resync]);
 
   // Live: new messages (INSERT), receipt/edit/delete/pin changes (UPDATE),
   // and reactions (their own lightweight channel — a reaction changing is
@@ -2539,7 +2583,7 @@ export function ConversationRoom({
           <Lock className="h-3.5 w-3.5 shrink-0" /> Only admins can send messages in this group
         </div>
       ) : recordingVoice ? (
-        <div className="border-t border-border/60 bg-card/70 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl lg:pb-3">
+        <div className={cn("border-t border-border/60 bg-card/70 p-3 backdrop-blur-xl lg:pb-3", composerBottomPad)}>
           <VoiceRecorder
             onRecorded={handleVoiceRecorded}
             onCancel={() => {
@@ -2573,7 +2617,8 @@ export function ConversationRoom({
         <form
           onSubmit={submit}
           className={cn(
-            "frenz-message-composer flex items-end gap-2 border-t border-border/60 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl lg:pb-3",
+            "frenz-message-composer flex items-end gap-2 border-t border-border/60 p-3 backdrop-blur-xl lg:pb-3",
+            composerBottomPad,
             // Translucent (not solid) over a wallpaper — same "top 0 bottom 0"
             // full-bleed ask as the message list above: the shared image
             // painted behind the whole thread shows through here instead of

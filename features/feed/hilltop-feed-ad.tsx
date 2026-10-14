@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { HilltopSlot } from "@/features/monetization/hilltop-slot";
+import { useShowAds } from "@/features/monetization/use-show-ads";
 
 /**
  * A HilltopAds banner inside the scrolling feed.
@@ -39,11 +40,19 @@ export function HilltopFeedAd({
 }: {
   anchorId: string;
 }) {
+  // 🔴 2026-10-14 (owner: "I see empty ad slot in feed … feed ad can show on Pro but not on
+  // Business"): this wrapper used to print "Sponsored" for everyone while the unit inside
+  // checked the plan (free only) and drew nothing for Pro and Business, an empty labelled gap.
+  // It now follows the feed's plan rule, and its label and spacing appear only once a creative
+  // has actually painted something.
+  const { showAds, ready } = useShowAds("feed_inline");
   const host = useRef<HTMLDivElement | null>(null);
+  const unit = useRef<HTMLDivElement | null>(null);
   const [eligible, setEligible] = useState(false);
+  const [painted, setPainted] = useState(false);
 
   useEffect(() => {
-    if (eligible) return;
+    if (eligible || !ready || !showAds) return;
     const el = host.current;
     if (!el) return;
     if (typeof IntersectionObserver === "undefined") {
@@ -61,16 +70,31 @@ export function HilltopFeedAd({
     );
     obs.observe(el);
     return () => obs.disconnect();
+  }, [eligible, ready, showAds]);
+
+  // the creative is third-party and reports nothing back, so its own height is the answer
+  useEffect(() => {
+    const el = unit.current;
+    if (!eligible || !el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setPainted(el.offsetHeight > PAINTED_MIN_PX));
+    ro.observe(el);
+    return () => ro.disconnect();
   }, [eligible]);
 
+  if (!ready || !showAds) return null;
+
   return (
-    <div ref={host} className="my-4 first:mt-0">
+    <div ref={host} className={painted ? "my-4 first:mt-0" : undefined}>
       {eligible ? (
         <>
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
-            Sponsored
-          </p>
-          <HilltopSlot slot="feed" instanceKey={anchorId} />
+          {painted ? (
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
+              Sponsored
+            </p>
+          ) : null}
+          <div ref={unit}>
+            <HilltopSlot slot="feed" instanceKey={anchorId} placement="feed_inline" />
+          </div>
         </>
       ) : (
         // Inert and effectively zero-height, but a real node so the box can be
@@ -82,3 +106,6 @@ export function HilltopFeedAd({
     </div>
   );
 }
+
+/** Taller than the 1px placeholders the slot keeps while waiting, shorter than any real creative. */
+const PAINTED_MIN_PX = 20;

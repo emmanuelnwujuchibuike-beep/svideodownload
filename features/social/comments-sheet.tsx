@@ -115,15 +115,19 @@ export function CommentsSheet({
 function CommentsLoadingPlaceholder() {
   return (
     <div className="space-y-3" aria-hidden>
-      <div className="flex items-center gap-1 rounded-3xl border border-border/60 bg-card/70 p-2 opacity-60 shadow-soft backdrop-blur-xl">
-        <span className="shrink-0 rounded-full p-2 text-muted-foreground"><Smile className="h-5 w-5" /></span>
-        <span className="shrink-0 rounded-full p-2 text-muted-foreground"><ImagePlus className="h-5 w-5" /></span>
-        <span className="shrink-0 rounded-full p-2 text-muted-foreground"><Sparkles className="h-5 w-5" /></span>
-        <span className="hidden shrink-0 rounded-full p-2 text-muted-foreground sm:inline-flex"><MapPin className="h-5 w-5" /></span>
-        <span className="min-w-0 flex-1 py-1.5 text-sm text-muted-foreground/70">Add a comment…</span>
-        <span className="shrink-0 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 p-2 text-white">
-          <Send className="h-5 w-5" />
-        </span>
+      <div className="flex flex-col rounded-3xl border border-border/60 bg-card/70 p-2 opacity-60 shadow-soft backdrop-blur-xl">
+        <div className="flex items-center gap-1">
+          <span className="shrink-0 rounded-full p-2 text-muted-foreground"><Smile className="h-5 w-5" /></span>
+          <span className="shrink-0 rounded-full p-2 text-muted-foreground"><ImagePlus className="h-5 w-5" /></span>
+          <span className="shrink-0 rounded-full p-2 text-muted-foreground"><Sparkles className="h-5 w-5" /></span>
+          <span className="shrink-0 rounded-full p-2 text-muted-foreground"><MapPin className="h-5 w-5" /></span>
+        </div>
+        <div className="flex items-end gap-1 border-t border-border/50 pt-1.5">
+          <span className="min-w-0 flex-1 py-1.5 pl-2 text-sm text-muted-foreground/70">Add a comment…</span>
+          <span className="shrink-0 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 p-2 text-white">
+            <Send className="h-5 w-5" />
+          </span>
+        </div>
       </div>
       <LoadingStripe />
     </div>

@@ -139,12 +139,20 @@ export function AddFriendButton({
           {armed ? "Cancel request?" : "Requested"}
         </button>
       ) : state === "incoming" ? (
-        <span className={cn("inline-flex items-center gap-2", className)}>
+        /*
+          🔴 Its own full row on a phone (owner, 2026-10-14: the profile actions "scatter when a
+          user sent a request and a follow"). This pair took the caller's `flex-1 min-w-0`, a
+          single button's share of the action bar, while holding TWO buttons that can't shrink,
+          so they spilled out both sides: Accept off the screen's left edge, Decline under
+          Follow back. Now the pair spans the row (each button half of it) and the rest of the
+          bar wraps beneath; from sm up it sits inline as before.
+        */
+        <span className="flex w-full flex-none items-center gap-2 sm:w-auto">
           <button
             type="button"
             onClick={() => respond("accept")}
             disabled={busy}
-            className={cn(base, "btn-lux-primary")}
+            className={cn(base, "btn-lux-primary min-w-0 flex-1 justify-center sm:flex-none")}
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserCheck className="h-4 w-4" />} Accept
           </button>
@@ -152,7 +160,7 @@ export function AddFriendButton({
             type="button"
             onClick={() => respond("decline")}
             disabled={busy}
-            className={cn(base, "btn-lux-secondary")}
+            className={cn(base, "btn-lux-secondary min-w-0 flex-1 justify-center sm:flex-none")}
           >
             Decline
           </button>

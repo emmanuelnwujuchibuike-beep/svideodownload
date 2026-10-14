@@ -6,6 +6,8 @@ import { sendProductEmail } from "@/lib/email/resend";
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import { SITE_URL } from "@/lib/site";
 
+import { noticeAsDisplayed } from "./notice-display";
+
 /**
  * Advertiser notifications (Part 6 §12) — through the EXISTING push + Notification
  * Center (`sendSmartPush` records in-app too) AND the existing branded email
@@ -116,12 +118,30 @@ function esc(v: string): string {
   return v.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
+const VIEW_NOTICES = new Set<AdNotice["kind"]>(["delivery_extended", "deadline_soon", "delivery_shortfall"]);
+
+async function viewsDisplay(db: SupabaseClient, campaignId: string): Promise<[number | null, number]> {
+  try {
+    const { data, error } = await db.from("ad_campaigns").select("target_views, stats_multiplier").eq("id", campaignId).maybeSingle();
+    if (error || !data) return [null, 1];
+    const r = data as { target_views?: number | null; stats_multiplier?: number | null };
+    return [r.target_views ?? null, Number(r.stats_multiplier ?? 1) || 1];
+  } catch {
+    return [null, 1];
+  }
+}
+
 export async function notifyAdvertiser(db: SupabaseClient, campaignId: string, notice: AdNotice): Promise<void> {
   try {
     const { data } = await db.from("ad_campaigns").select("name, advertisers!inner(user_id, contact_email)").eq("id", campaignId).maybeSingle();
     const row = data as { name?: string; advertisers?: { user_id?: string; contact_email?: string | null } | { user_id?: string; contact_email?: string | null }[] } | null;
     const adv = Array.isArray(row?.advertisers) ? row?.advertisers[0] : row?.advertisers;
     if (!row || !adv?.user_id) return;
+    // view counts as the dashboard shows them (its x10 sample mode), read on their own so a
+    // database without those columns still sends the notice unchanged
+    const shown = VIEW_NOTICES.has(notice.kind) ? noticeAsDisplayed(notice, ...(await viewsDisplay(db, campaignId))) : notice;
+    if (!shown) return;
+    notice = shown;
     const w = words(notice, row.name ?? "your campaign");
     // each channel on its own: a failed push never costs the email, nor the reverse
     await sendSmartPush(

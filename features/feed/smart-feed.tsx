@@ -38,6 +38,14 @@ const ReelsFeed = dynamic(() => import("@/features/reels/reels-feed").then((m) =
 // of showing that black loading frame — the exact same import `dynamic` uses, so
 // once it resolves the browser's module cache already has it and mounting is
 // synchronous. Safe to call repeatedly (the import is memoized by the runtime).
+/** When Reels was last open inside the feed (tab memory; 0 = closed) — see `reel` in SmartFeed. */
+let reelOpenAt = 0;
+/** How long an open in-feed Reels is reopened on return, the same window as the feed's own continuity. */
+const REEL_RETURN_MS = 30 * 60 * 1000;
+
+/** Frames (~1s) a restored scroll keeps re-landing while the restored cards lay out. */
+const RESTORE_TRIES = 60;
+
 function preloadReelsFeed() {
   void import("@/features/reels/reels-feed");
 }
@@ -170,7 +178,32 @@ export function SmartFeed({
   // sticky tab bar sticks at ONE position — fixed once it touches the top,
   // never sliding around with scroll direction (owner spec).
   useEffect(() => lockTopbarVisible(), []);
-  const [reel, setReel] = useState<{ startId: string; commentsId: string | null; startSlideIndex?: number } | null>(null);
+  const [reel, setReel] = useState<{ startId?: string; commentsId: string | null; startSlideIndex?: number } | null>(null);
+  /*
+    🔴 Reels opened inside the feed comes back (owner, 2026-10-14: "watching feed or reels and
+    navigate with the bottom nav … if a video was being watched it should continue"). This
+    overlay is component state, so leaving through the bottom nav dropped it and the return
+    landed on the feed instead. Leaving it OPEN is now remembered for the tab, and the return
+    reopens it with no startId, which makes ReelsFeed resume its own snapshot: the same reel,
+    and (resume-positions) the same second of it. Closing it with its X forgets it.
+  */
+  const reelSettled = useRef(false);
+  useEffect(() => {
+    if (reelOpenAt && Date.now() - reelOpenAt < REEL_RETURN_MS) setReel({ commentsId: null });
+    else reelOpenAt = 0;
+  }, []);
+  useEffect(() => {
+    // the first run is the mount (reel still null) and must not forget what the effect above restores
+    if (!reelSettled.current) {
+      reelSettled.current = true;
+      return;
+    }
+    reelOpenAt = reel ? Date.now() : 0;
+    // leaving the page with it open stamps the moment it was left, not the moment it was opened
+    return () => {
+      if (reel) reelOpenAt = Date.now();
+    };
+  }, [reel]);
   // Once an overlay has been opened we keep it mounted (it hides itself when its
   // item is null) so its close animation plays; before first use its chunk is
   // never loaded.
@@ -265,9 +298,19 @@ export function SmartFeed({
   // no reason to hit localStorage on every scroll tick). Tab switches and
   // every real feed fetch also persist immediately (see `changeSegment` /
   // `fetchPage`), so this listener mainly covers "left mid-scroll, same tab."
+  //
+  // 🔴 The unmount save used `window.scrollY` (owner, 2026-10-14: "navigate to a
+  // different page with the bottom nav, it starts the page from the top"). By the
+  // time a passive effect's cleanup runs on a route change, Next has ALREADY
+  // scrolled the new page to the top in its layout phase, so it saved 0 and the
+  // feed came back at the top. The position is now tracked on every scroll (a ref
+  // write, no storage) and the unmount saves that last real position.
+  const lastScrollY = useRef(0);
   useEffect(() => {
     let lastAt = 0;
+    lastScrollY.current = window.scrollY;
     const onScroll = () => {
+      lastScrollY.current = window.scrollY;
       const now = Date.now();
       if (now - lastAt < 1500) return;
       lastAt = now;
@@ -276,7 +319,7 @@ export function SmartFeed({
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       window.removeEventListener("scroll", onScroll);
-      persistContinuity(); // final save on unmount (e.g. navigating away)
+      persistContinuity({ scrollY: lastScrollY.current }); // final save on unmount (e.g. navigating away)
     };
   }, [persistContinuity]);
 
@@ -563,7 +606,30 @@ export function SmartFeed({
     if (restoreScrollFor.current !== sort) return;
     restoreScrollFor.current = null;
     const y = scrollPosRef.current[sort] ?? 0;
-    requestAnimationFrame(() => window.scrollTo({ top: y, behavior: "auto" }));
+    // Coming back through the bottom nav, the restored cards are still laying out (media boxes,
+    // fonts), so the page can be shorter than `y` on the first frame and the scroll would clamp
+    // short. Keep trying for a moment until the page is tall enough to land exactly, then stop.
+    // A scroll by the reader in the meantime wins: it ends the retries.
+    let tries = 0;
+    let userMoved = false;
+    const stop = () => {
+      userMoved = true;
+    };
+    window.addEventListener("touchstart", stop, { passive: true, once: true });
+    window.addEventListener("wheel", stop, { passive: true, once: true });
+    const done = () => {
+      window.removeEventListener("touchstart", stop);
+      window.removeEventListener("wheel", stop);
+    };
+    // not cancelled by a later `items` change (a page loading in): the landing must finish
+    const land = () => {
+      if (userMoved) return done();
+      window.scrollTo({ top: y, behavior: "auto" });
+      lastScrollY.current = window.scrollY;
+      if (Math.abs(window.scrollY - y) > 2 && tries++ < RESTORE_TRIES) requestAnimationFrame(land);
+      else done();
+    };
+    requestAnimationFrame(land);
   }, [sort, items]);
 
   // A decisive horizontal swipe on the feed switches tabs instantly, the same

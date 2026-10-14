@@ -289,7 +289,7 @@ export async function PostPageView({
                 resolve. A button that can only ever error is worse than no
                 button. */}
             {post.media_kind !== "text" ? (
-              <PostDownloadButton postId={post.id} mediaKind={post.media_kind} />
+              <PostDownloadButton postId={post.id} mediaKind={post.media_kind} isOwner={post.isOwner} />
             ) : null}
             {post.isOwner ? (
               <>

@@ -37,10 +37,13 @@ export function PostDownloadButton({
    */
   mediaKind = "video",
   className = "",
+  isOwner = false,
 }: {
   postId: string;
   mediaKind?: string;
   className?: string;
+  /** Their own post: the watermark chooser lets them take it clean. */
+  isOwner?: boolean;
 }) {
   const { download, state, progress } = useSocialDownload();
 
@@ -58,7 +61,7 @@ export function PostDownloadButton({
   return (
     <button
       type="button"
-      onClick={() => void download(postId)}
+      onClick={() => void download(postId, { isOwner })}
       disabled={state === "working"}
       aria-live="polite"
       className={`group relative inline-flex h-11 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-6 text-sm font-bold text-white shadow-lg shadow-violet-600/30 ring-1 ring-inset ring-white/15 transition-all duration-200 hover:-translate-y-px hover:shadow-xl hover:shadow-violet-600/40 active:translate-y-0 active:scale-[0.98] disabled:opacity-80 ${className}`}

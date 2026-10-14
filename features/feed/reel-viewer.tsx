@@ -3019,7 +3019,7 @@ function ReelCard({
           // reel's first-load JS for a tap that happens on a minority of
           // views.
           void import("@/lib/media/download-post").then((m) =>
-            m.downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title: title ?? undefined }),
+            m.downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title: title ?? undefined, isOwner: !!item.isOwner }),
           );
         }}
         onEditPost={() => {

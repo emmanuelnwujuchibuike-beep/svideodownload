@@ -1,6 +1,7 @@
 "use client";
 
 import { dismissToast, toast } from "@/features/ui/toast";
+import { chooseDownloadVersion } from "@/lib/media/choose-download";
 import { saveMediaToDevice } from "@/lib/media/save-to-device";
 
 /**
@@ -58,6 +59,8 @@ interface DownloadItem {
   url: string;
   kind: string;
   filename: string;
+  /** Set by the server when this file carries the watermark — see /api/posts/:id/download. */
+  watermark?: "burned" | "draw";
 }
 
 /**
@@ -70,11 +73,19 @@ interface DownloadItem {
 export async function savePostMedia(
   postId: string,
   onProgress?: (done: number, total: number) => void,
+  /** The chooser's answer; omitted, the server applies the plan's default (watermarked on Free). */
+  opts: { watermark?: boolean } = {},
 ): Promise<SavePostResult> {
-  let body: { url?: string; filename?: string; items?: DownloadItem[]; error?: string } = {};
+  let body: { url?: string; filename?: string; items?: DownloadItem[]; error?: string; watermark?: { handle: string } | null } = {};
   let res: Response;
   try {
-    res = await fetch(`/api/posts/${postId}/download`, { method: "POST", credentials: "same-origin" });
+    res = await fetch(`/api/posts/${postId}/download`, {
+      method: "POST",
+      credentials: "same-origin",
+      ...(typeof opts.watermark === "boolean"
+        ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ watermark: opts.watermark }) }
+        : {}),
+    });
     body = (await res.json().catch(() => ({}))) as typeof body;
   } catch {
     return { saved: 0, cancelled: 0, total: 0, error: "Couldn't download." };
@@ -95,6 +106,7 @@ export async function savePostMedia(
 
   if (items.length === 0) return { saved: 0, cancelled: 0, total: 0, error: "Nothing to download here." };
 
+  const handle = body.watermark?.handle ?? null;
   let saved = 0;
   let cancelled = 0;
   for (const [i, item] of items.entries()) {
@@ -111,6 +123,13 @@ export async function savePostMedia(
       // every feed photo into an unopenable "video".
       kind: item.kind === "image" ? "image" : "video",
       filename: item.filename,
+      // the worker's watermarked video — fetched from the worker itself
+      direct: item.watermark === "burned",
+      // a photo is stamped here; a stamp that fails fails the save, never falls back to the clean file
+      transform:
+        item.watermark === "draw" && handle
+          ? (blob) => import("@/lib/media/watermark-image").then((m) => m.stampImageWatermark(blob, handle))
+          : undefined,
     });
     if (result === "saved" || result === "shared") saved += 1;
     else if (result === "cancelled") cancelled += 1;
@@ -134,19 +153,34 @@ export async function downloadPost(item: {
   mediaUrl?: string | null;
   title?: string;
   thumbnailUrl?: string | null;
+  /** The viewer's own post — they may always take it without the watermark. */
+  isOwner?: boolean;
 }): Promise<void> {
   if (!item.mediaUrl) {
     toast("Nothing to download here.", "error");
     return;
   }
 
-  const tid = toast("Saving…", "loading");
-  const result = await savePostMedia(item.id, (done, total) => {
-    if (total > 1) toast(`Saving ${Math.min(done + 1, total)} of ${total}…`, "loading", { id: tid });
-  });
+  // with or without the watermark (owner, 2026-10-14) — dismissing it cancels the save
+  const choice = await chooseDownloadVersion({ isOwner: item.isOwner });
+  if (!choice) return;
+  const watermark = choice === "watermark";
+
+  const tid = toast(watermark ? "Adding watermark…" : "Saving…", "loading");
+  const result = await savePostMedia(
+    item.id,
+    (done, total) => {
+      if (total > 1) toast(`Saving ${Math.min(done + 1, total)} of ${total}…`, "loading", { id: tid });
+    },
+    { watermark },
+  );
 
   if (result.error) {
-    toast(result.error, "error", { id: tid, duration: result.error.includes("Pro") ? 6000 : 4000 });
+    toast(result.error, "error", {
+      id: tid,
+      duration: result.error.includes("Pro") ? 6000 : 4000,
+      action: result.error.includes("Pro") ? { label: "Go Pro", onClick: () => (window.location.href = "/pricing") } : undefined,
+    });
     if (result.error.toLowerCase().includes("sign in")) window.location.href = "/login?next=/home";
     return;
   }

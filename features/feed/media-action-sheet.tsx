@@ -57,12 +57,18 @@
  * the difference between a sheet that feels physical and one that feels like it
  * is measuring you.
  *
- * Drag is disabled while the content is scrolled away from the top, which is
- * what stops the gesture fighting the scroller. That is also precisely how iOS
- * behaves: you scroll back to the top, and then the sheet starts to move.
+ * 🔴 A pull on the LIST moves the sheet only when that touch STARTED with the
+ * list at its top (owner, 2026-10-14: "when I scroll down and want to scroll
+ * up it then closes the modal"). The note here used to promise that drag was
+ * off while the list was scrolled down, but `drag="y"` was live everywhere, so
+ * a swipe down to scroll back up dragged the sheet shut instead. Now framer's
+ * drag starts only from the grabber (`dragListener={false}` + controls), and
+ * the list runs its own pull-to-dismiss that a scrolled list never enters —
+ * even when that same swipe reaches the top. That is how iOS behaves: scroll
+ * back to the top, lift, and THEN a pull moves the sheet.
  */
 
-import { AnimatePresence, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
+import { animate, AnimatePresence, motion, useDragControls, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
 import { ChevronRight } from "lucide-react";
 import { Children, useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -414,19 +420,76 @@ export function MediaActionSheet({
     }
   }, [open, y]);
 
+  // framer's drag starts from the grabber only — see the header note
+  const dragControls = useDragControls();
+
   /*
-    Drag is live only while the content is at its scroll top — see the header
-    note. One ref guards the state so a scroll does not re-render per frame; the
-    component only updates on the boundary crossing itself.
+    Pull-to-dismiss on the LIST, for a touch that began at the list's top. A
+    callback ref, because the list mounts with the portal; non-passive, because
+    a pull has to preventDefault the browser's own overscroll.
   */
-  const [atTop, setAtTop] = useState(true);
-  const atTopRef = useRef(true);
-  const onScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const next = e.currentTarget.scrollTop <= 0;
-    if (next === atTopRef.current) return;
-    atTopRef.current = next;
-    setAtTop(next);
-  }, []);
+  const closeRef = useRef(requestClose);
+  closeRef.current = requestClose;
+  const listCleanup = useRef<(() => void) | null>(null);
+  const listRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      listCleanup.current?.();
+      listCleanup.current = null;
+      if (!el || reduce) return;
+      let startY = 0;
+      let startedAtTop = false;
+      let pulling = false;
+      let lastY = 0;
+      let lastT = 0;
+      let velocity = 0;
+      const onStart = (e: TouchEvent) => {
+        const t = e.touches[0];
+        if (!t || e.touches.length > 1) return;
+        startY = lastY = t.clientY;
+        lastT = e.timeStamp;
+        velocity = 0;
+        startedAtTop = el.scrollTop <= 0;
+        pulling = false;
+      };
+      const onMove = (e: TouchEvent) => {
+        const t = e.touches[0];
+        if (!t) return;
+        const dy = t.clientY - startY;
+        if (!pulling) {
+          // a touch that began scrolled down only ever scrolls
+          if (!startedAtTop || el.scrollTop > 0 || dy <= 6) return;
+          pulling = true;
+        }
+        e.preventDefault();
+        const dt = e.timeStamp - lastT;
+        if (dt > 0) velocity = ((t.clientY - lastY) / dt) * 1000;
+        lastY = t.clientY;
+        lastT = e.timeStamp;
+        y.set(Math.max(0, dy * 0.9));
+      };
+      const onEnd = () => {
+        if (!pulling) return;
+        pulling = false;
+        if (y.get() > DISMISS_DISTANCE || velocity > DISMISS_VELOCITY) {
+          haptic("light");
+          closeRef.current();
+        } else {
+          void animate(y, 0, springs.sheet);
+        }
+      };
+      el.addEventListener("touchstart", onStart, { passive: true });
+      el.addEventListener("touchmove", onMove, { passive: false });
+      el.addEventListener("touchend", onEnd);
+      el.addEventListener("touchcancel", onEnd);
+      listCleanup.current = () => {
+        el.removeEventListener("touchstart", onStart);
+        el.removeEventListener("touchmove", onMove);
+        el.removeEventListener("touchend", onEnd);
+        el.removeEventListener("touchcancel", onEnd);
+      };
+    },
+    [reduce, y],
+  );
 
   // Escape closes, and the body must not scroll underneath. Same body-scroll
   // convention (`overflowY`, never the shorthand) every viewer in this app uses.
@@ -484,12 +547,14 @@ export function MediaActionSheet({
             {/* Drag layer — pixel transform, composited. */}
             <motion.div
               drag={closing || reduce ? false : "y"}
+              dragControls={dragControls}
+              dragListener={false}
               dragConstraints={{ top: 0, bottom: 0 }}
               // Up is locked so the sheet never lifts off its own edge; down is
               // near 1:1 so it tracks the finger instead of lagging behind it.
               dragElastic={{ top: 0, bottom: 0.9 }}
               dragMomentum={false}
-              style={{ y, touchAction: atTop ? "none" : "pan-y" }}
+              style={{ y }}
               onDragEnd={(_, info) => {
                 if (info.offset.y > DISMISS_DISTANCE || info.velocity.y > DISMISS_VELOCITY) {
                   haptic("light");
@@ -507,12 +572,15 @@ export function MediaActionSheet({
             >
               {/* Grabber. Purely an affordance — it states that the sheet is
                   draggable before anyone has tried. */}
-              <div className="flex justify-center pb-1.5 pt-2.5">
+              <div
+                onPointerDown={(e) => dragControls.start(e)}
+                className="flex touch-none justify-center pb-1.5 pt-2.5"
+              >
                 <div className="h-[5px] w-10 rounded-full bg-slate-300 dark:bg-white/25" />
               </div>
 
               <div
-                onScroll={onScroll}
+                ref={listRef}
                 role="menu"
                 aria-label={label}
                 className="max-h-[78vh] space-y-3 overflow-y-auto overscroll-contain px-4 pb-2 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"

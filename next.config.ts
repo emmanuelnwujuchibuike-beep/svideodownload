@@ -360,12 +360,15 @@ const nextConfig: NextConfig = {
           no-store. An answer that names no caching policy of its own was
           never meant to be shared.
 
+          `watermark/mark` (2026-10-14) is the download watermark PNG: the same
+          handle always draws the same bytes, so it caches for a year.
+
           The path-to-regexp form: a negative lookahead inside the parameter's
           custom pattern; `(?:/|$)` after a name so /api/flags is kept while
           /api/flagsx is not. Verified against Next's own compiled matcher.
         */
         source:
-          "/api/:path((?!ads(?:/|$)|announcement(?:/|$)|ai/jobs/[^/]+/poster(?:/|$)|discovery(?:/|$)|feed(?:/|$)|flags(?:/|$)|landing/grid-image(?:/|$)|monetag(?:/|$)|posts/|sounds/discovery(?:/|$)|tools(?:/|$)|wallpaper(?:/|$)|profile/[^/]+/hub/|rewards/public(?:/|$)).*)",
+          "/api/:path((?!ads(?:/|$)|announcement(?:/|$)|ai/jobs/[^/]+/poster(?:/|$)|discovery(?:/|$)|feed(?:/|$)|flags(?:/|$)|landing/grid-image(?:/|$)|monetag(?:/|$)|posts/|sounds/discovery(?:/|$)|tools(?:/|$)|wallpaper(?:/|$)|watermark/mark(?:/|$)|profile/[^/]+/hub/|rewards/public(?:/|$)).*)",
         headers: [{ key: "Cache-Control", value: "private, no-store, max-age=0" }],
       },
       {

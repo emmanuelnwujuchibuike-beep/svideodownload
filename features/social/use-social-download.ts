@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 
+import { chooseDownloadVersion } from "@/lib/media/choose-download";
 import { savePostMedia } from "@/lib/media/download-post";
 import { toast } from "@/features/ui/toast";
 
@@ -70,13 +71,19 @@ export function useSocialDownload() {
   /** Guards a double-tap from spending two of the five free daily downloads. */
   const busy = useRef(false);
 
-  const download = useCallback(async (postId: string) => {
+  const download = useCallback(async (postId: string, opts: { isOwner?: boolean } = {}) => {
     if (busy.current) return;
     busy.current = true;
+    // with or without the watermark (owner, 2026-10-14) — the same chooser the feed shows
+    const choice = await chooseDownloadVersion({ isOwner: opts.isOwner });
+    if (!choice) {
+      busy.current = false;
+      return;
+    }
     setState("working");
     setProgress(null);
 
-    const result = await savePostMedia(postId, (done, total) => setProgress({ done, total }));
+    const result = await savePostMedia(postId, (done, total) => setProgress({ done, total }), { watermark: choice === "watermark" });
     busy.current = false;
 
     if (result.error) {

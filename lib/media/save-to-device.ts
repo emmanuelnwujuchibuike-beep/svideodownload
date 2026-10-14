@@ -66,10 +66,20 @@ export async function saveMediaToDevice({
   url,
   kind,
   filename,
+  direct = false,
+  transform,
 }: {
   url: string;
   kind: "image" | "video";
   filename?: string | null;
+  /**
+   * Fetch `url` itself, never through the storage proxy — for a file a Frenz
+   * service makes on request (the worker's watermarked video, which answers
+   * CORS for the site's origins). Not a storage object, so the proxy can't fetch it.
+   */
+  direct?: boolean;
+  /** Rewrites the bytes before they are saved (the photo watermark). */
+  transform?: (blob: Blob) => Promise<Blob>;
 }): Promise<SaveResult> {
   try {
     const ext = extensionFor(url, null, kind);
@@ -90,9 +100,12 @@ export async function saveMediaToDevice({
     // the fallback. Nothing is loosened: the URL is one the page already
     // shows (a public object), and the bytes still become a same-origin blob
     // below, so `Content-Disposition` was never what saved it.
-    const res = (await fetchDirect(url)) ?? (await fetch(proxiedUrl(url, name), { cache: "no-store" }));
+    const res = direct
+      ? await fetch(url, { mode: "cors", cache: "no-store", credentials: "omit" })
+      : ((await fetchDirect(url)) ?? (await fetch(proxiedUrl(url, name), { cache: "no-store" })));
     if (!res.ok) return "failed";
-    const blob = await res.blob();
+    const fetched = await res.blob();
+    const blob = transform ? await transform(fetched) : fetched;
     const file = new File([blob], name, { type: blob.type || (kind === "video" ? "video/mp4" : "image/jpeg") });
 
     // 1. Share sheet — the only path to the iOS Photos library.

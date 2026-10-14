@@ -417,9 +417,10 @@ function FeedPostCardImpl({
   };
 
   // True for exactly the two media shapes that render inside their own
-  // full-bleed box (FeedVideo/FeedImage) and can have the engagement row
-  // blended onto them — see engagementRow's own note just below.
-  const overlayEngagement =
+  // full-bleed box (FeedVideo/FeedImage). Their engagement row used to be
+  // blended onto the media; since 2026-10-14 it sits below like every other
+  // post's, and these two also get the views count under it.
+  const mediaBox =
     !(item.mediaItems && item.mediaItems.length > 1) &&
     ((item.mediaKind === "video" && !!(item.streamUid || item.mediaUrl)) ||
       (item.mediaKind === "image" && !!(item.mediaUrl || item.thumbnailUrl)));
@@ -731,7 +732,7 @@ function FeedPostCardImpl({
                         label="Download"
                         onClick={() => {
                           setMenuOpen(false);
-                          void import("@/lib/media/download-post").then((m) => m.downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title }));
+                          void import("@/lib/media/download-post").then((m) => m.downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title, isOwner: !!item.isOwner }));
                         }}
                       />
                       {item.isOwner ? (
@@ -901,9 +902,7 @@ function FeedPostCardImpl({
                     {formatDuration(item.durationSec)}
                   </span>
                 ) : null}
-                {engagementRow(true)}
               </FeedVideo>
-              <ViewsRow count={item.viewsCount} />
             </div>
           ) : item.mediaKind === "image" && (item.mediaUrl || item.thumbnailUrl) ? (
             <div className="relative">
@@ -918,10 +917,7 @@ function FeedPostCardImpl({
                   if (!liked) void react("like");
                 }}
                 onExpand={() => open(item)}
-              >
-                {engagementRow(true)}
-              </FeedImage>
-              <ViewsRow count={item.viewsCount} />
+              />
             </div>
           ) : item.mediaKind === "text" ? (
             /*
@@ -1015,7 +1011,16 @@ function FeedPostCardImpl({
         itself instead (see `engagementRow`'s own note) — `overlayEngagement`
         below is true for exactly those two cases.
       */}
-          {overlayEngagement ? null : engagementRow(false)}
+          {/*
+            🔴 THE TRAY IS ALWAYS BELOW THE MEDIA NOW (owner, 2026-10-14: "Bring
+            the engagement Tray out of the media card, it should stay outside
+            below on the white section so users gets a clear view of the
+            video"). It used to sit on the bottom of a single video or image
+            over a dark scrim (`overlayEngagement`), which covered the frame.
+            For those two shapes the views count follows the tray.
+          */}
+          {engagementRow(false)}
+          {mediaBox ? <ViewsRow count={item.viewsCount} /> : null}
         </div>
       </div>
 

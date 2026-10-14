@@ -1,10 +1,13 @@
 import { after, NextResponse } from "next/server";
 
 import { getRequestUser } from "@/lib/auth/request-user";
+import { directWorkerBase } from "@/lib/downloads/direct-ticket";
+import { cleanHandle, mintWatermarkTicket } from "@/lib/media/watermark-ticket";
 import { getUserPlan } from "@/lib/monetization/plan";
 import { consumeDaily } from "@/lib/rate-limit";
 import { checkDownloadMilestone } from "@/lib/social/milestones";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { hasWorker, WORKER_SECRET } from "@/lib/worker";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,6 +48,57 @@ interface DownloadItem {
   url: string;
   kind: string;
   filename: string;
+  /**
+   * How the watermark gets onto this file, when it carries one:
+   * "burned" — `url` is the worker's watermarked video, save it as-is;
+   * "draw"   — a photo; the browser stamps /api/watermark/mark onto it.
+   */
+  watermark?: "burned" | "draw";
+}
+
+/**
+ * 🔴 THE DOWNLOAD WATERMARK (owner, 2026-10-14: "put a watermark of the person
+ * who own the video username on it with frensave brand logo. Only pro upward
+ * downloads from feed or reels without watermarks. Let users know when they're
+ * downloading to choose with watermark or without").
+ *
+ * The client sends `{ watermark: boolean }` from the chooser. Without a body
+ * (the SDK, native clients) the plan's default applies: watermarked on Free,
+ * clean on Pro and up — so nothing that already calls this breaks.
+ *
+ * A free member asking for the clean file is refused here, not just hidden in
+ * the UI. The post's own creator may always choose: it is their media.
+ */
+const WATERMARK_UPGRADE_MESSAGE = "Upgrade to Pro to download without the watermark.";
+
+async function wantedWatermark(request: Request): Promise<boolean | null> {
+  try {
+    const body = (await request.json()) as { watermark?: unknown };
+    return typeof body.watermark === "boolean" ? body.watermark : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Stamps each item with how its watermark is applied; null when a video can't be watermarked here. */
+function watermarkItems(items: DownloadItem[], handle: string): DownloadItem[] | null {
+  const base = hasWorker ? directWorkerBase() : "";
+  const out: DownloadItem[] = [];
+  for (const it of items) {
+    if (it.kind === "image") {
+      out.push({ ...it, watermark: "draw" });
+      continue;
+    }
+    if (it.kind !== "video") {
+      out.push(it);
+      continue;
+    }
+    if (!WORKER_SECRET) return null;
+    const name = it.filename.replace(/\.[a-z0-9]+$/i, "") + ".mp4";
+    const t = mintWatermarkTicket({ src: it.url, handle, name }, WORKER_SECRET);
+    out.push({ ...it, url: `${base}/api/posts/watermark?t=${encodeURIComponent(t)}`, filename: name, watermark: "burned" });
+  }
+  return out;
 }
 
 /**
@@ -134,10 +188,29 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const visible = post.status === "published" && (post.visibility === "public" || isOwner);
   if (!visible) return NextResponse.json({ error: "Not available." }, { status: 403 });
 
+  const plan = await getUserPlan(user.id);
+  const mayGoClean = isOwner || plan !== "free";
+  const asked = await wantedWatermark(request);
+  const watermark = asked ?? !mayGoClean;
+  // refused BEFORE the daily cap is spent
+  if (!watermark && !mayGoClean) {
+    return NextResponse.json({ error: WATERMARK_UPGRADE_MESSAGE, upgrade: true, code: "WATERMARK_REQUIRED" }, { status: 402 });
+  }
+  let handle = "";
+  if (watermark) {
+    const { data: profile } = await admin.from("profiles").select("handle").eq("id", post.publisher_id).maybeSingle();
+    handle = cleanHandle((profile as { handle?: string | null } | null)?.handle);
+    if (!handle) handle = "frenzsave";
+  }
+  const finish = (items: DownloadItem[], remaining: number | null) => {
+    const out = watermark ? watermarkItems(items, handle) : items;
+    if (!out) return NextResponse.json({ error: "Watermarked video downloads are unavailable right now. Please try again later." }, { status: 503 });
+    return NextResponse.json({ url: out[0]!.url, filename: out[0]!.filename, items: out, remaining, watermark: watermark ? { handle } : null });
+  };
+
   // Free plan: enforce the daily cap. Owners downloading their own post and paid
   // plans skip the cap.
   if (!isOwner) {
-    const plan = await getUserPlan(user.id);
     if (plan === "free") {
       const cap = await consumeDaily(`postdl:${user.id}`, FREE_DAILY_DOWNLOADS);
       if (!cap.allowed) {
@@ -153,11 +226,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
       after(() => bumpDownloadsCount(admin, id, post.publisher_id as string, post.downloads_count ?? 0));
       const items = await collectItems(admin, { id, media_url: post.media_url, media_kind: post.media_kind, title: post.title });
-      return NextResponse.json({ url: items[0]!.url, filename: items[0]!.filename, items, remaining: cap.remaining });
+      return finish(items, cap.remaining);
     }
   }
 
   after(() => bumpDownloadsCount(admin, id, post.publisher_id as string, post.downloads_count ?? 0));
   const items = await collectItems(admin, { id, media_url: post.media_url, media_kind: post.media_kind, title: post.title });
-  return NextResponse.json({ url: items[0]!.url, filename: items[0]!.filename, items, remaining: null });
+  return finish(items, null);
 }

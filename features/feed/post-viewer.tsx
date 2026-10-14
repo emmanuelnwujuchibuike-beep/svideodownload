@@ -384,7 +384,7 @@ function ViewerInner({
             // Frenz-hosted post → direct download (free members get 5/day).
             <button
               type="button"
-              onClick={() => downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title })}
+              onClick={() => downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title, isOwner: !!item.isOwner })}
               className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-secondary"
               aria-label="Download to device"
             >

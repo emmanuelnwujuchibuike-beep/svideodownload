@@ -45,11 +45,14 @@ export function SelfAdCreative({
   onSize,
   onProgress,
   soundAt = "bottom",
+  onVideo,
 }: {
   /** the video's played fraction, 0–1 (the full-screen layout's progress line) */
   onProgress?: (fraction: number) => void;
-  /** where the sound control sits: the corner of a card, or under the full-screen layout's top row */
-  soundAt?: "bottom" | "top";
+  /** where the sound control sits: the corner of a card, or the full-screen layout's right-hand rail */
+  soundAt?: "bottom" | "rail";
+  /** the <video> element (the full-screen layout's tap-to-pause) */
+  onVideo?: (el: HTMLVideoElement | null) => void;
   ad: EligibleAd;
   placement: string;
   page: string;
@@ -187,7 +190,10 @@ export function SelfAdCreative({
       ) : null}
       {ad.mediaType === "video" ? (
         <video
-          ref={video}
+          ref={(el) => {
+            video.current = el;
+            onVideo?.(el);
+          }}
           src={ad.thumb ? ad.media : withFirstFrame(ad.media)}
           poster={ad.thumb ?? undefined}
           muted
@@ -235,13 +241,15 @@ export function SelfAdCreative({
           aria-label={soundOn && !soundBlocked ? "Mute ad" : "Turn ad sound on"}
           aria-pressed={!(soundOn && !soundBlocked)}
           className={cn(
-            "absolute right-2 z-20 inline-flex min-h-[2.25rem] items-center gap-1 rounded-full bg-black/55 px-2.5 text-[11px] font-semibold text-white backdrop-blur-sm transition hover:bg-black/70",
-            // "top": below the full-screen layout's top row (its media box already starts under the safe area)
-            soundAt === "top" ? "right-3 top-16 z-30" : "bottom-2",
+            "absolute z-20 inline-flex items-center text-white transition",
+            soundAt === "rail"
+              ? // the TikTok-style rail: a round glass button, right of centre, under the layout's own rail items
+                "right-3 top-[calc(50%+3.75rem)] h-11 w-11 justify-center rounded-full bg-black/35 ring-1 ring-inset ring-white/15 backdrop-blur-md active:scale-90 motion-reduce:active:scale-100"
+              : "bottom-2 right-2 min-h-[2.25rem] gap-1 rounded-full bg-black/55 px-2.5 text-[11px] font-semibold backdrop-blur-sm hover:bg-black/70",
           )}
         >
           {soundOn && !soundBlocked ? <Volume2 className="h-4 w-4" aria-hidden /> : <VolumeX className="h-4 w-4" aria-hidden />}
-          {soundBlocked ? "Tap for sound" : null}
+          {soundBlocked ? (soundAt === "rail" ? <span aria-hidden className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 animate-pulse rounded-full bg-rose-500 ring-2 ring-black/40 motion-reduce:animate-none" /> : "Tap for sound") : null}
         </button>
       ) : null}
     </div>

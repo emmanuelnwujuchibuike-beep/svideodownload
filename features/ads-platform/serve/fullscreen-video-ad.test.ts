@@ -19,10 +19,19 @@ describe("full-screen video ads", () => {
   });
 
   it("🔴 sponsor, headline and description are overlaid on the video's foot, not stacked under it", () => {
-    const foot = layout.slice(layout.indexOf("absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t"));
+    const foot = layout.slice(layout.indexOf("absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t"));
+    expect(foot.length).toBeLessThan(layout.length);
     expect(foot).toContain("{ad.sponsor}");
     expect(foot).toContain("{ad.headline}");
     expect(foot).toContain("{ad.body}");
+  });
+
+  it("TikTok/Snapchat grammar with no made-up numbers: rail of real actions, CTA that lights up, tap to pause", () => {
+    expect(layout).toContain('aria-label="Share this ad"');
+    expect(layout).toMatch(/setTimeout\(\(\) => setCtaLit\(true\), CTA_HIGHLIGHT_MS\)/);
+    expect(layout).toMatch(/aria-label=\{paused \? "Play the ad" : "Pause the ad"\}/);
+    // the truth rule: no like/comment/view counters on an ad
+    expect(layout).not.toMatch(/likes|comments|views|formatCompactNumber/i);
   });
 
   it("the interstitial, the Stories card and the Reels slide use it for a video", () => {

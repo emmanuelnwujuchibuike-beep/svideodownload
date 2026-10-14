@@ -134,10 +134,25 @@ export function VastInterstitialTriggers() {
       "keydown",
       "wheel",
       "touchstart",
-      "scroll",
+      // no bare "scroll": the app scrolls itself on a return (the feed restoring its position) —
+      // a real scroll always starts with a touch, a wheel or a key (2026-10-14)
     ] as const;
+    /*
+      🔴 NOT ON RETURN (owner, 2026-10-14: "the back to the app interstitial is still happening.
+      When I enter the app back from outside, I said stop it"). Coming back to the app, or the app
+      loading fresh, used to restart this countdown, so the first thing after re-entering — a few
+      seconds of not touching anything — was a full-screen ad. The countdown now starts only from a
+      real interaction on this visit, and going to the background stops it; becoming visible again
+      starts nothing.
+    */
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") {
+        window.clearTimeout(timer);
+        window.clearTimeout(warmTimer);
+      }
+    };
     for (const e of ACTIVITY) window.addEventListener(e, arm, { passive: true });
-    document.addEventListener("visibilitychange", arm);
+    document.addEventListener("visibilitychange", onVisibility);
 
     /*
       BACK-SWIPE. `popstate` is the one signal that covers the iOS edge-swipe,
@@ -151,14 +166,14 @@ export function VastInterstitialTriggers() {
     const onPop = () => fire();
     window.addEventListener("popstate", onPop);
 
-    arm();
+    // no arm() here: a fresh load (often a return to the app) starts no countdown until the visitor interacts
     return () => {
       window.clearTimeout(timer);
       // The warm timer too — a route change must not leave a pending fetch for
       // a moment that can no longer happen.
       window.clearTimeout(warmTimer);
       for (const e of ACTIVITY) window.removeEventListener(e, arm);
-      document.removeEventListener("visibilitychange", arm);
+      document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("popstate", onPop);
     };
   }, [idleMs]);

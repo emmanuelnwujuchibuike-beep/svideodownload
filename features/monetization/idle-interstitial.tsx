@@ -99,7 +99,9 @@ const MIN_GAP_MS = 3_000;
 
 const LAST_SHOWN_KEY = "frenz:interstitial-last-shown";
 
-const ACTIVITY = ["pointerdown", "pointermove", "keydown", "wheel", "touchstart", "scroll"] as const;
+// no bare "scroll": the app scrolls itself on a return (the feed restoring its position), which is
+// not the visitor acting — a real scroll always starts with a touch, a wheel or a key (2026-10-14)
+const ACTIVITY = ["pointerdown", "pointermove", "keydown", "wheel", "touchstart"] as const;
 
 export function IdleInterstitial() {
   const { showAds, ready } = useShowAds();
@@ -172,14 +174,21 @@ export function IdleInterstitial() {
       // next tick: the paid layer hears the same visibilitychange and claims first
       // off since 2026-10-14 (lib/monetization/return-interstitial.ts)
       if (RETURN_INTERSTITIAL_ENABLED && away >= AWAY_MS) window.setTimeout(show, 0);
-      else arm(); // short flick away — just restart the idle timer
+      /*
+        🔴 NOT ON RETURN (owner, 2026-10-14: "the back to the app interstitial is still happening.
+      When I enter the app back from outside, I said stop it"). Coming back to the app, or the app
+      loading fresh, used to restart this countdown, so the first thing after re-entering — a few
+      seconds of not touching anything — was a full-screen ad. The countdown now starts only from a
+      real interaction on this visit, and going to the background stops it; becoming visible again
+      starts nothing.
+      */
     };
 
     for (const event of ACTIVITY) {
       window.addEventListener(event, arm, { passive: true });
     }
     document.addEventListener("visibilitychange", onVisibility);
-    arm();
+    // no arm() on mount: a fresh load (often a return to the app) waits for a real interaction first
 
     return () => {
       window.clearTimeout(timer);

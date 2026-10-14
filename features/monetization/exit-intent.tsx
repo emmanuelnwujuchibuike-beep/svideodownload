@@ -87,18 +87,15 @@ export function ExitIntent() {
     };
 
     /*
-      Touch: the page becoming hidden. A real end-of-visit signal that costs the
-      visitor nothing — deliberately NOT a back-button trap.
+      🔴 NO TOUCH TRIGGER ANY MORE (owner, 2026-10-14: "the back to the app interstitial is still
+      happening … I said stop it"). On a phone the "exit" signal was the page becoming hidden,
+      and the modal it opened was the first thing on screen when the visitor came BACK: a
+      return interstitial under another name. Only the desktop pointer leaving through the top
+      edge remains, and that one is shown while the visitor is still here.
     */
-    const onVisibility = () => {
-      if (document.visibilityState === "hidden") trigger();
-    };
-
     document.addEventListener("mouseout", onMouseOut);
-    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       document.removeEventListener("mouseout", onMouseOut);
-      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [ready, showAds]);
 

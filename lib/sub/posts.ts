@@ -102,7 +102,7 @@ export interface SubPostOpen {
 }
 
 /**
- * The viewer's handle (the tiled watermark) and the creator's (the bottom-edge mark),
+ * The viewer's handle (the corner-hopping watermark) and the creator's (the bottom-edge mark),
  * read together. The watermark names the VIEWER by public handle only: never an email,
  * phone or payout detail; the creator's mark points to their PUBLIC profile, never to a
  * private post, which has no URL at all (owner 2026-10-12).

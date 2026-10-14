@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 
 import { GLASS, primaryPill, quietPill } from "@/features/friends/ui";
 import { haptic } from "@/lib/motion/haptics";
+import { WATERMARK_CORNER_SECONDS, WATERMARK_CORNERS } from "@/lib/media/watermark-mark-geometry";
 import { usd } from "@/lib/creator/membership/engine";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
@@ -408,7 +409,7 @@ function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }: { pos
     shrunk into side bars. It starts BELOW the safe area (status bar,
     Dynamic Island) and ends above the home indicator — it never goes behind them. The top
     bar floats over the media; several items swipe sideways like a carousel. The viewer's
-    tiled watermark and the creator's bottom-edge mark ride on the media itself.
+    corner-hopping watermark and the creator's bottom-edge mark ride on the media itself.
   */
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label="Subscriber post" className="fixed inset-0 z-[80] bg-black text-white" onContextMenu={block}>
@@ -467,17 +468,7 @@ function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }: { pos
             })}
           </div>
         )}
-        {data?.watermark ? (
-          <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-            <div className="absolute -inset-1/2 flex rotate-[-24deg] flex-wrap content-start gap-x-16 gap-y-20 opacity-[0.12]">
-              {Array.from({ length: 40 }, (_, i) => (
-                <span key={i} className="whitespace-nowrap text-[13px] font-semibold text-white">
-                  {data.watermark} · frenzsave.com
-                </span>
-              ))}
-            </div>
-          </div>
-        ) : null}
+        {data?.watermark ? <RovingWatermark text={`${data.watermark} · frenzsave.com`} /> : null}
 
         {/* the top bar floats over the media, inside the safe area like the History player */}
         <div className="absolute inset-x-0 top-0 z-[3] flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent px-3 pb-6 pt-2">
@@ -756,4 +747,33 @@ function shortAgo(iso: string): string {
   if (s < 86_400) return `${Math.floor(s / 3600)}h`;
   if (s < 604_800) return `${Math.floor(s / 86_400)}d`;
   return `${Math.floor(s / 604_800)}w`;
+}
+
+/**
+ * The viewer's mark on a private post — ONE badge that hops corners, not a
+ * pattern scattered across the media (owner, 2026-10-14: "remove the private
+ * post watermark that is scattered on the screen, and use the watermarks that
+ * appears at the top and bottom switching every 3 seconds"). Same corners and
+ * timing as a downloaded video's watermark (lib/media/watermark-mark-geometry.ts).
+ * Clear of the top bar, and above a video's controls and the creator's mark.
+ */
+function RovingWatermark({ text }: { text: string }) {
+  const [k, setK] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setK((v) => (v + 1) % WATERMARK_CORNERS.length), WATERMARK_CORNER_SECONDS * 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  const corner = WATERMARK_CORNERS[k]!;
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "pointer-events-none absolute z-[2] select-none whitespace-nowrap rounded-full bg-black/30 px-2.5 py-1 text-[12px] font-semibold text-white/75 [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]",
+        corner.startsWith("top") ? "top-16" : "bottom-28",
+        corner.endsWith("left") ? "left-3" : "right-3",
+      )}
+    >
+      {text}
+    </span>
+  );
 }

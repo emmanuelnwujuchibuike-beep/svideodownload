@@ -117,7 +117,7 @@ export const PIPELINE_STAGES: PipelineStage[] = [
   { id: "transcription", name: "Speech transcription", source: "", status: "planned", description: "Full speech-to-text beyond caption tracks.", note: "Caption tracks exist via Stream; a separate transcript store/search index is deferred." },
   { id: "ocr", name: "OCR", source: "", status: "planned", description: "Text extraction from images and video frames." },
   { id: "scene-detection", name: "Scene / object / face detection", source: "", status: "planned", description: "Frame analysis, policy-gated.", note: "Needs a GPU inference tier; face detection additionally needs an explicit consent policy." },
-  { id: "watermark", name: "Watermarking", source: "server/services/watermark-service.ts", status: "live", description: "Feed/Reels downloads carry the creator's @handle and the Frenzsave mark — burned into video on the worker, stamped onto photos in the browser; Pro and up may take the clean file.", note: "Each watermarked video is re-encoded on request; results are not cached yet." },
+  { id: "watermark", name: "Watermarking", source: "server/services/watermark-service.ts", status: "live", description: "Feed/Reels downloads carry the creator's @handle and the Frenzsave mark — burned into video on the worker, hopping corners every 3 s (bottom-left, top-left, bottom-right, top-right); stamped bottom-left onto photos in the browser; Pro and up may take the clean file.", note: "Each watermarked video is re-encoded on request; results are not cached yet." },
   { id: "ai-enhance", name: "AI enhancement", source: "", status: "planned", description: "Upscaling, denoise, background removal." },
 ];
 

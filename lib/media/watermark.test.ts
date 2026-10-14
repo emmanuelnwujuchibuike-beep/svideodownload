@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { buildWatermarkArgs, displayedSize, markPlacement } from "./watermark-args";
-import { MARK_SHARE } from "./watermark-mark-geometry";
+import { MARK_SHARE, WATERMARK_CORNER_SECONDS, WATERMARK_CORNERS } from "./watermark-mark-geometry";
 import { cleanHandle, mintWatermarkTicket, verifyWatermarkTicket, WATERMARK_TICKET_TTL_MS } from "./watermark-ticket";
 
 /* Owner, 2026-10-14: feed/Reels downloads carry the creator's @handle and the
@@ -64,6 +64,37 @@ describe("where the mark goes", () => {
     // a silent video must not fail on a missing audio track
     expect(args.join(" ")).toContain("-map 0:a?");
     expect(args).toContain("+faststart");
+  });
+});
+
+describe("the watermark hops corners every 3 seconds (owner, 2026-10-14)", () => {
+  it("starts at the bottom, then top, bottom, top — left side first", () => {
+    // the ffmpeg expression and the private-post badge both depend on this exact order
+    expect(WATERMARK_CORNERS).toEqual(["bottom-left", "top-left", "bottom-right", "top-right"]);
+    expect(WATERMARK_CORNER_SECONDS).toBe(3);
+  });
+
+  it("the video's overlay follows that order, driven by the frame time", () => {
+    const args = buildWatermarkArgs("in", "mark.png", "out.mp4", { width: 720, height: 1280 });
+    const filter = args[args.indexOf("-filter_complex") + 1]!;
+    const p = markPlacement({ width: 720, height: 1280 });
+    expect(filter).toContain(`x='if(lt(mod(floor(t/3),4),2),${p.x},main_w-overlay_w-${p.x})'`);
+    expect(filter).toContain(`y='if(eq(mod(mod(floor(t/3),4),2),0),main_h-overlay_h-${p.inset},${p.inset})'`);
+  });
+
+  it("the same expression, evaluated, lands on the listed corner at each step", () => {
+    const k = (t: number) => Math.floor(t / 3) % 4;
+    const side = (t: number) => (k(t) < 2 ? "left" : "right");
+    const edge = (t: number) => (k(t) % 2 === 0 ? "bottom" : "top");
+    for (const t of [0, 1, 4, 7, 10, 12.5]) expect(`${edge(t)}-${side(t)}`).toBe(WATERMARK_CORNERS[k(t)]);
+  });
+
+  it("a private post shows one roving badge, not a pattern scattered over the media", () => {
+    const g = src("features/sub/sub-gallery.tsx");
+    expect(g).not.toContain("Array.from({ length: 40 }");
+    expect(g).not.toContain("rotate-[-24deg]");
+    expect(g).toContain("<RovingWatermark text={`${data.watermark} · frenzsave.com`} />");
+    expect(g).toContain("(v + 1) % WATERMARK_CORNERS.length), WATERMARK_CORNER_SECONDS * 1000)");
   });
 });
 

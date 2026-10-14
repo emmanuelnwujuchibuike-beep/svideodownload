@@ -1,4 +1,4 @@
-import { MARK_INSET, MARK_SHARE } from "@/lib/media/watermark-mark-geometry";
+import { MARK_INSET, MARK_SHARE, WATERMARK_CORNER_SECONDS, WATERMARK_CORNERS } from "@/lib/media/watermark-mark-geometry";
 
 /** A video's size AS DISPLAYED — a phone clip stored landscape with a 90° rotation is portrait. */
 export function displayedSize(probe: { width?: number; height?: number; rotation?: number | null }): { width: number; height: number } | null {
@@ -24,8 +24,11 @@ export function markPlacement(size: { width: number; height: number }): { width:
  * testable without ffmpeg.
  *
  * The mark is scaled to an exact pixel width computed from the DISPLAYED size
- * (ffprobe, see watermark-service.ts) and overlaid bottom-left — the same
- * geometry the browser uses on photos (lib/media/watermark-image.ts). ffmpeg's
+ * (ffprobe, see watermark-service.ts). It starts bottom-left — where the
+ * browser puts it on photos (lib/media/watermark-image.ts) — and moves to the
+ * next of WATERMARK_CORNERS every WATERMARK_CORNER_SECONDS: bottom-left,
+ * top-left, bottom-right, top-right, again. `overlay` re-evaluates x/y per
+ * frame by default, so `t` (the frame's time) drives the move. ffmpeg's
  * autorotate runs before the filter, so the overlay lands on the upright frame.
  *
  * 🔴 Plain `scale` + `overlay`, not `scale2ref` (2026-10-14): what scale2ref's
@@ -35,7 +38,11 @@ export function markPlacement(size: { width: number; height: number }): { width:
  */
 export function buildWatermarkArgs(input: string, mark: string, output: string, size: { width: number; height: number }): string[] {
   const p = markPlacement(size);
-  const filter = `[1:v]scale=${p.width}:-2[wm];[0:v][wm]overlay=x=${p.x}:y=main_h-overlay_h-${p.inset}[v]`;
+  const k = `mod(floor(t/${WATERMARK_CORNER_SECONDS}),${WATERMARK_CORNERS.length})`;
+  // index 0–1 left, 2–3 right; even bottom, odd top (the order in watermark-mark-geometry.ts)
+  const x = `if(lt(${k},2),${p.x},main_w-overlay_w-${p.x})`;
+  const y = `if(eq(mod(${k},2),0),main_h-overlay_h-${p.inset},${p.inset})`;
+  const filter = `[1:v]scale=${p.width}:-2[wm];[0:v][wm]overlay=x='${x}':y='${y}'[v]`;
   return [
     "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
     "-i", input,

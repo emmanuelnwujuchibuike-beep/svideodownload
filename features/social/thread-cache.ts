@@ -90,3 +90,17 @@ export async function warmThread(conversationId: string): Promise<void> {
   inFlight.set(conversationId, run);
   return run;
 }
+
+/**
+ * The session copy plus the server rows NEWER than its newest message (owner,
+ * 2026-10-14: a message that arrived while the chat was closed didn't show on
+ * entry). Only newer rows: an older row the copy lacks may have been removed
+ * on purpose, and the server copy can be hours old on a client navigation.
+ */
+export function mergeMissing(cached: MessageItem[], fresh: MessageItem[]): MessageItem[] {
+  const newest = cached.reduce((t, m) => Math.max(t, Date.parse(m.createdAt) || 0), 0);
+  const have = new Set(cached.map((m) => m.id));
+  const add = fresh.filter((m) => !have.has(m.id) && Date.parse(m.createdAt) > newest);
+  if (add.length === 0) return cached;
+  return [...cached, ...add].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+}

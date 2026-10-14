@@ -10,6 +10,7 @@ import { BackToSecretChats } from "@/features/social/secret-chats-panel";
 import { toast } from "@/features/ui/toast";
 import { useAnchoredPanel } from "@/features/ui/use-anchored-panel";
 import { haptic } from "@/lib/motion/haptics";
+import { useVisualViewport } from "@/lib/pwa/use-visual-viewport";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { decryptFromConversation, encryptForConversation, ensureIdentityKey, fetchPublicKey } from "@/lib/crypto/secret-chat";
 
@@ -60,6 +61,8 @@ export function SecretChatRoom({
   initialDisappearAfterSeconds: number | null;
 }) {
   const [ready, setReady] = useState(false);
+  // the keyboard covers the home-bar strip, so its safe-area padding is dropped while typing (2026-10-14)
+  const { keyboardOpen } = useVisualViewport();
   const [keyError, setKeyError] = useState(false);
   const [messages, setMessages] = useState<DecryptedMessage[]>([]);
   const [body, setBody] = useState("");
@@ -305,7 +308,7 @@ export function SecretChatRoom({
           e.preventDefault();
           void send();
         }}
-        className="flex items-center gap-2 border-t border-border/60 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+        className={`flex items-center gap-2 border-t border-border/60 p-3 ${keyboardOpen ? "pb-2" : "pb-[max(0.75rem,env(safe-area-inset-bottom))]"}`}
       >
         <div className="flex flex-1 items-center gap-2 rounded-full bg-secondary/50 px-4 py-2.5">
           <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />

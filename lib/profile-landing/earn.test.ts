@@ -42,7 +42,7 @@ describe("anonymous Profile: earning copy comes only from the live reward rules"
   it("cash-out is never promised while withdrawals are closed, and states the real requirements when open", () => {
     expect(cashOutLine(cfg((c) => (c.withdrawals.enabled = false)))).toContain("aren't open");
     const open = cashOutLine(cfg((c) => { c.withdrawals.enabled = true; c.qualification.minAccountAgeDays = 30; c.qualification.minEngagements = 100; }));
-    expect(open).toContain("30 days");
+    expect(open).toContain("30 active days");
     expect(open).toContain("100 qualifying engagements");
     expect(open).toContain("never cashable");
   });

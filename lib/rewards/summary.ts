@@ -1,6 +1,7 @@
 import "server-only";
 
 import { publicRewardsConfig, type RewardsConfig } from "@/lib/rewards/config";
+import { loadActiveDays } from "@/lib/rewards/active-days";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -11,11 +12,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
  */
 export async function loadRewardsSummary(userId: string, config: RewardsConfig) {
   const db = createAdminClient();
-  const [wallet, profile, user, links, referred, rewards, withdrawals] = await Promise.all([
+  const [wallet, profile, activeDays, links, referred, rewards, withdrawals] = await Promise.all([
     db.from("ai_product_balances").select("balance_cents, withdrawable_cents, currency").eq("user_id", userId).eq("product", "character_replace").maybeSingle(),
     // 0189: the earned totals are running counters on the profile row, not a scan of reward_events
     db.from("reward_profiles").select("qualified_at, qualifying_engagements, restricted, earned_usable, earned_withdrawable, qualification_status, qualification_applied_at").eq("user_id", userId).maybeSingle(),
-    db.auth.admin.getUserById(userId),
+    loadActiveDays(userId),
     db.from("share_links").select("clicks, signups").eq("owner_id", userId).limit(500),
     db.from("referral_attributions").select("referred_user_id", { count: "exact", head: false }).eq("referrer_id", userId).eq("status", "active").limit(1),
     db.from("reward_events").select("id, event_type, role, amount, credit_class, created_at").eq("beneficiary_id", userId).order("created_at", { ascending: false }).limit(10),
@@ -23,8 +24,8 @@ export async function loadRewardsSummary(userId: string, config: RewardsConfig) 
   ]);
   const w = (wallet.data ?? null) as { balance_cents: number; withdrawable_cents: number; currency: string } | null;
   const p = profile.error ? await legacyProfile(userId) : ((profile.data ?? null) as ProfileRow | null);
-  const createdAt = user.data.user?.created_at ?? null;
-  const ageDays = createdAt ? Math.floor((Date.now() - Date.parse(createdAt)) / 86_400_000) : 0;
+  // ACTIVE days, not days since sign-up (owner, 2026-10-15) — lib/rewards/active-days.ts
+  const ageDays = activeDays;
   const totals = { usable: Number(p?.earned_usable ?? 0), withdrawable: Number(p?.earned_withdrawable ?? 0) };
   const linkRows = (links.data ?? []) as { clicks: number; signups: number }[];
   const balance = w?.currency === "CREDIT" ? Number(w.balance_cents) : 0;
@@ -40,8 +41,8 @@ export async function loadRewardsSummary(userId: string, config: RewardsConfig) 
       appliedAt: p?.qualification_applied_at ?? null,
       canApply: !p?.restricted && !p?.qualified_at && p?.qualification_status !== "applied" && ageDays >= config.qualification.minAccountAgeDays && (p?.qualifying_engagements ?? 0) >= config.qualification.minEngagements,
       restricted: !!p?.restricted,
-      accountAgeDays: ageDays,
-      requiredAccountAgeDays: config.qualification.minAccountAgeDays,
+      activeDays: ageDays,
+      requiredActiveDays: config.qualification.minAccountAgeDays,
       engagements: p?.qualifying_engagements ?? 0,
       requiredEngagements: config.qualification.minEngagements,
     },

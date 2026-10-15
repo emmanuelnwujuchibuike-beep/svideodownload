@@ -48,7 +48,7 @@ export interface RewardsAdminMember {
   status: "none" | "applied" | "approved" | "rejected";
   appliedAt: string | null;
   restricted: boolean;
-  accountAgeDays: number;
+  activeDays: number;
   engagements: number;
   earnedUsable: number;
   earnedWithdrawable: number;
@@ -134,7 +134,7 @@ export async function loadRewardsAdmin(): Promise<RewardsAdminView> {
       status: (m.status as RewardsAdminMember["status"]) ?? "none",
       appliedAt: (m.applied_at as string | null) ?? null,
       restricted: m.restricted === true,
-      accountAgeDays: n(m.account_age_days),
+      activeDays: n(m.active_days),
       engagements: n(m.engagements),
       earnedUsable: n(m.earned_usable),
       earnedWithdrawable: n(m.earned_withdrawable),

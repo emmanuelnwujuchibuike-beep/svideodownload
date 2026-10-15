@@ -18,8 +18,8 @@ interface Qualification {
   qualified: boolean;
   status: "none" | "applied" | "approved" | "rejected";
   restricted: boolean;
-  accountAgeDays: number;
-  requiredAccountAgeDays: number;
+  activeDays: number;
+  requiredActiveDays: number;
   engagements: number;
   requiredEngagements: number;
 }
@@ -50,7 +50,7 @@ export function WithdrawEligibilityNote({ uid }: { uid: string | null | undefine
 
   const steps = [
     q.requiredEngagements > 0 ? `${Math.min(q.engagements, q.requiredEngagements).toLocaleString("en-US")} of ${q.requiredEngagements.toLocaleString("en-US")} engagements` : null,
-    q.requiredAccountAgeDays > 0 ? `${Math.min(q.accountAgeDays, q.requiredAccountAgeDays)} of ${q.requiredAccountAgeDays} days account age` : null,
+    q.requiredActiveDays > 0 ? `${Math.min(q.activeDays, q.requiredActiveDays)} of ${q.requiredActiveDays} active days` : null,
   ].filter(Boolean);
 
   return (

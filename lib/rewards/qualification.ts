@@ -4,6 +4,7 @@ import { emailMember } from "@/lib/email/member-email";
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import type { RewardsConfig } from "@/lib/rewards/config";
 import { SITE_URL } from "@/lib/site";
+import { loadActiveDays } from "@/lib/rewards/active-days";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -17,8 +18,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *
  *   none / rejected ──apply (thresholds met)──▶ applied ──admin──▶ approved | rejected
  *
- * Applying is checked HERE against the live rules — account age from
- * auth.users, engagements from the profile — never against anything the
+ * Applying is checked HERE against the live rules — active days from
+ * the streak ledger, engagements from the profile — never against anything the
  * browser says. Approval sets `qualified_at`, which is what the engine reads
  * to class every LATER reward as withdrawable. Each step is a conditional
  * update on the status it expects, so a double tap or two admins cannot apply
@@ -30,20 +31,19 @@ export async function applyForQualification(userId: string, config: RewardsConfi
   if (!config.enabled) return { ok: false, status: 503, error: "Rewards aren't open right now." };
   const db = createAdminClient();
   await db.from("reward_profiles").upsert({ user_id: userId }, { onConflict: "user_id", ignoreDuplicates: true });
-  const [{ data: profile }, user] = await Promise.all([
+  const [{ data: profile }, activeDays] = await Promise.all([
     db.from("reward_profiles").select("restricted, qualifying_engagements, qualification_status").eq("user_id", userId).maybeSingle(),
-    db.auth.admin.getUserById(userId),
+    loadActiveDays(userId),
   ]);
   const p = profile as { restricted: boolean; qualifying_engagements: number; qualification_status: QualificationStatus } | null;
   if (!p) return { ok: false, status: 503, error: "Couldn't read your account. Try again." };
   if (p.restricted) return { ok: false, status: 403, error: "Rewards are paused on this account." };
   if (p.qualification_status === "approved") return { ok: false, status: 409, error: "You're already approved for withdrawals." };
   if (p.qualification_status === "applied") return { ok: false, status: 409, error: "Your application is already being reviewed." };
-  const created = user.data.user?.created_at ? Date.parse(user.data.user.created_at) : NaN;
-  const ageDays = Number.isFinite(created) ? Math.floor((Date.now() - created) / 86_400_000) : 0;
   const q = config.qualification;
-  if (ageDays < q.minAccountAgeDays || p.qualifying_engagements < q.minEngagements) {
-    return { ok: false, status: 403, error: `You can apply once your account is ${q.minAccountAgeDays} days old with ${q.minEngagements} qualifying engagements.` };
+  // days ACTIVE, not days since sign-up (owner, 2026-10-15)
+  if (activeDays < q.minAccountAgeDays || p.qualifying_engagements < q.minEngagements) {
+    return { ok: false, status: 403, error: `You can apply once you have been active on ${q.minAccountAgeDays} days, with ${q.minEngagements} qualifying engagements.` };
   }
   const now = new Date().toISOString();
   const { data, error } = await db
@@ -57,7 +57,7 @@ export async function applyForQualification(userId: string, config: RewardsConfi
     return { ok: false, status: 503, error: "Couldn't send your application. Try again." };
   }
   if (!data?.length) return { ok: false, status: 409, error: "Your application is already being reviewed." };
-  console.info("[rewards/qualification] applied", { userId, ageDays, engagements: p.qualifying_engagements });
+  console.info("[rewards/qualification] applied", { userId, activeDays, engagements: p.qualifying_engagements });
   return { ok: true };
 }
 

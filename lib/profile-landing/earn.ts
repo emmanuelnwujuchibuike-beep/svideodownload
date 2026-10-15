@@ -75,6 +75,6 @@ const REFERRER_VERB: Partial<Record<RewardEventType, string>> = {
 export function cashOutLine(cfg: RewardsConfig): string {
   if (!cfg.enabled || !cfg.withdrawals.enabled) return "Credits are for Frenz AI tools. Cash-outs aren't open right now.";
   const q = cfg.qualification;
-  const needs = [q.minAccountAgeDays > 0 ? `an account at least ${plural(q.minAccountAgeDays, "day")} old` : null, q.minEngagements > 0 ? `${plural(q.minEngagements, "qualifying engagement")}` : null].filter(Boolean);
+  const needs = [q.minAccountAgeDays > 0 ? `${plural(q.minAccountAgeDays, "active day")}` : null, q.minEngagements > 0 ? `${plural(q.minEngagements, "qualifying engagement")}` : null].filter(Boolean);
   return `Rewards earned after your account is approved for withdrawals can be cashed out${needs.length ? `. To apply you need ${needs.join(" and ")}` : ""}; the team then reviews it. Everything else stays usable on Frenz AI tools and is never cashable.`;
 }

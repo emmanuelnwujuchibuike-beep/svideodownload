@@ -43,7 +43,7 @@ describe("the referral banner after a download", () => {
     expect(live).not.toMatch(/earn \d+ credit/);
     expect(live).toContain("Earn credits with Frenzsave");
     expect(live).toContain("{referralSentence(rules, n)}");
-    expect(live).toContain("withdraw once your account is");
+    expect(live).toContain("withdraw once you have been active on");
     expect(banner).toContain("const SKIP_AFTER_S = 5;");
     expect(banner).toContain("disabled={!canSkip}");
     expect(banner).toContain("Sign in to get your link");
@@ -67,7 +67,18 @@ describe("🔴 withdrawal qualification is applied for and granted by an admin (
   });
   it("applying re-checks age and engagements on the server, and moves only none/rejected → applied", () => {
     const q = code("lib/rewards/qualification.ts");
-    expect(q).toContain("if (ageDays < q.minAccountAgeDays || p.qualifying_engagements < q.minEngagements)");
+    expect(q).toContain("if (activeDays < q.minAccountAgeDays || p.qualifying_engagements < q.minEngagements)");
+    // owner, 2026-10-15: ACTIVE days, never the sign-up date — teeth: no creation-date maths may come back
+    const live = q.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(live).toContain("loadActiveDays(userId)");
+    expect(live).not.toMatch(/created_at|getUserById/);
+    const summary = code("lib/rewards/summary.ts").replace(/^\s*\/\/.*$/gm, "");
+    expect(summary).toContain("loadActiveDays(userId)");
+    expect(summary).not.toMatch(/getUserById|user\.created_at|createdAt/);
+    expect(code("lib/rewards/active-days.ts")).toContain('.from("streaks").select("total_active_days")');
+    const m245 = code("supabase/migrations/0245_reward_active_days.sql");
+    expect(m245).toContain("total_active_days");
+    expect(m245).not.toMatch(/as account_age_days/);
     expect(q).toContain('.in("qualification_status", ["none", "rejected"])');
     // and an admin decides only an application that is waiting
     expect(q).toContain('.eq("qualification_status", "applied")');

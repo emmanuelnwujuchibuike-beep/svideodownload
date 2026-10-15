@@ -124,7 +124,7 @@ export function RewardsPanel({ settings }: { settings: LandingSettings }) {
         <h3 className="mt-6 text-sm font-semibold">Withdrawal requirements</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">What a member must meet before they can apply for withdrawals. You then approve or reject each application in the table below.</p>
         <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <label className="text-xs text-muted-foreground">Account age (days)<input inputMode="numeric" value={q.age} onChange={(x) => setQ({ ...q, age: x.target.value })} className={cn(input, "mt-1 block")} /></label>
+          <label className="text-xs text-muted-foreground">Active days required<input inputMode="numeric" value={q.age} onChange={(x) => setQ({ ...q, age: x.target.value })} className={cn(input, "mt-1 block")} /></label>
           <label className="text-xs text-muted-foreground">Qualifying referral engagements<input inputMode="numeric" value={q.eng} onChange={(x) => setQ({ ...q, eng: x.target.value })} className={cn(input, "mt-1 block")} /></label>
           <label className="text-xs text-muted-foreground">Attribution window for a new account (days)<input inputMode="numeric" value={q.window} onChange={(x) => setQ({ ...q, window: x.target.value })} className={cn(input, "mt-1 block")} /></label>
         </div>
@@ -303,7 +303,7 @@ function RewardsActivity({ minAge, minEngagements }: { minAge: number; minEngage
               <tr>
                 <th className="px-3 py-2">Member</th>
                 <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Account age</th>
+                <th className="px-3 py-2">Active days</th>
                 <th className="px-3 py-2">Engagements</th>
                 <th className="px-3 py-2">Referral d / w / m</th>
                 <th className="px-3 py-2">Own d / w / m</th>
@@ -313,13 +313,13 @@ function RewardsActivity({ minAge, minEngagements }: { minAge: number; minEngage
             </thead>
             <tbody className="divide-y divide-border/60">
               {view.members.map((m) => {
-                const agePct = Math.min(100, minAge ? Math.round((m.accountAgeDays / minAge) * 100) : 100);
+                const agePct = Math.min(100, minAge ? Math.round((m.activeDays / minAge) * 100) : 100);
                 const engPct = Math.min(100, minEngagements ? Math.round((m.engagements / minEngagements) * 100) : 100);
                 return (
                   <tr key={m.userId} className={m.status === "applied" ? "bg-indigo-500/[0.04]" : undefined}>
                     <td className="px-3 py-2 font-medium">{m.user}{m.restricted ? <span className="ml-1 text-rose-600">· restricted</span> : null}</td>
                     <td className="px-3 py-2 capitalize">{m.status}{m.appliedAt && m.status === "applied" ? <span className="block text-[10.5px] text-muted-foreground">{m.appliedAt.slice(0, 10)}</span> : null}</td>
-                    <td className="px-3 py-2"><Meter pct={agePct} label={`${m.accountAgeDays} / ${minAge} d`} /></td>
+                    <td className="px-3 py-2"><Meter pct={agePct} label={`${m.activeDays} / ${minAge} d`} /></td>
                     <td className="px-3 py-2"><Meter pct={engPct} label={`${m.engagements} / ${minEngagements}`} /></td>
                     <td className="px-3 py-2 tabular-nums">{m.referral.day} / {m.referral.week} / {m.referral.month}</td>
                     <td className="px-3 py-2 tabular-nums">{m.own.day} / {m.own.week} / {m.own.month}</td>

@@ -196,7 +196,7 @@ function WithdrawSection({ summary }: { summary: Summary }) {
   const w = rules.withdrawals;
   const [status, setStatus] = useState(q.status);
   const [busy, setBusy] = useState(false);
-  const metAge = q.accountAgeDays >= q.requiredAccountAgeDays;
+  const metAge = q.activeDays >= q.requiredActiveDays;
   const metEng = q.engagements >= q.requiredEngagements;
   const approved = q.qualified || status === "approved";
   const canWithdraw = approved && !q.restricted && !!w && wallet.withdrawableCredits >= w.minCredits;
@@ -244,7 +244,7 @@ function WithdrawSection({ summary }: { summary: Summary }) {
 
       {/* step 1 — the requirements */}
       <div className="mt-3 space-y-3">
-        <Progress label="Account age" value={q.accountAgeDays} max={q.requiredAccountAgeDays} unit="days" done={metAge || approved} />
+        <Progress label="Active days" value={q.activeDays} max={q.requiredActiveDays} unit="days" done={metAge || approved} />
         <Progress label="Qualifying engagements" value={q.engagements} max={q.requiredEngagements} done={metEng || approved} />
         <p className="text-[11.5px] text-slate-500">Each rewarded action by someone you invited counts as one qualifying engagement.</p>
         {/* the operator's own requirements (admin-editable) — checked by the team at review */}

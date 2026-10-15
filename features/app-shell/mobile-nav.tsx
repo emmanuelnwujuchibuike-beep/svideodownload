@@ -538,5 +538,5 @@ function NavTab({
 
 /** The tab's description under its glyph (owner, 2026-10-09: "add description to the landing bottom NAVs"). */
 function NavLabel({ active, children }: { active: boolean; children: ReactNode }) {
-  return <span className={cn("text-[12px] font-semibold leading-none", active ? GLYPH_ACTIVE : GLYPH_INACTIVE)}>{children}</span>;
+  return <span className={cn("text-[10.5px] font-semibold leading-none", active ? GLYPH_ACTIVE : GLYPH_INACTIVE)}>{children}</span>;
 }

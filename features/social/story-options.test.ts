@@ -14,7 +14,7 @@ describe("the installed app keeps a bottom band for reply and reactions", () => 
     expect(v).toContain('"pointer-events-none absolute inset-x-0 bottom-0 z-0 flex items-center justify-center"');
     // someone else's story: the reply bar (its bottom padding is max(0.75rem, inset), so the band uses the same)
     expect(v).toContain('"[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+3.5rem)]"');
-    expect(v).toContain('"[.pwa-standalone_&]:bottom-[calc(env(safe-area-inset-bottom)+4.5rem)]"'); // your own: Seen by
+    expect(v).toContain('"[.pwa-standalone_&]:bottom-[calc(env(safe-area-inset-bottom)+2.75rem)]"'); // your own: Seen by
   });
 
   it("a visitor's story is WhatsApp's: no bottom nav, no emoji row above — a Reply pill with 3 emojis inside and a heart beside it (owner, 2026-10-15)", () => {

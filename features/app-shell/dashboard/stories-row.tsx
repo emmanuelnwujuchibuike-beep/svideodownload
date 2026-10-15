@@ -570,7 +570,7 @@ export function StoryViewer({
   */
   return createPortal(
     <motion.div
-      className="fixed inset-0 z-[95] flex items-center justify-center bg-black/95"
+      className="fixed inset-0 z-[95] flex items-center justify-center bg-black"
       role="dialog"
       aria-modal="true"
       style={{ y, opacity: reduceMotion ? 1 : dragOpacity }}
@@ -687,11 +687,11 @@ export function StoryViewer({
             type="button"
             onClick={() => setViewersOpen(true)}
             className={cn(
-              "absolute bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] left-4 z-20 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-2 text-[12.5px] font-semibold text-white ring-1 ring-inset ring-white/15 backdrop-blur-md transition hover:bg-white/20 active:scale-95",
+              "absolute bottom-[calc(0.5rem+env(safe-area-inset-bottom,0px))] left-3 z-20 inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-[11px] font-medium text-white/90 transition active:scale-95",
               holding && "pointer-events-none opacity-0",
             )}
           >
-            <Eye className="h-4 w-4" aria-hidden /> Seen by
+            <Eye className="h-3.5 w-3.5" aria-hidden /> Seen by
           </button>
           <StoryViewersSheet storyId={story.id} open={viewersOpen} onClose={() => setViewersOpen(false)} />
         </>
@@ -883,7 +883,7 @@ export function StoryViewer({
         className={cn(
           "pointer-events-none absolute inset-x-0 bottom-0 z-0 flex items-center justify-center",
           isOwn
-            ? "[.pwa-standalone_&]:bottom-[calc(env(safe-area-inset-bottom)+4.5rem)]"
+            ? "[.pwa-standalone_&]:bottom-[calc(env(safe-area-inset-bottom)+2.75rem)]"
             : // the band is just the reply box (WhatsApp's shape — no emoji row)
               "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+3.5rem)]",
         )}
@@ -926,7 +926,7 @@ export function StoryViewer({
             "pointer-events-none absolute inset-x-0 bottom-28 z-[15] px-6 text-center text-sm text-white/95 drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] transition-opacity duration-150",
             // in the PWA the caption sits on the media, just above the band
             isOwn
-              ? "[.pwa-standalone_&]:bottom-[calc(env(safe-area-inset-bottom)+5.5rem)]"
+              ? "[.pwa-standalone_&]:bottom-[calc(env(safe-area-inset-bottom)+3.75rem)]"
               : "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.5rem)]",
             holding && "opacity-0",
           )}

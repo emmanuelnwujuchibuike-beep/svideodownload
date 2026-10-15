@@ -72,7 +72,7 @@ import { cn } from "@/lib/utils";
   `text-muted-foreground`, unlike the marketing nav's darker slate: this
   file's immersive (Reels) variant below re-tints every inactive glyph white
   via a selector keyed on the literal class name
-  `[&_.text-muted-foreground]:!text-white/75` (line ~213) — swapping the
+  `[&_.text-foreground]:!text-white/85` — swapping the
   class here would silently stop that selector matching and un-white the
   Reels nav over video, which is a distinct, already-hard-won piece of UI
   (see its own extensive comment below) this pass has no reason to touch.
@@ -95,12 +95,21 @@ import { cn } from "@/lib/utils";
   colour one it left behind.
 */
 const GLYPH_ACTIVE = "text-primary";
-// Black drop-shadow removed (owner, 2026-08-25) — the color base
-// (`text-muted-foreground`) is untouched on purpose: the immersive Reels
-// variant re-tints every inactive glyph white via a selector keyed on that
-// literal class name (`[&_.text-muted-foreground]:!text-white/75`, ~line
-// 213) — dropping the class itself would silently un-white the Reels nav.
-const GLYPH_INACTIVE = "text-muted-foreground";
+// Inactive glyphs and labels are `text-foreground` (near-black, white in dark mode). The
+// immersive Reels variant re-tints them white via a selector keyed on that literal class
+// name (`[&_.text-foreground]:!text-white/85`) — rename the class and that selector stops
+// matching.
+const GLYPH_INACTIVE = "text-foreground";
+
+/*
+  🔴 THE EXACT SHAPE OF THE OWNER'S REFERENCE (2026-10-15, with a screenshot of
+  the iOS glass tab bar): a wide fully-rounded pill of labelled tabs, the
+  ACTIVE tab a soft grey capsule inside it with its icon and label in blue, and
+  a SEPARATE round glass button standing beside the pill (Profile here, where
+  the reference has Search). Inactive icons and labels are near-black. Over
+  /reels the same pill is dark glass, so the capsule turns to white there.
+*/
+const ACTIVE_CAPSULE = "bg-foreground/[0.08] [.frenz-nav-glass--immersive_&]:bg-white/20";
 
 /*
   Five equal columns across the pill, each the pill's full height — so every tab
@@ -108,7 +117,7 @@ const GLYPH_INACTIVE = "text-muted-foreground";
   ring inside the pill's curve.
 */
 const TAB_CLASS =
-  "relative flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-[1.25rem] px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";
+  "relative flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";
 
 /**
  * `marketing` is still accepted from the marketing layout but no longer changes the
@@ -308,7 +317,7 @@ export function MobileNav({
     */
     <div
       className={cn(
-        "pointer-events-none fixed inset-x-0 bottom-[var(--frenz-nav-gap)] z-40 mx-auto w-[calc(100%-1.75rem)] max-w-[560px] transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] lg:hidden motion-reduce:transition-none",
+        "pointer-events-none fixed inset-x-0 bottom-[var(--frenz-nav-gap)] z-40 mx-auto flex w-[calc(100%-1.75rem)] max-w-[560px] items-center gap-2.5 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] lg:hidden motion-reduce:transition-none",
         hideForScroll && "translate-y-[calc(100%+var(--frenz-nav-gap)+0.5rem)]",
       )}
     >
@@ -319,7 +328,7 @@ export function MobileNav({
           🔴 IMMERSIVE SURFACES (/reels) get the same pill in DARK glass whatever
           the theme, with the inactive glyphs and labels re-tinted white — the
           video runs to the physical edges and the pill floats over it, the way
-          TikTok and Instagram draw it. Re-pointing `text-muted-foreground` at the
+          TikTok and Instagram draw it. Re-pointing `text-foreground` at the
           descendants (rather than threading an `immersive` prop through every
           NavTab) keeps the treatment in one place; the ACTIVE tab keeps the
           brand blue, which reads on dark glass.
@@ -330,8 +339,8 @@ export function MobileNav({
           check the other.
         */
         className={cn(
-          "frenz-nav-glass pointer-events-auto relative flex h-[var(--frenz-nav-height)] items-center justify-around rounded-[1.75rem] px-1.5",
-          immersive && "frenz-nav-glass--immersive [&_.text-muted-foreground]:!text-white/75",
+          "frenz-nav-glass pointer-events-auto relative flex h-[var(--frenz-nav-height)] min-w-0 flex-1 items-center rounded-full p-1.5",
+          immersive && "frenz-nav-glass--immersive [&_.text-foreground]:!text-white/85",
         )}
       >
         {/*
@@ -379,54 +388,40 @@ export function MobileNav({
           <NavTab label="Support" href="/support" icon={Headset} activeIcon={Headset} active={pathname.startsWith("/support")} prefetch={false} onWarm={router.prefetch} />
         )}
 
-        {/* Profile (avatar-in-circle) — active state is now a colored ring
-            accent on the same tile, not a different fill entirely, matching
-            the inline-color-change treatment the other tabs use.
-            2026-07-15 (owner ask): the tab always showed the generic person
-            glyph, never the visitor's own actual profile picture — swapped
-            to the real `profiles.avatar_url` (same source `useEntitlements`
-            already exposes for the topbar) when set, falling back to the
-            plain icon only when there truly isn't one. */}
-        <Link
-          href={profileHref}
-          prefetch={false}
-          onPointerDown={() => router.prefetch(profileHref)}
-          onClick={() => {
-            haptic("light");
-            playSound("tap");
-          }}
-          aria-label="Profile"
-          className={TAB_CLASS}
-        >
-          <NavLift active={profileActive}>
-            <PressIcon active={profileActive}>
-              <span
-                className={cn(
-                  "flex h-[26px] w-[26px] items-center justify-center overflow-hidden rounded-full transition",
-                  // No avatar → the plain person glyph, no colored tile behind
-                  // it (owner, 2026-07-16). It follows the same active/inactive
-                  // contrast as every other tab rather than sitting on a blue
-                  // block that made this one tab look permanently "selected".
-                  avatarUrl
-                    ? "overflow-hidden text-white"
-                    : profileActive
-                      ? "text-primary"
-                      : "text-muted-foreground",
-                  profileActive && avatarUrl && "ring-2 ring-primary ring-offset-1 ring-offset-background",
-                )}
-              >
-                {avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <FrenzPersonSolid className={cn("h-6 w-6", profileActive ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
-                )}
-              </span>
-            </PressIcon>
-          </NavLift>
-          <NavLabel active={profileActive}>Profile</NavLabel>
-        </Link>
       </nav>
+      {/* Profile — the round glass button beside the pill (the reference's Search
+          circle). It keeps the visitor's own picture when there is one. */}
+      <Link
+        href={profileHref}
+        prefetch={false}
+        onPointerDown={() => router.prefetch(profileHref)}
+        onClick={() => {
+          haptic("light");
+          playSound("tap");
+        }}
+        aria-label="Profile"
+        aria-current={profileActive ? "page" : undefined}
+        className={cn(
+          "frenz-nav-glass pointer-events-auto relative flex h-[var(--frenz-nav-height)] w-[var(--frenz-nav-height)] shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+          immersive && "frenz-nav-glass--immersive [&_.text-foreground]:!text-white/85",
+        )}
+      >
+        <PressIcon active={profileActive}>
+          <span
+            className={cn(
+              "flex h-[34px] w-[34px] items-center justify-center overflow-hidden rounded-full",
+              profileActive && "ring-2 ring-primary ring-offset-2 ring-offset-transparent",
+            )}
+          >
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <FrenzPersonSolid className={cn("h-[30px] w-[30px]", profileActive ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
+            )}
+          </span>
+        </PressIcon>
+      </Link>
     </div>
   );
 }
@@ -466,12 +461,11 @@ export function MobileNav({
   descendants, which is documented at length on the page-transition classes in
   globals.css. A 2px transform does not need the hint.
 */
-function NavLift({ active, children }: { active: boolean; children: ReactNode }) {
+function NavLift({ children }: { active?: boolean; children: ReactNode }) {
   return (
     <span
       className={cn(
-        "relative flex h-8 w-8 items-center justify-center transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
-        active ? "-translate-y-0.5" : "translate-y-0",
+        "relative flex h-7 w-7 items-center justify-center",
       )}
     >
       {children}
@@ -511,7 +505,7 @@ function NavTab({
         haptic("light");
         playSound("tap");
       }}
-      className={TAB_CLASS}
+      className={cn(TAB_CLASS, active && ACTIVE_CAPSULE)}
     >
       <NavLift active={active}>
         <PressIcon active={active} className="relative">
@@ -529,10 +523,10 @@ function NavTab({
             … bouncing icons"): a 15 s loop that never stopped while the Feed tab
             was inactive, on a bar that is on screen on every page.
           */}
-          <Glyph strokeWidth={2.1} className={cn("h-6 w-6 transition-colors", active ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
+          <Glyph strokeWidth={2.1} className={cn("h-[26px] w-[26px] transition-colors", active ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
           {badge > 0 ? (
-            <span className="absolute -right-3 -top-2 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-white dark:ring-slate-900">
-              {badge > 9 ? "9+" : badge}
+            <span className="absolute -right-3.5 -top-2.5 flex h-[20px] min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold leading-none text-white shadow-sm">
+              {badge > 99 ? "99+" : badge}
             </span>
           ) : null}
         </PressIcon>
@@ -544,5 +538,5 @@ function NavTab({
 
 /** The tab's description under its glyph (owner, 2026-10-09: "add description to the landing bottom NAVs"). */
 function NavLabel({ active, children }: { active: boolean; children: ReactNode }) {
-  return <span className={cn("text-[10.5px] font-semibold leading-none", active ? GLYPH_ACTIVE : "text-muted-foreground")}>{children}</span>;
+  return <span className={cn("text-[12px] font-semibold leading-none", active ? GLYPH_ACTIVE : GLYPH_INACTIVE)}>{children}</span>;
 }

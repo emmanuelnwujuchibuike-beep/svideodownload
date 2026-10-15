@@ -29,7 +29,10 @@ function floats(src: string): boolean {
     // above the home indicator, by the shared gap
     /\bbottom-\[var\(--frenz-nav-gap\)\]/.test(wrapper) &&
     // the pill: glass, rounded, a fixed height every page can reserve
-    /"frenz-nav-glass pointer-events-auto relative flex h-\[var\(--frenz-nav-height\)\][^"]*rounded-\[1\.75rem\]/.test(src) &&
+    /"frenz-nav-glass pointer-events-auto relative flex h-\[var\(--frenz-nav-height\)\] min-w-0 flex-1[^"]*rounded-full/.test(src) &&
+    // the reference's shape: a SEPARATE round glass button (Profile) beside the pill, same height, and a capsule on the active tab
+    /w-\[var\(--frenz-nav-height\)\][^"]*rounded-full/.test(src) &&
+    /ACTIVE_CAPSULE/.test(src) &&
     // no opaque full-width slab left behind
     !/border-t border-border bg-background/.test(src) &&
     // nothing loops on the bar
@@ -44,6 +47,8 @@ describe("the floating glass bottom nav", () => {
 
   it("teeth: a full-width bar, an opaque slab, or the pulse coming back fails", () => {
     expect(floats(nav.replace("w-[calc(100%-1.75rem)]", "w-full"))).toBe(false);
+    expect(floats(nav.replace("relative flex h-[var(--frenz-nav-height)] min-w-0 flex-1 items-center rounded-full", "relative flex h-[var(--frenz-nav-height)] min-w-0 flex-1 items-center rounded-[1.75rem]"))).toBe(false);
+    expect(floats(nav.replaceAll("ACTIVE_CAPSULE", "NO_CAPSULE"))).toBe(false);
     expect(floats(nav.replace("frenz-nav-glass pointer-events-auto", "border-t border-border bg-background pointer-events-auto"))).toBe(false);
     expect(floats(nav.replace("active={pathname === \"/home\"", "attract={true}\n            active={pathname === \"/home\""))).toBe(false);
   });
@@ -75,9 +80,9 @@ describe("the floating glass bottom nav", () => {
   });
 
   it("the reel scrubber still sits above the pill (they are a pair)", () => {
-    // nav top = 3.875rem + max(0.5rem, inset - 0.75rem) <= 4.75rem + inset
+    // nav top = 3.75rem + max(0.5rem, inset - 0.75rem) <= 4.75rem + inset
     expect(code("features/feed/reel-viewer.tsx")).toContain('"!bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:!bottom-4"');
-    expect(css).toMatch(/--frenz-nav-height: 3\.875rem;/);
+    expect(css).toMatch(/--frenz-nav-height: 3\.75rem;/);
   });
 });
 

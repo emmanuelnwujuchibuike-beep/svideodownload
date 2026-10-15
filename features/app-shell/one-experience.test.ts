@@ -21,7 +21,8 @@ function oneTabSet(src: string): boolean {
     /label="Feed"\s+href="\/home"\s+icon=\{FrenzFeedOutline\}/.test(src) &&
     src.includes('<NavTab label="Earn" href="/quests" icon={FrenzEarnOutline} activeIcon={FrenzEarnSolid}') &&
     src.includes("<NavLabel active={active}>{label}</NavLabel>") &&
-    src.includes("<NavLabel active={profileActive}>Profile</NavLabel>")
+    // Profile is the round button beside the pill, labelled for screen readers
+    src.includes('aria-label="Profile"')
   );
 }
 

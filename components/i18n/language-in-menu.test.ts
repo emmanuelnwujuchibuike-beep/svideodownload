@@ -13,10 +13,13 @@ describe("the language button on the landing", () => {
     expect(header.match(/^\s*<LanguageSelector \/>$/gm)).toBeNull();
   });
 
-  it("is a Language row in the side menu, beside Appearance", () => {
-    const at = header.indexOf("Appearance</span>");
-    expect(at).toBeGreaterThan(0);
-    expect(header.indexOf('<LanguageSelector variant="row" />', at)).toBeGreaterThan(at);
+  it("is the FIRST row of the side menu, above Search (owner, 2026-10-15)", () => {
+    const row = header.indexOf('<LanguageSelector variant="row" />');
+    const search = header.indexOf('<SearchTrigger className="w-full" />');
+    expect(row).toBeGreaterThan(0);
+    expect(row).toBeLessThan(search);
+    // teeth: it is the only row — not repeated beside Appearance
+    expect(header.split('<LanguageSelector variant="row" />').length).toBe(2);
   });
 
   it("its list opens above the menu sheet (z-70), not behind it", () => {

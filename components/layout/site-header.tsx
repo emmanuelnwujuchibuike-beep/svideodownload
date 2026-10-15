@@ -645,6 +645,11 @@ export function SiteHeader({
                   mobile menu and organised even the search"). A keyboard shortcut
                   is an accelerator for people with a keyboard; on a phone the only
                   discoverable search is one you can see and tap. */}
+              {/* Language FIRST (owner, 2026-10-15: "bring the language translator to the top in the
+                  mobile menu"). The row carries its own top margin, so it is pulled back up. */}
+              <div className="-mt-3 mb-3">
+                <LanguageSelector variant="row" />
+              </div>
               <SearchTrigger className="w-full" />
 
               {/*
@@ -742,10 +747,6 @@ export function SiteHeader({
                 <span className="text-sm font-medium text-muted-foreground">Appearance</span>
                 <ThemeToggle />
               </div>
-              {/* Language, beside Appearance (owner, 2026-10-15: "put the language button on
-                  the landing page inside the top side menu") — the landing header no longer
-                  carries the globe. */}
-              <LanguageSelector variant="row" />
 
               {enabled && user ? (
                 <div className="mt-3 space-y-0.5">

@@ -13,8 +13,18 @@ describe("the installed app keeps a bottom band for reply and reactions", () => 
     const v = viewer();
     expect(v).toContain('"pointer-events-none absolute inset-x-0 bottom-0 z-0 flex items-center justify-center"');
     // someone else's story: the reply bar (its bottom padding is max(0.75rem, inset), so the band uses the same)
-    expect(v).toContain('"[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)]"');
+    expect(v).toContain('"[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+3.25rem)]"');
     expect(v).toContain('"[.pwa-standalone_&]:bottom-[calc(env(safe-area-inset-bottom)+4.5rem)]"'); // your own: Seen by
+  });
+
+  it("a visitor's story has NO bottom nav and NO emoji row — just the reply box (owner, 2026-10-15)", () => {
+    const v = viewer();
+    expect(v).not.toContain("QUICK_EMOJI");
+    expect(v).not.toContain("quickReactions");
+    // portalled by the viewer itself, so no surface can trap it under the z-40 nav
+    expect(v).toContain("return createPortal(");
+    expect(v).toContain("document.body,");
+    expect(v).toContain("placeholder={`Reply to ${name}…`}");
   });
 
   it("the reply bar sits on solid black in the band, not a gradient over the picture", () => {

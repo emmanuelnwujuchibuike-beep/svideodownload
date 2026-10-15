@@ -5,6 +5,7 @@ import { Eye, Loader2, MoreHorizontal, Plus, Repeat2, Send, Smile, X } from "luc
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
@@ -22,7 +23,6 @@ import type { StoryGroup } from "@/lib/social/stories";
 import { isGroupSeen, loadSeenMap, markGroupSeen, type SeenMap } from "@/lib/social/story-seen";
 import { cn } from "@/lib/utils";
 
-const QUICK_EMOJI = ["❤️", "😂", "😮", "😍", "🔥", "👏", "🙌"];
 const STICKERS = ["🎉", "💯", "😭", "🥰", "😎", "🤯", "👀", "🫶", "💀", "🤝", "✨", "🙏"];
 
 const IMAGE_MS = 5000;
@@ -244,16 +244,12 @@ export function StoryViewer({
   startGroup,
   onClose,
   onGroupSeen,
-  quickReactions = true,
 }: {
   groups: StoryGroup[];
   startGroup: number;
   onClose: () => void;
   /** Fired once per group after it's marked seen (ring-state refresh in the row). */
   onGroupSeen?: () => void;
-  /** The one-tap emoji row above the reply box. Off when opened from a chat,
-   *  where only the reply box shows (owner, 2026-10-14). */
-  quickReactions?: boolean;
 }) {
   /*
     Stories the author deleted from here (owner, 2026-10-08). Filtered locally
@@ -565,7 +561,14 @@ export function StoryViewer({
 
   if (!story) return null;
 
-  return (
+  /*
+    Portalled to <body> by the viewer ITSELF, so every surface that opens it gets the same
+    answer (owner, 2026-10-15: the bottom nav was still showing over the story on the feed
+    and the message page). Rendered in place it sat inside a scroll or transform ancestor
+    whose stacking context trapped this z-[95] UNDER the z-40 bottom nav. From <body> the
+    viewer covers the nav entirely and the reply box is the last thing on the screen.
+  */
+  return createPortal(
     <motion.div
       className="fixed inset-0 z-[95] flex items-center justify-center bg-black/95"
       role="dialog"
@@ -881,10 +884,8 @@ export function StoryViewer({
           "pointer-events-none absolute inset-x-0 bottom-0 z-0 flex items-center justify-center",
           isOwn
             ? "[.pwa-standalone_&]:bottom-[calc(env(safe-area-inset-bottom)+4.5rem)]"
-            : quickReactions
-              ? "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)]"
-              : // no emoji row → the band is just the reply box
-                "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+3.25rem)]",
+            : // the band is just the reply box (WhatsApp's shape — no emoji row)
+              "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+3.25rem)]",
         )}
         style={{ top: "var(--frenz-safe-top, 0px)" }}
       >
@@ -926,9 +927,7 @@ export function StoryViewer({
             // in the PWA the caption sits on the media, just above the band
             isOwn
               ? "[.pwa-standalone_&]:bottom-[calc(env(safe-area-inset-bottom)+5.5rem)]"
-              : quickReactions
-                ? "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+6.75rem)]"
-                : "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.25rem)]",
+              : "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.25rem)]",
             holding && "opacity-0",
           )}
         >
@@ -946,10 +945,10 @@ export function StoryViewer({
           toUserId={group.userId}
           name={group.displayName.split(" ")[0] || group.displayName}
           onFocusChange={setReplying}
-          quickReactions={quickReactions}
         />
       )}
-    </motion.div>
+    </motion.div>,
+    document.body,
   );
 }
 
@@ -957,12 +956,10 @@ function StoryReplyBar({
   toUserId,
   name,
   onFocusChange,
-  quickReactions,
 }: {
   toUserId: string;
   name: string;
   onFocusChange: (v: boolean) => void;
-  quickReactions: boolean;
 }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -996,14 +993,6 @@ function StoryReplyBar({
     <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/70 to-transparent px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-5 [.pwa-standalone_&]:bg-black [.pwa-standalone_&]:bg-none [.pwa-standalone_&]:pt-3">
       {sent ? (
         <p className="mb-2 text-center text-xs font-semibold text-emerald-300">Sent to {name} ✓</p>
-      ) : quickReactions ? (
-        <div className="mb-2 flex justify-center gap-2">
-          {QUICK_EMOJI.map((e) => (
-            <button key={e} type="button" onClick={() => send(e)} className="text-2xl transition active:scale-125" aria-label={`React ${e}`}>
-              {e}
-            </button>
-          ))}
-        </div>
       ) : null}
 
       {stickers ? (

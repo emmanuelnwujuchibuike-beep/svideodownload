@@ -452,7 +452,7 @@
      ~8px off the bottom — so the pill sits 12px INSIDE the inset (~22px up,
      ~9px above the bar), and 8px up on phones with no inset. */
   :root {
-    --frenz-nav-height: 3.875rem;
+    --frenz-nav-height: 3.75rem;
     --frenz-nav-gap: max(0.5rem, calc(env(safe-area-inset-bottom) - 0.75rem));
     --frenz-nav-clearance: calc(var(--frenz-nav-height) + var(--frenz-nav-gap));
   }

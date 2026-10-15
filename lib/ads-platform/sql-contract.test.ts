@@ -193,6 +193,33 @@ describe("RLS and grants", () => {
   });
 });
 
+describe("0243 — each ad shows the brand from its own application", () => {
+  const M = readFileSync(join(process.cwd(), "supabase/migrations/0243_ad_campaign_brand_name.sql"), "utf8");
+  const snapshot = M.slice(M.indexOf("create or replace function public.ad_serving_snapshot()"), M.indexOf("$$;", M.indexOf("create or replace function public.ad_serving_snapshot()")));
+  const base = SQL.slice(SQL.indexOf("create or replace function public.ad_serving_snapshot()"), SQL.indexOf("$$;", SQL.indexOf("create or replace function public.ad_serving_snapshot()")));
+  const norm = (x: string) => x.replace(/--.*$/gm, "").replace(/\s+/g, " ").trim();
+
+  it("the sponsor is the campaign's brand, the account's name only when it has none", () => {
+    expect(snapshot).toContain("'advertiser_name', coalesce(nullif(left(btrim(c.brand_name), 60), ''), a.display_name)");
+    expect(M).toMatch(/add column if not exists brand_name text/);
+    expect(M).toMatch(/set brand_name = a\.business_name[\s\S]*?c\.brand_name is null/);
+  });
+
+  it("teeth: the re-created snapshot is 0195's in every other respect, and still private and server-only", () => {
+    const back = norm(snapshot).replace("'advertiser_name', coalesce(nullif(left(btrim(c.brand_name), 60), ''), a.display_name)", "'advertiser_name', a.display_name");
+    expect(back).toBe(norm(base));
+    expect(snapshot).not.toMatch(/contact_email|business_name|total_amount|payment_reference|price|review_flags|status_reason|storage_path/);
+    expect(M).toContain("grant execute on function public.ad_serving_snapshot() to service_role;");
+    expect(M).toContain("revoke all on function public.ad_serving_snapshot() from public, anon, authenticated;");
+  });
+
+  it("the submit step writes the brand onto every campaign of the application", () => {
+    const srv = readFileSync(join(process.cwd(), "lib/ads-platform/advertiser-server.ts"), "utf8");
+    const submit = srv.slice(srv.indexOf("export async function submitApplication"));
+    expect(submit).toContain('.update({ brand_name: businessName }).in("id", all.map((r) => r.id))');
+  });
+});
+
 describe("0196 — the application layer", () => {
   const M = readFileSync(join(process.cwd(), "supabase/migrations/0196_ad_platform_applications.sql"), "utf8");
   it("the catalog is public, the blocklist lookup is server-only", () => {

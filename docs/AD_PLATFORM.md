@@ -1164,3 +1164,20 @@ application and service."
   the next media's player comes back over it. Pro members don't see this moment
   (`history_story_ad` is not in `PRO_AD_PLACEMENTS`). That is unchanged and is the
   owner's call.
+
+## The name on an ad is its application's brand (0243, 2026-10-15)
+
+Owner, with a screenshot of the full-screen header ("Frenzsave · AD"): "Check if the name
+here is the brand name it uses or the frenzsave platform. It should be the brand name used
+in application."
+
+It was never the platform's name. It was the application's "Business or brand name", but
+stored once per ACCOUNT (`advertisers.display_name`) and overwritten by each new
+application. So an account that applied for brand A and then brand B showed "B" on A's live
+ads. Since 0243 every campaign keeps the brand it was applied under (`ad_campaigns.brand_name`,
+written by `submitApplication` on each campaign of the application). The serving snapshot
+ships it as the sponsor, which is the header, the "Sponsored · …" line, the details sheet
+and the avatar letter. Campaigns from before 0243 are filled with the account's current name,
+which is what they already showed. The account's name is now only the next application's
+prefill. The "Frenzsave" in the owner's screenshot is the brand typed in that application (the
+Frenzsave house advert).

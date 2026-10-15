@@ -23,6 +23,7 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
 
 ### Live probes owed (production)
 
+- **0243 (each ad shows its own application's brand, 2026-10-15):** column `ad_campaigns.brand_name` (backfilled from the account's current name, so nothing on screen changes) and the re-created `ad_serving_snapshot` (sponsor = the campaign's brand, else `advertisers.display_name`). Run after 0242. Until it runs, ads keep showing the account's name and submit logs a warning.
 - **0242 (History viewer full-screen ad, 2026-10-14, docs/AD_PLATFORM.md "History viewer full-screen ad"):** one `ad_placements` row `history_story` (INTERSTITIAL, page `history`). Insert-only. Not for sale until an admin prices it. The site code works before and after it runs.
 
 - **0240 (views-based campaigns, 2026-10-12, docs/AD_PLATFORM.md Part 9):** columns `ad_platform_settings.views_*`, `ad_placements.views_enabled/views_rate_per_1000_minor`, `ad_durations.views_enabled`, `ad_campaigns.pricing_model/target_views`, status `completed`; table `ad_campaign_delivery`; functions `ad_views_price_for`, `ad_views_capacity`, `ad_views_credit`, `ad_views_fulfil`, `ad_views_deadline(s)`, `ad_views_claim_notices` (service role only). Views pricing ships **off** (`views_enabled=false`) — the admin turns it on. The advertiser wizard step to choose views is the next part. **0238 + 0239 were NOT live when probed 2026-10-12** (private-post alerts, likes, comments).

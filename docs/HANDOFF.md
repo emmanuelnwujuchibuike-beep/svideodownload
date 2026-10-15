@@ -23,6 +23,8 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
 
 ### Live probes owed (production)
 
+- **Whole-page translation (2026-10-15, docs/GLOBALIZATION_PLATFORM.md "Whole-page translation"):** needs `ANTHROPIC_API_KEY` (already set for moderation) and Upstash for the shared cache. Optional: `TRANSLATE_MODEL`, `RATE_LIMIT_TRANSLATE_PER_MIN`. Pick a language on the phone and check that a few pages, a sheet and a toast change, and that English restores them.
+
 - **0242 is taken by `0242_ad_pricing_delivery_admin…`** (written in the owner's local checkout, not yet pushed). The History viewer and brand-name migrations were renumbered 0243 and 0244 on 2026-10-15 so the two never share a number.
 - **0244 (each ad shows its own application's brand, 2026-10-15):** column `ad_campaigns.brand_name` (backfilled from the account's current name, so nothing on screen changes) and the re-created `ad_serving_snapshot` (sponsor = the campaign's brand, else `advertisers.display_name`). Run after 0243. Until it runs, ads keep showing the account's name and submit logs a warning.
 - **0243 (History viewer full-screen ad, 2026-10-14, docs/AD_PLATFORM.md "History viewer full-screen ad"):** one `ad_placements` row `history_story` (INTERSTITIAL, page `history`). Insert-only. Not for sale until an admin prices it. The site code works before and after it runs.

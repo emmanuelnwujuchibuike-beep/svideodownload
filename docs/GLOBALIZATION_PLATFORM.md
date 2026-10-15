@@ -123,3 +123,36 @@ must point at a file that exists, and a `planned` row must name none. The fail-c
 locale rule is asserted too — English is live, and any locale with zero strings is
 `planned`, never offerable. The operator view is the admin **Globalization** section
 (under System).
+
+
+## Whole-page translation (owner decision, 2026-10-15)
+
+Owner: "the language translator is not working, only on language showed in a few sections, I want
+all language to change in everything that has text that is translatable and needs to translate."
+
+The "no machine translation" position above was left to the owner
+(docs/ANALYTICS_AUDIT_2026-08-09.md §8), and the owner has now decided. The hand-written
+catalogues cover about 80 header strings, so a language pick changed almost nothing. Now:
+
+- **What translates:** `lib/i18n/page-translator.ts` translates every visible piece of interface text, plus
+  `placeholder`, `aria-label`, `title`, `alt` and the page title. It keeps up through a
+  MutationObserver as screens, sheets and toasts render. English puts every original back.
+- **What stays:** people's own words (everything through `RichText`: posts, captions,
+  comments, messages, marked `translate="no"`), each language's native name in the picker, form
+  values, code, numbers, sizes, @handles, #tags, links and addresses.
+- **Where translations come from:** `POST /api/i18n/translate` →
+  `lib/i18n/machine-translate.ts`, which uses the Claude API (`TRANSLATE_MODEL`, default
+  `claude-opus-5-5`, low effort, structured output, refusal fallback on). Each distinct string is
+  translated once per language and cached for everyone for 180 days. The device also keeps its
+  own copy per language, so a return visit needs no request. Rate limited per visitor
+  (`RATE_LIMIT_TRANSLATE_PER_MIN`, 40).
+- **Weight:** English visitors pay one cookie read (`components/i18n/page-translation.tsx`).
+  The translator is a dynamic import.
+- **Unchanged:** the catalogues and `scripts/i18n.mjs` (still no machine step). A catalogue
+  string renders first and is simply returned unchanged by the translator.
+
+**Honest limits.** A first visit in a language shows English for a moment until its strings
+arrive (instant once cached). Wording is machine-made and nobody has reviewed it. A sentence
+React splits around a value ("Today you saved" + a bold word) is translated in pieces. Display
+names outside `RichText` are treated as interface text. Cost is one model call per new string
+per language, after which the cache serves it.

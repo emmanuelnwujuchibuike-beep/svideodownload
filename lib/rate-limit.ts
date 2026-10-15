@@ -211,6 +211,11 @@ export const aiJobReadLimiter: Limiter = buildLimiter(
  * application is about five calls, so thirty a minute is generous for a person
  * and a ceiling for a script farming upload tickets.
  */
+/**
+ * 2026-10-15: whole-page translation (app/api/i18n/translate). A page asks a few times as it
+ * renders and as content loads in; repeats are served from the shared cache before the model.
+ */
+export const translateLimiter: Limiter = buildLimiter(Number(process.env.RATE_LIMIT_TRANSLATE_PER_MIN || 40));
 export const adApplicationLimiter: Limiter = buildLimiter(
   Number(process.env.RATE_LIMIT_AD_APPLICATION_PER_MIN || 30),
 );

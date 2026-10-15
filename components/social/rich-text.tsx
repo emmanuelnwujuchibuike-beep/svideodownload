@@ -68,7 +68,7 @@ export function RichText({
       const warn = linkWarning(token);
       if (warn) {
         nodes.push(
-          <span key={`w${key++}`} role="note" className="ml-1 inline-flex items-center rounded-md bg-red-500/12 px-1.5 py-0.5 align-middle text-[11px] font-semibold not-italic text-red-600 dark:text-red-400">
+          <span key={`w${key++}`} role="note" translate="yes" className="ml-1 inline-flex items-center rounded-md bg-red-500/12 px-1.5 py-0.5 align-middle text-[11px] font-semibold not-italic text-red-600 dark:text-red-400">
             ⚠ {LINK_WARNING_TEXT[warn]}
           </span>,
         );
@@ -98,5 +98,10 @@ export function RichText({
     It leads the class list so a caller's own `className` still wins — reels
     already passes its own text/colour utilities through here.
   */
-  return <span className={cn("whitespace-pre-line", className)}>{nodes}</span>;
+  // People's own words stay as written when the page is translated (lib/i18n/page-translator.ts)
+  return (
+    <span translate="no" className={cn("whitespace-pre-line", className)}>
+      {nodes}
+    </span>
+  );
 }

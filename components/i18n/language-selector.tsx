@@ -23,7 +23,7 @@ import { playSound } from "@/lib/notifications/sound-fx";
  */
 const LANG_COOKIE = "frenz_lang"; // must match lib/i18n/languages LANGUAGE_COOKIE
 
-type MenuComponent = ComponentType<{ current: string; onChoose: (code: string) => void; onClose: () => void }>;
+type MenuComponent = ComponentType<{ current: string; onChoose: (code: string) => void; onClose: () => void; elevated?: boolean }>;
 
 function readLang(): string {
   if (typeof document === "undefined") return "en";
@@ -36,7 +36,12 @@ function readLang(): string {
   }
 }
 
-export function LanguageSelector() {
+/**
+ * `variant="row"` is the side menu's "Language" row (owner, 2026-10-15: "put the language
+ * button on the landing page inside the top side menu, the landing header is too crowded").
+ * Its list opens ABOVE the menu sheet (`elevated`), which otherwise covers it.
+ */
+export function LanguageSelector({ variant = "icon" }: { variant?: "icon" | "row" } = {}) {
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState("en");
   const [Menu, setMenu] = useState<MenuComponent | null>(null);
@@ -60,6 +65,40 @@ export function LanguageSelector() {
     }
     setOpen(true);
   };
+
+  const menu =
+    open && Menu ? (
+      <Menu
+        current={current}
+        elevated={variant === "row"}
+        onChoose={(code) => {
+          setCurrent(code);
+          setOpen(false);
+        }}
+        onClose={() => setOpen(false)}
+      />
+    ) : null;
+
+  if (variant === "row") {
+    return (
+      <>
+        <button
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={toggle}
+          className="mt-3 flex w-full items-center justify-between rounded-2xl border border-border/60 px-3 py-2 text-left"
+        >
+          <span className="text-sm font-medium text-muted-foreground">Language</span>
+          <span className="inline-flex items-center gap-1.5 text-sm font-semibold">
+            <Globe className="h-[18px] w-[18px]" aria-hidden />
+            <span translate="no" className="uppercase">{current}</span>
+          </span>
+        </button>
+        {menu}
+      </>
+    );
+  }
 
   return (
     <>
@@ -87,16 +126,7 @@ export function LanguageSelector() {
         </IconTile>
       </button>
 
-      {open && Menu ? (
-        <Menu
-          current={current}
-          onChoose={(code) => {
-            setCurrent(code);
-            setOpen(false);
-          }}
-          onClose={() => setOpen(false)}
-        />
-      ) : null}
+      {menu}
     </>
   );
 }

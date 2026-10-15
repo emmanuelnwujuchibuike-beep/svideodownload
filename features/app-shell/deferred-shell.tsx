@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
+import { PageTranslation } from "@/components/i18n/page-translation";
 import { SelfAdsGate } from "@/features/ads-platform/serve/self-ads-gate";
 import { MediaProtection } from "@/features/media/media-protection";
 import { VastDownloadCompleteTrigger } from "@/features/monetization/vast-interstitial/download-complete-trigger";
@@ -126,6 +127,11 @@ export function DeferredShell() {
         DOM tree — only `contextmenu` and `dragstart`.
       */}
       <MediaProtection />
+      {/*
+        Whole-page translation for a language other than English (owner, 2026-10-15). One
+        cookie read for an English visitor; the translator is a dynamic import.
+      */}
+      <PageTranslation />
       {/*
         Daily streak: records today's activity once per page open and raises
         the celebration when the SERVER says to. Mounted here so landing,

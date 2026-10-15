@@ -437,8 +437,12 @@ export function SiteHeader({
               which already carries it for exactly this reason. */}
           {landing ? null : <SearchTrigger className="w-48" />}
           {/* Language selector for the top ~50 languages (owner — replaced the
-              downloads/history icon). History lives in the bottom nav now. */}
-          <LanguageSelector />
+              downloads/history icon). History lives in the bottom nav now.
+              Not on the LANDING (owner, 2026-10-15: "the landing header is too
+              crowded"): there it is the "Language" row in the menu drawer. On a
+              desktop that drawer exists only for signed-out visitors, so a
+              signed-in one keeps the globe here, or they could not reach it. */}
+          {landing && !user ? null : <LanguageSelector />}
           {/*
             Install — Frenz | Search | Language | Install | Menu.
 
@@ -530,8 +534,9 @@ export function SiteHeader({
                 the install button in the landing page"). */}
             {landing ? <PromoteButton size="header" /> : null}
             {/* Language selector — the top ~50 languages (owner, replaced the
-                downloads/history icon; History is in the bottom nav). */}
-            <LanguageSelector />
+                downloads/history icon; History is in the bottom nav). On the
+                landing it lives in the menu drawer instead (owner, 2026-10-15). */}
+            {landing ? null : <LanguageSelector />}
             {/* Log in — owner, 2026-07-21: the login CTA was desktop-only and
                 buried in the hamburger on mobile, so a new visitor on a phone had
                 no visible way in. UserMenu already carries the robust signed-in/out
@@ -737,6 +742,10 @@ export function SiteHeader({
                 <span className="text-sm font-medium text-muted-foreground">Appearance</span>
                 <ThemeToggle />
               </div>
+              {/* Language, beside Appearance (owner, 2026-10-15: "put the language button on
+                  the landing page inside the top side menu") — the landing header no longer
+                  carries the globe. */}
+              <LanguageSelector variant="row" />
 
               {enabled && user ? (
                 <div className="mt-3 space-y-0.5">

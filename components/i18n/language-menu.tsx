@@ -22,10 +22,13 @@ export function LanguageMenu({
   current,
   onChoose,
   onClose,
+  elevated = false,
 }: {
   current: string;
   onChoose: (code: string) => void;
   onClose: () => void;
+  /** opened from the side menu (z-70): the list must sit above the sheet */
+  elevated?: boolean;
 }) {
   const router = useRouter();
   const [q, setQ] = useState("");
@@ -93,11 +96,11 @@ export function LanguageMenu({
 
   return (
     <>
-      <button type="button" aria-label="Close" onClick={onClose} className="fixed inset-0 z-[60] cursor-default" />
+      <button type="button" aria-label="Close" onClick={onClose} className={cn("fixed inset-0 cursor-default", elevated ? "z-[80]" : "z-[60]")} />
       <div
         role="menu"
         aria-label="Choose a language"
-        className="fixed right-2 top-[calc(var(--frenz-safe-top)+3.75rem)] z-[61] w-72 max-w-[calc(100vw-1rem)] overflow-hidden rounded-2xl border border-border/60 bg-card shadow-2xl"
+        className={cn(elevated ? "z-[81]" : "z-[61]", "fixed right-2 top-[calc(var(--frenz-safe-top)+3.75rem)] w-72 max-w-[calc(100vw-1rem)] overflow-hidden rounded-2xl border border-border/60 bg-card shadow-2xl")}
       >
         <div className="border-b border-border/60 p-2">
           <div className="relative">
@@ -137,7 +140,8 @@ export function LanguageMenu({
                   )}
                 >
                   <span className="min-w-0">
-                    <span className={cn("block truncate text-sm font-semibold", note && "text-muted-foreground")}>
+                    {/* a language's own name is never translated — it is how its speakers find it */}
+                    <span translate="no" className={cn("block truncate text-sm font-semibold", note && "text-muted-foreground")}>
                       {l.native}
                     </span>
                     {/*

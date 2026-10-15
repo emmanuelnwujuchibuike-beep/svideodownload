@@ -1,7 +1,7 @@
 "use client";
 
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
-import { Eye, Loader2, MoreHorizontal, Plus, Repeat2, Send, Smile, X } from "lucide-react";
+import { Eye, Heart, Loader2, MoreHorizontal, Plus, Repeat2, Send, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -23,7 +23,7 @@ import type { StoryGroup } from "@/lib/social/stories";
 import { isGroupSeen, loadSeenMap, markGroupSeen, type SeenMap } from "@/lib/social/story-seen";
 import { cn } from "@/lib/utils";
 
-const STICKERS = ["🎉", "💯", "😭", "🥰", "😎", "🤯", "👀", "🫶", "💀", "🤝", "✨", "🙏"];
+const QUICK_EMOJI = ["😍", "😂", "😮"];
 
 const IMAGE_MS = 5000;
 
@@ -885,7 +885,7 @@ export function StoryViewer({
           isOwn
             ? "[.pwa-standalone_&]:bottom-[calc(env(safe-area-inset-bottom)+4.5rem)]"
             : // the band is just the reply box (WhatsApp's shape — no emoji row)
-              "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+3.25rem)]",
+              "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+3.5rem)]",
         )}
         style={{ top: "var(--frenz-safe-top, 0px)" }}
       >
@@ -927,7 +927,7 @@ export function StoryViewer({
             // in the PWA the caption sits on the media, just above the band
             isOwn
               ? "[.pwa-standalone_&]:bottom-[calc(env(safe-area-inset-bottom)+5.5rem)]"
-              : "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.25rem)]",
+              : "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.5rem)]",
             holding && "opacity-0",
           )}
         >
@@ -935,7 +935,7 @@ export function StoryViewer({
         </p>
       ) : null}
 
-      {/* Reply bar — text, emojis & stickers (delivered as a DM). Hidden with
+      {/* Reply bar — text and quick emojis (delivered as a DM). Hidden with
           the rest of the chrome while holding, not just faded: it sits UNDER
           a `pointer-events-none` toggle of its own composer input, and a
           held thumb resting near the bottom of the screen must not land on a
@@ -964,14 +964,12 @@ function StoryReplyBar({
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
-  const [stickers, setStickers] = useState(false);
 
   const send = async (payload: string) => {
     const t = payload.trim();
     if (!t || busy) return;
     setBusy(true);
     setText("");
-    setStickers(false);
     try {
       const r = await fetch("/api/stories/reply", {
         method: "POST",
@@ -989,52 +987,63 @@ function StoryReplyBar({
     }
   };
 
+  /*
+    ── WhatsApp's status reply bar, exactly (owner, 2026-10-15, with its screenshot) ──
+    A thin divider across the foot of the picture, then ONE grey glass pill — "Reply"
+    on the left, three quick emojis inside it on the right — and a separate round
+    heart button beside it. Typing swaps the emojis and heart for Send. No sticker
+    tray, no emoji row above the pill.
+  */
+  const typing = text.trim().length > 0;
   return (
-    <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/70 to-transparent px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-5 [.pwa-standalone_&]:bg-black [.pwa-standalone_&]:bg-none [.pwa-standalone_&]:pt-3">
-      {sent ? (
-        <p className="mb-2 text-center text-xs font-semibold text-emerald-300">Sent to {name} ✓</p>
-      ) : null}
-
-      {stickers ? (
-        <div className="mx-auto mb-2 grid max-w-md grid-cols-6 gap-1 rounded-2xl bg-white/10 p-2 backdrop-blur">
-          {STICKERS.map((s) => (
-            <button key={s} type="button" onClick={() => send(s)} className="rounded-xl py-1.5 text-2xl transition hover:bg-white/10 active:scale-110" aria-label={`Sticker ${s}`}>
-              {s}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
+    <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/70 to-transparent px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-5 [.pwa-standalone_&]:bg-black [.pwa-standalone_&]:bg-none [.pwa-standalone_&]:pt-0">
+      <div className="mx-auto mb-2 h-px max-w-md bg-white/35 [.pwa-standalone_&]:hidden" aria-hidden />
+      {sent ? <p className="mb-1 text-center text-xs font-semibold text-emerald-300">Sent to {name} ✓</p> : null}
       <div className="mx-auto flex max-w-md items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setStickers((v) => !v)}
-          aria-label="Stickers"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition hover:bg-white/20"
-        >
-          <Smile className="h-5 w-5" />
-        </button>
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onFocus={() => onFocusChange(true)}
-          onBlur={() => onFocusChange(false)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void send(text);
-          }}
-          maxLength={500}
-          placeholder={`Reply to ${name}…`}
-          className="h-10 min-w-0 flex-1 rounded-full border border-white/20 bg-white/10 px-4 text-sm text-white outline-none backdrop-blur placeholder:text-white/50 focus:border-white/40"
-        />
-        <button
-          type="button"
-          onClick={() => send(text)}
-          disabled={busy || !text.trim()}
-          aria-label="Send reply"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white transition disabled:opacity-40"
-        >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-        </button>
+        <div className="flex h-11 min-w-0 flex-1 items-center rounded-full bg-white/20 pl-4 pr-3 backdrop-blur-md">
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onFocus={() => onFocusChange(true)}
+            onBlur={() => onFocusChange(false)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void send(text);
+            }}
+            maxLength={500}
+            placeholder="Reply"
+            aria-label={`Reply to ${name}`}
+            className="h-full min-w-0 flex-1 bg-transparent text-[17px] text-white outline-none placeholder:text-white/80"
+          />
+          {typing ? null : (
+            <span className="flex shrink-0 items-center gap-3">
+              {QUICK_EMOJI.map((e) => (
+                <button key={e} type="button" onClick={() => send(e)} className="text-[26px] leading-none transition active:scale-125" aria-label={`React ${e}`}>
+                  {e}
+                </button>
+              ))}
+            </span>
+          )}
+        </div>
+        {typing ? (
+          <button
+            type="button"
+            onClick={() => send(text)}
+            disabled={busy}
+            aria-label="Send reply"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white transition disabled:opacity-40"
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => send("❤️")}
+            aria-label="Like"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md transition active:scale-110"
+          >
+            <Heart className="h-6 w-6" />
+          </button>
+        )}
       </div>
     </div>
   );

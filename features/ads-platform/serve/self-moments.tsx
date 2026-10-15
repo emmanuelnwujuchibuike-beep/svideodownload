@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { isPlayerOpen, onPlayerChange, SAVED_TO_DEVICE_EVENT } from "@/features/downloads/player-store";
 import type { EligibleAd } from "@/lib/ads-platform/eligibility";
+import type { AdPageContext } from "@/lib/ads-platform/catalog";
+import { HISTORY_STORY_AD_EVENT, type HistoryStoryAdRequest } from "@/lib/ads-platform/history-story-event";
 import { AI_VIDEO_SAVE_EVENT } from "@/lib/ads-platform/moment-events";
 import { PAID_REWARD_EVENT, type PaidRewardRequest } from "@/lib/ads-platform/paid-reward-event";
 import { claimMoment, lastShownCr, mayShowAgain, nextFromPool, pageForPath, poolFor, recordShown } from "@/lib/ads-platform/serving-state";
@@ -32,6 +34,11 @@ import { SelfInterstitial } from "./self-interstitial";
  *                      access) — Continue and close work from the first frame.
  *   return             INTERSTITIAL when someone comes back after ≥5 s away,
  *                      at most once per the format's admin gap (120 s seeded).
+ *   History viewer     INTERSTITIAL (image or video) after every 3 media
+ *                      watched in History (0242). The player asks; its "every
+ *                      3 media" is the frequency rule, so the format's gap is
+ *                      not applied (as Stories), and the page is always
+ *                      `history` — the gallery also lives on / and /downloads.
  *
  * Each moment reads the payload already in memory (no request at the moment),
  * picks the next ad that is NOT the one shown last, and claims the moment so
@@ -48,11 +55,23 @@ interface Showing {
   page: string;
   reward: boolean;
   slot: string | undefined;
+  /** 0242: told when the ad closes (the History viewer completes its advance) */
+  after?: () => void;
   /** 0203: a download reward GATE — what to say, and who to tell how it ended */
   gate?: { text: string; onComplete: () => void; onDismiss: () => void; done: boolean };
 }
 
 const REWARD_PLACEMENTS = new Set(["ai_video_save_reward", "hd_download_reward", "batch_download_reward"]);
+
+/** 0242: the History viewer's placement — its own cadence, always the `history` page */
+const HISTORY_STORY = "history_story";
+
+interface Where {
+  /** the content area, when the moment knows it better than the route does */
+  page?: AdPageContext;
+  /** false: the moment has its own cadence, so the format's between-ads gap is not applied */
+  gap?: boolean;
+}
 
 function noSelfMoment(pathname: string): boolean {
   return pathname.startsWith("/advertise/create") || pathname.startsWith("/advertise/payment") || pathname.startsWith("/studio/ai/character-replace") || pathname.startsWith("/ai/character-replace/create");
@@ -69,13 +88,13 @@ export function SelfMoments() {
   const aiSaveAt = useRef(0);
 
   /** May a paid ad take this placement here, now? Its pool and slot, or null — synchronous, no request. */
-  const eligible = useCallback((placement: string) => {
+  const eligible = useCallback((placement: string, at: Where = {}) => {
     const { pathname: p, tab: t } = where.current;
     if (noSelfMoment(p)) return null;
-    const page = pageForPath(p, t);
+    const page = at.page ?? pageForPath(p, t);
     const payload = peekSelfAds();
     const pool = poolFor(payload, placement, page);
-    if (!pool.ads.length || !mayShowAgain(placement, pool.rules)) return null;
+    if (!pool.ads.length || (at.gap !== false && !mayShowAgain(placement, pool.rules))) return null;
     /*
       The moment is a canonical slot too (lib/ads-platform/slot-registry.ts):
       the paid campaign takes it only when it leads the admin's order among the
@@ -93,10 +112,10 @@ export function SelfMoments() {
   }, []);
 
   /** Pick and claim. Returns what to show, or null — all synchronous. */
-  const pick = useCallback((placement: string, moment: "download-complete" | "return" | null): Showing | null => {
+  const pick = useCallback((placement: string, moment: "download-complete" | "return" | null, at: Where = {}): Showing | null => {
     // never on top of another full-screen dialog (the referral promo, a sheet…) — the moment is simply skipped
     if (busy.current || anotherModalOpen()) return null;
-    const e = eligible(placement);
+    const e = eligible(placement, at);
     if (!e) return null;
     // Part 10: the ad whose image was fetched ahead, when it may still serve
     const ad = takeWarmed(placement, e.pool.ads, lastShownCr(placement)) ?? nextFromPool(placement, e.pool.ads);
@@ -106,9 +125,9 @@ export function SelfMoments() {
   }, [eligible]);
 
   /** Part 10: choose this placement's next ad now and fetch its still image — once, from memory, never a video. */
-  const warmFor = useCallback((placement: string) => {
+  const warmFor = useCallback((placement: string, at: Where = {}) => {
     if (isWarmed(placement) || !mayWarm()) return;
-    const e = eligible(placement);
+    const e = eligible(placement, at);
     const ad = e ? nextFromPool(placement, e.pool.ads) : null;
     if (ad) warm(placement, ad);
   }, [eligible]);
@@ -118,6 +137,8 @@ export function SelfMoments() {
   useEffect(() => {
     const run = () => {
       for (const placement of ["download_completed_interstitial", "hd_download_reward", "batch_download_reward", "ai_video_save_reward"]) warmFor(placement);
+      // the History viewer's ad, on the History page (its page is `history`, which no route maps to)
+      if (where.current.pathname === "/history") warmFor(HISTORY_STORY, { page: "history", gap: false });
     };
     const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
     if (w.requestIdleCallback) {
@@ -146,6 +167,20 @@ export function SelfMoments() {
     };
     window.addEventListener(PAID_REWARD_EVENT, onGate);
     return () => window.removeEventListener(PAID_REWARD_EVENT, onGate);
+  }, [pick, open]);
+
+  // 0242: the History viewer holds its advance after every 3 media and asks; a live campaign that leads the slot takes it
+  useEffect(() => {
+    const onStory = (e: Event) => {
+      const req = (e as CustomEvent<HistoryStoryAdRequest>).detail;
+      if (!req || req.handled) return;
+      const s = pick(HISTORY_STORY, null, { page: "history", gap: false });
+      if (!s) return;
+      req.handled = true;
+      open({ ...s, after: req.onDone });
+    };
+    window.addEventListener(HISTORY_STORY_AD_EVENT, onStory);
+    return () => window.removeEventListener(HISTORY_STORY_AD_EVENT, onStory);
   }, [pick, open]);
 
   // AI video save → the sponsor video, beside the save
@@ -230,6 +265,7 @@ export function SelfMoments() {
       g.done = true;
       g.onDismiss();
     }
+    showingRef.current?.after?.();
     setShowing(null);
   }, []);
 

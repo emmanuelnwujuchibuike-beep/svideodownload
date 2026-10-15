@@ -18,6 +18,7 @@ import {
   usePlayerQueue,
 } from "@/features/downloads/player-store";
 import { StoryAdSlide } from "@/features/monetization/story-ad-slide";
+import { requestPaidHistoryStoryAd } from "@/lib/ads-platform/history-story-event";
 import { SendToChatSheet } from "@/features/downloads/send-to-chat-sheet";
 import { removeDownload, toggleFavorite } from "@/features/history/store";
 import { toast } from "@/features/ui/toast";
@@ -65,8 +66,21 @@ export function DownloadPlayer() {
   useEffect(() => {
     if (adPending && storyAdFilled === false) playerAdDone();
   }, [adPending, storyAdFilled]);
+  /*
+    WHO fills the ad (0242, owner 2026-10-14: "include it to the self ad
+    application and service"). The paid layer is asked first, synchronously;
+    a live `history_story` campaign that leads the slot's order takes it and
+    completes the advance when its ad closes. Otherwise the network's story
+    ad runs exactly as before. Null = not asked yet (one frame).
+  */
+  const [adBy, setAdBy] = useState<"paid" | "network" | null>(null);
   useEffect(() => {
-    if (!adPending) setStoryAdFilled(null);
+    if (!adPending) {
+      setStoryAdFilled(null);
+      setAdBy(null);
+      return;
+    }
+    setAdBy(requestPaidHistoryStoryAd(playerAdDone) ? "paid" : "network");
   }, [adPending]);
   const rec = queue?.items[queue.index];
 
@@ -86,21 +100,31 @@ export function DownloadPlayer() {
   }, [queue]);
 
   if (!queue || !rec) return null;
-  return (
-    <>
-      <PlayerInner key={rec.id} rec={rec} index={queue.index} total={queue.items.length} />
-      {/*
-        The story ad sits OVER the player rather than replacing it, so the clip
-        underneath keeps its position and resumes exactly where it was. Rendered
-        here in the outer component because this is where the ad state lives —
-        PlayerInner is keyed per record and would remount the ad on every
-        advance.
-      */}
-      {adPending ? (
-        <StoryAdSlide zone="history_story_ad" onNext={playerAdDone} onResolved={setStoryAdFilled} />
-      ) : null}
-    </>
-  );
+  /*
+    🔴 THE AD REPLACES THE PLAYER WHILE IT SHOWS (owner, 2026-10-14: "Ad doesn't
+    show in the history").
+
+    It used to sit "over" the still-mounted player. But the player is a MODAL
+    <dialog> in the browser's TOP LAYER (see PlayerInner — that is how it beats
+    the in-page push), and nothing outside the top layer can be drawn above it,
+    whatever its z-index: the story ad, the VAST overlay and a paid full-screen
+    ad all mounted UNDER the player, invisible and inert behind the modal. The
+    queue then advanced on the next tap with the ad still "pending" unseen.
+
+    Nothing is lost by unmounting the player here: the ad completes an advance,
+    and PlayerInner is keyed per record, so the next media mounts fresh anyway.
+    A black backdrop holds the screen while the paid ad (portalled above it)
+    or the network's slide decides.
+  */
+  if (adPending) {
+    return (
+      <>
+        <div className="fixed inset-0 z-[94] bg-black" aria-hidden />
+        {adBy === "network" ? <StoryAdSlide zone="history_story_ad" onNext={playerAdDone} onResolved={setStoryAdFilled} /> : null}
+      </>
+    );
+  }
+  return <PlayerInner key={rec.id} rec={rec} index={queue.index} total={queue.items.length} />;
 }
 
 /**

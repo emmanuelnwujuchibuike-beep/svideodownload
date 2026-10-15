@@ -23,6 +23,8 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
 
 ### Live probes owed (production)
 
+- **0242 (History viewer full-screen ad, 2026-10-14, docs/AD_PLATFORM.md "History viewer full-screen ad"):** one `ad_placements` row `history_story` (INTERSTITIAL, page `history`). Insert-only. Not for sale until an admin prices it. The site code works before and after it runs.
+
 - **0240 (views-based campaigns, 2026-10-12, docs/AD_PLATFORM.md Part 9):** columns `ad_platform_settings.views_*`, `ad_placements.views_enabled/views_rate_per_1000_minor`, `ad_durations.views_enabled`, `ad_campaigns.pricing_model/target_views`, status `completed`; table `ad_campaign_delivery`; functions `ad_views_price_for`, `ad_views_capacity`, `ad_views_credit`, `ad_views_fulfil`, `ad_views_deadline(s)`, `ad_views_claim_notices` (service role only). Views pricing ships **off** (`views_enabled=false`) — the admin turns it on. The advertiser wizard step to choose views is the next part. **0238 + 0239 were NOT live when probed 2026-10-12** (private-post alerts, likes, comments).
 - **0241 (slot availability + alerts + "ends soon", docs/AD_PLATFORM.md Part 10):** run AFTER 0240. Table `ad_slot_waitlist`; columns `ad_campaign_delivery.deadline_notified_at`, `ad_campaigns.expiry_notified_for`; functions `ad_slot_availability` (anon may read), `ad_slot_waitlist_due`, `ad_views_deadline_notices`, `ad_expiring_notices` (service role). The wizard and server fail open without it.
 - **Ad videos (2026-10-12):** every ad video now goes to the worker first (480p MP4 + JPEG cover); Stream only if the worker is unreachable. The worker must be redeployed for it to take effect.

@@ -405,7 +405,7 @@ Providers inside a "zone" are whatever rows the operator configures for it
 | 15 | Multi-Link (4 places) | MultiLinkPanel, SourceCard, FetchAdGate | zones `multilink_*` | same | — | no | kept |
 | 16 | History: above the grid / between periods | HistoryGridAd (ExoClick), AdSurface + HilltopSlot | ExoClick; zone `history_between_periods` + Hilltop **together** | same | — | ⚠ B: zone + Hilltop at one spot | reported (as #11) |
 | 17 | Download history top/bottom; history complete | DownloadHistoryAd, HistoryCompleteAd | zones `download_history_*` | same | — | no | kept |
-| 18 | History story ad (media viewer) | StoryAdSlide | zone `history_story_ad` | same | — | no | kept (it is not social Stories) |
+| 18 | History story ad (media viewer) | StoryAdSlide | zone `history_story_ad` | same | — | no | kept (it is not social Stories); 0242 adds paid placement `history_story` to the same moment slot, paid first |
 | 19 | Blog sidebar | AdSurface | zone `sidebar` | same | — | no | kept |
 | 20 | Download-complete moment | DownloadCompleteAd + VAST download-complete + Monetag moment | zone `download_complete`, Hilltop/ExoClick VAST, Monetag | `download_complete` | download_completed_interstitial | already coordinated (panel stands down for the VAST) | **shared** (claim) |
 | 21 | Return / idle moment | IdleInterstitial + VAST idle/back-swipe | zone `idle_interstitial`, VAST | `idle_interstitial` | interstitial | no | **shared** (claim) |
@@ -1127,3 +1127,34 @@ target is reached. A views campaign shows no paid "Extend".
   advertiser and live data: production has neither 0240 nor 0241.
 - Push permission on an iPhone.
 - The hourly notices against a live database.
+
+## History viewer full-screen ad (0242, 2026-10-14)
+
+Owner: "Ad doesn't show in the history. When a user watched 3 medias from history he or
+she should see the full screen ad, can be image or video. Include it to the self ad
+application and service."
+
+- **Why it didn't show:** the History player is a modal `<dialog>` in the browser's top
+  layer (it has to be, to beat Monetag's in-page push). The story ad was rendered *over*
+  it with a z-index, which can't beat the top layer, so it mounted underneath, unseen.
+  The player is now unmounted while the ad shows (`features/downloads/download-player.tsx`).
+  The network's VAST path also no longer releases the player before its overlay closes.
+- **Cadence:** "3 media **watched**", counted since the queue opened or since the last
+  ad (`seenSinceAd` in `player-store.ts`). It used to be the queue position, so opening
+  at the 6th download gave an ad after one media. Going back to a media counts too.
+  Only the History gallery's queue has ads. The cadence no longer carries over to
+  another queue opened later.
+- **Paid side:** new placement `history_story` (INTERSTITIAL, image or video, page
+  `history`), migration `0242_ad_history_story.sql`. It sells in `/advertise` like every
+  placement once an admin prices it. It is the moment slot `history_story_ad`
+  (`slot-moments.ts`), paid first and the network second. The player asks the paid layer
+  synchronously (`lib/ads-platform/history-story-event.ts`). `SelfMoments` takes it with
+  the shared full-screen layout (skip countdown, tap for details) and completes the
+  advance on close. The "every 3 media" cadence is its frequency rule, so the format's
+  120 s gap does not apply (as Stories).
+- **Not done (honest):** when the admin puts the network first and the network then
+  has nothing, the paid ad does not step in. The moment is skipped as before. ExoClick's
+  interstitial, if that is what the network serves there, still returns on *show*, so
+  the next media's player comes back over it. Pro members don't see this moment
+  (`history_story_ad` is not in `PRO_AD_PLACEMENTS`). That is unchanged and is the
+  owner's call.

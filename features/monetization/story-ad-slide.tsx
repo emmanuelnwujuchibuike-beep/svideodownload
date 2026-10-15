@@ -59,9 +59,8 @@ export function StoryAdSlide({
     while it plays. When it resolves — shown, skipped, or nothing to show — the
     queue advances, which is exactly what the tap zones below would have done.
 
-    `onResolved(false)` in that case, deliberately: this component renders no ad
-    of its own on the video path, and telling the player otherwise would have it
-    hold a slide with nothing in it.
+    The player holds its advance (a black screen) until then — see the effect
+    below for why it is no longer released early.
   */
   const [mode, setMode] = useState<"unknown" | "vast" | "slot">("unknown");
   const fired = useRef(false);
@@ -84,14 +83,19 @@ export function StoryAdSlide({
   useEffect(() => {
     if (mode !== "vast" || fired.current) return;
     fired.current = true;
-    onResolved(false);
+    /*
+      🔴 NO `onResolved(false)` here any more (2026-10-14). That released the
+      player at once, and the player is a top-layer modal <dialog>: it came
+      straight back OVER the VAST overlay it was supposed to give way to. The
+      player now holds a black screen until the overlay resolves (`onNext`).
+    */
     void import("./vast-interstitial/request")
       .then((m) => m.requestVastInterstitial("history-story"))
       .catch(() => {
         /* A slide that cannot load its ad must still advance. */
       })
       .finally(onNext);
-  }, [mode, onNext, onResolved]);
+  }, [mode, onNext]);
 
   // Nothing of our own on the video path — the overlay owns the screen.
   if (mode !== "slot") return null;

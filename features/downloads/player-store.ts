@@ -73,6 +73,8 @@ export function closePlayer() {
   // Clearing this matters: a latched ad would otherwise re-appear over the
   // next queue the visitor opens.
   adPending = false;
+  // …and so would the cadence: only the history gallery's queue has ads
+  adEvery = 0;
   emit();
 }
 
@@ -106,6 +108,8 @@ export function playerClipEnded() {
 /** Back to the previous queue item — a no-op at the first item. */
 export function playerPrev() {
   if (!current || current.index === 0) return;
+  // going back to one is watching it too — it counts toward the "3 media" beat
+  seenSinceAd++;
   current = { ...current, index: current.index - 1 };
   emit();
 }
@@ -143,8 +147,15 @@ export function usePlayerQueue(): PlayerQueue | null {
 let adEvery = 0;
 /** True while a story ad is on screen, holding the advance. */
 let adPending = false;
-/** Advances already paid for, so going back and forth cannot replay one. */
-const adShownAt = new Set<number>();
+/**
+ * Media WATCHED since the queue opened or the last ad — counting the one on
+ * screen. 🔴 Owner, 2026-10-14: "when a user watched 3 medias from history he
+ * or she should see the full screen ad". It was `nextIndex % adEvery`, the
+ * QUEUE POSITION, so opening at the 6th download showed an ad after ONE media
+ * and opening at the 5th after two. A count of what was actually watched is
+ * the same "3, then an ad" wherever the visitor starts.
+ */
+let seenSinceAd = 0;
 
 /** Open a queue that shows a story ad after every `every` items. */
 export function openPlayerQueueWithAds(
@@ -154,7 +165,7 @@ export function openPlayerQueueWithAds(
 ) {
   adEvery = Math.max(0, Math.floor(every));
   adPending = false;
-  adShownAt.clear();
+  seenSinceAd = 1; // the one tapped is the first watched
   openPlayerQueue(items, startIndex);
 }
 
@@ -164,17 +175,13 @@ export function isPlayerAdPending(): boolean {
 }
 
 /**
- * Should moving to `nextIndex` be interrupted by an ad?
- *
- * Counted on the DESTINATION so the rhythm is "3 media, then an ad", and
- * latched per position so a visitor tapping back and forth over the same
- * boundary is not shown the same ad repeatedly.
+ * Should moving to `nextIndex` be interrupted by an ad? Yes once `adEvery`
+ * media have been watched since the last one (or since the queue opened).
  */
 function adDueAt(nextIndex: number): boolean {
   if (adEvery <= 0 || adPending) return false;
   if (nextIndex <= 0 || nextIndex >= (current?.items.length ?? 0)) return false;
-  if (adShownAt.has(nextIndex)) return false;
-  return nextIndex % adEvery === 0;
+  return seenSinceAd >= adEvery;
 }
 
 /** Dismiss the story ad and complete the advance it was holding. */
@@ -184,6 +191,7 @@ export function playerAdDone() {
   if (current && current.index < current.items.length - 1) {
     current = { ...current, index: current.index + 1 };
   }
+  seenSinceAd = 1; // the media after the ad is the first of the next three
   emit();
 }
 
@@ -191,13 +199,16 @@ export function playerAdDone() {
  * The advance used by BOTH a tap and a natural clip end, with the ad check.
  *
  * Returns true when an ad took over instead of advancing, so the caller knows
- * the queue did not move.
+ * the queue did not move. When it returns false the caller advances, which is
+ * one more media watched.
  */
 function advanceWithAd(): boolean {
   if (!current) return false;
   const next = current.index + 1;
-  if (!adDueAt(next)) return false;
-  adShownAt.add(next);
+  if (!adDueAt(next)) {
+    seenSinceAd++;
+    return false;
+  }
   adPending = true;
   emit();
   return true;

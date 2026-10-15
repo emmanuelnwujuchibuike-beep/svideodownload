@@ -37,8 +37,10 @@ describe("media lock — no iOS lift on feed or chat media", () => {
 describe("Private posts (owner, 2026-10-12)", () => {
   it("the viewer watermark says frenzsave.com, not Frenz", () => {
     const g = code("features/sub/sub-gallery.tsx");
-    expect(g).toContain("{data.watermark} · frenzsave.com");
-    expect(g).not.toContain("{data.watermark} · Frenz");
+    // 2026-10-14: the moving mark now carries the creator's profile address too
+    expect(g).toContain("const text = viewer ? `${viewer} · ${where}` : where;");
+    expect(g).toContain("`frenzsave.com/u/${creatorHandle}` : \"frenzsave.com\"");
+    expect(g).not.toContain("· Frenz");
   });
   it("the viewer is full width: each slide is the whole stage, the media fills it unless its measured shape is truly different", () => {
     const g = code("features/sub/sub-gallery.tsx");

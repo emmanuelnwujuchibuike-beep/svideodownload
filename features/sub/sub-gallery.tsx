@@ -284,7 +284,7 @@ interface Opened {
   media: { kind: "image" | "video"; url: string; width: number | null; height: number | null }[];
   expiresAt: string;
   watermark: string | null;
-  /** the creator's public handle — the bottom-edge mark links to their profile */
+  /** the creator's public handle — the roving mark links to their profile */
   creatorHandle?: string | null;
 }
 
@@ -409,7 +409,7 @@ function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }: { pos
     shrunk into side bars. It starts BELOW the safe area (status bar,
     Dynamic Island) and ends above the home indicator — it never goes behind them. The top
     bar floats over the media; several items swipe sideways like a carousel. The viewer's
-    corner-hopping watermark and the creator's bottom-edge mark ride on the media itself.
+    corner-hopping watermark (viewer's handle + the creator's profile link) rides on the media.
   */
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label="Subscriber post" className="fixed inset-0 z-[80] bg-black text-white" onContextMenu={block}>
@@ -450,25 +450,12 @@ function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }: { pos
                   ) : (
                     <video src={m.url} controls playsInline autoPlay={i === 0} preload="metadata" controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture disableRemotePlayback onContextMenu={block} onLoadedMetadata={(e) => measure(e.currentTarget.videoWidth, e.currentTarget.videoHeight)} className={cn("absolute inset-0 h-full w-full bg-black", fit)} />
                   )}
-                  {/*
-                    The creator's address along the bottom edge (owner 2026-10-12, "like onlyfans.com/<user>"):
-                    a screenshot that leaves Frenz still says where to find them — their PUBLIC profile, never
-                    this private post. Above a video's controls, so it never covers them.
-                  */}
-                  {data.creatorHandle ? (
-                    <a
-                      href={`/u/${encodeURIComponent(data.creatorHandle)}`}
-                      className={cn("absolute right-3 z-[2] select-none text-[12.5px] font-semibold tracking-[0.01em] text-white/85 [text-shadow:0_1px_3px_rgba(0,0,0,0.75)]", m.kind === "video" ? "bottom-16" : "bottom-3")}
-                    >
-                      frenzsave.com/u/{data.creatorHandle}
-                    </a>
-                  ) : null}
                 </div>
               );
             })}
           </div>
         )}
-        {data?.watermark ? <RovingWatermark text={`${data.watermark} · frenzsave.com`} /> : null}
+        {data && (data.watermark || data.creatorHandle) ? <RovingWatermark viewer={data.watermark} creatorHandle={data.creatorHandle ?? null} /> : null}
 
         {/* the top bar floats over the media, inside the safe area like the History player */}
         <div className="absolute inset-x-0 top-0 z-[3] flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent px-3 pb-6 pt-2">
@@ -755,24 +742,34 @@ function shortAgo(iso: string): string {
  * post watermark that is scattered on the screen, and use the watermarks that
  * appears at the top and bottom switching every 3 seconds"). Same corners and
  * timing as a downloaded video's watermark (lib/media/watermark-mark-geometry.ts).
- * Clear of the top bar, and above a video's controls and the creator's mark.
+ * Clear of the top bar, and above a video's controls.
+ *
+ * It is the ONLY mark (owner, 2026-10-14: "the one moving alone is enough, and
+ * add /the user's name that opens the profile page in the moving watermark"):
+ * the creator's fixed bottom-edge address is gone and its link rides here —
+ * "@viewer · frenzsave.com/u/<creator>", a tap opening the creator's PUBLIC
+ * profile, never this private post.
  */
-function RovingWatermark({ text }: { text: string }) {
+function RovingWatermark({ viewer, creatorHandle }: { viewer: string | null; creatorHandle: string | null }) {
   const [k, setK] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => setK((v) => (v + 1) % WATERMARK_CORNERS.length), WATERMARK_CORNER_SECONDS * 1000);
     return () => window.clearInterval(id);
   }, []);
   const corner = WATERMARK_CORNERS[k]!;
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "pointer-events-none absolute z-[2] select-none whitespace-nowrap rounded-full bg-black/30 px-2.5 py-1 text-[12px] font-semibold text-white/75 [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]",
-        corner.startsWith("top") ? "top-16" : "bottom-28",
-        corner.endsWith("left") ? "left-3" : "right-3",
-      )}
-    >
+  const where = creatorHandle ? `frenzsave.com/u/${creatorHandle}` : "frenzsave.com";
+  const text = viewer ? `${viewer} · ${where}` : where;
+  const cls = cn(
+    "absolute z-[2] select-none whitespace-nowrap rounded-full bg-black/30 px-2.5 py-1 text-[12px] font-semibold text-white/75 [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]",
+    corner.startsWith("top") ? "top-16" : "bottom-28",
+    corner.endsWith("left") ? "left-3" : "right-3",
+  );
+  return creatorHandle ? (
+    <a href={`/u/${encodeURIComponent(creatorHandle)}`} aria-label={`Open @${creatorHandle}'s profile`} className={cls}>
+      {text}
+    </a>
+  ) : (
+    <span aria-hidden className={cn("pointer-events-none", cls)}>
       {text}
     </span>
   );

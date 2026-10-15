@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, ChevronDown, ChevronRight, Loader2, Sparkles, type LucideIcon } from "lucide-react";
-import { useId, useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode, type Ref } from "react";
 
 import { aiButtonClass } from "@/features/ai/design/ai-button";
 import { formatCredits } from "@/lib/ai/credits/units";
@@ -385,6 +385,7 @@ export function AiPromptBox({
   rows = 4,
   disabled,
   aside,
+  inputRef,
 }: {
   label: string;
   hint?: string | null;
@@ -396,6 +397,8 @@ export function AiPromptBox({
   disabled?: boolean;
   /** Top-right of the label row (the reference's sparkle button goes here when a tool has one). */
   aside?: ReactNode;
+  /** the textarea — a prompt suggestion focuses it and grows it to show the whole text (2026-10-15) */
+  inputRef?: Ref<HTMLTextAreaElement>;
 }) {
   const id = useId();
   return (
@@ -411,6 +414,7 @@ export function AiPromptBox({
       </div>
       <div className="relative mt-3 rounded-2xl bg-card ring-1 ring-inset ring-black/[0.08] transition focus-within:ring-2 focus-within:ring-indigo-400 dark:ring-white/10">
         <textarea
+          ref={inputRef}
           id={id}
           value={value}
           disabled={disabled}

@@ -2564,3 +2564,74 @@ Important: inspect the current implementation and architecture first. Do not rew
 | C | Landing promo | ⏸ queued | — | not one of the 11; owner decisions recorded above |
 
 **Hand-off 2026-10-06:** pages 1–7 pushed on the owner instruction. Resume from page 8; read `docs/agent-memory/handoff-2026-10-06-ai-redesign-pages-1-7.md` and `docs/agent-memory/ai-redesign-lessons-pages-1-3.md` first.
+
+---
+
+## Smart video prompt suggestions (2026-10-15)
+
+Owner's brief: a Prompt Suggestions Library on Text to Video and Image to Video, so people who
+don't know how to write a video prompt can pick a professional one. It enhances the existing
+workspaces. Generation, the Kling integration, quoting and credits are untouched.
+
+**Where it lives**
+
+| Part | File |
+|---|---|
+| Section + Explore button + requirement notice | `features/ai/prompts/prompt-ideas.tsx` (in each workspace, just above the prompt box) |
+| Library (sheet on phones, modal from `sm`) | `features/ai/prompts/prompt-library.tsx` — a dynamic import, loaded on the first tap |
+| Schema, capabilities, readiness, insert | `lib/ai/prompts/schema.ts` |
+| Search (local, instant, synonyms) | `lib/ai/prompts/search.ts` |
+| Catalog + its one loader | `lib/ai/prompts/catalog-text-to-video.ts` (114), `catalog-image-to-video.ts` (76), `catalog.ts` |
+| Focus / grow the field after insert | `features/ai/prompts/show-inserted.ts`; `AiPromptBox` gained an optional `inputRef` |
+
+**Behaviour.**
+- **Choosing a prompt:** the library closes, and the full prompt goes into the prompt field. If
+  the field already has text, a Replace / Add / Cancel choice comes first. The field then
+  focuses and grows to show the prompt (up to 60 % of the screen, then it scrolls). Nothing
+  else changes: the photo, references, settings, generation and credits stay as they were.
+- **One request:** when the field goes from empty to filled, the workspace's existing price
+  check (`POST /api/ai/video/quote`) runs once, exactly as it does on the first typed character
+  (`use-video-generation.ts`). It only reads a price. It was left as it is because the brief
+  says not to change existing requests.
+- **Recent and Favourites:** kept on the device (localStorage, per tool). No backend, no
+  analytics per keystroke.
+
+**References and model capabilities.** Both tools run Kling v3 Omni. `WORKSPACE_CAPABILITIES`
+records what the pipeline code really does:
+- **Text to Video:** reference images, plus a reference video to *edit* ("Edit this video",
+  base_video) or to *copy motion* from (feature_video).
+- **Image to Video:** the photo is the first frame, plus reference images. A reference video is
+  used for motion only, because the server forces `feature`.
+
+So character replacement inside an existing clip is a Text to Video prompt that needs a
+reference video in "Edit this video" mode. The notice says what is missing:
+- "Go to references" or "Add your photo" scrolls to the slot, which the member taps (iOS needs
+  the tap for the file picker).
+- "Use 'Edit this video'" is a button the member presses. It may change the price, and the
+  notice says so.
+- A suggestion the current tool cannot do points to the tool that can ("Open in Text to Video",
+  carrying the prompt through sessionStorage).
+
+Nothing switches tools, modes or models by itself.
+
+**Admin-ready, local for now.** Every suggestion already carries id, mode, category, title,
+description, prompt, requiredAssets, supportedModelCapabilities, compatibleModels, tags,
+featured, active, sortOrder, thumbnail, createdAt and updatedAt. Moving the catalog to Supabase
+replaces `loadPromptLibrary` only. Inactive entries are never shown (tested).
+
+**Verified.**
+- **Unit tests:** `lib/ai/prompts/catalog.test.ts` checks counts per category, length within
+  the model's 2,500 characters, the brief's examples word for word, readiness, search and
+  insert. `features/ai/prompts/prompt-wiring.test.ts` checks the wiring, that no request is made,
+  lazy loading and accessibility.
+- **Real build in Chromium** (iPhone 13 and 1280 px), through a temporary local page, since
+  removed: everything in §11 passes, including no generation, credit or other request on
+  choosing beyond the price check above.
+
+**Not done / honest limits.**
+- No thumbnails ship. Results aren't predictable, and stock pictures would misrepresent them,
+  so the preview is the full prompt itself.
+- The library's titles, descriptions and labels are translated by the page translator like any
+  other UI. The prompt preview is marked `translate="no"`, so it always shows exactly the
+  (English) text that goes into the field.
+- Prompts can't promise a multi-scene film; the story prompts are written as one scene.

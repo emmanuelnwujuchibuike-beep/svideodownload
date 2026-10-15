@@ -1,7 +1,7 @@
 "use client";
 
 import { Clock, Gauge, ImagePlay, Palette } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AiCreditStrip } from "@/features/ai/design/ai-credit-strip";
 import {
@@ -16,6 +16,8 @@ import {
   AiSettingRow,
   AiStylePicker,
 } from "@/features/ai/design/ai-generate";
+import { PromptIdeas } from "@/features/ai/prompts/prompt-ideas";
+import { scrollToSection, showInsertedPrompt } from "@/features/ai/prompts/show-inserted";
 import { FreeVideoNotice } from "@/features/ai/video/free-video-notice";
 import { AiShowcase } from "@/features/ai/design/ai-showcase";
 import { AiPageShell, AiPanel, AiToolTitle } from "@/features/ai/design/ai-surface";
@@ -142,6 +144,14 @@ export function ImageToVideoWorkspace({
 
   // Image to Video's prompt is optional, so the card falls back to the tool's name.
   const gen = useVideoGeneration({ feature: "image_to_video", input, ready: !!firstFrameUrl, label: prompt.trim() || "From your image" });
+  // prompt suggestions (2026-10-15): they only ever set the prompt text; these let them show it and point at the photo or references
+  const promptRef = useRef<HTMLTextAreaElement | null>(null);
+  const photoRef = useRef<HTMLDivElement | null>(null);
+  const referencesRef = useRef<HTMLDivElement | null>(null);
+  const assets = useMemo(
+    () => ({ firstFrame: !!firstFrameUrl, referenceImages: referenceImageUrls.length, referenceVideo: !!referenceVideoUrl }),
+    [firstFrameUrl, referenceImageUrls.length, referenceVideoUrl],
+  );
   const locked = gen.status === "submitting" || gen.status === "running";
 
   /*
@@ -172,6 +182,7 @@ export function ImageToVideoWorkspace({
 
       {/* ── THE ONE CARD: the photo first and largest (§14) ──────────────── */}
       <AiPanel className="mt-5 space-y-4">
+        <div ref={photoRef} className="scroll-mt-24">
         <AiImageDrop
           label="Your photo"
           hint="The video opens on this image and animates from it."
@@ -181,8 +192,23 @@ export function ImageToVideoWorkspace({
           accept={KLING_OMNI.images.mimeTypes}
           maxBytes={KLING_OMNI.images.maxBytes}
         />
+        </div>
+
+        {/* Prompt ideas (owner, 2026-10-15): compact here, the library loads on the first tap */}
+        <PromptIdeas
+          mode="image_to_video"
+          prompt={prompt}
+          onPromptChange={setPrompt}
+          max={KLING_OMNI.prompt.maxChars}
+          assets={assets}
+          onShowReferences={() => scrollToSection(firstFrameUrl ? referencesRef.current : photoRef.current)}
+          onInserted={() => showInsertedPrompt(promptRef.current)}
+          base={base}
+          disabled={locked}
+        />
 
         <AiPromptBox
+          inputRef={promptRef}
           label="What should happen?"
           hint="Optional — describe the motion, or leave it and let the model decide."
           value={prompt}
@@ -219,13 +245,15 @@ export function ImageToVideoWorkspace({
             />
           </div>
 
-          <AiReferenceSection
-            images={referenceImageUrls}
-            onImagesChange={setReferenceImages}
-            videoUrl={referenceVideoUrl}
-            onVideoChange={setReferenceVideo}
-            disabled={locked}
-          />
+          <div ref={referencesRef} className="scroll-mt-24">
+            <AiReferenceSection
+              images={referenceImageUrls}
+              onImagesChange={setReferenceImages}
+              videoUrl={referenceVideoUrl}
+              onVideoChange={setReferenceVideo}
+              disabled={locked}
+            />
+          </div>
         </div>
 
         <AiAdvancedSettings>

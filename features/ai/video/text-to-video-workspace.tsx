@@ -1,7 +1,7 @@
 "use client";
 
 import { Clock, Palette, Play, RectangleHorizontal } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AiCreditStrip } from "@/features/ai/design/ai-credit-strip";
 import {
@@ -16,6 +16,8 @@ import {
   AiSettingRow,
   AiStylePicker,
 } from "@/features/ai/design/ai-generate";
+import { PromptIdeas } from "@/features/ai/prompts/prompt-ideas";
+import { scrollToSection, showInsertedPrompt } from "@/features/ai/prompts/show-inserted";
 import { FreeVideoNotice } from "@/features/ai/video/free-video-notice";
 import { AiShowcase } from "@/features/ai/design/ai-showcase";
 import { AiPageShell, AiPanel, AiToolTitle } from "@/features/ai/design/ai-surface";
@@ -164,6 +166,13 @@ export function TextToVideoWorkspace({
   );
 
   const gen = useVideoGeneration({ feature: "text_to_video", input, ready: prompt.trim().length > 0, label: prompt.trim() });
+  // prompt suggestions (2026-10-15): they only ever set the prompt text; these let them show it and point at the references
+  const promptRef = useRef<HTMLTextAreaElement | null>(null);
+  const referencesRef = useRef<HTMLDivElement | null>(null);
+  const assets = useMemo(
+    () => ({ firstFrame: false, referenceImages: referenceImageUrls.length, referenceVideo: !!referenceVideoUrl, referenceVideoMode }),
+    [referenceImageUrls.length, referenceVideoUrl, referenceVideoMode],
+  );
   const locked = gen.status === "submitting" || gen.status === "running";
 
   /*
@@ -191,7 +200,21 @@ export function TextToVideoWorkspace({
 
       {/* ── THE ONE CARD: input first and largest (§14), then the settings ─── */}
       <AiPanel className="mt-5 space-y-3">
+        {/* Prompt ideas (owner, 2026-10-15): compact here, the library loads on the first tap */}
+        <PromptIdeas
+          mode="text_to_video"
+          prompt={prompt}
+          onPromptChange={setPrompt}
+          max={KLING_OMNI.prompt.maxChars}
+          assets={assets}
+          onShowReferences={() => scrollToSection(referencesRef.current)}
+          onUseEditMode={() => setReferenceVideoMode("base")}
+          onInserted={() => showInsertedPrompt(promptRef.current)}
+          base={base}
+          disabled={locked}
+        />
         <AiPromptBox
+          inputRef={promptRef}
           label="Describe your video"
           hint={`Up to ${KLING_OMNI.prompt.maxChars.toLocaleString("en-US")} characters. Be as detailed as you want — scene, style, mood, action.`}
           value={prompt}
@@ -227,13 +250,15 @@ export function TextToVideoWorkspace({
           />
         </div>
 
-        <AiReferenceSection
-          images={referenceImageUrls}
-          onImagesChange={setReferenceImages}
-          videoUrl={referenceVideoUrl}
-          onVideoChange={setReferenceVideo}
-          disabled={locked}
-        />
+        <div ref={referencesRef} className="scroll-mt-24">
+          <AiReferenceSection
+            images={referenceImageUrls}
+            onImagesChange={setReferenceImages}
+            videoUrl={referenceVideoUrl}
+            onVideoChange={setReferenceVideo}
+            disabled={locked}
+          />
+        </div>
 
         {referenceVideoUrl ? (
           <AiField

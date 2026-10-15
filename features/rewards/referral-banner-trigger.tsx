@@ -3,9 +3,8 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
 
-import { isPlayerOpen, onPlayerChange, SAVED_TO_DEVICE_EVENT } from "@/features/downloads/player-store";
-import { DOWNLOAD_COMPLETED_EVENT } from "@/lib/downloads/completion-event";
-import { countDownload, DAILY_KEY, readDaily } from "@/features/rewards/referral-daily";
+import { DOWNLOAD_COMPLETED_EVENT, DOWNLOAD_PREPARING_EVENT } from "@/lib/downloads/completion-event";
+import { countDownload, DAILY_KEY, isSnoozed, readDaily, SNOOZE_KEY } from "@/features/rewards/referral-daily";
 import { sharedToday } from "@/features/rewards/referral-shared-today";
 import { anotherModalOpen } from "@/lib/ui/modal-open";
 
@@ -48,6 +47,12 @@ const ReferralBanner = dynamic(() => import("@/features/rewards/referral-banner"
  * that day", then "it should show on the first download of the day"): no longer every
  * download from the 3rd on. ONCE a day, on the first completed download of that day
  * (referral-daily.ts).
+ *
+ * 2026-10-15 (owner: "it shouldn't show when a Download finish, it should show during preparing
+ * stage … not really intrusive"): it now rides DOWNLOAD_PREPARING_EVENT — the moment a download
+ * enters its preparing stage — and is dropped if that download completes before it opened. The
+ * "I understood, don't show this again this week" button snoozes it a week (SNOOZE_KEY); the
+ * ordinary Skip does not, so it comes back on the next day's first download.
  */
 const BURST_MS = 20_000;
 
@@ -72,9 +77,10 @@ export function ReferralBannerTrigger() {
     // the network ad's dialog, or a paid campaign's (Ad Platform Part 5)
     // ANY full-screen dialog (an ad, a sheet) — never stack on it (lib/ui/modal-open.ts)
     const adOpen = () => anotherModalOpen();
-    const onCompleted = () => {
+    const onPreparing = () => {
       let due = false;
       try {
+        if (isSnoozed(localStorage.getItem(SNOOZE_KEY), new Date())) return;
         const next = countDownload(readDaily(localStorage.getItem(DAILY_KEY)), new Date());
         localStorage.setItem(DAILY_KEY, JSON.stringify(next.state));
         due = next.due;
@@ -84,44 +90,29 @@ export function ReferralBannerTrigger() {
       if (!due || Date.now() - lastShown < BURST_MS || sharedToday()) return;
       lastShown = Date.now();
       const started = Date.now();
-      // give the ad a moment to open first, then wait for it to close
+      // give an ad a moment to open first, then wait for it to close — but never past the
+      // preparing stage: a download that already finished (onCompleted) cancels this
       const tryShow = () => {
         if (adOpen()) {
           // still blocked after a minute: skip this time rather than open on top of it
           if (Date.now() - started < 60_000) waitTimer = window.setTimeout(tryShow, 1000);
           return;
         }
-        if (isPlayerOpen()) {
-          waitForDelivery();
-          return;
-        }
         setShow(true);
       };
-      waitTimer = window.setTimeout(tryShow, 1500);
+      waitTimer = window.setTimeout(tryShow, 800);
     };
-    // the viewer is open: show once the file is really delivered (saved) or the viewer closes
-    let stopWaiting: (() => void) | null = null;
-    const waitForDelivery = () => {
-      if (stopWaiting) return;
-      const done = () => {
-        stopWaiting?.();
-        stopWaiting = null;
-        if (!sharedToday() && !anotherModalOpen()) setShow(true);
-      };
-      const offPlayer = onPlayerChange(() => {
-        if (!isPlayerOpen()) done();
-      });
-      window.addEventListener(SAVED_TO_DEVICE_EVENT, done);
-      stopWaiting = () => {
-        offPlayer();
-        window.removeEventListener(SAVED_TO_DEVICE_EVENT, done);
-      };
+    // the file finished before the modal opened: it is a preparing-stage prompt only, so drop it
+    const onCompleted = () => {
+      if (waitTimer !== null) window.clearTimeout(waitTimer);
+      waitTimer = null;
     };
+    window.addEventListener(DOWNLOAD_PREPARING_EVENT, onPreparing);
     window.addEventListener(DOWNLOAD_COMPLETED_EVENT, onCompleted);
     return () => {
       window.removeEventListener(DOWNLOAD_COMPLETED_EVENT, onCompleted);
+      window.removeEventListener(DOWNLOAD_PREPARING_EVENT, onPreparing);
       if (waitTimer !== null) window.clearTimeout(waitTimer);
-      stopWaiting?.();
     };
   }, [setShow]);
   return show ? <ReferralBanner onClose={close} /> : null;

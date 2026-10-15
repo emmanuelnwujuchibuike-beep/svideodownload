@@ -10,7 +10,7 @@ import { STORAGE_FULL_EVENT, type StorageFullDetail } from "@/lib/downloads/stor
 import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
 import { toast } from "@/features/ui/toast";
 import { isIosDevice, saveBlob, saveFilesToDevice, saveToDevice } from "@/lib/client-download";
-import { DOWNLOAD_COMPLETED_EVENT } from "@/lib/downloads/completion-event";
+import { DOWNLOAD_COMPLETED_EVENT, DOWNLOAD_PREPARING_EVENT } from "@/lib/downloads/completion-event";
 import { DOWNLOAD_502_MESSAGE, DOWNLOAD_FAILED_MESSAGE, downloadFailureMessage } from "@/lib/downloads/failure-copy";
 import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
 import type { MediaKind, PlatformId } from "@/types";
@@ -503,6 +503,11 @@ async function run(id: string) {
     slowPrepare: false,
     attempts: task.attempts ?? 1,
   });
+  try {
+    window.dispatchEvent(new Event(DOWNLOAD_PREPARING_EVENT));
+  } catch {
+    /* a listener must never fail the download */
+  }
 
   /*
     A long prepare is EXPLAINED, not left silent (owner: "when a preparing

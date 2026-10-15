@@ -20,3 +20,11 @@
  * loaded whenever a download is running — carries the weight.
  */
 export const DOWNLOAD_COMPLETED_EVENT = "frenz:download:completed";
+
+/**
+ * Fired when a download ENTERS its preparing stage (the server is extracting the file, no byte has
+ * streamed yet). The "Earn credits" modal rides this, not the completion event: owner, 2026-10-15,
+ * "it shouldn't show when a download finishes, it should show during preparing". Same
+ * dependency-free-constant reason as above.
+ */
+export const DOWNLOAD_PREPARING_EVENT = "frenz:download:preparing";

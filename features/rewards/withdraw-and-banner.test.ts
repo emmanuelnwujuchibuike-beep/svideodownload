@@ -43,8 +43,8 @@ describe("the referral banner after a download", () => {
     expect(live).not.toMatch(/earn \d+ credit/);
     expect(live).toContain("Earn credits with Frenzsave");
     expect(live).toContain("{referralSentence(rules, n)}");
-    expect(live).toContain("withdraw them once your account has reached the qualifications");
-    expect(banner).toContain("const SKIP_AFTER_S = 4;");
+    expect(live).toContain("withdraw once your account is");
+    expect(banner).toContain("const SKIP_AFTER_S = 5;");
     expect(banner).toContain("disabled={!canSkip}");
     expect(banner).toContain("Sign in to get your link");
   });

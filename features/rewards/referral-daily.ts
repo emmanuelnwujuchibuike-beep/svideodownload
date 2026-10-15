@@ -29,6 +29,23 @@ export function countDownload(prev: DailyState | null, now: Date): { state: Dail
   return { state, due: !state.shown && state.count >= DAILY_AT };
 }
 
+/**
+ * "I understood — don't show this again this week" (owner, 2026-10-15). Only THAT button writes
+ * it; the ordinary Skip never does, so a skipped modal is back on the next day's first download.
+ */
+export const SNOOZE_KEY = "frenz:referral-snooze-until";
+export const SNOOZE_DAYS = 7;
+
+export function snoozeUntil(now: Date): number {
+  return now.getTime() + SNOOZE_DAYS * 24 * 60 * 60 * 1000;
+}
+
+/** True while a stored snooze deadline is still in the future; malformed or absent → not snoozed. */
+export function isSnoozed(raw: string | null, now: Date): boolean {
+  const t = raw ? Number(raw) : NaN;
+  return Number.isFinite(t) && t > now.getTime();
+}
+
 /** Parse whatever is stored; anything malformed counts as a fresh day. */
 export function readDaily(raw: string | null): DailyState | null {
   if (!raw) return null;

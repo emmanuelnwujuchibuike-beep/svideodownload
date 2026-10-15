@@ -23,7 +23,7 @@ export const MOMENT_SLOTS: readonly SlotSpec[] = [
   */
   { id: "hd_download_reward", kind: "moment", paidPlacement: "hd_download_reward", networkZone: null, pages: ["download", "download_result"], aspect: null, order: PAID_FIRST },
   /*
-    0242 (owner, 2026-10-14): the History viewer's full-screen ad after every 3
+    0243 (owner, 2026-10-14): the History viewer's full-screen ad after every 3
     media — the moment the network's `history_story_ad` zone already serves
     (StoryAdSlide). The player asks the paid layer first (history-story-event.ts).
   */

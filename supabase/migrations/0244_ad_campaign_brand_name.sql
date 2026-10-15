@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
---  0243 — each ad shows the brand name from ITS OWN application (2026-10-15)
+--  0244 — each ad shows the brand name from ITS OWN application (2026-10-15)
 -- ═══════════════════════════════════════════════════════════════════════════
 --
 -- Owner, with a screenshot of the full-screen ad's header ("Frenzsave · AD"):
@@ -56,7 +56,7 @@ language sql stable security definer set search_path = public as $$
         'id', c.id, 'placement_code', p.code, 'status', c.status,
         'payment_verified', c.payment_verified_at is not null,
         'advertiser_status', a.status,
-        -- 0243: the brand THIS campaign was applied under; the account's latest name only for a campaign from before 0243
+        -- 0244: the brand THIS campaign was applied under; the account's latest name only for a campaign from before 0244
         'advertiser_name', coalesce(nullif(left(btrim(c.brand_name), 60), ''), a.display_name),
         'start_at', c.start_at, 'end_at', c.end_at, 'target_pages', c.target_pages,
         'slot_number', (select min(sl.slot_number) from public.ad_slots sl

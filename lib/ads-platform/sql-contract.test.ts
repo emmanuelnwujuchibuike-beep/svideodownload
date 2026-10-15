@@ -74,20 +74,20 @@ describe("TS ⇄ SQL: one vocabulary", () => {
     const formats211 = M211.slice(M211.indexOf("insert into public.ad_formats"), M211.indexOf("update public.ad_formats"));
     expect([...formats.matchAll(/\('([A-Z_]+)', '/g), ...formats211.matchAll(/\('([A-Z_]+)', '/g)].map((m) => m[1])).toEqual([...AD_FORMAT_CODES]);
     const placements = SQL.slice(SQL.indexOf("insert into public.ad_placements"), SQL.indexOf("insert into public.ad_durations"));
-    // placements seeded after 0195, in migration order: 0203 (HD + batch download rewards), 0207 (history_grid), 0242 (history_story), then 0211 (all_slots) last in the list
+    // placements seeded after 0195, in migration order: 0203 (HD + batch download rewards), 0207 (history_grid), 0243 (history_story), then 0211 (all_slots) last in the list
     const M203 = readFileSync(join(process.cwd(), "supabase/migrations/0203_download_reward_placements.sql"), "utf8");
     const M207 = readFileSync(join(process.cwd(), "supabase/migrations/0207_ad_history_grid.sql"), "utf8");
     const rows207 = M207.slice(M207.indexOf("insert into public.ad_placements"));
     const rows211 = M211.slice(M211.indexOf("insert into public.ad_placements"));
-    const M242 = readFileSync(join(process.cwd(), "supabase/migrations/0242_ad_history_story.sql"), "utf8");
-    const rows242 = M242.slice(M242.indexOf("insert into public.ad_placements"));
-    const seeded = [...placements.matchAll(/\('([a-z_]+)', '/g), ...M203.matchAll(/\('([a-z_]+)', '/g), ...rows207.matchAll(/\('([a-z_]+)', '/g), ...rows242.matchAll(/\('([a-z_]+)', '/g), ...rows211.matchAll(/\('([a-z_]+)', '/g)].map((m) => m[1]);
+    const M243 = readFileSync(join(process.cwd(), "supabase/migrations/0243_ad_history_story.sql"), "utf8");
+    const rows243 = M243.slice(M243.indexOf("insert into public.ad_placements"));
+    const seeded = [...placements.matchAll(/\('([a-z_]+)', '/g), ...M203.matchAll(/\('([a-z_]+)', '/g), ...rows207.matchAll(/\('([a-z_]+)', '/g), ...rows243.matchAll(/\('([a-z_]+)', '/g), ...rows211.matchAll(/\('([a-z_]+)', '/g)].map((m) => m[1]);
     expect(seeded).toEqual([...AD_PLACEMENT_CODES]);
     expect(rows207).toMatch(/\('history_grid', 'History grid', '[^']+', 'CONTENT_BANNER', array\['history'\]/);
     expect(M207).toContain("on conflict (code) do nothing");
-    // 0242: the History viewer's full-screen ad takes images AND videos (the INTERSTITIAL format)
-    expect(rows242).toMatch(/\('history_story', 'History viewer', '[^']+', 'INTERSTITIAL', array\['history'\]/);
-    expect(M242).toContain("on conflict (code) do nothing");
+    // 0243: the History viewer's full-screen ad takes images AND videos (the INTERSTITIAL format)
+    expect(rows243).toMatch(/\('history_story', 'History viewer', '[^']+', 'INTERSTITIAL', array\['history'\]/);
+    expect(M243).toContain("on conflict (code) do nothing");
   });
 });
 
@@ -193,8 +193,8 @@ describe("RLS and grants", () => {
   });
 });
 
-describe("0243 — each ad shows the brand from its own application", () => {
-  const M = readFileSync(join(process.cwd(), "supabase/migrations/0243_ad_campaign_brand_name.sql"), "utf8");
+describe("0244 — each ad shows the brand from its own application", () => {
+  const M = readFileSync(join(process.cwd(), "supabase/migrations/0244_ad_campaign_brand_name.sql"), "utf8");
   const snapshot = M.slice(M.indexOf("create or replace function public.ad_serving_snapshot()"), M.indexOf("$$;", M.indexOf("create or replace function public.ad_serving_snapshot()")));
   const base = SQL.slice(SQL.indexOf("create or replace function public.ad_serving_snapshot()"), SQL.indexOf("$$;", SQL.indexOf("create or replace function public.ad_serving_snapshot()")));
   const norm = (x: string) => x.replace(/--.*$/gm, "").replace(/\s+/g, " ").trim();

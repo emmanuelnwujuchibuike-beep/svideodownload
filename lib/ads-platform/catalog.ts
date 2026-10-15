@@ -27,7 +27,7 @@ export const AD_FORMAT_CODES = [
 ] as const;
 export type AdFormatCode = (typeof AD_FORMAT_CODES)[number];
 
-/** Placements — where an ad is shown. Seeded by 0195 (`history_grid` by 0207, `history_story` by 0242). An admin may add rows, so the payload accepts any code. */
+/** Placements — where an ad is shown. Seeded by 0195 (`history_grid` by 0207, `history_story` by 0243). An admin may add rows, so the payload accepts any code. */
 export const AD_PLACEMENT_CODES = [
   "global_top_banner",
   "feed_banner",
@@ -44,7 +44,7 @@ export const AD_PLACEMENT_CODES = [
   "batch_download_reward",
   // 0207: the History grid tile
   "history_grid",
-  // 0242: the full-screen ad after every 3 media in the History viewer
+  // 0243: the full-screen ad after every 3 media in the History viewer
   "history_story",
   // 0211: the "All slots" package — not a physical slot; merged into every slot's rotation
   "all_slots",

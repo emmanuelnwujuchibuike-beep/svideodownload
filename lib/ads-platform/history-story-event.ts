@@ -1,5 +1,5 @@
 /**
- * The History viewer's question to the paid-ad layer (0242). Its own module, like
+ * The History viewer's question to the paid-ad layer (0243). Its own module, like
  * ./paid-reward-event.ts: the player imports only this string and function, never
  * the ad engine.
  */

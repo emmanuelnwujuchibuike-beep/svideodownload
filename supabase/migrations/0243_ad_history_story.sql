@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
---  0242 — a paid full-screen ad in the History viewer (2026-10-14)
+--  0243 — a paid full-screen ad in the History viewer (2026-10-14)
 -- ═══════════════════════════════════════════════════════════════════════════
 --
 -- Owner: "Ad doesn't show in the history. When a user watched 3 medias from

@@ -67,7 +67,7 @@ export function DownloadPlayer() {
     if (adPending && storyAdFilled === false) playerAdDone();
   }, [adPending, storyAdFilled]);
   /*
-    WHO fills the ad (0242, owner 2026-10-14: "include it to the self ad
+    WHO fills the ad (0243, owner 2026-10-14: "include it to the self ad
     application and service"). The paid layer is asked first, synchronously;
     a live `history_story` campaign that leads the slot's order takes it and
     completes the advance when its ad closes. Otherwise the network's story

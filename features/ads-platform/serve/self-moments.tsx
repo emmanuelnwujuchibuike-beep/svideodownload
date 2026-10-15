@@ -35,7 +35,7 @@ import { SelfInterstitial } from "./self-interstitial";
  *   return             INTERSTITIAL when someone comes back after ≥5 s away,
  *                      at most once per the format's admin gap (120 s seeded).
  *   History viewer     INTERSTITIAL (image or video) after every 3 media
- *                      watched in History (0242). The player asks; its "every
+ *                      watched in History (0243). The player asks; its "every
  *                      3 media" is the frequency rule, so the format's gap is
  *                      not applied (as Stories), and the page is always
  *                      `history` — the gallery also lives on / and /downloads.
@@ -55,7 +55,7 @@ interface Showing {
   page: string;
   reward: boolean;
   slot: string | undefined;
-  /** 0242: told when the ad closes (the History viewer completes its advance) */
+  /** 0243: told when the ad closes (the History viewer completes its advance) */
   after?: () => void;
   /** 0203: a download reward GATE — what to say, and who to tell how it ended */
   gate?: { text: string; onComplete: () => void; onDismiss: () => void; done: boolean };
@@ -63,7 +63,7 @@ interface Showing {
 
 const REWARD_PLACEMENTS = new Set(["ai_video_save_reward", "hd_download_reward", "batch_download_reward"]);
 
-/** 0242: the History viewer's placement — its own cadence, always the `history` page */
+/** 0243: the History viewer's placement — its own cadence, always the `history` page */
 const HISTORY_STORY = "history_story";
 
 interface Where {
@@ -169,7 +169,7 @@ export function SelfMoments() {
     return () => window.removeEventListener(PAID_REWARD_EVENT, onGate);
   }, [pick, open]);
 
-  // 0242: the History viewer holds its advance after every 3 media and asks; a live campaign that leads the slot takes it
+  // 0243: the History viewer holds its advance after every 3 media and asks; a live campaign that leads the slot takes it
   useEffect(() => {
     const onStory = (e: Event) => {
       const req = (e as CustomEvent<HistoryStoryAdRequest>).detail;

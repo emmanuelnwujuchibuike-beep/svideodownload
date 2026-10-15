@@ -82,12 +82,12 @@ describe("All slots", () => {
   });
 });
 
-describe("0242: All slots includes the History viewer's full-screen ad (owner, 2026-10-14: \"put it on all slot too\")", () => {
-  // the real seeded rows: INTERSTITIAL (0195: image or video, 30 s most) and history_story (0242: page history)
+describe("0243: All slots includes the History viewer's full-screen ad (owner, 2026-10-14: \"put it on all slot too\")", () => {
+  // the real seeded rows: INTERSTITIAL (0195: image or video, 30 s most) and history_story (0243: page history)
   const M195 = readFileSync("supabase/migrations/0195_ad_platform_foundation.sql", "utf8");
-  const M242 = readFileSync("supabase/migrations/0242_ad_history_story.sql", "utf8");
+  const M243 = readFileSync("supabase/migrations/0243_ad_history_story.sql", "utf8");
   const interstitial = /\('INTERSTITIAL', 'Interstitial', array\[([^\]]+)\], null, null, null, (\d+), (true|false), (\d+),/.exec(M195)!;
-  const history = /\('history_story', 'History viewer', '[^']+', '([A-Z_]+)', array\[([^\]]+)\]/.exec(M242)!;
+  const history = /\('history_story', 'History viewer', '[^']+', '([A-Z_]+)', array\[([^\]]+)\]/.exec(M243)!;
   const list = (s: string) => [...s.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]!);
   const withHistory = (campaigns: SnapshotCampaign[]): ServingSnapshot => {
     const base = snap(campaigns);

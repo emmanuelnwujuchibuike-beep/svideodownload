@@ -723,14 +723,14 @@ export async function submitApplication(db: Db, userId: string, input: SubmitInp
   // the advertiser's name on the profile they advertise under
   await ensureAdvertiser(db, userId, businessName);
   /*
-    0243 (owner, 2026-10-15: "It should be the brand name used in application"): the
+    0244 (owner, 2026-10-15: "It should be the brand name used in application"): the
     brand THIS application was made under, on each of its campaigns. The account's
     name above is only the next application's prefill. An ad shows its own campaign's
     brand, so applying later for another brand never renames the ads already running.
-    Best-effort until 0243 runs, when the ads keep showing the account's name.
+    Best-effort until 0244 runs, when the ads keep showing the account's name.
   */
   const { error: brandErr } = await db.from("ad_campaigns").update({ brand_name: businessName }).in("id", all.map((r) => r.id));
-  if (brandErr) console.warn("[ads-platform] brand_name not saved (0243 not applied?)", { error: brandErr.message });
+  if (brandErr) console.warn("[ads-platform] brand_name not saved (0244 not applied?)", { error: brandErr.message });
 
   // the creative carries the link and the copy - on every campaign of the application
   const now = new Date().toISOString();

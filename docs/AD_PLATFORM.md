@@ -1152,6 +1152,12 @@ application and service."
   the shared full-screen layout (skip countdown, tap for details) and completes the
   advance on close. The "every 3 media" cadence is its frequency rule, so the format's
   120 s gap does not apply (as Stories).
+- **All slots (owner: "put it on all slot too"):** an All-slots campaign joins this
+  rotation like every other slot's (`eligibleForPlacement`, 0211). Its image always fits;
+  its video fits within INTERSTITIAL's 30 s, and ALL_SLOTS allows 15 s at most anyway.
+  The slot's own `history_story` buyers come first, and the campaign's own page choice
+  still applies. Tested on the real seeded rows (`all-slots.test.ts`, with a mutant).
+  The `/advertise/video-ads` guide lists the History viewer moment and All slots.
 - **Not done (honest):** when the admin puts the network first and the network then
   has nothing, the paid ad does not step in. The moment is skipped as before. ExoClick's
   interstitial, if that is what the network serves there, still returns on *show*, so

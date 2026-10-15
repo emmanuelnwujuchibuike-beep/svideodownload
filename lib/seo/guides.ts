@@ -629,6 +629,8 @@ export const GUIDES: readonly Guide[] = [
           "Welcome back — when someone returns to Frenzsave after a short time away, at most once in a set interval.",
           "Sponsor video — beside an AI video save that has already started. It never blocks the save.",
           "Reward videos — offered before an HD or batch download for people who choose to watch.",
+          "History viewer — an image or a video after every three downloads someone watches in their History.",
+          "Every full-screen moment at once, alongside every other place, with the All slots package.",
         ],
       },
       {

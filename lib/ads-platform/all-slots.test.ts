@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { eligibleForPlacement, type ServingSnapshot, type SnapshotCampaign, type SnapshotCreative, type SnapshotFormat } from "./eligibility";
+import { eligibleForPlacement, getEligibleAds, type ServingSnapshot, type SnapshotCampaign, type SnapshotCreative, type SnapshotFormat } from "./eligibility";
+import { MOMENT_SLOTS } from "./slot-moments";
 
 /**
  * 0211 — "All slots" (owner, 2026-10-09): "All slot shows on all available
@@ -78,6 +79,44 @@ describe("All slots", () => {
     const s = snap([paused, unpaid, campaign("feed-only", "feed_banner", creative("CONTENT_BANNER", "image"))]);
     expect(eligibleForPlacement(s, "global_top_banner", NOW)).toEqual([]);
     expect(eligibleForPlacement(s, "feed_banner", NOW).map((a) => a.c)).toEqual(["feed-only"]);
+  });
+});
+
+describe("0242: All slots includes the History viewer's full-screen ad (owner, 2026-10-14: \"put it on all slot too\")", () => {
+  // the real seeded rows: INTERSTITIAL (0195: image or video, 30 s most) and history_story (0242: page history)
+  const M195 = readFileSync("supabase/migrations/0195_ad_platform_foundation.sql", "utf8");
+  const M242 = readFileSync("supabase/migrations/0242_ad_history_story.sql", "utf8");
+  const interstitial = /\('INTERSTITIAL', 'Interstitial', array\[([^\]]+)\], null, null, null, (\d+), (true|false), (\d+),/.exec(M195)!;
+  const history = /\('history_story', 'History viewer', '[^']+', '([A-Z_]+)', array\[([^\]]+)\]/.exec(M242)!;
+  const list = (s: string) => [...s.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]!);
+  const withHistory = (campaigns: SnapshotCampaign[]): ServingSnapshot => {
+    const base = snap(campaigns);
+    return {
+      ...base,
+      formats: [...base.formats, fmt("INTERSTITIAL", list(interstitial[1]!), { slot_count: Number(interstitial[2]), no_consecutive_repeat: interstitial[3] === "true", max_duration_seconds: Number(interstitial[4]), min_gap_seconds: 120 })],
+      placements: [...base.placements, { code: "history_story", format_code: history[1]!, page_scope: list(history[2]!), enabled: true, priority: 100 }],
+    };
+  };
+
+  it("an All-slots IMAGE and VIDEO both join the History viewer's rotation, after its own buyers", () => {
+    const s = withHistory([
+      campaign("all-img", "all_slots", creative("ALL_SLOTS", "image"), 3),
+      campaign("all-vid", "all_slots", creative("ALL_SLOTS", "video", { duration_seconds: 12 }), 2),
+      campaign("own", "history_story", creative("INTERSTITIAL", "video", { duration_seconds: 20 }), 1, 1),
+    ]);
+    expect(getEligibleAds(s, { placement: "history_story", page: "history", now: NOW }).map((a) => a.c)).toEqual(["own", "all-img", "all-vid"]);
+  });
+
+  it("follows the campaign's own page choice: All slots on every page shows there, one aimed only at the feed does not", () => {
+    const everywhere = { ...campaign("everywhere", "all_slots", creative("ALL_SLOTS", "image")), target_pages: ["all_pages"] };
+    const feedOnly = { ...campaign("feed-only", "all_slots", creative("ALL_SLOTS", "image")), target_pages: ["feed"] };
+    expect(getEligibleAds(withHistory([everywhere, feedOnly]), { placement: "history_story", page: "history", now: NOW }).map((a) => a.c)).toEqual(["everywhere"]);
+  });
+
+  it("teeth: the moment slot really carries history_story, and a paused All-slots campaign shows nowhere", () => {
+    expect(MOMENT_SLOTS.find((x) => x.paidPlacement === "history_story")?.id).toBe("history_story_ad");
+    const paused = { ...campaign("p", "all_slots", creative("ALL_SLOTS", "image")), status: "paused" };
+    expect(getEligibleAds(withHistory([paused]), { placement: "history_story", page: "history", now: NOW })).toEqual([]);
   });
 });
 

@@ -17,6 +17,12 @@ RUN npm ci
 # ---- builder ----
 FROM base AS builder
 WORKDIR /app
+# 🔴 The build needs more than Node's default heap (~2 GB): webpack ran out of memory at
+# 1.9 GB and the Railway build failed (2026-10-15, reproduced from a clean checkout; the
+# commit before that day's work failed the same way, so it is the app's size, not one
+# change). 4 GB passes with ~4.9 GB peak memory across the build's processes. Build stage
+# only: the running server keeps Node's default.
+ENV NODE_OPTIONS=--max-old-space-size=4096
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build

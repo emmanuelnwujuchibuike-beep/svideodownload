@@ -3,23 +3,37 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-import { isCriticalActivityInProgress, onCriticalActivityIdle } from "@/lib/pwa/activity-lock";
+import { isCriticalActivityInProgress } from "@/lib/pwa/activity-lock";
 import { BAKED_APP_BUILD, fetchServerBuild } from "@/lib/pwa/app-version";
+import { mayCarryUpdate } from "@/lib/pwa/deferred-update";
 import { isStandalone } from "@/lib/pwa/platform";
 import { serviceWorkerContainer } from "@/lib/pwa/service-worker-container";
 
-/** Reloads now, or — if a critical section (e.g. an in-flight upload) is
- * open — waits for it to end first. Never skips the reload outright, since
- * that would leave the tab on stale code indefinitely. */
-function reloadRespectingCriticalActivity() {
-  if (!isCriticalActivityInProgress()) {
-    window.location.reload();
-    return;
+/**
+ * 🔴 A NEW DEPLOY WAITS FOR THE NEXT TAP (owner, 2026-10-15: "Make everything open instant,
+ * never reload on every entry or backswipe"). Finding a new build used to reload the page right
+ * away — 4 s after opening the app, or on coming back after a minute — so with several deploys a
+ * day the app reloaded on almost every entry. Now the build is only remembered here, and the
+ * member's next ordinary in-app link loads its destination as a full page, bringing the new
+ * build with it (lib/pwa/deferred-update.ts). Entry, resume and back-swipe never reload. A lazy
+ * chunk that vanished meanwhile is still recovered by the chunk-error screen.
+ */
+let pendingBuild: string | null = null;
+
+function onDocumentClick(e: MouseEvent) {
+  if (!pendingBuild || isCriticalActivityInProgress()) return;
+  const a = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+  if (!a) return;
+  if (!mayCarryUpdate(e, { href: a.href, target: a.target, hasDownload: a.hasAttribute("download") }, location)) return;
+  try {
+    localStorage.setItem(RELOADED_KEY, pendingBuild);
+  } catch {
+    /* storage blocked — still one full load, the next check won't repeat it before a tap */
   }
-  const unsubscribe = onCriticalActivityIdle(() => {
-    unsubscribe();
-    window.location.reload();
-  });
+  pendingBuild = null;
+  e.preventDefault();
+  e.stopPropagation();
+  window.location.assign(a.href);
 }
 
 /**
@@ -41,7 +55,8 @@ function reloadRespectingCriticalActivity() {
  * old bundle forever (new sections like Trending Reels never appeared until
  * the user deleted and re-added the app). The build-stamp check below compares
  * this bundle's baked NEXT_PUBLIC_APP_BUILD against /api/app-version on
- * resume/focus and reloads once per new deploy — the moment the user returns.
+ * resume/focus, and the new build is taken on the member's next in-app link
+ * (since 2026-10-15 — never as a reload on return, see `onDocumentClick`).
  */
 const RELOADED_KEY = "frenz-reloaded-for";
 
@@ -88,8 +103,8 @@ async function reloadIfNewDeploy() {
     // navigated past /login) still needs to catch it.
     const onAuthPage = location.pathname.startsWith("/login") || location.pathname.startsWith("/auth");
     if (build && build !== BAKED_APP_BUILD && !onAuthPage && localStorage.getItem(RELOADED_KEY) !== build) {
-      localStorage.setItem(RELOADED_KEY, build);
-      reloadRespectingCriticalActivity();
+      // remembered, never applied here: the next tap on an in-app link carries it (see `onDocumentClick`)
+      pendingBuild = build;
     }
   } catch {
     /* localStorage unavailable (private browsing, quota) — try again next resume */
@@ -189,6 +204,8 @@ export function RegisterServiceWorker() {
       void reloadIfNewDeploy();
     };
     sw.addEventListener("controllerchange", onControllerChange);
+    // capture phase: decided before Next's <Link> turns the tap into a client-side navigation
+    document.addEventListener("click", onDocumentClick, true);
 
     // Actively re-check for a new deploy — the piece that fixes an always-open
     // laptop tab that never navigates, and a resumed home-screen app.
@@ -197,9 +214,9 @@ export function RegisterServiceWorker() {
       void reloadIfNewDeploy();
     };
 
-    // A version-check that finds a new build reloads the WHOLE page (full
-    // cold boot — boot splash + every route's loading.tsx) — correct for a
-    // real return from being away, but during active development a new
+    // (Before 2026-10-15) a version-check that found a new build reloaded the WHOLE page (full
+    // cold boot — boot splash + every route's loading.tsx). It now only marks the build for
+    // the next tap, but the check stays throttled the same way: during active development a new
     // deploy can land every few minutes, so gating this on visibility/focus
     // alone reloaded on almost every brief app-switch too (owner: "Home
     // seems to always load and delay ... when I minimize and come back
@@ -242,6 +259,7 @@ export function RegisterServiceWorker() {
 
     return () => {
       sw.removeEventListener("controllerchange", onControllerChange);
+      document.removeEventListener("click", onDocumentClick, true);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onFocus);
       window.clearInterval(interval);

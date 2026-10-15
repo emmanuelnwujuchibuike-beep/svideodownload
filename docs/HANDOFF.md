@@ -23,6 +23,9 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
 
 ### Live probes owed (production)
 
+- **Railway build (2026-10-15):** the Docker build ran out of JavaScript heap (Node's ~2 GB default) during webpack. Reproduced from a clean checkout; the commit before that day's work failed the same way, so it is the app's size, not one change. Fixed with `NODE_OPTIONS=--max-old-space-size=4096` in the Dockerfile's builder stage plus `experimental.webpackMemoryOptimizations` (peak ~4.9 GB across the build's processes). If Railway's builder has less than ~5 GB of memory, the build is killed instead. Check the next Railway build log.
+- **New deploys no longer reload the app on entry, resume or back-swipe (2026-10-15):** the version check only remembers a new build. The next tap on an in-app link loads its destination as a full page and brings it in (`lib/pwa/deferred-update.ts`, `register-sw.tsx`). Verified on a production build in Chromium: no reload on entry or resume with a new build live, and tap/back/forward stay client-side otherwise. ⚠️ Locally, stop every old `next start` before testing. A stale server on the port serves the previous build's HTML, and its 404'd chunks make every link a full load.
+
 - **Whole-page translation (2026-10-15, docs/GLOBALIZATION_PLATFORM.md "Whole-page translation"):** needs `ANTHROPIC_API_KEY` (already set for moderation) and Upstash for the shared cache. Optional: `TRANSLATE_MODEL`, `RATE_LIMIT_TRANSLATE_PER_MIN`. Pick a language on the phone and check that a few pages, a sheet and a toast change, and that English restores them.
 
 - **0242 is taken by `0242_ad_pricing_delivery_admin…`** (written in the owner's local checkout, not yet pushed). The History viewer and brand-name migrations were renumbered 0243 and 0244 on 2026-10-15 so the two never share a number.

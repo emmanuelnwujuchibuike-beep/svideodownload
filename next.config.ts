@@ -245,6 +245,9 @@ const nextConfig: NextConfig = {
     // page changes only with a deploy, and a deploy reloads the app (register-sw.tsx).
     staleTimes: { dynamic: 21600, static: 21600 },
     scrollRestoration: true,
+    // Lower webpack's peak memory during `next build` (2026-10-15: the Docker build on Railway
+    // ran out of heap). A little slower to build, nothing changes in what ships.
+    webpackMemoryOptimizations: true,
   },
   images: {
     // yt-dlp returns thumbnails from arbitrary CDNs; allow https remotes.

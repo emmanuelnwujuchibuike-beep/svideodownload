@@ -289,6 +289,7 @@ export function SelfMoments() {
           : undefined
       }
       slot={showing.slot}
+      swipeNext={showing.placement === HISTORY_STORY}
       onClose={close}
     />
   );

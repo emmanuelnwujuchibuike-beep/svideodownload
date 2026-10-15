@@ -1,3 +1,4 @@
+import type { ScrollAnchor } from "@/lib/dom/scroll-anchor";
 import type { FeedItem, HomeFeedSort } from "@/lib/social/home-feed";
 
 /**
@@ -25,6 +26,8 @@ const MAX_ITEMS_PER_TAB = 60;
 export interface FeedContinuitySnapshot {
   sort: HomeFeedSort;
   scrollY: number;
+  /** 2026-10-15: the post at the top of the screen and how far into it — what a return lands on (scrollY is the fallback) */
+  anchor?: ScrollAnchor | null;
   savedAt: number;
   tabs: Partial<Record<HomeFeedSort, { items: FeedItem[]; nextOffset: number | null }>>;
 }

@@ -18,8 +18,26 @@ describe("returning to the feed", () => {
     expect(s).not.toContain("persistContinuity(); // final save on unmount");
   });
 
-  it("the restore keeps landing while the restored cards lay out", () => {
-    expect(s).toMatch(/tries\+\+ < RESTORE_TRIES\) requestAnimationFrame\(land\)/);
+  it("🔴 2026-10-15: the return lands on the saved POST, not a pixel, with no frame loop (it crawled and missed)", () => {
+    expect(s).toContain("restoreStop.current = restoreToAnchor({");
+    expect(s).toContain('const loadAnchorRestore = () => import("@/lib/dom/scroll-anchor-restore");');
+    expect(s).not.toMatch(/import \{[^}]*restoreToAnchor[^}]*\} from/);
+    expect(s).toContain("fallbackY: y,");
+    expect(s).not.toMatch(/RESTORE_TRIES|requestAnimationFrame\(land\)/);
+    // the reader's post is read when the scroll pauses and saved with the snapshot
+    expect(s).toContain("anchorPosRef.current[sortRef.current] = readAnchor(FEED_POST_ATTR, ANCHOR_PROBE_Y, tabScope(sortRef.current));");
+    expect(s).toContain("anchor: anchorPosRef.current[sort] ?? null,");
+    expect(s).toContain("anchorPosRef.current[snap.sort] = snap.anchor ?? null;");
+  });
+
+  it("restored posts appear in place: no fade-in per card, no tab slide while it settles", () => {
+    expect(s).toContain("enter={!instant}");
+    expect(s).toContain("transition={{ duration: instant ? 0 : 0.22");
+    const card = code("features/feed/feed-post-card.tsx");
+    expect(card).toContain("data-feed-post={item.id}");
+    expect(card).toContain("initial={enter ? { opacity: 0, y: 12 } : false}");
+    // no animation end means framer's resting transform must be stripped at mount (fixed video)
+    expect(card).toMatch(/if \(!enter && articleRef\.current\) articleRef\.current\.style\.transform = "";/);
   });
 
   it("Reels left open inside the feed reopens on return", () => {

@@ -121,6 +121,7 @@ function FeedPostCardImpl({
    * immediately instead of waiting on its own IntersectionObserver).
    */
   priority = false,
+  enter = true,
   nextVideoSrc,
 }: {
   item: FeedItem;
@@ -128,6 +129,8 @@ function FeedPostCardImpl({
   onRemove: (id: string) => void;
   onOpen: (item: FeedItem, startComments?: boolean, startIndex?: number) => void;
   priority?: boolean;
+  /** false: appear in place without the fade-in (a return to the feed restores many cards at once). Read at mount only. */
+  enter?: boolean;
   /** The next VIDEO in the reel deck, warmed once this card starts playing —
    *  see `FeedVideo`'s `nextSrc`. */
   nextVideoSrc?: string | null;
@@ -138,6 +141,11 @@ function FeedPostCardImpl({
   const repostState = useRepostState(item.id, item.viewerReposted ?? false, item.repostsCount ?? 0);
   const [likes, setLikes] = useState(item.likesCount);
   const articleRef = useRef<HTMLElement>(null);
+  // without the fade-in there is no animation end to strip framer's resting transform (see the article): strip it now
+  useEffect(() => {
+    if (!enter && articleRef.current) articleRef.current.style.transform = "";
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, at mount
+  }, []);
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [title, setTitle] = useState(item.title);
@@ -543,7 +551,10 @@ function FeedPostCardImpl({
       ref={articleRef}
       // media lock (globals.css): a held photo or video never lifts or shrinks — options live on the ⋯ button
       data-media-lock
-      initial={{ opacity: 0, y: 12 }}
+      // the reader's place on a return to the feed (lib/dom/scroll-anchor.ts)
+      data-feed-post={item.id}
+      // a return restores many posts at once: they appear in place, no fade-in each (2026-10-15)
+      initial={enter ? { opacity: 0, y: 12 } : false}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}

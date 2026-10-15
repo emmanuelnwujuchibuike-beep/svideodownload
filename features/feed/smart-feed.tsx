@@ -43,8 +43,16 @@ let reelOpenAt = 0;
 /** How long an open in-feed Reels is reopened on return, the same window as the feed's own continuity. */
 const REEL_RETURN_MS = 30 * 60 * 1000;
 
-/** Frames (~1s) a restored scroll keeps re-landing while the restored cards lay out. */
-const RESTORE_TRIES = 60;
+/** The attribute every feed post carries — the reader's place is a post, not a pixel (lib/dom/scroll-anchor.ts). */
+const FEED_POST_ATTR = "data-feed-post";
+/** Just under the sticky top bar: the post crossing this line is "where the reader is". */
+const ANCHOR_PROBE_Y = 72;
+/** How long a return keeps the reader's post in place while the media above it lays out. */
+const RESTORE_HOLD_MS = 2000;
+/** The posts of ONE tab (the tab switch briefly shows two lists at once). */
+const tabScope = (sort: HomeFeedSort): ParentNode => document.querySelector(`[data-feed-tab="${sort}"]`) ?? document;
+/** The landing code, in its own chunk (the /home route weight is a ratchet) — warmed on the first scroll. */
+const loadAnchorRestore = () => import("@/lib/dom/scroll-anchor-restore");
 
 function preloadReelsFeed() {
   void import("@/features/reels/reels-feed");
@@ -72,6 +80,7 @@ import {
   buildSparkDeck,
   summarizeAway,
 } from "@/lib/social/smart-feed";
+import { readAnchor, type ScrollAnchor } from "@/lib/dom/scroll-anchor";
 import { loadFeedContinuity, saveFeedContinuity } from "@/lib/social/feed-continuity";
 import { getApi } from "@/lib/sdk/browser";
 import { cn } from "@/lib/utils";
@@ -246,6 +255,11 @@ export function SmartFeed({
   // the slide/fade transition below plays (1 = forward/left, -1 = back/right).
   const scrollPosRef = useRef<Partial<Record<HomeFeedSort, number>>>({});
   const restoreScrollFor = useRef<HomeFeedSort | null>(null);
+  // the post at the top of the screen per tab, and how far into it (2026-10-15) — what a return lands on
+  const anchorPosRef = useRef<Partial<Record<HomeFeedSort, ScrollAnchor | null>>>({});
+  // a return restores many posts at once: they appear in place, without each one's fade-in
+  const [instant, setInstant] = useState(false);
+  const restoreStop = useRef<(() => void) | null>(null);
   const [direction, setDirection] = useState(0);
 
   // Snapshot the active tab + scroll position to localStorage, so leaving
@@ -255,9 +269,11 @@ export function SmartFeed({
   // it to effect dependency arrays.
   const persistContinuity = useCallback((opts?: { sort?: HomeFeedSort; scrollY?: number }) => {
     if (typeof window === "undefined" || !cacheRef.current) return;
+    const sort = opts?.sort ?? sortRef.current;
     saveFeedContinuity({
-      sort: opts?.sort ?? sortRef.current,
+      sort,
       scrollY: opts?.scrollY ?? window.scrollY,
+      anchor: anchorPosRef.current[sort] ?? null,
       tabs: cacheRef.current,
     });
   }, []);
@@ -290,7 +306,9 @@ export function SmartFeed({
     // Piggyback on the existing tab-switch scroll-restore effect below —
     // it's already keyed on `[sort, items]` and watches this exact ref pair.
     scrollPosRef.current[snap.sort] = snap.scrollY;
+    anchorPosRef.current[snap.sort] = snap.anchor ?? null;
     restoreScrollFor.current = snap.sort;
+    setInstant(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -308,9 +326,21 @@ export function SmartFeed({
   const lastScrollY = useRef(0);
   useEffect(() => {
     let lastAt = 0;
+    let anchorTimer = 0;
     lastScrollY.current = window.scrollY;
+    let warmed = false;
     const onScroll = () => {
       lastScrollY.current = window.scrollY;
+      // someone who scrolls may leave and come back: have the landing code ready by then
+      if (!warmed) {
+        warmed = true;
+        void loadAnchorRestore();
+      }
+      // which post the reader is on — read once the scroll pauses, never per scroll tick
+      window.clearTimeout(anchorTimer);
+      anchorTimer = window.setTimeout(() => {
+        anchorPosRef.current[sortRef.current] = readAnchor(FEED_POST_ATTR, ANCHOR_PROBE_Y, tabScope(sortRef.current));
+      }, 120);
       const now = Date.now();
       if (now - lastAt < 1500) return;
       lastAt = now;
@@ -319,6 +349,7 @@ export function SmartFeed({
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       window.removeEventListener("scroll", onScroll);
+      window.clearTimeout(anchorTimer);
       persistContinuity({ scrollY: lastScrollY.current }); // final save on unmount (e.g. navigating away)
     };
   }, [persistContinuity]);
@@ -530,6 +561,7 @@ export function SmartFeed({
     // Remember exactly where we're leaving so returning here resumes at the
     // same scroll position instead of jumping to the top.
     scrollPosRef.current[sort] = window.scrollY;
+    anchorPosRef.current[sort] = readAnchor(FEED_POST_ATTR, ANCHOR_PROBE_Y, tabScope(sort));
     restoreScrollFor.current = s;
     setDirection(SWIPE_ORDER.indexOf(s) > SWIPE_ORDER.indexOf(sort) ? 1 : -1);
     setSort(s);
@@ -606,31 +638,33 @@ export function SmartFeed({
     if (restoreScrollFor.current !== sort) return;
     restoreScrollFor.current = null;
     const y = scrollPosRef.current[sort] ?? 0;
-    // Coming back through the bottom nav, the restored cards are still laying out (media boxes,
-    // fonts), so the page can be shorter than `y` on the first frame and the scroll would clamp
-    // short. Keep trying for a moment until the page is tall enough to land exactly, then stop.
-    // A scroll by the reader in the meantime wins: it ends the retries.
-    let tries = 0;
-    let userMoved = false;
-    const stop = () => {
-      userMoved = true;
-    };
-    window.addEventListener("touchstart", stop, { passive: true, once: true });
-    window.addEventListener("wheel", stop, { passive: true, once: true });
-    const done = () => {
-      window.removeEventListener("touchstart", stop);
-      window.removeEventListener("wheel", stop);
-    };
-    // not cancelled by a later `items` change (a page loading in): the landing must finish
-    const land = () => {
-      if (userMoved) return done();
-      window.scrollTo({ top: y, behavior: "auto" });
-      lastScrollY.current = window.scrollY;
-      if (Math.abs(window.scrollY - y) > 2 && tries++ < RESTORE_TRIES) requestAnimationFrame(land);
-      else done();
-    };
-    requestAnimationFrame(land);
+    /*
+      🔴 Back to the same POST, not the same pixel (owner, 2026-10-15: "it starts to lag and
+      come down to where I was slowly and lagging badly and also doesn't get it accurately").
+      This used to re-run scrollTo(y) on every frame for a second while the restored cards
+      laid out: the page grew under it, so it crawled down, and once the media above had sized
+      itself y pointed at another post. Now it lands on the saved post once, corrects only
+      when the page really changes size, and the reader's first touch ends it
+      (lib/dom/scroll-anchor.ts). Not cancelled by a later `items` change (a page loading in).
+    */
+    const anchor = anchorPosRef.current[sort] ?? null;
+    void loadAnchorRestore().then(({ restoreToAnchor }) => {
+      restoreStop.current?.();
+      restoreStop.current = restoreToAnchor({
+        anchor: anchor && { ...anchor },
+        fallbackY: y,
+        attr: FEED_POST_ATTR,
+        scope: () => tabScope(sort),
+        holdMs: RESTORE_HOLD_MS,
+        onLanded: (at) => {
+          lastScrollY.current = at;
+        },
+      });
+    });
+    window.setTimeout(() => setInstant(false), RESTORE_HOLD_MS);
   }, [sort, items]);
+  // a landing still holding the reader's post stops when the feed leaves the page
+  useEffect(() => () => restoreStop.current?.(), []);
 
   // A decisive horizontal swipe on the feed switches tabs instantly, the same
   // as tapping — swiping past "Following" opens Reels (same action as tapping
@@ -1054,10 +1088,12 @@ export function SmartFeed({
         <AnimatePresence mode="popLayout" initial={false}>
           <motion.div
             key={sort}
+            data-feed-tab={sort}
             initial={{ opacity: 0, x: direction >= 0 ? 24 : -24 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: direction >= 0 ? -24 : 24 }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            // a return lands without the tab-slide: nothing moves under the reader while it settles
+            transition={{ duration: instant ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }}
           >
             {switching ? (
               <FeedSkeleton count={3} />
@@ -1095,6 +1131,7 @@ export function SmartFeed({
                         onRemove={remove}
                         onOpen={openViewer}
                         priority={index < 2}
+                        enter={!instant}
                         nextVideoSrc={nextVideoSrcById.get(slot.item.id)}
                       />
                     ) : slot.type === "ad" ? (

@@ -2,7 +2,7 @@
 
 import { X } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import type { EligibleAd } from "@/lib/ads-platform/eligibility";
@@ -11,6 +11,9 @@ import { DEFAULT_VAST_INTERSTITIAL, normalizeVastInterstitial } from "@/lib/mone
 import { cn } from "@/lib/utils";
 
 import { trackAdEvent, type AdView } from "../ad-events-client";
+
+/** How far a finger must travel for a swipe to move on (the History viewer's ad). */
+const SWIPE_PX = 50;
 
 // loaded only when a full-screen ad opens — a page that never shows one never fetches it
 const FullscreenAd = dynamic(() => import("./fullscreen-video-ad").then((m) => m.FullscreenAd), { ssr: false });
@@ -45,8 +48,17 @@ export function SelfInterstitial({
   rewardText,
   onRewardComplete,
   slot,
+  swipeNext = false,
   onClose,
 }: {
+  /**
+   * The History viewer's ad (owner, 2026-10-15: "users should be able to next it by swiping
+   * or tapping at the left or right but during the count down nothing swipe or next should
+   * work"). Once the countdown ends, a tap on either side or a swipe (left, right or up)
+   * moves on to the next media, as the media itself does. Before that, neither does
+   * anything. The middle stays the ad's own (pause, details).
+   */
+  swipeNext?: boolean;
   /** the canonical moment slot it occupies (lib/ads-platform/slot-registry.ts) */
   slot?: string;
   ad: EligibleAd;
@@ -69,6 +81,7 @@ export function SelfInterstitial({
   const canSkipRef = useRef(canSkip);
   canSkipRef.current = canSkip;
   const dialog = useRef<HTMLDivElement | null>(null);
+  const swipeFrom = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (reward) return;
@@ -116,6 +129,19 @@ export function SelfInterstitial({
   }, [onClose]);
 
   if (typeof document === "undefined") return null;
+
+  // History viewer: a swipe moves on, but only once the ad may be skipped
+  const onPointerDown = (e: ReactPointerEvent) => {
+    swipeFrom.current = swipeNext && canSkipRef.current ? { x: e.clientX, y: e.clientY } : null;
+  };
+  const onPointerUp = (e: ReactPointerEvent) => {
+    const from = swipeFrom.current;
+    swipeFrom.current = null;
+    if (!from || !canSkipRef.current) return;
+    const dx = e.clientX - from.x;
+    const dy = e.clientY - from.y;
+    if (Math.abs(dx) >= SWIPE_PX || dy <= -SWIPE_PX) onClose();
+  };
 
   // the one place a reward completes — only on the video's real end, never on close or skip
   const handleEnded = () => {
@@ -169,6 +195,10 @@ export function SelfInterstitial({
       aria-label={reward ? `Sponsored video from ${ad.sponsor}` : `Advertisement from ${ad.sponsor}`}
       ref={dialog}
       tabIndex={-1}
+      onPointerDown={swipeNext ? onPointerDown : undefined}
+      onPointerUp={swipeNext ? onPointerUp : undefined}
+      onPointerCancel={swipeNext ? () => (swipeFrom.current = null) : undefined}
+      style={swipeNext ? { touchAction: "none" } : undefined}
     >
       <FullscreenAd
         ad={ad}
@@ -202,7 +232,15 @@ export function SelfInterstitial({
         }}
         onEnded={handleEnded}
         onFail={onClose}
-      />
+      >
+        {/* History viewer: the two sides move on, as they do on the media — only after the countdown */}
+        {swipeNext && canSkip ? (
+          <>
+            <button type="button" aria-label="Next" onClick={onClose} data-ad-next="left" className="absolute inset-y-0 left-0 w-[30%]" />
+            <button type="button" aria-label="Next" onClick={onClose} data-ad-next="right" className="absolute inset-y-0 right-0 w-[30%]" />
+          </>
+        ) : null}
+      </FullscreenAd>
     </div>,
     document.body,
   );

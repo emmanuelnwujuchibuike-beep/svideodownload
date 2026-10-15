@@ -141,3 +141,21 @@ describe("the paid side (self-serve placement `history_story`)", () => {
     expect(c).toMatch(/const close = useCallback\([\s\S]*?showingRef\.current\?\.after\?\.\(\);/);
   });
 });
+
+describe("2026-10-15: the History ad moves on by a side tap or a swipe — only after the countdown", () => {
+  const c = code("features/ads-platform/serve/self-interstitial.tsx");
+
+  it("the side zones exist only once the ad may be skipped", () => {
+    expect(c).toMatch(/\{swipeNext && canSkip \? \([\s\S]*?data-ad-next="left"[\s\S]*?data-ad-next="right"[\s\S]*?\) : null\}/);
+  });
+
+  it("a swipe left, right or up moves on, and a swipe during the countdown does nothing", () => {
+    expect(c).toMatch(/swipeFrom\.current = swipeNext && canSkipRef\.current \? \{ x: e\.clientX, y: e\.clientY \} : null;/);
+    expect(c).toMatch(/if \(!from \|\| !canSkipRef\.current\) return;/);
+    expect(c).toMatch(/if \(Math\.abs\(dx\) >= SWIPE_PX \|\| dy <= -SWIPE_PX\) onClose\(\);/);
+  });
+
+  it("only the History viewer's ad gets it", () => {
+    expect(code("features/ads-platform/serve/self-moments.tsx")).toContain("swipeNext={showing.placement === HISTORY_STORY}");
+  });
+});

@@ -211,7 +211,7 @@ function Delivery({ c, v }: { c: CampaignRow; v: ViewsTerms }) {
   const left = Math.max(0, v.targetViews - done);
   // the share is floored: 99.6 % reads 99 %, never "100 %" before the target is really reached
   const pctDone = Math.floor(share * 100);
-  const phase = !d ? "Waiting to go live" : d.phase === "initial" ? "Planned period" : d.phase === "extended" ? "Extended delivery" : d.phase === "fulfilled" ? "Target reached" : "Ended short";
+  const phase = !d ? "Waiting to go live" : d.phase === "initial" ? "Planned period" : d.phase === "extended" ? "Extended delivery" : d.phase === "review" ? "Under review" : d.phase === "fulfilled" ? "Target reached" : "Ended short";
   const extDays = d?.phase === "extended" && d.initialEndAt ? Math.max(0, Math.floor((Date.now() - Date.parse(d.initialEndAt)) / 86_400_000)) : null;
   return (
     <AiPanel>
@@ -253,6 +253,8 @@ function Delivery({ c, v }: { c: CampaignRow; v: ViewsTerms }) {
           <p className="text-[13px] text-muted-foreground">Delivering in your planned period{d.initialEndAt ? ` (until ${date(d.initialEndAt)})` : ""}. If {num(left)} views are still left then, delivery continues free until they are.</p>
         ) : d.phase === "extended" ? (
           <Notice icon={CalendarPlus} tone="indigo">Extended delivery, free of charge: {num(left)} views to go. Your original payment covers it.</Notice>
+        ) : d.phase === "review" ? (
+          <Notice icon={Pause} tone="amber">Your planned period and its free extensions have ended with {num(left)} views to go. Our team is reviewing it: we&apos;ll either continue delivery at no charge or refund the undelivered share. Nothing is closed without telling you.</Notice>
         ) : d.phase === "fulfilled" ? (
           <>
             <Notice icon={Play} tone="emerald">Target reached{d.fulfilledAt ? ` on ${date(d.fulfilledAt)}` : ""}. This campaign has stopped and will not renew or charge you again.</Notice>

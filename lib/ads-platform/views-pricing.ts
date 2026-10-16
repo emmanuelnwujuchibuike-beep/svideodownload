@@ -21,6 +21,29 @@ export interface ViewsTerms {
   autoExtend: boolean;
   extensionDays: number;
   maxExtensions: number;
+  /** 0242: from `minViews` up the rate is `ratePer1000Minor` (absent before 0242 = none) */
+  tiers: VolumeTier[];
+  /** 0242: the smallest checkout total, in cents (0 = none) */
+  minCheckoutMinor: number;
+}
+
+export interface VolumeTier {
+  minViews: number;
+  ratePer1000Minor: number;
+}
+
+/** Tiers from the catalog or an admin request: whole positive numbers only, sorted by threshold. */
+export function parseTiers(raw: unknown): VolumeTier[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: VolumeTier[] = [];
+  for (const t of raw) {
+    const r = t as { min_views?: unknown; rate_per_1000_minor?: unknown; minViews?: unknown; ratePer1000Minor?: unknown };
+    const minViews = Number(r.min_views ?? r.minViews);
+    const rate = Number(r.rate_per_1000_minor ?? r.ratePer1000Minor);
+    if (!Number.isSafeInteger(minViews) || minViews < 1 || !Number.isSafeInteger(rate) || rate < 1) return null;
+    out.push({ minViews, ratePer1000Minor: rate });
+  }
+  return out.sort((a, b) => a.minViews - b.minViews);
 }
 
 /** The admin's current views terms, or null when views are not sold (or 0240 has not run). */
@@ -35,15 +58,23 @@ export function viewsTermsOf(cat: AdCatalog): ViewsTerms | null {
     autoExtend: s.views_auto_extend === true,
     extensionDays: Number(s.views_extension_days),
     maxExtensions: Number(s.views_max_extensions),
+    tiers: parseTiers(s.views_volume_tiers ?? []) ?? [],
+    minCheckoutMinor: Number(s.views_min_checkout_minor ?? 0) || 0,
   };
   return [t.ratePer1000Minor, t.minTarget, t.maxTarget, t.step].every((n) => Number.isSafeInteger(n) && n > 0) ? t : null;
 }
 
-/** A placement's own rate, else the default; null when it does not sell views. */
-export function viewsRateFor(cat: AdCatalog, terms: ViewsTerms, placementCode: string): number | null {
+/**
+ * The rate for a placement and target — ad_views_rate's order: the placement's
+ * own rate, else the cheapest tier the target reaches, else the default. Null
+ * when the placement does not sell views.
+ */
+export function viewsRateFor(cat: AdCatalog, terms: ViewsTerms, placementCode: string, target: number = terms.minTarget): number | null {
   const p = cat.placements.find((x) => x.code === placementCode);
   if (!p || p.views_enabled === false) return null;
-  return p.views_rate_per_1000_minor ?? terms.ratePer1000Minor;
+  if (p.views_rate_per_1000_minor != null) return p.views_rate_per_1000_minor;
+  const reached = terms.tiers.filter((t) => t.minViews <= target).map((t) => t.ratePer1000Minor);
+  return reached.length ? Math.min(...reached) : terms.ratePer1000Minor;
 }
 
 /** The periods a views campaign may choose: enabled, and switched on for views. */

@@ -152,6 +152,11 @@ export function ViewsPicker({
             </Link>
           </span>
         </div>
+        {terms.minCheckoutMinor > 0 && cost < terms.minCheckoutMinor ? (
+          <p className="mt-2 text-[12px] font-semibold text-amber-800 dark:text-amber-200" role="status">
+            The smallest order is {formatMoney(terms.minCheckoutMinor, currency)} — choose more views.
+          </p>
+        ) : null}
         <p className="mt-2 text-[11.5px] text-muted-foreground">Final price confirmed before you pay.</p>
       </aside>
     </div>

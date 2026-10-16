@@ -29,6 +29,7 @@ import { Suspense } from "react";
 import { AdCampaignPaymentsLazy } from "@/features/admin/ad-campaign-payments-lazy";
 import { AdCampaignsDeskLazy } from "@/features/admin/ad-campaigns-desk-lazy";
 import { AdManager } from "@/features/admin/ad-manager";
+import { AdDeliveryMonitorLazy } from "@/features/admin/ad-delivery-monitor-lazy";
 import { AdPlatformControlsLazy } from "@/features/admin/ad-platform-controls-lazy";
 import { AdSafetyCenterLazy } from "@/features/admin/ad-safety-center-lazy";
 import { AdminPanel, AdminShell } from "@/features/admin/admin-shell";
@@ -406,6 +407,8 @@ export default async function AdminPage() {
                 /* Ad Platform Part 7: review, pause, remove and refund self-serve campaigns; advertisers. Loads when shown. */
                 { id: "campaigns", label: "Campaigns", content: <AdCampaignsDeskLazy /> },
                 /* Self-serve campaigns paid through Paystack/Bachs (Part 3) - loads when shown. */
+                /* Part 3 (0242): guaranteed-views obligations, capacity, audited delivery actions. Loads when shown. */
+                { id: "delivery-monitor", label: "Delivery monitor", content: <AdDeliveryMonitorLazy /> },
                 { id: "campaign-payments", label: "Campaign payments", content: <AdCampaignPaymentsLazy /> },
                 /* Part 8: flags, invalid traffic, unsafe creatives and links, traffic rules. */
                 { id: "traffic-safety", label: "Traffic & safety", content: <AdSafetyCenterLazy /> },

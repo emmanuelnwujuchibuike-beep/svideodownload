@@ -102,6 +102,10 @@ export interface AdCatalog {
     views_auto_extend?: boolean;
     views_extension_days?: number;
     views_max_extensions?: number;
+    /** 0242 (absent before it runs: fixed sales on, no minimum, no tiers) */
+    fixed_enabled?: boolean;
+    views_min_checkout_minor?: number;
+    views_volume_tiers?: unknown;
   };
   formats: CatalogFormat[];
   placements: CatalogPlacement[];

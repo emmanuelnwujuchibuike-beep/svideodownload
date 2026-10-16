@@ -3,6 +3,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
+import { recordConfigChange } from "@/lib/platform/config-audit";
+
 import { AD_ADVERTISER_CONTROLS_KEY, loadControls, parseControls, type AdvertiserControls } from "./campaign-manage";
 
 /**
@@ -120,8 +122,22 @@ export class AdminFormatError extends Error {}
   the NEXT quote, never to a campaign already priced (its snapshot holds the
   terms it was sold on). Read on its own so the panel still loads before 0240.
 */
-const VIEWS_COLUMNS =
+const VIEWS_COLUMNS_0240 =
   "views_enabled, views_rate_per_1000_minor, views_min_target, views_max_target, views_target_step, views_auto_extend, views_extension_days, views_max_extensions, views_capacity_policy, views_capacity_window_days";
+/** 0242 adds fixed-period on/off, the minimum checkout, tiers and the delivery policies */
+const VIEWS_COLUMNS_0242 = `${VIEWS_COLUMNS_0240}, fixed_enabled, views_min_checkout_minor, views_volume_tiers, views_extend_when_advertiser_paused, views_suspension_policy, views_on_exhausted, views_review_after_extensions`;
+
+/** Volume tiers: up to 10, whole positive numbers, thresholds strictly rising and rates never rising with volume. */
+export const volumeTiersSchema = z
+  .array(z.object({ min_views: z.number().int().min(1).max(100_000_000), rate_per_1000_minor: z.number().int().min(1).max(10_000_000) }).strict())
+  .max(10)
+  .superRefine((tiers, ctx) => {
+    const sorted = [...tiers].sort((a, b) => a.min_views - b.min_views);
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i]!.min_views === sorted[i - 1]!.min_views) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Two tiers start at the same number of views." });
+      if (sorted[i]!.rate_per_1000_minor > sorted[i - 1]!.rate_per_1000_minor) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A bigger tier can't cost more per 1,000 views." });
+    }
+  });
 
 export const viewsSettingsSchema = z
   .object({
@@ -135,6 +151,14 @@ export const viewsSettingsSchema = z
     views_max_extensions: z.number().int().min(0).max(52),
     views_capacity_policy: z.enum(["allow", "review", "block"]),
     views_capacity_window_days: z.number().int().min(1).max(90),
+    /* 0242 */
+    fixed_enabled: z.boolean(),
+    views_min_checkout_minor: z.number().int().min(0).max(100_000_000),
+    views_volume_tiers: volumeTiersSchema,
+    views_extend_when_advertiser_paused: z.boolean(),
+    views_suspension_policy: z.enum(["close_refund", "hold_review"]),
+    views_on_exhausted: z.enum(["review", "close_refund"]),
+    views_review_after_extensions: z.number().int().min(0).max(52),
   })
   .partial()
   .strict();
@@ -146,6 +170,8 @@ export const viewsPatchSchema = z
     placement: z.object({ code: z.string().regex(/^[a-z][a-z0-9_]{1,63}$/), views_enabled: z.boolean().optional(), views_rate_per_1000_minor: z.number().int().min(1).max(10_000_000).nullable().optional() }).strict().optional(),
     /** whether a campaign period may be chosen for a views campaign */
     duration: z.object({ id: z.string().uuid(), views_enabled: z.boolean() }).strict().optional(),
+    /** 0242: a new campaign period (for new purchases; running campaigns keep theirs) */
+    newDuration: z.object({ days: z.number().int().min(1).max(366), name: z.string().trim().min(1).max(40) }).strict().optional(),
   })
   .strict();
 
@@ -153,39 +179,67 @@ export interface ViewsAdmin {
   settings: Record<string, unknown>;
   placements: { code: string; name: string; views_enabled: boolean; views_rate_per_1000_minor: number | null }[];
   durations: { id: string; name: string; duration_days: number; enabled: boolean; views_enabled: boolean }[];
+  /** false until 0242 runs: its controls are shown as waiting for the migration */
+  migrated0242: boolean;
 }
 
 /** null before 0240 runs: the panel says so instead of failing. */
 export async function loadViewsAdmin(db: Db): Promise<ViewsAdmin | null> {
-  const [s, pl, du] = await Promise.all([
-    db.from("ad_platform_settings").select(VIEWS_COLUMNS).eq("id", true).maybeSingle(),
+  const [s2, pl, du] = await Promise.all([
+    db.from("ad_platform_settings").select(VIEWS_COLUMNS_0242).eq("id", true).maybeSingle(),
     db.from("ad_placements").select("code, name, views_enabled, views_rate_per_1000_minor").order("sort_order", { ascending: true }),
     db.from("ad_durations").select("id, name, duration_days, enabled, views_enabled").order("duration_days", { ascending: true }),
   ]);
+  const s = s2.error ? await db.from("ad_platform_settings").select(VIEWS_COLUMNS_0240).eq("id", true).maybeSingle() : s2;
   if (s.error || pl.error || du.error || !s.data) return null;
-  return { settings: s.data as Record<string, unknown>, placements: (pl.data ?? []) as ViewsAdmin["placements"], durations: (du.data ?? []) as ViewsAdmin["durations"] };
+  return {
+    settings: s.data as Record<string, unknown>,
+    placements: (pl.data ?? []) as ViewsAdmin["placements"],
+    durations: (du.data ?? []) as ViewsAdmin["durations"],
+    migrated0242: !s2.error,
+  };
 }
 
+/**
+ * Save one change and record it in config_audit_log (who, before, after, when) —
+ * the repo's existing settings audit trail. A change applies to the NEXT quote:
+ * a priced campaign keeps the terms in its snapshot.
+ */
 export async function saveViews(db: Db, adminId: string, patch: z.infer<typeof viewsPatchSchema>): Promise<ViewsAdmin | null> {
   const now = new Date().toISOString();
+  const cur = await loadViewsAdmin(db);
+  if (!cur) throw new AdminFormatError("Views pricing needs migration 0240 — run it, then save again.");
   if (patch.settings && Object.keys(patch.settings).length) {
-    const cur = await loadViewsAdmin(db);
-    if (!cur) throw new AdminFormatError("Views pricing needs migration 0240 — run it, then save again.");
-    const next = { ...cur.settings, ...patch.settings } as { views_min_target: number; views_max_target: number };
+    const s = patch.settings;
+    if (!cur.migrated0242 && Object.keys(s).some((k) => !VIEWS_COLUMNS_0240.includes(k))) throw new AdminFormatError("This setting needs migration 0242 — run it, then save again.");
+    const next = { ...cur.settings, ...s } as { views_min_target: number; views_max_target: number; views_enabled?: boolean; fixed_enabled?: boolean };
     if (next.views_min_target > next.views_max_target) throw new AdminFormatError("The minimum views are above the maximum.");
-    const { error } = await db.from("ad_platform_settings").update({ ...patch.settings, updated_by: adminId, updated_at: now }).eq("id", true);
+    if (next.fixed_enabled === false && next.views_enabled === false) throw new AdminFormatError("At least one way to buy must stay on sale.");
+    const { error } = await db.from("ad_platform_settings").update({ ...s, updated_by: adminId, updated_at: now }).eq("id", true);
     if (error) throw new AdminFormatError("The database refused that value.");
+    const before = Object.fromEntries(Object.keys(s).map((k) => [k, cur.settings[k] ?? null]));
+    recordConfigChange({ actorId: adminId, surface: "ad_pricing", targetId: "ad_platform_settings", action: "settings.update", before, after: s });
   }
   if (patch.placement) {
     const { code, ...fields } = patch.placement;
+    const was = cur.placements.find((p) => p.code === code) ?? null;
     const { data, error } = await db.from("ad_placements").update({ ...fields, updated_at: now }).eq("code", code).select("code");
     if (error) throw new AdminFormatError("The database refused that value.");
     if (!data?.length) throw new AdminFormatError("No such placement.");
+    recordConfigChange({ actorId: adminId, surface: "ad_pricing", targetId: `placement:${code}`, action: "placement.update", before: was, after: fields });
   }
   if (patch.duration) {
+    const was = cur.durations.find((d) => d.id === patch.duration!.id) ?? null;
     const { data, error } = await db.from("ad_durations").update({ views_enabled: patch.duration.views_enabled, updated_at: now }).eq("id", patch.duration.id).select("id");
     if (error) throw new AdminFormatError("The database refused that value.");
     if (!data?.length) throw new AdminFormatError("No such campaign length.");
+    recordConfigChange({ actorId: adminId, surface: "ad_pricing", targetId: `duration:${patch.duration.id}`, action: "duration.views", before: was, after: patch.duration });
+  }
+  if (patch.newDuration) {
+    if (cur.durations.some((d) => d.duration_days === patch.newDuration!.days)) throw new AdminFormatError("A campaign length with that many days already exists — switch it on instead.");
+    const { data, error } = await db.from("ad_durations").insert({ name: patch.newDuration.name, duration_days: patch.newDuration.days, enabled: true, sort_order: patch.newDuration.days }).select("id").single();
+    if (error || !data) throw new AdminFormatError("The database refused that value.");
+    recordConfigChange({ actorId: adminId, surface: "ad_pricing", targetId: `duration:${data.id as string}`, action: "duration.create", before: null, after: patch.newDuration });
   }
   return loadViewsAdmin(db);
 }
@@ -209,6 +263,8 @@ export async function loadPlatform(db: Db): Promise<PlatformState> {
 }
 
 export async function saveSettings(db: Db, adminId: string, patch: PlatformSettingsPatch): Promise<Record<string, unknown>> {
+  const { data: before } = await db.from("ad_platform_settings").select(Object.keys(patch).join(", ") || "id").eq("id", true).maybeSingle();
+  recordConfigChange({ actorId: adminId, surface: "ad_pricing", targetId: "ad_platform_settings", action: "platform.update", before: before ?? null, after: patch });
   const { data, error } = await db
     .from("ad_platform_settings")
     .upsert({ id: true, ...patch, updated_by: adminId, updated_at: new Date().toISOString() }, { onConflict: "id" })
@@ -303,11 +359,14 @@ export async function loadPricing(db: Db): Promise<PricingState> {
 }
 
 /** A price change applies to NEW quotes only: an open quote keeps the price the advertiser was shown (0197). */
-export async function savePrice(db: Db, p: z.infer<typeof priceSchema>): Promise<void> {
+export async function savePrice(db: Db, p: z.infer<typeof priceSchema>, adminId: string | null = null): Promise<void> {
+  // Part 3: the previous value goes in the audit trail with the new one
+  const { data: before } = await db.from("ad_pricing_plans").select("price_minor, enabled").eq("placement_id", p.placementId).eq("duration_id", p.durationId).eq("currency", p.currency).maybeSingle();
   const { error } = await db
     .from("ad_pricing_plans")
     .upsert({ placement_id: p.placementId, duration_id: p.durationId, currency: p.currency, price_minor: p.priceMinor, enabled: p.enabled, updated_at: new Date().toISOString() }, { onConflict: "placement_id,duration_id,currency" });
   if (error) throw new Error(`price save: ${error.message}`);
+  recordConfigChange({ actorId: adminId, surface: "ad_pricing", targetId: `price:${p.placementId}:${p.durationId}:${p.currency}`, action: "price.set", before: before ?? null, after: { price_minor: p.priceMinor, enabled: p.enabled } });
 }
 
 export async function savePromotion(db: Db, p: z.infer<typeof promotionSchema>): Promise<string> {

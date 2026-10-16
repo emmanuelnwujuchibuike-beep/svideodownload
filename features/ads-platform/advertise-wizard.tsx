@@ -136,9 +136,10 @@ function durationsFor(f: Pick<Form, "pricingModel" | "placementCodes">, cat: AdC
 }
 
 /** Every chosen placement's views rate, or null when one of them doesn't sell views. */
-function viewsRates(cat: AdCatalog, terms: ViewsTerms | null, codes: readonly string[]): number[] | null {
+function viewsRates(cat: AdCatalog, terms: ViewsTerms | null, codes: readonly string[], target?: number | null): number[] | null {
   if (!terms || codes.length === 0) return null;
-  const rates = codes.map((c) => viewsRateFor(cat, terms, c));
+  // 0242: the rate depends on the target once volume tiers exist
+  const rates = codes.map((c) => viewsRateFor(cat, terms, c, target ?? terms.minTarget));
   return rates.every((r): r is number => r !== null) ? rates : null;
 }
 
@@ -176,6 +177,12 @@ function reconcile(form: Form, cat: AdCatalog): { form: Form; notes: string[] } 
     f.pricingModel = terms ? f.pricingModel : "fixed_period";
   }
   if (f.pricingModel === "views_based" && terms) f.targetViews = snapTarget(terms, f.targetViews ?? terms.minTarget);
+  // 0242: fixed-period sales switched off — a fixed draft moves to views (the only way to buy)
+  if (f.pricingModel === "fixed_period" && cat.settings.fixed_enabled === false && terms) {
+    f.pricingModel = "views_based";
+    f.targetViews = snapTarget(terms, f.targetViews ?? terms.minTarget);
+    if (f.placementCodes.length) notes.push(adMessage("fixed_pricing_disabled"));
+  }
   if (f.durationId && !durationsFor(f, cat).some((d) => d.id === f.durationId)) {
     notes.push(adMessage("duration_unavailable"));
     f.durationId = null;
@@ -308,14 +315,16 @@ export function AdvertiseWizard() {
   const placements = format ? offeredPlacements(cat, format.code) : [];
   // Part 2: views terms from the live catalog (null = views not sold, or the database has no 0240)
   const terms = viewsTermsOf(cat);
-  const rates = viewsRates(cat, terms, form.placementCodes);
   const views = form.pricingModel === "views_based";
-  const durations = durationsFor(form, cat);
   const target = views && terms ? snapTarget(terms, form.targetViews ?? terms.minTarget) : null;
+  const rates = viewsRates(cat, terms, form.placementCodes, target);
+  const durations = durationsFor(form, cat);
+  // 0242: a total under the admin's minimum checkout can't be bought (the server refuses it too)
+  const belowMin = views && !!terms && !!rates && target !== null && viewsEstimate(target, rates) < terms.minCheckoutMinor;
   const est: Estimate | null = !form.durationId
     ? null
     : views
-      ? rates && target !== null && durations.some((d) => d.id === form.durationId)
+      ? rates && target !== null && !belowMin && durations.some((d) => d.id === form.durationId)
         ? { currency: cat.settings.display_currency, lines: [], subtotal: viewsEstimate(target, rates), discount: 0, total: viewsEstimate(target, rates) }
         : null
       : estimate(cat, form.placementCodes, form.durationId);
@@ -514,7 +523,7 @@ export function AdvertiseWizard() {
   const canContinue: Record<ApplicationStep, boolean> = {
     format: !!format,
     placement: form.placementCodes.length > 0 && !form.placementCodes.some((c) => isFull(slots?.get(c))),
-    duration: !!form.durationId && durations.some((d) => d.id === form.durationId) && (!views || (!!rates && target !== null)),
+    duration: !!form.durationId && durations.some((d) => d.id === form.durationId) && (!views || (!!rates && target !== null && !belowMin)),
     creative: !!form.creative,
     details: destOk && Object.keys(problems).length === 0,
     preview: true,
@@ -684,13 +693,15 @@ export function AdvertiseWizard() {
                   title="Choose Your Duration"
                   badge={<Chip>Time</Chip>}
                   selected={!views}
+                  // 0242: the admin switched fixed-period sales off — shown as off, never hidden
+                  disabled={cat.settings.fixed_enabled === false}
                   onSelect={() => {
                     if (!views) return;
                     const ok = offeredDurations(cat, form.placementCodes).some((d) => d.id === form.durationId);
                     update({ pricingModel: "fixed_period", durationId: ok ? form.durationId : null });
                   }}
                 >
-                  Keep your ad running for the campaign period you choose.
+                  {cat.settings.fixed_enabled === false ? adMessage("fixed_pricing_disabled") : "Keep your ad running for the campaign period you choose."}
                 </OptionCard>
               </div>
             </>

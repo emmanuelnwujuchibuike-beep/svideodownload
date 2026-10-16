@@ -38,6 +38,8 @@ export type AdNotice =
   | { kind: "delivery_extended"; remaining: number; endAt: string | null }
   | { kind: "delivery_shortfall"; shortfall: number; refundOwed: boolean }
   | { kind: "deadline_soon"; remaining: number; endAt: string | null; freeExtension: boolean }
+  /* 0242: the extensions ran out (or a suspension is held) — an admin decides, and the advertiser is told */
+  | { kind: "delivery_review"; remaining: number }
   /* 0241: a live fixed-period campaign, a day before its end */
   | { kind: "expiring_soon"; endAt: string | null };
 
@@ -73,6 +75,8 @@ function words(n: AdNotice, name: string): { title: string; body: string; money:
       return { title: "Views target reached", body: `“${name}” delivered all ${n.views.toLocaleString("en-US")} views and has stopped. It won't renew or charge you again — launch another campaign any time.`, money: false };
     case "delivery_extended":
       return { title: "Delivery extended, free", body: `“${name}” has ${n.remaining.toLocaleString("en-US")} views to go, so it keeps running${day(n.endAt) ? ` until ${day(n.endAt)}` : ""} at no extra charge.`, money: false };
+    case "delivery_review":
+      return { title: "Your views campaign is under review", body: `“${name}” has ${n.remaining.toLocaleString("en-US")} views to go after its free extensions. Our team will either continue delivery at no charge or refund the undelivered share.`, money: false };
     case "expiring_soon":
       return { title: "Your ad ends soon", body: `“${name}” stops showing${day(n.endAt) ? ` on ${day(n.endAt)}` : " soon"}. Extend it from your campaign page to keep it running.`, money: false };
     case "deadline_soon":

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getAdminUser } from "@/lib/admin/guard";
+import { recordConfigChange } from "@/lib/platform/config-audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -46,6 +47,7 @@ export async function PATCH(request: Request) {
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  const { data: was } = await createAdminClient().from("ad_durations").select("enabled").eq("id", parsed.data.id).maybeSingle();
   const { data, error } = await createAdminClient()
     .from("ad_durations")
     .update({ enabled: parsed.data.enabled, updated_at: new Date().toISOString() })
@@ -54,5 +56,7 @@ export async function PATCH(request: Request) {
     .maybeSingle();
   if (error || !data) return NextResponse.json({ error: "Couldn't save that." }, { status: error ? 503 : 404 });
   console.info("[admin/ads/durations] set", { by: admin.id, id: parsed.data.id, enabled: parsed.data.enabled });
+  // Part 3: every pricing change is audited (who, before, after, when)
+  recordConfigChange({ actorId: admin.id, surface: "ad_pricing", targetId: `duration:${parsed.data.id}`, action: "duration.enabled", before: was ?? null, after: { enabled: parsed.data.enabled } });
   return NextResponse.json({ ok: true, id: data.id, enabled: data.enabled });
 }

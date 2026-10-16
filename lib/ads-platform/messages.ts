@@ -170,6 +170,13 @@ export function adMessage(code: string, f: MessageFacts = {}): string {
       return "We can't deliver that many views on this placement in a reasonable time. Try fewer views or another placement.";
     case "currency_unsupported":
       return "Views campaigns are priced in US dollars only.";
+    /* ── 0242: admin pricing rules ── */
+    case "fixed_pricing_disabled":
+      return "Campaigns by days aren't on sale right now. You can buy your campaign by views.";
+    case "below_min_checkout":
+      return "This order is below the smallest amount we accept. Choose more views.";
+    case "delivery_review":
+      return "This campaign's delivery is being reviewed by our team, so it can't be changed right now. We'll be in touch.";
     /* ── 0241: slots ── */
     case "placement_full":
       return "All ad slots in this placement are taken right now. Choose another placement, or ask us to tell you when a slot opens.";

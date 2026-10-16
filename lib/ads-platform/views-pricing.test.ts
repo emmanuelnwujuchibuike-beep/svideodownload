@@ -24,7 +24,7 @@ const fn = (name: string) => {
   return M240.slice(start, M240.indexOf("\n$$;", start));
 };
 
-const TERMS: ViewsTerms = { ratePer1000Minor: 30, minTarget: 1000, maxTarget: 1_000_000, step: 1000, autoExtend: true, extensionDays: 7, maxExtensions: 8 };
+const TERMS: ViewsTerms = { ratePer1000Minor: 30, minTarget: 1000, maxTarget: 1_000_000, step: 1000, autoExtend: true, extensionDays: 7, maxExtensions: 8, tiers: [], minCheckoutMinor: 0 };
 
 describe("the price: target × rate ÷ 1,000, integer cents", () => {
   it("the brief's table at $0.30 per 1,000 views", () => {

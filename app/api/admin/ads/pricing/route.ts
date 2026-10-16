@@ -34,7 +34,7 @@ export async function PUT(request: Request) {
   const parsed = priceSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid price." }, { status: 400 });
   try {
-    await savePrice(createAdminClient(), parsed.data);
+    await savePrice(createAdminClient(), parsed.data, gate.user.id);
     console.info("[admin/ads/pricing] price", { by: gate.user.id, ...parsed.data });
     return NextResponse.json({ ok: true });
   } catch (e) {

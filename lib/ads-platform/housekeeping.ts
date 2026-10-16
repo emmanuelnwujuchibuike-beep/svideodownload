@@ -64,6 +64,7 @@ async function runViewsDelivery(db: Db) {
   for (const r of rows) {
     if (r.phase === "fulfilled") await notifyAdvertiser(db, r.campaign_id, { kind: "target_reached", views: r.target_views });
     else if (r.phase === "extended") await notifyAdvertiser(db, r.campaign_id, { kind: "delivery_extended", remaining: Math.max(0, r.target_views - r.delivered_views), endAt: r.end_at });
+    else if (r.phase === "review") await notifyAdvertiser(db, r.campaign_id, { kind: "delivery_review", remaining: Math.max(0, r.target_views - r.delivered_views) });
     else if (r.phase === "shortfall") await notifyAdvertiser(db, r.campaign_id, { kind: "delivery_shortfall", shortfall: r.shortfall_views ?? Math.max(0, r.target_views - r.delivered_views), refundOwed: r.refund_owed });
   }
   // 0241: one "planned period ends soon" notice, a day ahead, for a campaign still short

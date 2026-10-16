@@ -515,19 +515,37 @@ interface ViewsAdmin {
     views_max_extensions: number;
     views_capacity_policy: "allow" | "review" | "block";
     views_capacity_window_days: number;
+    /* 0242 (absent until it runs) */
+    fixed_enabled?: boolean;
+    views_min_checkout_minor?: number;
+    views_volume_tiers?: { min_views: number; rate_per_1000_minor: number }[];
+    views_extend_when_advertiser_paused?: boolean;
+    views_suspension_policy?: "close_refund" | "hold_review";
+    views_on_exhausted?: "review" | "close_refund";
+    views_review_after_extensions?: number;
   };
   placements: { code: string; name: string; views_enabled: boolean; views_rate_per_1000_minor: number | null }[];
   durations: { id: string; name: string; duration_days: number; enabled: boolean; views_enabled: boolean }[];
+  migrated0242?: boolean;
 }
 type ViewsPatch = {
   settings?: Partial<ViewsAdmin["settings"]>;
   placement?: { code: string; views_enabled?: boolean; views_rate_per_1000_minor?: number | null };
   duration?: { id: string; views_enabled: boolean };
+  newDuration?: { days: number; name: string };
 };
 type Note = { tone: "ok" | "bad"; text: string } | null;
 
+/**
+ * Advertising Pricing & Delivery (Part 3, 0240–0242): both ways to buy, the
+ * views terms, placement rates, volume tiers, campaign periods and the delivery
+ * guarantee's rules. Every change is checked on the server, applies to NEW
+ * quotes only (a priced campaign keeps the terms it was sold on), and is
+ * recorded in the config audit log with the admin, the old and the new value.
+ */
 function ViewsPricing({ v, busy, setBusy, setNote, onSaved }: { v: ViewsAdmin; busy: boolean; setBusy: (b: boolean) => void; setNote: (n: Note) => void; onSaved: (next: ViewsAdmin) => void }) {
   const s = v.settings;
+  const m42 = v.migrated0242 === true;
   const save = async (patch: ViewsPatch, label: string) => {
     setBusy(true);
     setNote(null);
@@ -540,40 +558,81 @@ function ViewsPricing({ v, busy, setBusy, setNote, onSaved }: { v: ViewsAdmin; b
     } else setNote({ tone: "bad", text: j?.error ?? "Couldn't save that. Nothing changed." });
   };
   const smallest = Math.floor((s.views_min_target * s.views_rate_per_1000_minor) / 1000);
+  const select = "mt-1 block w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground";
   return (
     <section className={box}>
-      <h3 className="text-sm font-semibold">Views-based campaigns</h3>
+      <h3 className="text-sm font-semibold">Advertising Pricing &amp; Delivery</h3>
       <p className="mt-0.5 text-xs text-muted-foreground">
-        Sold as qualifying views (at least half the ad on screen for a second, after the traffic checks). If the planned period ends short, delivery is extended free. Changes apply to new quotes only.
+        Every change applies to new quotes only — a campaign already priced keeps its terms. Switching a way to buy off stops new sales; running campaigns keep serving. Every change is audited.
       </p>
-      <div className="mt-2 flex items-center gap-3">
-        <span className="flex-1 text-sm font-medium">Sell views-based campaigns</span>
+
+      <h4 className="mt-3 text-xs font-semibold">Ways to buy</h4>
+      <div className="mt-1 flex items-center gap-3 py-1.5">
+        <span className="flex-1 text-sm font-medium">By days (fixed period)</span>
+        <Switch on={s.fixed_enabled !== false} label="Sell campaigns by days" disabled={busy || !m42} onChange={(on) => void save({ settings: { fixed_enabled: on } }, "campaigns by days")} />
+      </div>
+      <div className="flex items-center gap-3 py-1.5">
+        <span className="flex-1 text-sm font-medium">By views (guaranteed delivery)</span>
         <Switch on={s.views_enabled} label="Sell views-based campaigns" disabled={busy} onChange={(on) => void save({ settings: { views_enabled: on } }, "views-based campaigns")} />
       </div>
-      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+      <p className="text-[11.5px] text-muted-foreground">Both on: advertisers choose. At least one must stay on. Currency: US dollars (the checkout converts as today).</p>
+
+      <h4 className="mt-4 text-xs font-semibold">Views</h4>
+      <div className="mt-1 grid gap-3 sm:grid-cols-2">
         <NumberField label="Minimum views per campaign" min={1} max={100000000} value={s.views_min_target} disabled={busy} onSave={(n) => void save({ settings: { views_min_target: n } }, "minimum views")} />
         <NumberField label="Maximum views per campaign" min={1} max={100000000} value={s.views_max_target} disabled={busy} onSave={(n) => void save({ settings: { views_max_target: n } }, "maximum views")} />
         <NumberField label="Views are bought in steps of" min={1} max={1000000} value={s.views_target_step} disabled={busy} onSave={(n) => void save({ settings: { views_target_step: n } }, "views step")} />
-        <NumberField label="Default rate per 1,000 views (US cents)" min={1} max={10000000} value={s.views_rate_per_1000_minor} disabled={busy} onSave={(n) => void save({ settings: { views_rate_per_1000_minor: n } }, "default rate")} />
+        <NumberField label="Base rate per 1,000 views (US cents)" min={1} max={10000000} value={s.views_rate_per_1000_minor} disabled={busy} onSave={(n) => void save({ settings: { views_rate_per_1000_minor: n } }, "base rate")} />
+        <NumberField label="Minimum checkout (US cents, 0 = none)" min={0} max={100000000} value={s.views_min_checkout_minor ?? 0} disabled={busy || !m42} onSave={(n) => void save({ settings: { views_min_checkout_minor: n } }, "minimum checkout")} />
+      </div>
+      <p className="mt-2 text-[11.5px] text-muted-foreground">The smallest campaign costs ${(smallest / 100).toFixed(2)} at the base rate.</p>
+
+      <Tiers tiers={s.views_volume_tiers ?? []} disabled={busy || !m42} onSave={(t) => void save({ settings: { views_volume_tiers: t } }, "volume tiers")} />
+
+      <h4 className="mt-4 text-xs font-semibold">Delivery guarantee</h4>
+      <div className="mt-1 flex items-center gap-3 py-1.5">
+        <span className="flex-1 text-sm">Extend free until the target is met</span>
+        <Switch on={s.views_auto_extend} label="Extend free until the target is met" disabled={busy} onChange={(on) => void save({ settings: { views_auto_extend: on } }, "free extension")} />
+      </div>
+      <div className="flex items-center gap-3 py-1.5">
+        <span className="flex-1 text-sm">An advertiser&apos;s own pause still earns an extension</span>
+        <Switch on={s.views_extend_when_advertiser_paused !== false} label="Advertiser pause earns an extension" disabled={busy || !m42} onChange={(on) => void save({ settings: { views_extend_when_advertiser_paused: on } }, "advertiser pause rule")} />
+      </div>
+      <div className="mt-1 grid gap-3 sm:grid-cols-2">
         <NumberField label="Free extension length (days)" min={1} max={90} value={s.views_extension_days} disabled={busy} onSave={(n) => void save({ settings: { views_extension_days: n } }, "extension length")} />
         <NumberField label="Most free extensions per campaign" min={0} max={52} value={s.views_max_extensions} disabled={busy} onSave={(n) => void save({ settings: { views_max_extensions: n } }, "extension limit")} />
+        <label className="text-[11.5px] text-muted-foreground">
+          When the free extensions run out →
+          <select value={s.views_on_exhausted ?? "review"} disabled={busy || !m42} onChange={(e) => void save({ settings: { views_on_exhausted: e.target.value as "review" | "close_refund" } }, "after the last extension")} className={select}>
+            <option value="review">Hold it for an admin to decide (recommended)</option>
+            <option value="close_refund">Close it and owe the undelivered share</option>
+          </select>
+        </label>
+        <label className="text-[11.5px] text-muted-foreground">
+          A campaign suspended by Frenzsave at its deadline →
+          <select value={s.views_suspension_policy ?? "close_refund"} disabled={busy || !m42} onChange={(e) => void save({ settings: { views_suspension_policy: e.target.value as "close_refund" | "hold_review" } }, "suspension rule")} className={select}>
+            <option value="close_refund">Close it and owe the undelivered share</option>
+            <option value="hold_review">Hold it for an admin to decide</option>
+          </select>
+        </label>
+        <NumberField label="Flag for review after this many extensions (0 = off)" min={0} max={52} value={s.views_review_after_extensions ?? 0} disabled={busy || !m42} onSave={(n) => void save({ settings: { views_review_after_extensions: n } }, "review threshold")} />
+      </div>
+
+      <h4 className="mt-4 text-xs font-semibold">Capacity</h4>
+      <div className="mt-1 grid gap-3 sm:grid-cols-2">
         <NumberField label="Capacity estimate looks back (days)" min={1} max={90} value={s.views_capacity_window_days} disabled={busy} onSave={(n) => void save({ settings: { views_capacity_window_days: n } }, "capacity window")} />
         <label className="text-[11.5px] text-muted-foreground">
           When a target may not fit the measured views →
-          <select value={s.views_capacity_policy} disabled={busy} onChange={(e) => void save({ settings: { views_capacity_policy: e.target.value as ViewsAdmin["settings"]["views_capacity_policy"] } }, "capacity policy")} className="mt-1 block w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground">
+          <select value={s.views_capacity_policy} disabled={busy} onChange={(e) => void save({ settings: { views_capacity_policy: e.target.value as ViewsAdmin["settings"]["views_capacity_policy"] } }, "capacity policy")} className={select}>
             <option value="review">Sell it, then hold it for an admin</option>
             <option value="block">Refuse it (no history yet: hold for an admin)</option>
             <option value="allow">Sell it anyway</option>
           </select>
         </label>
       </div>
-      <div className="mt-2 flex items-center gap-3">
-        <span className="flex-1 text-sm">Extend free until the target is met</span>
-        <Switch on={s.views_auto_extend} label="Extend free until the target is met" disabled={busy} onChange={(on) => void save({ settings: { views_auto_extend: on } }, "free extension")} />
-      </div>
-      <p className="mt-2 text-[11.5px] text-muted-foreground">The smallest campaign costs ${(smallest / 100).toFixed(2)} at the default rate.</p>
+      {!m42 ? <p className="mt-2 text-[11.5px] font-semibold text-amber-700">The greyed controls appear once migration 0242 has run.</p> : null}
 
-      <h4 className="mt-4 text-xs font-semibold">Per placement (no own rate = the default)</h4>
+      <h4 className="mt-4 text-xs font-semibold">Per placement (no own rate = the base rate or tier)</h4>
       <ul className="mt-1 divide-y divide-border/60">
         {v.placements.map((p) => (
           <li key={p.code} className="flex flex-wrap items-end gap-3 py-2">
@@ -583,7 +642,7 @@ function ViewsPricing({ v, busy, setBusy, setNote, onSaved }: { v: ViewsAdmin; b
             </div>
             {p.views_rate_per_1000_minor !== null ? (
               <button type="button" disabled={busy} onClick={() => void save({ placement: { code: p.code, views_rate_per_1000_minor: null } }, `${p.name} rate`)} className="min-h-[2rem] rounded-lg border border-border px-2.5 text-xs font-semibold disabled:opacity-40">
-                Use default
+                Use base rate
               </button>
             ) : null}
             <Switch on={p.views_enabled} label={`${p.name} sells views`} disabled={busy} onChange={(on) => void save({ placement: { code: p.code, views_enabled: on } }, p.name)} />
@@ -591,7 +650,8 @@ function ViewsPricing({ v, busy, setBusy, setNote, onSaved }: { v: ViewsAdmin; b
         ))}
       </ul>
 
-      <h4 className="mt-4 text-xs font-semibold">Planned periods advertisers may choose</h4>
+      <h4 className="mt-4 text-xs font-semibold">Planned periods for views campaigns</h4>
+      <p className="text-[11.5px] text-muted-foreground">A switched-off length is never offered for a new purchase; campaigns already running keep theirs. Lengths for campaigns by days are switched in Ad placements.</p>
       <ul className="mt-1 divide-y divide-border/60">
         {v.durations.map((d) => (
           <li key={d.id} className="flex items-center gap-3 py-2">
@@ -603,6 +663,61 @@ function ViewsPricing({ v, busy, setBusy, setNote, onSaved }: { v: ViewsAdmin; b
           </li>
         ))}
       </ul>
+      <NewDuration disabled={busy} existing={v.durations.map((d) => d.duration_days)} onAdd={(days, name) => void save({ newDuration: { days, name } }, `new length ${name}`)} />
     </section>
+  );
+}
+
+/** Volume tiers: a lower rate from a number of views up. Edited locally, saved once. */
+function Tiers({ tiers, disabled, onSave }: { tiers: { min_views: number; rate_per_1000_minor: number }[]; disabled: boolean; onSave: (t: { min_views: number; rate_per_1000_minor: number }[]) => void }) {
+  const [rows, setRows] = useState(tiers.map((t) => ({ min: String(t.min_views), rate: String(t.rate_per_1000_minor) })));
+  useEffect(() => setRows(tiers.map((t) => ({ min: String(t.min_views), rate: String(t.rate_per_1000_minor) }))), [tiers]);
+  const parsed = rows.map((r) => ({ min_views: Number(r.min), rate_per_1000_minor: Number(r.rate) }));
+  const valid = parsed.every((t) => Number.isInteger(t.min_views) && t.min_views >= 1 && Number.isInteger(t.rate_per_1000_minor) && t.rate_per_1000_minor >= 1);
+  return (
+    <div className="mt-3">
+      <p className="text-xs font-semibold">Volume tiers</p>
+      <p className="text-[11.5px] text-muted-foreground">From a number of views up, a lower rate (US cents per 1,000). A placement&apos;s own rate wins over a tier. The server refuses a bigger tier that costs more.</p>
+      <ul className="mt-1 space-y-1.5">
+        {rows.map((r, i) => (
+          <li key={i} className="flex flex-wrap items-center gap-2 text-xs">
+            From
+            <input inputMode="numeric" value={r.min} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, min: e.target.value } : x)))} className="w-28 rounded-lg border border-border bg-background px-2 py-1.5" aria-label="From views" />
+            views →
+            <input inputMode="numeric" value={r.rate} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, rate: e.target.value } : x)))} className="w-20 rounded-lg border border-border bg-background px-2 py-1.5" aria-label="Cents per 1,000" />
+            ¢ / 1,000
+            <button type="button" onClick={() => setRows(rows.filter((_, j) => j !== i))} className="min-h-[2rem] px-1.5 font-semibold text-rose-600">
+              Remove
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-1.5 flex gap-2">
+        <button type="button" disabled={disabled || rows.length >= 10} onClick={() => setRows([...rows, { min: "", rate: "" }])} className="min-h-[2rem] rounded-lg border border-border px-2.5 text-xs font-semibold disabled:opacity-40">
+          Add tier
+        </button>
+        <button type="button" disabled={disabled || !valid} onClick={() => onSave(parsed)} className="min-h-[2rem] rounded-lg border border-border px-2.5 text-xs font-semibold disabled:opacity-40">
+          Save tiers
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function NewDuration({ disabled, existing, onAdd }: { disabled: boolean; existing: number[]; onAdd: (days: number, name: string) => void }) {
+  const [days, setDays] = useState("");
+  const n = Number(days);
+  const ok = Number.isInteger(n) && n >= 1 && n <= 366 && !existing.includes(n);
+  return (
+    <div className="mt-2 flex flex-wrap items-end gap-2 text-xs">
+      <label className="text-[11.5px] text-muted-foreground">
+        Add a length (days)
+        <input inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} className="mt-1 block w-24 rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground" />
+      </label>
+      <button type="button" disabled={disabled || !ok} onClick={() => { onAdd(n, `${n} ${n === 1 ? "day" : "days"}`); setDays(""); }} className="min-h-[2rem] rounded-lg border border-border px-2.5 font-semibold disabled:opacity-40">
+        Add
+      </button>
+      {days && existing.includes(n) ? <span className="text-muted-foreground">That length exists — switch it on above.</span> : null}
+    </div>
   );
 }

@@ -92,8 +92,10 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
       if (!res.ok) {
         setIncoming(prevIn);
         setFriends(prevFriends);
-      } else if (action === "accept") {
-        setCelebrating(req.user);
+      } else {
+        if (action === "accept") setCelebrating(req.user);
+        // Profiles cached in the router (6 h) would still show the old state (2026-10-16).
+        router.refresh();
       }
     } catch {
       setIncoming(prevIn);
@@ -149,6 +151,7 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
     try {
       const res = await fetch(`/api/friends/${req.user.id}`, { method: "DELETE" });
       if (!res.ok) setOutgoing(prev);
+      else router.refresh();
     } catch {
       setOutgoing(prev);
     } finally {

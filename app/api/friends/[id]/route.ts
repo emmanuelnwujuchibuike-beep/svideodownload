@@ -10,6 +10,7 @@ import {
   unfriend,
 } from "@/lib/social/friends";
 import { NOTE_MAX, REQUEST_SOURCES } from "@/lib/social/friend-requests/trust";
+import { bumpSuggestionVersion } from "@/lib/social/people/engine";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -82,6 +83,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const e = ERR[res.reason] ?? { msg: "Couldn't update friendship right now.", status: 400 };
     return NextResponse.json({ error: e.msg, reason: res.reason }, { status: e.status });
   }
+  // Suggestions are cached 60 s per person; without this the one just requested came back as "Add".
+  await Promise.all([bumpSuggestionVersion(user.id), bumpSuggestionVersion(id)]);
   return NextResponse.json({ ok: true, state: res.state });
 }
 
@@ -97,5 +100,6 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const res =
     state === "friends" ? await unfriend(user.id, id) : await cancelFriendRequest(user.id, id);
   if (!res.ok) return NextResponse.json({ error: "Couldn't update." }, { status: 400 });
+  await Promise.all([bumpSuggestionVersion(user.id), bumpSuggestionVersion(id)]);
   return NextResponse.json({ ok: true, state: res.state });
 }

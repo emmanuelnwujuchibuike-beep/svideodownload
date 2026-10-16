@@ -2,6 +2,7 @@
 
 import { Check, Loader2, MoreHorizontal, RotateCw, UserPlus, Users } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { VerifiedTick } from "@/components/badges/identity-badges";
@@ -299,6 +300,7 @@ function SuggestionRow({ person, onAnswer }: { person: PersonSuggestion; onAnswe
 
 /** A friend request from a suggestion (source "suggestion"), through the same route as everywhere else. */
 function AddFriendChip({ id, name }: { id: string; name: string }) {
+  const router = useRouter();
   const [state, setState] = useState<"idle" | "busy" | "sent" | "failed">("idle");
   const send = async () => {
     if (state === "busy" || state === "sent") return;
@@ -309,6 +311,15 @@ function AddFriendChip({ id, name }: { id: string; name: string }) {
       body: JSON.stringify({ action: "request", source: "suggestion" }),
     }).catch(() => null);
     setState(res?.ok ? "sent" : "failed");
+    if (res?.ok) {
+      // Coming back must not offer "Add" again (owner, 2026-10-16): this tab's saved
+      // lists forget them and the router's cached pages are refreshed. The card on
+      // screen keeps "Sent".
+      const kept = readSession();
+      for (const k of Object.keys(kept) as SuggestionFilter[]) kept[k] = kept[k]?.filter((p) => p.id !== id);
+      writeSession(kept);
+      router.refresh();
+    }
   };
   return (
     <button

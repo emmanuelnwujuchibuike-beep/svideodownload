@@ -42,6 +42,8 @@ export function AddFriendButton({
 }) {
   const router = useRouter();
   const [state, setState] = useState<FriendState>(initialState);
+  // A refreshed page (router.refresh below) brings the server's state; follow it.
+  useEffect(() => setState(initialState), [initialState]);
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
@@ -189,6 +191,13 @@ export function AddFriendButton({
           const res = await post({ action: "request", note: note || undefined, source: "profile" });
           if (res.ok) {
             setState("outgoing");
+            /*
+              🔴 2026-10-16 (owner): "When I add friend and go out of the page and come back
+              it still shows I haven't added the person". The router keeps a page for 6 h
+              (next.config staleTimes), so coming back replayed this profile as it was
+              before the request. Accept and remove already refreshed; the send did not.
+            */
+            router.refresh();
             // Same prompt a follow raises — see creator-notify-nudge.tsx. Fired
             // on the REQUEST rather than on acceptance because this is the
             // moment the person is thinking about this account; the preference
@@ -200,6 +209,7 @@ export function AddFriendButton({
           if (res.status === 409) {
             setState("incoming");
             setModal(false);
+            router.refresh();
           }
           return false;
         }}

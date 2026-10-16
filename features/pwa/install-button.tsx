@@ -129,7 +129,7 @@ export function InstallButton({ className }: { className?: string }) {
  * three parts flush. "There should still be space" is a spacing brief, and the
  * cheapest way to make a control look expensive is to give it room.
  */
-/** `label`: the Download page's crowded bar says just "Install" (owner 2026-10-12) */
+/** `label`: the Download page's bar and the landing header say just "Install" (owner 2026-10-12, 2026-10-16) */
 export function InstallHeaderCta({ className, label = "Install Frenz" }: { className?: string; label?: string }) {
   const state = useSyncExternalStore(subscribeInstall, getInstallState, getServerInstallState);
   const [open, setOpen] = useState(false);

@@ -470,7 +470,7 @@ export function SiteHeader({
             header is unchanged and the row cannot shift.
           */}
           {/* the streak moved to the chat page (owner, 2026-10-09) — see features/social/chat-streak.tsx */}
-          {landing ? <InstallHeaderCta /> : <InstallButton />}
+          {landing ? <InstallHeaderCta label="Install" /> : <InstallButton />}
           {/* Promote sits right beside Install on the landing (owner, 2026-10-09). */}
           {landing ? <PromoteButton size="header" /> : null}
           <ThemeToggle />
@@ -529,7 +529,7 @@ export function SiteHeader({
               streak, so a first-time visitor’s header is byte-for-byte
               unchanged and there is no layout shift either way.
             */}
-            {landing ? <InstallHeaderCta /> : <SearchTriggerIcon />}
+            {landing ? <InstallHeaderCta label="Install" /> : <SearchTriggerIcon />}
             {/* Promote, fixed beside Install (owner, 2026-10-09: "make it be close to
                 the install button in the landing page"). */}
             {landing ? <PromoteButton size="header" /> : null}

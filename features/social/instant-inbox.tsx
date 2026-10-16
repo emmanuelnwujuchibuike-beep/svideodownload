@@ -1,7 +1,6 @@
 "use client";
 
 import { RefreshCw } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { getEntry, revalidate, subscribe, type CacheEntry } from "@/features/data";
@@ -63,16 +62,13 @@ export function InstantInbox({ variant = "page" }: { variant?: "page" | "pane" }
 }
 
 function MemberInbox({ variant }: { variant: "page" | "pane" }) {
-  const router = useRouter();
   const inbox = useEntry<Inbox>(INBOX_KEY);
   const requests = useEntry<FriendRequestItem[]>(INBOX_REQUESTS_KEY);
   const [viewerId, setViewerId] = useState("");
 
   useEffect(() => {
-    if (!hasAuthCookie()) {
-      router.replace("/login?next=/messages");
-      return;
-    }
+    // no session: the guest inbox takes over after hydration (InstantInbox) — never send them to /login from here
+    if (!hasAuthCookie()) return;
     primeInboxFromDevice();
     // the painted copy came from the device (or nothing): refresh it once, behind the list
     if (getEntry<Inbox>(INBOX_KEY).updatedAt === 0) void revalidate(INBOX_KEY, loadInbox, 0).catch(() => {});
@@ -89,7 +85,7 @@ function MemberInbox({ variant }: { variant: "page" | "pane" }) {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, []);
 
   if (inbox.data === undefined) {
     if (inbox.error) {

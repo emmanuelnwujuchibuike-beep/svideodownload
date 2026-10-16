@@ -48,7 +48,7 @@ export function InboxHeaderActions() {
   return guest ? <GuestHeaderActions /> : <MemberHeaderActions />;
 }
 
-/** A signed-out visitor: the same three circles, each asking them to sign in; no avatar (owner, 2026-10-16). */
+/** A signed-out visitor: the same three circles, no avatar; New message and the tools ask them to sign in (owner, 2026-10-16). */
 function GuestHeaderActions() {
   const [ask, setAsk] = useState(false);
   const open = () => {
@@ -57,9 +57,10 @@ function GuestHeaderActions() {
   };
   return (
     <span className="ml-auto flex shrink-0 items-center gap-1 min-[360px]:gap-1.5">
-      <button type="button" aria-label="Add friends" title="Add friends" onClick={open} className={CIRCLE}>
+      {/* Add friends opens the Friends page, locked behind sign-in for a guest (owner, 2026-10-16) */}
+      <Link href="/friends" prefetch={false} aria-label="Add friends" title="Add friends" onClick={() => haptic("light")} className={CIRCLE}>
         <UserPlus className={ICON} strokeWidth={STROKE} aria-hidden />
-      </button>
+      </Link>
       <button type="button" aria-label="New message" onClick={open} className={CIRCLE}>
         <PenSquare className={ICON} strokeWidth={STROKE} aria-hidden />
       </button>

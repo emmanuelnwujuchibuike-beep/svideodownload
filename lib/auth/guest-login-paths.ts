@@ -32,6 +32,10 @@ export const GUEST_LOGIN_PREFIXES = [
   "/welcome",
 ] as const;
 
+/** Pages under a listed prefix that a guest may OPEN (owner, 2026-10-16: /friends shows, locked behind sign-in). */
+export const GUEST_OPEN_EXACT = new Set(["/friends"]);
+
 export function guestMustLogin(path: string): boolean {
+  if (GUEST_OPEN_EXACT.has(path)) return false;
   return GUEST_LOGIN_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));
 }

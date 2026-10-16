@@ -1,8 +1,8 @@
 "use client";
 
-import { MessageCircle, X } from "lucide-react";
+import { MessageCircle, Users, X, type LucideIcon } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
 import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
@@ -43,8 +43,22 @@ export function GuestInbox() {
   );
 }
 
-/** The sign-in modal a guest gets from Add friends, New chat and the tools menu. */
-export function GuestSignInModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+/** The sign-in modal a guest gets from New chat, the tools menu and the locked Friends page. */
+export function GuestSignInModal({
+  open,
+  onClose,
+  next = "/messages",
+  title = "Sign in to chat",
+  body = "Add friends and start conversations with a free Frenz account.",
+  icon: Icon = MessageCircle,
+}: {
+  open: boolean;
+  onClose: () => void;
+  next?: string;
+  title?: string;
+  body?: string;
+  icon?: LucideIcon;
+}) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -66,12 +80,12 @@ export function GuestSignInModal({ open, onClose }: { open: boolean; onClose: ()
           <X className="h-4 w-4" aria-hidden />
         </button>
         <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-500/15 to-violet-500/15">
-          <MessageCircle className="h-5 w-5 text-violet-500" aria-hidden />
+          <Icon className="h-5 w-5 text-violet-500" aria-hidden />
         </span>
-        <p id="guest-signin-title" className="mt-3 text-[16px] font-bold">Sign in to chat</p>
-        <p className="mt-1 text-[13px] text-muted-foreground">Add friends and start conversations with a free Frenz account.</p>
+        <p id="guest-signin-title" className="mt-3 text-[16px] font-bold">{title}</p>
+        <p className="mt-1 text-[13px] text-muted-foreground">{body}</p>
         <Link
-          href={NEXT}
+          href={`/login?next=${encodeURIComponent(next)}`}
           prefetch={false}
           className="mt-4 flex min-h-[2.75rem] w-full items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-violet-600 text-[14px] font-semibold text-white transition active:scale-[0.98] motion-reduce:active:scale-100"
         >
@@ -83,5 +97,42 @@ export function GuestSignInModal({ open, onClose }: { open: boolean; onClose: ()
       </div>
     </div>,
     document.body,
+  );
+}
+
+/**
+ * The Friends page for a guest (owner, 2026-10-16: "the add friends button should open
+ * the friends page but won't be able to interact or click on any, it will show sign in").
+ * The page renders with empty data; every tap, key or focus inside is caught before it
+ * reaches a control and opens the sign-in modal instead. The modal sits OUTSIDE the
+ * locked box, so its own buttons work (React events bubble through portals).
+ */
+export function GuestLock({ children, next }: { children: React.ReactNode; next: string }) {
+  const [ask, setAsk] = useState(false);
+  const stop = (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  return (
+    <>
+      <div
+        onClickCapture={(e) => {
+          stop(e);
+          setAsk(true);
+        }}
+        onPointerDownCapture={stop}
+        onKeyDownCapture={(e) => {
+          if (e.key === "Tab") return;
+          stop(e);
+          if (e.key === "Enter" || e.key === " ") setAsk(true);
+        }}
+        onFocusCapture={(e) => {
+          if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) e.target.blur();
+        }}
+      >
+        {children}
+      </div>
+      <GuestSignInModal open={ask} onClose={() => setAsk(false)} next={next} title="Sign in to see your friends" body="Add friends, see requests and chat with a free Frenz account." icon={Users} />
+    </>
   );
 }

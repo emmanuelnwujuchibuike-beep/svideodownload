@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 
 import { FriendActivityFeed } from "@/features/friends/friend-activity-feed";
 import { FriendsHub } from "@/features/friends/friends-hub";
@@ -10,6 +9,7 @@ import { getFriendActivity } from "@/lib/social/friend-activity";
 import { friendsOverview, runFriendRemindersSoon } from "@/lib/social/friends";
 import { archivedFriendIds } from "@/lib/social/intelligence/server";
 import { getActiveStories } from "@/lib/social/stories";
+import { GuestLock } from "@/features/social/guest-chat";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -27,7 +27,18 @@ export default async function FriendsPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login?next=/friends");
+  // A guest sees the page, empty and locked: any tap asks them to sign in (owner, 2026-10-16). Nothing private is read.
+  if (!user) {
+    return (
+      <div className="mx-auto flex w-full max-w-[1600px] flex-1 gap-4 px-3 sm:px-4">
+        <main className="min-w-0 flex-1 pb-[calc(var(--frenz-nav-clearance)+1.5rem)] pt-4 lg:pb-6">
+          <GuestLock next="/friends">
+            <FriendsHub initial={{ viewer: null, friends: [], incoming: [], outgoing: [], activity: [] }} />
+          </GuestLock>
+        </main>
+      </div>
+    );
+  }
 
   // Same opportunistic reminder tick as the API — page loads count too.
   runFriendRemindersSoon();

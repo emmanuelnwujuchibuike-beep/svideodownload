@@ -1,6 +1,6 @@
 "use client";
 
-import { History, UserPlus } from "lucide-react";
+import { History, Users } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -347,7 +347,7 @@ export function MobileNav({
           full bleed bottom NAV should not be used anywhere"). One tab set, chosen only
           by whether someone is signed in:
             member  Home (/downloads) · Feed (/home, the complete feed) · History · Chats · Profile
-            guest   Home (/) · Add friend (/friends) · History · Chats · Profile
+            guest   Home (/) · Friends (/friends) · History · Chats · Profile
           Every tab carries its label (owner: "add description to the landing bottom NAVs").
         */}
         <NavTab
@@ -375,8 +375,8 @@ export function MobileNav({
             onWarm={router.prefetch}
           />
         ) : (
-          /* Add friend in Earn's place on the landing (owner, 2026-10-16) — the Friends page; it asks a guest to sign in. */
-          <NavTab label="Add friend" href="/friends" icon={UserPlus} activeIcon={UserPlus} active={pathname.startsWith("/friends")} prefetch={false} onWarm={router.prefetch} />
+          /* Friends in Earn's place on the landing (owner, 2026-10-16) — a guest sees the page locked behind sign-in. */
+          <NavTab label="Friends" href="/friends" icon={Users} activeIcon={Users} active={pathname.startsWith("/friends")} prefetch={false} onWarm={router.prefetch} />
         )}
         <NavTab label="History" href="/history" icon={History} activeIcon={History} active={pathname.startsWith("/history")} onWarm={router.prefetch} />
         {/* Chats for everyone (owner, 2026-10-16: Support → Chats on the landing too). A guest sees an empty

@@ -68,8 +68,10 @@ describe("guest /login redirect at the edge", () => {
   });
 
   it("prefix matching is by segment, never by string", () => {
-    expect(guestMustLogin("/friends")).toBe(true);
+    // 2026-10-16 (owner): /friends itself opens for a guest, locked; everything under it still asks to log in
+    expect(guestMustLogin("/friends")).toBe(false);
     expect(guestMustLogin("/friends/discover")).toBe(true);
+    expect(guestMustLogin("/home")).toBe(true);
     expect(guestMustLogin("/friendship-guide")).toBe(false);
     expect(guestMustLogin("/downloadsx")).toBe(false);
     expect(guestMustLogin("/feed")).toBe(false);

@@ -424,3 +424,26 @@ describe("the membership page never carries subscriber announcements (found whil
     expect(src.match(/\.filter\(isMembersNote\)/g)?.length).toBeGreaterThanOrEqual(3);
   });
 });
+
+describe("Part 7 review — the fan-out's concurrency is bounded", () => {
+  it("never more than FANOUT_CONCURRENCY hand-offs in flight within a page", async () => {
+    for (let i = 0; i < 60; i++) {
+      db.tables.profiles!.push(profile(U(3000 + i), `p${i}`));
+      db.tables.creator_memberships!.push(sub(U(3000 + i)));
+    }
+    const smart = await import("@/lib/notifications/smart-delivery");
+    let inFlight = 0;
+    let peak = 0;
+    const spy = vi.spyOn(smart, "sendSmartPush").mockImplementation(async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 2));
+      inFlight -= 1;
+    });
+    await drain(await announce());
+    expect(spy).toHaveBeenCalledTimes(60);
+    expect(peak).toBeLessThanOrEqual(fan.FANOUT_CONCURRENCY);
+    expect(peak).toBeGreaterThan(1);
+    spy.mockRestore();
+  });
+});

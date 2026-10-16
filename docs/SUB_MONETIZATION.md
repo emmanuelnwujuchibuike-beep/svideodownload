@@ -498,3 +498,60 @@ dark (no horizontal overflow, no page errors, long creator names truncate). Know
 announcements block appears after its fetch (subscribers only), a small late insert above the gallery.
 
 **Not verified from here:** real push/email delivery; 0251 applied; the ai-reconcile clock.
+
+## Frenz Exclusive Part 7 — creator earnings, analytics and admin (2026-10-16)
+
+**Sources of truth (traced, not assumed).** Creator money is USD cents (the creator's price):
+`settle_sub_purchase` writes `sub_ledger earning +price` and moves `sub_balances.pending/lifetime`;
+`release_sub_earnings` moves pending → available (`release`); `reverse_sub_purchase` writes
+`clawback −price` (from pending, else available, the rest as `debt`); `request_sub_withdrawal`
+moves available → held (`withdrawal_hold −gross`); `resolve_withdrawal` moves held → withdrawn
+(`withdrawal_paid`, amount 0) or back to available (`withdrawal_return +gross`). What subscribers paid
+(price + fee) is on `sub_purchases` in its CHARGED currency (`charged_currency`, `charged_minor`).
+
+| Figure | Source | Meaning |
+|---|---|---|
+| Available / clearing / in a withdrawal / owed back / earned all time / paid out | `sub_balances` (never summed from a page of rows) | available, pending, held, debt, lifetime (net of clawbacks), withdrawn (gross) |
+| Net earnings (period) | `sub_creator_summary` | ledger `earning` − `clawback` in the period |
+| New / renewals | 0252 functions | a settled purchase is NEW when no earlier settled purchase exists for that creator+subscriber |
+| Settled purchase | 0252 | `paid_at` set, status not `refund_due` (a later refund doesn't un-settle it; refunds are counted by `reversed_at`) |
+| Access ended | 0252 | a paid membership (not removed) whose `period_end` fell in the period |
+| Cancellations / ending | 0252 | cancellations still standing for the current period (0250); ending = paid up and cancelled |
+| What subscribers paid | 0252 | per charged currency, minor units — never added across currencies |
+| Admin creator share / platform fee | 0252 | `price_cents` / `fee_cents` of purchases settled in the period (USD), before refunds |
+| Likes / comments | `sub_post_likes`, `sub_post_comments` (visible) | counted in the period |
+| Views, impressions, conversion | — | not recorded for exclusive posts, so not shown (the page says so) |
+
+Periods are 7 / 30 / 90 days from UTC midnight N days ago — the same boundary for totals and the
+daily series. Amounts are integers end to end (cents / minor units); formatting happens only for display.
+
+**Migration 0252 (`0252_sub_reporting.sql`, after 0251).** Three read-only aggregate functions
+(`sub_creator_summary`, `sub_creator_daily`, `sub_admin_summary`) — SECURITY INVOKER, EXECUTE only for
+`service_role` — and four indexes for their filters (`sub_purchases (creator_id, subscriber_id,
+paid_at)`, `(paid_at)`, `(reversed_at)`, `sub_ledger (creator_id, kind, created_at)`). No table,
+policy or money function changed. PGlite (`supabase/tests/0252_sub_reporting.pglite.mjs`) builds the
+data with the REAL settle/reverse functions and checks every figure (applied twice; the mutant fails 9).
+Before it runs: balances and counts still show; period analytics say they arrive with the next update.
+
+**Creator: `/exclusive/earnings`** (linked from the studio and Members). Server-rendered first view;
+`GET /api/sub/earnings/overview?days=` and `GET /api/sub/earnings/ledger?filter=&from=&to=&cursor=`
+(session user only — there is no creator parameter). Withdraw reuses the existing sheet and
+`request_sub_withdrawal` (minimum, fee, one open request, idempotency — all in SQL); the page explains
+why it can't be used (paused, a request in progress, below the minimum). History is the creator's own
+ledger, 25 a page, keyset; withdrawal rows show their request's own status (Requested … Paid), never
+"paid" before `resolve_withdrawal` completes it.
+
+**Admin (Rewards → SUB, loaded only when opened).** Overview (`/api/admin/memberships/summary`),
+search (`/api/admin/memberships/search`: creator/subscriber by @handle or id, reference part limited
+to letters/digits/_ , status, date range; 25 a page; no provider ids or checkout links) and Exclusive
+moderation by state (`/api/admin/memberships/moderation`: reported, removed, restored — from the
+security audit log —, dismissed; posts or comments; 25 a page). Every route checks `getAdminUser()`
+itself. Media is reviewed only through the existing audited sub-review.
+**Moderation fixes:** remove only takes down what is up (a repeat no longer rewrites the first
+admin/time), restore only brings back what an admin removed (restoring visible content is 409), and
+the admin's reason plus the real outcome (`changed`, `state`) go on the audit entry.
+
+**Part 6 review fix:** the fan-out sent a whole page (200) at once; it now hands off at most 20 at a
+time, and the publish request sends only the first page (the reconcile run sends the rest).
+
+**Not verified from here:** production data, Paystack payouts, 0252 applied.

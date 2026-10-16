@@ -89,7 +89,8 @@ export function fakeDb(seed: Record<string, Row[]> = {}): FakeDb {
     const orders: { col: string; asc: boolean }[] = [];
     let limit: number | null = null;
 
-    const val = (r: Row, col: string) => (col.includes(".") ? (r[col.split(".")[0]!] as Row | undefined)?.[col.split(".")[1]!] : r[col]);
+    // "a.b" reads an embedded row; "a->>b" reads a JSON column's key as PostgREST does
+    const val = (r: Row, col: string) => (col.includes("->>") ? (r[col.split("->>")[0]!] as Row | undefined)?.[col.split("->>")[1]!] : col.includes(".") ? (r[col.split(".")[0]!] as Row | undefined)?.[col.split(".")[1]!] : r[col]);
     const add = (desc: string, p: (r: Row) => boolean) => (filters.push(desc), preds.push(p), b);
     const b: Record<string, unknown> = {
       select(cols?: string, opts?: { count?: string; head?: boolean }) {

@@ -167,7 +167,7 @@ describe("admin review and takedown", () => {
     expect(db.tables.sub_posts![0]).toMatchObject({ status: "archived", moderated_by: ADMIN });
     expect(db.tables.sub_post_media).toHaveLength(1);
     expect(db.tables.reports![0]!.status).toBe("actioned");
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ eventType: "moderation_action", targetType: "sub_post", metadata: { action: "remove" } }));
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ eventType: "moderation_action", targetType: "sub_post", metadata: { action: "remove", changed: true, state: "removed" } })); // Part 7: the real outcome is recorded too
     expect(await openSubPost(POST, SUBSCRIBER)).toMatchObject({ ok: false, status: 404 });
     // the creator cannot delete the evidence while it is under review
     expect(await deleteSubPost(CREATOR, POST)).toMatchObject({ ok: false, status: 409 });
@@ -181,7 +181,7 @@ describe("admin review and takedown", () => {
   });
   it("a comment takedown hides it (never deletes it)", async () => {
     admin = { id: ADMIN };
-    expect(await moderate("sub_comment", COMMENT, "remove", ADMIN)).toEqual({ ok: true });
+    expect(await moderate("sub_comment", COMMENT, "remove", ADMIN)).toEqual({ ok: true, state: "removed", changed: true });
     expect(db.tables.sub_post_comments![0]!.hidden_at).toBeTruthy();
     expect(db.tables.sub_post_comments).toHaveLength(1);
   });

@@ -110,7 +110,13 @@ export const isSubModAction = (a: unknown): a is SubModAction => a === "remove" 
  * about the caller and must never be reachable without that check. Returns the owner for the
  * audit trail written by the caller.
  */
-export async function moderateSubTarget(type: SubTargetType, targetId: string, action: SubModAction, adminId: string): Promise<{ ok: true; ownerId: string | null } | Fail> {
+/*
+ * Part 7: every transition is conditional on the state it starts from, so a repeated or conflicting
+ * action can't corrupt the record: remove only takes down what is up (a second remove changes nothing
+ * and keeps the FIRST admin and time), restore only brings back what an admin took down, and a
+ * restore of something that isn't removed is refused. `changed` says whether anything moved.
+ */
+export async function moderateSubTarget(type: SubTargetType, targetId: string, action: SubModAction, adminId: string): Promise<{ ok: true; ownerId: string | null; changed: boolean; state: string } | Fail> {
   if (!isUuid(targetId) || !isSubTargetType(type) || !isSubModAction(action)) return fail("Invalid action.");
   const db = createAdminClient();
   const at = new Date().toISOString();
@@ -118,23 +124,33 @@ export async function moderateSubTarget(type: SubTargetType, targetId: string, a
     const { data } = await db.from("sub_posts").select("creator_id, status").eq("id", targetId).maybeSingle();
     const p = data as Row | null;
     if (!p) return fail("Not found.", 404);
+    if (action === "restore" && p.status !== "archived") return fail("This post isn't removed.", 409);
+    let changed = false;
     if (action === "remove") {
-      const { error } = await db.from("sub_posts").update({ status: "archived", moderated_at: at, moderated_by: adminId, updated_at: at }).eq("id", targetId);
+      const { data: hit, error } = await db.from("sub_posts").update({ status: "archived", moderated_at: at, moderated_by: adminId, updated_at: at }).eq("id", targetId).eq("status", "published").select("id");
       if (error) return fail("Action failed.", 500);
+      changed = ((hit ?? []) as Row[]).length > 0;
     } else if (action === "restore") {
-      const { error } = await db.from("sub_posts").update({ status: "published", moderated_at: null, moderated_by: null, updated_at: at }).eq("id", targetId).eq("status", "archived");
+      const { data: hit, error } = await db.from("sub_posts").update({ status: "published", moderated_at: null, moderated_by: null, updated_at: at }).eq("id", targetId).eq("status", "archived").select("id");
       if (error) return fail("Action failed.", 500);
+      changed = ((hit ?? []) as Row[]).length > 0;
     }
-    return { ok: true, ownerId: p.creator_id as string };
+    const state = action === "remove" ? "removed" : action === "restore" ? (changed ? "restored" : "removed") : p.status === "archived" ? "removed" : "visible";
+    return { ok: true, ownerId: p.creator_id as string, changed, state };
   }
-  const { data } = await db.from("sub_post_comments").select("user_id").eq("id", targetId).maybeSingle();
+  const { data } = await db.from("sub_post_comments").select("user_id, hidden_at").eq("id", targetId).maybeSingle();
   const c = data as Row | null;
   if (!c) return fail("Not found.", 404);
+  if (action === "restore" && !c.hidden_at) return fail("This comment isn't hidden.", 409);
+  let changed = false;
   if (action !== "dismiss") {
-    const { error } = await db.from("sub_post_comments").update(action === "remove" ? { hidden_at: at, hidden_by: adminId } : { hidden_at: null, hidden_by: null }).eq("id", targetId);
+    const q = db.from("sub_post_comments").update(action === "remove" ? { hidden_at: at, hidden_by: adminId } : { hidden_at: null, hidden_by: null }).eq("id", targetId);
+    const { data: hit, error } = await (action === "remove" ? q.is("hidden_at", null) : q.not("hidden_at", "is", null)).select("id");
     if (error) return fail("Action failed.", 500);
+    changed = ((hit ?? []) as Row[]).length > 0;
   }
-  return { ok: true, ownerId: c.user_id as string };
+  const state = action === "remove" ? "removed" : action === "restore" ? "restored" : c.hidden_at ? "removed" : "visible";
+  return { ok: true, ownerId: c.user_id as string, changed, state };
 }
 
 export interface SubReview {

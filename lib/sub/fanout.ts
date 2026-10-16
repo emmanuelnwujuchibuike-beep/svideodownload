@@ -48,6 +48,12 @@ type Db = ReturnType<typeof createAdminClient>;
 export type FanoutKind = "announcement" | "private_post";
 export type Mode = "off" | "push" | "email" | "both";
 export const FANOUT_PAGE = 200;
+/**
+ * Part 7 review: at most this many hand-offs at once. Each one reads the member's settings and may
+ * call the push service, so a whole page at once (200) was a burst that could exhaust database
+ * connections for a big creator. Bounded concurrency keeps one page cheap and steady.
+ */
+export const FANOUT_CONCURRENCY = 20;
 const MODES = new Set(["off", "push", "email", "both"]);
 const mode = (v: unknown, dflt: Mode): Mode => (typeof v === "string" && MODES.has(v) ? (v as Mode) : dflt);
 
@@ -181,41 +187,40 @@ export async function processFanoutPage(jobId: string, pageSize = FANOUT_PAGE): 
   const who = mine.length ? await pushPerson(creatorId) : null;
   const tab = who?.handle ? `/u/${who.handle}?tab=sub` : "/exclusive";
   const results = new Map<string, { status: "handed_off" | "skipped" | "failed"; channels: string | null; detail: string | null }>();
-  await Promise.all(
-    mine.map(async (id) => {
-      if (excluded.has(id) || suspended.has(id) || (allowed && !allowed.has(id))) return void results.set(id, { status: "skipped", channels: null, detail: "not_eligible" });
-      const p = prefs.get(id);
-      const m = job.kind === "announcement" ? mode(p?.announcements, "push") : mode(p?.private_posts, "off");
-      if (m === "off") return void results.set(id, { status: "skipped", channels: null, detail: "opted_out" });
-      const channels: string[] = [];
-      try {
-        if (m === "push" || m === "both") {
-          channels.push("push");
-          await sendSmartPush(
-            id,
-            job.kind === "announcement"
-              ? { title: who!.name, body: "Posted an announcement for subscribers", genericBody: "A new announcement", url: `${tab}#announcements`, icon: who!.icon, tag: `announce:${job.ref_id as string}`, actorId: creatorId }
-              : { title: who!.name, body: "Posted a new private post", genericBody: "A new private post", url: tab, icon: who!.icon, tag: `private-post:${creatorId}`, actorId: creatorId },
-            "medium",
-            "social",
-            { type: "news_following", actorId: creatorId },
-          );
-        }
-        if (m === "email" || m === "both") {
-          channels.push("email");
-          await emailMember(
-            id,
-            job.kind === "announcement"
-              ? { subject: `${who!.name} posted an announcement for subscribers`, heading: `${who!.name} posted an announcement`, intro: "It's for their subscribers. Open their Exclusive tab to read it.", ctaLabel: "Open their Exclusive tab", ctaPath: `${tab}#announcements` }
-              : { subject: `${who!.name} posted a new private post`, heading: `${who!.name} posted a new private post`, intro: "You asked to hear when they share something for their subscribers.", ctaLabel: "Open their private posts", ctaPath: tab },
-          );
-        }
-        results.set(id, { status: "handed_off", channels: channels.join(","), detail: null });
-      } catch (e) {
-        results.set(id, { status: "failed", channels: channels.join(",") || null, detail: String(e).slice(0, 120) });
+  const handOff = async (id: string): Promise<void> => {
+    if (excluded.has(id) || suspended.has(id) || (allowed && !allowed.has(id))) return void results.set(id, { status: "skipped", channels: null, detail: "not_eligible" });
+    const p = prefs.get(id);
+    const m = job.kind === "announcement" ? mode(p?.announcements, "push") : mode(p?.private_posts, "off");
+    if (m === "off") return void results.set(id, { status: "skipped", channels: null, detail: "opted_out" });
+    const channels: string[] = [];
+    try {
+      if (m === "push" || m === "both") {
+        channels.push("push");
+        await sendSmartPush(
+          id,
+          job.kind === "announcement"
+            ? { title: who!.name, body: "Posted an announcement for subscribers", genericBody: "A new announcement", url: `${tab}#announcements`, icon: who!.icon, tag: `announce:${job.ref_id as string}`, actorId: creatorId }
+            : { title: who!.name, body: "Posted a new private post", genericBody: "A new private post", url: tab, icon: who!.icon, tag: `private-post:${creatorId}`, actorId: creatorId },
+          "medium",
+          "social",
+          { type: "news_following", actorId: creatorId },
+        );
       }
-    }),
-  );
+      if (m === "email" || m === "both") {
+        channels.push("email");
+        await emailMember(
+          id,
+          job.kind === "announcement"
+            ? { subject: `${who!.name} posted an announcement for subscribers`, heading: `${who!.name} posted an announcement`, intro: "It's for their subscribers. Open their Exclusive tab to read it.", ctaLabel: "Open their Exclusive tab", ctaPath: `${tab}#announcements` }
+            : { subject: `${who!.name} posted a new private post`, heading: `${who!.name} posted a new private post`, intro: "You asked to hear when they share something for their subscribers.", ctaLabel: "Open their private posts", ctaPath: tab },
+        );
+      }
+      results.set(id, { status: "handed_off", channels: channels.join(","), detail: null });
+    } catch (e) {
+      results.set(id, { status: "failed", channels: channels.join(",") || null, detail: String(e).slice(0, 120) });
+    }
+  };
+  for (let i = 0; i < mine.length; i += FANOUT_CONCURRENCY) await Promise.all(mine.slice(i, i + FANOUT_CONCURRENCY).map(handOff));
 
   // ── record outcomes, grouped (one update per outcome) ──
   const groups = new Map<string, string[]>();
@@ -253,8 +258,8 @@ async function finish(db: Db, jobId: string, cursor: string | null): Promise<voi
   await db.from("sub_fanout_jobs").update({ state: "done", cursor, finished_at: at, updated_at: at }).eq("id", jobId).eq("state", "pending");
 }
 
-/** The first pages, right after publishing (inside `after()`): bounded, the rest is the sweep's. */
-export async function startFanout(jobId: string, maxPages = 2): Promise<void> {
+/** The first page, right after publishing (inside `after()`): bounded, the rest is the sweep's. */
+export async function startFanout(jobId: string, maxPages = 1): Promise<void> {
   for (let i = 0; i < maxPages; i++) {
     const r = await processFanoutPage(jobId).catch(() => null);
     if (!r || r.done) return;

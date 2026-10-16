@@ -201,7 +201,9 @@ export async function moderate(
   action: ModAction,
   /** Part 11c — the admin performing this action, for the audit log. */
   adminId?: string,
-): Promise<{ ok: boolean }> {
+  /** Frenz Exclusive Part 7: the admin's reason, kept on the audit entry. */
+  note?: string | null,
+): Promise<{ ok: boolean; status?: number; error?: string; state?: string; changed?: boolean }> {
   if (!hasSupabase) return { ok: false };
   const db = createAdminClient();
 
@@ -211,10 +213,11 @@ export async function moderate(
     const { isSubModAction, moderateSubTarget } = await import("@/lib/sub/moderation");
     if (!adminId || !isSubModAction(action)) return { ok: false };
     const out = await moderateSubTarget(targetType, targetId, action, adminId);
-    if (!out.ok) return { ok: false };
+    if (!out.ok) return { ok: false, status: out.status, error: out.error };
     await db.from("reports").update({ status: action === "remove" ? "actioned" : "dismissed" }).eq("target_type", targetType).eq("target_id", targetId).eq("status", "open");
-    if (out.ownerId) await writeAuditLog({ userId: out.ownerId, actorUserId: adminId, eventType: "moderation_action", targetType, targetId, metadata: { action } });
-    return { ok: true };
+    // Part 7: the reason and what actually changed travel with the audit entry (a repeat is recorded as a no-op)
+    if (out.ownerId) await writeAuditLog({ userId: out.ownerId, actorUserId: adminId, eventType: "moderation_action", targetType, targetId, metadata: { action, changed: out.changed, state: out.state, ...(note ? { note: note.slice(0, 300) } : {}) } });
+    return { ok: true, state: out.state, changed: out.changed };
   }
 
   // Resolve the content owner BEFORE acting — this is who the audit log

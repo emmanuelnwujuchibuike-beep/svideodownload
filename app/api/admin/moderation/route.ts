@@ -14,6 +14,8 @@ const schema = z.object({
   // hide/unhide are friends-only visibility (migration 0082) and are NOT
   // synonyms for suspend/unsuspend, which remain a full lockout.
   action: z.enum(["remove", "restore", "suspend", "unsuspend", "hide", "unhide", "dismiss"]),
+  // Frenz Exclusive Part 7: the admin's reason (kept on the audit entry; plain text)
+  note: z.string().trim().max(300).optional(),
 });
 
 /** GET — the moderation queue (open reports grouped by target). */
@@ -40,7 +42,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid action." }, { status: 400 });
   }
 
-  const res = await moderate(parsed.data.targetType, parsed.data.targetId, parsed.data.action, admin.id);
-  if (!res.ok) return NextResponse.json({ error: "Action failed." }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  const res = await moderate(parsed.data.targetType, parsed.data.targetId, parsed.data.action, admin.id, parsed.data.note ?? null);
+  // an invalid transition (restoring what isn't removed) says so; anything else stays a generic failure
+  if (!res.ok) return NextResponse.json({ error: res.status === 409 || res.status === 404 ? res.error : "Action failed." }, { status: res.status === 409 || res.status === 404 ? res.status : 500 });
+  return NextResponse.json({ ok: true, state: res.state ?? null, changed: res.changed ?? null });
 }

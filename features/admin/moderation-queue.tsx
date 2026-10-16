@@ -161,7 +161,7 @@ interface SubReviewData {
  * come from the admin-only /api/admin/moderation/sub-review, expire in five minutes, and every
  * opening is written to the security audit log. Nothing is fetched until Review is pressed.
  */
-function SubReviewButton({ t }: { t: ReportedTarget }) {
+export function SubReviewButton({ t }: { t: Pick<ReportedTarget, "targetType" | "targetId"> }) {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<SubReviewData | null>(null);
   const [error, setError] = useState<string | null>(null);

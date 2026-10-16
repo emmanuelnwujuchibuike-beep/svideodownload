@@ -201,6 +201,11 @@ function Setup({ d, handle, act }: { d: Dashboard; handle: string; act: Act }) {
               <Wallet className="h-4 w-4" aria-hidden /> Withdraw
             </button>
           ) : null}
+          {st.setupCompleted ? (
+            <Link href="/exclusive/earnings" prefetch={false} className={quietPill}>
+              Earnings and analytics
+            </Link>
+          ) : null}
         </div>
         {st.setupCompleted ? <SubPayoutSettings className="mt-3" /> : null}
       </div>

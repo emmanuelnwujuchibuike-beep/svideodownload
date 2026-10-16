@@ -1,11 +1,15 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { usd } from "@/lib/creator/membership/engine";
 import type { LandingSettings } from "@/lib/landing/settings";
 import { cn } from "@/lib/utils";
+
+// Part 7: overview, search and Exclusive moderation — loaded only when this panel is open
+const SubAdminInsights = dynamic(() => import("./sub-admin-insights").then((m) => m.SubAdminInsights), { ssr: false, loading: () => <div aria-hidden className="mt-6 h-40 animate-pulse rounded-2xl bg-muted motion-reduce:animate-none" /> });
 
 /**
  * Admin → Rewards: SUB (0227, owner briefs 2026-10-11).
@@ -288,6 +292,7 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
           </ul>
         </>
       ) : null}
+      <SubAdminInsights />
     </section>
   );
 }

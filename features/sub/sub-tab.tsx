@@ -2,6 +2,7 @@
 
 import { ArrowRight, Check, ChevronDown, Copy, Loader2, Lock, Pause, Pencil, Play, Plus, Share2, Wallet } from "lucide-react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -386,6 +387,10 @@ function CreatorOverview({ settings, bounds, onChange, onCompose, onWithdraw }: 
             <Metric label="Clearing" value={e ? usd(e.pendingCents) : failed ? "—" : "…"} />
             <Metric label="Withdrawn" value={e ? usd(e.withdrawnCents) : failed ? "—" : "…"} />
           </div>
+          {/* Part 7: the full earnings, analytics and history */}
+          <Link href="/exclusive/earnings" prefetch={false} className="mt-2 flex min-h-11 items-center justify-between rounded-2xl bg-black/[0.03] px-3.5 text-[13.5px] font-semibold transition hover:bg-black/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-white/[0.05]">
+            Earnings and analytics <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+          </Link>
           {editing ? (
             <div className="mt-3">
               <label htmlFor="sub-price-edit" className="text-[13px] font-semibold">

@@ -68,6 +68,8 @@ export async function saveMediaToDevice({
   filename,
   direct = false,
   transform,
+  onProgress,
+  onNeedsTap,
 }: {
   url: string;
   kind: "image" | "video";
@@ -80,6 +82,17 @@ export async function saveMediaToDevice({
   direct?: boolean;
   /** Rewrites the bytes before they are saved (the photo watermark). */
   transform?: (blob: Blob) => Promise<Blob>;
+  /** Bytes received so far — the fraction, when the response says how big it is. */
+  onProgress?: (fraction: number | null) => void;
+  /**
+   * iOS refused the share sheet because the tap's permission was spent while the
+   * file was being fetched (a watermarked video takes a while). Ask for ONE more
+   * tap and run `share` inside it — the file is ready by then. Without this the
+   * save falls back to a blob link, which an iOS web app opens as a Quick Look
+   * page (owner, 2026-10-15: "it shouldn't be downloading like this, it should be
+   * downloading in the app").
+   */
+  onNeedsTap?: (share: () => Promise<SaveResult>) => Promise<SaveResult>;
 }): Promise<SaveResult> {
   try {
     const ext = extensionFor(url, null, kind);
@@ -104,7 +117,7 @@ export async function saveMediaToDevice({
       ? await fetch(url, { mode: "cors", cache: "no-store", credentials: "omit" })
       : ((await fetchDirect(url)) ?? (await fetch(proxiedUrl(url, name), { cache: "no-store" })));
     if (!res.ok) return "failed";
-    const fetched = await res.blob();
+    const fetched = await readWithProgress(res, onProgress);
     const blob = transform ? await transform(fetched) : fetched;
     const file = new File([blob], name, { type: blob.type || (kind === "video" ? "video/mp4" : "image/jpeg") });
 
@@ -119,6 +132,17 @@ export async function saveMediaToDevice({
         // no, not a failure, and must not fall through to a second attempt
         // that pops a download they didn't ask for.
         if (e instanceof DOMException && e.name === "AbortError") return "cancelled";
+        // the tap was spent on the wait: one more tap opens the sheet, in the app
+        if (e instanceof DOMException && e.name === "NotAllowedError" && onNeedsTap) {
+          return onNeedsTap(async () => {
+            try {
+              await nav.share({ files: [file] });
+              return "shared";
+            } catch (err) {
+              return err instanceof DOMException && err.name === "AbortError" ? "cancelled" : "failed";
+            }
+          });
+        }
         // NotAllowedError lands here and is EXPECTED on iOS: `navigator.share`
         // must be called inside the user gesture, and the `await fetch` above
         // has already spent it. There is no way to have both the bytes and the
@@ -143,4 +167,35 @@ export async function saveMediaToDevice({
   } catch {
     return "failed";
   }
+}
+
+/**
+ * The response body as a blob, reporting how much has arrived. Without a size
+ * (no Content-Length) it reports null once, so the caller shows a plain
+ * "Downloading…"; without a stream reader it is just `res.blob()`.
+ */
+async function readWithProgress(res: Response, onProgress?: (fraction: number | null) => void): Promise<Blob> {
+  const total = Number(res.headers.get("content-length")) || 0;
+  if (!onProgress || !res.body || typeof res.body.getReader !== "function") return res.blob();
+  if (!total) {
+    onProgress(null);
+    return res.blob();
+  }
+  const reader = res.body.getReader();
+  const chunks: BlobPart[] = [];
+  let got = 0;
+  let shown = -1;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    got += value.byteLength;
+    // whole percents only, so a fast connection doesn't re-render the toast for every chunk
+    const pct = Math.min(100, Math.floor((got / total) * 100));
+    if (pct !== shown) {
+      shown = pct;
+      onProgress(pct / 100);
+    }
+  }
+  return new Blob(chunks, { type: res.headers.get("content-type") ?? "" });
 }

@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import { chooseDownloadVersion } from "@/lib/media/choose-download";
-import { savePostMedia } from "@/lib/media/download-post";
+import { askTapToSave, savePostMedia } from "@/lib/media/download-post";
 import { toast } from "@/features/ui/toast";
 
 /**
@@ -83,7 +83,11 @@ export function useSocialDownload() {
     setState("working");
     setProgress(null);
 
-    const result = await savePostMedia(postId, (done, total) => setProgress({ done, total }), { watermark: choice === "watermark" });
+    const result = await savePostMedia(postId, (done, total) => setProgress({ done, total }), {
+      watermark: choice === "watermark",
+      // iOS: the share sheet needs one more tap after a long wait — asked for in the app, never a Safari page
+      onNeedsTap: askTapToSave(crypto.randomUUID()),
+    });
     busy.current = false;
 
     if (result.error) {

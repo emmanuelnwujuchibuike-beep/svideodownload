@@ -15,6 +15,8 @@ export interface Toast {
   message: string;
   type: ToastType;
   action?: ToastAction;
+  /** the X was tapped (not the action, not a timeout) */
+  onDismiss?: () => void;
 }
 
 let toasts: Toast[] = [];
@@ -28,11 +30,11 @@ const emit = () => {
 export function toast(
   message: string,
   type: ToastType = "info",
-  opts?: { id?: string; duration?: number; action?: ToastAction },
+  opts?: { id?: string; duration?: number; action?: ToastAction; onDismiss?: () => void },
 ): string {
   const id = opts?.id ?? crypto.randomUUID();
   const existing = toasts.findIndex((t) => t.id === id);
-  const next: Toast = { id, message, type, action: opts?.action };
+  const next: Toast = { id, message, type, action: opts?.action, onDismiss: opts?.onDismiss };
   if (existing >= 0) toasts[existing] = next;
   else toasts = [...toasts, next];
   emit();
@@ -101,7 +103,7 @@ export function Toaster() {
                   {t.action.label}
                 </button>
               ) : null}
-              <button type="button" onClick={() => dismissToast(t.id)} aria-label="Dismiss" className="shrink-0 text-muted-foreground transition hover:text-foreground">
+              <button type="button" onClick={() => { dismissToast(t.id); t.onDismiss?.(); }} aria-label="Dismiss" className="shrink-0 text-muted-foreground transition hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>

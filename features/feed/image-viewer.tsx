@@ -54,7 +54,6 @@ const ShareQrSheet = dynamic(() => import("@/features/social/share-qr-sheet").th
 const CollectionPicker = dynamic(() => import("@/features/social/collection-picker").then((m) => m.CollectionPicker), { ssr: false });
 const PostEditSheet = dynamic(() => import("@/features/social/post-edit-sheet").then((m) => m.PostEditSheet), { ssr: false });
 const ReportSheet = dynamic(() => import("@/features/social/report-sheet").then((m) => m.ReportSheet), { ssr: false });
-import { downloadPost } from "@/lib/media/download-post";
 import { getQualityPreference, getSyncConditions } from "@/lib/media/network-conditions";
 import { clampFeedRatio, isReelsShaped } from "@/lib/media/aspect";
 import { claimPlayback, releasePlayback, suspendPlayback } from "@/lib/media/video-coordinator";
@@ -750,7 +749,7 @@ function ImageStage({
 
                 <MoreGroup>
                   <MoreItem icon={FolderPlus} label="Add to collection" onClick={() => { setMoreOpen(false); setPickerReady(true); setPickerOpen(true); }} />
-                  <MoreItem icon={Download} label="Download" onClick={() => { setMoreOpen(false); void downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title, isOwner: !!item.isOwner }); }} />
+                  <MoreItem icon={Download} label="Download" onClick={() => { setMoreOpen(false); void import("@/lib/media/download-post").then((m) => m.downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title, isOwner: !!item.isOwner })); }} />
                   {item.isOwner ? (
                     <MoreItem icon={Pencil} label="Edit post" onClick={() => { setMoreOpen(false); setEditReady(true); setEditOpen(true); }} />
                   ) : (

@@ -2,7 +2,8 @@
 
 import { dismissToast, toast } from "@/features/ui/toast";
 import { chooseDownloadVersion } from "@/lib/media/choose-download";
-import { saveMediaToDevice } from "@/lib/media/save-to-device";
+import { downloadingLabel } from "@/lib/media/download-label";
+import { saveMediaToDevice, type SaveResult } from "@/lib/media/save-to-device";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -74,7 +75,13 @@ export async function savePostMedia(
   postId: string,
   onProgress?: (done: number, total: number) => void,
   /** The chooser's answer; omitted, the server applies the plan's default (watermarked on Free). */
-  opts: { watermark?: boolean } = {},
+  opts: {
+    watermark?: boolean;
+    /** the current file's bytes, 0–1 (null: size unknown) — "Downloading… 40%" */
+    onBytes?: (fraction: number | null) => void;
+    /** iOS needs one more tap before its share sheet opens (see saveMediaToDevice) */
+    onNeedsTap?: (share: () => Promise<SaveResult>) => Promise<SaveResult>;
+  } = {},
 ): Promise<SavePostResult> {
   let body: { url?: string; filename?: string; items?: DownloadItem[]; error?: string; watermark?: { handle: string } | null } = {};
   let res: Response;
@@ -130,6 +137,8 @@ export async function savePostMedia(
         item.watermark === "draw" && handle
           ? (blob) => import("@/lib/media/watermark-image").then((m) => m.stampImageWatermark(blob, handle))
           : undefined,
+      onProgress: opts.onBytes,
+      onNeedsTap: opts.onNeedsTap,
     });
     if (result === "saved" || result === "shared") saved += 1;
     else if (result === "cancelled") cancelled += 1;
@@ -137,6 +146,24 @@ export async function savePostMedia(
   onProgress?.(items.length, items.length);
 
   return { saved, cancelled, total: items.length };
+}
+
+/**
+ * iOS spent the tap on the wait — the file is ready, so ask for one more tap,
+ * in the app, on the same toast (owner, 2026-10-15: a watermarked save opened a
+ * Safari "Real.mp4" page instead of saving like the clean one). Closing the toast
+ * is a cancel, never a failure.
+ */
+export function askTapToSave(toastId: string): (share: () => Promise<SaveResult>) => Promise<SaveResult> {
+  return (share) =>
+    new Promise<SaveResult>((resolve) => {
+      toast("Your video is ready.", "info", {
+        id: toastId,
+        duration: 0,
+        action: { label: "Save", onClick: () => void share().then(resolve) },
+        onDismiss: () => resolve("cancelled"),
+      });
+    });
 }
 
 /**
@@ -166,13 +193,24 @@ export async function downloadPost(item: {
   if (!choice) return;
   const watermark = choice === "watermark";
 
-  const tid = toast(watermark ? "Adding watermark…" : "Saving…", "loading");
+  /*
+    "Downloading…" for BOTH choices (owner, 2026-10-15: "it shouldn't be showing adding
+    watermark when saving with watermark, it should show downloading"). The watermark is
+    part of the download, not a separate step the person has to watch.
+  */
+  const tid = toast(downloadingLabel(null), "loading");
+  let at: { done: number; total: number } | undefined;
   const result = await savePostMedia(
     item.id,
     (done, total) => {
-      if (total > 1) toast(`Saving ${Math.min(done + 1, total)} of ${total}…`, "loading", { id: tid });
+      at = { done, total };
+      if (total > 1) toast(downloadingLabel(null, at), "loading", { id: tid });
     },
-    { watermark },
+    {
+      watermark,
+      onBytes: (f) => toast(downloadingLabel(f, at), "loading", { id: tid }),
+      onNeedsTap: askTapToSave(tid),
+    },
   );
 
   if (result.error) {

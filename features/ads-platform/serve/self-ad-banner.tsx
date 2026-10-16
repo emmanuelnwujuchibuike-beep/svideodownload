@@ -12,7 +12,7 @@ import { creativeFailed, nextFromPool, recordShown } from "@/lib/ads-platform/se
 import { cn } from "@/lib/utils";
 
 import type { AdView } from "../ad-events-client";
-import { openAdDetail } from "./ad-detail-store";
+import { visitAd } from "./ad-detail-store";
 import { SelfAdCreative } from "./self-ad-creative";
 
 /**
@@ -228,12 +228,12 @@ export function SelfAdBanner({
         rel="sponsored noopener noreferrer"
         onClick={(e) => {
         e.preventDefault();
-        openAdDetail(current, viewRef.current);
+        visitAd(current, viewRef.current);
       }}
-        aria-label={`Ad from ${current.sponsor}${current.headline ? `: ${current.headline}` : ""} (opens its details)`}
+        aria-label={`Ad from ${current.sponsor}${current.headline ? `: ${current.headline}` : ""} (opens the advertiser's site)`}
         style={{ width: box.width }}
         className={cn(
-          "mx-auto block max-w-full overflow-hidden rounded-[1.25rem] bg-card ring-1 ring-inset ring-black/[0.06] outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:ring-white/10",
+          "mx-auto block max-w-full touch-manipulation select-none overflow-hidden rounded-[1.25rem] bg-card ring-1 ring-inset ring-black/[0.06] outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:ring-white/10",
           className,
         )}
       >
@@ -264,16 +264,16 @@ export function SelfAdBanner({
       href={current.url}
       target="_blank"
       rel="sponsored noopener noreferrer"
-      // 2026-10-09 (owner): a tap opens the ad's details on this page (click + conversion); the link itself waits behind an external-link warning
+      // 2026-10-15 (owner): a tap anywhere on the ad opens its link at once — no details sheet, no warning (visitAd)
       onClick={(e) => {
         e.preventDefault();
-        openAdDetail(current, viewRef.current);
+        visitAd(current, viewRef.current);
       }}
-      aria-label={`Ad from ${current.sponsor}${current.headline ? `: ${current.headline}` : ""} (opens its details)`}
+      aria-label={`Ad from ${current.sponsor}${current.headline ? `: ${current.headline}` : ""} (opens the advertiser's site)`}
       // 2026-10-11 (owner): the top strip is the creative's own shape (topStripBox), so nothing is cropped and there are no side bars
       style={variant === "strip" ? topStripBox(stripRatio) : undefined}
       className={cn(
-        "relative block overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",
+        "relative block touch-manipulation select-none overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",
         variant === "strip"
           ? "mx-auto"
           : "aspect-square w-full rounded-2xl bg-black/40",

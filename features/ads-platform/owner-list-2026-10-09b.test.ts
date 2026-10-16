@@ -8,26 +8,23 @@ import { AD_EVENT_TYPES } from "@/lib/ads-platform/catalog";
 /** Owner list of 2026-10-09 (second batch): ad details in-page, ad periods, promote bubble, streak placement. */
 const code = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 
-describe("a tapped ad opens its details on the same page", () => {
-  // 2026-10-14: the interstitial and the story card are the shared full-screen layout (fullscreen-video-ad.tsx), which owns their call to action
+describe("a tapped ad opens its link at once, like Snapchat (owner, 2026-10-15)", () => {
+  // was 2026-10-09: open the details sheet, then a "you're leaving" warning. Owner, 2026-10-15: "it shouldn't show preview or confirmation"
   const SURFACES = ["self-ad-banner.tsx", "fullscreen-video-ad.tsx"];
-  /** Every surface opens the detail instead of leaving — a function so the teeth can run it on a broken copy. */
-  const opensDetail = (src: string) => /onClick=\{\(e\) => \{\s*e\.preventDefault\(\);\s*openAdDetail\(/.test(src) && !src.includes("trackAdClick(");
-  it("banner, interstitial and story card all open the detail sheet", () => {
-    for (const f of SURFACES) expect(opensDetail(code(`features/ads-platform/serve/${f}`)), f).toBe(true);
+  /** Every surface visits straight away and none opens the sheet — a function so the teeth can run it on a broken copy. */
+  const visitsAtOnce = (src: string) => /visitAd\(/.test(src) && !src.includes("openAdDetail(");
+  it("the banner, the card and the full-screen layout (interstitial, story card, Reels slide) all visit directly", () => {
+    for (const f of SURFACES) expect(visitsAtOnce(code(`features/ads-platform/serve/${f}`)), f).toBe(true);
     for (const f of ["self-interstitial.tsx", "self-story-card.tsx"]) expect(code(`features/ads-platform/serve/${f}`), f).toContain("<FullscreenAd");
   });
-  it("teeth: a surface that still links straight out fails", () => {
+  it("teeth: a surface that goes back to the details sheet fails", () => {
     const b = code("features/ads-platform/serve/self-ad-banner.tsx");
-    expect(opensDetail(b.replace(/onClick=\{\(e\) => \{\s*e\.preventDefault\(\);\s*openAdDetail\(current, viewRef\.current\);\s*\}\}/, "onClick={() => trackAdClick(viewRef.current)}"))).toBe(false);
+    expect(visitsAtOnce(b.replace("visitAd(current, viewRef.current);", "openAdDetail(current, viewRef.current);"))).toBe(false);
   });
-  it("opening counts a click AND a conversion; visiting is behind a warning and counts an outbound", () => {
+  it("a visit counts a click AND an outbound, and opens inside the tap", () => {
     const store = code("features/ads-platform/serve/ad-detail-store.ts");
-    expect(store).toContain('trackAdEvent(view, "click");\n    trackAdEvent(view, "conversion");');
-    const sheet = code("features/ads-platform/serve/ad-detail-sheet.tsx");
-    expect(sheet).toContain("You&apos;re leaving Frenzsave");
-    expect(sheet).toContain('if (view) trackAdEvent(view, "outbound");');
-    expect(sheet).toContain('window.open(ad.url, "_blank", "noopener,noreferrer");');
+    expect(store).toContain('trackAdEvent(view, "click");\n    trackAdEvent(view, "outbound");');
+    expect(store).toContain('const w = window.open(ad.url, "_blank", "noopener,noreferrer");');
     expect(AD_EVENT_TYPES).toContain("conversion");
     expect(AD_EVENT_TYPES).toContain("outbound");
   });

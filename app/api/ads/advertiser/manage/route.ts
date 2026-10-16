@@ -5,6 +5,8 @@ import { editDetails, extensionQuote, finalizeReplacement, removeFromList, repla
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// the destination check follows up to 10 redirects in 8 s (affiliate links, lib/ads-platform/server.ts)
+export const maxDuration = 60;
 
 const version = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v > 0 ? v : null);
 

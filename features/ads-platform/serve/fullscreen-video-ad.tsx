@@ -10,7 +10,7 @@ import { haptic } from "@/lib/motion/haptics";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 import type { AdView } from "../ad-events-client";
-import { openAdDetail } from "./ad-detail-store";
+import { visitAd } from "./ad-detail-store";
 import { loadAdEngagement, reactToAd } from "./ad-engagement";
 import { destinationHost, SelfAdCreative } from "./self-ad-creative";
 
@@ -156,7 +156,11 @@ export function FullscreenVideoAd({
     };
   }, [isVideo, imageMs, imageEnds, ad.cr]);
 
-  const open = () => openAdDetail(ad, view);
+  // every way into the advertiser opens the link at once, as Snapchat does (owner, 2026-10-15) — no sheet, no warning
+  const open = () => {
+    haptic("selection");
+    visitAd(ad, view);
+  };
 
   const togglePause = () => {
     const v = video.current;
@@ -237,7 +241,7 @@ export function FullscreenVideoAd({
 
         {/* TikTok's right rail: the brand (opens its details), Like, views, Share — it grows UP from just above the sound button */}
         <div className="absolute bottom-[calc(50%-3rem)] right-3 z-20 flex flex-col items-center gap-3.5">
-          <button type="button" onClick={open} aria-label={`About ${ad.sponsor}`} className="mb-1 transition active:scale-90 motion-reduce:active:scale-100">
+          <button type="button" onClick={open} aria-label={`Visit ${ad.sponsor}`} className="mb-1 transition active:scale-90 motion-reduce:active:scale-100">
             {brandBadge("lg")}
           </button>
           <button
@@ -326,11 +330,10 @@ export function FullscreenVideoAd({
           rel="sponsored noopener noreferrer"
           onClick={(e) => {
             e.preventDefault();
-            openAdDetail(ad, view);
-            haptic("selection");
+            open();
           }}
           className={cn(
-            "pointer-events-auto relative mt-3 flex min-h-[2.875rem] w-full items-center justify-between overflow-hidden rounded-lg px-4 text-[15px] font-semibold transition-[background-color,box-shadow] duration-500 active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100",
+            "pointer-events-auto relative mt-3 flex min-h-[3.25rem] w-full touch-manipulation select-none items-center justify-between overflow-hidden rounded-lg px-4 text-[15px] font-semibold transition-[background-color,box-shadow] duration-500 active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100",
             ctaLit ? "bg-gradient-to-r from-indigo-500 to-violet-600 shadow-[0_10px_28px_-12px_rgba(99,102,241,0.95)]" : "bg-white/20 backdrop-blur-md",
           )}
         >

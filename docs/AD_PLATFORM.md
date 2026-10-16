@@ -797,9 +797,9 @@ The public text is `TRAFFIC_QUALITY_POLICY` on `/advertise/rules#traffic-quality
 - **Redirects:** a restricted probe of where the link really goes:
   - HEAD only, https and port 443 only
   - DNS answers checked, with private, loopback, link-local, CGNAT and metadata addresses refused, and the socket pinned to the checked address
-  - at most 5 hops in 4 s, with no body read
+  - at most 10 hops in 8 s for an ad destination (5 in 4 s by default), with no body read — affiliate links chain several trackers (2026-10-15)
   - every hop re-checked
-  - landing on another domain → a person reviews it
+  - landing on another domain is accepted when every hop passed and the final page passes reputation (2026-10-15, owner: affiliate links must work); reputation unavailable → a person reviews it
 
 **Safe-failure.**
 - A blocked link is refused.

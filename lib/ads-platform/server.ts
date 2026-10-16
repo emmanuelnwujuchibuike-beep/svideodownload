@@ -241,14 +241,25 @@ export async function checkDestination(db: Db, raw: string, opts: { deep?: boole
     const rep = await reputationLookup(url);
     if (rep === "unavailable") review ??= "reputation_unavailable";
     else if (rep && rep.verdict === "block") return { status: "blocked", code: "destination_unsafe", reason: rep.reason };
-    const chase = await chaseRedirects(url, (hh) => blockedDomain(db, hh));
+    /*
+      🔴 AFFILIATE AND TRACKING LINKS (owner, 2026-10-15: a Carry1st affiliate link
+      "doesn't want to work on the self ad, because of security … I want it to be able
+      work on it and other affiliate links"). tolt.link/… goes through five hops
+      (tolt.link → shop.carry1st.com → carry1st.sng.link → shop.carry1st.com → /en/NG),
+      about 3 s, so it sat on the old 5-hop / 4 s limit. It also always landed on
+      another domain, and that alone sent every affiliate link to a person. Now the
+      chain gets 10 hops and 8 s. A link that lands elsewhere is accepted when every
+      hop passed the syntax, heuristic and blocklist checks (chaseRedirects) and the
+      final page passes reputation. Reputation unavailable → a person still looks.
+    */
+    const chase = await chaseRedirects(url, (hh) => blockedDomain(db, hh), { maxHops: 10, budgetMs: 8000 });
     if (chase.verdict.verdict === "block") return { status: "blocked", code: "destination_unsafe", reason: chase.verdict.reason };
     if (chase.verdict.verdict === "review") review ??= chase.verdict.reason;
     else if (baseDomain(new URL(chase.final).hostname) !== baseDomain(host)) {
-      // lands somewhere else: that place gets the same reputation check, and a person looks
+      // lands somewhere else: that place gets the same reputation check
       const rep2 = await reputationLookup(chase.final);
-      if (rep2 && rep2 !== "unavailable" && rep2.verdict === "block") return { status: "blocked", code: "destination_unsafe", reason: `redirect_${rep2.reason}` };
-      review ??= "redirects_to_other_domain";
+      if (rep2 === "unavailable") review ??= "reputation_unavailable";
+      else if (rep2 && rep2.verdict === "block") return { status: "blocked", code: "destination_unsafe", reason: `redirect_${rep2.reason}` };
     }
   }
   return review ? { status: "pending", code: "needs_review", reason: review } : { status: "valid" };

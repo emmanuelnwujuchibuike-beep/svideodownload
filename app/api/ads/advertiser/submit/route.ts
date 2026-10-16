@@ -3,6 +3,8 @@ import { submitApplication } from "@/lib/ads-platform/advertiser-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// the destination check follows up to 10 redirects in 8 s (affiliate links, lib/ads-platform/server.ts)
+export const maxDuration = 60;
 
 /**
  * POST /api/ads/advertiser/submit — "Continue to Payment". Requires the rules

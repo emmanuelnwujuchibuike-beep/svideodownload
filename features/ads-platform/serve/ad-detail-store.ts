@@ -53,3 +53,24 @@ export function useAdDetail(): AdDetailState | null {
     () => null,
   );
 }
+
+/**
+ * Open the ad's link NOW, in this tap, as a Snapchat ad does (owner, 2026-10-15:
+ * "when a user click on the visit button it opens the link directly instantly like
+ * Snapchat ad, it shouldn't show preview or confirmation … any touch around the ad
+ * card should open the link instantly"). Replaces the details sheet and the
+ * external-link warning on every ad surface.
+ *
+ * Counted as `click` and `outbound` (a site visit) for the advertiser's
+ * dashboard. `window.open` runs synchronously inside the tap, so no browser
+ * treats it as a popup. The link is the server-validated destination.
+ */
+export function visitAd(ad: EligibleAd, view: AdView | null): void {
+  if (view) {
+    trackAdEvent(view, "click");
+    trackAdEvent(view, "outbound");
+  }
+  const w = window.open(ad.url, "_blank", "noopener,noreferrer");
+  // a blocked window.open returns null in some in-app browsers: go there in this tab instead
+  if (!w) window.location.assign(ad.url);
+}

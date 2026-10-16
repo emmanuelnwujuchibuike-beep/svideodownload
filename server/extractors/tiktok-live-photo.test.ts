@@ -160,11 +160,27 @@ describe("a normal video post still behaves", () => {
     music: "https://cdn/song.mp3",
   });
 
-  it("puts the H.264 stream FIRST, so nobody gets the re-encode by default", () => {
-    // The 55s-to-first-byte lesson: `hdplay` is often H.265 and needs a
-    // transcode, `play` is already H.264 and streams as-is.
-    expect(formats[0]!.kind).toBe("video");
-    expect(formats[0]!.directUrl).toBe("https://v16m.tiktokcdn-us.com/h264.mp4");
+  it("puts the HD tier FIRST, so the default download is the best quality (owner, 2026-10-16)", () => {
+    // Was H.264 `play` first (2026-08-09, the 55 s re-encode). Since TikTok blocks
+    // its page route, TikWM serves every link and `play` is its 576p copy; an
+    // iPhone takes `hdplay` with no conversion (download-service clientPlaysHevc).
+    const hd = formats[0]!;
+    expect(hd.kind).toBe("video");
+    expect(hd.directUrl).not.toBe("https://v16m.tiktokcdn-us.com/h264.mp4");
+    expect(hd.label).toBe("HD · Best quality");
+    const fast = formats.find((f) => f.directUrl === "https://v16m.tiktokcdn-us.com/h264.mp4")!;
+    expect(fast.label).toBe("Fast · smaller file");
+    expect(formats.indexOf(fast)).toBeGreaterThan(0);
+  });
+
+  it("with no separate HD, the one stream is the HD default", () => {
+    const only = buildTikWmFormats({ play: "https://cdn/only.mp4", size: 10 });
+    expect(only[0]!.label).toBe("HD · No watermark");
+  });
+
+  it("teeth: the old SD-first order would fail the rule above", () => {
+    const old = [...formats].sort((x) => (x.vcodec === "h264" ? -1 : 1));
+    expect(old[0]!.label).not.toBe("HD · Best quality");
   });
 
   it("emits no image formats at all", () => {

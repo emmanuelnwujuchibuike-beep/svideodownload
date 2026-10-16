@@ -69,8 +69,9 @@ const METADATA_TTL_SECONDS = Number(
  * v5 — 2026-10-08: streamable tiers sort ahead of "converts on download"
  * (quality-ladder.ts) — the ORDER is cached, and the default is formats[0].
  * v6 — 2026-10-08: TikTok video prefers the native route (preferTikTokRoute).
+ * v7 — 2026-10-16: TikWM's HD tier is first (tiktok.ts) — the ORDER is cached.
  */
-const EXTRACTOR_SHAPE_VERSION = "v6";
+const EXTRACTOR_SHAPE_VERSION = "v7";
 
 function metadataKey(url: string): string {
   return `meta:${EXTRACTOR_SHAPE_VERSION}:${url}`;

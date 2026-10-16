@@ -545,27 +545,26 @@ export function buildTikWmFormats(d: TikWmData): MediaFormat[] {
       the fast, universally-playable stream what you get unless you ask for
       the other one — and the other one now says what it costs.
     */
-    if (d.play && d.play !== d.hdplay)
-      formats.push({
-        formatId: d.hdplay ? "tt-sd" : "tt-0",
-        kind: "video",
-        label: "HD · No watermark",
-        ext: "mp4",
-        resolution: null,
-        fps: null,
-        // Delivered byte-for-byte, so this number is exact.
-        filesize: typeof d.size === "number" && d.size > 0 ? d.size : null,
-        tbr: null,
-        vcodec: "h264",
-        acodec: "aac",
-        directUrl: abs(d.play),
-        httpHeaders: headers,
-      });
+    /*
+      🔴 2026-10-16 (owner): "all Download now download in lower quality … it
+      doesn't suppose to affect the quality". The 2026-08-09 order below (H.264
+      `play` first) only cost quality while TikTok's own page route usually won
+      with real per-height tiers. Since TikTok answers that route with a 1.5 KB
+      challenge page (2026-10-16: production serves TikWM for every link tried,
+      and a home connection gets the same challenge;
+      yt-dlp 2026.08.19 lists the same ceiling: H.264 576x1024, HEVC 720x1280),
+      every TikTok link is TikWM, and the default was its 576p H.264 copy.
+      Now the HD tier is first: an HEVC-capable device (iPhone) gets it byte for
+      byte with no conversion (download-service's clientPlaysHevc path), other
+      devices get it converted to H.264, and a failed conversion falls back to
+      the H.264 copy. When both are the same file, the probe finds H.264 and
+      it is remuxed in about a second. The original reasoning is kept below.
+    */
     if (d.hdplay)
       formats.push({
         formatId: "tt-0",
         kind: "video",
-        label: "Best quality · converts on download",
+        label: "HD · Best quality",
         ext: "mp4",
         resolution: null,
         fps: null,
@@ -586,6 +585,22 @@ export function buildTikWmFormats(d: TikWmData): MediaFormat[] {
         vcodec: null,
         acodec: "aac",
         directUrl: abs(d.hdplay),
+        httpHeaders: headers,
+      });
+    if (d.play && d.play !== d.hdplay)
+      formats.push({
+        formatId: d.hdplay ? "tt-sd" : "tt-0",
+        kind: "video",
+        label: d.hdplay ? "Fast · smaller file" : "HD · No watermark",
+        ext: "mp4",
+        resolution: null,
+        fps: null,
+        // Delivered byte-for-byte, so this number is exact.
+        filesize: typeof d.size === "number" && d.size > 0 ? d.size : null,
+        tbr: null,
+        vcodec: "h264",
+        acodec: "aac",
+        directUrl: abs(d.play),
         httpHeaders: headers,
       });
   }

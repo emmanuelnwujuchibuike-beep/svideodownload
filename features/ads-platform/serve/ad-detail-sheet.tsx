@@ -8,6 +8,7 @@ import type { EligibleAd } from "@/lib/ads-platform/eligibility";
 import { haptic } from "@/lib/motion/haptics";
 
 import { trackAdEvent, type AdView } from "../ad-events-client";
+import { openAdInNewTab } from "./ad-detail-store";
 import { destinationHost } from "./self-ad-creative";
 
 /**
@@ -39,7 +40,8 @@ export function AdDetailSheet({ ad, view, onClose }: { ad: EligibleAd; view: AdV
   const visit = () => {
     if (view) trackAdEvent(view, "outbound");
     haptic("medium");
-    window.open(ad.url, "_blank", "noopener,noreferrer");
+    // a new tab, never this one (owner 2026-10-16 — see openAdInNewTab)
+    openAdInNewTab(ad.url);
     onClose();
   };
 

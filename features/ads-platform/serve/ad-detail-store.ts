@@ -70,7 +70,27 @@ export function visitAd(ad: EligibleAd, view: AdView | null): void {
     trackAdEvent(view, "click");
     trackAdEvent(view, "outbound");
   }
-  const w = window.open(ad.url, "_blank", "noopener,noreferrer");
-  // a blocked window.open returns null in some in-app browsers: go there in this tab instead
-  if (!w) window.location.assign(ad.url);
+  openAdInNewTab(ad.url);
+}
+
+/**
+ * Owner, 2026-10-16: "opening ad link shouldn't close the frenzsave tab, it should open another
+ * tab so users can still return where they stop".
+ *
+ * 🔴 The old code was `const w = window.open(url, "_blank", "noopener,noreferrer"); if (!w)
+ * location.assign(url)`. With "noopener", window.open ALWAYS returns null (HTML spec) — even when
+ * the new tab opened — so the "blocked" fallback ran every time and took the Frenzsave tab to the
+ * advertiser's site too. A real link with target=_blank, clicked inside the same tap, opens a new
+ * tab (an installed app hands it to the browser) and never navigates this one. If a browser
+ * refuses it, nothing happens here: the visitor stays where they were.
+ */
+export function openAdInNewTab(url: string): void {
+  const a = document.createElement("a");
+  a.href = url;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer sponsored";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }

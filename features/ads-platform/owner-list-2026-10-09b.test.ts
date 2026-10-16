@@ -24,7 +24,9 @@ describe("a tapped ad opens its link at once, like Snapchat (owner, 2026-10-15)"
   it("a visit counts a click AND an outbound, and opens inside the tap", () => {
     const store = code("features/ads-platform/serve/ad-detail-store.ts");
     expect(store).toContain('trackAdEvent(view, "click");\n    trackAdEvent(view, "outbound");');
-    expect(store).toContain('const w = window.open(ad.url, "_blank", "noopener,noreferrer");');
+    // 2026-10-16: a target=_blank link clicked inside the tap — never this tab (see ad-new-tab.test.ts)
+    expect(store).toContain("openAdInNewTab(ad.url);");
+    expect(store).not.toContain("window.location.assign(ad.url)");
     expect(AD_EVENT_TYPES).toContain("conversion");
     expect(AD_EVENT_TYPES).toContain("outbound");
   });

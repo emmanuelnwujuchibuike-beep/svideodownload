@@ -11,6 +11,7 @@ import { getClient } from "@/lib/supabase/client-lazy";
 import { getClientAuthUser } from "@/lib/supabase/client-user";
 
 import { ConversationList } from "./conversation-list";
+import { GuestInbox, useIsGuest } from "./guest-chat";
 import { INBOX_KEY, INBOX_REQUESTS_KEY, loadInbox, loadInboxRequests, primeInboxFromDevice, type Inbox } from "./inbox";
 import { InboxListSkeleton } from "./inbox-shell";
 
@@ -57,6 +58,11 @@ function useEntry<T>(key: string): CacheEntry<T> {
 const REQUESTS_FRESH_MS = 60_000;
 
 export function InstantInbox({ variant = "page" }: { variant?: "page" | "pane" }) {
+  // A signed-out visitor sees an empty inbox with a way to sign in; nothing is fetched (owner, 2026-10-16).
+  return useIsGuest() ? <GuestInbox /> : <MemberInbox variant={variant} />;
+}
+
+function MemberInbox({ variant }: { variant: "page" | "pane" }) {
   const router = useRouter();
   const inbox = useEntry<Inbox>(INBOX_KEY);
   const requests = useEntry<FriendRequestItem[]>(INBOX_REQUESTS_KEY);

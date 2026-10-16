@@ -1,7 +1,6 @@
 "use client";
 
 import { UserCircle } from "lucide-react";
-import Link from "next/link";
 import { type ComponentType, useState } from "react";
 
 import { MyDiamondCrownBadge } from "@/components/badges/my-diamond-crown-badge";
@@ -56,17 +55,8 @@ export function UserMenu() {
     setOpen(true);
   };
 
-  // Supabase not configured → keep the original primary CTA.
-  if (!enabled) {
-    return (
-      <Link
-        href="/#download"
-        className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
-      >
-        Get Started
-      </Link>
-    );
-  }
+  // Supabase not configured → nothing, like a signed-out visitor (owner, 2026-10-16: no "Get Started" in the header).
+  if (!enabled) return null;
 
   // While auth is still resolving, paint the last-known avatar rather than a
   // grey pulse (owner, 2026-07-16: "the profile button in message page at the

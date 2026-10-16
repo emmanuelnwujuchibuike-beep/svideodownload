@@ -1,6 +1,6 @@
 "use client";
 
-import { Headset, History, UserPlus } from "lucide-react";
+import { History, UserPlus } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -347,7 +347,7 @@ export function MobileNav({
           full bleed bottom NAV should not be used anywhere"). One tab set, chosen only
           by whether someone is signed in:
             member  Home (/downloads) · Feed (/home, the complete feed) · History · Chats · Profile
-            guest   Home (/) · Add friend (/friends) · History · Support · Profile
+            guest   Home (/) · Add friend (/friends) · History · Chats · Profile
           Every tab carries its label (owner: "add description to the landing bottom NAVs").
         */}
         <NavTab
@@ -379,12 +379,9 @@ export function MobileNav({
           <NavTab label="Add friend" href="/friends" icon={UserPlus} activeIcon={UserPlus} active={pathname.startsWith("/friends")} prefetch={false} onWarm={router.prefetch} />
         )}
         <NavTab label="History" href="/history" icon={History} activeIcon={History} active={pathname.startsWith("/history")} onWarm={router.prefetch} />
-        {/* Signed in: Chats in Support's place (owner, 2026-10-08). A guest keeps Support. */}
-        {handle ? (
-          <NavTab label="Chats" href="/messages" icon={FrenzInboxOutline} activeIcon={FrenzInboxSolid} active={pathname.startsWith("/messages")} badge={unread} prefetch={false} onWarm={router.prefetch} />
-        ) : (
-          <NavTab label="Support" href="/support" icon={Headset} activeIcon={Headset} active={pathname.startsWith("/support")} prefetch={false} onWarm={router.prefetch} />
-        )}
+        {/* Chats for everyone (owner, 2026-10-16: Support → Chats on the landing too). A guest sees an empty
+            inbox and a sign-in modal (features/social/guest-chat.tsx); Support stays in the menu. */}
+        <NavTab label="Chats" href="/messages" icon={FrenzInboxOutline} activeIcon={FrenzInboxSolid} active={pathname.startsWith("/messages")} badge={handle ? unread : 0} prefetch={false} onWarm={router.prefetch} />
 
       </nav>
       {/* Profile — the round glass button beside the pill (the reference's Search

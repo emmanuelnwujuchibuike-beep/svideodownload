@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
+import { useIsGuest } from "@/features/social/guest-chat";
 import { InboxHeaderActions } from "@/features/social/inbox-header-actions";
 import { InboxStoriesRow } from "@/features/social/inbox-stories-row";
 import { InboxUnreadDot } from "@/features/social/inbox-unread-dot";
@@ -43,6 +44,7 @@ export function InboxMobileChrome() {
   const pathname = usePathname();
   const inMessages = pathname === "/messages" || pathname.startsWith("/messages/");
   const ref = useRef<HTMLDivElement>(null);
+  const guest = useIsGuest();
 
   useEffect(() => {
     const el = ref.current;
@@ -53,7 +55,7 @@ export function InboxMobileChrome() {
     const ro = new ResizeObserver(publish);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [inMessages]);
+  }, [inMessages, guest]);
 
   if (!inMessages) return null;
 
@@ -78,7 +80,8 @@ export function InboxMobileChrome() {
         {/* owner 2026-10-09: the streak moved to your own profile page (StreakHeaderChip). */}
         <p className="mt-1 min-w-0 pl-1.5 text-xs text-muted-foreground">Stay connected with the people you care about</p>
       </div>
-      <InboxStoriesRow />
+      {/* no stories for a signed-out visitor: no "Your story" placeholder, nothing fetched (owner, 2026-10-16) */}
+      {guest ? null : <InboxStoriesRow />}
     </div>
   );
 }

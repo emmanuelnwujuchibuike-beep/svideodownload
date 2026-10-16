@@ -99,7 +99,22 @@ describe("Support lives in the profile menu for members (owner, 2026-10-09)", ()
   it("teeth: Support missing from the footer fails", () => {
     expect(supportBesideTheme(menu.replace('href="/support"', 'href="/help"'))).toBe(false);
   });
-  it("members' bottom nav keeps Chats; guests keep Support there", () => {
-    expect(nav).toMatch(/\{handle \? \(\s*<NavTab label="Chats" href="\/messages"[\s\S]*?\) : \(\s*<NavTab label="Support" href="\/support"/);
+  // 2026-10-16 (owner): Support → Chats on the landing too; a guest gets an empty inbox and a sign-in modal
+  const chatsForAll = (src: string) =>
+    /\n\s*<NavTab label="Chats" href="\/messages"[^\n]*badge=\{handle \? unread : 0\}/.test(src) && !src.includes('<NavTab label="Support"');
+  it("everyone's bottom nav has Chats; no Support tab", () => {
+    expect(chatsForAll(nav)).toBe(true);
+  });
+  it("teeth: a Support tab back on the bar fails", () => {
+    expect(chatsForAll(nav + '\n<NavTab label="Support" href="/support" />')).toBe(false);
+  });
+  it("a guest's chat page: no fetch, no avatar, no stories; actions ask to sign in", () => {
+    const read = (f: string) => readFileSync(join(process.cwd(), f), "utf8");
+    expect(read("features/social/instant-inbox.tsx")).toContain("return useIsGuest() ? <GuestInbox /> : <MemberInbox variant={variant} />;");
+    expect(read("features/social/inbox-header-actions.tsx")).toContain("return guest ? <GuestHeaderActions /> : <MemberHeaderActions />;");
+    expect(read("features/social/inbox-mobile-chrome.tsx")).toContain("{guest ? null : <InboxStoriesRow />}");
+    const guestActions = read("features/social/inbox-header-actions.tsx").split("function GuestHeaderActions")[1]!.split("function MemberHeaderActions")[0]!;
+    expect(guestActions).not.toContain("<UserMenu");
+    expect(guestActions).toContain("<GuestSignInModal");
   });
 });

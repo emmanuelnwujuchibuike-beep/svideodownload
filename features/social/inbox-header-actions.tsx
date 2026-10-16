@@ -1,13 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Lock, MoreVertical, UserPlus } from "lucide-react";
+import { Lock, MoreVertical, PenSquare, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { UserMenu } from "@/features/auth/user-menu";
 import { ComposeLauncher } from "@/features/social/compose-launcher";
+import { GuestSignInModal, useIsGuest } from "@/features/social/guest-chat";
 import { MessageSearchLauncher } from "@/features/social/message-search-launcher";
 import { NotificationSettingsPicker } from "@/features/social/notification-settings-picker";
 import { PresenceStatusPicker } from "@/features/social/presence-status-picker";
@@ -43,6 +44,34 @@ const MENU_WIDTH = 248;
  * own panel — so it opens downward (y axis) and can never widen the header.
  */
 export function InboxHeaderActions() {
+  const guest = useIsGuest();
+  return guest ? <GuestHeaderActions /> : <MemberHeaderActions />;
+}
+
+/** A signed-out visitor: the same three circles, each asking them to sign in; no avatar (owner, 2026-10-16). */
+function GuestHeaderActions() {
+  const [ask, setAsk] = useState(false);
+  const open = () => {
+    haptic("light");
+    setAsk(true);
+  };
+  return (
+    <span className="ml-auto flex shrink-0 items-center gap-1 min-[360px]:gap-1.5">
+      <button type="button" aria-label="Add friends" title="Add friends" onClick={open} className={CIRCLE}>
+        <UserPlus className={ICON} strokeWidth={STROKE} aria-hidden />
+      </button>
+      <button type="button" aria-label="New message" onClick={open} className={CIRCLE}>
+        <PenSquare className={ICON} strokeWidth={STROKE} aria-hidden />
+      </button>
+      <button type="button" aria-label="More tools" onClick={open} className={CIRCLE}>
+        <MoreVertical className={ICON} strokeWidth={STROKE} aria-hidden />
+      </button>
+      <GuestSignInModal open={ask} onClose={() => setAsk(false)} />
+    </span>
+  );
+}
+
+function MemberHeaderActions() {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);

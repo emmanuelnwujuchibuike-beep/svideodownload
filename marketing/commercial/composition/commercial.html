@@ -1,0 +1,472 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Frenzsave commercial</title>
+<!--
+  Frenzsave commercial — the whole edit as one deterministic HTML timeline.
+  window.seek(t) puts every element where it belongs at time t (seconds), so the
+  renderer (tools/render-frames.cjs) can step through frames at any fps.
+  ?fmt=h → 1920×1080 (16:9)   ?fmt=v → 1080×1920 (9:16)
+  Phone screens are real recordings of the app, as 30fps JPEG sequences in
+  ../captures/seq/<name>/NNNNN.jpg (see capture/*.cjs and tools/build.sh).
+-->
+<style>
+  :root {
+    --bg: #050816;               /* app dark background, 229 55% 5% */
+    --blue: #0073E6;             /* Electric Blue (primary) */
+    --blue-2: #3B82F6;
+    --purple: #6C4DFF;           /* Royal Purple (accent) */
+    --indigo: #4F46E5;
+    --magenta: #C026D3;
+    --cyan: #22D3EE;
+    --ink: #F4F6FB;
+    --ink-2: #A9B1C7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
+  body { font-family: 'Inter', sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+  #stage { position: absolute; inset: 0; overflow: hidden; background: var(--bg); }
+  .abs { position: absolute; }
+  .layer { position: absolute; inset: 0; }
+  /* background */
+  .orb { position: absolute; border-radius: 50%; filter: blur(90px); will-change: transform; }
+  #grid { position: absolute; inset: -20%; background-image: linear-gradient(rgba(120,130,255,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(120,130,255,.06) 1px, transparent 1px); background-size: 80px 80px; mask-image: radial-gradient(ellipse at center, #000 20%, transparent 70%); -webkit-mask-image: radial-gradient(ellipse at center, #000 20%, transparent 70%); }
+  #grain { position: absolute; inset: 0; opacity: .07; mix-blend-mode: overlay; pointer-events: none; }
+  #vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.55) 100%); pointer-events: none; }
+
+  /* typography */
+  .kicker { font-family: 'Inter'; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; font-size: 22px; color: #9fb6ff; display: inline-flex; align-items: center; gap: 14px; }
+  .kicker i { display: inline-block; width: 34px; height: 3px; border-radius: 2px; background: linear-gradient(90deg, var(--blue-2), var(--purple)); }
+  .h1 { font-family: 'Inter Display', 'Inter'; font-weight: 800; letter-spacing: -0.035em; line-height: .98; font-size: 104px; }
+  .h1 .line { display: block; overflow: hidden; padding-bottom: .08em; }
+  .h1 .line > span { display: inline-block; will-change: transform; }
+  .grad { background: linear-gradient(92deg, #4FA3FF 0%, #7C6BFF 45%, #C26BFF 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { font-size: 30px; line-height: 1.4; color: var(--ink-2); font-weight: 500; }
+  .chip { display: inline-flex; align-items: center; gap: 10px; padding: 12px 22px; border-radius: 999px; font-weight: 600; font-size: 24px; color: #e8ecff; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); backdrop-filter: blur(8px); white-space: nowrap; }
+  .chip b { width: 10px; height: 10px; border-radius: 50%; background: linear-gradient(135deg, var(--blue-2), var(--purple)); display: inline-block; }
+
+  /* phone mockup */
+  .phone { position: absolute; transform-style: preserve-3d; will-change: transform; }
+  .phone .body { position: absolute; inset: 0; border-radius: 15.5% / 7.2%; background: linear-gradient(145deg, #2b2f3d, #0d0f16 40%, #1c1f2a 75%, #3a3f52); box-shadow: 0 60px 120px -30px rgba(10,10,40,.85), 0 30px 60px -20px rgba(60,40,200,.45), inset 0 0 0 2px rgba(255,255,255,.08); }
+  .phone .screen { position: absolute; left: 3.6%; right: 3.6%; top: 1.7%; bottom: 1.7%; border-radius: 12.5% / 5.8%; overflow: hidden; background: #fff; }
+  .phone .screen img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .phone .island { position: absolute; top: 2.9%; left: 50%; width: 30%; height: 3.6%; transform: translateX(-50%); background: #000; border-radius: 999px; z-index: 3; }
+  .phone .glare { position: absolute; inset: 0; border-radius: 15.5% / 7.2%; background: linear-gradient(115deg, rgba(255,255,255,0) 30%, rgba(255,255,255,.14) 45%, rgba(255,255,255,0) 60%); background-size: 300% 100%; z-index: 4; pointer-events: none; mix-blend-mode: screen; }
+  .phone .btn { position: absolute; background: #23263280; border-radius: 3px; }
+  .phone .shadow { position: absolute; left: 10%; right: 10%; bottom: -6%; height: 6%; background: radial-gradient(ellipse at center, rgba(0,0,0,.55), transparent 70%); filter: blur(10px); }
+
+  /* caption bar */
+  .cap { position: absolute; display: flex; align-items: center; gap: 14px; padding: 16px 28px 16px 18px; border-radius: 22px; background: rgba(12,16,40,.72); border: 1px solid rgba(140,150,255,.22); box-shadow: 0 20px 50px -20px rgba(0,0,0,.6); backdrop-filter: blur(14px); font-weight: 600; font-size: 28px; white-space: nowrap; }
+  .cap .ic { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--blue), var(--purple)); }
+  .cap .ic svg { width: 26px; height: 26px; stroke: #fff; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* wipe transition */
+  .wipe { position: absolute; top: -50%; height: 200%; width: 70%; background: linear-gradient(90deg, rgba(79,70,229,0), #4F46E5 25%, #6C4DFF 50%, #3B82F6 75%, rgba(59,130,246,0)); transform: skewX(-18deg); filter: blur(6px); will-change: transform; }
+  #flash { position: absolute; inset: 0; background: radial-gradient(circle at center, rgba(190,200,255,.9), rgba(108,77,255,.4) 40%, transparent 70%); opacity: 0; mix-blend-mode: screen; }
+
+  /* end card */
+  .url { display: inline-flex; align-items: center; gap: 16px; padding: 20px 40px; border-radius: 999px; background: linear-gradient(92deg, #1E6BFF, #6C4DFF 60%, #A34DFF); font-family: 'Inter Display'; font-weight: 700; font-size: 44px; letter-spacing: -.01em; box-shadow: 0 25px 60px -15px rgba(108,77,255,.7); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- background -->
+  <div class="layer" id="bg">
+    <div id="grid"></div>
+    <div class="orb" id="orb1"></div><div class="orb" id="orb2"></div><div class="orb" id="orb3"></div><div class="orb" id="orb4"></div>
+  </div>
+
+  <!-- S1 · logo intro -->
+  <div class="layer" id="s1">
+    <div class="abs" id="s1ring"></div>
+    <img class="abs" id="s1logo" src="assets/frenz-logo.png" alt="">
+    <div class="abs" id="s1word" style="font-family:'Inter Display';font-weight:800;letter-spacing:-.03em;white-space:nowrap"></div>
+    <div class="abs sub" id="s1tag" style="white-space:nowrap;text-align:center">Save. Discover. Create and earn.</div>
+  </div>
+
+  <!-- S2 · downloader -->
+  <div class="layer" id="s2">
+    <div class="abs" id="s2text">
+      <div class="kicker" id="s2k"><i></i>Video downloader</div>
+      <div class="h1" id="s2h"><span class="line"><span>Paste a link.</span></span><span class="line"><span class="grad">Save it in seconds.</span></span></div>
+      <div class="sub" id="s2s">TikTok, Instagram, YouTube, X, Facebook and more — straight from the link.</div>
+      <div id="s2chips"></div>
+    </div>
+    <div class="phone" id="p2"></div>
+    <div class="cap" id="c2a"><span class="ic"><svg viewBox="0 0 24 24"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></span>Paste any video link</div>
+    <div class="cap" id="c2b"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></span>Pick HD video or audio</div>
+  </div>
+
+  <!-- S3 · Frenz AI -->
+  <div class="layer" id="s3">
+    <div class="abs" id="s3text">
+      <div class="kicker" id="s3k"><i></i>Frenz AI</div>
+      <div class="h1" id="s3h"><span class="line"><span>Turn words</span></span><span class="line"><span class="grad">into motion.</span></span></div>
+      <div class="sub" id="s3s">Create AI video from a prompt or a photo — plus lip sync, natural voices and voice cloning.</div>
+      <div id="s3chips"></div>
+    </div>
+    <div class="phone" id="p3"></div>
+    <div class="cap" id="c3a"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18 9.4l-4.2 1.8L12 16l-1.8-4.8L6 9.4l4.2-1.8z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg></span>Text to video</div>
+    <div class="cap" id="c3b"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m3 16 5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.6"/></svg></span>Image to video</div>
+  </div>
+
+  <!-- S4 · reels + history -->
+  <div class="layer" id="s4">
+    <div class="abs" id="s4text">
+      <div class="kicker" id="s4k"><i></i>Reels &amp; history</div>
+      <div class="h1" id="s4h"><span class="line"><span>Discover reels.</span></span><span class="line"><span class="grad">Keep every save.</span></span></div>
+    </div>
+    <div class="phone" id="p4b"></div>
+    <div class="phone" id="p4a"></div>
+    <div class="cap" id="c4a"><span class="ic"><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="m10 9 5 3-5 3z"/></svg></span>For You · Following · AI Reels</div>
+    <div class="cap" id="c4b"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></span>Your download history</div>
+  </div>
+
+  <!-- S5 · montage -->
+  <div class="layer" id="s5">
+    <div class="abs" id="s5text" style="text-align:center">
+      <div class="kicker" id="s5k" style="justify-content:center"><i></i>One super app<i></i></div>
+      <div class="h1" id="s5h"><span class="line"><span>Explore. Share. <span class="grad">Earn.</span></span></span></div>
+    </div>
+    <div class="phone" id="p5a"></div><div class="phone" id="p5b"></div><div class="phone" id="p5c"></div>
+    <div class="cap" id="c5a"><span class="ic"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></span>Explore</div>
+    <div class="cap" id="c5b"><span class="ic"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M4 10h16"/><path d="M10 10v10"/></svg></span>Feed</div>
+    <div class="cap" id="c5c"><span class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h12l3 6-9 12L3 9z"/><path d="M3 9h18"/></svg></span>Quests &amp; rewards</div>
+  </div>
+
+  <!-- S6 · end card -->
+  <div class="layer" id="s6">
+    <div class="abs" id="s6glow"></div>
+    <img class="abs" id="s6logo" src="assets/frenz-logo.png" alt="">
+    <div class="abs" id="s6word" style="font-family:'Inter Display';font-weight:800;letter-spacing:-.035em;white-space:nowrap">Frenzsave</div>
+    <div class="abs sub" id="s6tag" style="white-space:nowrap;text-align:center">Save. Discover. Create and earn.</div>
+    <div class="abs" id="s6url"><span class="url">frenzsave.com</span></div>
+    <div class="abs sub" id="s6foot" style="white-space:nowrap;text-align:center;font-size:24px">Open it in your browser · Install Frenz on your phone</div>
+  </div>
+
+  <div class="layer" id="wipes"><div class="wipe" id="w1"></div><div class="wipe" id="w2"></div></div>
+  <div id="flash"></div>
+  <canvas id="grain"></canvas>
+  <div id="vignette"></div>
+</div>
+
+<script src="../captures/seq/manifest.js"></script>
+<script>
+const Q = new URLSearchParams(location.search);
+const V = Q.get('fmt') === 'v';
+const W = V ? 1080 : 1920, H = V ? 1920 : 1080;
+const SEQ = '../captures/seq/';
+const FPS = 30;
+const $ = (id) => document.getElementById(id);
+document.getElementById('stage').style.width = W + 'px';
+document.getElementById('stage').style.height = H + 'px';
+
+/* ── easing + helpers ─────────────────────────────────────────── */
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const eOut = (x) => 1 - Math.pow(1 - x, 3);
+const eOut5 = (x) => 1 - Math.pow(1 - x, 5);
+const eIn = (x) => x * x * x;
+const eIO = (x) => (x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const eBack = (x) => { const c1 = 1.5, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+function css(el, o) { for (const k in o) el.style[k] = o[k]; }
+function show(el, on) { el.style.display = on ? '' : 'none'; }
+/** in/out envelope: 0 before a, rises over `inD`, holds, falls over `outD` ending at b */
+function env(t, a, b, inD = .5, outD = .4) { return Math.min(eOut(prog(t, a, a + inD)), 1 - eIn(prog(t, b - outD, b))); }
+
+/* ── phone mockup factory ─────────────────────────────────────── */
+const SEQS = {}; // name → frame count (captures/seq/manifest.js)
+function buildPhone(el, w) {
+  const h = w * 2.05;
+  css(el, { width: w + 'px', height: h + 'px' });
+  el.innerHTML = `<div class="shadow"></div><div class="body"></div>
+    <div class="btn" style="left:-0.9%;top:17%;width:1%;height:4%"></div>
+    <div class="btn" style="left:-0.9%;top:24%;width:1%;height:7.5%"></div>
+    <div class="btn" style="left:-0.9%;top:33%;width:1%;height:7.5%"></div>
+    <div class="btn" style="right:-0.9%;top:26%;width:1%;height:11%"></div>
+    <div class="screen"><img alt=""></div><div class="island"></div><div class="glare"></div>`;
+  el._w = w; el._h = h; el._img = el.querySelector('.screen img'); el._glare = el.querySelector('.glare');
+}
+const cache = new Map();
+function frameSrc(name, f) { const n = SEQS[name] || 1; const i = clamp(Math.floor(f), 0, n - 1); return `${SEQ}${name}/${String(i + 1).padStart(5, '0')}.jpg`; }
+function loadImg(src) {
+  if (cache.has(src)) return cache.get(src);
+  const p = new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+  cache.set(src, p); if (cache.size > 400) cache.delete(cache.keys().next().value);
+  return p;
+}
+const pending = [];
+/** place a phone: centre x,y, scale s, rotations (deg), opacity, screen clip name + local time */
+function phone(el, { x, y, s = 1, rx = 0, ry = 0, rz = 0, o = 1, seq, ft = 0, glare = 0 }) {
+  css(el, { left: (x - el._w / 2) + 'px', top: (y - el._h / 2) + 'px', opacity: o, transform: `perspective(2400px) rotateX(${rx}deg) rotateY(${ry}deg) rotateZ(${rz}deg) scale(${s})`, display: o <= 0.001 ? 'none' : '' });
+  el._glare.style.backgroundPosition = `${lerp(120, -20, glare)}% 0`;
+  if (seq && o > 0.001) {
+    const src = frameSrc(seq, ft * FPS);
+    if (el._img.dataset.src !== src) {
+      el._img.dataset.src = src;
+      pending.push(loadImg(src).then((im) => { if (im && el._img.dataset.src === src) el._img.src = src; }));
+    }
+  }
+}
+/** line-mask reveal of a .h1 block */
+function revealH1(el, t, a, stagger = .12, dur = .7, outA = null, outD = .35) {
+  const spans = el.querySelectorAll('.line > span');
+  spans.forEach((sp, i) => {
+    const p = eOut5(prog(t, a + i * stagger, a + i * stagger + dur));
+    let y = (1 - p) * 110, o = p;
+    if (outA !== null) { const q = eIn(prog(t, outA + i * .05, outA + i * .05 + outD)); y -= q * 110; o *= 1 - q; }
+    css(sp, { transform: `translateY(${y}%)`, opacity: o });
+  });
+}
+function fadeUp(el, t, a, dur = .6, dist = 30, outA = null, outD = .3) {
+  const p = eOut(prog(t, a, a + dur));
+  let o = p, y = (1 - p) * dist;
+  if (outA !== null) { const q = eIn(prog(t, outA, outA + outD)); o *= 1 - q; y -= q * dist; }
+  css(el, { opacity: o, transform: `translateY(${y}px)` });
+}
+function cap(el, t, a, b, x, y, fromX = -40) {
+  const e = env(t, a, b, .45, .35);
+  const p = eBack(prog(t, a, a + .55));
+  css(el, { left: x + 'px', top: y + 'px', opacity: e, transform: `translateX(${(1 - p) * fromX}px) scale(${lerp(.92, 1, p)})`, display: e <= .001 ? 'none' : '' });
+}
+
+/* ── build static pieces ──────────────────────────────────────── */
+const PW = V ? 510 : 430; // phone width for single-phone scenes
+['p2', 'p3', 'p4a'].forEach((id) => buildPhone($(id), PW));
+buildPhone($('p4b'), PW * .82);
+['p5a', 'p5b', 'p5c'].forEach((id) => buildPhone($(id), V ? 400 : 330));
+
+// platforms actually listed in lib/platforms.ts
+const PLATFORMS = ['TikTok', 'Instagram', 'YouTube', 'X', 'Facebook', 'Pinterest', 'Snapchat', 'Threads', 'Reddit', 'Vimeo', 'LinkedIn', 'Telegram'];
+$('s2chips').innerHTML = PLATFORMS.map((p) => `<span class="chip"><b></b>${p}</span>`).join('');
+css($('s2chips'), { display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '34px', maxWidth: V ? '960px' : '760px' });
+const AI = ['Text to video', 'Image to video', 'Lip sync', 'Text to speech', 'Voice cloning'];
+$('s3chips').innerHTML = AI.map((p) => `<span class="chip"><b></b>${p}</span>`).join('');
+css($('s3chips'), { display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '34px', maxWidth: V ? '960px' : '700px' });
+$('s1word').innerHTML = 'Frenzsave'.split('').map((c) => `<span style="display:inline-block">${c}</span>`).join('');
+
+// background orbs
+const ORBS = [['orb1', '#1E5BFF', 900], ['orb2', '#6C4DFF', 800], ['orb3', '#4F46E5', 700], ['orb4', '#B23CFF', 520]];
+ORBS.forEach(([id, c, s]) => css($(id), { width: s + 'px', height: s + 'px', background: `radial-gradient(circle, ${c} 0%, ${c}00 70%)`, opacity: .55 }));
+
+// film grain (static noise texture, offset per frame)
+(function grain() {
+  const g = $('grain'); g.width = 512; g.height = 512; const c = g.getContext('2d'); const d = c.createImageData(512, 512);
+  let s = 1234567; const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < d.data.length; i += 4) { const v = r() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
+  c.putImageData(d, 0, 0); css(g, { width: '100%', height: '100%', imageRendering: 'pixelated' });
+  g._ctx = c;
+})();
+
+/* ── layout per format ────────────────────────────────────────── */
+const L = V ? {
+  textX: 80, textY: 140, textW: 920, h1: 112, sub: 34,
+  phoneX: 540, phoneY: 1340, phoneAltX: 540,
+} : {
+  textX: 140, textY: 250, textW: 940, h1: 100, sub: 30,
+  phoneX: 1400, phoneY: 560, phoneAltX: 520,
+};
+['s2text', 's3text', 's4text'].forEach((id) => css($(id), { width: L.textW + 'px' }));
+document.querySelectorAll('.h1').forEach((h) => (h.style.fontSize = L.h1 + 'px'));
+document.querySelectorAll('.sub').forEach((s) => { if (!s.style.fontSize) s.style.fontSize = L.sub + 'px'; });
+document.querySelectorAll('#s2s,#s3s').forEach((s) => css(s, { marginTop: '28px', maxWidth: V ? '900px' : '700px' }));
+document.querySelectorAll('.kicker').forEach((k) => (k.style.marginBottom = '26px'));
+
+/* ── timeline ─────────────────────────────────────────────────── */
+// scene windows (seconds). Music drop at 4.0, outro hit at 38.0 (audio/music.py).
+const T = { s1: [0, 4.15], s2: [3.9, 14.25], s3: [13.9, 24.25], s4: [23.9, 32.25], s5: [31.9, 38.25], s6: [37.9, 46] };
+const DUR = 46;
+// where each capture clip starts inside its scene (seconds of clip at scene start)
+const CLIP = { download: 0.0, ai: 0.0, reels: 0.0, history: 0.0, explore: 0.0, feed: 0.0, quests: 0.0 };
+
+function bg(t) {
+  const k = t * 0.25;
+  const pos = [
+    [W * .2 + Math.sin(k) * 160, H * .25 + Math.cos(k * .8) * 120],
+    [W * .82 + Math.cos(k * .9) * 180, H * .7 + Math.sin(k * 1.1) * 140],
+    [W * .55 + Math.sin(k * 1.3 + 1) * 220, H * .45 + Math.cos(k * .7) * 200],
+    [W * .9 + Math.sin(k * .6 + 2) * 120, H * .15 + Math.cos(k * .9 + 1) * 120],
+  ];
+  // the palette drifts with the scene: blue for download, purple for AI
+  const hueShift = t < 14 ? 0 : t < 24 ? 25 : t < 32 ? -10 : 10;
+  ORBS.forEach(([id], i) => {
+    const el = $(id); const s = el.offsetWidth;
+    css(el, { transform: `translate(${pos[i][0] - s / 2}px, ${pos[i][1] - s / 2}px)`, filter: `blur(90px) hue-rotate(${hueShift}deg)` });
+  });
+  css($('grid'), { transform: `translateY(${(t * 18) % 80}px)`, opacity: .9 });
+  const g = $('grain'); g.style.transform = `translate(${(Math.floor(t * 24) * 37) % 50 - 25}px, ${(Math.floor(t * 24) * 53) % 50 - 25}px) scale(1.2)`;
+}
+
+function wipe(t, at) {
+  // a brand-gradient band sweeping across, centred on `at`
+  const p = prog(t, at - .35, at + .35);
+  const active = p > 0 && p < 1;
+  const w1 = $('w1'), w2 = $('w2');
+  show(w1, active); show(w2, active);
+  if (!active) return false;
+  const x = lerp(-W * .9, W * 1.25, eIO(p));
+  css(w1, { left: x + 'px', opacity: 1 });
+  css(w2, { left: (x - W * .25) + 'px', opacity: .55, width: '40%' });
+  return true;
+}
+
+function s1(t) {
+  const on = t < T.s1[1]; show($('s1'), on); if (!on) return;
+  const cx = W / 2, cy = H / 2 - (V ? 120 : 70);
+  const LS = V ? 360 : 300;
+  // logo: blur-in + scale, then pushes toward camera into the drop
+  const pin = eOut5(prog(t, .2, 1.6));
+  const push = eIn(prog(t, 3.55, 4.1));
+  const s = lerp(.55, 1, pin) * (1 + push * 3.5);
+  const ly = cy - (1 - pin) * 20 - eOut(prog(t, 1.6, 2.4)) * (V ? 110 : 80);
+  css($('s1logo'), { width: LS + 'px', left: (cx - LS / 2) + 'px', top: (ly - LS / 2) + 'px', transform: `scale(${s}) rotate(${(1 - pin) * -8}deg)`, opacity: pin * (1 - prog(t, 3.85, 4.1)), filter: `blur(${(1 - pin) * 18 + push * 10}px) drop-shadow(0 20px 60px rgba(108,77,255,.6))` });
+  // halo ring
+  const rp = eOut(prog(t, .5, 2.2));
+  const RS = LS * 2.2;
+  css($('s1ring'), { width: RS + 'px', height: RS + 'px', left: (cx - RS / 2) + 'px', top: (ly - RS / 2) + 'px', borderRadius: '50%', border: '2px solid rgba(140,150,255,.35)', boxShadow: '0 0 80px rgba(108,77,255,.35), inset 0 0 80px rgba(59,130,246,.25)', transform: `scale(${lerp(.4, 1, rp)})`, opacity: rp * (1 - prog(t, 2.6, 3.6)) });
+  // wordmark letters
+  const word = $('s1word'); const FS = V ? 150 : 132;
+  css(word, { fontSize: FS + 'px', left: '0px', width: W + 'px', textAlign: 'center', top: (cy + (V ? 150 : 115)) + 'px', opacity: 1 - prog(t, 3.5, 3.85) });
+  word.querySelectorAll('span').forEach((sp, i) => {
+    const p = eOut5(prog(t, 1.75 + i * .045, 2.45 + i * .045));
+    css(sp, { transform: `translateY(${(1 - p) * 60}px)`, opacity: p, filter: `blur(${(1 - p) * 8}px)` });
+  });
+  const tag = $('s1tag');
+  css(tag, { left: '0px', width: W + 'px', top: (cy + (V ? 350 : 285)) + 'px', fontSize: (V ? 40 : 34) + 'px' });
+  fadeUp(tag, t, 2.6, .6, 20, 3.45, .3);
+  // flash on the drop
+  css($('flash'), { opacity: Math.max(0, 1 - Math.abs(t - 4.0) / .22) * .9 });
+}
+
+function textBlock(prefix, t, a, outA) {
+  fadeUp($(prefix + 'k'), t, a, .5, 20, outA, .3);
+  revealH1($(prefix + 'h'), t, a + .15, .12, .75, outA, .35);
+  if ($(prefix + 's')) fadeUp($(prefix + 's'), t, a + .55, .6, 24, outA + .05, .3);
+}
+
+function s2(t) {
+  const [a, b] = T.s2; const on = t >= a && t < b; show($('s2'), on); if (!on) return;
+  const lt = t - a;
+  css($('s2text'), { left: L.textX + 'px', top: L.textY + 'px' });
+  textBlock('s2', lt, .25, b - a - .55);
+  // chips cascade
+  $('s2chips').querySelectorAll('.chip').forEach((c, i) => {
+    const p = eBack(prog(lt, 1.2 + i * .06, 1.75 + i * .06));
+    const q = eIn(prog(lt, b - a - .5, b - a - .2));
+    css(c, { opacity: clamp(p) * (1 - q), transform: `translateY(${(1 - p) * 24}px) scale(${lerp(.85, 1, clamp(p))})` });
+  });
+  // phone: rises in, gentle float + turn
+  const pin = eOut5(prog(lt, .1, 1.1)); const pout = eIn(prog(lt, b - a - .55, b - a - .1));
+  const fl = Math.sin(lt * 1.4) * 8;
+  phone($('p2'), {
+    x: L.phoneX + (V ? 0 : (1 - pin) * 160) + pout * (V ? 0 : 300), y: L.phoneY + (V ? (1 - pin) * 500 : 0) + fl - pout * (V ? 0 : 0),
+    s: V ? 1 : 1, rx: 4, ry: V ? 0 : lerp(-26, -12, pin) - lt * .4, rz: V ? 0 : lerp(4, 1.5, pin), o: pin * (1 - pout), seq: 'download', ft: lt + CLIP.download, glare: prog(lt, .4, 2.2),
+  });
+  const capX = V ? 120 : L.phoneX - 520, capX2 = V ? 520 : L.phoneX + 110;
+  cap($('c2a'), lt, 1.4, 4.6, capX, V ? 1000 : 330);
+  cap($('c2b'), lt, 5.4, b - a - .4, capX2, V ? 1480 : 760, 40);
+}
+
+function s3(t) {
+  const [a, b] = T.s3; const on = t >= a && t < b; show($('s3'), on); if (!on) return;
+  const lt = t - a;
+  css($('s3text'), V ? { left: L.textX + 'px', top: L.textY + 'px' } : { left: '960px', top: L.textY + 'px' });
+  textBlock('s3', lt, .3, b - a - .55);
+  $('s3chips').querySelectorAll('.chip').forEach((c, i) => {
+    const p = eBack(prog(lt, 1.3 + i * .08, 1.85 + i * .08));
+    const q = eIn(prog(lt, b - a - .5, b - a - .2));
+    css(c, { opacity: clamp(p) * (1 - q), transform: `translateY(${(1 - p) * 24}px) scale(${lerp(.85, 1, clamp(p))})` });
+  });
+  const pin = eOut5(prog(lt, .1, 1.1)); const pout = eIn(prog(lt, b - a - .55, b - a - .1));
+  const fl = Math.sin(lt * 1.3 + 1) * 8;
+  phone($('p3'), {
+    x: (V ? L.phoneX : L.phoneAltX) - (V ? 0 : (1 - pin) * 160) - pout * (V ? 0 : 300), y: L.phoneY + (V ? (1 - pin) * 500 : 0) + fl,
+    rx: 4, ry: V ? 0 : lerp(26, 12, pin) + lt * .4, rz: V ? 0 : lerp(-4, -1.5, pin), o: pin * (1 - pout), seq: 'ai', ft: lt + CLIP.ai, glare: prog(lt, .4, 2.2),
+  });
+  cap($('c3a'), lt, 1.6, 5.0, V ? 560 : 70, V ? 1000 : 330);
+  cap($('c3b'), lt, 5.6, b - a - .4, V ? 90 : L.phoneAltX + 160, V ? 1480 : 860, 40);
+}
+
+function s4(t) {
+  const [a, b] = T.s4; const on = t >= a && t < b; show($('s4'), on); if (!on) return;
+  const lt = t - a;
+  css($('s4text'), { left: L.textX + 'px', top: (V ? L.textY : 300) + 'px' });
+  textBlock('s4', lt, .3, b - a - .55);
+  const pin = eOut5(prog(lt, .1, 1.1)); const pout = eIn(prog(lt, b - a - .55, b - a - .1));
+  const hin = eOut5(prog(lt, 3.6, 4.6));
+  const fl = Math.sin(lt * 1.5) * 8;
+  // reels phone (front), history phone (slides in behind/right at 3.6s)
+  const ax = V ? lerp(540, 380, hin) : lerp(1250, 1120, hin);
+  phone($('p4a'), { x: ax, y: L.phoneY + (V ? (1 - pin) * 500 : (1 - pin) * 300) + fl, rx: 3, ry: V ? 0 : -10 + lt * .3, rz: V ? lerp(0, -3, hin) : 0, o: pin * (1 - pout), seq: 'reels', ft: lt + CLIP.reels, glare: prog(lt, .4, 2) });
+  const bx = V ? lerp(860, 730, hin) : lerp(1780, 1600, hin);
+  phone($('p4b'), { x: bx, y: L.phoneY + (V ? 80 : 60) + Math.sin(lt * 1.2 + 2) * 8, rx: 3, ry: V ? 0 : -18, rz: V ? 4 : 3, o: hin * (1 - pout), seq: 'history', ft: Math.max(0, lt - 3.6) + CLIP.history, glare: prog(lt, 3.8, 5.5) });
+  cap($('c4a'), lt, 1.3, 4.0, V ? 110 : 780, V ? 940 : 730);
+  cap($('c4b'), lt, 4.4, b - a - .4, V ? 470 : 1310, V ? 1500 : 940, 40);
+}
+
+function s5(t) {
+  const [a, b] = T.s5; const on = t >= a && t < b; show($('s5'), on); if (!on) return;
+  const lt = t - a;
+  css($('s5text'), { left: '0px', width: W + 'px', top: (V ? 200 : 90) + 'px' });
+  fadeUp($('s5k'), lt, .2, .5, 20, b - a - .55, .3);
+  revealH1($('s5h'), lt, .3, .12, .7, b - a - .55);
+  $('s5h').style.fontSize = (V ? 104 : 96) + 'px';
+  const ids = ['p5a', 'p5b', 'p5c'], seqs = ['explore', 'feed', 'quests'], caps = ['c5a', 'c5b', 'c5c'];
+  const pout = eIn(prog(lt, b - a - .55, b - a - .1));
+  ids.forEach((id, i) => {
+    const p = eOut5(prog(lt, .25 + i * .18, 1.25 + i * .18));
+    const xs = V ? [250, 540, 830] : [560, 960, 1360];
+    const ys = V ? [1150, 1080, 1150] : [640, 610, 640];
+    phone($(id), { x: xs[i], y: ys[i] + (1 - p) * 600 + Math.sin(lt * 1.4 + i) * 6 + pout * 80, rx: 6, ry: (i - 1) * -14, rz: (i - 1) * 3, s: V ? (i === 1 ? 1.06 : .92) : (i === 1 ? 1.06 : .95), o: clamp(p * 1.4) * (1 - pout), seq: seqs[i], ft: lt + CLIP[seqs[i]], glare: prog(lt, .5 + i * .2, 2.5 + i * .2) });
+    const cx = V ? [70, 380, 690] : [430, 860, 1220];
+    cap($(caps[i]), lt, 1.3 + i * .25, b - a - .4, cx[i], V ? 1560 : 965, 0);
+  });
+}
+
+function s6(t) {
+  const [a] = T.s6; const on = t >= a; show($('s6'), on); if (!on) return;
+  const lt = t - a;
+  const cx = W / 2, cy = H / 2 - (V ? 260 : 150);
+  const LS = V ? 300 : 230;
+  const p = eOut5(prog(lt, .1, 1.1));
+  css($('s6logo'), { width: LS + 'px', left: (cx - LS / 2) + 'px', top: (cy - LS / 2) + 'px', opacity: p, transform: `scale(${lerp(1.6, 1, p) + Math.sin(lt * 1.2) * .01})`, filter: `blur(${(1 - p) * 14}px) drop-shadow(0 20px 60px rgba(108,77,255,.6))` });
+  const G = LS * 3.2;
+  css($('s6glow'), { width: G + 'px', height: G + 'px', left: (cx - G / 2) + 'px', top: (cy - G / 2) + 'px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(108,77,255,.45), rgba(59,130,246,.15) 40%, transparent 70%)', opacity: p, transform: `scale(${1 + Math.sin(lt * 1.6) * .04})` });
+  const word = $('s6word'); const FS = V ? 150 : 128;
+  css(word, { fontSize: FS + 'px', left: '0px', width: W + 'px', textAlign: 'center', top: (cy + LS / 2 + 30) + 'px' });
+  fadeUp(word, lt, .45, .8, 40);
+  const tag = $('s6tag'); css(tag, { left: '0px', width: W + 'px', top: (cy + LS / 2 + FS + 70) + 'px', fontSize: (V ? 42 : 36) + 'px', color: '#C9D2EA' });
+  fadeUp(tag, lt, 1.0, .7, 24);
+  const url = $('s6url'); css(url, { left: '0px', width: W + 'px', textAlign: 'center', top: (cy + LS / 2 + FS + (V ? 190 : 165)) + 'px' });
+  const up = eBack(prog(lt, 1.6, 2.3));
+  css(url, { opacity: clamp(up), transform: `scale(${lerp(.8, 1, clamp(up))})` });
+  const foot = $('s6foot'); css(foot, { left: '0px', width: W + 'px', top: (V ? H - 240 : H - 130) + 'px', fontSize: (V ? 30 : 24) + 'px' });
+  fadeUp(foot, lt, 2.4, .7, 16);
+  // final fade to black
+  css($('stage'), { filter: `brightness(${1 - eIn(prog(t, DUR - 1.2, DUR))})` });
+}
+
+window.seek = async (t) => {
+  pending.length = 0;
+  bg(t);
+  s1(t); s2(t); s3(t); s4(t); s5(t); s6(t);
+  wipe(t, 14.05); wipe(t, 24.05) || wipe(t, 32.05);
+  if (t < 38) css($('stage'), { filter: 'none' });
+  // brief flash on the outro hit
+  if (t > 30) css($('flash'), { opacity: Math.max(0, 1 - Math.abs(t - 38.0) / .25) * .7 });
+  await Promise.all(pending);
+  await new Promise((r) => requestAnimationFrame(() => r()));
+};
+
+(async () => {
+  Object.assign(SEQS, window.SEQ_MANIFEST || {}); // written by tools/build.sh
+  await document.fonts.load('800 100px "Inter Display"'); await document.fonts.load('600 30px Inter');
+  await loadImg('assets/frenz-logo.png');
+  await window.seek(0);
+  window.__ready = true;
+})();
+</script>
+</body>
+</html>

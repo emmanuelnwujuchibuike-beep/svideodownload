@@ -5,6 +5,7 @@ import {
   Play,
 } from "lucide-react";
 import { VerifiedTick } from "@/components/badges/identity-badges";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -12,10 +13,16 @@ import { FadeImage } from "@/features/ui/fade-image";
 
 import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
 import { useQuery } from "@/features/data";
-import { ReelsFeed } from "@/features/reels/reels-feed";
 import { getApi } from "@/lib/sdk/browser";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { formatCompactNumber } from "@/lib/utils";
+
+// On tap only (2026-10-16, /home weight): the whole Reels engine was in /home's first
+// load through this import. Same split and black first frame as smart-feed.tsx.
+const ReelsFeed = dynamic(() => import("@/features/reels/reels-feed").then((m) => m.ReelsFeed), {
+  ssr: false,
+  loading: () => <div className="fixed inset-0 z-[85] bg-black" aria-hidden />,
+});
 
 const FALLBACK = ["from-rose-500 to-fuchsia-600", "from-sky-500 to-blue-600", "from-violet-500 to-purple-600", "from-amber-500 to-orange-600", "from-emerald-500 to-teal-600"];
 

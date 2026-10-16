@@ -726,7 +726,17 @@ const ENTRY_ROUTES = [
  * really about — even though it cannot yet be held to the landing's number.
  */
 const APP_ENTRY_CEILING = 300 * 1024;
-const APP_ENTRY_ROUTES = ["/(app)/downloads/page"];
+/*
+ * 2026-10-16 (owner: "Make the home weight to go back to 350 at all cost"): /home joins
+ * this ceiling. 389,545 B -> 291,983 B (285 kB) by three code splits, no feature removed:
+ *  · lib/sdk/browser.ts took the synchronous Supabase client (~61 kB gz with Realtime)
+ *    into every route holding the SDK; its getToken is async, so it now uses the lazy door.
+ *  · trending-reels.tsx imported the whole Reels engine statically; it is dynamic now,
+ *    as in smart-feed.tsx.
+ *  · the story viewer's reshare and "seen by" sheets load when a story opens.
+ * The guard below names each one, so a static import that brings them back fails by name.
+ */
+const APP_ENTRY_ROUTES = ["/(app)/downloads/page", "/(app)/home/page"];
 
 describe.skipIf(!buildExists())("route weight budget", () => {
   it("keeps every route under the global ceiling", () => {
@@ -757,7 +767,7 @@ describe.skipIf(!buildExists())("route weight budget", () => {
     ).toHaveLength(0);
   });
 
-  it("keeps the signed-in download page under its own ceiling", () => {
+  it("keeps the signed-in download page and /home under their own ceiling", () => {
     const weights = new Map(routeWeights().map((r) => [r.route, r.bytes]));
 
     const over = APP_ENTRY_ROUTES.filter((route) => {
@@ -772,6 +782,18 @@ describe.skipIf(!buildExists())("route weight budget", () => {
         `rule as the landing: find the bytes, do not raise the ceiling. See the ` +
         `note above APP_ENTRY_CEILING for why this is 300 and not 275.`,
     ).toHaveLength(0);
+  });
+
+  it("keeps the /home splits in place (2026-10-16)", () => {
+    const src = (f: string) => readFileSync(join(process.cwd(), f), "utf8");
+    const staticImport = (code: string, mod: string) => new RegExp(`^import [^;]*from "${mod}";`, "m").test(code);
+    expect(staticImport(src("lib/sdk/browser.ts"), "@/lib/supabase/client")).toBe(false);
+    expect(staticImport(src("features/app-shell/dashboard/trending-reels.tsx"), "@/features/reels/reels-feed")).toBe(false);
+    const stories = src("features/app-shell/dashboard/stories-row.tsx");
+    expect(staticImport(stories, "@/features/social/reshare-sheet")).toBe(false);
+    expect(staticImport(stories, "@/features/social/story-viewers-sheet")).toBe(false);
+    // Teeth: the guard does see a static import when there is one.
+    expect(staticImport(`import { ReelsFeed } from "@/features/reels/reels-feed";`, "@/features/reels/reels-feed")).toBe(true);
   });
 
   it("keeps framer-motion off the landing page entirely", () => {

@@ -13,11 +13,15 @@ import { useSelfAdPool } from "@/features/ads-platform/serve/use-self-ad-pool";
 import type { EligibleAd } from "@/lib/ads-platform/eligibility";
 import { seed, useQuery } from "@/features/data";
 import { useEntitlements } from "@/features/auth/use-entitlements";
-import { ReshareSheet } from "@/features/social/reshare-sheet";
-import { StoryViewersSheet } from "@/features/social/story-viewers-sheet";
 import { toast } from "@/features/ui/toast";
 import { fireWowFeedback, WowBurst } from "@/features/ui/wow-burst";
 import { formatRelative } from "@/lib/i18n/format";
+
+// Sheets a story viewer opens on a tap: loaded then, not with /home (2026-10-16, /home weight).
+const ReshareSheet = dynamic(() => import("@/features/social/reshare-sheet").then((m) => m.ReshareSheet), { ssr: false });
+const StoryViewersSheet = dynamic(() => import("@/features/social/story-viewers-sheet").then((m) => m.StoryViewersSheet), {
+  ssr: false,
+});
 import { haptic } from "@/lib/motion/haptics";
 import { isSingleEmoji } from "@/lib/social/single-emoji";
 import { fetchStoryGroups, readCachedStories, writeCachedStories } from "@/lib/social/story-cache";

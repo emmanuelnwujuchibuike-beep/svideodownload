@@ -1,6 +1,6 @@
 "use client";
 
-import { createClient } from "@/lib/supabase/client";
+import { getClient } from "@/lib/supabase/client-lazy";
 
 import { FrenzsaveClient } from "./client";
 
@@ -16,12 +16,13 @@ let instance: FrenzsaveClient | null = null;
 
 export function getApi(): FrenzsaveClient {
   if (instance) return instance;
-  const supabase = createClient();
   instance = new FrenzsaveClient({
     baseUrl: typeof window !== "undefined" ? window.location.origin : "",
     client: "web",
+    /* The lazy door (2026-10-16): getToken is async anyway, so Supabase (~61 kB gz)
+       arrives on the first API call instead of in every route that holds the SDK. */
     getToken: async () => {
-      const { data } = await supabase.auth.getSession();
+      const { data } = await (await getClient()).auth.getSession();
       return data.session?.access_token ?? null;
     },
   });

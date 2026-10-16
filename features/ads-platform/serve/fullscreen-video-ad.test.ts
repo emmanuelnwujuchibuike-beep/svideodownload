@@ -26,6 +26,15 @@ describe("full-screen ads (image and video)", () => {
     expect(foot).toContain("{ad.body}");
   });
 
+  it("owner 2026-10-16: the rail and the sound button stand on the CTA block (TikTok), not mid-screen", () => {
+    expect(layout).toContain('root.style.setProperty("--ad-cta"');
+    expect(layout).toContain("bottom-[calc(var(--ad-cta,4.125rem)+5.25rem)]");
+    expect(layout).not.toContain("bottom-[calc(50%-3rem)]");
+    const creative = code("features/ads-platform/serve/self-ad-creative.tsx");
+    expect(creative).toContain("bottom-[calc(var(--ad-cta,4.125rem)+1.625rem)] right-3 h-11 w-11");
+    expect(creative).not.toContain("top-[calc(50%+3.75rem)]");
+  });
+
   it("TikTok/Snapchat grammar: rail of real actions, CTA that lights up, tap to pause", () => {
     expect(layout).toContain('"Share this ad"');
     expect(layout).toMatch(/setTimeout\(\(\) => setCtaLit\(true\), CTA_HIGHLIGHT_MS\)/);

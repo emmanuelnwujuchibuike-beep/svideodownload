@@ -243,8 +243,9 @@ export function SelfAdCreative({
           className={cn(
             "absolute z-20 inline-flex items-center text-white transition",
             soundAt === "rail"
-              ? // the TikTok-style rail: a round glass button, right of centre, under the layout's own rail items
-                "right-3 top-[calc(50%+3.75rem)] h-11 w-11 justify-center rounded-full bg-black/35 ring-1 ring-inset ring-white/15 backdrop-blur-md active:scale-90 motion-reduce:active:scale-100"
+              ? // the TikTok-style rail: a round glass button at the rail's foot, just above the layout's CTA
+                // block (its height is --ad-cta, set by fullscreen-video-ad.tsx), under the rail items
+                "bottom-[calc(var(--ad-cta,4.125rem)+1.625rem)] right-3 h-11 w-11 justify-center rounded-full bg-black/35 ring-1 ring-inset ring-white/15 backdrop-blur-md active:scale-90 motion-reduce:active:scale-100"
               : "bottom-2 right-2 min-h-[2.25rem] gap-1 rounded-full bg-black/55 px-2.5 text-[11px] font-semibold backdrop-blur-sm hover:bg-black/70",
           )}
         >

@@ -94,6 +94,20 @@ export function FullscreenVideoAd({
   const [progress, setProgress] = useState(0);
   const [paused, setPaused] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  // the CTA block's height (the bar plus any caller footer) as --ad-cta: the rail and the sound
+  // button stand on it, whatever the caller puts under the bar
+  const rootRef = useRef<HTMLDivElement>(null);
+  const ctaRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = rootRef.current;
+    const cta = ctaRef.current;
+    if (!root || !cta) return;
+    const set = () => root.style.setProperty("--ad-cta", `${Math.round(cta.getBoundingClientRect().height)}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(cta);
+    return () => ro.disconnect();
+  }, []);
   const [ctaLit, setCtaLit] = useState(false);
   const video = useRef<HTMLVideoElement | null>(null);
   const captionRef = useRef<HTMLSpanElement | null>(null);
@@ -207,7 +221,7 @@ export function FullscreenVideoAd({
   );
 
   return (
-    <div className={cn("relative h-full w-full overflow-hidden bg-black text-white", className)}>
+    <div ref={rootRef} className={cn("relative h-full w-full overflow-hidden bg-black text-white", className)}>
       {/* the media, inside the safe areas — full width, never cropped, never under the notch or the home bar */}
       <div className="absolute inset-x-0 bottom-[env(safe-area-inset-bottom)] top-[env(safe-area-inset-top)]">
         <SelfAdCreative
@@ -239,8 +253,13 @@ export function FullscreenVideoAd({
         ) : null}
         <div className="absolute inset-0 z-[7] [&>*]:pointer-events-auto pointer-events-none">{children}</div>
 
-        {/* TikTok's right rail: the brand (opens its details), Like, views, Share — it grows UP from just above the sound button */}
-        <div className="absolute bottom-[calc(50%-3rem)] right-3 z-20 flex flex-col items-center gap-3.5">
+        {/*
+          TikTok's right rail: the brand (opens its details), Like, views, Share. Owner 2026-10-16: it sits
+          down by the call-to-action like a TikTok ad, not mid-screen. It grows UP from just above the sound
+          button, which sits just above the CTA block (its measured height is --ad-cta, set below); an image
+          ad has no sound button, so its rail starts right above the CTA.
+        */}
+        <div className={cn("absolute right-3 z-20 flex flex-col items-center gap-3.5", isVideo ? "bottom-[calc(var(--ad-cta,4.125rem)+5.25rem)]" : "bottom-[calc(var(--ad-cta,4.125rem)+1.625rem)]")}>
           <button type="button" onClick={open} aria-label={`Visit ${ad.sponsor}`} className="mb-1 transition active:scale-90 motion-reduce:active:scale-100">
             {brandBadge("lg")}
           </button>
@@ -323,7 +342,8 @@ export function FullscreenVideoAd({
           </span>
         </div>
 
-        {/* the call-to-action bar: see-through first, then it fills with colour (TikTok) */}
+        {/* the call-to-action bar: see-through first, then it fills with colour (TikTok) — measured with the footer, for the rail */}
+        <div ref={ctaRef}>
         <a
           href={ad.url}
           target="_blank"
@@ -341,6 +361,7 @@ export function FullscreenVideoAd({
           <ChevronRight className="h-5 w-5 shrink-0" aria-hidden />
         </a>
         {footer ? <div className="pointer-events-auto">{footer}</div> : null}
+        </div>
       </div>
     </div>
   );

@@ -701,7 +701,10 @@ export function ConversationRoom({
   // 🔴 2026-10-14 (owner: "too much gap between the placeholder and the keyboard"): iOS keeps
   // env(safe-area-inset-bottom) (~34px, the home-bar strip) while the keyboard is up, but the keyboard
   // already covers that strip, so the padding showed as an empty band above it. Drop it while typing.
-  const composerBottomPad = keyboardOpen ? "pb-2" : "pb-[calc(0.75rem+env(safe-area-inset-bottom))]";
+  // 2026-10-15 (owner: "too much white space between the chat placeholder and the keyboard"): without the
+  // keyboard the pad is the home-bar inset minus 8px (the bar itself sits ~8px off the bottom, as the nav pill's
+  // gap rule in globals.css), not 12px ON TOP of the full inset — ~26px instead of ~46px on an iPhone.
+  const composerBottomPad = keyboardOpen ? "pb-2" : "pb-[max(0.75rem,calc(env(safe-area-inset-bottom)-0.5rem))]";
   // useLayoutEffect, not useEffect (owner, 2026-07-16: "make the chat page open
   // from the botton on any entry so users dont need to scroll down to see new
   // messages"): a plain effect runs AFTER the browser paints, so every entry

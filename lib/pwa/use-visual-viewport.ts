@@ -2,6 +2,24 @@
 
 import { useEffect, useState } from "react";
 
+/**
+ * The height the keyboard is measured against: the LAYOUT viewport.
+ *
+ * 🔴 2026-10-15 (owner, iPhone screenshot in Safari: a big white band between
+ * the chat composer and the keyboard, the thread header gone off the top).
+ * Both hooks below used `window.innerHeight − visualViewport.height` as the
+ * keyboard height. Newer iOS Safari shrinks `innerHeight` together with the
+ * keyboard, so that difference reads ~0, the pin never engaged, and the fixed
+ * thread rode up as if nothing were done — header off-screen, blank page
+ * below the composer. `documentElement.clientHeight` is the layout viewport
+ * (the initial containing block a `position: fixed` surface is sized
+ * against), which the keyboard never shrinks; the larger of the two is used,
+ * so a browser that does keep `innerHeight` full still measures the same.
+ */
+export function layoutViewportHeight(): number {
+  return Math.max(window.innerHeight, document.documentElement.clientHeight || 0);
+}
+
 export interface VisualViewportState {
   height: number | null;
   /** Heuristic — there's no direct "keyboard is open" API, so this treats a
@@ -28,7 +46,7 @@ export function useVisualViewport(): VisualViewportState {
     const update = () => {
       setState({
         height: vv.height,
-        keyboardOpen: window.innerHeight - vv.height > 120,
+        keyboardOpen: layoutViewportHeight() - vv.height > 120,
       });
     };
     update();
@@ -131,7 +149,7 @@ export function useVisualViewportPin(): ViewportPin | null {
         resolve to `null` — plain CSS `inset-0` is correct there, same as with
         no keyboard at all.
       */
-      const heightGap = window.innerHeight - vv.height;
+      const heightGap = layoutViewportHeight() - vv.height;
       /*
         🔴 NO FOCUSED FIELD ⇒ NO KEYBOARD ⇒ NO PIN (owner, 2026-10-08: "this
         large space keeps appearing when I enter chat, I have to exit and come

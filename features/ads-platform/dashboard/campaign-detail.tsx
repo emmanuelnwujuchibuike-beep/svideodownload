@@ -20,6 +20,7 @@ import {
   date,
   liveCreative,
   loadCampaign,
+  loadEngagementCounts,
   loadExtensions,
   loadHistory,
   loadPayments,
@@ -500,6 +501,8 @@ function Performance({ id }: { id: string }) {
   const [range, setRange] = useState<number | null>(30);
   const rows: StatRow[] | null = useDash(`perf:${id}:${range ?? "all"}`, () => loadStats([id], fromDay(range))).data ?? null;
   const t = useMemo(() => (rows ? totalsOf(rows) : null), [rows]);
+  // 0246: likes and shares from the full-screen ad — lifetime, whatever the range (null before 0246: not shown)
+  const reactions = useDash(`engagement:${id}`, () => loadEngagementCounts(id)).data ?? null;
   return (
     <AiPanel>
       <TestModeNote campaignId={id} />
@@ -514,7 +517,7 @@ function Performance({ id }: { id: string }) {
       {!rows || !t ? <div className="mt-3"><Skeleton /></div> : (
         <>
           {/* 0201: conversions = details opened on Frenzsave; site visits = after the external-link warning */}
-          <div className="mt-4 grid grid-cols-3 gap-px overflow-hidden rounded-xl bg-border/70 ring-1 ring-inset ring-border/70">
+          <div className={cn("mt-4 grid gap-px overflow-hidden rounded-xl bg-border/70 ring-1 ring-inset ring-border/70", reactions ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3")}>
             {[
               { l: "Views", v: num(t.views) },
               { l: "Clicks", v: num(t.clicks) },
@@ -522,6 +525,7 @@ function Performance({ id }: { id: string }) {
               { l: "Conversions", v: num(t.conversions) },
               { l: "Site visits", v: num(t.outbounds) },
               { l: "Video ends", v: num(t.videoCompletes + t.rewardCompletes) },
+              ...(reactions ? [{ l: "Likes", v: num(reactions.likes) }, { l: "Shares", v: num(reactions.shares) }] : []),
             ].map((k) => (
               <div key={k.l} className="min-w-0 bg-card px-3 py-3">
                 <p className="truncate text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{k.l}</p>

@@ -108,6 +108,8 @@ declare
   v_d_enabled   boolean;
   v_d_views     boolean;
   v_total       bigint;
+  v_list        bigint;
+  v_pct         integer := 0;
   v_cap         jsonb;
 begin
   select * into s from public.ad_platform_settings where id;
@@ -125,14 +127,19 @@ begin
   if p_target % s.views_target_step <> 0 then return jsonb_build_object('ok', false, 'reason', 'target_step', 'step', s.views_target_step); end if;
   v_rate := public.ad_views_rate(p_placement, p_target);
   -- integer money only: cents per 1,000 views x views / 1,000, rounded DOWN to the cent
-  v_total := (p_target::bigint * v_rate) / 1000;
-  if v_total <= 0 then return jsonb_build_object('ok', false, 'reason', 'no_price'); end if;
+  v_list := (p_target::bigint * v_rate) / 1000;
+  if v_list <= 0 then return jsonb_build_object('ok', false, 'reason', 'no_price'); end if;
+  -- 0246's volume discount, when 0246 has run (this file may run after it)
+  if to_regprocedure('public.ad_views_discount_percent(integer)') is not null then
+    execute 'select public.ad_views_discount_percent($1)' into v_pct using p_target;
+  end if;
+  v_total := v_list - (v_list * coalesce(v_pct, 0)) / 100;
   if v_total < s.views_min_checkout_minor then return jsonb_build_object('ok', false, 'reason', 'below_min_checkout', 'min_minor', s.views_min_checkout_minor); end if;
   v_cap := public.ad_views_capacity(p_placement, p_target, v_days);
   if v_cap ->> 'decision' = 'refuse' then return jsonb_build_object('ok', false, 'reason', 'over_capacity', 'capacity', v_cap); end if;
   return jsonb_build_object(
     'ok', true, 'pricing_model', 'views_based', 'currency', p_currency,
-    'list_price', v_total, 'discount_percent', 0, 'total', v_total,
+    'list_price', v_list, 'discount_percent', coalesce(v_pct, 0), 'total', v_total,
     'duration_days', v_days, 'extra_days', 0, 'pricing_plan_id', null, 'promotion_id', null, 'quoted_at', now(),
     'target_views', p_target, 'rate_per_1000_minor', v_rate,
     'terms', jsonb_build_object('auto_extend', s.views_auto_extend, 'extension_days', s.views_extension_days,
@@ -622,7 +629,9 @@ language sql stable security definer set search_path = public as $$
         'views_enabled', s.views_enabled, 'views_rate_per_1000_minor', s.views_rate_per_1000_minor,
         'views_min_target', s.views_min_target, 'views_max_target', s.views_max_target, 'views_target_step', s.views_target_step,
         'views_auto_extend', s.views_auto_extend, 'views_extension_days', s.views_extension_days, 'views_max_extensions', s.views_max_extensions,
-        'fixed_enabled', s.fixed_enabled, 'views_min_checkout_minor', s.views_min_checkout_minor, 'views_volume_tiers', s.views_volume_tiers)
+        'fixed_enabled', s.fixed_enabled, 'views_min_checkout_minor', s.views_min_checkout_minor, 'views_volume_tiers', s.views_volume_tiers,
+        -- 0246's volume discounts, when 0246 has run (null before)
+        'views_volume_discounts', to_jsonb(s) -> 'views_volume_discounts')
       from public.ad_platform_settings s where s.id),
     'formats', coalesce((select jsonb_agg(jsonb_build_object(
         'code', f.code, 'name', f.name, 'description', f.description, 'recommendation', f.recommendation,

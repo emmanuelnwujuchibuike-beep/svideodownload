@@ -106,6 +106,8 @@ export interface AdCatalog {
     fixed_enabled?: boolean;
     views_min_checkout_minor?: number;
     views_volume_tiers?: unknown;
+    /** 0246 (absent before it runs: no discounts) */
+    views_volume_discounts?: unknown;
   };
   formats: CatalogFormat[];
   placements: CatalogPlacement[];

@@ -39,7 +39,7 @@ import {
   type Estimate,
 } from "@/lib/ads-platform/offer";
 import { tallForTopBanner } from "@/lib/ads-platform/slot-registry";
-import { offeredViewsDurations, snapTarget, viewsRateFor, viewsTermsOf, type PricingModel, type ViewsTerms } from "@/lib/ads-platform/views-pricing";
+import { offeredViewsDurations, snapTarget, viewsDiscountPercent, viewsRateFor, viewsTermsOf, type PricingModel, type ViewsTerms } from "@/lib/ads-platform/views-pricing";
 import { ADVERTISING_RULES, ADVERTISING_RULES_VERSION, AUTOMATED_VALIDATION_NOTICE, RULES_CHECKBOX_TEXT } from "@/lib/ads-platform/rules";
 import { cn } from "@/lib/utils";
 
@@ -319,13 +319,15 @@ export function AdvertiseWizard() {
   const target = views && terms ? snapTarget(terms, form.targetViews ?? terms.minTarget) : null;
   const rates = viewsRates(cat, terms, form.placementCodes, target);
   const durations = durationsFor(form, cat);
+  // 0246: the volume discount for this many views (0 below the admin's first step)
+  const discountPct = terms && target !== null ? viewsDiscountPercent(terms, target) : 0;
   // 0242: a total under the admin's minimum checkout can't be bought (the server refuses it too)
-  const belowMin = views && !!terms && !!rates && target !== null && viewsEstimate(target, rates) < terms.minCheckoutMinor;
+  const belowMin = views && !!terms && !!rates && target !== null && viewsEstimate(target, rates, discountPct) < terms.minCheckoutMinor;
   const est: Estimate | null = !form.durationId
     ? null
     : views
       ? rates && target !== null && !belowMin && durations.some((d) => d.id === form.durationId)
-        ? { currency: cat.settings.display_currency, lines: [], subtotal: viewsEstimate(target, rates), discount: 0, total: viewsEstimate(target, rates) }
+        ? { currency: cat.settings.display_currency, lines: [], subtotal: viewsEstimate(target, rates), discount: viewsEstimate(target, rates) - viewsEstimate(target, rates, discountPct), total: viewsEstimate(target, rates, discountPct) }
         : null
       : estimate(cat, form.placementCodes, form.durationId);
   const stepIndex = APPLICATION_STEPS.indexOf(form.step);

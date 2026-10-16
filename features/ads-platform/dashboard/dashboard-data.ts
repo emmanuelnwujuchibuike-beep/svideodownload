@@ -435,3 +435,22 @@ export function remaining(endAt: string | null, now = Date.now()): string | null
 export function liveCreative(c: Pick<CampaignRow, "ad_creatives">): CampaignCreative | null {
   return c.ad_creatives?.find((x) => x.status === "active") ?? null;
 }
+
+/**
+ * 0246 (owner, 2026-10-15: "the ad campaign owner should be able to see how many
+ * likes the ad got"): the campaign's likes and shares from the full-screen ad,
+ * read under RLS (the advertiser's own rows only). The real counts — the x10
+ * sample mode scales views, never likes. Fails open to null before 0246 runs.
+ */
+export async function loadEngagementCounts(campaignId: string): Promise<{ likes: number; shares: number } | null> {
+  try {
+    const sb = await getClient();
+    const { data, error } = await sb.from("ad_campaign_engagement").select("likes, shares").eq("campaign_id", campaignId).maybeSingle();
+    if (error) return null;
+    const r = data as { likes: number; shares: number } | null;
+    // no row yet = nobody has liked or shared it: a real zero
+    return { likes: Number(r?.likes ?? 0), shares: Number(r?.shares ?? 0) };
+  } catch {
+    return null;
+  }
+}

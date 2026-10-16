@@ -80,6 +80,7 @@ export const NOT_EXPORTED: Record<string, string> = {
   ad_campaign_daily_stats: "Daily view and click counts of your campaigns — tied to the campaign, see ad_campaigns.",
   ad_campaign_delivery: "How many guaranteed views a views-based campaign has delivered — tied to the campaign, see ad_campaigns.",
   ad_delivery_adjustments: "Corrections our team made to a campaign's delivered views, with the reason — tied to the campaign, see ad_campaigns.",
+  ad_campaign_engagement: "How many likes and shares your campaign's ad got — tied to the campaign, see ad_campaigns.",
   /* Part 8 (0206): traffic-quality internals. None is keyed by a member, and none holds an IP. */
   ad_invalid_daily: "Counts of filtered ad traffic per campaign and day. Not personal data.",
   ad_ingest_counters: "Short-lived counters (kept for minutes) that rate-limit ad events. Not personal data.",
@@ -369,6 +370,8 @@ export const OWNER_COLUMN: Record<string, string> = {
   ad_payment_quotes: "user_id",
   // 0198: extra days you bought for a running campaign
   ad_campaign_extensions: "user_id",
+  // 0246: the ads you liked or shared while signed in (a signed-out like is keyed by an anonymous id, never you)
+  ad_campaign_reactions: "user_id",
   // 0241: placements you asked to be told about when a slot opens
   ad_slot_waitlist: "user_id",
   affiliate_clicks: "user_id",

@@ -2,7 +2,7 @@
 
 import { ShieldCheck } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 
 import { formatMoney, type AdCatalog, type CatalogDuration } from "@/lib/ads-platform/offer";
 import {
@@ -13,6 +13,8 @@ import {
   targetProblem,
   targetRange,
   targetToSlider,
+  discountedMinor,
+  viewsDiscountPercent,
   viewsPriceMinor,
   type ViewsTerms,
 } from "@/lib/ads-platform/views-pricing";
@@ -30,9 +32,19 @@ import { cn } from "@/lib/utils";
 const fmt = (n: number) => n.toLocaleString("en-US");
 const short = (n: number) => (n >= 1_000_000 ? `${fmt(n / 1_000_000)}M` : n >= 1000 ? `${fmt(n / 1000)}K` : fmt(n));
 
-/** The rates of the chosen placements — each placement is its own campaign at the same target. */
-export function viewsEstimate(target: number, rates: readonly number[]): number {
-  return rates.reduce((sum, r) => sum + viewsPriceMinor(target, r), 0);
+/**
+ * The rates of the chosen placements — each placement is its own campaign at the same target,
+ * each priced and discounted on its own (ad_views_price_for), so the sum here is the sum the
+ * server charges. `discountPercent` is the volume discount (0246); 0 = the list price.
+ */
+export function viewsEstimate(target: number, rates: readonly number[], discountPercent = 0): number {
+  return rates.reduce((sum, r) => sum + discountedMinor(viewsPriceMinor(target, r), discountPercent), 0);
+}
+
+/** "25% off" on a preset chip, from the admin's table — nothing when that size has no discount. */
+export function presetDiscountLabel(terms: ViewsTerms, target: number): string | null {
+  const pct = viewsDiscountPercent(terms, target);
+  return pct > 0 ? `-${pct}%` : null;
 }
 
 /** The guarantee in the admin's actual terms — never a promise the settings don't make. */
@@ -66,7 +78,11 @@ export function ViewsPicker({
   onDuration: (id: string) => void;
 }) {
   const currency = cat.settings.display_currency;
-  const cost = viewsEstimate(target, rates);
+  // 0246 (owner, 2026-10-15): a volume discount from the admin's table — 500K views 25%, 1M 30%
+  const discount = viewsDiscountPercent(terms, target);
+  const list = viewsEstimate(target, rates);
+  const cost = viewsEstimate(target, rates, discount);
+  const nextStep = (terms.discounts ?? []).find((d) => d.minViews > target && d.percent > discount && d.minViews <= terms.maxTarget) ?? null;
   const rate = rates.length === 1 ? rates[0]! : null;
   const period = durations.find((d) => d.id === durationId) ?? null;
   const { lo, hi } = targetRange(terms);
@@ -96,6 +112,9 @@ export function ViewsPicker({
                   )}
                 >
                   {short(p)}
+                  {presetDiscountLabel(terms, p) ? (
+                    <span className={cn("ml-1 text-[10.5px] font-bold", p === target ? "text-white/85" : "text-emerald-600 dark:text-emerald-400")}>{presetDiscountLabel(terms, p)}</span>
+                  ) : null}
                 </button>
               ))}
             </div>
@@ -136,12 +155,23 @@ export function ViewsPicker({
           <SummaryLine label="Planned period" value={period ? period.name : "Choose a period"} />
           <SummaryLine label="Placement" value={placementNames.join(" · ") || "—"} />
         </dl>
-        <div className="mt-3 flex items-end justify-between border-t border-indigo-100 pt-3 dark:border-indigo-400/20">
+        {discount > 0 ? (
+          <dl className="mt-3 space-y-1.5 border-t border-indigo-100 pt-3 text-[13px] dark:border-indigo-400/20">
+            <SummaryLine label="Price" value={<span className="text-muted-foreground line-through">{formatMoney(list, currency)}</span>} />
+            <SummaryLine label={`Volume discount (${discount}%)`} value={<span className="font-semibold text-emerald-600 dark:text-emerald-400">−{formatMoney(list - cost, currency)}</span>} />
+          </dl>
+        ) : null}
+        <div className={cn("flex items-end justify-between pt-3", discount > 0 ? "mt-1.5" : "mt-3 border-t border-indigo-100 dark:border-indigo-400/20")}>
           <span className="text-[13px] font-semibold text-muted-foreground">Estimated cost</span>
           <span className="font-brand text-[1.7rem] font-bold leading-none tracking-[-0.03em] tabular-nums" aria-live="polite">
             {formatMoney(cost, currency)}
           </span>
         </div>
+        {nextStep ? (
+          <p className="mt-1.5 text-right text-[11.5px] font-medium text-emerald-700 dark:text-emerald-400">
+            {nextStep.percent}% off from {short(nextStep.minViews)} views
+          </p>
+        ) : null}
         <div className="mt-3 flex items-start gap-2 rounded-2xl bg-card/80 p-3 text-[12.5px] leading-snug dark:bg-white/5">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-300" aria-hidden />
           <span>
@@ -163,7 +193,7 @@ export function ViewsPicker({
   );
 }
 
-function SummaryLine({ label, value }: { label: string; value: string }) {
+function SummaryLine({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
       <dt className="text-muted-foreground">{label}</dt>

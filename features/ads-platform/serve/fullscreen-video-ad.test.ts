@@ -26,12 +26,25 @@ describe("full-screen ads (image and video)", () => {
     expect(foot).toContain("{ad.body}");
   });
 
-  it("TikTok/Snapchat grammar with no made-up numbers: rail of real actions, CTA that lights up, tap to pause", () => {
-    expect(layout).toContain('aria-label="Share this ad"');
+  it("TikTok/Snapchat grammar: rail of real actions, CTA that lights up, tap to pause", () => {
+    expect(layout).toContain('"Share this ad"');
     expect(layout).toMatch(/setTimeout\(\(\) => setCtaLit\(true\), CTA_HIGHLIGHT_MS\)/);
     expect(layout).toMatch(/aria-label=\{paused \? "Play the ad" : "Pause the ad"\}/);
-    // the truth rule: no like/comment/view counters on an ad
-    expect(layout).not.toMatch(/likes|comments|views|formatCompactNumber/i);
+  });
+
+  it("🔴 likes, views and shares are the campaign's REAL counts — none shown before they load (owner, 2026-10-15)", () => {
+    // read from the engagement route only, never computed or seeded here
+    expect(layout).toContain("void loadAdEngagement(ad.c).then((e) => {");
+    expect(layout).toContain("const [counts, setCounts] = useState<AdEngagement | null>(null);");
+    // the views item exists only once counts are in; the like button says "Like" until then
+    expect(layout).toContain("{counts ? (\n            <div className=\"flex flex-col items-center gap-1\" aria-label={`${counts.views} views`}>");
+    expect(layout).toContain('{counts ? formatCompactNumber(counts.likes) : "Like"}');
+    // no literal number is ever rendered as a count
+    expect(layout).not.toMatch(/formatCompactNumber\(\d/);
+    // an optimistic like is rolled back when the server refuses it
+    expect(layout).toContain("setCounts(after ?? before);");
+    // a share is counted only after it really happened
+    expect(layout.indexOf('void reactToAd(ad.c, "share", true)')).toBeGreaterThan(layout.indexOf("await navigator.share(data);"));
   });
 
   it("🔴 the interstitial, the Stories card and the Reels slide use it for EVERY ad, image or video", () => {

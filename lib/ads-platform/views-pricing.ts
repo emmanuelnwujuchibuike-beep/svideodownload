@@ -25,6 +25,39 @@ export interface ViewsTerms {
   tiers: VolumeTier[];
   /** 0242: the smallest checkout total, in cents (0 = none) */
   minCheckoutMinor: number;
+  /** 0246: from `minViews` up, `percent` off the views price (absent before 0246 = none) */
+  discounts?: VolumeDiscount[];
+}
+
+export interface VolumeDiscount {
+  minViews: number;
+  percent: number;
+}
+
+/** The discount table from the catalog or an admin request: whole numbers, a percentage 0–90, sorted by threshold. Null when malformed. */
+export function parseDiscounts(raw: unknown): VolumeDiscount[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: VolumeDiscount[] = [];
+  for (const d of raw) {
+    const r = d as { min_views?: unknown; percent?: unknown; minViews?: unknown };
+    const minViews = Number(r.min_views ?? r.minViews);
+    const percent = Number(r.percent);
+    if (!Number.isSafeInteger(minViews) || minViews < 1 || !Number.isSafeInteger(percent) || percent < 0 || percent > 90) return null;
+    out.push({ minViews, percent });
+  }
+  return out.sort((a, b) => a.minViews - b.minViews);
+}
+
+/** The percentage off for a target — ad_views_discount_percent's rule: the largest step it reaches, 0 below the first. */
+export function viewsDiscountPercent(terms: Pick<ViewsTerms, "discounts">, target: number): number {
+  let pct = 0;
+  for (const d of terms.discounts ?? []) if (d.minViews <= target) pct = Math.max(pct, d.percent);
+  return Math.min(90, pct);
+}
+
+/** The charge after the discount — the cents off are rounded DOWN, as the database does. */
+export function discountedMinor(listMinor: number, percent: number): number {
+  return listMinor - Math.floor((listMinor * percent) / 100);
 }
 
 export interface VolumeTier {
@@ -60,6 +93,7 @@ export function viewsTermsOf(cat: AdCatalog): ViewsTerms | null {
     maxExtensions: Number(s.views_max_extensions),
     tiers: parseTiers(s.views_volume_tiers ?? []) ?? [],
     minCheckoutMinor: Number(s.views_min_checkout_minor ?? 0) || 0,
+    discounts: parseDiscounts(s.views_volume_discounts ?? []) ?? [],
   };
   return [t.ratePer1000Minor, t.minTarget, t.maxTarget, t.step].every((n) => Number.isSafeInteger(n) && n > 0) ? t : null;
 }

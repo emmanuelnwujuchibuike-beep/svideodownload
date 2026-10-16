@@ -523,10 +523,13 @@ interface ViewsAdmin {
     views_suspension_policy?: "close_refund" | "hold_review";
     views_on_exhausted?: "review" | "close_refund";
     views_review_after_extensions?: number;
+    /* 0246 (absent until it runs) */
+    views_volume_discounts?: { min_views: number; percent: number }[];
   };
   placements: { code: string; name: string; views_enabled: boolean; views_rate_per_1000_minor: number | null }[];
   durations: { id: string; name: string; duration_days: number; enabled: boolean; views_enabled: boolean }[];
   migrated0242?: boolean;
+  migrated0246?: boolean;
 }
 type ViewsPatch = {
   settings?: Partial<ViewsAdmin["settings"]>;
@@ -587,6 +590,7 @@ function ViewsPricing({ v, busy, setBusy, setNote, onSaved }: { v: ViewsAdmin; b
       </div>
       <p className="mt-2 text-[11.5px] text-muted-foreground">The smallest campaign costs ${(smallest / 100).toFixed(2)} at the base rate.</p>
 
+      <Discounts steps={s.views_volume_discounts ?? []} disabled={busy || v.migrated0246 !== true} onSave={(d) => void save({ settings: { views_volume_discounts: d } }, "volume discounts")} />
       <Tiers tiers={s.views_volume_tiers ?? []} disabled={busy || !m42} onSave={(t) => void save({ settings: { views_volume_tiers: t } }, "volume tiers")} />
 
       <h4 className="mt-4 text-xs font-semibold">Delivery guarantee</h4>
@@ -665,6 +669,42 @@ function ViewsPricing({ v, busy, setBusy, setNote, onSaved }: { v: ViewsAdmin; b
       </ul>
       <NewDuration disabled={busy} existing={v.durations.map((d) => d.duration_days)} onAdd={(days, name) => void save({ newDuration: { days, name } }, `new length ${name}`)} />
     </section>
+  );
+}
+
+/** 0246 volume discounts: a percentage off from a number of views up. Edited locally, saved once. */
+function Discounts({ steps, disabled, onSave }: { steps: { min_views: number; percent: number }[]; disabled: boolean; onSave: (d: { min_views: number; percent: number }[]) => void }) {
+  const [rows, setRows] = useState(steps.map((d) => ({ min: String(d.min_views), pct: String(d.percent) })));
+  useEffect(() => setRows(steps.map((d) => ({ min: String(d.min_views), pct: String(d.percent) }))), [steps]);
+  const parsed = rows.map((r) => ({ min_views: Number(r.min), percent: Number(r.pct) }));
+  const valid = parsed.every((d) => Number.isInteger(d.min_views) && d.min_views >= 1 && Number.isInteger(d.percent) && d.percent >= 0 && d.percent <= 90);
+  return (
+    <div className="mt-3">
+      <p className="text-xs font-semibold">Volume discounts</p>
+      <p className="text-[11.5px] text-muted-foreground">From a number of views up, a percentage off the views price — the largest step reached applies. Advertisers see it on the views picker and at checkout. The server refuses a bigger step with a smaller discount.</p>
+      <ul className="mt-1 space-y-1.5">
+        {rows.map((r, i) => (
+          <li key={i} className="flex flex-wrap items-center gap-2 text-xs">
+            From
+            <input inputMode="numeric" value={r.min} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, min: e.target.value } : x)))} className="w-28 rounded-lg border border-border bg-background px-2 py-1.5" aria-label="From views" />
+            views →
+            <input inputMode="numeric" value={r.pct} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, pct: e.target.value } : x)))} className="w-16 rounded-lg border border-border bg-background px-2 py-1.5" aria-label="Percent off" />
+            % off
+            <button type="button" onClick={() => setRows(rows.filter((_, j) => j !== i))} className="min-h-[2rem] px-1.5 font-semibold text-rose-600">
+              Remove
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-1.5 flex gap-2">
+        <button type="button" disabled={disabled || rows.length >= 10} onClick={() => setRows([...rows, { min: "", pct: "" }])} className="min-h-[2rem] rounded-lg border border-border px-2.5 text-xs font-semibold disabled:opacity-40">
+          Add discount
+        </button>
+        <button type="button" disabled={disabled || !valid} onClick={() => onSave(parsed)} className="min-h-[2rem] rounded-lg border border-border px-2.5 text-xs font-semibold disabled:opacity-40">
+          Save discounts
+        </button>
+      </div>
+    </div>
   );
 }
 

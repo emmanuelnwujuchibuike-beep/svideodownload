@@ -139,6 +139,21 @@ export const volumeTiersSchema = z
     }
   });
 
+/**
+ * 0246 volume discounts (owner, 2026-10-15: "discount from 5% to 30% … 1m views 30%, 500K 25%"):
+ * up to 10 steps, a whole percentage 0–90, thresholds distinct and a bigger step never a smaller discount.
+ */
+export const volumeDiscountsSchema = z
+  .array(z.object({ min_views: z.number().int().min(1).max(100_000_000), percent: z.number().int().min(0).max(90) }).strict())
+  .max(10)
+  .superRefine((steps, ctx) => {
+    const sorted = [...steps].sort((a, b) => a.min_views - b.min_views);
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i]!.min_views === sorted[i - 1]!.min_views) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Two discounts start at the same number of views." });
+      if (sorted[i]!.percent < sorted[i - 1]!.percent) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "More views can't get a smaller discount." });
+    }
+  });
+
 export const viewsSettingsSchema = z
   .object({
     views_enabled: z.boolean(),
@@ -159,6 +174,8 @@ export const viewsSettingsSchema = z
     views_suspension_policy: z.enum(["close_refund", "hold_review"]),
     views_on_exhausted: z.enum(["review", "close_refund"]),
     views_review_after_extensions: z.number().int().min(0).max(52),
+    /* 0246 */
+    views_volume_discounts: volumeDiscountsSchema,
   })
   .partial()
   .strict();
@@ -181,22 +198,27 @@ export interface ViewsAdmin {
   durations: { id: string; name: string; duration_days: number; enabled: boolean; views_enabled: boolean }[];
   /** false until 0242 runs: its controls are shown as waiting for the migration */
   migrated0242: boolean;
+  /** false until 0246 runs: the discount table waits for it */
+  migrated0246: boolean;
 }
 
 /** null before 0240 runs: the panel says so instead of failing. */
 export async function loadViewsAdmin(db: Db): Promise<ViewsAdmin | null> {
-  const [s2, pl, du] = await Promise.all([
+  const [s2, pl, du, d46] = await Promise.all([
     db.from("ad_platform_settings").select(VIEWS_COLUMNS_0242).eq("id", true).maybeSingle(),
     db.from("ad_placements").select("code, name, views_enabled, views_rate_per_1000_minor").order("sort_order", { ascending: true }),
     db.from("ad_durations").select("id, name, duration_days, enabled, views_enabled").order("duration_days", { ascending: true }),
+    // 0246, on its own so the panel loads before it runs
+    db.from("ad_platform_settings").select("views_volume_discounts").eq("id", true).maybeSingle(),
   ]);
   const s = s2.error ? await db.from("ad_platform_settings").select(VIEWS_COLUMNS_0240).eq("id", true).maybeSingle() : s2;
   if (s.error || pl.error || du.error || !s.data) return null;
   return {
-    settings: s.data as Record<string, unknown>,
+    settings: { ...(s.data as Record<string, unknown>), ...(d46.error || !d46.data ? {} : (d46.data as Record<string, unknown>)) },
     placements: (pl.data ?? []) as ViewsAdmin["placements"],
     durations: (du.data ?? []) as ViewsAdmin["durations"],
     migrated0242: !s2.error,
+    migrated0246: !d46.error && !!d46.data,
   };
 }
 
@@ -211,7 +233,8 @@ export async function saveViews(db: Db, adminId: string, patch: z.infer<typeof v
   if (!cur) throw new AdminFormatError("Views pricing needs migration 0240 — run it, then save again.");
   if (patch.settings && Object.keys(patch.settings).length) {
     const s = patch.settings;
-    if (!cur.migrated0242 && Object.keys(s).some((k) => !VIEWS_COLUMNS_0240.includes(k))) throw new AdminFormatError("This setting needs migration 0242 — run it, then save again.");
+    if (!cur.migrated0246 && "views_volume_discounts" in s) throw new AdminFormatError("Volume discounts need migration 0246 — run it, then save again.");
+    if (!cur.migrated0242 && Object.keys(s).some((k) => k !== "views_volume_discounts" && !VIEWS_COLUMNS_0240.includes(k))) throw new AdminFormatError("This setting needs migration 0242 — run it, then save again.");
     const next = { ...cur.settings, ...s } as { views_min_target: number; views_max_target: number; views_enabled?: boolean; fixed_enabled?: boolean };
     if (next.views_min_target > next.views_max_target) throw new AdminFormatError("The minimum views are above the maximum.");
     if (next.fixed_enabled === false && next.views_enabled === false) throw new AdminFormatError("At least one way to buy must stay on sale.");

@@ -176,6 +176,8 @@ export const DATA_DOMAINS: DataDomain[] = [
       "memory_reminder_dismissals",
       "creator_membership_settings",
       "creator_memberships",
+      // Frenz Exclusive Part 5 (0250): one row per renewal reminder actually sent (the dedupe)
+      "sub_membership_reminders",
       "sub_purchases",
       "sub_balances",
       "sub_ledger",

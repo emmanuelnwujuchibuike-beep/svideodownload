@@ -1,5 +1,7 @@
 import { usd } from "@/lib/creator/membership/engine";
 
+import { inRenewWindow, RENEW_WINDOW_DAYS } from "./lifecycle";
+
 /**
  * What the creator subscription card says (Frenz Exclusive Part 4). Pure, so every state is
  * tested without a browser. Every number comes from the server's quote (`subTabFor` → price +
@@ -35,15 +37,20 @@ export interface OfferView {
 
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : null);
 
-export function offerView(input: { creatorName: string; quote: OfferQuote | null; membership: OfferMembership | undefined; signedIn: boolean }): OfferView {
+export function offerView(input: { creatorName: string; quote: OfferQuote | null; membership: OfferMembership | undefined; signedIn: boolean; now?: number }): OfferView {
   const { creatorName, quote, membership, signedIn } = input;
+  const now = input.now ?? Date.now();
   const priced = quote && quote.totalCents > 0 && quote.periodDays > 0 ? quote : null;
   const priceLine = priced ? `${usd(priced.totalCents)} for ${priced.periodDays} days` : null;
   const feeLine = priced ? (priced.feeCents > 0 ? `${usd(priced.priceCents)} to ${creatorName} + ${usd(priced.feeCents)} service fee` : `All of it goes to ${creatorName}`) : null;
 
   if (membership?.state === "active") {
     const until = day(membership.until);
-    return { tone: "active", title: `You're subscribed to ${creatorName}`, priceLine: null, feeLine: null, status: until ? `Access until ${until}. It doesn't renew automatically.` : "Your subscription is active.", action: "none", actionLabel: null };
+    // Part 5: in the last RENEW_WINDOW_DAYS, renewing early adds a period from the current end (checkout refuses it before then)
+    if (priced && signedIn && inRenewWindow(membership.until, now)) {
+      return { tone: "active", title: `You're subscribed to ${creatorName}`, priceLine, feeLine, status: `Access until ${until}. Renew now to add ${priced.periodDays} days from then.`, action: "renew", actionLabel: "Renew early" };
+    }
+    return { tone: "active", title: `You're subscribed to ${creatorName}`, priceLine: null, feeLine: null, status: until ? `Access until ${until}. It doesn't renew automatically. You can renew in the last ${RENEW_WINDOW_DAYS} days.` : "Your subscription is active.", action: "none", actionLabel: null };
   }
   if (!priced) {
     return { tone: "unavailable", title: `${creatorName} isn't taking new subscriptions right now`, priceLine: null, feeLine: null, status: null, action: "none", actionLabel: null };

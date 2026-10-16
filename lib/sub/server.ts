@@ -17,6 +17,7 @@ import { flagsOf, isAccountVisibleTo } from "@/lib/social/account-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { classifyVerification, isSubReference, isUuid, subReturnPath } from "./guards";
+import { checkoutBlockedByActive, RENEW_WINDOW_DAYS } from "./lifecycle";
 
 /**
  * SUB — paid subscriptions and SUB withdrawals (owner brief 2026-10-11, 0227).
@@ -156,11 +157,20 @@ export async function startSubCheckout(input: { subscriberId: string; email: str
     getSubSettings(input.creatorId),
     db.from("profiles").select("id, handle, is_suspended, is_hidden").eq("id", input.creatorId).maybeSingle(),
     db.from("blocks").select("blocker_id").or(`and(blocker_id.eq.${input.subscriberId},blocked_id.eq.${input.creatorId}),and(blocker_id.eq.${input.creatorId},blocked_id.eq.${input.subscriberId})`).limit(1),
-    db.from("creator_memberships").select("status").eq("creator_id", input.creatorId).eq("member_id", input.subscriberId).maybeSingle(),
+    db.from("creator_memberships").select("status, billing, period_end").eq("creator_id", input.creatorId).eq("member_id", input.subscriberId).maybeSingle(),
   ]);
   const creator = creatorR.data as Row | null;
   if (!creator || (blockR.data ?? []).length || !isAccountVisibleTo(flagsOf(creator), "stranger")) return fail("You can't subscribe to this creator.", 404);
-  if ((memberR.data as Row | null)?.status === "removed") return fail("This creator removed you from their subscribers.", 403);
+  const member = memberR.data as Row | null;
+  if (member?.status === "removed") return fail("This creator removed you from their subscribers.", 403);
+  /*
+    Part 5: no accidental second purchase. A subscriber paid up beyond the last RENEW_WINDOW_DAYS
+    would only buy days they already have. Inside the window a renewal extends from the current
+    end (settle_sub_purchase, unchanged); after expiry it starts now.
+  */
+  if (checkoutBlockedByActive(member ? { status: String(member.status ?? ""), billing: String(member.billing ?? ""), periodEnd: (member.period_end as string | null) ?? null } : null, Date.now())) {
+    return fail(`You're already subscribed. You can renew in the last ${RENEW_WINDOW_DAYS} days of your access.`, 409, "already_active");
+  }
   if (!s.active || !s.priceCents) return fail("This creator isn't taking subscriptions right now.", 409);
   const price = validatePrice(s.priceCents, cfg);
   if (!price.ok) return fail("This creator's price is outside what Frenz allows. They need to update it.", 409);

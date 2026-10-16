@@ -188,9 +188,23 @@ export async function joinFree(memberId: string, creatorId: string): Promise<Res
   return { ok: true, membership: toMembership(joined as Row) };
 }
 
-/** Leave now. A paid subscription is not refunded; its access simply stops. */
-export async function leave(memberId: string, creatorId: string): Promise<Result> {
-  const { error } = await createAdminClient().from("creator_memberships").update({ status: "ended", ended_at: new Date().toISOString() }).eq("creator_id", creatorId).eq("member_id", memberId).in("status", ["active", "lapsed"]);
+/**
+ * Leave. A FREE membership ends now. A PAID subscription with time left is cancelled at the end
+ * of its period (Frenz Exclusive Part 5, owner 2026-10-16): the subscriber keeps the access they
+ * paid for, nothing is refunded, nothing renews. Only an already-expired paid row is ended here.
+ */
+export async function leave(memberId: string, creatorId: string): Promise<Result<{ cancelled?: boolean; periodEnd?: string | null }>> {
+  if (!isUuid(memberId) || !isUuid(creatorId)) return fail("Invalid request.");
+  const db = createAdminClient();
+  const { data: row, error: readError } = await db.from("creator_memberships").select("status, billing, period_end").eq("creator_id", creatorId).eq("member_id", memberId).maybeSingle();
+  if (readError) return fail("Couldn't save that.", 500);
+  const r = row as Row | null;
+  if (r?.billing === "sub" && r.status === "active" && typeof r.period_end === "string" && Date.parse(r.period_end) > Date.now()) {
+    const { cancelSubscription } = await import("@/lib/sub/subscriptions");
+    const out = await cancelSubscription(memberId, creatorId);
+    return out.ok ? { ok: true, cancelled: true, periodEnd: out.periodEnd } : out;
+  }
+  const { error } = await db.from("creator_memberships").update({ status: "ended", ended_at: new Date().toISOString() }).eq("creator_id", creatorId).eq("member_id", memberId).in("status", ["active", "lapsed"]);
   return error ? fail("Couldn't save that.", 500) : { ok: true };
 }
 

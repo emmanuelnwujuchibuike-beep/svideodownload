@@ -146,13 +146,18 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
               <Link href={subTab} prefetch={false} className="inline-flex min-h-[2.5rem] items-center gap-1.5 rounded-full bg-white px-4 text-[13px] font-bold text-indigo-800 transition active:scale-[0.97] motion-reduce:active:scale-100">
                 Open PRIVATE POSTS <ArrowRight className="h-4 w-4" aria-hidden />
               </Link>
+            ) : null}
+            {isSub ? (
+              <Link href="/account/subscriptions" prefetch={false} className="inline-flex min-h-[2.5rem] items-center rounded-full bg-white/12 px-4 text-[13px] font-semibold text-white transition active:scale-[0.97] motion-reduce:active:scale-100">
+                Manage subscription
+              </Link>
             ) : (
               <button type="button" onClick={() => void leaveNow()} className="inline-flex min-h-[2.5rem] items-center rounded-full bg-white/12 px-4 text-[13px] font-semibold text-white transition active:scale-[0.97] motion-reduce:active:scale-100">
                 Leave
               </button>
             )}
           </div>
-          {isSub ? <p className="mt-3 text-[11.5px] text-white/50">Subscriptions never renew by themselves. Subscribe again when this one ends to keep access.</p> : null}
+          {isSub ? <p className="mt-3 text-[11.5px] text-white/50">Subscriptions never renew by themselves. Renew in the last 3 days, or after it ends, to keep access. Cancelling keeps your access until this date.</p> : null}
         </section>
       ) : null}
 

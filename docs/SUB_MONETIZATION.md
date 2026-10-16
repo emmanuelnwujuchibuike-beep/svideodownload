@@ -346,3 +346,80 @@ a taken-down post can't be edited back) and switch Locked/Hidden. Edits are rate
 **Not built (later parts):** drafts saved across sessions (the composer keeps an unsent post only
 while open — a draft table was not needed for "never publish by accident"), editing a post's media
 or cover after publishing, subscriber management, favourites, announcements, analytics, renewals.
+
+## Frenz Exclusive Part 5 — subscriber management, cancellation and the lifecycle (2026-10-16)
+
+Owner decisions (2026-10-16): "Leave" on a paid subscription keeps access until the paid period
+ends; renewals stay MANUAL (no stored cards, no auto-charge) with reminders.
+
+**Migration 0250 (`0250_sub_membership_lifecycle.sql`, run after 0247–0249).** Additive only; no
+function, policy or grant changed.
+- `creator_memberships.cancelled_at` + `cancel_period` — "I won't renew", for one period
+  (`cancel_period` = the `period_index` it belongs to; a check keeps the two together).
+  `settle_sub_purchase` already moves `period_index` on with every paid renewal, so a renewal makes
+  an older cancellation stale by itself.
+- `sub_membership_reminders` — one row per (membership, period, reminder) sent; the primary key is
+  the dedupe. RLS on, no policy, no grant to anon/authenticated.
+- `creator_memberships_expiry_idx` (reminder sweep), `creator_memberships_creator_sub_idx`
+  (the creator's paged list).
+- PGlite: `supabase/tests/0250_sub_membership_lifecycle.pglite.mjs` — applied twice; it drives the
+  REAL settle/reverse functions around a cancellation (28 checks). The mutant (no primary key, no
+  checks) fails 5 of them.
+- Before 0250 runs: the manager works, cancelling answers "arrives with the next update" (503),
+  and the reminder sweep sends nothing (it never sends without the dedupe table).
+
+**Cancellation (`lib/sub/subscriptions.ts` `cancelSubscription` / `resumeSubscription`; `leave()`
+delegates for a paid subscription with time left).**
+- Writes ONLY the two intent columns. Status and `period_end` stay as the payment left them, so
+  access runs to the paid end and is never extended. No refund. Free memberships still end on the tap.
+- Idempotent: a repeat answers `already` with no write. The write is conditional on the row not
+  having moved (same `period_index`, same cancel value) — a renewal settling at the same moment
+  wins and the member is asked to look again.
+- Resume clears the intent only while paid time is running; it never grants or extends access.
+- Both are audited in `financial_audit_log` (`sub_membership_cancelled` / `_resumed`).
+- Access rules are unchanged: `hasActiveSub` never reads the cancellation columns. Refunds,
+  disputes, removals, blocks and suspensions end access exactly as before (PGlite proves a refund
+  of a cancelled subscription still ends it, and clearing the flag brings nothing back).
+
+**No accidental second purchase (`startSubCheckout`).** A subscriber paid up beyond the last
+`RENEW_WINDOW_DAYS` (3) is refused (409 `already_active`) before any purchase row is created.
+Inside the window a renewal extends from the current end (settlement, unchanged); after expiry it
+starts now. This is the existing extension behaviour, not new stacking.
+
+**Subscriber manager — `/account/subscriptions`** (linked from Account, Members → Your memberships,
+the membership page and the profile card). Per paid subscription: creator + profile link, state
+(Active / Ending / Payment pending / Expired / Refunded / Ended / Unavailable), subscribed since,
+access until (date and time), and Renew (existing checkout, returns here), Cancel (confirmation
+sheet: access kept until …, nothing refunded, no automatic renewal so no charge is being stopped),
+or Keep subscription. A payment in flight is shown as pending, never as access. A block or a
+suspended creator shows "Unavailable" even with paid time left (as `hasActiveSub`). States are
+derived in `lib/sub/lifecycle.ts` (pure, tested). APIs: `GET/POST /api/sub/subscriptions`.
+
+**Payments and receipts.** `GET /api/sub/transactions` — the member's own `sub_purchases`, 20 a
+page, keyset on (created_at, id). `/account/subscriptions/receipt/[id]` renders one row on the
+server; another member's id is a 404. Statuses are distinct: Pending, Not completed, Paid, Refund
+due, Refunded, Disputed, Reversed. Only a settled charge is a receipt (with the charged amount in
+its currency, the USD price/fee/total, the access period and a shortened reference); an
+open checkout says "This is not a receipt". Never sent: `provider_ref`, `checkout_url`,
+`failure_source`, FX internals. Print / save as PDF uses the browser.
+
+**Creator's subscriber list.** Members → directory → "Paid subscribers"
+(`features/members/subscribers-list.tsx`, `GET /api/members/subscribers`): 30 a page, keyset on
+(joined_at, id), "With access" or "Everyone who subscribed". Shows name, avatar, Active / Ending /
+Expired / Refunded / Removed / Left / Blocked, subscribed since and access until. No amounts,
+references or payment data. The creator is always the session user. Suspended accounts are not
+listed (as on the dashboard). Remove uses the existing `op: remove`.
+
+**Reminders (`lib/sub/reminders.ts`, inside the existing 10-minute `ai-reconcile` run, 25 a run).**
+`renew_3d` (push + in-app + email), `renew_1d` (push + in-app), `expired` within two days of the
+end (push + in-app + email). Only the most relevant one is sent. Claimed in
+`sub_membership_reminders` BEFORE sending: a second or concurrent run sends nothing. Excluded:
+anything not `active` (refunds that ended the period, removals, ended), a cancellation for this
+period, a block either way, a suspended creator or member; "renew soon" is not sent when the
+creator stopped selling. Push follows the member's settings (`renewal_reminder` category,
+priority low / medium for the last day). Copy names only the creator and says it does not renew
+automatically. Email has no per-type preference in this codebase (an existing gap); it is sent at
+most twice per period.
+
+**Not verified from here:** push or email delivery (no device or mail provider in tests); whether
+production's GitHub Actions clock for `ai-reconcile` is running; 0250 applied.

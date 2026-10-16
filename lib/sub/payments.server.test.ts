@@ -26,6 +26,8 @@ vi.mock("@/lib/landing/settings", async () => {
   return { getLandingSettings: async () => ({ frenzRewards: { sub: SUB_DEFAULTS }, frenzAiCharacterReplace: { recharge: { checkoutCurrency: "NGN" } } }) };
 });
 vi.mock("./notify", () => ({ notifySubscribed: vi.fn() }));
+// Part 5: the duplicate-purchase guard runs before pricing; past it, a rate outage is the first stop (proves the guard let it through)
+vi.mock("@/lib/ai/character-replace/fx-rate-server", () => ({ resolveCheckoutRate: async () => ({ error: "test: no rate" }) }));
 vi.mock("./payout-account", () => ({ autoWithdrawSub: vi.fn() }));
 
 const { confirmSubPayment, hasActiveSub, startSubCheckout, settleOwnPendingSub } = await import("./server");
@@ -147,5 +149,43 @@ describe("identifiers are validated inside the helpers (audit R5)", () => {
     expect(out).toMatchObject({ ok: false, status: 400 });
     expect(await settleOwnPendingSub("x", C)).toBe(false);
     expect(verify).not.toHaveBeenCalled();
+  });
+});
+
+describe("Part 5 — no accidental second purchase (startSubCheckout)", () => {
+  const live = () => {
+    db.tables.profiles = [{ id: C, handle: "amaka", is_suspended: false, is_hidden: false }];
+    db.tables.creator_membership_settings = [{ creator_id: C, sub_price_cents: 1000, sub_active: true, setup_step: 4, setup_completed_at: ago(100), open: false, welcome: null, promo_dismissed_at: null }];
+    db.tables.blocks = [];
+  };
+  const member = (days: number, over: Record<string, unknown> = {}) => [{ id: "m1", creator_id: C, member_id: S, status: "active", billing: "sub", period_end: new Date(Date.now() + days * 86_400_000).toISOString(), ...over }];
+  const start = () => startSubCheckout({ subscriberId: S, email: "a@b.co", creatorId: C, returnPath: "/account/subscriptions" });
+
+  it("a subscriber paid up beyond the renewal window is refused, and no purchase row is created", async () => {
+    live();
+    db.tables.creator_memberships = member(20);
+    expect(await start()).toMatchObject({ ok: false, status: 409, reason: "already_active" });
+    expect(db.writes.filter((w) => w.table === "sub_purchases")).toHaveLength(0);
+  });
+
+  it("inside the last 3 days, after expiry, after leaving, or with no membership, checkout proceeds", async () => {
+    for (const rows of [member(2), member(-1), member(20, { status: "ended" }), []]) {
+      live();
+      db.tables.creator_memberships = rows;
+      // past the guard: the next stop is pricing (the test has no exchange rate)
+      expect(await start()).toMatchObject({ ok: false, status: 503 });
+    }
+  });
+
+  it("a cancelled-but-paid-up subscriber is still refused until the window — cancelling never opens a second purchase", async () => {
+    live();
+    db.tables.creator_memberships = member(20, { cancelled_at: ago(10), cancel_period: 1, period_index: 1 });
+    expect(await start()).toMatchObject({ ok: false, status: 409, reason: "already_active" });
+  });
+
+  it("a removed member is refused as before", async () => {
+    live();
+    db.tables.creator_memberships = member(20, { status: "removed" });
+    expect(await start()).toMatchObject({ ok: false, status: 403 });
   });
 });

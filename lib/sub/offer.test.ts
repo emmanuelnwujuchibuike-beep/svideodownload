@@ -26,10 +26,20 @@ describe("the subscription card", () => {
   });
 
   it("an active subscriber sees their access date and no button — no second purchase offered", () => {
-    const v = offerView({ ...base, membership: { state: "active", until: "2026-11-15T12:00:00Z" } });
+    // a fixed clock: the card's answer depends on how close the end is (Part 5's renewal window)
+    const v = offerView({ ...base, membership: { state: "active", until: "2026-11-15T12:00:00Z" }, now: Date.parse("2026-10-16T00:00:00Z") });
     expect(v).toMatchObject({ tone: "active", action: "none", actionLabel: null, priceLine: null });
     expect(v.status).toContain("Nov 15, 2026");
     expect(v.status).toContain("doesn't renew automatically");
+  });
+
+  it("Part 5: in the last 3 days an active subscriber may renew early, at the server's price; never earlier", () => {
+    const now = Date.parse("2026-11-13T12:00:00Z");
+    const v = offerView({ ...base, membership: { state: "active", until: "2026-11-15T12:00:00Z" }, now });
+    expect(v).toMatchObject({ tone: "active", action: "renew", actionLabel: "Renew early", priceLine: "$11.00 for 30 days" });
+    expect(offerView({ ...base, membership: { state: "active", until: "2026-11-15T12:00:00Z" }, now: now - 2 * 86_400_000 }).action).toBe("none");
+    // no quote (creator paused) → nothing to renew with
+    expect(offerView({ ...base, quote: null, membership: { state: "active", until: "2026-11-15T12:00:00Z" }, now }).action).toBe("none");
   });
 
   it("an expired subscriber is offered a renewal at today's price, through the same checkout", () => {

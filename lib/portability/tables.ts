@@ -94,6 +94,7 @@ export const NOT_EXPORTED: Record<string, string> = {
   asset_usage: "Links assets to places they appear. Not personal data.",
   post_media: "Attachments belonging to a post; the post itself is exported.",
   sub_balances: "Your private post balance is a running total of sub_ledger, which is exported; it is not a separate fact.",
+  sub_membership_reminders: "Bookkeeping that stops a renewal reminder being sent twice (0250). The reminders themselves are in your notifications, which are exported.",
   memory_people: "The friends on each of your memories. Exported inside each memory (memories.people) rather than as raw ids.",
   memory_media: "References from your memories to existing posts and media. Exported inside each memory.",
   memory_versions: "Earlier versions of your memories. Exported through the Memories export on /memories; the current version is in memories.",

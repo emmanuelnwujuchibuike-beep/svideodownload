@@ -81,6 +81,7 @@ export interface SettingEntry {
 export const SETTINGS: readonly SettingEntry[] = [
   /* ───────────────────────────────── account ────────────────────────────── */
   { id: "account.plan", category: "account", label: "Plan & billing", description: "Your plan, what it includes, and how to change it.", keywords: ["upgrade", "pro", "business", "premium", "subscription", "billing", "payment", "price", "cancel"], href: "/account/plan", status: "live" },
+  { id: "account.subscriptions", category: "account", label: "Creator subscriptions", description: "Creators you subscribe to, when your access ends, cancelling, renewing, and your receipts.", keywords: ["exclusive", "private posts", "creator", "subscription", "renew", "cancel", "receipt", "transactions", "refund"], href: "/account/subscriptions", status: "live" },
   { id: "account.password", category: "account", label: "Password", description: "Change the password you sign in with.", keywords: ["change password", "reset password", "credentials"], href: "/account/password", status: "live" },
   { id: "account.appeals", category: "account", label: "Appeals", description: "Challenge a moderation decision on your account or content.", keywords: ["appeal", "ban", "suspended", "restricted", "moderation", "dispute"], href: "/account/appeals", status: "live" },
   /*

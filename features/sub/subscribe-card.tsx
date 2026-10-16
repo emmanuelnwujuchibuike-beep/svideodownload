@@ -51,14 +51,32 @@ export function CreatorSubscribeCard({
 
   if (v.tone === "active") {
     return (
-      <section aria-label="Your subscription" className={cn("mb-3 flex items-center gap-3 rounded-[22px] px-4 py-3.5", GLASS)}>
-        <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-accent text-primary-foreground">
-          <BadgeCheck className="h-5 w-5" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-[15px] font-bold leading-tight">{v.title}</p>
-          {v.status ? <p className="mt-0.5 text-[13px] text-muted-foreground">{v.status}</p> : null}
+      <section aria-label="Your subscription" className={cn("mb-3 rounded-[22px] px-4 py-3.5", GLASS)}>
+        <div className="flex items-center gap-3">
+          <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-accent text-primary-foreground">
+            <BadgeCheck className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[15px] font-bold leading-tight">{v.title}</p>
+            {v.status ? <p className="mt-0.5 text-[13px] text-muted-foreground">{v.status}</p> : null}
+          </div>
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {v.action === "renew" ? (
+            <button type="button" onClick={() => void checkout()} disabled={busy} className={cn(primaryPill, "bg-gradient-to-r from-primary to-accent")}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RotateCcw className="h-4 w-4" aria-hidden />}
+              {busy ? "Opening secure payment…" : `${v.actionLabel}${v.priceLine ? ` · ${v.priceLine}` : ""}`}
+            </button>
+          ) : null}
+          <Link href="/account/subscriptions" prefetch={false} className="text-[13px] font-semibold text-primary">
+            Manage subscription
+          </Link>
+        </div>
+        {note ? (
+          <p role="alert" className="mt-1.5 text-[12.5px] font-medium text-rose-500">
+            {note}
+          </p>
+        ) : null}
       </section>
     );
   }

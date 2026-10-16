@@ -12,6 +12,7 @@ import { FEEDBACK_ASPECTS, MEMBER_ROLES, RECOGNITIONS, SPONSOR_KINDS, usd, type 
 import type { CreatorDashboard as Dashboard, Membership, Person } from "@/lib/creator/membership/server";
 import { cn } from "@/lib/utils";
 
+const SubscribersList = dynamic(() => import("@/features/members/subscribers-list").then((m) => m.SubscribersList), { ssr: false });
 const SubPayoutSettings = dynamic(() => import("@/features/sub/payout-settings").then((m) => m.SubPayoutSettings), { ssr: false });
 const SubWithdrawSheet = dynamic(() => import("@/features/sub/sub-withdraw").then((m) => m.SubWithdrawSheet), { ssr: false });
 
@@ -110,8 +111,22 @@ export function CreatorDashboard({ initial, held, handle }: { initial: Dashboard
 type Act = (draw: (x: Dashboard) => Dashboard, body: Record<string, unknown>) => Promise<{ error: string | null; data: Record<string, unknown> | null }>;
 
 function Held({ held }: { held: { membership: Membership; creator: Person }[] }) {
-  if (!held.length) return <p className={cn("rounded-[22px] px-3.5 py-3 text-[13px] text-muted-foreground", GLASS)}>You haven&apos;t joined any memberships. Creators who offer one show it on their profile.</p>;
+  // Part 5: paid subscriptions are managed (cancel, renew, receipts) on one page
+  const manage = (
+    <Link href="/account/subscriptions" prefetch={false} className={cn(quietPill, "mb-3 w-full justify-center")}>
+      Manage subscriptions and receipts <ArrowRight className="h-4 w-4" aria-hidden />
+    </Link>
+  );
+  if (!held.length)
+    return (
+      <>
+        <p className={cn("mb-3 rounded-[22px] px-3.5 py-3 text-[13px] text-muted-foreground", GLASS)}>You haven&apos;t joined any memberships. Creators who offer one show it on their profile.</p>
+        {manage}
+      </>
+    );
   return (
+    <>
+    {held.some((h) => h.membership.billing === "sub") ? manage : null}
     <GlassGroup label="Your memberships">
       {held.map(({ membership: m, creator }) => (
         <li key={m.id}>
@@ -127,6 +142,7 @@ function Held({ held }: { held: { membership: Membership; creator: Person }[] })
         </li>
       ))}
     </GlassGroup>
+    </>
   );
 }
 
@@ -314,9 +330,34 @@ function Directory({ d, act }: { d: Dashboard; act: Act }) {
     return d.members.filter((m) => (status === "all" || m.membership.status === "active") && (!role || m.membership.role === role) && (!t || [m.person.displayName, m.person.handle, m.country ?? "", ...m.languages].some((s) => s.toLowerCase().includes(t))));
   }, [d.members, q, role, status]);
   const setMember = (memberId: string, patch: Partial<Membership>) => (x: Dashboard) => ({ ...x, members: x.members.map((m) => (m.person.id === memberId ? { ...m, membership: { ...m.membership, ...patch } } : m)) });
+  // Part 5: paid subscribers are a server-paged view of this same directory, not a second list
+  const [view, setView] = useState<"community" | "subscribers">("community");
+  const switcher = d.settings.setupCompleted ? (
+    <div role="tablist" aria-label="Directory" className={cn("mb-2 inline-flex rounded-full p-1", GLASS)}>
+      {(
+        [
+          ["community", "Everyone"],
+          ["subscribers", "Paid subscribers"],
+        ] as const
+      ).map(([k, l]) => (
+        <button key={k} type="button" role="tab" aria-selected={view === k} onClick={() => setView(k)} className={cn("min-h-[2.25rem] rounded-full px-3.5 text-[12.5px] font-semibold transition", view === k ? "bg-foreground text-background" : "text-foreground/70")}>
+          {l}
+        </button>
+      ))}
+    </div>
+  ) : null;
+  if (view === "subscribers")
+    return (
+      <section className="mb-6" aria-labelledby="mb-dir">
+        <SectionHeader id="mb-dir" title="Members" />
+        {switcher}
+        <SubscribersList />
+      </section>
+    );
   return (
     <section className="mb-6" aria-labelledby="mb-dir">
       <SectionHeader id="mb-dir" title="Members" count={list.length} />
+      {switcher}
       <div className={cn("mb-2 flex items-center gap-2 rounded-2xl px-3", GLASS)}>
         <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
         <input aria-label="Search members" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, handle, country, language" className="min-h-[2.75rem] min-w-0 flex-1 bg-transparent text-[15px] outline-none" />

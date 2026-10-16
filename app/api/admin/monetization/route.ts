@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { getAdminUser } from "@/lib/admin/guard";
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
+import { DEFAULT_DIRECT_LINK, isValidDirectLinkUrl } from "@/lib/monetization/direct-link";
 import { DEFAULT_VAST_INTERSTITIAL } from "@/lib/monetization/vast-interstitial";
 import { MONETAG_AD_TYPE_IDS, MONETAG_PLACEMENT_IDS, MONETAG_SURFACE_IDS } from "@/lib/monetization/monetag";
 import {
@@ -65,6 +66,23 @@ const schema = z.object({
     and why it is no longer hard-coded at 5. 0 disables the cap.
   */
   monetagInPagePushDailyLimit: z.number().int().min(0).max(500).default(20),
+  // Monetag Direct Link (lib/monetization/direct-link.ts). Defaulted so an older client's save still validates.
+  monetagDirectLink: z
+    .object({
+      enabled: z.boolean().default(false),
+      url: z
+        .string()
+        .trim()
+        .max(2000)
+        .refine((v) => v === "" || isValidDirectLinkUrl(v), { message: "Direct link must be a full https:// URL" })
+        .default(""),
+      spots: z
+        .object({ wallpaper: z.boolean().default(true), resultPreview: z.boolean().default(true) })
+        .default(DEFAULT_DIRECT_LINK.spots),
+      chancePercent: z.number().int().min(1).max(100).default(50),
+    })
+    .refine((v) => !v.enabled || v.url !== "", { message: "Paste the direct link URL before switching it on" })
+    .default(DEFAULT_DIRECT_LINK),
   monetagSurfaces: z.array(z.enum(MONETAG_SURFACE_IDS)).max(20).default([]),
   // Moment placements: one Monetag tag per moment, parsed (not injected) client-side.
   monetagPlacements: z

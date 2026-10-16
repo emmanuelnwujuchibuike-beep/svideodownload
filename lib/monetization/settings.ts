@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { DEFAULT_DIRECT_LINK, normalizeDirectLink, type DirectLinkConfig } from "./direct-link";
+
 import { AD_ZONES, isExoClickZone, type AdZoneId } from "./ad-schema";
 import { HILLTOP_BANNER_SLOTS } from "./hilltop";
 import { DEFAULT_HILLTOP, normalizeHilltop, type HilltopConfig } from "./hilltop-config";
@@ -159,6 +161,10 @@ export interface MonetizationSettings {
    * Configurable so the owner owns it. 0 disables the cap entirely.
    */
   monetagInPagePushDailyLimit: number;
+  /** Monetag Direct Link (owner, 2026-10-16): one URL, opened at random once per
+   *  session from the wallpaper download area and the result card's preview.
+   *  See lib/monetization/direct-link.ts. Off until the admin sets a URL. */
+  monetagDirectLink: DirectLinkConfig;
   /* ── Offerium (rewarded / offerwall) ──────────────────────────────────────
      Owner, 2026-08-23: "put a slot in admin dashboard where I can set up all
      Offerium API, SDK, and all."
@@ -733,6 +739,7 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
     and the architecture already limits a whole PWA session to a single load.
   */
   monetagInPagePushDailyLimit: 20,
+  monetagDirectLink: DEFAULT_DIRECT_LINK,
   /* Offerium ships OFF and unconfigured. It stays off until an admin pastes
      real values AND the server-side secrets exist — see `offeriumConfigured`. */
   offerium: false,
@@ -1059,6 +1066,8 @@ export async function readMonetizationSettings(): Promise<MonetizationRead> {
     // or a non-boolean, and a truthy `"false"` would turn a switched-off
     // placement back on.
     merged.exoclickZones = normalizeExoClickZones(merged.exoclickZones);
+    // A row saved before the direct link existed has no key; a hand edit may carry anything.
+    merged.monetagDirectLink = normalizeDirectLink(merged.monetagDirectLink);
     /*
       Same reason as the line above: a settings row written before HilltopAds
       existed carries no `hilltop` key, and every consumer reads fields off it.

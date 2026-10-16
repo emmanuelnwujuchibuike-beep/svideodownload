@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { ReelsAdSlide } from "@/features/monetization/reels-ad-slide";
 import { WallpaperRewardGate } from "@/features/monetization/wallpaper-reward-gate";
+import { useDirectLink } from "@/features/monetization/use-direct-link";
 import { Bookmark, Crown, Download, Heart, Loader2, MessageCircle, Send, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
@@ -192,6 +193,15 @@ export function WallpaperReels({
     is worse than no reward at all.
   */
   const [pendingDownload, setPendingDownload] = useState<(typeof items)[number] | null>(null);
+  /*
+    Monetag direct link (owner, 2026-10-16): "shows randomly once when a user clicks
+    anywhere around the Wallpaper download button". The caption block holding the
+    button is the "around": a tap on its controls is caught by onClickCapture below,
+    and a tap on its text (pointer-events-none, so it lands on the slide) by the
+    slide's onClick checking this box. Never blocks swiping, never replaces the tap.
+  */
+  const openDirectLink = useDirectLink("wallpaper");
+  const downloadAreaRef = useRef<HTMLDivElement | null>(null);
   const [state, setState] = useState<Record<string, { liked: boolean; saved: boolean; likes: number }>>(() =>
     Object.fromEntries(items.map((w) => [w.id, { liked: !!w.viewerLiked, saved: !!w.viewerSaved, likes: w.likes }])),
   );
@@ -480,6 +490,10 @@ export function WallpaperReels({
             onClick={(e) => {
               setUpgradeOpen(false);
               if (w.id !== current?.id) return;
+              {
+                const r = downloadAreaRef.current?.getBoundingClientRect();
+                if (r && e.clientY >= r.top && e.clientY <= r.bottom && e.clientX >= r.left && e.clientX <= r.right) openDirectLink();
+              }
               const now = Date.now();
               if (now - lastTapRef.current < DOUBLE_TAP_WINDOW_MS) {
                 lastTapRef.current = 0;
@@ -680,6 +694,8 @@ export function WallpaperReels({
 
       {/* Caption + the one primary action */}
       <div
+        ref={downloadAreaRef}
+        onClickCapture={openDirectLink}
         className="pointer-events-none absolute inset-x-0 z-10 px-4 text-white"
         style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1.25rem)" }}
       >

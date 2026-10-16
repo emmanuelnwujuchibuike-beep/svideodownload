@@ -33,6 +33,7 @@ import type { RewardSessionItem } from "@/features/monetization/use-reward-sessi
 import { rewardAdsFor, type RewardAd } from "@/lib/monetization/reward-policy";
 import { useInterstitialConfig, useRewardNetwork } from "@/features/monetization/use-interstitial-skip";
 import { useShowAds } from "@/features/monetization/use-show-ads";
+import { useDirectLink } from "@/features/monetization/use-direct-link";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
 import { cn, formatBytes, formatCompactNumber, formatDuration } from "@/lib/utils";
@@ -141,6 +142,8 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
     not merely untidy.
   */
   const { showAds, ready: adsReady } = useShowAds();
+  // Monetag direct link on the media preview (owner, 2026-10-16) — a tap anywhere on the cover, at random, once a visit.
+  const openDirectLink = useDirectLink("resultPreview");
   const isPremiumBatch = !adsReady || !showAds;
   useEffect(() => setSelected(new Set()), [metadata.id]);
 
@@ -769,7 +772,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
       />
 
       {/* ---------------- Media cover ---------------- */}
-      <div className="relative aspect-video overflow-hidden bg-neutral-950">
+      <div className="relative aspect-video overflow-hidden bg-neutral-950" onClickCapture={openDirectLink}>
         {/* blurred fill so portrait/square media frames elegantly */}
         <AnimatePresence mode="popLayout">
           {cover ? (

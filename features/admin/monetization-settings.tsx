@@ -36,6 +36,7 @@ import {
   parseHilltopTag,
   parseHilltopVastUrl,
 } from "@/lib/monetization/hilltop";
+import { isValidDirectLinkUrl, type DirectLinkConfig } from "@/lib/monetization/direct-link";
 import type { MonetizationSettings } from "@/lib/monetization/settings";
 import {
   DEFAULT_VAST_INTERSTITIAL,
@@ -1571,6 +1572,12 @@ export function MonetizationSettings({
               </p>
             </div>
 
+            <DirectLinkEditor
+              value={state.monetagDirectLink}
+              busy={busy}
+              onChange={(monetagDirectLink) => setState((s) => ({ ...s, monetagDirectLink }))}
+            />
+
             {/* WHERE Monetag shows. Pro/Business are ad-free regardless; this narrows
                 it further by page. Controlled by the parent state (one save path). */}
             <div className="mt-4 space-y-3 border-t border-border/50 pt-4">
@@ -2665,6 +2672,101 @@ function VastRow({
         <span className="block text-[11px] leading-relaxed text-muted-foreground">{hint}</span>
       </span>
       {control}
+    </div>
+  );
+}
+
+/**
+ * Monetag Direct Link (owner, 2026-10-16) — lib/monetization/direct-link.ts.
+ * Part of the parent state, saved with the form's own Save button.
+ */
+function DirectLinkEditor({
+  value,
+  busy,
+  onChange,
+}: {
+  value: DirectLinkConfig;
+  busy: boolean;
+  onChange: (next: DirectLinkConfig) => void;
+}) {
+  const urlBad = value.url.trim() !== "" && !isValidDirectLinkUrl(value.url.trim());
+  const spots: { id: keyof DirectLinkConfig["spots"]; label: string; hint: string }[] = [
+    { id: "wallpaper", label: "Wallpaper download", hint: "A tap anywhere around the wallpaper viewer's Download button" },
+    { id: "resultPreview", label: "Download result preview", hint: "A tap on the media preview at the top of the result card" },
+  ];
+  return (
+    <div className="mt-4 space-y-3 border-t border-border/50 pt-4">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => onChange({ ...value, enabled: !value.enabled })}
+        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5 text-left transition hover:border-foreground/20 disabled:opacity-70"
+      >
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold">Direct link</span>
+          <span className="block text-xs text-muted-foreground">
+            Opens in a new tab, at random, at most once per visit at each spot. The tap&apos;s own action
+            (the download, the preview) still happens. Free plan only; needs the Monetag switch on.
+          </span>
+        </span>
+        <Switch on={value.enabled} />
+      </button>
+      <div>
+        <label htmlFor="monetag-direct-link" className="mb-1 block text-xs font-medium text-muted-foreground">
+          Direct link URL
+        </label>
+        <input
+          id="monetag-direct-link"
+          value={value.url}
+          disabled={busy}
+          onChange={(e) => onChange({ ...value, url: e.target.value })}
+          placeholder="https://…"
+          inputMode="url"
+          className={cn(
+            "h-10 w-full rounded-xl bg-background px-3 font-mono text-sm outline-none ring-1 ring-inset focus:ring-2 focus:ring-primary",
+            urlBad ? "ring-destructive" : "ring-border",
+          )}
+        />
+        {urlBad ? <p className="mt-1 text-xs text-destructive">Must be a full https:// link.</p> : null}
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {spots.map((spot) => (
+          <button
+            key={spot.id}
+            type="button"
+            disabled={busy}
+            onClick={() => onChange({ ...value, spots: { ...value.spots, [spot.id]: !value.spots[spot.id] } })}
+            className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3 text-left transition hover:border-foreground/20 disabled:opacity-70"
+          >
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold">{spot.label}</span>
+              <span className="block text-xs text-muted-foreground">{spot.hint}</span>
+            </span>
+            <Switch on={value.spots[spot.id]} />
+          </button>
+        ))}
+      </div>
+      <div className="space-y-1">
+        <label htmlFor="monetag-direct-link-chance" className="block text-xs font-medium text-muted-foreground">
+          Chance a tap opens it (%)
+        </label>
+        <input
+          id="monetag-direct-link-chance"
+          type="number"
+          min={1}
+          max={100}
+          inputMode="numeric"
+          disabled={busy}
+          value={value.chancePercent}
+          onChange={(e) =>
+            onChange({ ...value, chancePercent: Math.min(100, Math.max(1, Math.round(Number(e.target.value) || 1))) })
+          }
+          className="w-32 rounded-xl border border-border/70 bg-background px-3 py-2 text-sm tabular-nums disabled:opacity-70"
+        />
+        <p className="text-xs text-muted-foreground">
+          100 opens it on the first tap; lower spreads it over later taps. Either way it opens once per visit at each spot.
+        </p>
+      </div>
     </div>
   );
 }

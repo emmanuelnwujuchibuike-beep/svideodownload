@@ -4,7 +4,7 @@ import { CircleAlert, CircleCheck, CloudUpload, ImageUp, LoaderCircle, RefreshCw
 import { useEffect, useId, useRef, useState } from "react";
 
 import { AiButton } from "@/features/ai/design/ai-button";
-import { IMAGE_MIME_TYPES, validateCreative, VIDEO_MIME_TYPES } from "@/lib/ads-platform/creative-validation";
+import { effectiveMaxVideoSeconds, IMAGE_MIME_TYPES, validateCreative, VIDEO_MIME_TYPES } from "@/lib/ads-platform/creative-validation";
 import { adMessage } from "@/lib/ads-platform/messages";
 import { formatBytes, type CatalogFormat } from "@/lib/ads-platform/offer";
 import { specOf } from "@/lib/ads-platform/media-spec";
@@ -92,7 +92,7 @@ export function CreativeStep({
   const limits = {
     code: format.code,
     mediaTypes: format.media_types,
-    maxDurationSeconds: format.max_duration_seconds,
+    maxDurationSeconds: effectiveMaxVideoSeconds(format.max_duration_seconds),
     maxFileBytes: format.max_file_bytes,
     maxWidth: format.max_width,
     maxHeight: format.max_height,
@@ -219,7 +219,7 @@ export function CreativeStep({
         <Chip tone="indigo">{format.media_types.length === 2 ? "Image or video" : format.media_types[0] === "video" ? "Video only" : "Image only"}</Chip>
         {recommended ? <Chip>{recommended} px</Chip> : null}
         <Chip>Up to {formatBytes(format.max_file_bytes)}</Chip>
-        {format.media_types.includes("video") && format.max_duration_seconds ? <Chip tone="amber">Video up to {format.max_duration_seconds} seconds</Chip> : null}
+        {format.media_types.includes("video") ? <Chip tone="amber">Video up to {effectiveMaxVideoSeconds(format.max_duration_seconds)} seconds</Chip> : null}
       </div>
 
       <input

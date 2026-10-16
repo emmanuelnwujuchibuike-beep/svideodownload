@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { EligibleAd, FormatRules } from "@/lib/ads-platform/eligibility";
 import { cardMediaBox, RESULT_VIDEO_BOX, topStripBox } from "@/lib/ads-platform/media-spec";
-import { dwellSeconds, VIDEO_MIN_DWELL_SECONDS } from "@/lib/ads-platform/rotation";
+import { dwellSeconds, VIDEO_MIN_DWELL_SECONDS, VIDEO_STALL_SECONDS } from "@/lib/ads-platform/rotation";
 
 /** How far outside the viewport a tile/card keeps its media mounted — about a screen, so scrolling meets a ready ad. */
 const MEDIA_MOUNT_MARGIN_PX = 600;
@@ -113,8 +113,10 @@ export function SelfAdBanner({
   useEffect(() => {
     // an off-screen tile does not rotate (its media is not even mounted)
     if (count <= 1 || !dwell || !inView) return;
-    // a video that has not started yet gets VIDEO_MIN_DWELL_SECONDS to start; once it plays, its full dwell runs from then
-    const wait = (waitingForPlay ? VIDEO_MIN_DWELL_SECONDS : dwell) * 1000;
+    // a video that has not started yet gets VIDEO_MIN_DWELL_SECONDS to start. Once it plays it runs to its END
+    // (onEnded below moves on — owner 2026-10-16); this timer is then only the stall safety net.
+    const isVideo = current?.mediaType === "video";
+    const wait = (waitingForPlay ? VIDEO_MIN_DWELL_SECONDS : isVideo ? Math.max(dwell, VIDEO_STALL_SECONDS) : dwell) * 1000;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const arm = () => {
       if (timer || document.visibilityState !== "visible") return;
@@ -138,6 +140,7 @@ export function SelfAdBanner({
       if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVis);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- current changes exactly when index/count do
   }, [index, count, dwell, waitingForPlay, inView]);
 
   // Warm ONLY the next creative, and only an image.
@@ -196,6 +199,10 @@ export function SelfAdBanner({
         viewRef.current = v;
       }}
       onPlaying={() => setPlayingCr(current.cr)}
+      // with more than one ad, a video plays ONCE to its end and the next ad follows (owner 2026-10-16);
+      // a lone ad keeps looping
+      loop={count <= 1}
+      onEnded={count > 1 && dwell ? () => setIndex((i) => (i + 1) % count) : undefined}
       onSize={variant === "strip" ? (w, h) => w > 0 && h > 0 && setMeasured({ cr: current.cr, ratio: w / h }) : undefined}
       onFail={() => bump((n) => n + 1)}
     />

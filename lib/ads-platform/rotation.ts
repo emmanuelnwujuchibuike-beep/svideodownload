@@ -18,7 +18,15 @@
  * moves on after VIDEO_MIN_DWELL_SECONDS so the slot never freezes. Null = a
  * format without a timer (a new ad on every show).
  */
+import { AD_VIDEO_MAX_SECONDS } from "./creative-validation";
+
 export const IMAGE_MIN_DWELL_SECONDS = 5;
+/**
+ * Owner, 2026-10-16: "make video ad in banner play until the end before rotating". A PLAYING
+ * video moves on when it ends, not on the dwell clock. This is only the safety net for one
+ * that stalls or never fires "ended": the longest allowed upload plus a margin.
+ */
+export const VIDEO_STALL_SECONDS = AD_VIDEO_MAX_SECONDS + 5;
 export const VIDEO_MIN_DWELL_SECONDS = 10;
 
 export function dwellSeconds(mediaType: string | null | undefined, rotationSeconds: number | null): number | null {

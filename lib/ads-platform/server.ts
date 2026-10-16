@@ -7,7 +7,7 @@ import { cdnBucket } from "@/lib/net/cdn-bucket";
 import { hasWorker } from "@/lib/worker";
 
 import type { CampaignStatus } from "./catalog";
-import { checkDestinationUrl, validateCreative, type CreativeLimits } from "./creative-validation";
+import { checkDestinationUrl, effectiveMaxVideoSeconds, validateCreative, type CreativeLimits } from "./creative-validation";
 import type { ServingSnapshot } from "./eligibility";
 import { uploadBytesOf } from "./media-spec";
 import { buildServingPayload, type ServingPayload } from "./serving-payload";
@@ -184,7 +184,8 @@ export function formatLimits(f: FormatRow): CreativeLimits {
   return {
     code: f.code,
     mediaTypes: f.media_types,
-    maxDurationSeconds: f.max_duration_seconds,
+    // 2026-10-16: never above the platform's 15 s video cap (creative-validation.ts)
+    maxDurationSeconds: effectiveMaxVideoSeconds(f.max_duration_seconds),
     maxFileBytes: Number(f.max_file_bytes),
     maxWidth: f.max_width,
     maxHeight: f.max_height,

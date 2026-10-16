@@ -18,6 +18,17 @@
 import type { AdMediaType } from "./catalog";
 import { withinUploadCaps } from "./media-spec";
 
+/**
+ * Owner, 2026-10-16: "the maximum video length for upload should be 15sec". One cap for every
+ * format, on top of each format's own admin limit (the shorter wins; no limit = 15 s). It
+ * applies to NEW uploads only: a live ad with a longer video keeps serving until it ends.
+ */
+export const AD_VIDEO_MAX_SECONDS = 15;
+
+export function effectiveMaxVideoSeconds(formatMax: number | null | undefined): number {
+  return formatMax && formatMax > 0 ? Math.min(formatMax, AD_VIDEO_MAX_SECONDS) : AD_VIDEO_MAX_SECONDS;
+}
+
 export interface CreativeFacts {
   formatCode: string;
   mediaType: AdMediaType | string;

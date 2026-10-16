@@ -558,7 +558,7 @@ export async function probeAndPublish(db: Db, cr: { id: string; storage_path: st
         if (!error) posterUrl = db.storage.from(PUBLIC_BUCKET).getPublicUrl(poster).data.publicUrl;
       }
       const started = limits.videoProcessing
-        ? await startVideoProcessing(db, cr, locked, kind, f.max_duration_seconds, {
+        ? await startVideoProcessing(db, cr, locked, kind, limits.maxDurationSeconds, {
             ...factCols,
             mime_type: facts!.mime,
             thumbnail_url: posterUrl,

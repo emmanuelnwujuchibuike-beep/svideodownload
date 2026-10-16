@@ -1,6 +1,6 @@
 "use client";
 
-import { Headset, History } from "lucide-react";
+import { Headset, History, UserPlus } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -14,8 +14,6 @@ import { useEffect, useRef } from "react";
 import { PressIcon } from "@/components/motion/press-icon";
 import { useAiGlassTier } from "@/features/ai/design/glass-tier";
 import {
-  FrenzEarnOutline,
-  FrenzEarnSolid,
   FrenzFeedOutline,
   FrenzFeedSolid,
   FrenzHomeOutline,
@@ -349,7 +347,7 @@ export function MobileNav({
           full bleed bottom NAV should not be used anywhere"). One tab set, chosen only
           by whether someone is signed in:
             member  Home (/downloads) · Feed (/home, the complete feed) · History · Chats · Profile
-            guest   Home (/) · Earn (/quests) · History · Support · Profile
+            guest   Home (/) · Add friend (/friends) · History · Support · Profile
           Every tab carries its label (owner: "add description to the landing bottom NAVs").
         */}
         <NavTab
@@ -377,8 +375,8 @@ export function MobileNav({
             onWarm={router.prefetch}
           />
         ) : (
-          /* Earn in Feed's place on the landing (owner, 2026-10-09) — the quests; the page itself asks a guest to sign in. */
-          <NavTab label="Earn" href="/quests" icon={FrenzEarnOutline} activeIcon={FrenzEarnSolid} active={pathname.startsWith("/quests")} prefetch={false} onWarm={router.prefetch} />
+          /* Add friend in Earn's place on the landing (owner, 2026-10-16) — the Friends page; it asks a guest to sign in. */
+          <NavTab label="Add friend" href="/friends" icon={UserPlus} activeIcon={UserPlus} active={pathname.startsWith("/friends")} prefetch={false} onWarm={router.prefetch} />
         )}
         <NavTab label="History" href="/history" icon={History} activeIcon={History} active={pathname.startsWith("/history")} onWarm={router.prefetch} />
         {/* Signed in: Chats in Support's place (owner, 2026-10-08). A guest keeps Support. */}

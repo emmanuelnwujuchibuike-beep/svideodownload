@@ -1,10 +1,10 @@
 /**
  * The bottom nav's idle warm-up for a SIGNED-OUT visitor: the public tabs a
- * guest actually has (Earn, History, Support, Profile's /profile doorway).
+ * guest actually has (History, Support, Profile's /profile doorway).
  * Members keep the owner's list in mobile-nav.tsx. Plain .ts so tests can
  * import it without a JSX transform.
  */
-export const GUEST_WARM_ROUTES = ["/history", "/quests", "/support", "/profile"] as const;
+export const GUEST_WARM_ROUTES = ["/history", "/support", "/profile"] as const;
 
 /**
  * Warmed FIRST, the moment the nav mounts — everything else waits for the page

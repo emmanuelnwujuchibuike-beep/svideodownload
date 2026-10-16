@@ -19,7 +19,7 @@ function oneTabSet(src: string): boolean {
   return (
     !/fullBleed|useAppMode|FrenzReelsOutline|FrenzFriendsOutline/.test(src) &&
     /label="Feed"\s+href="\/home"\s+icon=\{FrenzFeedOutline\}/.test(src) &&
-    src.includes('<NavTab label="Earn" href="/quests" icon={FrenzEarnOutline} activeIcon={FrenzEarnSolid}') &&
+    src.includes('<NavTab label="Add friend" href="/friends" icon={UserPlus} activeIcon={UserPlus}') &&
     src.includes("<NavLabel active={active}>{label}</NavLabel>") &&
     // Profile is the round button beside the pill, labelled for screen readers
     src.includes('aria-label="Profile"')
@@ -27,12 +27,12 @@ function oneTabSet(src: string): boolean {
 }
 
 describe("one experience", () => {
-  it("one tab set: member Feed opens /home, guest gets Earn, every tab labelled", () => {
+  it("one tab set: member Feed opens /home, guest gets Add friend (2026-10-16, was Earn), every tab labelled", () => {
     expect(oneTabSet(nav)).toBe(true);
   });
   it("teeth: the old Full Bleed branch, or Feed back on the guest bar, fails", () => {
     expect(oneTabSet(nav.replace("{handle ? (\n          /* The complete feed", "{fullBleedActive ? (\n          /* The complete feed"))).toBe(false);
-    expect(oneTabSet(nav.replace('label="Earn" href="/quests"', 'label="Feed" href="/feed"'))).toBe(false);
+    expect(oneTabSet(nav.replace('label="Add friend" href="/friends"', 'label="Feed" href="/feed"'))).toBe(false);
   });
   it("no mode anywhere: the switch, the prompt, the cookie routing and the launch page", () => {
     for (const f of ["features/app-shell/use-app-mode.ts", "features/app-shell/app-mode-switcher.tsx", "features/app-shell/switch-mode-prompt.tsx", "lib/app-mode.ts"]) expect(existsSync(join(process.cwd(), f)), f).toBe(false);

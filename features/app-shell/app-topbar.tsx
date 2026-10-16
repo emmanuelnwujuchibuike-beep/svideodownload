@@ -1,6 +1,6 @@
 "use client";
 
-import { IoAdd, IoCloudUploadOutline, IoLogoUsd, IoPersonAdd, IoSearchOutline } from "react-icons/io5";
+import { IoAdd, IoCloudUploadOutline, IoPersonAdd, IoSearchOutline } from "react-icons/io5";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
@@ -457,24 +457,19 @@ export function AppTopbar() {
         {pathname === "/downloads" && !searchActive ? <InstallHeaderCta className="h-9 px-3.5 text-[13px]" label="Install" /> : null}
         {/* Promote in the top bar on /downloads, beside Install — as on the landing header (owner, 2026-10-09: "put the promote button in the Download page at the top header like it is in the landing page"). */}
         {/* Promote moved down to the "Save. Discover. Create." row (owner 2026-10-12: the bar was crowded) */}
-        {/*
-          Earn beside Promote (owner 2026-10-12: the credits card left /downloads, its Earn button moved up here).
-          Built inline — importing the AI credit strip module would pull the wallet code into every page's first load.
-        */}
+        {/* Add friend in Earn's place (owner 2026-10-16: "replace the earning button at the top header … with the add friend button"); same instant tap. */}
         {pathname === "/downloads" && !searchActive && !!handle ? (
-          // the same tap as Promote (owner 2026-10-12: "the earn button no longer responds on tap like the promote
-          // button"): it answers on the first frame (pressed + spinner) and its page is warmed once the page is idle
           <TapOnceLink
-            href="/quests"
+            href="/friends"
             prefetch={false}
             warmOnIdle
             spinner={false}
-            aria-label="Earn credits"
-            className="group inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 px-3 text-[12.5px] font-bold text-white shadow-[0_6px_14px_-8px_rgba(249,115,22,0.9)] transition-transform active:scale-95 data-[pending]:scale-95 data-[pending]:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 motion-reduce:transition-none"
+            aria-label="Add friend"
+            className="group inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 px-3 text-[12.5px] font-bold text-white shadow-[0_6px_14px_-8px_rgba(79,70,229,0.9)] transition-transform active:scale-95 data-[pending]:scale-95 data-[pending]:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 motion-reduce:transition-none"
           >
-            <IoLogoUsd className="h-3.5 w-3.5 group-data-[pending]:hidden" aria-hidden />
+            <IoPersonAdd className="h-3.5 w-3.5 group-data-[pending]:hidden" aria-hidden />
             <span aria-hidden className="hidden h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent group-data-[pending]:inline-block motion-reduce:animate-none" />
-            Earn
+            Add friend
           </TapOnceLink>
         ) : null}
 

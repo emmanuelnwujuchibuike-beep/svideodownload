@@ -96,6 +96,7 @@ export async function Hero() {
           Explore Features moves to the full-width bar below, as on /downloads.
         */
         showFrenzAi
+        moreToExplore
         aiPromo={aiPromo}
         hideEmptyStats
         /* owner 2026-10-09: no Earn at the top of the landing - the bottom nav's Earn tab is enough;

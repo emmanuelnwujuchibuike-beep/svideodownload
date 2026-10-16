@@ -5,6 +5,7 @@ import { AiCreditStrip, EarnButton } from "@/features/ai/design/ai-credit-strip"
 import { PromoteButton } from "@/features/downloads/promote-button";
 import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
 import { ExploreFeaturesBar, FrenzAICta } from "@/features/downloads/frenz-ai-cta";
+import { MoreToExplore } from "@/features/downloads/more-to-explore";
 import type { AiPromo } from "@/lib/ai/promo/config";
 import { HilltopSlot } from "@/features/monetization/hilltop-slot";
 import { LazyAdSurface } from "@/features/monetization/lazy-ad-surface";
@@ -93,6 +94,7 @@ export function DownloadPageCore({
    * layout rather than accidentally advertising the feature.
    */
   showFrenzAi = false,
+  moreToExplore = false,
   aiPromo = null,
 }: {
   platformStatus?: PlatformStatusMap;
@@ -113,6 +115,8 @@ export function DownloadPageCore({
    */
   installBanner?: boolean;
   showFrenzAi?: boolean;
+  /** Landing only: the "More to Explore" row in place of the full-width Features bar. */
+  moreToExplore?: boolean;
   /** The landing promotion played over the Frenz AI tile (Brief C). Landing only. */
   aiPromo?: AiPromo | null;
   /**
@@ -221,7 +225,10 @@ export function DownloadPageCore({
       {/* The full-width Features bar exists only where Frenz AI took its slot
           above. On the landing page Features IS that slot, and repeating it
           would put the same door on the screen twice. */}
-      {showFrenzAi ? (
+      {/* The landing swaps the bar for the "More to Explore" row (owner mockup, 2026-10-16). */}
+      {showFrenzAi && moreToExplore ? (
+        <MoreToExplore />
+      ) : showFrenzAi ? (
         <div className="mt-3">
           <ExploreFeaturesBar />
         </div>

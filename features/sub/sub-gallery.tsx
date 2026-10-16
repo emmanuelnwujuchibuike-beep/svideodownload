@@ -1,18 +1,18 @@
 "use client";
 
-import { BadgeCheck, Eye, EyeOff, Film, Flag, Heart, Images, Loader2, Lock, MessageCircle, Plus, Send, Trash2, X } from "lucide-react";
+import { Eye, EyeOff, Film, Flag, Heart, Images, Loader2, Lock, MessageCircle, Pencil, Plus, Send, Trash2, X } from "lucide-react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { GLASS, primaryPill, quietPill } from "@/features/friends/ui";
+import { quietPill } from "@/features/friends/ui";
 import { haptic } from "@/lib/motion/haptics";
 import { WATERMARK_CORNER_SECONDS, WATERMARK_CORNERS } from "@/lib/media/watermark-mark-geometry";
-import { usd } from "@/lib/creator/membership/engine";
+import type { OfferMembership } from "@/lib/sub/offer";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 import { forgetSubPosts, loadSubPosts } from "./sub-posts-cache";
+import { CreatorSubscribeCard } from "./subscribe-card";
 
 // reporting exclusive content (Frenz Exclusive Part 2): the shared sheet, loaded only when opened
 const ReportSheet = dynamic(() => import("@/features/social/report-sheet").then((m) => m.ReportSheet), { ssr: false });
@@ -50,6 +50,8 @@ interface Card {
   thumbUrl?: string | null;
   /** 0248, only ever sent to the creator or a subscriber: hidden = non-subscribers do not know it exists */
   audience?: "locked" | "hidden";
+  /** Part 4, creator only: Frenzsave took it down — shown marked, never opened */
+  removed?: true;
 }
 
 /**
@@ -69,15 +71,13 @@ export interface SubQuoteView {
 }
 
 export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext, onCompose, onAccess }: { creatorId: string; creatorName: string; quote: SubQuoteView | null; signedIn: boolean; loginNext: string; onCompose?: () => void; onAccess?: (subscribed: boolean) => void }) {
-  const [state, setState] = useState<{ posts: Card[]; access: boolean; isCreator: boolean; next: string | null; ready: boolean; accessUntil?: string | null } | null>(null);
+  const [state, setState] = useState<{ posts: Card[]; access: boolean; isCreator: boolean; next: string | null; ready: boolean; accessUntil?: string | null; membership?: OfferMembership } | null>(null);
   // the tab's "for paid subscribers only" notice gives way to "You're subscribed" (2026-10-12)
   useEffect(() => {
     if (state) onAccess?.(state.access && !state.isCreator);
   }, [state, onAccess]);
   const [loadingMore, setLoadingMore] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
-  const [paying, setPaying] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
 
   // once per creator, shared with the tab warm-up and kept four minutes (sub-posts-cache.ts) — no polling
   useEffect(() => {
@@ -152,20 +152,6 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
     if (j) setState((s) => (s ? { ...s, posts: [...s.posts, ...j.posts], next: j.next } : s));
   };
 
-  const subscribe = async () => {
-    haptic("selection");
-    setPaying(true);
-    setNote(null);
-    const res = await fetch("/api/sub/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ creatorId, returnPath: loginNext }) }).catch(() => null);
-    const j = (await res?.json().catch(() => null)) as { url?: string; error?: string } | null;
-    if (res?.ok && j?.url) {
-      window.location.assign(j.url);
-      return;
-    }
-    setPaying(false);
-    setNote(j?.error ?? "Couldn't open the payment. Try again.");
-  };
-
   const removed = useCallback((id: string) => {
     forgetSubPosts(creatorId);
     setState((s) => (s ? { ...s, posts: s.posts.filter((p) => p.id !== id) } : s));
@@ -183,49 +169,8 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
 
   return (
     <div>
-      {/* a subscriber is told so, and until when (owner 2026-10-12: "indicating he is a paid subscriber") */}
-      {state.access && !state.isCreator ? (
-        <div className="mb-3 flex items-center gap-3 rounded-[22px] border border-emerald-500/25 bg-emerald-500/[0.08] px-4 py-3.5">
-          <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-500 text-white">
-            <BadgeCheck className="h-5 w-5" />
-          </span>
-          <div className="min-w-0">
-            <p className="text-[15px] font-bold leading-tight">You&apos;re subscribed to {creatorName}</p>
-            <p className="mt-0.5 text-[13px] text-muted-foreground">
-              {state.accessUntil ? `Your access runs until ${new Date(state.accessUntil).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}. ` : ""}Tap any post to open it.
-            </p>
-          </div>
-        </div>
-      ) : null}
-
-      {/* the price and the subscribe action, for anyone without access */}
-      {!state.access && quote ? (
-        <div className={cn("mb-3 rounded-[22px] px-4 py-3.5", GLASS)}>
-          <div className="flex items-start gap-3">
-            <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white">
-              <Lock className="h-[18px] w-[18px]" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-[15px] font-bold leading-tight">Subscribe to {creatorName}</p>
-              <p className="mt-0.5 text-[13px] text-muted-foreground">
-                <b className="text-foreground">{usd(quote.priceCents)}</b> for {quote.periodDays} days of their subscriber posts.
-              </p>
-            </div>
-          </div>
-          {signedIn ? (
-            <button type="button" onClick={() => void subscribe()} disabled={paying} className={cn(primaryPill, "mt-3 w-full justify-center bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600")}>
-              {paying ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-              {paying ? "Opening secure payment…" : "Subscribe"}
-            </button>
-          ) : (
-            <Link href={`/login?next=${encodeURIComponent(loginNext)}`} prefetch={false} className={cn(primaryPill, "mt-3 w-full justify-center")}>
-              Sign in to subscribe
-            </Link>
-          )}
-          <p className="mt-2 text-center text-[11.5px] text-muted-foreground">Paid securely with Paystack. Unlocks only once the payment is confirmed.</p>
-          {note ? <p className="mt-2 text-center text-[12.5px] font-medium text-rose-600">{note}</p> : null}
-        </div>
-      ) : null}
+      {/* Part 4: ONE card for every visitor — the offer, a renewal, "you're subscribed" or "not taking subscriptions" (lib/sub/offer.ts) */}
+      {!state.isCreator ? <CreatorSubscribeCard creatorId={creatorId} creatorName={creatorName} quote={quote} membership={state.membership} signedIn={signedIn} returnPath={loginNext} /> : null}
 
       {state.isCreator && onCompose ? (
         <button type="button" onClick={onCompose} className={cn(quietPill, "mb-3 w-full justify-center")}>
@@ -241,8 +186,9 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
             <li key={p.id}>
               <button
                 type="button"
-                onClick={() => (state.access ? setOpen(p.id) : void 0)}
-                aria-label={state.access ? `Open subscriber post${p.caption ? `: ${p.caption.slice(0, 60)}` : ""}` : "Subscriber only. Subscribe to unlock."}
+                onClick={() => (state.access && !p.removed ? setOpen(p.id) : void 0)}
+                disabled={!!p.removed}
+                aria-label={p.removed ? "Removed by Frenzsave. Under review." : state.access ? `Open subscriber post${p.caption ? `: ${p.caption.slice(0, 60)}` : ""}` : "Subscriber only. Subscribe to unlock."}
                 className="relative block aspect-[4/5] w-full overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-500/25 via-violet-500/20 to-blue-500/25 transition active:scale-[0.98] motion-reduce:active:scale-100"
               >
                 {p.coverUrl ? (
@@ -256,9 +202,17 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
                     a tile shows the public cover or the small private preview and NEVER the original photo or
                     video — the media loads when the post is opened (and the first one is pre-loaded once the
                     covers are up, below). */}
-                {state.access && p.audience === "hidden" ? (
-                  <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-black/55 px-1.5 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm" title="Only subscribers know this post exists">
-                    <EyeOff className="h-3 w-3" aria-hidden /> Hidden
+                {/* Part 4: the creator sees every tile's audience; a subscriber sees only the Hidden mark */}
+                {state.access && (state.isCreator || p.audience === "hidden") && !p.removed ? (
+                  <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-black/55 px-1.5 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm" title={p.audience === "hidden" ? "Visitors don't know this post exists" : "Visitors see a locked tile"}>
+                    {p.audience === "hidden" ? <EyeOff className="h-3 w-3" aria-hidden /> : <Lock className="h-3 w-3" aria-hidden />}
+                    {p.audience === "hidden" ? "Hidden" : "Locked"}
+                  </span>
+                ) : null}
+                {p.removed ? (
+                  <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/70 px-2 text-center text-white">
+                    <Flag className="h-4 w-4" aria-hidden />
+                    <span className="text-[10.5px] font-semibold leading-tight">Removed by Frenzsave</span>
                   </span>
                 ) : null}
                 {!state.access ? (
@@ -285,7 +239,7 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
         </button>
       ) : null}
 
-      {open ? <PrivateViewer postId={open} initial={state.posts.find((p) => p.id === open)?.open ?? null} isCreator={state.isCreator} onClose={() => setOpen(null)} onDeleted={(id) => { removed(id); setOpen(null); }} /> : null}
+      {open ? <PrivateViewer postId={open} initial={state.posts.find((p) => p.id === open)?.open ?? null} isCreator={state.isCreator} onClose={() => setOpen(null)} onDeleted={(id) => { removed(id); setOpen(null); }} onEdited={(id, caption) => { forgetSubPosts(creatorId); setState((st) => (st ? { ...st, posts: st.posts.map((x) => (x.id === id ? { ...x, caption, ...(x.open ? { open: { ...x.open, caption } } : {}) } : x)) } : st)); }} /> : null}
     </div>
   );
 }
@@ -302,7 +256,7 @@ interface Opened {
 }
 
 /** The private viewer: a portal with no URL, no share action, covered whenever the app is not in front. */
-export function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }: { postId: string; initial: Opened | null; isCreator: boolean; onClose: () => void; onDeleted: (id: string) => void }) {
+export function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted, onEdited }: { postId: string; initial: Opened | null; isCreator: boolean; onClose: () => void; onDeleted: (id: string) => void; onEdited?: (id: string, caption: string | null) => void }) {
   // already opened by the gallery (or earlier in this tab) and still valid: shown at once, no second check
   const [data, setData] = useState<Opened | null>(() => (fresh(openedCache.get(postId)) ? openedCache.get(postId)! : fresh(initial) ? initial : null));
   const [index, setIndex] = useState(0);
@@ -325,6 +279,22 @@ export function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }
   // Part 3 (0248): the creator switches who may know this post exists
   const [audience, setAudience] = useState<"locked" | "hidden" | null>(null);
   const [savingAudience, setSavingAudience] = useState(false);
+  // Part 4: the creator edits the caption in place (server: own published post only, plain text)
+  const [editing, setEditing] = useState<string | null>(null);
+  const [savingCaption, setSavingCaption] = useState(false);
+  const saveCaption = async () => {
+    if (editing === null) return;
+    setSavingCaption(true);
+    const res = await fetch(`/api/sub/posts/${postId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caption: editing }) }).catch(() => null);
+    const j = (await res?.json().catch(() => null)) as { caption?: string | null; error?: string } | null;
+    setSavingCaption(false);
+    if (!res?.ok) return setError(j?.error ?? "Couldn't save the caption.");
+    setData((d) => (d ? { ...d, caption: j?.caption ?? null } : d));
+    openedCache.delete(postId);
+    onEdited?.(postId, j?.caption ?? null);
+    setEditing(null);
+    haptic("selection");
+  };
   const toggleAudience = async (current: "locked" | "hidden") => {
     const next = current === "hidden" ? "locked" : "hidden";
     setSavingAudience(true);
@@ -492,6 +462,11 @@ export function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }
           </span>
           <span className="flex items-center gap-1">
             {isCreator && data ? (
+              <button type="button" aria-label="Edit caption" onClick={() => setEditing(data.caption ?? "")} className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/35 transition active:bg-white/10">
+                <Pencil className="h-[18px] w-[18px]" aria-hidden />
+              </button>
+            ) : null}
+            {isCreator && data ? (
               <button
                 type="button"
                 aria-pressed={(audience ?? data.audience) === "hidden"}
@@ -518,6 +493,18 @@ export function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }
           </span>
         </div>
         {reporting ? <ReportSheet targetType="sub_post" targetId={postId} open={reporting} onClose={() => setReporting(false)} /> : null}
+        {editing !== null ? (
+          <div className="absolute inset-x-0 bottom-0 z-[9] rounded-t-[24px] bg-zinc-950/95 p-4 text-white ring-1 ring-white/10 backdrop-blur-xl" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }} role="dialog" aria-label="Edit caption">
+            <label htmlFor="sub-edit-caption" className="text-[13px] font-semibold">Caption</label>
+            <textarea id="sub-edit-caption" rows={3} maxLength={2200} value={editing} onChange={(e) => setEditing(e.target.value)} className="mt-1.5 w-full resize-none rounded-2xl bg-white/10 px-3 py-2 text-[15px] outline-none ring-1 ring-inset ring-white/15 focus-visible:ring-2 focus-visible:ring-white/50" />
+            <div className="mt-2 flex justify-end gap-2">
+              <button type="button" onClick={() => setEditing(null)} disabled={savingCaption} className="min-h-[2.5rem] rounded-full px-4 text-[13.5px] font-semibold text-white/80">Cancel</button>
+              <button type="button" onClick={() => void saveCaption()} disabled={savingCaption} className="inline-flex min-h-[2.5rem] items-center gap-1.5 rounded-full bg-white px-4 text-[13.5px] font-semibold text-zinc-950">
+                {savingCaption ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null} Save
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {/* caption over the media's foot, out of a video's controls */}
         {data?.caption ? (

@@ -301,3 +301,48 @@ failed page, skeletons sized like the cards, an empty state with a way to find c
 discovery — later parts). Feed preview links last five minutes: a tab left open longer shows a
 placeholder until refreshed. The profile gallery's own locked tile is unchanged (Part 4 redesigns
 the profile).
+
+## Frenz Exclusive Part 4 — creator profiles and the publishing studio (2026-10-16)
+
+No migration. Everything builds on 0247/0248.
+
+**The profile's Exclusive tab (`lib/sub/profile.ts` `subTabFor`, moved out of the page so its rules are tested).**
+- The creator always has the tab: "Get paid for your content" until they go live, then their studio
+  (share card, overview with price/pause/withdraw, New exclusive post, their gallery).
+- A visitor has the tab only while the creator is live (active, priced, purchases on). A creator
+  without subscriptions shows no tab and no settings.
+- A visitor who blocked the creator gets no tab. A creator who blocked the visitor, or a suspended
+  creator, is a 404 profile already. A creator under an admin hide keeps the tab for the friends who
+  can see the profile (existing subscribers still read what they paid for) but offers no new
+  subscription.
+
+**One subscription card per tab (`features/sub/subscribe-card.tsx`, wording from `lib/sub/offer.ts`).**
+It replaces the old notice, price box and "You're subscribed" banner. States:
+- offer: what the visitor actually pays — price + the platform fee, e.g. "$11.00 for 30 days, $10.00
+  to the creator + $1.00 service fee" (the old box showed only the creator's price, $10.00, while
+  checkout charged $11.00);
+- renew: a lapsed subscriber ("Your subscription ended on …"), same checkout, today's price;
+- active: "Access until …. It doesn't renew automatically." — no button, no second purchase;
+- signed out: "Sign in to subscribe";
+- unavailable: "isn't taking new subscriptions right now" (no price shown).
+A removed member is shown the plain offer (removal is never announced); checkout refuses them with
+its own message. Every number is the server's; checkout recomputes it and refuses any extra field.
+The membership state comes with the gallery read (`listSubPosts` → `membership`), one query.
+
+**Publishing studio (`features/sub/sub-composer.tsx`).** Two steps: compose (media from the gallery
+or camera, caption, audience, an optional public cover — offered for Locked preview only, since a
+hidden post has no public tile and its cover would never be shown, so it is not uploaded), then
+preview ("What subscribers see" next to "What visitors see" — a locked tile, or "Nothing" for
+Hidden). Nothing is uploaded or published before Publish; closing with unsaved work asks first
+("Nothing has been published or uploaded"). Uploads show a progress bar. Server side unchanged:
+own private folder only, bytes checked (Part 2), audience validated (Part 3).
+
+**Managing posts.** The creator's gallery marks every tile Locked or Hidden, and shows a post
+Frenzsave took down as "Removed by Frenzsave" (not openable, not deletable — the creator sees it;
+nobody else ever receives an archived row). In the viewer the creator can edit the caption
+(`PATCH /api/sub/posts/[id] { caption }`: own published post only, plain text, ≤ 2,200 characters;
+a taken-down post can't be edited back) and switch Locked/Hidden. Edits are rate-limited.
+
+**Not built (later parts):** drafts saved across sessions (the composer keeps an unsent post only
+while open — a draft table was not needed for "never publish by accident"), editing a post's media
+or cover after publishing, subscriber management, favourites, announcements, analytics, renewals.

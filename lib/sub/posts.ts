@@ -163,6 +163,8 @@ export interface SubPostCard {
   caption: string | null;
   /** only for a viewer WITH access (a non-subscriber never receives a hidden post at all) */
   audience?: SubAudience;
+  /** Part 4, creator only: Frenzsave took this post down (archived) — shown marked, not openable */
+  removed?: true;
   coverUrl: string | null;
   items: number;
   hasVideo: boolean;
@@ -170,7 +172,7 @@ export interface SubPostCard {
 }
 
 /** The SUB POSTS gallery. A viewer without access sees covers and counts, nothing private. Cursor-paged. */
-export async function listSubPosts(creatorId: string, viewerId: string | null, before?: string | null): Promise<{ posts: SubPostCard[]; access: boolean; isCreator: boolean; next: string | null; ready: boolean; accessUntil?: string | null }> {
+export async function listSubPosts(creatorId: string, viewerId: string | null, before?: string | null): Promise<{ posts: SubPostCard[]; access: boolean; isCreator: boolean; next: string | null; ready: boolean; accessUntil?: string | null; membership?: SubMembershipView }> {
   const db = createAdminClient();
   const isCreator = viewerId === creatorId;
   /*
@@ -185,9 +187,11 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
   const read = (withAudience: boolean) => {
     let q = db
       .from("sub_posts")
-      .select(withAudience ? "id, caption, cover_url, created_at, audience" : "id, caption, cover_url, created_at")
+      .select(withAudience ? "id, caption, cover_url, created_at, status, audience" : "id, caption, cover_url, created_at, status")
       .eq("creator_id", creatorId)
-      .eq("status", "published")
+      // Part 4: the CREATOR also sees what Frenzsave took down (archived, Part 2) — marked, never openable.
+      // Nobody else ever receives an archived row.
+      .in("status", isCreator ? ["published", "archived"] : ["published"])
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .limit(PAGE + 1);
@@ -198,13 +202,16 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
   let postsR = await read(true);
   // before 0248 there is no audience column, so no post can be hidden: every post is 'locked'
   if (postsR.error && MISSING(postsR.error.message)) postsR = await read(false);
-  // a subscriber sees that they ARE one, and until when (2026-10-12) — read only for a subscriber
-  // (read alongside the media below, not before it — one round trip fewer on every open)
+  // the visitor's OWN membership: subscribed until when, or ended when (Part 4: the offer card says
+  // "Renew" to a lapsed subscriber). Read alongside the media below — one round trip fewer on every open.
   const untilRead =
-    access && viewerId && !isCreator
-      ? db.from("creator_memberships").select("period_end").eq("creator_id", creatorId).eq("member_id", viewerId).eq("status", "active").eq("billing", "sub").order("period_end", { ascending: false }).limit(1).maybeSingle()
+    viewerId && !isCreator && isUuid(viewerId)
+      ? db.from("creator_memberships").select("status, billing, period_end, ended_at").eq("creator_id", creatorId).eq("member_id", viewerId).maybeSingle()
       : Promise.resolve({ data: null });
-  if (postsR.error) return { posts: [], access, isCreator, next: null, ready: !MISSING(postsR.error.message), accessUntil: (((await untilRead).data as Row | null)?.period_end as string | null) ?? null };
+  if (postsR.error) {
+    const m = viewerId && !isCreator ? membershipView((await untilRead).data as Row | null, access) : undefined;
+    return { posts: [], access, isCreator, next: null, ready: !MISSING(postsR.error.message), accessUntil: m?.state === "active" ? m.until : null, ...(m ? { membership: m } : {}) };
+  }
   const rows = (postsR.data ?? []) as unknown as Row[];
   const page = rows.slice(0, PAGE);
   const ids = page.map((r) => r.id as string);
@@ -221,7 +228,8 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
     opening && ids.length ? marks(viewerId!, creatorId) : Promise.resolve(null),
     untilRead,
   ]);
-  const accessUntil = ((until.data as Row | null)?.period_end as string | null) ?? null;
+  const membership = viewerId && !isCreator ? membershipView(until.data as Row | null, access) : undefined;
+  const accessUntil = membership?.state === "active" ? membership.until : null;
   const counts = new Map<string, { n: number; video: boolean }>();
   for (const m of (media ?? []) as Row[]) {
     const c = counts.get(m.post_id as string) ?? { n: 0, video: false };
@@ -244,6 +252,12 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
     await Promise.all(
       page.map(async (r) => {
         const list = byPost.get(r.id as string) ?? [];
+        // a taken-down post is shown to its creator as a marked tile only: no media links
+        if (r.status === "archived") {
+          const t = list[0]?.thumb_key as string | null | undefined;
+          if (t) thumbs.set(r.id as string, await presignPrivateGet(t, SIGNED_TTL_SECONDS));
+          return;
+        }
         const firstThumb = list[0]?.thumb_key as string | null | undefined;
         const [signed, thumb] = await Promise.all([signMedia(list), firstThumb ? presignPrivateGet(firstThumb, SIGNED_TTL_SECONDS) : Promise.resolve(null)]);
         opened.set(r.id as string, { caption: (r.caption as string | null) ?? null, audience: audienceOf(r.audience), media: signed, expiresAt, ...mk });
@@ -252,13 +266,25 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
     );
   }
   return {
-    posts: page.map((r) => ({ id: r.id as string, ...(access ? { audience: audienceOf(r.audience) } : {}), caption: access ? ((r.caption as string | null) ?? null) : null, coverUrl: (r.cover_url as string | null) ?? null, items: counts.get(r.id as string)?.n ?? 0, hasVideo: counts.get(r.id as string)?.video ?? false, createdAt: r.created_at as string, ...(opened.has(r.id as string) ? { open: opened.get(r.id as string) } : {}), ...(thumbs.has(r.id as string) ? { thumbUrl: thumbs.get(r.id as string) } : {}) })),
+    posts: page.map((r) => ({ id: r.id as string, ...(access ? { audience: audienceOf(r.audience) } : {}), caption: access ? ((r.caption as string | null) ?? null) : null, coverUrl: (r.cover_url as string | null) ?? null, items: counts.get(r.id as string)?.n ?? 0, hasVideo: counts.get(r.id as string)?.video ?? false, createdAt: r.created_at as string, ...(r.status === "archived" ? { removed: true } : {}), ...(opened.has(r.id as string) ? { open: opened.get(r.id as string) } : {}), ...(thumbs.has(r.id as string) ? { thumbUrl: thumbs.get(r.id as string) } : {}) })),
     access,
     isCreator,
     next: rows.length > PAGE ? encodeSubCursor(page[page.length - 1]!.created_at as string, page[page.length - 1]!.id as string) : null,
     ready: true,
     accessUntil,
+    ...(membership ? { membership } : {}),
   };
+}
+
+/** A visitor's own membership, as the offer card shows it (Part 4). Null for the creator and signed-out visitors. */
+export type SubMembershipView = { state: "active"; until: string | null } | { state: "expired"; endedAt: string | null } | { state: "none" };
+
+function membershipView(row: Row | null, access: boolean): SubMembershipView | undefined {
+  if (access) return { state: "active", until: (row?.period_end as string | null | undefined) ?? null };
+  if (!row || row.billing !== "sub") return { state: "none" };
+  // a creator's removal is not announced here (checkout says so if they try); refunds end the period
+  if (row.status === "removed") return { state: "none" };
+  return { state: "expired", endedAt: ((row.ended_at ?? row.period_end) as string | null) ?? null };
 }
 
 /** Opens one post for a viewer who may see it: the caption and five-minute links. Anyone else gets 403 and nothing. */
@@ -344,4 +370,18 @@ async function backfillThumbs(creatorId: string, rows: Row[]): Promise<void> {
       /* the tile keeps using the original */
     }
   }
+}
+
+/**
+ * The creator edits the caption of one of their own PUBLISHED posts (Part 4). Same rules as
+ * publishing: plain text, at most 2,200 characters, empty clears it. A taken-down (archived)
+ * post can't be edited, and someone else's post answers exactly like a missing one.
+ */
+export async function setSubPostCaption(creatorId: string, postId: string, raw: unknown): Promise<{ ok: true; caption: string | null } | Fail> {
+  if (!isUuid(creatorId) || !isUuid(postId) || (raw !== null && typeof raw !== "string")) return fail("Invalid request.");
+  const caption = typeof raw === "string" ? raw.trim() || null : null;
+  if (caption && (caption.length > 2200 || /[<>]/.test(caption))) return fail("Keep the caption to 2,200 characters of plain text.");
+  const { data, error } = await createAdminClient().from("sub_posts").update({ caption, updated_at: new Date().toISOString() }).eq("id", postId).eq("creator_id", creatorId).eq("status", "published").select("id");
+  if (error) return fail("Couldn't save that.", 500);
+  return (data ?? []).length ? { ok: true, caption } : fail("Not found.", 404);
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { trackLimiter } from "@/lib/rate-limit";
 import { deleteSubPost, openSubPost } from "@/lib/sub/posts";
 import { createClient } from "@/lib/supabase/server";
 
@@ -51,7 +52,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
-  const body = (await request.json().catch(() => null)) as { idx?: unknown; thumbKey?: unknown; width?: unknown; height?: unknown; audience?: unknown } | null;
+  const { success } = await trackLimiter.limit(`sub-post-edit:${user.id}`);
+  if (!success) return NextResponse.json({ error: "Too many changes — try again in a moment." }, { status: 429 });
+  const body = (await request.json().catch(() => null)) as { idx?: unknown; thumbKey?: unknown; width?: unknown; height?: unknown; audience?: unknown; caption?: unknown } | null;
+  // Part 4: the creator edits the caption of their own published post
+  if (body && "caption" in body) {
+    const { setSubPostCaption } = await import("@/lib/sub/posts");
+    const out = await setSubPostCaption(user.id, id, (body as { caption?: unknown }).caption);
+    return out.ok ? NextResponse.json(out) : NextResponse.json({ error: out.error }, { status: out.status });
+  }
   // Part 3 (0248): the creator switches a post between locked and hidden — only their own post
   if (body && "audience" in body) {
     const { setSubPostAudience } = await import("@/lib/sub/posts");

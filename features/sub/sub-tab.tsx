@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Bell, Check, ChevronDown, Copy, Loader2, Lock, Pause, Pencil, Play, Plus, Share2, ShieldCheck, Wallet } from "lucide-react";
+import { ArrowRight, Bell, Check, ChevronDown, Copy, Loader2, Lock, Pause, Pencil, Play, Plus, Share2, Wallet } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -81,8 +81,6 @@ export function SubTab({
   const [composing, setComposing] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   const [galleryKey, setGalleryKey] = useState(0);
-  // a subscriber sees "You're subscribed" from the gallery instead of the paid-only notice
-  const [subscribed, setSubscribed] = useState(false);
   const loginNext = `/u/${handle}?tab=sub`;
 
   if (isOwner && s && !s.setupCompleted) {
@@ -96,11 +94,9 @@ export function SubTab({
           <ShareCard handle={handle} />
           <CreatorOverview settings={s} bounds={bounds} onChange={setS} onCompose={() => setComposing(true)} onWithdraw={() => setWithdrawing(true)} />
         </>
-      ) : subscribed ? null : (
-        <SubNotice />
-      )}
+      ) : null}
       {!isOwner && signedIn ? <PrivatePostAlerts creatorId={creatorId} /> : null}
-      <SubGallery key={galleryKey} creatorId={creatorId} creatorName={creatorName} quote={isOwner ? null : quote} signedIn={signedIn} loginNext={loginNext} onAccess={setSubscribed} />
+      <SubGallery key={galleryKey} creatorId={creatorId} creatorName={creatorName} quote={isOwner ? null : quote} signedIn={signedIn} loginNext={loginNext} />
       {composing ? <SubComposer onClose={() => setComposing(false)} onPosted={() => {
             forgetSubPosts(creatorId);
             setGalleryKey((k) => k + 1);
@@ -175,18 +171,6 @@ function PrivatePostAlerts({ creatorId }: { creatorId: string }) {
 }
 
 /** The prominent notice every visitor sees first: what this tab is and how it's protected. */
-function SubNotice() {
-  return (
-    <div className="mb-3 flex items-start gap-3 rounded-[22px] border border-indigo-500/25 bg-indigo-500/[0.07] px-4 py-3.5">
-      <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600 dark:text-indigo-400" aria-hidden />
-      <div className="min-w-0">
-        <p className="text-[14.5px] font-bold">PRIVATE POSTS are for paid subscribers only</p>
-        <p className="mt-0.5 text-[13px] text-muted-foreground">These posts are private to this creator&apos;s subscribers. They can&apos;t be shared, reposted, linked or downloaded, and they never appear in feeds or search.</p>
-      </div>
-    </div>
-  );
-}
-
 /** "Get paid for your content" — four steps, saved as the creator goes. */
 function GetPaidSetup({ settings, bounds, onChange }: { settings: SubOwnerSettings; bounds: SubBounds; onChange: (s: SubOwnerSettings) => void }) {
   const [step, setStep] = useState(Math.min(3, settings.setupStep));

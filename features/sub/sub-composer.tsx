@@ -1,7 +1,7 @@
 "use client";
 
-import { Camera, ImagePlus, Images, Loader2, Lock, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { ArrowLeft, Camera, EyeOff, ImagePlus, Images, Loader2, Lock, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { primaryPill, quietPill } from "@/features/friends/ui";
@@ -41,6 +41,20 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
   const [audience, setAudience] = useState<"locked" | "hidden">("locked");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Part 4: compose → preview → publish. Nothing is uploaded or published before Publish.
+  const [step, setStep] = useState<"compose" | "preview">("compose");
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
+  const dirty = items.length > 0 || caption.trim() !== "" || !!cover;
+  const coverPreview = useMemo(() => (cover ? URL.createObjectURL(cover) : null), [cover]);
+  useEffect(() => () => void (coverPreview && URL.revokeObjectURL(coverPreview)), [coverPreview]);
+  const close = () => {
+    if (busy) return;
+    // an unpublished draft is never lost to a stray tap — and closing never publishes anything
+    if (dirty && !confirmDiscard) return setConfirmDiscard(true);
+    items.forEach((it) => URL.revokeObjectURL(it.preview));
+    onClose();
+  };
   const pick = useRef<HTMLInputElement>(null);
   // owner 2026-10-11: straight from the camera too, not only the gallery
   const shoot = useRef<HTMLInputElement>(null);
@@ -67,6 +81,7 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
       for (let i = 0; i < items.length; i++) {
         const it = items[i]!;
         setBusy(`Uploading ${i + 1} of ${items.length}…`);
+        setProgress(i / items.length);
         const plan = await fetch("/api/sub/posts/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: it.kind, ext: extOf(it.file) }) }).then((r) => r.json());
         if (!plan?.ok) throw new Error(plan?.error ?? "Couldn't upload.");
         const put = await fetch(plan.uploadUrl as string, { method: "PUT", body: it.file, headers: { "Content-Type": it.file.type || "application/octet-stream", "Cache-Control": "private, no-store" } });
@@ -83,8 +98,10 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
         }
         media.push({ key: plan.key as string, kind: it.kind, width: it.width ?? thumb.width, height: it.height ?? thumb.height, ...(thumbKey ? { thumbKey } : {}) });
       }
+      setProgress(1);
       let coverUrl: string | null = null;
-      if (cover) {
+      // a hidden post has no public tile, so its cover would never be shown: it is not uploaded
+      if (cover && audience === "locked") {
         setBusy("Uploading the cover…");
         coverUrl = await uploadWithPlan(await presignUpload("image", extOf(cover)), cover, cover.type || "image/jpeg");
       }
@@ -100,75 +117,169 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
     } finally {
       end();
       setBusy(null);
+      setProgress(null);
     }
   };
 
+  const first = items[0];
+  const audiences = [
+    { v: "locked" as const, title: "Locked preview", sub: "Visitors see a locked tile — your cover if you add one, and how many items. Never the caption or the media." },
+    { v: "hidden" as const, title: "Hidden", sub: "Visitors don't see it at all — no tile, no count. You and your subscribers still do." },
+  ];
+
   return createPortal(
-    <div role="dialog" aria-modal="true" aria-label="New subscriber post" className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 sm:items-center">
+    <div role="dialog" aria-modal="true" aria-label="New exclusive post" className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 sm:items-center">
       <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-[28px] bg-background p-4 sm:rounded-[28px]" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="inline-flex items-center gap-2 text-[17px] font-bold">
-            <Lock className="h-4 w-4 text-indigo-500" aria-hidden /> For subscribers
-          </h2>
-          <button type="button" aria-label="Close" onClick={onClose} disabled={!!busy} className="inline-flex h-10 w-10 items-center justify-center rounded-full transition active:bg-black/[0.06]">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          {step === "preview" ? (
+            <button type="button" onClick={() => setStep("compose")} disabled={!!busy} className="-ml-2 inline-flex h-10 items-center gap-1 rounded-full px-2 text-[14px] font-semibold transition active:bg-black/[0.06]">
+              <ArrowLeft className="h-4 w-4" aria-hidden /> Edit
+            </button>
+          ) : (
+            <h2 className="inline-flex items-center gap-2 text-[17px] font-bold">
+              <Lock className="h-4 w-4 text-primary" aria-hidden /> New exclusive post
+            </h2>
+          )}
+          <span className="ml-auto text-[12px] font-medium text-muted-foreground">{step === "compose" ? "Step 1 of 2" : "Step 2 of 2 · Preview"}</span>
+          <button type="button" aria-label="Close" onClick={close} disabled={!!busy} className="inline-flex h-10 w-10 items-center justify-center rounded-full transition active:bg-black/[0.06]">
             <X className="h-5 w-5" aria-hidden />
           </button>
         </div>
+
+        {confirmDiscard ? (
+          <div role="alertdialog" aria-label="Discard this post?" className="mb-3 rounded-2xl border border-border bg-muted/60 p-3">
+            <p className="text-[13.5px] font-semibold">Discard this post?</p>
+            <p className="text-[12.5px] text-muted-foreground">Nothing has been published or uploaded.</p>
+            <div className="mt-2 flex gap-2">
+              <button type="button" onClick={() => setConfirmDiscard(false)} className={quietPill}>
+                Keep editing
+              </button>
+              <button type="button" onClick={close} className={cn(quietPill, "text-rose-500")}>
+                Discard
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         <input ref={pick} type="file" accept="image/*,video/*" multiple hidden onChange={(e) => (void add(e.target.files), (e.target.value = ""))} />
         <input ref={shoot} type="file" accept="image/*,video/*" capture="environment" hidden onChange={(e) => (void add(e.target.files), (e.target.value = ""))} />
         <input ref={pickCover} type="file" accept="image/*" hidden onChange={(e) => setCover(e.target.files?.[0] ?? null)} />
-        <div className="grid grid-cols-4 gap-1.5">
-          {items.map((it, i) => (
-            <div key={it.preview} className="relative aspect-square overflow-hidden rounded-xl bg-black/[0.05]">
-              {it.kind === "image" ? (
-                // eslint-disable-next-line @next/next/no-img-element -- a local preview, never uploaded from here
-                <img src={it.preview} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <video src={it.preview} muted className="h-full w-full object-cover" />
-              )}
-              <button type="button" aria-label="Remove" onClick={() => setItems((x) => x.filter((_, j) => j !== i))} className="absolute right-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white">
-                <X className="h-3.5 w-3.5" aria-hidden />
-              </button>
+
+        {step === "compose" ? (
+          <>
+            <div className="grid grid-cols-4 gap-1.5">
+              {items.map((it, i) => (
+                <div key={it.preview} className="relative aspect-square overflow-hidden rounded-xl bg-black/[0.05]">
+                  {it.kind === "image" ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- a local preview, never uploaded from here
+                    <img src={it.preview} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <video src={it.preview} muted className="h-full w-full object-cover" />
+                  )}
+                  <button type="button" aria-label="Remove" onClick={() => setItems((x) => x.filter((_, j) => j !== i))} className="absolute right-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white">
+                    <X className="h-3.5 w-3.5" aria-hidden />
+                  </button>
+                </div>
+              ))}
+              {items.length < 10 ? (
+                <>
+                  <button type="button" onClick={() => pick.current?.click()} className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border text-[11.5px] font-semibold text-muted-foreground transition active:scale-95">
+                    <Images className="h-5 w-5" aria-hidden /> Gallery
+                  </button>
+                  <button type="button" onClick={() => shoot.current?.click()} className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border text-[11.5px] font-semibold text-muted-foreground transition active:scale-95">
+                    <Camera className="h-5 w-5" aria-hidden /> Camera
+                  </button>
+                </>
+              ) : null}
             </div>
-          ))}
-          {items.length < 10 ? (
-            <>
-              <button type="button" onClick={() => pick.current?.click()} className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border text-[11.5px] font-semibold text-muted-foreground transition active:scale-95">
-                <Images className="h-5 w-5" aria-hidden /> Gallery
+            <label htmlFor="sub-caption" className="sr-only">
+              Caption
+            </label>
+            <textarea id="sub-caption" rows={3} maxLength={2200} value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Write a caption for your subscribers" className="mt-3 w-full resize-none rounded-2xl border border-border bg-background px-3 py-2 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-primary/40" />
+            <fieldset className="mt-3">
+              <legend className="mb-1.5 text-[13px] font-semibold">Who can see that this post exists</legend>
+              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2" role="radiogroup">
+                {audiences.map(({ v, title, sub }) => (
+                  <button key={v} type="button" role="radio" aria-checked={audience === v} onClick={() => setAudience(v)} className={cn("flex items-start gap-2.5 rounded-2xl border px-3 py-2.5 text-left transition", audience === v ? "border-primary bg-primary/[0.07] ring-1 ring-primary/40" : "border-border")}>
+                    {v === "locked" ? <Lock className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden /> : <EyeOff className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />}
+                    <span>
+                      <span className="block text-[13.5px] font-semibold">{title}</span>
+                      <span className="block text-[11.5px] leading-snug text-muted-foreground">{sub}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            {audience === "locked" ? (
+              <button type="button" onClick={() => pickCover.current?.click()} className={cn(quietPill, "mt-2")}>
+                <ImagePlus className="h-4 w-4" aria-hidden /> {cover ? `Cover: ${cover.name.slice(0, 24)}` : "Add a public cover (optional)"}
               </button>
-              <button type="button" onClick={() => shoot.current?.click()} className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border text-[11.5px] font-semibold text-muted-foreground transition active:scale-95">
-                <Camera className="h-5 w-5" aria-hidden /> Camera
-              </button>
-            </>
-          ) : null}
-        </div>
-        <label htmlFor="sub-caption" className="sr-only">
-          Caption
-        </label>
-        <textarea id="sub-caption" rows={3} maxLength={2200} value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Write a caption for your subscribers" className="mt-3 w-full resize-none rounded-2xl border border-border bg-background px-3 py-2 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-primary/40" />
-        <button type="button" onClick={() => pickCover.current?.click()} className={cn(quietPill, "mt-2")}>
-          <ImagePlus className="h-4 w-4" aria-hidden /> {cover ? `Cover: ${cover.name.slice(0, 24)}` : "Add a public cover (optional)"}
-        </button>
-        <fieldset className="mt-3">
-          <legend className="mb-1.5 text-[12.5px] font-semibold">Who knows this post exists</legend>
-          <div className="grid grid-cols-2 gap-1.5" role="radiogroup">
-            {([
-              ["locked", "Locked preview", "Everyone sees a locked tile"],
-              ["hidden", "Hidden", "Only subscribers see it"],
-            ] as const).map(([v, title, sub]) => (
-              <button key={v} type="button" role="radio" aria-checked={audience === v} onClick={() => setAudience(v)} disabled={!!busy} className={cn("rounded-2xl border px-3 py-2.5 text-left transition", audience === v ? "border-primary bg-primary/[0.07] ring-1 ring-primary/40" : "border-border")}>
-                <span className="block text-[13.5px] font-semibold">{title}</span>
-                <span className="block text-[11.5px] text-muted-foreground">{sub}</span>
-              </button>
-            ))}
-          </div>
-        </fieldset>
-        <p className="mt-1.5 text-[12px] text-muted-foreground">The cover is the only thing non-subscribers see. Without one, they see a locked tile. Photos and videos stay private and can&apos;t be shared or linked.</p>
-        {error ? <p className="mt-2 text-[13px] font-medium text-rose-600">{error}</p> : null}
-        <button type="button" onClick={() => void post()} disabled={!!busy || !items.length} className={cn(primaryPill, "mt-3 w-full justify-center")}>
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-          {busy ?? "Post for subscribers"}
-        </button>
+            ) : null}
+            <p className="mt-2 text-[12px] text-muted-foreground">Photos and videos stay private and can&apos;t be shared, linked or downloaded.</p>
+            {error ? (
+              <p role="alert" className="mt-2 text-[13px] font-medium text-rose-500">
+                {error}
+              </p>
+            ) : null}
+            <button type="button" onClick={() => (setError(null), setStep("preview"))} disabled={!items.length} className={cn(primaryPill, "mt-3 w-full justify-center")}>
+              Preview
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <figure>
+                <figcaption className="mb-1.5 text-[12px] font-semibold text-muted-foreground">What subscribers see</figcaption>
+                <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-muted">
+                  {first?.kind === "image" ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- a local preview
+                    <img src={first.preview} alt="" className="h-full w-full object-cover" />
+                  ) : first ? (
+                    <video src={first.preview} muted className="h-full w-full object-cover" />
+                  ) : null}
+                  <span className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white">
+                    {items.length} {items.length === 1 ? "item" : "items"}
+                  </span>
+                </div>
+                {caption.trim() ? <p className="mt-1.5 line-clamp-3 text-[12.5px]">{caption.trim()}</p> : null}
+              </figure>
+              <figure>
+                <figcaption className="mb-1.5 text-[12px] font-semibold text-muted-foreground">What visitors see</figcaption>
+                {audience === "locked" ? (
+                  <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-accent to-primary/80">
+                    {coverPreview ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- a local preview of the public cover
+                      <img src={coverPreview} alt="" className="h-full w-full object-cover" />
+                    ) : null}
+                    <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/35 text-white">
+                      <Lock className="h-5 w-5" aria-hidden />
+                      <span className="text-[10.5px] font-bold uppercase tracking-[0.08em]">Subscriber only</span>
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex aspect-[4/5] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border px-3 text-center">
+                    <EyeOff className="h-5 w-5 text-muted-foreground" aria-hidden />
+                    <span className="text-[12px] leading-snug text-muted-foreground">Nothing. No tile, no count — visitors won&apos;t know it exists.</span>
+                  </div>
+                )}
+              </figure>
+            </div>
+            {progress !== null ? (
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)} aria-label="Upload progress">
+                <div className="h-full rounded-full bg-gradient-to-r from-primary to-accent transition-[width] duration-300" style={{ width: `${Math.max(6, Math.round(progress * 100))}%` }} />
+              </div>
+            ) : null}
+            {error ? (
+              <p role="alert" className="mt-2 text-[13px] font-medium text-rose-500">
+                {error}
+              </p>
+            ) : null}
+            <button type="button" onClick={() => void post()} disabled={!!busy || !items.length} className={cn(primaryPill, "mt-3 w-full justify-center bg-gradient-to-r from-primary to-accent")}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+              {busy ?? (audience === "hidden" ? "Publish hidden post" : "Publish for subscribers")}
+            </button>
+          </>
+        )}
       </div>
     </div>,
     document.body,

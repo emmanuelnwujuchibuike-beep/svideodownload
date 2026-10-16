@@ -71,9 +71,7 @@ import {
   type ProfileDetails,
 } from "@/lib/social/profile-platform";
 import { createClient } from "@/lib/supabase/server";
-import { subscriptionCharge } from "@/lib/creator/membership/engine";
-import { getSubSettings, subConfig } from "@/lib/sub/server";
-import type { SubTabData } from "@/features/profile/profile-tabs";
+import { subTabFor } from "@/lib/sub/profile";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -1288,28 +1286,3 @@ async function ProfileSectionsLoader({
   );
 }
 
-/**
- * The SUB POSTS tab (owner briefs 2026-10-11): always there for the creator
- * (it holds "Get paid for your content"), there for everyone else only once the
- * creator is live with a price. One row read; the gallery itself loads on tap.
- */
-async function subTabFor(creatorId: string, creatorName: string, viewerId: string | null, owner: boolean): Promise<SubTabData | null> {
-  try {
-    const [settings, cfg] = await Promise.all([getSubSettings(creatorId), subConfig()]);
-    if (!settings.ready) return null;
-    const bounds = { minPriceCents: cfg.minPriceCents, maxPriceCents: cfg.maxPriceCents, purchaseFeePercent: cfg.purchaseFeePercent, withdrawalFeePercent: cfg.withdrawalFeePercent };
-    const live = settings.active && !!settings.priceCents && cfg.purchasesEnabled;
-    if (!owner && !live) return null;
-    const c = live && settings.priceCents ? subscriptionCharge(settings.priceCents, cfg.purchaseFeePercent) : null;
-    return {
-      creatorName,
-      signedIn: !!viewerId,
-      bounds,
-      quote: c ? { priceCents: c.priceCents, feeCents: c.feeCents, totalCents: c.totalCents, feePercent: cfg.purchaseFeePercent, periodDays: cfg.periodDays } : null,
-      settings: owner ? { priceCents: settings.priceCents, active: settings.active, setupStep: settings.setupStep, setupCompleted: settings.setupCompleted, promoDismissed: settings.promoDismissed } : null,
-    };
-  } catch {
-    // a non-critical read: no tab beats a broken profile
-    return null;
-  }
-}

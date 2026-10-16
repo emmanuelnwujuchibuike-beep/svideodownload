@@ -1503,6 +1503,27 @@ export function MonetizationSettings({
               NOT need Monetag&apos;s &ldquo;upload sw.js&rdquo; method, which can&apos;t be used here
               (that path is the app&apos;s own service worker).
             </p>
+            {/*
+              Owner 2026-10-16: the Multitag serves EVERY format switched on in the Monetag dashboard
+              (In-Page Push, Vignette, Push…), whatever the per-type switches below say. Its own switch
+              stops it without the master switch, so the direct link keeps working.
+            */}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setState((s) => ({ ...s, monetagMultitagEnabled: !s.monetagMultitagEnabled }))}
+              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5 text-left transition hover:border-foreground/20 disabled:opacity-70"
+            >
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">Multitag</span>
+                <span className="block text-xs text-muted-foreground">
+                  {state.monetagMultitagEnabled
+                    ? "On: loads every format switched on in your Monetag dashboard (In-Page Push, Vignette…), even if the per-type tags below are off."
+                    : "Off: only the per-type tags below, the moment placements and the direct link run."}
+                </span>
+              </span>
+              <Switch on={state.monetagMultitagEnabled} />
+            </button>
             <label className="block text-xs font-medium text-muted-foreground">Multitag (all formats)</label>
             <textarea
               value={state.monetagSnippet}

@@ -128,6 +128,8 @@ export interface MonetizationSettings {
    * master switch. See lib/monetization/monetag.ts.
    */
   monetagUnits: MonetagUnit[];
+  /** The Multitag (all formats) on or off, apart from the master switch (2026-10-16). Default on. */
+  monetagMultitagEnabled: boolean;
   /**
    * Whether Monetag shows on every page (the default) or only the selected
    * surfaces. When false, `monetagSurfaces` lists where it may appear.
@@ -730,6 +732,7 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   monetagUnits: [],
   // Back-compat: an existing site keeps showing Monetag everywhere until the
   // owner narrows it. `monetagSurfaces` only applies when this is false.
+  monetagMultitagEnabled: true,
   monetagAllPages: true,
   monetagSurfaces: [],
   monetagPlacements: [],

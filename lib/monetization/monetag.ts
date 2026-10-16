@@ -343,6 +343,14 @@ export function resolveMonetagPlacements(input: {
 export function resolveMonetagTags(input: {
   monetag: boolean;
   monetagSnippet: string;
+  /**
+   * Owner, 2026-10-16: In-Page Push and Vignette kept showing with every per-type unit off.
+   * The Multitag serves EVERY format switched on in the Monetag dashboard, and it had no
+   * switch of its own, so the only way to stop it was the master switch, which also stops
+   * the direct link. Off = the Multitag is not loaded; the units, the moment placements and
+   * the direct link are unaffected. Absent (older settings rows) = on, as before.
+   */
+  monetagMultitagEnabled?: boolean;
   monetagUnits: MonetagUnit[];
 }): MonetagTag[] {
   if (!input.monetag) return [];
@@ -363,7 +371,7 @@ export function resolveMonetagTags(input: {
   };
 
   // The primary Multitag stays in its own field for back-compat.
-  add("multitag", input.monetagSnippet ?? "");
+  add("multitag", input.monetagSnippet ?? "", input.monetagMultitagEnabled !== false);
   for (const unit of input.monetagUnits ?? []) {
     if (isMonetagAdType(unit?.type)) add(unit.type, unit?.snippet ?? "", unit?.enabled !== false);
   }

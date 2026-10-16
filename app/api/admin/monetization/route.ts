@@ -58,6 +58,8 @@ const schema = z.object({
     )
     .max(20)
     .default([]),
+  // The Multitag's own switch (2026-10-16): off stops it without the master switch (the direct link keeps working).
+  monetagMultitagEnabled: z.boolean().default(true),
   // Page scope: show Monetag everywhere (default) or only on selected surfaces.
   monetagAllPages: z.boolean().default(true),
   /*

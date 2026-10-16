@@ -25,6 +25,7 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
+  Star,
   Store,
   UserCog,
   Users,
@@ -249,6 +250,7 @@ export default async function AccountPage() {
       heading: "Plan & developer",
       items: [
         { href: "/account/plan", Icon: Crown, title: "Plan", sub: `${planLabel} plan · billing`, tint: "amber" },
+        { href: "/exclusive/favourites", Icon: Star, title: "Favourite creators", sub: "Creators you keep one tap away", tint: "amber" },
         { href: "/account/subscriptions", Icon: CreditCard, title: "Subscriptions", sub: "Creators you subscribe to, access dates & receipts", tint: "violet" },
         { href: "/account/developer", Icon: Code2, title: "Developer", sub: "API keys & usage", tint: "slate" },
       ],

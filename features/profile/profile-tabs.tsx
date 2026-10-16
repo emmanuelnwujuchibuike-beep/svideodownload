@@ -48,7 +48,7 @@ export interface SubTabData {
   creatorName: string;
   signedIn: boolean;
   quote: { priceCents: number; feeCents: number; totalCents: number; feePercent: number; periodDays: number } | null;
-  settings: { priceCents: number | null; active: boolean; setupStep: number; setupCompleted: boolean; promoDismissed?: boolean } | null;
+  settings: { priceCents: number | null; active: boolean; setupStep: number; setupCompleted: boolean; promoDismissed?: boolean; notifySubscribed?: "off" | "push" | "email" | "both" } | null;
   bounds: { minPriceCents: number; maxPriceCents: number; purchaseFeePercent: number; withdrawalFeePercent: number };
 }
 

@@ -49,6 +49,8 @@ type Db = ReturnType<typeof createAdminClient>;
 type Row = Record<string, unknown>;
 const MISSING = (m: string) => /schema cache|does not exist|column/i.test(m);
 const str = (v: unknown) => (typeof v === "string" && v.trim() ? v : null);
+/** A note for the creator's community (every note before 0251). Subscriber announcements and deleted rows are not. */
+export const isMembersNote = (n: Row) => (n.audience ?? "members") === "members" && !n.deleted_at;
 
 export interface Person {
   id: string;
@@ -133,7 +135,7 @@ export async function creatorPage(handle: string, viewerId: string | null): Prom
   const membership = mR.data ? toMembership(mR.data as Row) : null;
   const isMember = !!membership?.current;
   const [notesR, recR, fbR] = await Promise.all([
-    isMember ? db.from("creator_notes").select("id, body, min_role, created_at").eq("creator_id", cid).order("created_at", { ascending: false }).limit(30) : Promise.resolve({ data: [], error: null }),
+    isMember ? db.from("creator_notes").select("*").eq("creator_id", cid).order("created_at", { ascending: false }).limit(30) : Promise.resolve({ data: [], error: null }),
     isMember ? db.from("creator_recognitions").select("kind").eq("creator_id", cid).eq("member_id", viewerId!).eq("shown", true) : Promise.resolve({ data: [], error: null }),
     membership ? db.from("creator_feedback").select("*").eq("creator_id", cid).eq("member_id", viewerId!).maybeSingle() : Promise.resolve({ data: null, error: null }),
   ]);
@@ -150,7 +152,8 @@ export async function creatorPage(handle: string, viewerId: string | null): Prom
       membership,
       milestone: isMember ? memberMilestone(membership!.joinedAt, new Date()) : null,
       recognitions: ((recR.data ?? []) as Row[]).map((r) => r.kind).filter(isRecognition),
-      notes: ((notesR.data ?? []) as Row[]).filter((n) => isMemberRole(n.min_role) && rank >= ROLE_RANK[n.min_role]).map((n) => ({ id: n.id as string, body: n.body as string, createdAt: n.created_at as string })),
+      // Part 6 (0251): only MEMBERS notes here — a subscriber announcement is read through its own access check (lib/sub/announcements.ts), never by a free member
+      notes: ((notesR.data ?? []) as Row[]).filter(isMembersNote).filter((n) => isMemberRole(n.min_role) && rank >= ROLE_RANK[n.min_role]).map((n) => ({ id: n.id as string, body: n.body as string, createdAt: n.created_at as string })),
       feedback: fbR.data ? (Object.fromEntries((Object.keys(FEEDBACK_ASPECTS) as FeedbackAspect[]).map((k) => [k, ((fbR.data as Row)[k] as number | null) ?? null])) as Partial<Record<FeedbackAspect, number | null>>) : null,
     },
     ready: settings.ready,
@@ -274,7 +277,7 @@ export async function creatorDashboard(creatorId: string, now = new Date()): Pro
     quoteSub(creatorId),
     subEarnings(creatorId),
     db.from("creator_memberships").select("*").eq("creator_id", creatorId).order("joined_at", { ascending: false }).limit(2000),
-    db.from("creator_notes").select("id, body, min_role, created_at").eq("creator_id", creatorId).order("created_at", { ascending: false }).limit(50),
+    db.from("creator_notes").select("*").eq("creator_id", creatorId).order("created_at", { ascending: false }).limit(50),
     db.from("creator_sponsors").select("id, name, kind, url").eq("creator_id", creatorId).order("created_at").limit(30),
     db.from("creator_feedback").select("*").eq("creator_id", creatorId).limit(2000),
     db.from("creator_recognitions").select("member_id, kind").eq("creator_id", creatorId).limit(5000),
@@ -322,7 +325,7 @@ export async function creatorDashboard(creatorId: string, now = new Date()): Pro
       };
     });
   const currentRows = members.filter((m) => m.membership.current);
-  const lastNote = ((notesR.data ?? []) as Row[])[0]?.created_at as string | undefined;
+  const lastNote = ((notesR.data ?? []) as Row[]).filter(isMembersNote)[0]?.created_at as string | undefined;
   const lastPost = [((postsR.data ?? []) as Row[])[0]?.created_at, ((subPostR.data ?? []) as Row[])[0]?.created_at].filter((x): x is string => typeof x === "string").sort().pop();
   const nowMs = now.getTime();
   const ended = (m: MemberRow) => (m.membership.current ? null : (m.membership.endedAt ?? m.membership.periodEnd));
@@ -330,7 +333,7 @@ export async function creatorDashboard(creatorId: string, now = new Date()): Pro
     settings,
     quote,
     members,
-    notes: ((notesR.data ?? []) as Row[]).map((n) => ({ id: n.id as string, body: n.body as string, minRole: (isMemberRole(n.min_role) ? n.min_role : "member") as MemberRole, createdAt: n.created_at as string })),
+    notes: ((notesR.data ?? []) as Row[]).filter(isMembersNote).map((n) => ({ id: n.id as string, body: n.body as string, minRole: (isMemberRole(n.min_role) ? n.min_role : "member") as MemberRole, createdAt: n.created_at as string })),
     sponsors: sponsorsR.error ? [] : ((sponsorsR.data ?? []) as Row[]).map((s) => ({ id: s.id as string, name: s.name as string, kind: (isSponsorKind(s.kind) ? s.kind : "brand") as SponsorKind, url: str(s.url) })),
     insights: {
       active: currentRows.length,
@@ -380,7 +383,11 @@ export async function addNote(creatorId: string, body: string, minRole: string):
 }
 
 export async function deleteNote(creatorId: string, id: string): Promise<Result> {
-  const { error } = await createAdminClient().from("creator_notes").delete().eq("id", id).eq("creator_id", creatorId);
+  const db = createAdminClient();
+  // Part 6: a subscriber announcement is deleted (soft, audited) from the Exclusive tab, never hard-deleted here
+  const { data: row } = await db.from("creator_notes").select("*").eq("id", id).eq("creator_id", creatorId).maybeSingle();
+  if (row && !isMembersNote(row as Row)) return fail("Delete announcements from your Exclusive tab.", 409);
+  const { error } = await db.from("creator_notes").delete().eq("id", id).eq("creator_id", creatorId);
   return error ? fail("Couldn't delete that.", 500) : { ok: true };
 }
 

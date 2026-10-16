@@ -423,3 +423,78 @@ most twice per period.
 
 **Not verified from here:** push or email delivery (no device or mail provider in tests); whether
 production's GitHub Actions clock for `ai-reconcile` is running; 0250 applied.
+
+## Frenz Exclusive Part 6 — favourite creators, notification preferences and announcements (2026-10-16)
+
+**Migration 0251 (`0251_exclusive_favourites_announcements.sql`, run after 0250).** Additive; no
+policy, grant or function changed. PGlite: `supabase/tests/0251_exclusive_favourites_announcements.pglite.mjs`
+(applied twice; 32 checks; the mutant fails 12).
+- `social_circles.kind` gains `favourite_creators` (0217's check restated whole).
+- `creator_notification_prefs.announcements` off/push/email/both, default `push`; every other
+  column on an existing row is untouched.
+- `creator_membership_settings.notify_subscribed` off/push/email/both, default `both` (= today).
+- `creator_notes.title`, `audience` ('members' — every existing row — or 'subscribers'),
+  `idempotency_key` (unique per creator), `deleted_at`.
+- `sub_fanout_jobs` (one per announcement / private post) and `sub_fanout_deliveries` (one claim per
+  recipient; status claimed / handed_off / skipped / failed — never "delivered"). RLS on, no client
+  policy, no grant to anon/authenticated.
+- Before 0251 runs: favourites and announcements answer "arrive with the next update" (503), the
+  new preference reads its default, and private-post alerts use the older direct path.
+
+**Favourites (`lib/sub/favourites.ts`, `/api/sub/favourites`, `/exclusive/favourites`).** An
+ordinary Social Circle of kind `favourite_creators`, created on first use, one per member (0217's
+unique index). Safe to reuse because every circle permission in the codebase names ONE exact circle
+the owner chose (`circle:<uuid>`, a memory's circle, a presence audience) — nothing grants access to
+"anyone in any of my circles" — and members are never told which circles they are in. Add/remove are
+idempotent and rate-limited; no self-favourite; a block either way, a suspended, hidden or missing
+account all get the same refusal. Favourites grant no access (`hasActiveSub` never reads circles),
+removing one never cancels a subscription, and cancelling never removes a favourite. The list is 24 a
+page (keyset on added_at, member id), batched (profiles, blocks, settings in one read each), public
+fields only, and leaves out blocked, suspended and hidden accounts without saying why. Cap: 500
+(the existing per-circle cap). The circle also appears in the member's own circle manager, where they
+may rename or edit it like any of their circles.
+
+**Preferences.** Members: on a creator's Exclusive tab, "New private posts" and "Announcements"
+(off / push / email / both, saved one column at a time; `/api/sub/notify`). Creators: a
+Notifications panel in their studio explains who hears what and sets `notify_subscribed` (the
+in-app row is always written by settlement). Push also follows each person's general notification
+settings (category, quiet hours, caps). Email has no global per-type opt-out in this codebase (an
+existing gap); it is sent only to members who chose email or both.
+
+**Announcements (`lib/sub/announcements.ts`, `/api/sub/announcements`).** Title (≤ 80) + plain
+body (≤ 2,000), audience subscribers, published time. The creator is always the session user (no
+creator id in a write). Readers: the creator, or `hasActiveSub` right now — expired, refunded,
+removed, ended, free and blocked members get `access: false` and nothing else; there is no
+read-by-id. A retry with the same idempotency key returns the same announcement and creates no
+second job. Delete is soft (kept for audit) and cancels any fan-out still running.
+**Leak fixed while building this:** the membership page served EVERY creator note to every current
+member, free ones included. Notes are now read through `isMembersNote` there and on the dashboard,
+and the community-notes delete refuses an announcement.
+
+**Fan-out (`lib/sub/fanout.ts`).** Used by announcements and, now, private-post alerts. Pages of
+200 recipients keyed on the recipient id; the publish request runs up to 2 pages after its response,
+the 10-minute `ai-reconcile` run the rest (3 jobs × 3 pages per run). A page is claimed in ONE
+insert before anything is sent; only what that insert returned is sent to, so retries, the sweep and
+concurrent workers never notify anyone twice; a claim whose worker died stays 'claimed' (at most once,
+reported as unconfirmed). Eligibility is re-read for every page at send time: announcements → active
+paid subscribers; private posts → members who opted in, and for a HIDDEN post (its CURRENT audience)
+only active subscribers among them; then blocks either way and mutes (a failed read sends to nobody
+and claims nobody), suspended accounts, and the item must still exist (announcement not deleted; post
+published, not taken down). Payloads carry only the creator's public name and photo and a link to
+their Exclusive tab — never a title, body, caption, media, storage key or preview link. The creator sees
+"notifications queued for N subscribers · M opted out or not eligible · K failed", never "delivered".
+
+**UI (owner's global UI/UX standard, applied from Part 6).** One shared segmented control
+(`features/sub/segmented.tsx`: a real radiogroup, raised selected thumb, full names for assistive
+tech, no animation library, motion-reduce honoured) replaces the four-block choice grids in the
+member and creator panels. Favourite is a labelled toggle (`aria-pressed`, "Add to favourites" /
+"In favourites" — not colour alone). Delivery is shown as labelled chips (Sending / Queued / Skipped /
+Failed) with a one-line legend. The favourites row keeps the name readable on narrow phones (the
+Exclusive link is icon-only below 400 px, with its accessible name). Glass only on the existing cards
+(GLASS); no new blur surfaces. Every new panel is dynamically imported on the Exclusive tab, so
+nothing is added to a profile's first paint for visitors who never open the tab; the favourites page
+is server-rendered with its first page. Verified by screenshots at 320, 375 and 430 px in light and
+dark (no horizontal overflow, no page errors, long creator names truncate). Known: the subscriber
+announcements block appears after its fetch (subscribers only), a small late insert above the gallery.
+
+**Not verified from here:** real push/email delivery; 0251 applied; the ai-reconcile clock.

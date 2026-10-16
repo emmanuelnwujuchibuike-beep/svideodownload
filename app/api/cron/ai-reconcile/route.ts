@@ -6,6 +6,7 @@ import { sweepAiJobs } from "@/lib/ai/recovery";
 import { awardClosedWeek } from "@/lib/ai/weekly-top";
 import { verifyProcessingPayouts } from "@/lib/rewards/paystack-payouts";
 import { sweepAutoWithdrawals } from "@/lib/sub/payout-account";
+import { sweepFanout } from "@/lib/sub/fanout";
 import { sweepSubReminders } from "@/lib/sub/reminders";
 import { reconcilePendingSubPurchases } from "@/lib/sub/server";
 import { sweepPrivacyExpiry } from "@/lib/privacy/center";
@@ -44,7 +45,7 @@ async function run(request: Request) {
     reconcilePendingSubPurchases().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
   ]);
   // 0218: any payment alert a webhook did not send yet; and the weekly AI prizes once a week has closed
-  const [fundingAlerts, weeklyAwards, payouts, autoWithdrawals, privacyExpiry, subReminders] = await Promise.all([
+  const [fundingAlerts, weeklyAwards, payouts, autoWithdrawals, privacyExpiry, subReminders, subFanout] = await Promise.all([
     flushFundingAlerts().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
     awardClosedWeek(createAdminClient()).catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
     // Paystack payouts still processing whose webhook never came
@@ -55,8 +56,10 @@ async function run(request: Request) {
     sweepPrivacyExpiry().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
     // Frenz Exclusive Part 5: renewal and expiry reminders for paid subscriptions (once each per period, 0250)
     sweepSubReminders().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
+    // Part 6: announcement and private-post alerts still queued (0251): a few jobs, a few pages each
+    sweepFanout().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
   ]);
-  return NextResponse.json({ ...ai, adPayments, subPurchases, fundingAlerts, weeklyAwards, payouts, autoWithdrawals, privacyExpiry, subReminders });
+  return NextResponse.json({ ...ai, adPayments, subPurchases, fundingAlerts, weeklyAwards, payouts, autoWithdrawals, privacyExpiry, subReminders, subFanout });
 }
 
 export const GET = run;

@@ -21,7 +21,13 @@ describe("private post notifications", () => {
   });
   it("publishing notifies after the response; push and email follow the chosen mode; blocks and mutes respected", () => {
     // Part 3: the post's audience travels with it, so a hidden post is announced to subscribers only
-    expect(code("app/api/sub/posts/route.ts")).toContain("if (out.ok) after(() => import(\"@/lib/sub/private-notify\").then((m) => m.notifyNewPrivatePost(user.id, { audience: out.audience })));");
+    // Part 6: a fan-out job (bounded, claimed once, eligibility re-read at send — lib/sub/fanout.server.test.ts),
+    // with the older direct path only when 0251 hasn't run; the post's audience still travels with it
+    const route = code("app/api/sub/posts/route.ts");
+    expect(route).toContain('const jobId = await enqueueFanout("private_post", postId, user.id);');
+    expect(route).toContain("if (jobId) return startFanout(jobId);");
+    expect(route).toContain("return notifyNewPrivatePost(user.id, { audience });");
+    expect(route).toMatch(/after\(async \(\) => \{\s+const \{ enqueueFanout, startFanout \}/);
     const n = code("lib/sub/private-notify.ts");
     expect(n).toContain('if (r.private_posts === "push" || r.private_posts === "both")');
     expect(n).toContain('if (r.private_posts === "email" || r.private_posts === "both")');

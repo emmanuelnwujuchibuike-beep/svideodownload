@@ -49,6 +49,12 @@ export async function notifySubscribed(reference: string): Promise<void> {
     const p = data as Row | null;
     if (!p) return;
     const creatorId = p.creator_id as string;
+    // Part 6 (0251): the creator's own choice; "both" (today's behaviour) when unset or before 0251. The in-app row is always written by settle.
+    const { data: pref } = await createAdminClient().from("creator_membership_settings").select("notify_subscribed").eq("creator_id", creatorId).maybeSingle();
+    const mode = (pref as Row | null)?.notify_subscribed;
+    const wantPush = mode !== "off" && mode !== "email";
+    const wantEmail = mode !== "off" && mode !== "push";
+    if (!wantPush && !wantEmail) return;
     const sub = await who(p.subscriber_id as string);
     const earned = usd(Number(p.price_cents ?? 0));
     await Promise.allSettled([
@@ -59,7 +65,7 @@ export async function notifySubscribed(reference: string): Promise<void> {
         icon, a platform rule), the body says what happened and what it earned, and the
         tap opens the subscriber's profile. The in-app row is written by settle_sub_purchase.
       */
-      sendSmartPush(
+      !wantPush ? Promise.resolve() : sendSmartPush(
         creatorId,
         {
           title: sub.name,
@@ -74,7 +80,7 @@ export async function notifySubscribed(reference: string): Promise<void> {
         categoryForType("member_joined"),
         { recorded: { type: "member_joined", actorId: sub.id } },
       ),
-      emailMember(creatorId, {
+      !wantEmail ? Promise.resolve() : emailMember(creatorId, {
         subject: `${sub.name} subscribed to your content`,
         heading: "You have a new subscriber",
         intro: `${sub.name} just subscribed to your PRIVATE POSTS for ${Number(p.period_days ?? 30)} days.`,

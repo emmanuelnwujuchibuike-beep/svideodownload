@@ -17,7 +17,7 @@ const body = z.discriminatedUnion("op", [
   z.object({ op: z.literal("leave"), creatorId: id }).strict(),
   z.object({ op: z.literal("feedback"), creatorId: id, communication: rating, professionalism: rating, quality: rating, reliability: rating, education: rating, community: rating }).strict(),
   // creator side (the session user IS the creator)
-  z.object({ op: z.literal("settings"), priceCents: z.number().int().optional(), step: z.number().int().min(0).max(4).optional(), complete: z.boolean().optional(), active: z.boolean().optional(), open: z.boolean().optional(), welcome: z.string().max(800).nullable().optional(), dismissPromo: z.boolean().optional() }).strict(),
+  z.object({ op: z.literal("settings"), priceCents: z.number().int().optional(), step: z.number().int().min(0).max(4).optional(), complete: z.boolean().optional(), active: z.boolean().optional(), open: z.boolean().optional(), welcome: z.string().max(800).nullable().optional(), dismissPromo: z.boolean().optional(), notifySubscribed: z.enum(["off", "push", "email", "both"]).optional() }).strict(),
   z.object({ op: z.literal("role"), memberId: id, role: z.string().max(20) }).strict(),
   z.object({ op: z.literal("remove"), memberId: id }).strict(),
   z.object({ op: z.literal("recognition"), memberId: id, kind: z.string().max(30), on: z.boolean(), shown: z.boolean().optional() }).strict(),

@@ -58,21 +58,28 @@ export interface SubSettings {
   welcome: string | null;
   /** 0231: the creator closed the Get paid card on their profile */
   promoDismissed: boolean;
+  /** 0251: how the creator hears about a new subscriber (default both: what is sent today) */
+  notifySubscribed: NotifyMode;
 }
+
+export type NotifyMode = "off" | "push" | "email" | "both";
+const NOTIFY_MODES: readonly NotifyMode[] = ["off", "push", "email", "both"];
+export const isNotifyMode = (v: unknown): v is NotifyMode => typeof v === "string" && (NOTIFY_MODES as readonly string[]).includes(v);
 
 export async function getSubSettings(creatorId: string): Promise<SubSettings & { ready: boolean }> {
   const db = createAdminClient();
   const base = "sub_price_cents, sub_active, setup_step, setup_completed_at, open, welcome";
-  // 0231's column, with the older shape as the answer before that migration runs
-  let res = await db.from("creator_membership_settings").select(`${base}, promo_dismissed_at`).eq("creator_id", creatorId).maybeSingle();
+  // 0231's and 0251's columns, with each older shape as the answer before those migrations run
+  let res = await db.from("creator_membership_settings").select(`${base}, promo_dismissed_at, notify_subscribed`).eq("creator_id", creatorId).maybeSingle();
+  if (res.error && MISSING(res.error.message)) res = (await db.from("creator_membership_settings").select(`${base}, promo_dismissed_at`).eq("creator_id", creatorId).maybeSingle()) as typeof res;
   if (res.error && MISSING(res.error.message)) res = (await db.from("creator_membership_settings").select(base).eq("creator_id", creatorId).maybeSingle()) as typeof res;
   const { data, error } = res;
   const r = (data ?? {}) as Row;
-  return { priceCents: (r.sub_price_cents as number | null) ?? null, active: !!r.sub_active, setupStep: Number(r.setup_step ?? 0), setupCompleted: !!r.setup_completed_at, open: !!r.open, welcome: (r.welcome as string | null) ?? null, promoDismissed: !!r.promo_dismissed_at, ready: !error };
+  return { priceCents: (r.sub_price_cents as number | null) ?? null, active: !!r.sub_active, setupStep: Number(r.setup_step ?? 0), setupCompleted: !!r.setup_completed_at, open: !!r.open, welcome: (r.welcome as string | null) ?? null, promoDismissed: !!r.promo_dismissed_at, notifySubscribed: isNotifyMode(r.notify_subscribed) ? r.notify_subscribed : "both", ready: !error };
 }
 
 /** Saves setup progress and the price. Completing setup needs a valid price; it never grants payout eligibility. */
-export async function saveSubSettings(creatorId: string, patch: { priceCents?: number; step?: number; complete?: boolean; active?: boolean; open?: boolean; welcome?: string | null; dismissPromo?: boolean }): Promise<Result<{ settings: SubSettings }>> {
+export async function saveSubSettings(creatorId: string, patch: { priceCents?: number; step?: number; complete?: boolean; active?: boolean; open?: boolean; welcome?: string | null; dismissPromo?: boolean; notifySubscribed?: string }): Promise<Result<{ settings: SubSettings }>> {
   const cfg = await subConfig();
   const db = createAdminClient();
   const current = await getSubSettings(creatorId);
@@ -96,6 +103,10 @@ export async function saveSubSettings(creatorId: string, patch: { priceCents?: n
     cols.sub_active = patch.active;
   }
   if (patch.open !== undefined) cols.open = patch.open;
+  if (patch.notifySubscribed !== undefined) {
+    if (!isNotifyMode(patch.notifySubscribed)) return fail("Choose off, push, email or both.");
+    cols.notify_subscribed = patch.notifySubscribed;
+  }
   if (patch.dismissPromo !== undefined) cols.promo_dismissed_at = patch.dismissPromo ? new Date().toISOString() : null;
   if (patch.welcome !== undefined) {
     const w = patch.welcome?.trim() || null;

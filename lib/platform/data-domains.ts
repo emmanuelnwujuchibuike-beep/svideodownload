@@ -178,6 +178,9 @@ export const DATA_DOMAINS: DataDomain[] = [
       "creator_memberships",
       // Frenz Exclusive Part 5 (0250): one row per renewal reminder actually sent (the dedupe)
       "sub_membership_reminders",
+      // Frenz Exclusive Part 6 (0251): one job per announcement / private post, one claim per recipient
+      "sub_fanout_jobs",
+      "sub_fanout_deliveries",
       "sub_purchases",
       "sub_balances",
       "sub_ledger",

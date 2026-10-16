@@ -61,6 +61,20 @@ export async function POST(req: Request) {
   const out = await createSubPost(user.id, parsed.data);
   // everyone who asked to hear about this creator's private posts — after the response, never in its way
   // a hidden post is announced to active subscribers only (Part 3)
-  if (out.ok) after(() => import("@/lib/sub/private-notify").then((m) => m.notifyNewPrivatePost(user.id, { audience: out.audience })));
+  if (out.ok) {
+    const postId = out.id;
+    const audience = out.audience;
+    /*
+      Part 6: the alert fan-out is a job (0251) — bounded pages, every recipient claimed once,
+      eligibility re-read at send time. Before 0251 runs, the older direct path is used.
+    */
+    after(async () => {
+      const { enqueueFanout, startFanout } = await import("@/lib/sub/fanout");
+      const jobId = await enqueueFanout("private_post", postId, user.id);
+      if (jobId) return startFanout(jobId);
+      const { notifyNewPrivatePost } = await import("@/lib/sub/private-notify");
+      return notifyNewPrivatePost(user.id, { audience });
+    });
+  }
   return out.ok ? NextResponse.json(out) : NextResponse.json({ ok: false, error: out.error }, { status: out.status });
 }

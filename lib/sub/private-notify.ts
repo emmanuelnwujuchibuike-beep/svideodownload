@@ -32,8 +32,33 @@ export async function getPrivatePostMode(viewerId: string, creatorId: string): P
   return { mode: isMode(m) ? m : "off", ready: true };
 }
 
+/**
+ * Part 6 (0251): how this member hears about the creator's SUBSCRIBER ANNOUNCEMENTS — same four
+ * choices, default push. Only active subscribers are ever sent one (lib/sub/fanout.ts); the choice
+ * can be set before subscribing. Before 0251 runs the default is reported and saving answers pending.
+ */
+export async function getAlertPrefs(viewerId: string, creatorId: string): Promise<{ mode: PrivatePostMode; announcements: PrivatePostMode; ready: boolean }> {
+  if (viewerId === creatorId) return { mode: "off", announcements: "off", ready: true };
+  const db = createAdminClient();
+  const full = await db.from("creator_notification_prefs").select("private_posts, announcements").eq("viewer_id", viewerId).eq("target_id", creatorId).maybeSingle();
+  if (!full.error) {
+    const r = full.data as { private_posts?: string; announcements?: string } | null;
+    return { mode: isMode(r?.private_posts) ? r!.private_posts as PrivatePostMode : "off", announcements: isMode(r?.announcements) ? r!.announcements as PrivatePostMode : "push", ready: true };
+  }
+  const older = await getPrivatePostMode(viewerId, creatorId);
+  return { mode: older.mode, announcements: "push", ready: older.ready };
+}
+
+/** Saves ONLY the announcements column: every other preference on the row is left as it was. */
+export async function setAnnouncementMode(viewerId: string, creatorId: string, mode: PrivatePostMode): Promise<{ ok: boolean; pending?: boolean }> {
+  if (viewerId === creatorId || !isMode(mode)) return { ok: false };
+  const { error } = await createAdminClient().from("creator_notification_prefs").upsert({ viewer_id: viewerId, target_id: creatorId, announcements: mode, updated_at: new Date().toISOString() }, { onConflict: "viewer_id,target_id" });
+  if (error) return /column|schema cache|check constraint/i.test(error.message) ? { ok: false, pending: true } : { ok: false };
+  return { ok: true };
+}
+
 export async function setPrivatePostMode(viewerId: string, creatorId: string, mode: PrivatePostMode): Promise<{ ok: boolean; pending?: boolean }> {
-  if (viewerId === creatorId) return { ok: false };
+  if (viewerId === creatorId || !isMode(mode)) return { ok: false };
   const { error } = await createAdminClient().from("creator_notification_prefs").upsert({ viewer_id: viewerId, target_id: creatorId, private_posts: mode, updated_at: new Date().toISOString() }, { onConflict: "viewer_id,target_id" });
   if (error) return /column|schema cache/i.test(error.message) ? { ok: false, pending: true } : { ok: false };
   return { ok: true };

@@ -116,6 +116,20 @@ export async function presignPrivateGet(key: string, expiresSeconds = 600): Prom
   return (await r2().sign(url.toString(), { method: "GET", aws: { signQuery: true } })).url;
 }
 
+/**
+ * The first bytes of a private object and its total size, in ONE ranged read (Part 2: the
+ * server checks what a creator uploaded before it is posted). `null` = the object does not
+ * exist or storage could not answer; callers treat that as "refuse", never "allow".
+ */
+export async function readPrivatePrefix(key: string, bytes = 32): Promise<{ prefix: Uint8Array; size: number; contentType: string | null } | null> {
+  if (!hasPrivateR2) return null;
+  const res = await r2().fetch(privateEndpoint(key), { method: "GET", headers: { Range: `bytes=0-${bytes - 1}` } }).catch(() => null);
+  if (!res || (res.status !== 206 && res.status !== 200)) return null;
+  const total = Number(res.headers.get("content-range")?.split("/")[1] ?? res.headers.get("content-length") ?? NaN);
+  const buf = new Uint8Array(await res.arrayBuffer());
+  return { prefix: buf.slice(0, bytes), size: total, contentType: res.headers.get("content-type") };
+}
+
 /** Remove a private object (a creator deleting a post). Best effort. */
 export async function deletePrivate(key: string): Promise<void> {
   if (!hasPrivateR2) return;

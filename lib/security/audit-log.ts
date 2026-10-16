@@ -39,6 +39,8 @@ export type SecurityAuditEventType =
   | "device_trust_changed"
   | "device_forgotten"
   | "moderation_action"
+  // Frenz Exclusive Part 2: an admin opened a reported exclusive post's private content
+  | "moderation_review"
   | "appeal_submitted"
   | "appeal_resolved"
   | "account_deletion_requested"
@@ -60,7 +62,8 @@ export async function writeAuditLog(params: {
    *  11a behavior every existing call site still gets. */
   actorUserId?: string;
   /** Part 11c — the moderated post/comment/account this event is about. */
-  targetType?: "post" | "comment" | "user";
+  /** Frenz Exclusive Part 2: sub_post / sub_comment too (the column is free text, 0053). */
+  targetType?: "post" | "comment" | "user" | "sub_post" | "sub_comment";
   targetId?: string;
 }): Promise<void> {
   const { userId, eventType, request, metadata, actorUserId, targetType, targetId } = params;

@@ -8,7 +8,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const schema = z.object({
-  targetType: z.enum(["post", "comment", "user"]),
+  // sub_post / sub_comment: exclusive content (0247) — remove (archive / hide), restore or dismiss only
+  targetType: z.enum(["post", "comment", "user", "sub_post", "sub_comment"]),
   targetId: z.string().uuid(),
   // hide/unhide are friends-only visibility (migration 0082) and are NOT
   // synonyms for suspend/unsuspend, which remain a full lockout.
@@ -35,6 +36,9 @@ export async function POST(request: Request) {
   }
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid action." }, { status: 400 });
+  if ((parsed.data.targetType === "sub_post" || parsed.data.targetType === "sub_comment") && !["remove", "restore", "dismiss"].includes(parsed.data.action)) {
+    return NextResponse.json({ error: "Invalid action." }, { status: 400 });
+  }
 
   const res = await moderate(parsed.data.targetType, parsed.data.targetId, parsed.data.action, admin.id);
   if (!res.ok) return NextResponse.json({ error: "Action failed." }, { status: 500 });

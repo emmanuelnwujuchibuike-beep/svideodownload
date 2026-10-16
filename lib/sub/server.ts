@@ -16,6 +16,8 @@ import { SITE_URL } from "@/lib/site";
 import { flagsOf, isAccountVisibleTo } from "@/lib/social/account-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { classifyVerification, isSubReference, isUuid, subReturnPath } from "./guards";
+
 /**
  * SUB — paid subscriptions and SUB withdrawals (owner brief 2026-10-11, 0227).
  *
@@ -111,6 +113,8 @@ export async function saveSubSettings(creatorId: string, patch: { priceCents?: n
 /** Is `viewerId` an active, paid-up subscriber of `creatorId`? The creator always has access to their own. */
 export async function hasActiveSub(viewerId: string | null, creatorId: string): Promise<boolean> {
   if (!viewerId) return false;
+  // both ids are interpolated into a filter string below: anything but a UUID is "no access"
+  if (!isUuid(viewerId) || !isUuid(creatorId)) return false;
   if (viewerId === creatorId) return true;
   const db = createAdminClient();
   const [{ data, error }, blocked] = await Promise.all([
@@ -144,6 +148,7 @@ export async function quoteSub(creatorId: string): Promise<SubQuote | null> {
 export async function startSubCheckout(input: { subscriberId: string; email: string; creatorId: string; returnPath: string }): Promise<Result<{ url: string; reused: boolean }>> {
   const cfg = await subConfig();
   if (!cfg.purchasesEnabled) return fail("Subscriptions are paused right now.", 503, "paused");
+  if (!isUuid(input.subscriberId) || !isUuid(input.creatorId)) return fail("Invalid request.", 400, "invalid");
   if (input.subscriberId === input.creatorId) return fail("You don't need to subscribe to yourself.");
   if (!input.email) return fail("Add an email to your account to pay.", 400);
   const db = createAdminClient();
@@ -180,7 +185,7 @@ export async function startSubCheckout(input: { subscriberId: string; email: str
     .select("id")
     .single();
   if (error) return MISSING(error.message) ? fail("Subscriptions arrive with the next update.", 503) : fail("Couldn't start the payment.", 500);
-  const safeReturn = input.returnPath.startsWith("/") && !input.returnPath.startsWith("//") ? input.returnPath : `/u/${creator.handle as string}`;
+  const safeReturn = subReturnPath(input.returnPath, `/u/${creator.handle as string}`);
   try {
     const url = await initializeSubCheckout({
       email: input.email,
@@ -195,7 +200,7 @@ export async function startSubCheckout(input: { subscriberId: string; email: str
     return { ok: true, url, reused: false };
   } catch (e) {
     // a definite refusal: nothing was created at Paystack, so this purchase can never be paid
-    if (paystackFailureIsDefinite(e)) await db.from("sub_purchases").update({ status: "failed", updated_at: new Date().toISOString() }).eq("reference", reference).eq("status", "initiated");
+    if (paystackFailureIsDefinite(e)) await markPurchaseFailed(reference, "init_refused");
     return fail("Paystack couldn't open the payment. Try again.", 502);
   }
 }
@@ -204,8 +209,46 @@ export async function startSubCheckout(input: { subscriberId: string; email: str
  * Settle from Paystack's OWN record of the charge: the webhook and the return page
  * both call this, and the database answers a repeat with "already done".
  */
-export async function confirmSubPayment(reference: string): Promise<{ ok: boolean; status: "paid" | "pending" | "failed" | "mismatch" | "unknown"; next?: string }> {
-  if (!reference.startsWith("frenz_sub_")) return { ok: false, status: "unknown" };
+/**
+ * `held` = Paystack took the money but access was NOT granted because the creator
+ * removed this member before the charge settled (0247 `refund_due`): the refund owed is
+ * on the financial audit log for an admin.
+ */
+export type SubConfirmStatus = "paid" | "pending" | "failed" | "mismatch" | "held" | "unknown";
+
+/** Failures that are Paystack's or a refund's final word — never re-asked, never settled (0247). */
+const FINAL_FAILURES = new Set(["provider_reversed", "reversal_before_payment"]);
+
+/**
+ * Marks an UNSETTLED purchase failed, saying why (0247 `failure_source`). Only ever moves an
+ * `initiated` row: a paid, refunded or already-failed purchase is never touched. Before 0247
+ * runs the column does not exist, so the status alone is written (the older behaviour).
+ */
+async function markPurchaseFailed(reference: string, source: "verify_abandoned" | "verify_failed" | "provider_reversed" | "init_refused"): Promise<void> {
+  const db = createAdminClient();
+  const at = new Date().toISOString();
+  const { error } = await db.from("sub_purchases").update({ status: "failed", failure_source: source, updated_at: at }).eq("reference", reference).eq("status", "initiated");
+  if (error && MISSING(error.message)) await db.from("sub_purchases").update({ status: "failed", updated_at: at }).eq("reference", reference).eq("status", "initiated");
+}
+
+export async function confirmSubPayment(reference: string): Promise<{ ok: boolean; status: SubConfirmStatus; next?: string }> {
+  if (!isSubReference(reference)) return { ok: false, status: "unknown" };
+  const db = createAdminClient();
+  /*
+    Our own record first (Part 2, 2026-10-16). A reference we never issued costs no Paystack
+    call (anyone can type one into /sub/return), a settled one answers from the database, and
+    a final state is never re-asked. Only an open or recoverable purchase goes to Paystack.
+  */
+  let rowR = await db.from("sub_purchases").select("status, created_at, failure_source").eq("reference", reference).maybeSingle();
+  if (rowR.error && MISSING(rowR.error.message)) rowR = (await db.from("sub_purchases").select("status, created_at").eq("reference", reference).maybeSingle()) as typeof rowR;
+  if (rowR.error) return { ok: false, status: "pending" };
+  const row = rowR.data as { status: string; created_at: string; failure_source?: string | null } | null;
+  if (!row) return { ok: false, status: "unknown" };
+  if (row.status === "paid") return { ok: true, status: "paid" };
+  if (row.status === "refund_due") return { ok: false, status: "held" };
+  if (row.status === "refunded" || row.status === "disputed" || row.status === "reversed") return { ok: false, status: "failed" };
+  if (row.status === "failed" && FINAL_FAILURES.has(row.failure_source ?? "")) return { ok: false, status: "failed" };
+
   let charge;
   try {
     charge = await verifyTransaction(reference);
@@ -213,14 +256,20 @@ export async function confirmSubPayment(reference: string): Promise<{ ok: boolea
     return { ok: false, status: "pending" };
   }
   if (charge.metadata?.purpose !== SUB_PURPOSE) return { ok: false, status: "unknown" };
-  if (charge.status !== "success") {
-    if (charge.status === "failed" || charge.status === "abandoned" || charge.status === "reversed") {
-      await createAdminClient().from("sub_purchases").update({ status: "failed", updated_at: new Date().toISOString() }).eq("reference", reference).eq("status", "initiated");
-      return { ok: false, status: "failed" };
-    }
-    return { ok: false, status: "pending" };
+  /*
+    🔴 2026-10-16 (Part 2, audit S1): "abandoned" used to mark the purchase failed at once,
+    and the 10-minute reconcile asks about checkouts from 2 minutes old — while a bank-transfer
+    or USSD payer was still paying. The charge then completed, settle refused the failed row,
+    and the subscriber was charged with no access. Now an unfinished checkout stays open for
+    SUB_ABANDON_GRACE_MS, and even after that a verified charge still settles (0247).
+  */
+  const outcome = classifyVerification(charge.status, Date.now() - Date.parse(row.created_at));
+  if (outcome.kind === "pending") return { ok: false, status: "pending" };
+  if (outcome.kind === "fail") {
+    await markPurchaseFailed(reference, outcome.source);
+    return { ok: false, status: "failed" };
   }
-  const { data, error } = await createAdminClient().rpc("settle_sub_purchase", { p_reference: reference, p_paid_minor: charge.amount ?? 0, p_paid_currency: charge.currency ?? "", p_provider_ref: charge.id ? String(charge.id) : null });
+  const { data, error } = await db.rpc("settle_sub_purchase", { p_reference: reference, p_paid_minor: charge.amount ?? 0, p_paid_currency: charge.currency ?? "", p_provider_ref: charge.id ? String(charge.id) : null });
   if (error) return { ok: false, status: "pending" };
   const r = data as { ok?: boolean; reason?: string; duplicate?: boolean } | null;
   if (r?.ok) {
@@ -235,7 +284,10 @@ export async function confirmSubPayment(reference: string): Promise<{ ok: boolea
     }
     return { ok: true, status: "paid" };
   }
-  return { ok: false, status: r?.reason === "amount_mismatch" ? "mismatch" : "unknown" };
+  if (r?.reason === "amount_mismatch") return { ok: false, status: "mismatch" };
+  if (r?.reason === "removed") return { ok: false, status: "held" };
+  if (r?.reason === "not_payable") return { ok: false, status: "failed" };
+  return { ok: false, status: "unknown" };
 }
 
 /**
@@ -276,6 +328,7 @@ export async function reconcilePendingSubPurchases(limit = 20): Promise<{ checke
 
 /** The viewer's own unsettled purchase for this creator, confirmed now (the SUB tab heals itself on view). */
 export async function settleOwnPendingSub(subscriberId: string, creatorId: string): Promise<boolean> {
+  if (!isUuid(subscriberId) || !isUuid(creatorId)) return false;
   const { data } = await createAdminClient()
     .from("sub_purchases")
     .select("reference")

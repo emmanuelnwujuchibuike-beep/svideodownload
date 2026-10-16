@@ -11,9 +11,15 @@ const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export type TargetType = "post" | "comment" | "user";
+/**
+ * What the admin QUEUE can hold: every TargetType plus exclusive content (0247), handled by
+ * lib/sub/moderation.ts. Kept apart from TargetType on purpose: appeals (0064) and the AI
+ * assessments (0063) still only know post / comment / user.
+ */
+export type QueueTargetType = TargetType | "sub_post" | "sub_comment";
 
 export interface ReportedTarget {
-  targetType: TargetType;
+  targetType: QueueTargetType;
   targetId: string;
   count: number;
   reasons: string[];
@@ -26,7 +32,7 @@ export interface ReportedTarget {
 }
 
 interface ReportRow {
-  target_type: TargetType;
+  target_type: QueueTargetType;
   target_id: string;
   reason: string;
   created_at: string;
@@ -70,7 +76,7 @@ export async function listReportedTargets(limit = 100): Promise<ReportedTarget[]
     }
     const targets = [...groups.values()].slice(0, limit);
 
-    const idsByType = (t: TargetType) => targets.filter((g) => g.targetType === t).map((g) => g.targetId);
+    const idsByType = (t: QueueTargetType) => targets.filter((g) => g.targetType === t).map((g) => g.targetId);
     const postIds = idsByType("post");
     const commentIds = idsByType("comment");
     const userIds = idsByType("user");
@@ -118,6 +124,8 @@ export async function listReportedTargets(limit = 100): Promise<ReportedTarget[]
           g.handle = handleById.get(c.author_id as string) ?? null;
           g.sublabel = g.handle ? `@${g.handle}` : null;
         } else g.title = "Deleted comment";
+      } else if (g.targetType === "sub_post" || g.targetType === "sub_comment") {
+        // filled below from lib/sub/moderation.ts (titles and status only, never a media link)
       } else {
         const u = userById.get(g.targetId);
         if (u) {
@@ -132,6 +140,24 @@ export async function listReportedTargets(limit = 100): Promise<ReportedTarget[]
               : "active";
           g.sublabel = g.handle ? `@${g.handle}` : null;
         } else g.title = "Deleted user";
+      }
+    }
+
+    // Frenz Exclusive Part 2 — exclusive posts and their comments
+    const subPostIds = idsByType("sub_post");
+    const subCommentIds = idsByType("sub_comment");
+    if (subPostIds.length || subCommentIds.length) {
+      const { subTargetDetails } = await import("@/lib/sub/moderation");
+      const details = await subTargetDetails({ posts: subPostIds, comments: subCommentIds });
+      for (const g of targets) {
+        if (g.targetType !== "sub_post" && g.targetType !== "sub_comment") continue;
+        const d = details.get(`${g.targetType}:${g.targetId}`);
+        if (d) {
+          g.title = d.title;
+          g.currentStatus = d.status;
+          g.handle = d.handle;
+          g.sublabel = d.handle ? `@${d.handle}` : null;
+        } else g.title = g.targetType === "sub_post" ? "Deleted exclusive post" : "Deleted exclusive comment";
       }
     }
 
@@ -170,7 +196,7 @@ export type ModAction =
 
 /** Apply a moderation action to a target and resolve its open reports. */
 export async function moderate(
-  targetType: TargetType,
+  targetType: QueueTargetType,
   targetId: string,
   action: ModAction,
   /** Part 11c — the admin performing this action, for the audit log. */
@@ -178,6 +204,18 @@ export async function moderate(
 ): Promise<{ ok: boolean }> {
   if (!hasSupabase) return { ok: false };
   const db = createAdminClient();
+
+  // Frenz Exclusive Part 2 — exclusive content: archive / hide, never delete; same report
+  // resolution and the same audit trail as everything else below.
+  if (targetType === "sub_post" || targetType === "sub_comment") {
+    const { isSubModAction, moderateSubTarget } = await import("@/lib/sub/moderation");
+    if (!adminId || !isSubModAction(action)) return { ok: false };
+    const out = await moderateSubTarget(targetType, targetId, action, adminId);
+    if (!out.ok) return { ok: false };
+    await db.from("reports").update({ status: action === "remove" ? "actioned" : "dismissed" }).eq("target_type", targetType).eq("target_id", targetId).eq("status", "open");
+    if (out.ownerId) await writeAuditLog({ userId: out.ownerId, actorUserId: adminId, eventType: "moderation_action", targetType, targetId, metadata: { action } });
+    return { ok: true };
+  }
 
   // Resolve the content owner BEFORE acting — this is who the audit log
   // entry is about (`user_id`), distinct from `adminId` (`actor_user_id`).

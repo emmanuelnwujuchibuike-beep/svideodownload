@@ -1,6 +1,7 @@
 "use client";
 
-import { BadgeCheck, EyeOff, Film, Heart, Images, Loader2, Lock, MessageCircle, Plus, Send, Trash2, X } from "lucide-react";
+import { BadgeCheck, EyeOff, Film, Flag, Heart, Images, Loader2, Lock, MessageCircle, Plus, Send, Trash2, X } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -12,6 +13,9 @@ import { usd } from "@/lib/creator/membership/engine";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 import { forgetSubPosts, loadSubPosts } from "./sub-posts-cache";
+
+// reporting exclusive content (Frenz Exclusive Part 2): the shared sheet, loaded only when opened
+const ReportSheet = dynamic(() => import("@/features/social/report-sheet").then((m) => m.ReportSheet), { ssr: false });
 
 /**
  * SUB POSTS — a creator's subscriber-only gallery and the private viewer
@@ -308,6 +312,7 @@ function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }: { pos
   const [error, setError] = useState<string | null>(null);
   const [covered, setCovered] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [reporting, setReporting] = useState(false);
   const dataRef = useRef(data);
   dataRef.current = data;
   const reported = useRef(false);
@@ -468,12 +473,17 @@ function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }: { pos
               <button type="button" aria-label="Delete this post" disabled={deleting} onClick={() => void del()} className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/35 transition active:bg-white/10">
                 {deleting ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <Trash2 className="h-5 w-5" aria-hidden />}
               </button>
-            ) : null}
+            ) : (
+              <button type="button" aria-label="Report this post" onClick={() => setReporting(true)} className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/35 transition active:bg-white/10">
+                <Flag className="h-[18px] w-[18px]" aria-hidden />
+              </button>
+            )}
             <button type="button" aria-label="Close" onClick={onClose} className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/35 transition active:bg-white/10">
               <X className="h-5 w-5" aria-hidden />
             </button>
           </span>
         </div>
+        {reporting ? <ReportSheet targetType="sub_post" targetId={postId} open={reporting} onClose={() => setReporting(false)} /> : null}
 
         {/* caption over the media's foot, out of a video's controls */}
         {data?.caption ? (
@@ -524,6 +534,7 @@ function PrivateInteractions({ postId, isCreator }: { postId: string; isCreator:
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [reportComment, setReportComment] = useState<string | null>(null);
   const commentsRequested = useRef(false);
 
   useEffect(() => {
@@ -600,6 +611,7 @@ function PrivateInteractions({ postId, isCreator }: { postId: string; isCreator:
   if (!sum) return null;
   return (
     <>
+      {reportComment ? <ReportSheet targetType="sub_comment" targetId={reportComment} open onClose={() => setReportComment(null)} /> : null}
       {/* the engagement rail — frosted discs with a hairline ring, the reels rail's look */}
       <div className="absolute bottom-28 right-3 z-[4] flex flex-col items-center gap-4">
         <button type="button" onClick={toggleLike} aria-pressed={sum.liked} aria-label={sum.liked ? "Unlike" : "Like"} className="group flex flex-col items-center gap-1 text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.6)]">
@@ -685,6 +697,11 @@ function PrivateInteractions({ postId, isCreator }: { postId: string; isCreator:
                       {c.mine || isCreator ? (
                         <button type="button" aria-label="Delete comment" onClick={() => remove(c)} className="-mr-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/45 transition active:bg-white/10 active:text-rose-400">
                           <Trash2 className="h-4 w-4" aria-hidden />
+                        </button>
+                      ) : null}
+                      {!c.mine ? (
+                        <button type="button" aria-label="Report comment" onClick={() => setReportComment(c.id)} className="-mr-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/45 transition active:bg-white/10 active:text-white">
+                          <Flag className="h-4 w-4" aria-hidden />
                         </button>
                       ) : null}
                     </li>

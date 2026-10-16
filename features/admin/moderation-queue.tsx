@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, ShieldAlert, Sparkles } from "lucide-react";
+import { Eye, Loader2, ShieldAlert, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -8,7 +8,8 @@ import { useState } from "react";
 import type { ModAction, ReportedTarget } from "@/lib/social/moderation";
 import { cn } from "@/lib/utils";
 
-const TYPE_LABEL = { post: "Post", comment: "Comment", user: "User" } as const;
+const TYPE_LABEL = { post: "Post", comment: "Comment", user: "User", sub_post: "Exclusive post", sub_comment: "Exclusive comment" } as const;
+const isSub = (t: ReportedTarget) => t.targetType === "sub_post" || t.targetType === "sub_comment";
 
 function severityTint(severity: number): string {
   if (severity >= 70) return "bg-red-500/15 text-red-500";
@@ -42,6 +43,13 @@ export function ModerationQueue({ targets }: { targets: ReportedTarget[] }) {
         : [{ label: "Suspend", action: "suspend", danger: true }, { label: "Dismiss", action: "dismiss" }];
     }
     const live = t.currentStatus === "published" || t.currentStatus === "visible";
+    // exclusive content: a takedown archives the post / hides the comment; nothing is deleted
+    if (isSub(t)) {
+      return [
+        ...(live ? ([{ label: "Take down", action: "remove", danger: true }] as const) : ([{ label: "Restore", action: "restore" }] as const)),
+        { label: "Dismiss", action: "dismiss" },
+      ];
+    }
     return [
       { label: "Remove", action: "remove", danger: true },
       ...(!live ? ([{ label: "Restore", action: "restore" }] as const) : []),
@@ -108,6 +116,7 @@ export function ModerationQueue({ targets }: { targets: ReportedTarget[] }) {
               </div>
 
               <div className="flex flex-wrap gap-1.5">
+                {isSub(t) ? <SubReviewButton t={t} /> : null}
                 {actionsFor(t).map((a) => {
                   const key = `${t.targetType}:${t.targetId}:${a.action}`;
                   return (
@@ -134,5 +143,85 @@ export function ModerationQueue({ targets }: { targets: ReportedTarget[] }) {
         </ul>
       )}
     </section>
+  );
+}
+
+interface SubReviewData {
+  status: string;
+  caption: string | null;
+  comment: string | null;
+  creatorHandle: string | null;
+  media: { kind: "image" | "video"; url: string }[];
+  expiresAt: string;
+  reports: { reason: string; note: string | null; status: string; createdAt: string }[];
+}
+
+/**
+ * Frenz Exclusive Part 2 — an admin looks at a reported exclusive post or comment. The links
+ * come from the admin-only /api/admin/moderation/sub-review, expire in five minutes, and every
+ * opening is written to the security audit log. Nothing is fetched until Review is pressed.
+ */
+function SubReviewButton({ t }: { t: ReportedTarget }) {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<SubReviewData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
+    setOpen(true);
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/moderation/sub-review?type=${t.targetType}&id=${t.targetId}`, { cache: "no-store" });
+      const j = (await res.json().catch(() => null)) as (SubReviewData & { error?: string }) | null;
+      if (!res.ok || !j) setError(j?.error ?? "Couldn't load it.");
+      else setData(j);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <button type="button" onClick={() => void load()} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground">
+        {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />} Review
+      </button>
+      {open ? (
+        <div className="basis-full rounded-2xl border border-border bg-background p-3 text-sm">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              {data?.creatorHandle ? `@${data.creatorHandle} · ` : ""}
+              {data ? `${data.status} · links expire ${new Date(data.expiresAt).toLocaleTimeString()} · this review is logged` : "Loading…"}
+            </p>
+            <button type="button" onClick={() => setOpen(false)} className="text-xs text-muted-foreground hover:text-foreground">Close</button>
+          </div>
+          {error ? <p className="text-xs text-red-500">{error}</p> : null}
+          {data?.comment ? <p className="mb-2 rounded-xl bg-secondary px-3 py-2">Comment: “{data.comment}”</p> : null}
+          {data?.caption ? <p className="mb-2 whitespace-pre-line text-muted-foreground">Caption: {data.caption}</p> : null}
+          {data?.media.length ? (
+            <div className="grid grid-cols-3 gap-1.5">
+              {data.media.map((m, i) =>
+                m.kind === "image" ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- a five-minute private link, never cached
+                  <img key={i} src={m.url} alt="" className="aspect-square w-full rounded-lg object-cover" />
+                ) : (
+                  <video key={i} src={m.url} controls preload="metadata" className="aspect-square w-full rounded-lg bg-black object-contain" />
+                ),
+              )}
+            </div>
+          ) : null}
+          {data?.reports.length ? (
+            <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+              {data.reports.map((r, i) => (
+                <li key={i}>
+                  {new Date(r.createdAt).toLocaleString()} · {r.reason}
+                  {r.note ? ` — ${r.note}` : ""} · {r.status}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+    </>
   );
 }

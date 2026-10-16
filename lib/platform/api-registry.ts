@@ -7,14 +7,22 @@
  * which asserts every declared endpoint maps to a route file that actually exports
  * that method. So a renamed/removed route, or a method that moved, fails the suite.
  *
- * Two auth models, deliberately distinct:
+ * Auth models, deliberately distinct:
  *   - `api-key`  — the developer API (`Authorization: Bearer <key>`, `lib/api/auth`).
  *   - `session`  — the app's own backend (cookie on web, bearer token on native;
  *                  `lib/api/authenticate`). One backend, four clients (see the SDK).
+ *   - `session-optional` — answers signed-out visitors too, with less (Frenz Exclusive:
+ *                  the locked gallery shows covers and counts, never content).
+ *   - `admin`    — an administrator session, re-checked from the database per request
+ *                  (`lib/admin/require-admin`). Anyone else gets 404 or 403.
+ *
+ * Since Frenz Exclusive Part 2 (2026-10-16) the subscription routes (`/api/sub/*`) are
+ * catalogued here too (AGENTS.md: "An API route → declare it in api-registry.ts"). A row
+ * describes the route; it never grants or removes access — the route file does that.
  */
 
-export type ApiMethod = "GET" | "POST" | "PATCH" | "DELETE";
-export type ApiAuth = "api-key" | "session";
+export type ApiMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+export type ApiAuth = "api-key" | "session" | "session-optional" | "admin";
 export type ApiCategory =
   | "download"
   | "usage"
@@ -22,7 +30,8 @@ export type ApiCategory =
   | "feed"
   | "devices"
   | "sessions"
-  | "security";
+  | "security"
+  | "subscriptions";
 
 export interface ApiEndpoint {
   method: ApiMethod;
@@ -69,6 +78,29 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   { method: "POST", path: "/api/v1/app/security/passkeys/register/verify", auth: "session", category: "security", description: "Complete passkey registration." },
   { method: "POST", path: "/api/v1/app/security/passkeys/stepup/options", auth: "session", category: "security", description: "Begin a passkey step-up challenge." },
   { method: "POST", path: "/api/v1/app/security/passkeys/stepup/verify", auth: "session", category: "security", description: "Complete a passkey step-up challenge." },
+
+  /* ── Frenz Exclusive / SUB (session; money and access are decided on the server) ── */
+  { method: "POST", path: "/api/sub/checkout", auth: "session", category: "subscriptions", description: "Open (or reuse) a Paystack checkout for a creator subscription. Price and fee are the server's." },
+  { method: "GET", path: "/api/sub/earnings", auth: "session", category: "subscriptions", description: "The signed-in creator's SUB balance, ledger and withdrawals." },
+  { method: "GET", path: "/api/sub/notify", auth: "session-optional", category: "subscriptions", description: "How the viewer hears about a creator's new exclusive posts (off for signed-out)." },
+  { method: "PUT", path: "/api/sub/notify", auth: "session", category: "subscriptions", description: "Set push / email / both / off for one creator's new exclusive posts." },
+  { method: "GET", path: "/api/sub/payout-account", auth: "session", category: "subscriptions", description: "The creator's saved payout bank (masked)." },
+  { method: "POST", path: "/api/sub/payout-account", auth: "session", category: "subscriptions", description: "Save or change the payout bank (Paystack names the holder) and the auto-withdraw switch." },
+  { method: "DELETE", path: "/api/sub/payout-account", auth: "session", category: "subscriptions", description: "Remove the saved payout bank." },
+  { method: "POST", path: "/api/sub/withdraw", auth: "session", category: "subscriptions", description: "Withdraw SUB earnings (minimum, fee and one-open rule enforced in SQL)." },
+  { method: "GET", path: "/api/sub/posts", auth: "session-optional", category: "subscriptions", description: "A creator's exclusive gallery: covers and counts for everyone, content only with access." },
+  { method: "POST", path: "/api/sub/posts", auth: "session", category: "subscriptions", description: "Publish an exclusive post from files in the creator's own private folder." },
+  { method: "POST", path: "/api/sub/posts/upload", auth: "session", category: "subscriptions", description: "A five-minute upload link into the creator's own private-bucket folder." },
+  { method: "GET", path: "/api/sub/posts/[id]", auth: "session", category: "subscriptions", description: "Open one exclusive post: access re-checked, then five-minute media links." },
+  { method: "PATCH", path: "/api/sub/posts/[id]", auth: "session", category: "subscriptions", description: "The creator saves a missing preview for their own post." },
+  { method: "DELETE", path: "/api/sub/posts/[id]", auth: "session", category: "subscriptions", description: "The creator deletes their own post and its private files (not while taken down)." },
+  { method: "GET", path: "/api/sub/posts/[id]/like", auth: "session", category: "subscriptions", description: "Likes, comment count and whether I liked it (subscribers and the creator)." },
+  { method: "POST", path: "/api/sub/posts/[id]/like", auth: "session", category: "subscriptions", description: "Like or unlike an exclusive post (subscribers and the creator)." },
+  { method: "GET", path: "/api/sub/posts/[id]/comments", auth: "session", category: "subscriptions", description: "Comments on an exclusive post (subscribers and the creator)." },
+  { method: "POST", path: "/api/sub/posts/[id]/comments", auth: "session", category: "subscriptions", description: "Comment on an exclusive post (subscribers and the creator)." },
+  { method: "DELETE", path: "/api/sub/posts/[id]/comments", auth: "session", category: "subscriptions", description: "Delete your own comment, or any comment on your own post." },
+  { method: "POST", path: "/api/sub/posts/[id]/capture", auth: "session", category: "subscriptions", description: "Report a screenshot shortcut seen while an exclusive post was open." },
+  { method: "GET", path: "/api/admin/moderation/sub-review", auth: "admin", category: "subscriptions", description: "Admin review of a reported exclusive post or comment: five-minute links, audited." },
 ];
 
 export function getApiEndpoints(): ApiEndpoint[] {

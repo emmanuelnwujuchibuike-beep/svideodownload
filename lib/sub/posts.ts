@@ -3,10 +3,11 @@ import "server-only";
 import { after } from "next/server";
 
 import { makeSizedWebp } from "@/lib/media/thumbnail";
-import { deletePrivate, hasPrivateR2, presignPrivateGet, presignPrivatePut } from "@/lib/storage/r2";
+import { deletePrivate, hasPrivateR2, presignPrivateGet, presignPrivatePut, readPrivatePrefix } from "@/lib/storage/r2";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { hasActiveSub, subConfig } from "./server";
+import { checkUpload } from "./upload-check";
 
 /**
  * Subscriber-only posts (0227, owner briefs 2026-10-11).
@@ -78,6 +79,20 @@ export async function createSubPost(creatorId: string, input: { caption?: string
     // the preview obeys the same rule: the creator's OWN private folder, a jpg, nothing else
     if (m.thumbKey && (!m.thumbKey.startsWith(prefix) || m.thumbKey.includes("..") || !/^[A-Za-z0-9/._-]+\.jpg$/.test(m.thumbKey))) return fail("One of the files isn't yours to post.", 403);
   }
+  /*
+    Part 2 (2026-10-16): the bytes, not the browser's word. Each file (and each preview) is
+    read back from private storage — one ranged read — and must really be a photo or video
+    of the declared kind, within the size cap. A file that is missing or can't be read is
+    refused, never let through (lib/sub/upload-check.ts).
+  */
+  const checks = await Promise.all(
+    input.media.flatMap((m) => [
+      readPrivatePrefix(m.key).then((h) => checkUpload(m.kind as "image" | "video", h)),
+      ...(m.thumbKey ? [readPrivatePrefix(m.thumbKey).then((h) => checkUpload("image", h))] : []),
+    ]),
+  );
+  const bad = checks.find((c) => !c.ok);
+  if (bad && !bad.ok) return fail(bad.error, 422);
   const { data: post, error } = await db.from("sub_posts").insert({ creator_id: creatorId, caption, cover_url: cover }).select("id").single();
   if (error) return MISSING(error.message) ? fail("Subscriber posts arrive with the next update.", 503) : fail("Couldn't post that.", 500);
   const id = (post as Row).id as string;
@@ -230,6 +245,9 @@ export async function openSubPost(postId: string, viewerId: string | null): Prom
 
 export async function deleteSubPost(creatorId: string, postId: string): Promise<{ ok: true } | Fail> {
   const db = createAdminClient();
+  // a post an admin took down (archived, Part 2) is kept as evidence: its creator can't delete it
+  const { data: own } = await db.from("sub_posts").select("status").eq("id", postId).eq("creator_id", creatorId).maybeSingle();
+  if ((own as Row | null)?.status === "archived") return fail("This post was removed by Frenzsave and is kept under review.", 409);
   const withThumb = await db.from("sub_post_media").select("object_key, thumb_key, sub_posts!inner(creator_id)").eq("post_id", postId).eq("sub_posts.creator_id", creatorId);
   // before 0237 there is no thumb_key — the originals are still removed
   const media: Row[] | null = withThumb.error

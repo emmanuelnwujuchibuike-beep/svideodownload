@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { publishNotification } from "@/lib/notifications/publish";
 import { flagsOf, isAccountVisibleTo } from "@/lib/social/account-visibility";
 import { getPublicProfile } from "@/lib/social/profile";
+import { isUuid } from "@/lib/sub/guards";
 import { getSubSettings, quoteSub, subEarnings, type SubEarnings, type SubQuote, type SubSettings } from "@/lib/sub/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -161,6 +162,8 @@ export async function creatorPage(handle: string, viewerId: string | null): Prom
 
 /** Join a creator's FREE community. A paid subscription goes through SUB checkout instead. */
 export async function joinFree(memberId: string, creatorId: string): Promise<Result<{ membership: Membership }>> {
+  // both ids go into a filter string below (Part 2: each helper checks for itself)
+  if (!isUuid(memberId) || !isUuid(creatorId)) return fail("Invalid request.");
   if (memberId === creatorId) return fail("You can't join your own community.");
   const db = createAdminClient();
   const [settings, who, { data: blocked }] = await Promise.all([

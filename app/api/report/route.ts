@@ -11,7 +11,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const schema = z.object({
-  targetType: z.enum(["post", "comment", "user"]),
+  // sub_post / sub_comment (0247): exclusive content, checked and filed by lib/sub/moderation.ts
+  targetType: z.enum(["post", "comment", "user", "sub_post", "sub_comment"]),
   targetId: z.string().uuid(),
   reason: z.string().trim().min(1).max(60),
   note: z.string().trim().max(500).optional(),
@@ -36,6 +37,23 @@ export async function POST(request: Request) {
   }
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid report." }, { status: 400 });
+
+  /*
+    Exclusive content (Frenz Exclusive Part 2): the target must exist and be something this
+    person can actually see (a published post's tile; a comment only if they can read it),
+    and the answer carries nothing about the content. No auto-hide threshold and no AI
+    scoring of paid content here: an admin reviews every exclusive report.
+  */
+  if (parsed.data.targetType === "sub_post" || parsed.data.targetType === "sub_comment") {
+    const { success: perUser } = await trackLimiter.limit(`report-sub:${user.id}`);
+    if (!perUser) return NextResponse.json({ error: "Too many reports." }, { status: 429 });
+    const { reportSubTarget } = await import("@/lib/sub/moderation");
+    const out = await reportSubTarget(user.id, parsed.data.targetType, parsed.data.targetId, parsed.data.reason, parsed.data.note ?? null);
+    return out.ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: out.error }, { status: out.status });
+  }
+
+  // exclusive content returned above: from here on it is a post, comment or account
+  const targetType = parsed.data.targetType;
 
   const { error } = await supabase.from("reports").insert({
     reporter_id: user.id,
@@ -123,7 +141,7 @@ export async function POST(request: Request) {
           .eq("status", "open");
         const reasons = [...new Set(((openReports ?? []) as { reason: string }[]).map((r) => r.reason))];
 
-        await scoreReportedTarget(parsed.data.targetType, parsed.data.targetId, content, reasons);
+        await scoreReportedTarget(targetType, parsed.data.targetId, content, reasons);
       } catch {
         /* best-effort — the queue just shows no assessment for this target */
       }

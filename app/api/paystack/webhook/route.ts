@@ -83,8 +83,27 @@ export async function POST(request: Request) {
   if (event.event === "refund.processed" || event.event === "charge.dispute.create") {
     const ref = event.data?.transaction_reference ?? event.data?.transaction?.reference ?? event.data?.reference ?? "";
     if (ref.startsWith("frenz_sub_")) {
-      const out = await reverseSub(ref, event.event === "refund.processed" ? "refunded" : "disputed", null, `Paystack ${event.event}`);
-      return out.ok ? NextResponse.json({ received: true }) : NextResponse.json({ received: true, note: out.error });
+      /*
+        🔴 Part 2 (2026-10-16, audit S2): a failed reversal used to be answered 200, so Paystack
+        never redelivered it and a refunded subscriber kept access while the creator kept the
+        money. Now only a final answer is acknowledged: done, already done (the SQL is
+        idempotent on the reference, so a redelivery can never claw back twice), or a
+        permanently invalid event (an unknown reference). Anything else — a database error, a
+        timeout — is a 500, and the delivery log is left unprocessed so the retry runs.
+      */
+      const key = `${event.event}:${ref}`;
+      if ((await claimProviderEvent("paystack", key, event.event, ref)) === "done") return NextResponse.json({ received: true, duplicate: true });
+      const out = await reverseSub(ref, event.event === "refund.processed" ? "refunded" : "disputed", null, `Paystack ${event.event}`).catch(() => ({ ok: false as const, error: "threw", status: 500, reason: undefined }));
+      if (out.ok) {
+        await markProviderEvent("paystack", key, "reversed");
+        return NextResponse.json({ received: true });
+      }
+      if (out.status >= 500) {
+        console.error("[paystack] SUB reversal failed, asking for a retry", { reference: ref, event: event.event });
+        return NextResponse.json({ error: "Retry" }, { status: 500 });
+      }
+      await markProviderEvent("paystack", key, `ignored:${out.reason ?? "invalid"}`);
+      return NextResponse.json({ received: true, note: out.error });
     }
   }
 

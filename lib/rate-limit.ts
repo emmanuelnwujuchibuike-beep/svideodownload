@@ -139,6 +139,9 @@ export const messageLimiter: Limiter = buildLimiter(MESSAGE_TOKENS);
 // Sign-in codes: strict — every request sends a real email, and brute-force
 // resistance matters more than convenience here.
 export const otpLimiter: Limiter = buildLimiter(Number(process.env.RATE_LIMIT_OTP_PER_MIN || 4));
+// Frenz Exclusive Part 2: /sub/return asks Paystack about a payment with no session
+// (the payer usually comes back signed out). Keyed per IP and per reference by the page.
+export const subVerifyLimiter: Limiter = buildLimiter(Number(process.env.RATE_LIMIT_SUB_VERIFY_PER_MIN || 12));
 // Tracking pixels fire often but must resist fake-click floods.
 export const trackLimiter: Limiter = buildLimiter(
   Number(process.env.RATE_LIMIT_TRACK_PER_MIN || 120),

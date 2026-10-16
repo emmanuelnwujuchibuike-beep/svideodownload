@@ -161,3 +161,78 @@ impossible.
 | Phone screenshot alerts | needs native code | planned |
 | Automatic renewal by saved card | — | planned |
 | Native screenshot block (Android `FLAG_SECURE`) | needs the Android wrapper | planned |
+
+## Frenz Exclusive Part 2 — payment reliability, authorization and moderation (2026-10-16)
+
+Audit: `docs/FRENZ_EXCLUSIVE_PART1_AUDIT.md`. Migration **0247** (`0247_sub_settlement_hardening.sql`,
+PGlite-tested twice + a mutant: `supabase/tests/0247_sub_settlement.pglite.mjs`). The site works
+before and after it runs; until it runs, the old settle/reverse behaviour stays (no recovery of a
+prematurely failed checkout, no `refund_due`), and exclusive reports answer "arrives with the next
+update".
+
+**The checkout race (was: charged, no access).** Paystack reports a checkout the payer has not
+finished as `abandoned`, and the 10-minute reconcile asked about checkouts from 2 minutes old. Now:
+- `confirmSubPayment` reads our own row first: an unknown reference never reaches Paystack, a paid
+  one answers from the database, a final one (refunded / disputed / reversed, or failed with a
+  final `failure_source`) is never re-asked.
+- `abandoned` / `failed` only become a failure after **30 minutes** (`SUB_ABANDON_GRACE_MS`, the
+  ad checkout's window), and the failure records why (`sub_purchases.failure_source`).
+- `settle_sub_purchase` settles a `failed` row whose failure the APP assigned (`verify_abandoned`,
+  `verify_failed`, `init_refused`, or an older row with none) when Paystack later verifies the
+  charge at the quoted amount and currency. A Paystack reversal (`provider_reversed`) or a refund
+  that arrived before settlement (`reversal_before_payment`) is final. Refusals are audited
+  (`sub_settle_refused`, `sub_payment_mismatch`); a recovery is audited (`sub_purchase_recovered`).
+- A recovered failure is found by the webhook (Paystack redelivers `charge.success`) and by the
+  return page. The reconcile cron still only sweeps `initiated` rows (no extra Paystack calls
+  for every abandoned checkout).
+
+**A payment after removal.** A creator's removal and the money are separate. A verified charge for
+a member the creator removed is recorded as `refund_due`: no access, no creator earnings, audited
+as `sub_payment_after_removal` (with creator, subscriber, amount). The subscriber sees "Your payment
+was received … recorded for a refund". An admin refunds it in Paystack; the `refund.processed`
+webhook closes it as `refunded` with no balance change. A refund of a paid member who was then
+removed keeps them `removed` (before 0247 it turned them into `ended`, which let them pay again).
+
+**Refund / dispute webhook.** Only a final answer is acknowledged: reversed, already reversed, or a
+permanently invalid event (unknown reference). A database error or a throw answers **500** and the
+delivery log stays unprocessed, so Paystack's retry runs. The SQL is idempotent on the reference,
+so a redelivery can never claw back twice.
+
+**Return page.** `next` goes through `safeNext` (`subReturnPath`); verification is rate-limited per
+IP and per reference (`subVerifyLimiter`, `RATE_LIMIT_SUB_VERIFY_PER_MIN`, default 12). Without
+Upstash the limiter is per-instance memory, so it bounds a burst, not a distributed flood — the
+real cost guard is that only references we issued, and only open ones, ever reach Paystack.
+
+**Identifiers.** `hasActiveSub`, `startSubCheckout`, `settleOwnPendingSub` and `joinFree` check
+UUIDs themselves before building `.or(...)` filter strings.
+
+**Reporting and moderation.** `reports.target_type` gains `sub_post` and `sub_comment`.
+- Anyone who can see a published post's tile may report it; only someone who can read a comment
+  may report it. The answer is `{ ok: true }` and nothing else. One report per person and target.
+- No auto-hide threshold for exclusive content (three strangers could otherwise switch off a
+  creator's income) and no AI scoring of paid content: an admin decides every exclusive report.
+- Admin → Moderation shows them with **Review** (`/api/admin/moderation/sub-review`, admin only,
+  404 to anyone else): five-minute links, every review written to `security_audit_log`
+  (`moderation_review`). **Take down** archives the post (`status 'archived'`, `moderated_at/by`;
+  media kept as evidence; the creator cannot delete it while archived) or hides the comment
+  (`hidden_at/by`). **Restore** reverses it. Every action is `moderation_action` in the audit log.
+
+**Upload scanning.** No scanning service exists in this stack (no image/video classifier, and
+Cloudflare R2 has none built in). What IS enforced now (`lib/sub/upload-check.ts`): before a post
+is published, each file is read back from private storage (one ranged read) and must really be a
+photo or video of the declared kind by its own first bytes, at most 50 MB (photo) / 1 GB (video).
+HTML, SVG, archives and executables wearing a media name are refused. Follow-up options, each an
+owner decision because they cost money or send private content to a third party: a hash-matching
+service for known illegal imagery (e.g. a PhotoDNA-class service), or a moderation model on the
+worker for new uploads. Until then exclusive content is reactive: reports plus admin review.
+
+| Piece | Where | State |
+|---|---|---|
+| Settlement hardening, refund_due, report targets, takedown columns | `supabase/migrations/0247_sub_settlement_hardening.sql` | built, PGlite-tested. **Not applied** — the owner runs it |
+| Grace period, record-first confirm, failure reasons | `lib/sub/server.ts`, `lib/sub/guards.ts` | built, tested |
+| Retryable refund/dispute webhook | `app/api/paystack/webhook/route.ts` | built, tested |
+| Return page: safeNext, rate limit, "held" | `app/(app)/sub/return/page.tsx` | built |
+| Exclusive reporting and admin review/takedown | `lib/sub/moderation.ts`, `/api/report`, `/api/admin/moderation`, `/api/admin/moderation/sub-review`, `features/admin/moderation-queue.tsx`, Report in `features/sub/sub-gallery.tsx` | built, tested |
+| Upload byte check | `lib/sub/upload-check.ts`, `lib/storage/r2.ts` `readPrivatePrefix` | built, tested |
+| `/api/sub/*` in the API registry, with a completeness test | `lib/platform/api-registry.ts` | built, tested |
+| Content scanning of uploads | — | planned (owner decision) |

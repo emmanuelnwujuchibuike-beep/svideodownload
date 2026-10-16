@@ -25,7 +25,8 @@ export function ReportSheet({
   onClose,
   onReported,
 }: {
-  targetType: "post" | "comment" | "user";
+  /** sub_post / sub_comment: exclusive content (Frenz Exclusive Part 2) */
+  targetType: "post" | "comment" | "user" | "sub_post" | "sub_comment";
   targetId: string;
   open: boolean;
   onClose: () => void;

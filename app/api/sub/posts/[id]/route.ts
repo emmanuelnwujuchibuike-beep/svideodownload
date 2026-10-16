@@ -59,6 +59,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const db = (await import("@/lib/supabase/admin")).createAdminClient();
   const { data: post } = await db.from("sub_posts").select("creator_id").eq("id", id).maybeSingle();
   if ((post as { creator_id?: string } | null)?.creator_id !== user.id) return NextResponse.json({ error: "Not yours." }, { status: 403 });
+  // the preview must really be an image (Part 2, lib/sub/upload-check.ts)
+  const [{ readPrivatePrefix }, { checkUpload }] = await Promise.all([import("@/lib/storage/r2"), import("@/lib/sub/upload-check")]);
+  if (!checkUpload("image", await readPrivatePrefix(key)).ok) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   const { error } = await db.from("sub_post_media").update({ thumb_key: key }).eq("post_id", id).eq("idx", idx).is("thumb_key", null);
   if (error) return NextResponse.json({ error: "Couldn't save the preview." }, { status: 500 });
   const w = dim(body?.width);

@@ -35,12 +35,15 @@ export async function interactionSummary(postId: string, userId: string | null):
   const a = await access(postId, userId);
   if (!a.ok) return a;
   const db = createAdminClient();
-  const [likes, mine, comments] = await Promise.all([
+  const visibleComments = () => db.from("sub_post_comments").select("id", { count: "exact", head: true }).eq("post_id", postId);
+  const [likes, mine, counted] = await Promise.all([
     db.from("sub_post_likes").select("post_id", { count: "exact", head: true }).eq("post_id", postId),
     db.from("sub_post_likes").select("post_id").eq("post_id", postId).eq("user_id", userId!).maybeSingle(),
-    db.from("sub_post_comments").select("id", { count: "exact", head: true }).eq("post_id", postId),
+    // a comment an admin took down (0247 hidden_at) is not counted; before 0247 every comment is
+    visibleComments().is("hidden_at", null),
   ]);
   if (likes.error && MISSING(likes.error.message)) return fail("Likes and comments arrive with the next update.", 503);
+  const comments = counted.error && MISSING(counted.error.message) ? await visibleComments() : counted;
   return { ok: true, likes: likes.count ?? 0, liked: !!mine.data, comments: comments.count ?? 0 };
 }
 
@@ -59,7 +62,11 @@ export async function listComments(postId: string, userId: string | null): Promi
   const a = await access(postId, userId);
   if (!a.ok) return a;
   const db = createAdminClient();
-  const { data, error } = await db.from("sub_post_comments").select("id, user_id, body, created_at").eq("post_id", postId).order("created_at", { ascending: true }).limit(200);
+  const read = () => db.from("sub_post_comments").select("id, user_id, body, created_at").eq("post_id", postId).order("created_at", { ascending: true }).limit(200);
+  // taken-down comments (0247 hidden_at) never reach anyone; before 0247 the column is absent
+  let res = await read().is("hidden_at", null);
+  if (res.error && /hidden_at/.test(res.error.message)) res = await read();
+  const { data, error } = res;
   if (error) return MISSING(error.message) ? fail("Comments arrive with the next update.", 503) : fail("Couldn't load comments.", 500);
   const rows = (data ?? []) as { id: string; user_id: string; body: string; created_at: string }[];
   const ids = [...new Set(rows.map((r) => r.user_id))];

@@ -91,7 +91,8 @@ describe("the landing page structure", () => {
     expect(src("components/landing/hero.tsx")).not.toContain('topCredits="earn"');
     const core = src("features/downloads/download-page-core.tsx");
     // 2026-10-08 (owner): smaller, on the headline's row — it no longer pushes the headline down
-    expect(core).toContain('<DownloadsHero trailing={topCredits === "earn" ? <EarnButton size="md" /> : topCredits === "none" ? <PromoteButton /> : undefined}');
+    // 2026-10-15 (owner): "My ads" moved from this row up into the top bar
+    expect(core).toContain('<DownloadsHero trailing={topCredits === "earn" ? <EarnButton size="md" /> : undefined}');
     // /downloads drops the paragraph but shows the line under the credits card (owner, 2026-10-08 / 2026-10-09)
     expect(core).toContain('subtitle={topCredits !== "strip" && topCredits !== "none"}');
     expect(src("features/downloads/downloads-sections.tsx")).toContain('<h1 className="sr-only">Download</h1>');

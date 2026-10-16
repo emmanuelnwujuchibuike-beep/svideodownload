@@ -38,7 +38,8 @@ describe("every advertising button answers the first tap", () => {
     // 2026-10-09: the promote door is a fixed TapOnceLink — it goes once and stays pressed while the page comes
     const promote = src("features/downloads/promote-button.tsx");
     expect(promote).toContain("<TapOnceLink");
-    expect(promote).toContain('href="/advertise"');
+    // 2026-10-15 (owner): renamed "My ads" — it opens the advertiser's own campaigns
+    expect(promote).toContain('href="/advertise/campaigns"');
     expect(promote).toContain("data-[pending]:scale-95");
   });
 

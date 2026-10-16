@@ -77,17 +77,17 @@ describe("small fixes", () => {
     expect(code("app/(app)/account/page.tsx")).not.toMatch(/DiamondCrownBadge[^\n]*ring-2/);
   });
 
-  it("Promote responds on the first tap with a spinner and warms its route", () => {
+  it("My ads (was Promote) responds on the first tap with a spinner and warms its route", () => {
     const b = code("features/downloads/promote-button.tsx");
     expect(b).toContain("warmOnIdle");
     expect(b).toContain("group-data-[pending]:hidden");
     expect(b).toContain("group-data-[pending]:inline-block");
   });
 
-  it("Promote on /downloads sits opposite Save. Discover. Create. (owner 2026-10-12, out of the crowded top bar)", () => {
-    expect(code("features/app-shell/app-topbar.tsx")).not.toContain("<PromoteButton");
+  it("My ads on /downloads is in the top bar, not the hero (owner 2026-10-15: move it to the top header)", () => {
+    expect(code("features/app-shell/app-topbar.tsx")).toContain("<PromoteButton />");
     const core = code("features/downloads/download-page-core.tsx");
-    expect(core).toContain('topCredits === "none" ? <PromoteButton /> : undefined');
+    expect(core).not.toContain("<PromoteButton");
     // the strip itself still exists for a caller that asks for it — /downloads no longer does (owner 2026-10-12)
     expect(core).toContain('<AiCreditStrip base="/ai" className="mb-3" />');
     expect(code("features/downloads/downloads-page.tsx")).toContain('topCredits="none"');

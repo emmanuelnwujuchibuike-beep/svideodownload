@@ -125,7 +125,9 @@ describe("the quest page never reloads for nothing", () => {
     const strip = code("features/ai/design/ai-credit-strip.tsx");
     // a link that goes ONCE — the double tap opened a second quest page (owner, 2026-10-07)
     // EarnButton (2026-10-08) is the one definition, used by the strip and the landing
-    expect(strip).toMatch(/<TapOnceLink\s+href="\/quests"\s+aria-label="Earn credits"/);
+    expect(strip).toMatch(/<TapOnceLink\s+href="\/quests"[\s\S]{0,160}?warmOnIdle\s+aria-label="Earn credits"/);
+    // 2026-10-15 (owner: "the earn button delays to open"): the static quest page is warmed while idle, and the More to Explore door goes once too
+    expect(code("features/downloads/more-to-explore.tsx")).toContain('warmOnIdle={href === "/quests"}');
     expect(strip).toContain("<EarnButton />");
     expect(strip).not.toContain("Trophy");
     const once = code("features/ui/tap-once-link.tsx");

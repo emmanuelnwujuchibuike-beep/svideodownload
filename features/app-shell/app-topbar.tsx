@@ -10,6 +10,7 @@ import { IconTile } from "@/components/icons/icon-tile";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { InstallHeaderCta } from "@/features/pwa/install-button";
+import { PromoteButton } from "@/features/downloads/promote-button";
 import { setTopbarHidden } from "@/features/app-shell/topbar-visibility";
 import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { useTopbarCenter } from "@/features/app-shell/topbar-slot";
@@ -210,7 +211,7 @@ export function AppTopbar() {
     >
       {/* Far-left: search + create — kept apart from the action cluster so
           the right side never gets crowded. */}
-      <div className="flex shrink-0 items-center gap-2">
+      <div className={cn("flex shrink-0 items-center", onDownloads ? "gap-1 sm:gap-2" : "gap-2")}>
         {/* Mobile search entry (the search box is tablet+ only) — never on
             /search itself, which renders the real field in this row instead. */}
         {searchActive ? null : (
@@ -225,7 +226,7 @@ export function AppTopbar() {
               haptic("light");
               playSound("tap");
             }}
-            className="flex h-11 w-11 items-center justify-center"
+            className={cn("flex h-11 items-center justify-center", onDownloads ? "w-10 sm:w-11" : "w-11")}
           >
             <IconTile>
               <IoSearchOutline className="h-[26px] w-[26px]" />
@@ -243,7 +244,7 @@ export function AppTopbar() {
         {onDownloads ? (
           <Link
             href="/downloads"
-            className="font-brand text-gradient shrink-0 text-[17px] font-bold"
+            className="font-brand text-gradient shrink-0 text-[15px] font-bold sm:text-[17px]"
           >
             Frenzsave
           </Link>
@@ -363,7 +364,7 @@ export function AppTopbar() {
       )}
 
       {/* Right action cluster */}
-      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
         {/* Create — goes straight to the dedicated Post surface (owner,
             2026-07-16: each create button opens its OWN create page; there is
             no shared composer to re-steer any more). Desktop only: below
@@ -454,10 +455,15 @@ export function AppTopbar() {
           app is installed or running standalone, so it can never be a dead
           control, and it hides while the search field has the row.
         */}
-        {pathname === "/downloads" && !searchActive ? <InstallHeaderCta className="h-9 px-3.5 text-[13px]" label="Install" /> : null}
-        {/* Promote in the top bar on /downloads, beside Install — as on the landing header (owner, 2026-10-09: "put the promote button in the Download page at the top header like it is in the landing page"). */}
-        {/* Promote moved down to the "Save. Discover. Create." row (owner 2026-10-12: the bar was crowded) */}
+        {pathname === "/downloads" && !searchActive ? <InstallHeaderCta className="h-9 px-3 text-[13px] max-[374px]:hidden sm:px-3.5" label="Install" /> : null}
         {/* No Earn or Add friend in the top bar on /downloads (owner, 2026-10-16); Friends is in the bottom nav. */}
+        {/*
+          "My ads" — the megaphone and the words on a glass pill, set into this bar (owner 2026-10-15:
+          "move it to the top header … remove the circle background and leave just the icon and the
+          my ads text"). Measured on a replica with the production CSS: Install + My ads + the bell
+          fit from 375 px; on a narrower phone in a browser tab, Install steps out of this bar.
+        */}
+        {pathname === "/downloads" && !searchActive ? <PromoteButton /> : null}
 
         <span className={searchActive ? "hidden" : "lg:hidden"}>
           {searchActive ? null : <NotificationBell />}

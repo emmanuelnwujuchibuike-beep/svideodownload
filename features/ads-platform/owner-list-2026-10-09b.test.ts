@@ -49,16 +49,16 @@ describe("admin can switch a campaign period off", () => {
   });
 });
 
-describe("the promote button has a fixed home — no dragging, no floating (owner, 2026-10-09)", () => {
+describe("the My ads button (was Promote) has fixed homes — no dragging, no floating (owner, 2026-10-09; 2026-10-15)", () => {
   /** Where it lives, as a function of the sources, so the teeth can run it on broken copies. */
   function fixedHomes(core: string, header: string, button: string, topbar: string = TOPBAR): boolean {
     return (
-      // 2026-10-12 (owner): on /downloads it moved out of the crowded top bar, opposite "Save. Discover. Create."
-      core.includes('<DownloadsHero trailing={topCredits === "earn" ? <EarnButton size="md" /> : topCredits === "none" ? <PromoteButton /> : undefined}') &&
-      !topbar.includes("<PromoteButton") &&
+      // 2026-10-15 (owner): "move it to the top header" — on /downloads it is in the top bar, no longer in the hero
+      !core.includes("<PromoteButton") &&
+      topbar.includes('{pathname === "/downloads" && !searchActive ? <PromoteButton /> : null}') &&
       (header.match(/\{landing \? <PromoteButton size="header" \/> : null\}/g) ?? []).length === 2 &&
       !/drag|createPortal|pointermove|position: fixed|\bfixed\b/.test(button) &&
-      /\n\s*Promote\n/.test(button)
+      /\n\s*My ads\n/.test(button)
     );
   }
   const core = code("features/downloads/download-page-core.tsx");
@@ -66,17 +66,21 @@ describe("the promote button has a fixed home — no dragging, no floating (owne
   const header = code("components/layout/site-header.tsx");
   // comments stripped: the file documents the bubble it replaced
   const button = code("features/downloads/promote-button.tsx").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-  it("on /downloads in the hero row, beside Install in both landing header rows, tagged Promote", () => {
+  it("in the /downloads top bar and beside Install in both landing header rows, labelled My ads", () => {
     expect(fixedHomes(core, header, button)).toBe(true);
   });
   it("teeth: a draggable/fixed button, or losing a home, fails", () => {
     expect(fixedHomes(core, header, button + "\nconst drag = 1;")).toBe(false);
-    expect(fixedHomes(core.replace('topCredits === "none" ? <PromoteButton /> : ', ""), header, button)).toBe(false);
+    expect(fixedHomes(core, header, button, TOPBAR.replace('{pathname === "/downloads" && !searchActive ? <PromoteButton /> : null}', ""))).toBe(false);
     expect(fixedHomes(core, header.replace('{landing ? <PromoteButton size="header" /> : null}', ""), button)).toBe(false);
   });
-  it("tinted, not pure white, and the floating bubble is gone", () => {
-    expect(button).toMatch(/bg-gradient-to-br from-violet-100 via-indigo-50 to-fuchsia-100/);
-    expect(button).not.toMatch(/\bbg-white\b/);
+  it("a glass text pill, no circle, and the floating bubble is gone (owner, 2026-10-15)", () => {
+    expect(button).toContain("backdrop-blur-xl");
+    expect(button).toContain("rounded-full px-3 text-[12.5px] sm:px-3.5");
+    expect(button).not.toMatch(/\bh-(9|10) w-(9|10)\b/);
+    // the megaphone stays, with no disc behind it (owner, 2026-10-15)
+    expect(button).toContain("<Megaphone");
+    expect(button).not.toContain("bg-gradient-to-br from-violet-100");
     expect(() => code("features/downloads/promote-bubble.tsx")).toThrow();
     expect(() => code("features/downloads/promote-bubble-lazy.tsx")).toThrow();
   });

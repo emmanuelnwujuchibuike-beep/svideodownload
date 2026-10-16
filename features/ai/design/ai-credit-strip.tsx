@@ -55,6 +55,8 @@ export function EarnButton({ size = "sm", className }: { size?: "sm" | "md" | "l
   return (
     <TapOnceLink
       href="/quests"
+      // the page is static: warming it while idle makes the first tap open at once (owner, 2026-10-15)
+      warmOnIdle
       aria-label="Earn credits"
       className={cn(
         "inline-flex shrink-0 items-center rounded-full bg-gradient-to-r from-amber-400 to-orange-400 font-bold text-white transition-[transform,opacity] duration-200 active:scale-90 data-[pending]:scale-95 data-[pending]:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 motion-reduce:active:scale-100",

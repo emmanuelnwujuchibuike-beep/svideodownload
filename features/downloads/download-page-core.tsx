@@ -2,7 +2,6 @@
 
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { AiCreditStrip, EarnButton } from "@/features/ai/design/ai-credit-strip";
-import { PromoteButton } from "@/features/downloads/promote-button";
 import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
 import { ExploreFeaturesBar, FrenzAICta } from "@/features/downloads/frenz-ai-cta";
 import { MoreToExplore } from "@/features/downloads/more-to-explore";
@@ -152,8 +151,8 @@ export function DownloadPageCore({
         <AiCreditStrip base="/ai" className="mb-3" />
       ) : null}
       {/* /downloads: the "Save. Discover. Create." line sits under the credits card, without the paragraph (owner, 2026-10-09) */}
-      {/* /downloads: Promote sits opposite "Save. Discover. Create." (owner 2026-10-12: out of the crowded top bar) */}
-      <DownloadsHero trailing={topCredits === "earn" ? <EarnButton size="md" /> : topCredits === "none" ? <PromoteButton /> : undefined} subtitle={topCredits !== "strip" && topCredits !== "none"} />
+      {/* /downloads: "My ads" moved up into the top bar (owner 2026-10-15) — see promote-button.tsx */}
+      <DownloadsHero trailing={topCredits === "earn" ? <EarnButton size="md" /> : undefined} subtitle={topCredits !== "strip" && topCredits !== "none"} />
 
       {/*
         🔴 Install moved BELOW the paste box (owner, 2026-08-25, with a

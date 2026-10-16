@@ -144,6 +144,15 @@ export function showInterstitial({
     }
 
     const fired = new Set<string>();
+    /*
+      The History viewer's ad between media (owner, 2026-10-16: "they shouldn't show as reward,
+      they should be able to be skipped by swiping or tapping right or left"). It is a STORY ad, not
+      a gate: labelled "Sponsored", no upgrade pitch, and a swipe or a tap on either side skips it —
+      by the same rule as the Skip button (after the countdown, and only when the VAST response
+      allows skipping), the rule the owner set for History ads on 2026-10-10.
+    */
+    const story = zone === "history_story_ad";
+    let lastSwipeAt = 0;
     let settled = false;
     let started = false;
     let countdownTimer: ReturnType<typeof setInterval> | null = null;
@@ -247,7 +256,7 @@ export function showInterstitial({
     ].join(";");
 
     const badge = document.createElement("span");
-    badge.textContent = "Ad";
+    badge.textContent = story ? "Sponsored" : "Ad";
     badge.style.cssText =
       "background:rgba(0,0,0,.55);color:#fff;font:600 11px/1 system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;padding:6px 8px;border-radius:6px;backdrop-filter:blur(4px)";
 
@@ -598,6 +607,8 @@ export function showInterstitial({
       click.setAttribute("aria-label", "Visit advertiser");
       click.style.cssText = "position:absolute;inset:0;background:transparent;border:0;cursor:pointer";
       click.addEventListener("click", () => {
+        // a swipe that ends on the ad is a skip gesture, never a visit
+        if (story && Date.now() - lastSwipeAt < 500) return;
         pixel(creative.clickTracking);
         // Our own click counter, beside the network's. See `adBeacon`.
         adBeacon("click", zone, creative.adId);
@@ -611,6 +622,34 @@ export function showInterstitial({
       root.appendChild(click);
     } else {
       root.appendChild(video);
+    }
+
+    if (story) {
+      // the outer 30% on each side is "next", as in the story viewer; the centre stays the advertiser's
+      for (const side of ["left", "right"] as const) {
+        const zoneBtn = document.createElement("button");
+        zoneBtn.type = "button";
+        zoneBtn.setAttribute("aria-label", "Skip ad");
+        zoneBtn.style.cssText = `position:absolute;top:calc(env(safe-area-inset-top,0px) + 72px);bottom:calc(env(safe-area-inset-bottom,0px) + 72px);${side}:0;width:30%;background:transparent;border:0;pointer-events:auto;cursor:pointer`;
+        zoneBtn.addEventListener("click", doSkip);
+        root.appendChild(zoneBtn);
+      }
+      let from: { x: number; y: number } | null = null;
+      root.addEventListener("pointerdown", (e) => void (from = { x: e.clientX, y: e.clientY }), true);
+      root.addEventListener(
+        "pointerup",
+        (e) => {
+          if (!from) return;
+          const dx = e.clientX - from.x;
+          const dy = e.clientY - from.y;
+          from = null;
+          if (Math.abs(dx) >= 50 && Math.abs(dx) > Math.abs(dy)) {
+            lastSwipeAt = Date.now();
+            doSkip();
+          }
+        },
+        true,
+      );
     }
 
     /*
@@ -638,7 +677,7 @@ export function showInterstitial({
       deliberately transparent to taps, and it is appended AFTER the click-through
       layer so the advertiser's own click target cannot sit on top of it.
     */
-    if (creative.offerUpgrade) {
+    if (creative.offerUpgrade && !story) {
       const upgrade = document.createElement("a");
       upgrade.href = "/pricing";
       upgrade.textContent = "Tired of ads? Go Pro";

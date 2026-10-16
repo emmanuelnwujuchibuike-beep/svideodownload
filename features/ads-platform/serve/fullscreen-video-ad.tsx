@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { toast } from "@/features/ui/toast";
 import type { EligibleAd } from "@/lib/ads-platform/eligibility";
-import type { AdEngagement } from "@/lib/ads-platform/engagement";
+import { likesAfterTap, type AdEngagement } from "@/lib/ads-platform/engagement";
 import { haptic } from "@/lib/motion/haptics";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
@@ -147,7 +147,14 @@ export function FullscreenVideoAd({
     // at once, as TikTok does — the server's answer then replaces it (or rolls it back)
     setCounts({ ...counts, liked: on, likes: Math.max(0, counts.likes + (on ? 1 : -1)) });
     const after = await reactToAd(ad.c, "like", on);
-    setCounts(after ?? before);
+    /*
+      Owner, 2026-10-16: "the ad likes shouldn't show the x10 like count when the like is clicked …
+      it should show the x1 count but when refreshed or reloaded it should count to the x10".
+      The server's `likes` is the stored count × the campaign's multiplier (0249), so taking it here
+      made one tap jump by 10. The tap moves the number by exactly one — in the direction the
+      SERVER confirmed (`liked`) — and the multiplied total appears on the next load.
+    */
+    setCounts(likesAfterTap(before, after));
     liking.current = false;
   };
 

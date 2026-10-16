@@ -1,4 +1,5 @@
 import { loadAdsConfig } from "@/lib/monetization/ads-config-client";
+import { allowWindowOpen } from "@/lib/monetization/popunder-guard";
 import { directLinkRollWins, isValidDirectLinkUrl, type DirectLinkSpot } from "@/lib/monetization/direct-link";
 
 /**
@@ -24,6 +25,13 @@ export async function loadDirectLinkOpener(spot: DirectLinkSpot): Promise<(() =>
     } catch {
       /* ignore */
     }
+    /*
+      2026-10-16 (owner: "it should open another tab so users can still return where they stop"):
+      always a NEW tab, never this one. And announced first: where the pop-under guard is installed
+      (pages carrying the Hilltop slider) an unannounced window.open is refused, so the direct link
+      silently did nothing there.
+    */
+    allowWindowOpen();
     window.open(c.url, "_blank", "noopener,noreferrer");
   };
 }

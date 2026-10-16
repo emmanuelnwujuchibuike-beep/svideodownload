@@ -50,8 +50,9 @@ describe("full-screen ads (image and video)", () => {
     expect(layout).toContain('{counts ? formatCompactNumber(counts.likes) : "Like"}');
     // no literal number is ever rendered as a count
     expect(layout).not.toMatch(/formatCompactNumber\(\d/);
-    // an optimistic like is rolled back when the server refuses it
-    expect(layout).toContain("setCounts(after ?? before);");
+    // an optimistic like is rolled back when the server refuses it, and moves the count by one, never by the ×10
+    // (likesAfterTap: lib/ads-platform/likes-after-tap.test.ts proves both)
+    expect(layout).toContain("setCounts(likesAfterTap(before, after));");
     // a share is counted only after it really happened
     expect(layout.indexOf('void reactToAd(ad.c, "share", true)')).toBeGreaterThan(layout.indexOf("await navigator.share(data);"));
   });

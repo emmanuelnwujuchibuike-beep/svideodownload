@@ -821,131 +821,111 @@ async function ProfileData({
               <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-black/25" />
             </div>
 
-            {/* Identity Card™ — the premium glass surface */}
+            {/* Identity Card™ — owner 2026-10-16: "arrange visitors profile hero card to be exactly
+                like the one users use on their profile". The SAME structure and classes as the owner
+                hero above: name + handle on the LEFT, the identity ring on the RIGHT, then bio, links,
+                actions and the same four stats at full width. Only what a visitor may DO differs
+                (Follow / Message instead of Edit Profile). */}
             <div className="relative z-10 px-3 sm:px-4">
-              <div className={cn("relative lux-card lux-header lux-enter -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7", heroAccent && "lux-halo")} style={heroCardStyle}>
-                {/* Profile accent (Part · Appearance) — a subtle "your colour" tab. */}
+              <div className={cn("relative lux-card lux-header lux-enter -mt-16 rounded-3xl px-4 pb-6 pt-0 sm:-mt-20 sm:px-7", heroAccent && "lux-halo")} style={heroCardStyle}>
                 {heroAccent ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-1.5 w-24 -translate-x-1/2 rounded-b-full" style={{ background: heroAccent }} /> : null}
-                {/* Avatar · identity · adaptive action bar — three columns across the
-                    FULL card width (Facebook/Instagram arrangement, owner request). The
-                    identity used to sit BELOW the avatar with the actions stranded on the
-                    far right, which left the middle of the card empty on every screen
-                    wider than a phone. */}
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-6">
-                  <div className="relative -mt-14 w-fit sm:-mt-[4.5rem] sm:shrink-0">
-                    {/* Accent glow — the member's theme colour as a soft halo behind the avatar. */}
-                    {heroAccent ? <span aria-hidden className="pointer-events-none absolute -inset-2.5 rounded-full opacity-50 blur-xl" style={{ background: heroAccent }} /> : null}
-                    <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"}>
-                      <IdentityMediaViewer
-                        mode={profileMedia.identityMode}
-                        photo={profile.avatarUrl}
-                        video={profileMedia.videoUrl}
-                        avatar={profileMedia.avatarUrl}
-                        name={profile.displayName}
+                <div className="flex items-start justify-between gap-4 sm:gap-8">
+                  <div className="min-w-0 max-w-[60%] flex-none self-center py-3 sm:py-4">
+                    <h1 className="font-brand flex flex-wrap items-center gap-x-2 gap-y-1 text-[2rem] font-bold leading-[1.05] tracking-[-0.03em] text-slate-950 [-webkit-text-stroke:0.35px_currentColor] dark:text-white sm:text-[2.5rem]">
+                      {profile.displayName}
+                      {/* the plan badge stays behind the member's privacy switch, the tick never does */}
+                      <IdentityBadges verified={profile.isVerified} plan={plan} showPlan={privacy.show_plan_badge} accent={heroAccent} />
+                    </h1>
+                    <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
+                    {identity.type !== "personal" || details.headline ? (
+                      <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                        {identity.type !== "personal" ? (
+                          <span className="rounded-full bg-secondary/70 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-muted-foreground ring-1 ring-inset ring-border/50">
+                            {typeSpec.label}
+                          </span>
+                        ) : null}
+                        {details.headline ? <span className="text-muted-foreground">{details.headline}</span> : null}
+                      </p>
+                    ) : null}
+                    {/* Public reputation rank (0102) — the member can hide it from Privacy */}
+                    {privacy.show_reputation ? (
+                      <span
+                        className="mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold text-white shadow-sm ring-1 ring-inset ring-white/20"
+                        style={{ backgroundImage: `linear-gradient(135deg, ${reputation.rank.from}, ${reputation.rank.to})` }}
+                        title={`Reputation score ${reputation.score.toLocaleString()}`}
                       >
+                        <RankCrown className="h-4 w-4" /> {reputation.rank.name}
+                      </span>
+                    ) : null}
+                    {profileExtras.status || profileExtras.mood ? (
+                      <div className="mt-2 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-full bg-secondary/60 px-3 py-1 text-sm">
+                        {profileExtras.mood ? <span className="font-semibold text-primary" style={heroAccent ? { color: heroAccent } : undefined}>{profileExtras.mood}</span> : null}
+                        {profileExtras.status ? <span className="text-muted-foreground">{profileExtras.status}</span> : null}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* the ring, inside the card at its top right — exactly where the owner sees theirs */}
+                  <div className="mr-5 flex shrink-0 flex-col items-center pt-10 sm:mr-6 sm:pt-11">
+                    <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"} accent={heroAccent} glow={false}>
+                      <IdentityMediaViewer mode={profileMedia.identityMode} photo={profile.avatarUrl} video={profileMedia.videoUrl} avatar={profileMedia.avatarUrl} name={profile.displayName}>
                         <IdentityMedia
                           mode={profileMedia.identityMode}
                           photo={profile.avatarUrl}
                           video={profileMedia.videoUrl}
                           avatar={profileMedia.avatarUrl}
                           name={profile.displayName}
-                          className="h-24 w-24 ring-4 ring-background sm:h-32 sm:w-32"
+                          className="h-24 w-24 ring-4 ring-background sm:h-28 sm:w-28"
                         />
                       </IdentityMediaViewer>
                     </IdentityRing>
-                    {/* Plan badge lives ONCE, next to the name (Telegram/Snapchat-style) —
-                        no duplicate diamond on the avatar corner. */}
-                  </div>
-
-                  {/* Identity — the middle column. `flex-1` is what actually fills the
-                      card: the name, handle, rank and relationship chips now occupy the
-                      space between the avatar and the action bar. */}
-                  <div className="min-w-0 flex-1 sm:pt-2">
-                  <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
-                    {profile.displayName}
-                    {/* Same cluster as the owner hero — the plan badge stays behind the
-                        owner's privacy switch, the tick never does. */}
-                    <IdentityBadges verified={profile.isVerified} plan={plan} showPlan={privacy.show_plan_badge} accent={heroAccent} />
-                  </h1>
-                  <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
-                  {/* What this profile IS (Part 14) — the visitor's first answer
-                      to "what am I looking at". */}
-                  {identity.type !== "personal" || details.headline ? (
-                    <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                      {identity.type !== "personal" ? (
-                        <span className="rounded-full bg-secondary/70 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-muted-foreground ring-1 ring-inset ring-border/50">
-                          {typeSpec.label}
-                        </span>
-                      ) : null}
-                      {details.headline ? <span className="text-muted-foreground">{details.headline}</span> : null}
-                    </p>
-                  ) : null}
-                  {/* Public reputation rank (migration 0102) — shown by default; the
-                      profile owner can hide it from Privacy. A premium metallic chip
-                      in the rank's own gradient; the score is real (reputation.ts). */}
-                  {privacy.show_reputation ? (
-                    <span
-                      className="mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold text-white shadow-sm ring-1 ring-inset ring-white/20"
-                      style={{ backgroundImage: `linear-gradient(135deg, ${reputation.rank.from}, ${reputation.rank.to})` }}
-                      title={`Reputation score ${reputation.score.toLocaleString()}`}
-                    >
-                      <RankCrown className="h-4 w-4" /> {reputation.rank.name}
-                    </span>
-                  ) : null}
-                  {/* Status + Mood (Part 9) — the member's own expression, read
-                      defensively so it stays empty until migration 0095 is applied. */}
-                  {profileExtras.status || profileExtras.mood ? (
-                    <div className="mt-2 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-full bg-secondary/60 px-3 py-1 text-sm">
-                      {profileExtras.mood ? <span className="font-semibold text-primary" style={heroAccent ? { color: heroAccent } : undefined}>{profileExtras.mood}</span> : null}
-                      {profileExtras.status ? <span className="text-muted-foreground">{profileExtras.status}</span> : null}
+                    {/* the same mode pill, read-only for a visitor (it says what the member shows) */}
+                    <div className="mt-2 inline-flex items-center gap-0.5 rounded-full border border-border/60 bg-card/80 p-0.5 shadow-sm backdrop-blur" role="img" aria-label={`Showing their ${profileMedia.identityMode}`}>
+                      {(["photo", "video", "avatar"] as const).map((mode) => {
+                        const active = profileMedia.identityMode === mode;
+                        return (
+                          <span key={mode} aria-hidden className={`flex h-8 w-8 items-center justify-center rounded-full ${active ? "bg-white shadow-[0_2px_8px_-2px_rgba(91,61,245,0.55)] ring-1 ring-violet-500/30" : ""}`}>
+                            <IdentityModeGlyph name={mode} active={active} className="h-5 w-5" />
+                          </span>
+                        );
+                      })}
                     </div>
-                  ) : null}
-
-                {/*
-                  ── Utility row — Share, QR and ••• moved to the TOP (owner,
-                  2026-08-16: "put the share, QR code and dotted menu at the
-                  top so the add friend, follow and message button will have
-                  enough breathing space and not feel compressed") ──────────
-
-                  These three were flex siblings of Add Friend / Follow /
-                  Message in ONE row — three `shrink-0` icon circles claiming
-                  their width first, so the `flex-1` text buttons fought over
-                  whatever was left and "Add Friend" clipped on a phone (the
-                  reported screenshot). Same components, same conditional
-                  logic (Share + QR always when `me`'s target isn't self;
-                  ProfileActions only for a signed-in viewer) — only the ROW
-                  they render in has changed. Right-aligned to match where
-                  they sat before, so nothing about their own position moves,
-                  only what they compete with for width.
-                */}
-                <div className="flex items-center justify-end gap-2">
-                  <ShareProfileButton handle={profile.handle} name={profile.displayName} />
-                  <ProfileCardLink handle={profile.handle} />
-                  {me ? (
-                    <ProfileActions
-                      targetId={profile.id}
-                      handle={profile.handle}
-                      initialBlocked={profile.viewerHasBlocked}
-                    />
-                  ) : null}
+                  </div>
                 </div>
 
-                {/* Identity Presence™ — independent relationship signals, real data only.
-                    Rendered only for signed-in visitors when a genuine relationship exists. */}
-                {isViewer &&
-                (friendState === "friends" ||
-                  friendState === "incoming" ||
-                  friendState === "outgoing" ||
-                  followsYou ||
-                  profile.isFollowing ||
-                  mutuals > 0) ? (
+                {profile.restricted ? (
+                  <div className="mt-6 rounded-2xl border border-border/60 bg-card/50 p-8 text-center ring-hairline">
+                    <Lock className="mx-auto h-8 w-8 text-muted-foreground" />
+                    <p className="mt-3 font-semibold">This account is private</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{me ? "Follow to request access to their activity." : "Sign in and follow to see more."}</p>
+                  </div>
+                ) : (
+                  <>
+                    {profile.bio ? <p className="mt-3 leading-relaxed">{profile.bio}</p> : null}
+                    <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                      {profile.website ? (
+                        <a href={profile.website} target="_blank" rel="nofollow noopener" className="inline-flex items-center gap-1.5 text-primary hover:underline">
+                          <LinkIcon className="h-4 w-4" />
+                          {profile.website.replace(/^https?:\/\//, "")}
+                        </a>
+                      ) : null}
+                      <span className="inline-flex items-center gap-1.5">
+                        <CalendarDays className="h-4 w-4" />
+                        {joined}
+                      </span>
+                    </div>
+                  </>
+                )}
+
+                {/* Identity Presence™ — real relationship signals only, signed-in visitors */}
+                {isViewer && (friendState === "friends" || friendState === "incoming" || friendState === "outgoing" || followsYou || profile.isFollowing || mutuals > 0) ? (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {friendState === "friends" ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/12 px-2.5 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-300">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-300">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Friends
                       </span>
                     ) : friendState === "incoming" ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/12 px-2.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-300">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-300">
                         <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Sent you a request
                       </span>
                     ) : friendState === "outgoing" ? (
@@ -954,7 +934,7 @@ async function ProfileData({
                       </span>
                     ) : null}
                     {followsYou ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/12 px-2.5 py-1 text-xs font-semibold text-blue-600 dark:text-blue-300">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-600 dark:text-blue-300">
                         <span className="h-1.5 w-1.5 rounded-full bg-blue-500" /> Follows you
                       </span>
                     ) : null}
@@ -970,162 +950,62 @@ async function ProfileData({
                     ) : null}
                   </div>
                 ) : null}
-                  </div>
 
-                  {/* Action bar — pinned to the card's right edge on sm+, and a
-                      full-width block of equal buttons on a phone. Every button stays
-                      visible: it wraps to a second row rather than scrolling sideways
-                      (which used to clip the ••• menu). */}
-                  <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0 sm:justify-end sm:pt-2">
-                    {/* Business actions (Part 14) — adaptive, and REAL: each one
-                        appears only when the business has actually supplied the
-                        destination, so no visitor is offered a booking flow that
-                        goes nowhere. Book leads, because it's the action a
-                        business most wants taken. */}
+                {/* Actions — the owner's row (Edit Profile · Share · QR), with what a visitor can do */}
+                <div className="mt-3 flex w-full items-center gap-2">
+                  <FollowButton targetId={profile.id} targetHandle={profile.handle} initialFollowing={profile.isFollowing} canFollow={!!me} followsYou={followsYou} className="min-w-0 flex-1 justify-center" />
+                  {me ? (
+                    /* An existing chat opens directly; a first chat goes through /messages/new/ (owner, 2026-10-08) */
+                    <Link href={directChatId ? `/messages/${directChatId}` : `/messages/new/${profile.id}`} className={`btn-lux min-w-0 flex-1 justify-center ${friendState === "friends" ? "btn-lux-primary" : "btn-lux-secondary"}`}>
+                      <MessageCircle className="h-4 w-4" /> Message
+                    </Link>
+                  ) : null}
+                  <ShareProfileButton handle={profile.handle} name={profile.displayName} />
+                  <ProfileCardLink handle={profile.handle} />
+                </div>
+                {/* the rest on its own row, so nothing in the first row is squeezed (owner, 2026-08-16) */}
+                {(me && friendState !== "self") || isViewer || (isCommercialType(identity.type) && !profile.restricted && (details.bookingUrl || details.quoteUrl || details.contactPhone || details.contactEmail)) ? (
+                  <div className="mt-2 flex w-full flex-wrap items-center gap-2">
                     {isCommercialType(identity.type) && !profile.restricted ? (
                       <>
                         {details.bookingUrl ? (
-                          <a
-                            href={details.bookingUrl}
-                            target="_blank"
-                            rel="nofollow noopener"
-                            className="btn-lux btn-lux-primary min-w-0 flex-1 justify-center sm:flex-none"
-                          >
+                          <a href={details.bookingUrl} target="_blank" rel="nofollow noopener" className="btn-lux btn-lux-primary min-w-0 flex-1 justify-center">
                             <CalendarDays className="h-4 w-4" /> Book
                           </a>
                         ) : null}
                         {details.quoteUrl ? (
-                          <a
-                            href={details.quoteUrl}
-                            target="_blank"
-                            rel="nofollow noopener"
-                            className="btn-lux btn-lux-secondary min-w-0 flex-1 justify-center sm:flex-none"
-                          >
+                          <a href={details.quoteUrl} target="_blank" rel="nofollow noopener" className="btn-lux btn-lux-secondary min-w-0 flex-1 justify-center">
                             Get a quote
                           </a>
                         ) : null}
                         {details.contactPhone ? (
-                          <a
-                            href={`tel:${details.contactPhone.replace(/\s/g, "")}`}
-                            className="btn-lux btn-lux-secondary min-w-0 flex-1 justify-center sm:flex-none"
-                          >
+                          <a href={`tel:${details.contactPhone.replace(/\s/g, "")}`} className="btn-lux btn-lux-secondary min-w-0 flex-1 justify-center">
                             <Phone className="h-4 w-4" /> Call
                           </a>
                         ) : details.contactEmail ? (
-                          <a
-                            href={`mailto:${details.contactEmail}`}
-                            className="btn-lux btn-lux-secondary min-w-0 flex-1 justify-center sm:flex-none"
-                          >
+                          <a href={`mailto:${details.contactEmail}`} className="btn-lux btn-lux-secondary min-w-0 flex-1 justify-center">
                             <Mail className="h-4 w-4" /> Email
                           </a>
                         ) : null}
                       </>
                     ) : null}
                     {me && friendState !== "self" ? (
-                      <AddFriendButton
-                        targetId={profile.id}
-                        targetName={profile.displayName}
-                        targetHandle={profile.handle}
-                        targetAvatarUrl={profile.avatarUrl}
-                        mutualCount={mutuals}
-                        initialState={friendState}
-                        className="min-w-0 flex-1 justify-center sm:flex-none"
-                      />
+                      <AddFriendButton targetId={profile.id} targetName={profile.displayName} targetHandle={profile.handle} targetAvatarUrl={profile.avatarUrl} mutualCount={mutuals} initialState={friendState} className="min-w-0 flex-1 justify-center" />
                     ) : null}
-                    <FollowButton
-                      targetId={profile.id}
-                      targetHandle={profile.handle}
-                      initialFollowing={profile.isFollowing}
-                      canFollow={!!me}
-                      followsYou={followsYou}
-                      className="min-w-0 flex-1 justify-center sm:flex-none"
-                    />
-                    {me ? (
-                      /* Adaptive Relationship Engine (Part 7): messaging a friend is
-                         the natural primary action, so Message leads (filled) between
-                         friends and stays a calm secondary otherwise. Share/QR/•••
-                         moved to the utility row above — see the comment there. */
-                      /* An existing chat opens directly: one route, pushed (back returns
-                         here), no redirect (owner, 2026-10-08). A first chat still goes
-                         through /messages/new/, which gates and creates it. */
-                      <Link
-                        href={directChatId ? `/messages/${directChatId}` : `/messages/new/${profile.id}`}
-                        className={`btn-lux min-w-0 flex-1 justify-center sm:flex-none ${friendState === "friends" ? "btn-lux-primary" : "btn-lux-secondary"}`}
-                      >
-                        <MessageCircle className="h-4 w-4" /> Message
-                      </Link>
-                    ) : null}
-                    {/*
-                      The bell (owner, 2026-08-23: "make users to be able to turn
-                      on and off another users post notification, stories
-                      notification, feed or share notification").
-
-                      A profile is where people go looking for this — it is where
-                      every other app puts it, and it is the one screen that is
-                      unambiguously ABOUT this person. The same sheet is also
-                      reachable from any post's overflow menu, for the far more
-                      common case of already looking at something they made.
-
-                      Signed-in and not-your-own-profile only: there is nothing
-                      to configure about your own activity, and the API rejects
-                      that case anyway.
-                    */}
-                    {isViewer ? (
-                      <CreatorNotificationsButton userId={profile.id} handle={profile.handle} />
-                    ) : null}
+                    {isViewer ? <CreatorNotificationsButton userId={profile.id} handle={profile.handle} /> : null}
+                    {me ? <ProfileActions targetId={profile.id} handle={profile.handle} initialBlocked={profile.viewerHasBlocked} /> : null}
                   </div>
-                </div>
+                ) : null}
 
-                {profile.restricted ? (
-                  <div className="mt-6 rounded-2xl border border-border/60 bg-card/50 p-8 text-center ring-hairline">
-                    <Lock className="mx-auto h-8 w-8 text-muted-foreground" />
-                    <p className="mt-3 font-semibold">This account is private</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {me ? "Follow to request access to their activity." : "Sign in and follow to see more."}
-                    </p>
+                {/* The same four stats, in the same order, as the owner sees (owner 2026-10-16: no views in the visitor hero) */}
+                {!profile.restricted ? (
+                  <div className="mt-5 grid grid-cols-4 divide-x divide-border/50 overflow-hidden rounded-2xl border border-border/60 bg-card/50 ring-hairline">
+                    <StatCell label="Posts" value={postsTotal} />
+                    <StatCell label="Followers" value={profile.followersCount} href={`/u/${profile.handle}/followers`} />
+                    <StatCell label="Following" value={profile.followingCount} href={`/u/${profile.handle}/following`} />
+                    <StatCell label="Likes" value={totals.likes} />
                   </div>
-                ) : (
-                  <>
-                    {profile.bio ? <p className="mt-4 max-w-2xl leading-relaxed">{profile.bio}</p> : null}
-
-                    <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
-                      {profile.website ? (
-                        <a
-                          href={profile.website}
-                          target="_blank"
-                          rel="nofollow noopener"
-                          className="inline-flex items-center gap-1.5 text-primary hover:underline"
-                        >
-                          <LinkIcon className="h-4 w-4" />
-                          {profile.website.replace(/^https?:\/\//, "")}
-                        </a>
-                      ) : null}
-                      <span className="inline-flex items-center gap-1.5">
-                        <CalendarDays className="h-4 w-4" />
-                        Joined {new Date(profile.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-                      </span>
-                    </div>
-
-                    {/* Live stats — divided glass panel; Following/Followers link through.
-                        Views are public BY DEFAULT (owner) and drop out of the grid
-                        entirely when the member turns them off in Privacy, so the row
-                        re-balances to four rather than leaving a hole. */}
-                    <div
-                      className={cn(
-                        "mt-5 grid divide-x divide-border/50 overflow-hidden rounded-2xl border border-border/60 bg-card/50 ring-hairline",
-                        privacy.show_views ? "grid-cols-5" : "grid-cols-4",
-                      )}
-                    >
-                      <StatCell label="Following" value={profile.followingCount} href={`/u/${profile.handle}/following`} />
-                      <StatCell label="Followers" value={profile.followersCount} href={`/u/${profile.handle}/followers`} />
-                      {/* Owner: Friends replaced by Likes here — a visitor cares
-                          what the creator's work has earned, not their friend list. */}
-                      <StatCell label="Likes" value={totals.likes} />
-                      <StatCell label="Posts" value={postsTotal} />
-                      {privacy.show_views ? <StatCell label="Views" value={totals.views} /> : null}
-                    </div>
-                  </>
-                )}
+                ) : null}
               </div>
             </div>
 

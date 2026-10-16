@@ -229,10 +229,11 @@ export function ProfileTabs({
         />
       ) : null}
       <div ref={tray} className="mb-6 flex scroll-mt-24 items-center gap-2">
-        {/* A premium glass segmented control: the active section lifts into a
-            brand pill while the rest stay calm icons (labelled on wider screens,
-            icon-only on mobile so every section fits). */}
-        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-2xl border border-border/60 bg-card/60 p-1 shadow-sm backdrop-blur [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* Owner 2026-10-16: "like the bottom NAV". The SAME glass as the floating nav
+            (`.frenz-nav-glass`, with its fallback tiers), the same soft capsule under the
+            active section and the same primary glyph — labelled on wider screens, icon-only on
+            mobile so every section fits. No new blur surface is invented here. */}
+        <div className="frenz-nav-glass flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto rounded-full p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {sections.map((s) => {
             const Icon = ICONS[s.icon] ?? Grid3x3;
             const isActive = active === s.key;
@@ -246,10 +247,8 @@ export function ProfileTabs({
                 aria-pressed={isActive}
                 title={s.label}
                 className={cn(
-                  "group relative flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition",
-                  isActive
-                    ? "bg-brand-tile text-white shadow-sm"
-                    : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+                  "group relative flex min-h-10 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  isActive ? "bg-foreground/[0.08] text-primary" : "text-foreground/70 hover:text-foreground",
                 )}
               >
                 <Icon className="h-[18px] w-[18px] shrink-0 transition-transform group-active:scale-90" />
@@ -261,7 +260,7 @@ export function ProfileTabs({
 
         {/* Grid ⇄ list view toggle — always separated from the dock */}
         {showViewToggle ? (
-          <div className="flex shrink-0 items-center gap-0.5 rounded-xl border border-border/60 bg-card/70 p-0.5 shadow-sm backdrop-blur">
+          <div className="frenz-nav-glass flex shrink-0 items-center gap-0.5 rounded-full p-1">
             {(
               [
                 { v: "grid" as const, Icon: LayoutGrid, label: "Grid view" },
@@ -275,8 +274,8 @@ export function ProfileTabs({
                 aria-label={label}
                 aria-pressed={view === v}
                 className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-lg transition active:scale-95",
-                  view === v ? "bg-brand-tile text-white shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  "flex h-10 w-10 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  view === v ? "bg-foreground/[0.08] text-primary" : "text-foreground/70 hover:text-foreground",
                 )}
               >
                 <Icon className="h-[17px] w-[17px]" />

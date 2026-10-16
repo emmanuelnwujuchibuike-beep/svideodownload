@@ -37,3 +37,15 @@ export function parseEngagement(raw: unknown): AdEngagement | null {
   return { views, likes, shares, liked: r.liked === true };
 }
 
+
+/**
+ * The like count to show right after a tap (owner, 2026-10-16). The server's `likes` is the stored
+ * count × the campaign's multiplier (0249), so showing it after a tap made ONE like jump by ten. The
+ * shown count moves by exactly one, in the direction the server confirmed; the multiplied total is
+ * what the next load shows. No answer from the server → what was shown before.
+ */
+export function likesAfterTap(before: AdEngagement, after: AdEngagement | null): AdEngagement {
+  if (!after) return before;
+  const delta = after.liked === before.liked ? 0 : after.liked ? 1 : -1;
+  return { ...after, likes: Math.max(0, before.likes + delta) };
+}

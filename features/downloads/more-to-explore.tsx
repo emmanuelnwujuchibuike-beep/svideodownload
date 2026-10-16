@@ -1,17 +1,16 @@
-import { ChevronRight, Compass, DollarSign, MessageCircle, type LucideIcon } from "lucide-react";
+import { ChevronRight, Compass, DollarSign, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 
 import { TapOnceLink } from "@/features/ui/tap-once-link";
 
 /**
- * "More to Explore" — three small doors under the Frenz AI / Wallpapers pair, on the
+ * "More to Explore" — two small doors (owner, 2026-10-16: Post & Chat removed; Earn and Explore stay) under the Frenz AI / Wallpapers pair, on the
  * landing and on /downloads (owner mockup, 2026-10-16: "this is the clear design").
  * It replaces the full-width Explore Features bar; "See all" keeps /features one tap
  * away. Plain links and lucide glyphs: no state, no data, nothing added to first paint
  * beyond the markup.
  */
 const ITEMS: { href: string; title: string; desc: string; icon: LucideIcon; tint: string }[] = [
-  { href: "/home", title: "Post & Chat", desc: "Share and connect", icon: MessageCircle, tint: "from-rose-400 to-pink-500" },
   { href: "/quests", title: "Earn", desc: "Turn activity into rewards", icon: DollarSign, tint: "from-amber-400 to-orange-500" },
   { href: "/explore", title: "Explore", desc: "Discover trending content", icon: Compass, tint: "from-violet-500 to-indigo-600" },
 ];
@@ -25,7 +24,7 @@ export function MoreToExplore() {
           See all <ChevronRight className="h-3.5 w-3.5" aria-hidden />
         </Link>
       </div>
-      <div className="grid grid-cols-3 gap-1.5">
+      <div className="grid grid-cols-2 gap-1.5">
         {ITEMS.map(({ href, title, desc, icon: Icon, tint }) => (
           /*
             TapOnceLink, not a plain Link (owner, 2026-10-15: "the earn button delays to open, and

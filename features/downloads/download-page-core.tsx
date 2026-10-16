@@ -94,7 +94,6 @@ export function DownloadPageCore({
    * layout rather than accidentally advertising the feature.
    */
   showFrenzAi = false,
-  moreToExplore = false,
   aiPromo = null,
 }: {
   platformStatus?: PlatformStatusMap;
@@ -115,8 +114,6 @@ export function DownloadPageCore({
    */
   installBanner?: boolean;
   showFrenzAi?: boolean;
-  /** Landing only: the "More to Explore" row in place of the full-width Features bar. */
-  moreToExplore?: boolean;
   /** The landing promotion played over the Frenz AI tile (Brief C). Landing only. */
   aiPromo?: AiPromo | null;
   /**
@@ -225,14 +222,8 @@ export function DownloadPageCore({
       {/* The full-width Features bar exists only where Frenz AI took its slot
           above. On the landing page Features IS that slot, and repeating it
           would put the same door on the screen twice. */}
-      {/* The landing swaps the bar for the "More to Explore" row (owner mockup, 2026-10-16). */}
-      {showFrenzAi && moreToExplore ? (
-        <MoreToExplore />
-      ) : showFrenzAi ? (
-        <div className="mt-3">
-          <ExploreFeaturesBar />
-        </div>
-      ) : null}
+      {/* The "More to Explore" row in place of the full-width Features bar, on both pages (owner mockup, 2026-10-16). */}
+      {showFrenzAi ? <MoreToExplore /> : null}
 
 
       {/*

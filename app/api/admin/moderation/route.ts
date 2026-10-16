@@ -22,7 +22,8 @@ const schema = z.object({
 export async function GET() {
   const admin = await getAdminUser();
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  return NextResponse.json({ targets: await listReportedTargets() });
+  // Part 8 audit: an admin-only, private queue is never stored by a shared cache
+  return NextResponse.json({ targets: await listReportedTargets() }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 /** POST — apply a moderation action + resolve the target's reports. */

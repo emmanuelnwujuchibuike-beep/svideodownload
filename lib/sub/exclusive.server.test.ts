@@ -347,3 +347,32 @@ describe("cursor helpers", () => {
     expect(guards.visibleTo("locked", false)).toBe(true);
   });
 });
+
+// Part 8 audit: a suspended creator's (or viewer's) exclusive content is not reachable by id
+describe("suspension ends access everywhere, not only in the feed and the profile", () => {
+  const SUSPENDED_POST = "20000000-0000-4000-8000-000000000005";
+  it("an active subscriber of a SUSPENDED creator can't open a post by id, list the gallery, or comment — and nothing is signed", async () => {
+    presign.mockClear();
+    expect(db.tables.creator_memberships!.some((m) => m.creator_id === C.suspended && m.status === "active")).toBe(true);
+    expect(await posts.openSubPost(SUSPENDED_POST, VIEWER)).toMatchObject({ ok: false });
+    const gallery = await posts.listSubPosts(C.suspended, VIEWER);
+    expect(gallery.access).toBe(false);
+    expect(JSON.stringify(gallery)).not.toContain("secret of suspended");
+    expect(await interactions.addComment(SUSPENDED_POST, VIEWER, "hi")).toMatchObject({ ok: false });
+    expect(presign).not.toHaveBeenCalled();
+  });
+
+  it("a SUSPENDED viewer loses access to a creator they pay for", async () => {
+    presign.mockClear();
+    expect(await posts.openSubPost(P(1), VIEWER)).toMatchObject({ ok: true });
+    db.tables.profiles!.find((p) => p.id === VIEWER)!.is_suspended = true;
+    presign.mockClear();
+    expect(await posts.openSubPost(P(1), VIEWER)).toMatchObject({ ok: false });
+    expect(presign).not.toHaveBeenCalled();
+  });
+
+  it("a failed profile read is no access (fails closed)", async () => {
+    db.failOn.profiles = "outage";
+    expect(await posts.openSubPost(P(1), VIEWER)).toMatchObject({ ok: false });
+  });
+});

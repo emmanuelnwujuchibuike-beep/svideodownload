@@ -129,13 +129,24 @@ export async function hasActiveSub(viewerId: string | null, creatorId: string): 
   if (!isUuid(viewerId) || !isUuid(creatorId)) return false;
   if (viewerId === creatorId) return true;
   const db = createAdminClient();
-  const [{ data, error }, blocked] = await Promise.all([
+  const [{ data, error }, blocked, people] = await Promise.all([
     db.from("creator_memberships").select("id").eq("creator_id", creatorId).eq("member_id", viewerId).eq("status", "active").eq("billing", "sub").gt("period_end", new Date().toISOString()).limit(1),
     // owner 2026-10-11 ("block or ignore" a subscriber who screenshots): a creator's block ends SUB access at once
     db.from("blocks").select("blocker_id").or(`and(blocker_id.eq.${creatorId},blocked_id.eq.${viewerId}),and(blocker_id.eq.${viewerId},blocked_id.eq.${creatorId})`).limit(1),
+    /*
+      Part 8 audit: a SUSPENDED creator or viewer has no access. Suspension is a full lockout
+      (lib/social/moderation.ts) enforced per surface; the feed and the profile already hid a
+      suspended creator, but opening a post by id, the gallery API, likes, comments and
+      announcements all ask only this function — so a suspended creator's private media kept
+      being signed for existing subscribers. An admin HIDE is not a suspension and keeps
+      existing subscribers' access (Part 4).
+    */
+    db.from("profiles").select("id, is_suspended").in("id", [creatorId, viewerId]),
   ]);
   // a failed read is "no access": paid content fails CLOSED
-  return !error && !blocked.error && (data ?? []).length > 0 && (blocked.data ?? []).length === 0;
+  if (error || blocked.error || people.error) return false;
+  if (((people.data ?? []) as Row[]).some((p) => p.is_suspended)) return false;
+  return (data ?? []).length > 0 && (blocked.data ?? []).length === 0;
 }
 
 // ─── Money in ────────────────────────────────────────────────────────────────

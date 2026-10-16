@@ -555,3 +555,56 @@ the admin's reason plus the real outcome (`changed`, `state`) go on the audit en
 time, and the publish request sends only the first page (the reconcile run sends the rest).
 
 **Not verified from here:** production data, Paystack payouts, 0252 applied.
+
+## Frenz Exclusive Part 8 — integration, security and production-readiness audit (2026-10-16)
+
+**Map (entry → authorization → source of truth).** Checkout `POST /api/sub/checkout` (session;
+server price) → Paystack → webhook (HMAC) / `/sub/return` / 10-min reconcile → `confirmSubPayment`
+re-verifies → `settle_sub_purchase` (row lock, idempotent; `sub_purchases`, `creator_memberships`,
+`sub_balances`, `sub_ledger`). Access: `hasActiveSub` (membership active + paid period + no block +
+neither party suspended) is the ONE predicate behind the gallery, opening a post (signed links),
+likes, comments, capture, announcements and reports. Refunds: webhook / admin → `reverse_sub_purchase`.
+Withdrawals: `POST /api/sub/withdraw` → `request_sub_withdrawal` (locks the balance row; one open
+request by unique index; idempotency key) → Paystack Transfers or admin → `resolve_withdrawal`;
+"paid" only on `completed`. Fan-out: jobs + per-recipient claims (0251), 20 hand-offs at a time.
+Reporting: 0252 functions (service role only). Cron: `cronAuthorized` (secret, hashed DB token, or admin).
+
+**Fixed and tested in this audit**
+- A SUSPENDED creator's private media stayed reachable by id for existing subscribers (the feed and
+  profile hid them, but `hasActiveSub` didn't check suspension). Now a suspended creator or viewer
+  has no access anywhere; a failed read is no access. Regression tests in
+  `lib/sub/exclusive.server.test.ts` (fail against the old code).
+- The admin moderation queue response now says `private, no-store`.
+
+**Verified (with evidence)**
+- Every `/api/sub/*`, `/api/members/*` and `/api/admin/memberships*`/`moderation*` handler checks the
+  session or the admin on the server, per method; creator routes take no creator id from the client.
+- No reader outside `lib/sub` touches `sub_post_media` keys except the creator's own thumbnail write
+  (ownership-checked). Notification payloads carry no caption/title/body/keys (tests).
+- Migrations 0247–0252: every PGlite harness passes (each applies its predecessors; each applied twice)
+  and every mutant fails; no destructive statement outside function bodies; every SECURITY DEFINER
+  function sets `search_path`; reporting functions are not executable by anon/authenticated.
+- Withdrawals: balance row locked FOR UPDATE, one open request (unique index), idempotency key;
+  "Paid" shown only for `completed`.
+- Every private GET in these areas answers `private, no-store`.
+
+**Not verified (needs production or a real device)**
+- Live Paystack (charges, refunds, disputes, transfers) and the webhook subscriptions in the dashboard.
+- Real push / email delivery; the GitHub Actions clock for `ai-reconcile`.
+- Concurrency of two simultaneous withdrawals against real Postgres (PGlite is single-connection;
+  the guarantee rests on `FOR UPDATE` + the unique index, read in code).
+- Migrations 0247–0252 applied in production; `R2_PRIVATE_BUCKET` set.
+- Monetag's own OnClick/Multitag scripts: whether a zone runs as a tab-under (current tab replaced)
+  is a Monetag dashboard setting per zone — our own ad and direct-link opens are new-tab.
+
+**Known, recorded, not changed**
+- `request_sub_withdrawal` for a creator with no `sub_balances` row compares NULL and then fails safely
+  at the ledger's NOT NULL (rolls back, no money moves) with a generic error instead of "insufficient".
+- Older Exclusive screens (subscriptions, favourites, feed, studio panels) use the earlier `GLASS`
+  cards; the new `.ex-*` glass is on earnings/admin. Visually consistent but two class sets.
+
+**Production verification steps (in order)**
+1. Run 0247, 0248, 0249, 0250, 0251, 0252 in the Supabase SQL editor; probe the columns named in HANDOFF.
+2. Paystack test mode: subscribe → unlock → refund → relock; a withdrawal → transfer → completed.
+3. Confirm webhook events `charge.success`, `refund.processed`, `charge.dispute.create`, `transfer.*`.
+4. Publish an announcement to a test subscriber; watch `sub_fanout_jobs` reach `done`.

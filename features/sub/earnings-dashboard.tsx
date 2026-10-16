@@ -1,10 +1,9 @@
 "use client";
 
-import { ArrowDownLeft, ArrowUpRight, CalendarRange, Info, Loader2, RefreshCw, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Info, Loader2, RefreshCw } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useRef, useState } from "react";
 
-import { GLASS, primaryPill, quietPill, SectionHeader } from "@/features/friends/ui";
 import { Segmented } from "@/features/sub/segmented";
 import { usd } from "@/lib/creator/membership/engine";
 import { haptic } from "@/lib/motion/haptics";
@@ -12,14 +11,16 @@ import type { LedgerEntry, Overview } from "@/lib/sub/earnings";
 import { chargedAmount } from "@/lib/sub/lifecycle";
 import { cn } from "@/lib/utils";
 
-const EarningsChart = dynamic(() => import("@/features/sub/earnings-chart").then((m) => m.EarningsChart), { ssr: false, loading: () => <div aria-hidden className="h-[9.5rem] animate-pulse rounded-2xl bg-muted motion-reduce:animate-none" /> });
+const EarningsChart = dynamic(() => import("@/features/sub/earnings-chart").then((m) => m.EarningsChart), { ssr: false, loading: () => <div aria-hidden className="h-[8.5rem] rounded-2xl bg-black/[0.03] dark:bg-white/[0.04]" /> });
 const SubWithdrawSheet = dynamic(() => import("@/features/sub/sub-withdraw").then((m) => m.SubWithdrawSheet), { ssr: false });
 
 /**
- * Creator earnings (Frenz Exclusive Part 7). The first view is rendered on the server; changing the
- * period or the history filter fetches exactly that (no polling). Every figure is the server's and
- * keeps its own meaning: balances from sub_balances, period figures aggregated in the database,
- * subscribers' payments per charged currency (never added together). USD cents for creator money.
+ * Creator earnings (Frenz Exclusive Part 7), in the Exclusive glass language (app/globals.css
+ * `.ex-*`): one glass hero for the balance, grouped lists for everything else — no wall of cards.
+ * The first view is rendered on the server; changing the period or the history filter fetches
+ * exactly that (no polling). Every figure is the server's and keeps its own meaning: balances from
+ * sub_balances, period figures aggregated in the database, subscribers' payments per charged
+ * currency (never added together). USD cents for creator money.
  */
 
 type Days = 7 | 30 | 90;
@@ -34,8 +35,19 @@ const FILTERS = [
 type Filter = (typeof FILTERS)[number][0];
 
 const signed = (c: number) => (c === 0 ? usd(0) : `${c < 0 ? "−" : "+"}${usd(Math.abs(c))}`);
-const fmtDay = (iso: string) => new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
-const W_STATUS: Record<string, string> = { pending: "Requested", reviewing: "In review", approved: "Approved", processing: "Paying out", completed: "Paid", rejected: "Declined", failed: "Failed", cancelled: "Cancelled" };
+const fmtDay = (iso: string) => new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+const W_STATUS: Record<string, [string, string]> = {
+  pending: ["Requested", "ex-status--pending"],
+  reviewing: ["In review", "ex-status--pending"],
+  approved: ["Approved", "ex-status--pending"],
+  processing: ["Paying out", "ex-status--pending"],
+  completed: ["Paid", "ex-status--good"],
+  rejected: ["Declined", "ex-status--bad"],
+  failed: ["Failed", "ex-status--bad"],
+  cancelled: ["Cancelled", ""],
+};
+const H2 = "mb-2 px-1 text-[12.5px] font-semibold uppercase tracking-[0.07em] text-muted-foreground";
+const FIELD = "mt-1 block min-h-11 w-full rounded-2xl border border-black/[0.07] bg-white/70 px-3 text-[14px] text-foreground outline-none transition-colors focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/25 dark:border-white/10 dark:bg-white/[0.05]";
 
 export function EarningsDashboard({ initial, initialLedger }: { initial: Overview | null; initialLedger: LedgerPage | null }) {
   const [o, setO] = useState<Overview | null>(initial);
@@ -66,11 +78,11 @@ export function EarningsDashboard({ initial, initialLedger }: { initial: Overvie
 
   if (!o) {
     return (
-      <div className={cn("rounded-[22px] px-4 py-5", GLASS)}>
+      <div role="alert" className="ex-card px-5 py-5">
         <p className="text-[15px] font-semibold">Couldn&apos;t load your earnings</p>
-        <p className="mt-0.5 text-[13px] text-muted-foreground">Your money is safe; this is only the view. Try again.</p>
-        <button type="button" onClick={() => void load(days)} disabled={loading} className={cn(quietPill, "mt-3")}>
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />} Retry
+        <p className="mt-1 text-[13px] text-muted-foreground">Your money is safe — only this view didn&apos;t load.</p>
+        <button type="button" onClick={() => void load(days)} disabled={loading} className="ex-btn ex-btn--glass mt-4">
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />} Try again
         </button>
       </div>
     );
@@ -78,54 +90,62 @@ export function EarningsDashboard({ initial, initialLedger }: { initial: Overvie
 
   const b = o.balances;
   const p = o.period;
+  const extras = [b.heldCents ? ["In a withdrawal", usd(b.heldCents), ""] : null, b.pendingCents ? ["Clearing", usd(b.pendingCents), ""] : null, b.debtCents ? ["Owed back", usd(b.debtCents), "warn"] : null].filter((x): x is string[] => !!x);
   return (
-    <div>
-      {/* The balance — the one glass hero on the page */}
-      <section aria-labelledby="bal-title" className={cn("relative overflow-hidden rounded-[26px] px-4 pb-4 pt-4", GLASS)}>
-        <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/[0.09] via-accent/[0.05] to-transparent" />
-        <div className="relative">
-          <p id="bal-title" className="flex items-center gap-1.5 text-[12.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            <Wallet className="h-3.5 w-3.5" aria-hidden /> Available to withdraw
+    <div className="space-y-6">
+      {/* The balance — the one floating glass surface */}
+      <section aria-labelledby="bal-title" className="ex-glass rounded-[28px] px-5 pb-5 pt-5">
+        <p id="bal-title" className="text-[13px] font-medium text-muted-foreground">
+          Available to withdraw
+        </p>
+        <p className="mt-1 break-all text-[clamp(2.1rem,10vw,2.75rem)] font-bold leading-none tracking-[-0.035em] tabular-nums">{usd(b.availableCents)}</p>
+        <p className="mt-2 text-[13px] text-muted-foreground">
+          <span className="font-semibold text-foreground tabular-nums">{usd(b.lifetimeCents)}</span> earned all time · <span className="font-semibold text-foreground tabular-nums">{usd(b.withdrawnCents)}</span> paid out
+        </p>
+        {extras.length ? (
+          <ul className="mt-3 flex flex-wrap gap-1.5">
+            {extras.map(([label, value, tone]) => (
+              <li key={label} className={cn("rounded-full px-2.5 py-1 text-[12px] font-medium", tone === "warn" ? "bg-amber-500/10 text-amber-800 dark:text-amber-300" : "bg-black/[0.045] text-foreground/80 dark:bg-white/[0.08]")}>
+                {label} <span className="font-bold tabular-nums">{value}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <button type="button" onClick={() => setWithdrawing(true)} disabled={!!o.withdrawal.reason} className="ex-btn ex-btn--primary min-w-[9rem]">
+            <ArrowUpRight className="h-4 w-4" aria-hidden /> Withdraw
+          </button>
+          <p className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted-foreground">
+            {o.withdrawal.reason ? <Info className="h-3.5 w-3.5 shrink-0" aria-hidden /> : null}
+            {o.withdrawal.reason ?? `${o.withdrawal.feePercent}% fee · minimum ${usd(o.withdrawal.minCents)}`}
           </p>
-          <p className="mt-1 break-all text-[clamp(1.9rem,9vw,2.4rem)] font-extrabold leading-none tracking-[-0.03em] tabular-nums">{usd(b.availableCents)}</p>
-          <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[12.5px]">
-            <Stat label="Earned, all time" value={usd(b.lifetimeCents)} hint="After refunds" />
-            <Stat label="Paid out" value={usd(b.withdrawnCents)} hint="Completed withdrawals" />
-            {b.heldCents ? <Stat label="In a withdrawal" value={usd(b.heldCents)} hint="Requested, not paid yet" /> : null}
-            {b.pendingCents ? <Stat label="Clearing" value={usd(b.pendingCents)} hint="Becomes available after the hold" /> : null}
-            {b.debtCents ? <Stat label="Owed back" value={usd(b.debtCents)} hint="Refunds of money already paid out" tone="warn" /> : null}
-          </dl>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <button type="button" onClick={() => setWithdrawing(true)} disabled={!!o.withdrawal.reason} className={cn(primaryPill, "bg-gradient-to-r from-primary to-accent")}>
-              <ArrowUpRight className="h-4 w-4" aria-hidden /> Withdraw
-            </button>
-            {o.withdrawal.reason ? (
-              <p className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted-foreground">
-                <Info className="h-3.5 w-3.5 shrink-0" aria-hidden /> {o.withdrawal.reason}
-              </p>
-            ) : (
-              <p className="text-[12px] text-muted-foreground">
-                {o.withdrawal.feePercent}% withdrawal fee · minimum {usd(o.withdrawal.minCents)}
-              </p>
-            )}
-          </div>
         </div>
       </section>
 
-      {/* Now */}
-      <section aria-label="Right now" className="mt-3 grid grid-cols-3 gap-2">
-        <Tile label="Active subscribers" value={o.activeSubscribers.toLocaleString()} />
-        <Tile label="Ending" value={o.ending.toLocaleString()} hint="Cancelled, still paid up" />
-        <Tile label="Exclusive posts" value={o.posts.published.toLocaleString()} hint={`${o.posts.locked} locked · ${o.posts.hidden} hidden`} />
+      {/* Right now — one strip, three figures */}
+      <section aria-label="Right now" className="ex-card grid grid-cols-3 divide-x divide-black/[0.06] dark:divide-white/[0.07]">
+        <Figure value={o.activeSubscribers} label="Subscribers" />
+        <Figure value={o.ending} label="Ending" hint="Still paid up" />
+        <Figure value={o.posts.published} label="Posts" hint={`${o.posts.hidden} hidden`} />
       </section>
 
       {/* The period */}
-      <section aria-labelledby="period-title" className="mt-6">
+      <section aria-labelledby="period-title">
         <div className="mb-2 flex items-center justify-between gap-3 px-1">
-          <h2 id="period-title" className="flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-            <CalendarRange className="h-3.5 w-3.5" aria-hidden /> Last {days} days
+          <h2 id="period-title" className="text-[12.5px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
+            Last {days} days
           </h2>
-          {loading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Updating" /> : null}
+          <span aria-live="polite" className="text-[12px] text-muted-foreground">
+            {loading ? (
+              <span className="inline-flex items-center gap-1">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Updating
+              </span>
+            ) : error ? (
+              <button type="button" onClick={() => void load(days)} className="font-semibold text-rose-600 underline-offset-2 hover:underline dark:text-rose-400">
+                Couldn&apos;t update · Retry
+              </button>
+            ) : null}
+          </span>
         </div>
         <Segmented
           label="Reporting period"
@@ -137,58 +157,46 @@ export function EarningsDashboard({ initial, initialLedger }: { initial: Overvie
           ]}
           onChange={(v) => choose(Number(v) as Days)}
         />
-        <div aria-live="polite" className="sr-only">
-          {loading ? "Updating" : `Showing the last ${days} days`}
-        </div>
-        {error ? (
-          <p className="mt-2 text-[12.5px] text-rose-600">
-            Couldn&apos;t update.{" "}
-            <button type="button" onClick={() => void load(days)} className="font-semibold underline">
-              Retry
-            </button>
-          </p>
-        ) : null}
         {!o.analyticsReady || !p ? (
-          <p className={cn("mt-3 rounded-[22px] px-4 py-3.5 text-[13px] text-muted-foreground", GLASS)}>Period analytics arrive with the next update. Your balances above are current.</p>
+          <p className="ex-card mt-3 px-5 py-4 text-[13px] text-muted-foreground">Period analytics arrive with the next update. Your balance above is current.</p>
         ) : (
-          <div className={cn("mt-3 transition-opacity motion-reduce:transition-none", loading && "opacity-60")}>
-            <div className={cn("rounded-[22px] px-4 py-3.5", GLASS)}>
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <p className="text-[12.5px] font-semibold text-muted-foreground">Net earnings</p>
-                <p className={cn("text-[22px] font-extrabold tabular-nums tracking-[-0.02em]", p.netCents < 0 && "text-rose-600 dark:text-rose-400")}>{signed(p.netCents)}</p>
-              </div>
-              <p className="text-[12px] text-muted-foreground">
-                {usd(p.earnedCents)} earned{p.clawedCents ? ` − ${usd(p.clawedCents)} refunded` : ""}. Your share is the full price; the service fee is paid by subscribers on top.
+          <div className={cn("mt-3 space-y-3 transition-opacity duration-150 motion-reduce:transition-none", loading && "opacity-60")}>
+            <div className="ex-card px-5 py-4">
+              <p className="text-[13px] font-medium text-muted-foreground">Net earnings</p>
+              <p className={cn("mt-0.5 text-[28px] font-bold leading-tight tracking-[-0.02em] tabular-nums", p.netCents < 0 && "text-rose-600 dark:text-rose-400")}>{signed(p.netCents)}</p>
+              <p className="text-[12.5px] text-muted-foreground">
+                {usd(p.earnedCents)} earned{p.clawedCents ? `, ${usd(p.clawedCents)} refunded` : ""}
               </p>
-              <div className="mt-3">
+              <div className="mt-4">
                 <EarningsChart points={p.daily} days={days} />
               </div>
             </div>
-            <dl className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              <Card label="New subscribers" value={p.newSubs} hint="First payment to you" />
-              <Card label="Renewals" value={p.renewals} hint="Paid again" />
-              <Card label="Access ended" value={p.accessEnded} hint="Paid time ran out or was refunded" />
-              <Card label="Cancellations" value={p.cancellations} hint="Won't renew; access kept to the end" />
-              <Card label="Refunds" value={p.refunds} hint="Payments refunded or reversed" />
-              <Card label="Posts published" value={p.postsPublished} />
-              <Card label="Likes" value={p.likes} hint="On your exclusive posts" />
-              <Card label="Comments" value={p.comments} hint="Visible ones" />
-              <Card label="Withdrawals" value={p.withdrawalsRequested} hint={p.withdrawalsCompleted ? `${p.withdrawalsCompleted} paid · ${usd(p.withdrawalsCompletedNetCents)}` : "None paid in this period"} />
+
+            <dl className="ex-card ex-rows overflow-hidden">
+              <Row label="New subscribers" hint="First payment to you" value={p.newSubs} />
+              <Row label="Renewals" hint="Paid again" value={p.renewals} />
+              <Row label="Cancellations" hint="Won't renew; access kept to the end" value={p.cancellations} />
+              <Row label="Access ended" hint="Paid time ran out or was refunded" value={p.accessEnded} />
+              <Row label="Refunds" hint="Refunded or reversed payments" value={p.refunds} />
+              <Row label="Withdrawals" hint={p.withdrawalsCompleted ? `${p.withdrawalsCompleted} paid · ${usd(p.withdrawalsCompletedNetCents)} to you` : "None paid in this period"} value={p.withdrawalsRequested} />
+              <Row label="Posts published" value={p.postsPublished} />
+              <Row label="Likes · comments" value={`${p.likes.toLocaleString()} · ${p.comments.toLocaleString()}`} />
             </dl>
+
             {p.grossByCurrency.length ? (
-              <div className={cn("mt-2 rounded-[22px] px-4 py-3", GLASS)}>
-                <p className="text-[12.5px] font-semibold">What subscribers paid</p>
-                <p className="text-[12px] text-muted-foreground">Price plus service fee, in the currency they were charged. Currencies are shown apart, never added together.</p>
-                <ul className="mt-2 flex flex-wrap gap-1.5">
+              <div className="ex-card px-5 py-4">
+                <p className="text-[13.5px] font-semibold">What subscribers paid</p>
+                <p className="mt-0.5 text-[12px] text-muted-foreground">Price plus service fee, in the currency charged. Shown apart, never added together. Your share is the full price.</p>
+                <ul className="mt-3 flex flex-wrap gap-1.5">
                   {p.grossByCurrency.map((g) => (
-                    <li key={g.currency} className="rounded-full bg-black/[0.04] px-2.5 py-1 text-[13px] font-semibold tabular-nums dark:bg-white/[0.07]">
+                    <li key={g.currency} className="rounded-full bg-black/[0.045] px-3 py-1.5 text-[13px] font-semibold tabular-nums dark:bg-white/[0.08]">
                       {chargedAmount(g.minor, g.currency)}
                     </li>
                   ))}
                 </ul>
               </div>
             ) : null}
-            <p className="mt-2 px-1 text-[11.5px] text-muted-foreground">Views and impressions aren&apos;t recorded for exclusive posts, so they aren&apos;t shown. Days are counted in UTC.</p>
+            <p className="px-1 text-[11.5px] leading-relaxed text-muted-foreground">Views and impressions aren&apos;t recorded for exclusive posts, so they aren&apos;t shown. Days are in UTC.</p>
           </div>
         )}
       </section>
@@ -207,33 +215,24 @@ export function EarningsDashboard({ initial, initialLedger }: { initial: Overvie
   );
 }
 
-function Stat({ label, value, hint, tone }: { label: string; value: string; hint: string; tone?: "warn" }) {
+function Figure({ value, label, hint }: { value: number; label: string; hint?: string }) {
   return (
-    <div className="min-w-0">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className={cn("truncate text-[15px] font-bold tabular-nums", tone === "warn" && "text-rose-600 dark:text-rose-400")} title={hint}>
-        {value}
-      </dd>
+    <div className="min-w-0 px-3 py-3.5 text-center">
+      <p className="truncate text-[22px] font-bold leading-none tracking-[-0.02em] tabular-nums">{value.toLocaleString()}</p>
+      <p className="mt-1.5 truncate text-[12px] font-semibold">{label}</p>
+      {hint ? <p className="truncate text-[11px] text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }
 
-function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Row({ label, hint, value }: { label: string; hint?: string; value: number | string }) {
   return (
-    <div className={cn("min-w-0 rounded-[18px] px-3 py-2.5", GLASS)}>
-      <p className="truncate text-[20px] font-extrabold leading-tight tabular-nums">{value}</p>
-      <p className="text-[11.5px] font-semibold leading-tight text-foreground/80">{label}</p>
-      {hint ? <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground">{hint}</p> : null}
-    </div>
-  );
-}
-
-function Card({ label, value, hint }: { label: string; value: number; hint?: string }) {
-  return (
-    <div className="min-w-0 rounded-[18px] bg-black/[0.025] px-3 py-2.5 ring-1 ring-inset ring-black/[0.04] dark:bg-white/[0.04] dark:ring-white/[0.06]">
-      <dt className="text-[12px] font-semibold text-foreground/80">{label}</dt>
-      <dd className="text-[19px] font-extrabold tabular-nums">{value.toLocaleString()}</dd>
-      {hint ? <p className="text-[11px] leading-tight text-muted-foreground">{hint}</p> : null}
+    <div className="flex items-center justify-between gap-3 px-5 py-3">
+      <dt className="min-w-0">
+        <span className="block text-[14px] font-medium">{label}</span>
+        {hint ? <span className="block text-[11.5px] leading-snug text-muted-foreground">{hint}</span> : null}
+      </dt>
+      <dd className="shrink-0 text-[16px] font-bold tabular-nums">{typeof value === "number" ? value.toLocaleString() : value}</dd>
     </div>
   );
 }
@@ -270,61 +269,66 @@ function History({ initial }: { initial: LedgerPage | null }) {
   };
 
   return (
-    <section aria-labelledby="hist-title" className="mb-8 mt-6">
-      <SectionHeader id="hist-title" title="History" />
-      <div role="radiogroup" aria-label="Show" className="-mx-1 mb-2 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+    <section aria-labelledby="hist-title" className="pb-6">
+      <h2 id="hist-title" className={H2}>
+        History
+      </h2>
+      <div role="radiogroup" aria-label="Show" className="-mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
         {FILTERS.map(([k, l]) => (
-          <button key={k} type="button" role="radio" aria-checked={filter === k} onClick={() => apply({ filter: k })} className={cn("min-h-9 shrink-0 rounded-full px-3.5 text-[12.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", filter === k ? "bg-foreground text-background" : "bg-black/[0.05] text-foreground/75 dark:bg-white/[0.07]")}>
+          <button key={k} type="button" role="radio" aria-checked={filter === k} onClick={() => apply({ filter: k })} className="ex-chip">
             {l}
           </button>
         ))}
       </div>
-      <div className="mb-2 grid grid-cols-2 gap-2">
-        <label className="text-[11.5px] font-medium text-muted-foreground">
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        <label className="px-1 text-[12px] font-medium text-muted-foreground">
           From
-          <input type="date" value={from} max={to || undefined} onChange={(e) => apply({ from: e.target.value })} className="mt-0.5 block min-h-10 w-full rounded-xl border border-black/[0.08] bg-black/[0.02] px-2.5 text-[14px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/30 dark:border-white/10 dark:bg-white/[0.04]" />
+          <input type="date" value={from} max={to || undefined} onChange={(e) => apply({ from: e.target.value })} className={FIELD} />
         </label>
-        <label className="text-[11.5px] font-medium text-muted-foreground">
+        <label className="px-1 text-[12px] font-medium text-muted-foreground">
           To
-          <input type="date" value={to} min={from || undefined} onChange={(e) => apply({ to: e.target.value })} className="mt-0.5 block min-h-10 w-full rounded-xl border border-black/[0.08] bg-black/[0.02] px-2.5 text-[14px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/30 dark:border-white/10 dark:bg-white/[0.04]" />
+          <input type="date" value={to} min={from || undefined} onChange={(e) => apply({ to: e.target.value })} className={FIELD} />
         </label>
       </div>
       {page?.items.length ? (
-        <ul className={cn("divide-y divide-black/[0.06] overflow-hidden rounded-[22px] dark:divide-white/[0.07]", GLASS, loading && "opacity-60")}>
-          {page.items.map((e) => (
-            <li key={e.id} className="flex items-start gap-3 px-3.5 py-3">
-              <span aria-hidden className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", e.amountCents > 0 ? "bg-primary/10 text-primary" : e.amountCents < 0 ? "bg-black/[0.05] text-foreground/70 dark:bg-white/[0.07]" : "bg-accent/10 text-accent")}>
-                {e.amountCents >= 0 ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[14px] font-semibold leading-snug">{e.label}</span>
-                <span className="block text-[12px] text-muted-foreground" suppressHydrationWarning>
-                  {fmtDay(e.at)}
+        <ul className={cn("ex-card ex-rows overflow-hidden transition-opacity duration-150 motion-reduce:transition-none", loading && "opacity-60")}>
+          {page.items.map((e) => {
+            const w = e.withdrawal ? (W_STATUS[e.withdrawal.status] ?? [e.withdrawal.status, ""]) : null;
+            return (
+              <li key={e.id} className="flex items-center gap-3 px-4 py-3">
+                <span aria-hidden className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", e.amountCents > 0 ? "bg-primary/10 text-primary" : "bg-black/[0.05] text-foreground/70 dark:bg-white/[0.08]")}>
+                  {e.amountCents > 0 ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
                 </span>
-                {e.withdrawal ? (
-                  <span className="mt-0.5 block text-[12px] text-muted-foreground">
-                    {W_STATUS[e.withdrawal.status] ?? e.withdrawal.status} · {usd(e.withdrawal.netCents)} to you after a {usd(e.withdrawal.feeCents)} fee
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[14px] font-semibold leading-snug">{e.label}</span>
+                  <span className="block text-[12px] text-muted-foreground" suppressHydrationWarning>
+                    {fmtDay(e.at)}
+                    {e.withdrawal ? ` · ${usd(e.withdrawal.netCents)} to you, ${usd(e.withdrawal.feeCents)} fee` : ""}
                   </span>
-                ) : e.note && e.kind !== "earning" ? (
-                  <span className="mt-0.5 block break-words text-[12px] text-muted-foreground">{e.note}</span>
-                ) : null}
-              </span>
-              <span className={cn("shrink-0 text-right text-[14.5px] font-bold tabular-nums", e.amountCents > 0 && "text-primary", e.amountCents < 0 && "text-foreground")}>{e.kind === "withdrawal_paid" ? "Paid" : signed(e.amountCents)}</span>
-            </li>
-          ))}
+                </span>
+                <span className="flex shrink-0 flex-col items-end gap-1">
+                  {e.kind === "withdrawal_paid" ? null : <span className={cn("text-[15px] font-bold tabular-nums", e.amountCents > 0 && "text-primary")}>{signed(e.amountCents)}</span>}
+                  {w ? <span className={cn("ex-status", w[1])}>{w[0]}</span> : null}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       ) : !error ? (
-        <p className={cn("rounded-[22px] px-4 py-4 text-center text-[13px] text-muted-foreground", GLASS)}>{filter === "all" && !from && !to ? "No activity yet. Your first subscriber's payment will show here." : "Nothing matches these filters."}</p>
+        <div className="ex-card px-5 py-6 text-center">
+          <p className="text-[14px] font-semibold">{filter === "all" && !from && !to ? "No activity yet" : "Nothing matches"}</p>
+          <p className="mt-1 text-[12.5px] text-muted-foreground">{filter === "all" && !from && !to ? "Your first subscriber's payment will show here." : "Try another type or date range."}</p>
+        </div>
       ) : null}
       {error ? (
-        <div className={cn("mt-2 flex items-center justify-between gap-3 rounded-[22px] px-3.5 py-3", GLASS)}>
+        <div role="alert" className="ex-card mt-2 flex items-center justify-between gap-3 px-4 py-3">
           <p className="text-[13px] text-muted-foreground">Couldn&apos;t load your history.</p>
-          <button type="button" onClick={() => void load({ filter, from, to, cursor: null })} disabled={loading} className={quietPill}>
+          <button type="button" onClick={() => void load({ filter, from, to, cursor: null })} disabled={loading} className="ex-btn ex-btn--glass ex-btn--sm">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />} Retry
           </button>
         </div>
       ) : page?.next ? (
-        <button type="button" onClick={() => void load({ filter, from, to, cursor: page.next })} disabled={loading} className={cn(quietPill, "mt-2 w-full justify-center")}>
+        <button type="button" onClick={() => void load({ filter, from, to, cursor: page.next })} disabled={loading} className="ex-btn ex-btn--quiet mt-3 w-full">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null} {loading ? "Loading…" : "Show older"}
         </button>
       ) : null}

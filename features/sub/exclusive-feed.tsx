@@ -223,7 +223,7 @@ function FeedCard({ post, creator, eager, onOpen }: { post: Post; creator: Creat
             {post.hasVideo ? <Film className="h-8 w-8 text-muted-foreground" aria-hidden /> : <Images className="h-8 w-8 text-muted-foreground" aria-hidden />}
           </span>
         )}
-        <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/45 px-2.5 py-1 text-[11.5px] font-semibold text-white backdrop-blur-md">
+        <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/45 px-2.5 py-1 text-[11.5px] font-semibold text-white backdrop-blur">
           {post.hasVideo ? <Film className="h-3.5 w-3.5" aria-hidden /> : <Images className="h-3.5 w-3.5" aria-hidden />}
           {post.items}
         </span>
@@ -305,7 +305,7 @@ export function LockedPreviewCard({ card, creator }: { card: Card; creator: Disc
           <span className="block h-full w-full bg-gradient-to-br from-primary via-accent to-primary/80" />
         )}
         <span className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-white">
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/35 ring-1 ring-inset ring-white/25 backdrop-blur-md">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/35 ring-1 ring-inset ring-white/25 backdrop-blur">
             <Lock className="h-5 w-5" aria-hidden />
           </span>
           <span className="text-[12.5px] font-semibold [text-shadow:0_1px_3px_rgba(0,0,0,0.5)]">

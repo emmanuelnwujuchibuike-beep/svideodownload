@@ -1023,6 +1023,347 @@
     backdrop-filter: none;
   }
 
+  /* ── FRENZ EXCLUSIVE GLASS (owner directive 2026-10-16, "native iOS glass") ──
+     ONE small vocabulary for the Exclusive screens, built the way `.ai-glass`
+     and `.frenz-nav-glass` above are built (same four tiers, same rules):
+
+       .ex-ground        the page: a static two-tone wash, painted once. Never
+                         animated, never background-attachment: fixed.
+       .ex-card          grouped content. NO backdrop-filter: on a near-white
+                         ground blur adds nothing visible, so a card is a
+                         translucent fill + hairline + a static top highlight +
+                         a soft contact shadow — glass without the GPU cost.
+       .ex-glass         the few surfaces that float (the balance hero, the
+                         segmented track, sheets): 8px blur, the measured
+                         budget (features/ai/design/glass-cost.test.ts).
+       .ex-btn …         primary / glass / quiet / danger / icon, 44px targets.
+       .ex-seg …         the segmented control and its sliding thumb.
+       .ex-chip …        filter chips.
+       .ex-status …      a dot AND a word, never colour alone.
+
+     Motion: nothing here runs on its own. The only transitions are on
+     interaction — transform and opacity, 120–220ms — and every one of them is
+     switched off under reduced motion. No keyframes, no blur/shadow/filter
+     transition, so a hidden page does no work at all.
+
+     Tiers (equal specificity, html inside :where(); the most conservative tier
+     is declared last and wins):
+       1. Full glass     .ex-glass 8px blur, 72% fill
+       2. Reduced        reduced motion or data-glass="reduced": 4px, 86%
+       3. Translucent    no backdrop-filter: 94%
+       4. Solid          reduced transparency / more contrast: opaque, no blur */
+  .ex-ground {
+    background-color: hsl(var(--background));
+    background-image:
+      radial-gradient(60rem 28rem at 15% -6rem, hsl(var(--primary) / 0.07), transparent 70%),
+      radial-gradient(48rem 26rem at 95% 4rem, hsl(var(--accent) / 0.06), transparent 70%);
+    background-repeat: no-repeat;
+  }
+  .dark .ex-ground {
+    background-image:
+      radial-gradient(60rem 28rem at 15% -6rem, hsl(var(--primary) / 0.12), transparent 70%),
+      radial-gradient(48rem 26rem at 95% 4rem, hsl(var(--accent) / 0.1), transparent 70%);
+  }
+
+  .ex-card {
+    --ex-rgb: 255 255 255;
+    --ex-fill: 0.78;
+    position: relative;
+    border-radius: 1.375rem;
+    background-color: rgb(var(--ex-rgb) / var(--ex-fill));
+    border: 1px solid rgb(15 23 42 / 0.06);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.9),
+      0 1px 2px rgb(15 23 42 / 0.04),
+      0 12px 32px -18px rgb(15 23 42 / 0.22);
+  }
+  .dark .ex-card {
+    --ex-rgb: 22 26 42;
+    border-color: rgb(255 255 255 / 0.08);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.06),
+      0 14px 34px -18px rgb(0 0 0 / 0.7);
+  }
+  /* rows inside a card: hairline dividers, no nested cards */
+  .ex-rows > * + * {
+    border-top: 1px solid rgb(15 23 42 / 0.06);
+  }
+  .dark .ex-rows > * + * {
+    border-top-color: rgb(255 255 255 / 0.07);
+  }
+
+  .ex-glass {
+    --ex-rgb: 255 255 255;
+    --ex-fill: 0.72;
+    --ex-blur: 8px;
+    background-color: rgb(var(--ex-rgb) / var(--ex-fill));
+    -webkit-backdrop-filter: blur(var(--ex-blur)) saturate(150%);
+    backdrop-filter: blur(var(--ex-blur)) saturate(150%);
+    border: 1px solid rgb(255 255 255 / 0.7);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.85),
+      0 1px 2px rgb(15 23 42 / 0.05),
+      0 16px 40px -20px rgb(15 23 42 / 0.3);
+  }
+  .dark .ex-glass {
+    --ex-rgb: 20 24 40;
+    border-color: rgb(255 255 255 / 0.1);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.07),
+      0 18px 44px -20px rgb(0 0 0 / 0.75);
+  }
+
+  /* ── buttons ── */
+  .ex-btn {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border-radius: 9999px;
+    padding: 0 1.1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      transform 120ms var(--ease-out),
+      opacity 120ms var(--ease-out),
+      background-color 160ms var(--ease-out);
+  }
+  .ex-btn:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+  .ex-btn:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+  .ex-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .ex-btn--primary {
+    color: #fff;
+    background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(232 85% 55%));
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.25),
+      0 8px 20px -10px hsl(var(--primary) / 0.7);
+  }
+  .ex-btn--glass {
+    color: hsl(var(--foreground));
+    background-color: rgb(255 255 255 / 0.7);
+    border: 1px solid rgb(15 23 42 / 0.08);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 1px 2px rgb(15 23 42 / 0.05);
+  }
+  .dark .ex-btn--glass {
+    background-color: rgb(255 255 255 / 0.07);
+    border-color: rgb(255 255 255 / 0.1);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+  }
+  .ex-btn--quiet {
+    color: hsl(var(--foreground) / 0.85);
+    background-color: rgb(15 23 42 / 0.045);
+  }
+  .dark .ex-btn--quiet {
+    background-color: rgb(255 255 255 / 0.07);
+  }
+  .ex-btn--danger {
+    color: #be123c;
+    background-color: rgb(244 63 94 / 0.09);
+  }
+  .dark .ex-btn--danger {
+    color: #fda4af;
+    background-color: rgb(244 63 94 / 0.14);
+  }
+  .ex-btn--sm {
+    min-height: 2.25rem;
+    padding: 0 0.85rem;
+    font-size: 0.8125rem;
+  }
+  .ex-icon-btn {
+    display: inline-flex;
+    height: 2.75rem;
+    width: 2.75rem;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    color: hsl(var(--foreground) / 0.8);
+    background-color: rgb(255 255 255 / 0.7);
+    border: 1px solid rgb(15 23 42 / 0.07);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 1px 2px rgb(15 23 42 / 0.05);
+    transition: transform 120ms var(--ease-out);
+  }
+  .dark .ex-icon-btn {
+    background-color: rgb(255 255 255 / 0.07);
+    border-color: rgb(255 255 255 / 0.1);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+  }
+  .ex-icon-btn:active {
+    transform: scale(0.94);
+  }
+  .ex-icon-btn:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /* ── segmented control: a track and ONE thumb that slides (transform only) ── */
+  .ex-seg {
+    position: relative;
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    border-radius: 9999px;
+    padding: 0.25rem;
+  }
+  .ex-seg__thumb {
+    position: absolute;
+    top: 0.25rem;
+    bottom: 0.25rem;
+    left: 0.25rem;
+    border-radius: 9999px;
+    background-color: #fff;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 1),
+      0 1px 2px rgb(15 23 42 / 0.1),
+      0 4px 12px -6px rgb(15 23 42 / 0.3);
+    transition: transform 220ms var(--ease-out);
+  }
+  .dark .ex-seg__thumb {
+    background-color: rgb(255 255 255 / 0.16);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
+  }
+  .ex-seg__opt {
+    position: relative;
+    z-index: 1;
+    min-height: 2.5rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border-radius: 9999px;
+    padding: 0 0.4rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+    transition: color 160ms var(--ease-out);
+  }
+  .ex-seg__opt[aria-checked="true"] {
+    color: hsl(var(--foreground));
+    font-weight: 700;
+  }
+  .ex-seg__opt:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: -2px;
+  }
+
+  /* ── chips ── */
+  .ex-chip {
+    display: inline-flex;
+    min-height: 2.25rem;
+    flex-shrink: 0;
+    align-items: center;
+    border-radius: 9999px;
+    padding: 0 0.9rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: hsl(var(--foreground) / 0.75);
+    background-color: rgb(15 23 42 / 0.045);
+    transition: background-color 160ms var(--ease-out), transform 120ms var(--ease-out);
+  }
+  .dark .ex-chip {
+    background-color: rgb(255 255 255 / 0.07);
+  }
+  .ex-chip[aria-checked="true"],
+  .ex-chip[aria-pressed="true"] {
+    color: hsl(var(--background));
+    background-color: hsl(var(--foreground));
+  }
+  .ex-chip:active {
+    transform: scale(0.97);
+  }
+  .ex-chip:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /* ── status: a dot and a word ── */
+  .ex-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 9999px;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    background-color: rgb(15 23 42 / 0.05);
+    color: hsl(var(--foreground) / 0.75);
+  }
+  .dark .ex-status {
+    background-color: rgb(255 255 255 / 0.08);
+  }
+  .ex-status::before {
+    content: "";
+    height: 0.4rem;
+    width: 0.4rem;
+    border-radius: 9999px;
+    background-color: currentColor;
+    opacity: 0.85;
+  }
+  .ex-status--good { color: hsl(var(--primary)); background-color: hsl(var(--primary) / 0.1); }
+  .ex-status--pending { color: hsl(var(--accent)); background-color: hsl(var(--accent) / 0.1); }
+  .ex-status--warn { color: #b45309; background-color: rgb(245 158 11 / 0.12); }
+  .dark .ex-status--warn { color: #fbbf24; }
+  .ex-status--bad { color: #be123c; background-color: rgb(244 63 94 / 0.1); }
+  .dark .ex-status--bad { color: #fda4af; }
+
+  /* 2 · Reduced glass — reduced motion, or a constrained device. Also: no motion. */
+  @media screen and (prefers-reduced-motion: reduce) {
+    :where(html:not([data-a11y-motion="full"])) .ex-glass {
+      --ex-fill: 0.86;
+      --ex-blur: 4px;
+    }
+    :where(html:not([data-a11y-motion="full"])) :is(.ex-btn, .ex-icon-btn, .ex-chip, .ex-seg__thumb, .ex-seg__opt) {
+      transition: none;
+    }
+    :where(html:not([data-a11y-motion="full"])) :is(.ex-btn, .ex-icon-btn, .ex-chip):active {
+      transform: none;
+    }
+  }
+  :where(html[data-a11y-motion="reduce"], html[data-glass="reduced"]) .ex-glass {
+    --ex-fill: 0.86;
+    --ex-blur: 4px;
+  }
+  :where(html[data-a11y-motion="reduce"]) :is(.ex-btn, .ex-icon-btn, .ex-chip, .ex-seg__thumb, .ex-seg__opt) {
+    transition: none;
+  }
+
+  /* 3 · Translucent — no backdrop-filter at all. */
+  /* operands in the other order: the AI glass test finds its own tiers by their exact text */
+  @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    .ex-glass {
+      --ex-fill: 0.94;
+    }
+  }
+
+  /* 4 · Solid — less transparency or more contrast. */
+  @media (prefers-contrast: more), (prefers-reduced-transparency: reduce) {
+    .ex-glass,
+    .ex-card {
+      --ex-fill: 1;
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+  :where(html[data-a11y-transparency="reduce"], html[data-a11y-contrast="high"]) :is(.ex-glass, .ex-card) {
+    --ex-fill: 1;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
   .ai-cta {
     position: relative;
     isolation: isolate;

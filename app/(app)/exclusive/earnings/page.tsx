@@ -23,17 +23,19 @@ export default async function EarningsRoute() {
   if (!user) redirect("/login?next=/exclusive/earnings");
   const [overview, ledger] = await Promise.all([earningsOverview(user.id, 30), ledgerPage(user.id)]);
   return (
-    <div className="mx-auto w-full max-w-2xl flex-1 px-3 pt-4 sm:px-4" style={{ paddingBottom: "calc(var(--frenz-bottom-nav) + 1rem)" }}>
-      <header className="mb-4 flex items-center gap-2 px-1">
-        <Link href="/exclusive" aria-label="Back to Exclusive" className="-ml-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+    <div className="ex-ground w-full flex-1">
+      <div className="mx-auto w-full max-w-2xl px-4 pt-4" style={{ paddingBottom: "calc(var(--frenz-bottom-nav) + 1rem)" }}>
+      <header className="mb-5 flex items-center gap-3">
+        <Link href="/exclusive" aria-label="Back to Exclusive" className="ex-icon-btn -ml-1">
           <ArrowLeft className="h-5 w-5" aria-hidden />
         </Link>
         <div>
-          <h1 className="text-[22px] font-extrabold tracking-[-0.02em]">Earnings</h1>
+          <h1 className="text-[28px] font-bold leading-tight tracking-[-0.03em]">Earnings</h1>
           <p className="text-[13.5px] text-muted-foreground">Your Exclusive income, in US dollars. Only you can see this.</p>
         </div>
       </header>
       <EarningsDashboard initial={overview.ok ? (({ ok: _ok, ...rest }) => rest)(overview) : null} initialLedger={ledger.ok ? { items: ledger.items, next: ledger.next } : null} />
+      </div>
     </div>
   );
 }

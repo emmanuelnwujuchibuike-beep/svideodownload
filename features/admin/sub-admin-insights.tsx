@@ -16,9 +16,10 @@ import { cn } from "@/lib/utils";
  * and currencies are never added together. Media is reviewed only through the audited sub-review.
  */
 
-const card = "rounded-2xl border border-border/70 bg-background/60 px-3 py-2.5 backdrop-blur-sm";
-const field = "min-h-9 w-full rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/30";
-const pill = (on: boolean) => cn("min-h-8 rounded-full px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", on ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:text-foreground");
+// the Exclusive glass language (app/globals.css .ex-*): cards without blur, chips, buttons
+const card = "ex-card px-3.5 py-3";
+const field = "min-h-11 w-full rounded-2xl border border-black/[0.07] bg-white/70 px-3 text-sm outline-none transition-colors focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/25 dark:border-white/10 dark:bg-white/[0.05]";
+const pill = (_on: boolean) => "ex-chip";
 const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }) : "—");
 
 export function SubAdminInsights() {
@@ -159,21 +160,21 @@ function SearchPanel() {
         </select>
         <input aria-label="From date" type="date" value={q.from} onChange={(e) => setQ({ ...q, from: e.target.value })} className={field} />
         <input aria-label="To date" type="date" value={q.to} onChange={(e) => setQ({ ...q, to: e.target.value })} className={field} />
-        <button type="submit" disabled={loading} className="col-span-2 inline-flex min-h-9 items-center justify-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-60 sm:col-span-3">
+        <button type="submit" disabled={loading} className="ex-btn ex-btn--primary col-span-2 sm:col-span-3">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Search className="h-4 w-4" aria-hidden />} Search
         </button>
       </form>
       {error ? <p className="mt-2 text-sm text-rose-600">{error}</p> : null}
       {page ? (
         page.items.length ? (
-          <ul className="mt-3 divide-y divide-border/70 overflow-hidden rounded-2xl border border-border/70">
+          <ul className="ex-card ex-rows mt-3 overflow-hidden">
             {page.items.map((r) => (
               <li key={r.id} className="px-3 py-2.5 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="min-w-0 font-semibold">
                     @{r.creator.handle ?? r.creator.id.slice(0, 8)} ← @{r.subscriber.handle ?? r.subscriber.id.slice(0, 8)}
                   </span>
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold">{r.status.replace("_", " ")}</span>
+                  <span className={cn("ex-status", r.status === "paid" ? "ex-status--good" : r.status === "initiated" ? "ex-status--pending" : r.status === "refund_due" ? "ex-status--warn" : r.status === "failed" ? "" : "ex-status--bad")}>{r.status.replace("_", " ")}</span>
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {usd(r.priceCents)} to creator + {usd(r.feeCents)} fee · charged {chargedAmount(r.chargedMinor, r.chargedCurrency)} · created {fmt(r.createdAt)}
@@ -195,7 +196,7 @@ function SearchPanel() {
         )
       ) : null}
       {page?.next ? (
-        <button type="button" onClick={() => void run(page.next)} disabled={loading} className="mt-2 w-full rounded-full bg-muted py-2 text-sm font-semibold">
+        <button type="button" onClick={() => void run(page.next)} disabled={loading} className="ex-btn ex-btn--quiet mt-2 w-full">
           {loading ? "Loading…" : "More results"}
         </button>
       ) : null}
@@ -271,7 +272,7 @@ function Moderation() {
           ))}
         </div>
       </div>
-      <div aria-live="polite">{result ? <p className="mb-2 rounded-xl bg-muted px-3 py-2 text-sm">{result}</p> : null}</div>
+      <div aria-live="polite">{result ? <p className="ex-card mb-2 px-3.5 py-2.5 text-sm">{result}</p> : null}</div>
       {error ? (
         <p className="text-sm text-rose-600">
           {error}{" "}
@@ -281,12 +282,12 @@ function Moderation() {
         </p>
       ) : null}
       {page?.items.length ? (
-        <ul className={cn("divide-y divide-border/70 overflow-hidden rounded-2xl border border-border/70", loading && "opacity-60")}>
+        <ul className={cn("ex-card ex-rows overflow-hidden", loading && "opacity-60")}>
           {page.items.map((r) => (
             <li key={`${r.targetType}:${r.targetId}`} className="px-3 py-2.5 text-sm">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <span className="min-w-0 break-words font-semibold">{r.title}</span>
-                <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold">{r.state}</span>
+                <span className={cn("ex-status", r.state === "published" || r.state === "visible" ? "ex-status--good" : r.state === "archived" || r.state === "hidden" ? "ex-status--bad" : "")}>{r.state === "archived" ? "removed" : r.state}</span>
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {r.handle ? `@${r.handle} · ` : ""}
@@ -298,32 +299,32 @@ function Moderation() {
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {r.state !== "missing" ? <SubReviewButton t={{ targetType: r.targetType, targetId: r.targetId }} /> : null}
                 {r.state === "published" || r.state === "visible" ? (
-                  <button type="button" onClick={() => setActing({ row: r, action: "remove" })} className="min-h-8 rounded-full bg-rose-500/10 px-3 text-xs font-semibold text-rose-600">
+                  <button type="button" onClick={() => setActing({ row: r, action: "remove" })} className="ex-btn ex-btn--danger ex-btn--sm">
                     Remove
                   </button>
                 ) : null}
                 {r.state === "archived" || r.state === "hidden" ? (
-                  <button type="button" onClick={() => setActing({ row: r, action: "restore" })} className="min-h-8 rounded-full bg-muted px-3 text-xs font-semibold">
+                  <button type="button" onClick={() => setActing({ row: r, action: "restore" })} className="ex-btn ex-btn--quiet ex-btn--sm">
                     Restore
                   </button>
                 ) : null}
                 {filter === "open" ? (
-                  <button type="button" onClick={() => setActing({ row: r, action: "dismiss" })} className="min-h-8 rounded-full bg-muted px-3 text-xs font-semibold">
+                  <button type="button" onClick={() => setActing({ row: r, action: "dismiss" })} className="ex-btn ex-btn--quiet ex-btn--sm">
                     Dismiss reports
                   </button>
                 ) : null}
               </div>
               {acting && acting.row.targetId === r.targetId ? (
-                <div className="mt-2 rounded-xl border border-border/70 p-2.5">
+                <div className="ex-glass mt-2 rounded-2xl p-3">
                   <label className="block text-xs font-semibold">
                     Reason for {acting.action} (kept in the audit log{acting.action === "dismiss" ? "" : "; 3+ characters"})
                     <input value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} className={cn(field, "mt-1")} />
                   </label>
                   <div className="mt-2 flex gap-1.5">
-                    <button type="button" onClick={() => void confirm()} disabled={acting.action !== "dismiss" && note.trim().length < 3} className="min-h-8 rounded-full bg-foreground px-3 text-xs font-semibold text-background disabled:opacity-50">
+                    <button type="button" onClick={() => void confirm()} disabled={acting.action !== "dismiss" && note.trim().length < 3} className="ex-btn ex-btn--primary ex-btn--sm">
                       Confirm {acting.action}
                     </button>
-                    <button type="button" onClick={() => setActing(null)} className="min-h-8 rounded-full bg-muted px-3 text-xs font-semibold">
+                    <button type="button" onClick={() => setActing(null)} className="ex-btn ex-btn--quiet ex-btn--sm">
                       Cancel
                     </button>
                   </div>
@@ -336,7 +337,7 @@ function Moderation() {
         <p className="text-sm text-muted-foreground">Nothing here.</p>
       ) : null}
       {page?.next ? (
-        <button type="button" onClick={() => void load(filter, type, page.next)} disabled={loading} className="mt-2 w-full rounded-full bg-muted py-2 text-sm font-semibold">
+        <button type="button" onClick={() => void load(filter, type, page.next)} disabled={loading} className="ex-btn ex-btn--quiet mt-2 w-full">
           {loading ? "Loading…" : "More"}
         </button>
       ) : null}

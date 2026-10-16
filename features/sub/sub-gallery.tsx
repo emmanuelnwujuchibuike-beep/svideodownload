@@ -494,7 +494,7 @@ export function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted, 
         </div>
         {reporting ? <ReportSheet targetType="sub_post" targetId={postId} open={reporting} onClose={() => setReporting(false)} /> : null}
         {editing !== null ? (
-          <div className="absolute inset-x-0 bottom-0 z-[9] rounded-t-[24px] bg-zinc-950/95 p-4 text-white ring-1 ring-white/10 backdrop-blur-xl" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }} role="dialog" aria-label="Edit caption">
+          <div className="absolute inset-x-0 bottom-0 z-[9] rounded-t-[24px] bg-zinc-950/95 p-4 text-white ring-1 ring-white/10" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }} role="dialog" aria-label="Edit caption">
             <label htmlFor="sub-edit-caption" className="text-[13px] font-semibold">Caption</label>
             <textarea id="sub-edit-caption" rows={3} maxLength={2200} value={editing} onChange={(e) => setEditing(e.target.value)} className="mt-1.5 w-full resize-none rounded-2xl bg-white/10 px-3 py-2 text-[15px] outline-none ring-1 ring-inset ring-white/15 focus-visible:ring-2 focus-visible:ring-white/50" />
             <div className="mt-2 flex justify-end gap-2">
@@ -636,13 +636,13 @@ function PrivateInteractions({ postId, isCreator }: { postId: string; isCreator:
       {/* the engagement rail — frosted discs with a hairline ring, the reels rail's look */}
       <div className="absolute bottom-28 right-3 z-[4] flex flex-col items-center gap-4">
         <button type="button" onClick={toggleLike} aria-pressed={sum.liked} aria-label={sum.liked ? "Unlike" : "Like"} className="group flex flex-col items-center gap-1 text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.6)]">
-          <span className={cn("flex h-12 w-12 items-center justify-center rounded-full bg-black/30 ring-1 ring-inset ring-white/15 backdrop-blur-md transition group-active:scale-90 motion-reduce:transition-none", sum.liked && "bg-rose-500/20 ring-rose-400/40")}>
+          <span className={cn("flex h-12 w-12 items-center justify-center rounded-full bg-black/30 ring-1 ring-inset ring-white/15 backdrop-blur transition group-active:scale-90 motion-reduce:transition-none", sum.liked && "bg-rose-500/20 ring-rose-400/40")}>
             <Heart className={cn("h-6 w-6 transition-transform motion-reduce:transition-none", sum.liked && "scale-110 fill-rose-500 text-rose-500")} aria-hidden />
           </span>
           <span className="text-[12px] font-semibold tabular-nums">{formatCompactNumber(sum.likes)}</span>
         </button>
         <button type="button" onClick={openPanel} aria-label="Comments" className="group flex flex-col items-center gap-1 text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.6)]">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/30 ring-1 ring-inset ring-white/15 backdrop-blur-md transition group-active:scale-90 motion-reduce:transition-none">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/30 ring-1 ring-inset ring-white/15 backdrop-blur transition group-active:scale-90 motion-reduce:transition-none">
             <MessageCircle className="h-6 w-6" aria-hidden />
           </span>
           <span className="text-[12px] font-semibold tabular-nums">{formatCompactNumber(sum.comments)}</span>
@@ -653,7 +653,7 @@ function PrivateInteractions({ postId, isCreator }: { postId: string; isCreator:
           {/* a tap above the tray closes it, like the reels and feed sheets */}
           <button type="button" aria-label="Close comments" tabIndex={-1} onClick={() => setPanel(false)} className="absolute inset-0 z-[5] cursor-default bg-black/40" />
           {/* 2026-10-14 (owner): the same height as the reels and feed comment sheets, not a small strip */}
-          <section aria-label="Comments" className="absolute inset-x-0 bottom-0 z-[6] flex h-[68%] flex-col overflow-hidden rounded-t-[28px] bg-zinc-950/[0.97] text-white shadow-[0_-24px_60px_-20px_rgba(0,0,0,0.9)] ring-1 ring-inset ring-white/[0.08] backdrop-blur-2xl">
+          <section aria-label="Comments" className="absolute inset-x-0 bottom-0 z-[6] flex h-[68%] flex-col overflow-hidden rounded-t-[28px] bg-zinc-950/[0.97] text-white shadow-[0_-24px_60px_-20px_rgba(0,0,0,0.9)] ring-1 ring-inset ring-white/[0.08]">
             {/* a hairline of gold across the top edge — the private, members-only mark */}
             <span aria-hidden className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/60 to-transparent" />
             <span aria-hidden className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-white/25" />

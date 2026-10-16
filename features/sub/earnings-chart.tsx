@@ -36,21 +36,23 @@ export function EarningsChart({ points, days }: { points: DailyPoint[]; days: nu
 
   return (
     <figure className="m-0">
-      <figcaption className="mb-2 text-[12.5px] text-muted-foreground">{summary}</figcaption>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={summary} className="block h-32 w-full">
-        <line x1={0} x2={W} y1={base} y2={base} className="stroke-black/10 dark:stroke-white/15" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+      <figcaption className="mb-3 text-[12px] leading-snug text-muted-foreground">{summary}</figcaption>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={summary} className="block h-28 w-full">
+        <line x1={0} x2={W} y1={base} y2={base} className="stroke-black/[0.08] dark:stroke-white/[0.12]" strokeWidth={1} vectorEffect="non-scaling-stroke" strokeDasharray="3 4" />
         {points.map((p, i) => {
           if (!p.netCents) return null;
           const h = Math.max(2, Math.abs(p.netCents) * scale);
           const x = i * bw + bw * 0.18;
-          return <rect key={p.day} x={x} width={Math.max(1, bw * 0.64)} y={p.netCents > 0 ? base - h : base} height={h} rx={Math.min(3, bw * 0.3)} className={p.netCents > 0 ? "fill-primary" : "fill-rose-500"} opacity={p.netCents > 0 ? 0.9 : 0.75} />;
+          return <rect key={p.day} x={x} width={Math.max(1, bw * 0.64)} y={p.netCents > 0 ? base - h : base} height={h} rx={Math.min(3, bw * 0.3)} className={p.netCents > 0 ? "fill-primary" : "fill-rose-500"} opacity={p.netCents > 0 ? 0.85 : 0.7} />;
         })}
       </svg>
       <div className="mt-1 flex justify-between text-[11px] tabular-nums text-muted-foreground" aria-hidden>
         <span>{points[0] ? short(points[0].day) : ""}</span>
         <span>{points.length ? short(points[points.length - 1]!.day) : ""}</span>
       </div>
-      <table className="sr-only">
+      {/* Wrapped, not `table.sr-only`: a table ignores the 1px width and grew the page sideways (found at 320px) */}
+      <div className="sr-only">
+      <table>
         <caption>Net earnings per day</caption>
         <thead>
           <tr>
@@ -73,6 +75,7 @@ export function EarningsChart({ points, days }: { points: DailyPoint[]; days: nu
             ))}
         </tbody>
       </table>
+      </div>
     </figure>
   );
 }

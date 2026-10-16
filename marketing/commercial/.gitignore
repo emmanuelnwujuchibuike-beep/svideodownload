@@ -3,3 +3,4 @@ captures/seq/
 output/picture-*.mp4
 output/mix.wav
 mock/*.pem
+captures/raw/f-*/

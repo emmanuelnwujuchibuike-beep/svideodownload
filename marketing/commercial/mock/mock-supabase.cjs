@@ -37,7 +37,14 @@ const posts = [
   content_type: null, momentum_score: 0, hot_score: 0, format: 'reel', media_width: 540, media_height: 960,
   stream_ready: false, stream_error: null, sound_id: null, slug: null, publisher: undefined,
 }));
-const TABLES = { profiles, posts };
+// Demo wallpapers (demo-media/wp*.jpg) so the Wallpapers tile and gallery have images.
+const wallpapers = ['Aurora lines', 'Neon tunnel', 'Liquid glow', 'Aurora drift', 'Blue tunnel', 'Violet glow'].map((title, i) => ({
+  id: i + 1, title, category: 'abstract', image_url: `${base}/wp${i + 1}.jpg`, thumb_url: `${base}/wp${i + 1}.jpg`,
+  status: 'published', likes_count: 0, saves_count: 0, comments_count: 0, downloads_count: 0, views_count: 0,
+  views_boost: 0, likes_boost: 0, saves_boost: 0, width: 1080, height: 1920, created_at: iso(60 * (i + 1)),
+  source: 'upload', uploaded_by: null, sort_order: i,
+}));
+const TABLES = { profiles, posts, wallpapers };
 
 function parseFilters(u) {
   const f = [];

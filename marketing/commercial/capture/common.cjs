@@ -2,6 +2,7 @@
 const { chromium, devices } = require(require('path').resolve(__dirname, '../../../node_modules/playwright'));
 const { session } = require('../mock/session.cjs');
 const BASE = 'http://localhost:3100';
+const SAFE = { top: 47, bottom: 34 };
 async function open({ signedIn = false, dpr = 2, history = false } = {}) {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, args: ['--autoplay-policy=no-user-gesture-required', '--no-proxy-server'] });
   const ctx = await browser.newContext({ ...devices['iPhone 13'], viewport: { width: 390, height: 844 }, deviceScaleFactor: dpr, bypassCSP: true, ignoreHTTPSErrors: true, serviceWorkers: 'block', colorScheme: 'light' });
@@ -33,6 +34,15 @@ async function open({ signedIn = false, dpr = 2, history = false } = {}) {
     const add = () => { const s = document.createElement('style'); s.textContent = css; document.documentElement.appendChild(s); };
     if (document.documentElement) add(); else document.addEventListener('DOMContentLoaded', add);
   });
+  // iPhone safe areas (status bar 47pt, home indicator 34pt). The app is
+  // viewport-fit=cover, so it lays itself out around these exactly as on a phone.
+  const newPage = ctx.newPage.bind(ctx);
+  ctx.newPage = async () => {
+    const page = await newPage();
+    const cdp = await ctx.newCDPSession(page);
+    await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: SAFE.top, bottom: SAFE.bottom, left: 0, right: 0 } });
+    return page;
+  };
   return { browser, ctx, BASE };
 }
-module.exports = { open, BASE };
+module.exports = { open, BASE, SAFE };

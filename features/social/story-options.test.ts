@@ -38,7 +38,8 @@ describe("story options, like the History viewer's", () => {
   it("a ••• button opens them, and the story pauses while they are open", () => {
     const v = viewer();
     expect(v).toContain('aria-label="Story options"');
-    expect(v).toContain("replying || holding || paidCard || optionsOpen");
+    // a hold plays at 2x instead of pausing (owner, 2026-10-15); options, a paid card and replying still pause
+    expect(v).toContain("replying || paidCard || optionsOpen");
     expect(v).toMatch(/const StoryOptions = dynamic\(/);
   });
 
@@ -74,5 +75,25 @@ describe("DELETE /api/stories/:id", () => {
     expect(r).toContain('if (!data?.length) return NextResponse.json({ error: "Not found." }, { status: 404 });');
     expect(r).not.toMatch(/storage|\.remove\(/);
     expect(src("supabase/migrations/0015_stories.sql")).toContain('create policy "stories owner delete" on public.stories');
+  });
+});
+
+describe("story gestures (owner, 2026-10-15)", () => {
+  const v = readFileSync(join(process.cwd(), "features/app-shell/dashboard/stories-row.tsx"), "utf8");
+  it("hold right = 2x forward, hold left = 2x backward", () => {
+    expect(v).toContain('onPointerDown={() => startHold("back")}');
+    expect(v).toContain('onPointerDown={() => startHold("forward")}');
+    expect(v).toContain('const rate = holdRef.current === "forward" ? 2 : holdRef.current === "back" ? -2 : 1;');
+    expect(v).toContain("v.playbackRate = 2;");
+    expect(v).toContain("v.currentTime = Math.max(0, v.currentTime - 0.2);");
+  });
+  it("double-tap = Wow, once per story, never on your own", () => {
+    expect(v).toContain("fireWowFeedback();");
+    expect(v).toContain("if (story && !isOwn && !wowed.current.has(story.id)) {");
+    expect(v).toContain('onClick={() => zoneTap(next)}');
+  });
+  it("a single-emoji reply plays the rise on the tap", () => {
+    expect(v).toContain("if (isSingleEmoji(t)) {");
+    expect(v.indexOf("onEmoji?.(t);")).toBeLessThan(v.indexOf("const ok = await postStoryReply(toUserId, t);"));
   });
 });

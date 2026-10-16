@@ -1,7 +1,7 @@
 "use client";
 
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
-import { Eye, Heart, Loader2, MoreHorizontal, Plus, Repeat2, Send, X } from "lucide-react";
+import { Eye, FastForward, Heart, Loader2, MoreHorizontal, Plus, Repeat2, Rewind, Send, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -16,8 +16,10 @@ import { useEntitlements } from "@/features/auth/use-entitlements";
 import { ReshareSheet } from "@/features/social/reshare-sheet";
 import { StoryViewersSheet } from "@/features/social/story-viewers-sheet";
 import { toast } from "@/features/ui/toast";
+import { fireWowFeedback, WowBurst } from "@/features/ui/wow-burst";
 import { formatRelative } from "@/lib/i18n/format";
 import { haptic } from "@/lib/motion/haptics";
+import { isSingleEmoji } from "@/lib/social/single-emoji";
 import { fetchStoryGroups, readCachedStories, writeCachedStories } from "@/lib/social/story-cache";
 import type { StoryGroup } from "@/lib/social/stories";
 import { isGroupSeen, loadSeenMap, markGroupSeen, type SeenMap } from "@/lib/social/story-seen";
@@ -312,15 +314,23 @@ export function StoryViewer({
     an ordinary tap never crosses it, and `wasHold` suppresses the click that
     would otherwise fire once the pointer lifts off a genuine hold.
   */
-  const [holding, setHolding] = useState(false);
+  /*
+    2026-10-15 (owner): "make press and hold on right to fast forward on 2x, and left to be
+    backward on 2x". The hold still clears the screen; it now also plays the story at 2x —
+    forward on the right two thirds, backward on the left third — with a 2x badge. A video
+    plays at playbackRate 2 or steps back 0.2 s every 100 ms; an image's timer runs at ±2x.
+  */
+  const [holding, setHolding] = useState<false | "back" | "forward">(false);
+  const holdRef = useRef<false | "back" | "forward">(false);
+  holdRef.current = holding;
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wasHold = useRef(false);
-  const startHold = useCallback(() => {
+  const startHold = useCallback((dir: "back" | "forward") => {
     wasHold.current = false;
     holdTimer.current = setTimeout(() => {
       wasHold.current = true;
       haptic("light");
-      setHolding(true);
+      setHolding(dir);
     }, 220);
   }, []);
   const endHold = useCallback(() => {
@@ -468,15 +478,18 @@ export function StoryViewer({
   // clear look — `startedAt` is backdated by whatever had already elapsed, so
   // un-pausing resumes the same segment rather than restarting its 5s.
   useEffect(() => {
-    if (!story || story.mediaKind === "video" || replying || holding || paidCard || optionsOpen) return;
-    const startedAt = performance.now() - elapsedRef.current;
+    if (!story || story.mediaKind === "video" || replying || paidCard || optionsOpen) return;
+    let last = performance.now();
     let raf = 0;
     // Part 9 (2026-10-09): the whole viewer re-rendered every frame (60 Hz) for the
     // bar alone. It now re-renders only when the bar moves by 2 % (about 10 Hz);
     // a short linear CSS transition on the bar keeps it smooth.
     let shown = -1;
     const tick = (now: number) => {
-      elapsedRef.current = now - startedAt;
+      // 2x forward or backward while held (never below the start of the segment)
+      const rate = holdRef.current === "forward" ? 2 : holdRef.current === "back" ? -2 : 1;
+      elapsedRef.current = Math.max(0, elapsedRef.current + (now - last) * rate);
+      last = now;
       const p = Math.min(100, (elapsedRef.current / IMAGE_MS) * 100);
       const step = p >= 100 ? 100 : Math.floor(p / 2) * 2;
       if (step !== shown) {
@@ -488,15 +501,77 @@ export function StoryViewer({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [gi, si, story, next, replying, holding, paidCard, optionsOpen]);
+  }, [gi, si, story, next, replying, paidCard, optionsOpen]);
 
   // Pause the story video while replying, or held for a clear look.
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    if (replying || holding || paidCard || optionsOpen) v.pause();
+    if (replying || paidCard || optionsOpen) v.pause();
     else void v.play().catch(() => {});
-  }, [replying, holding, paidCard, optionsOpen, gi, si]);
+  }, [replying, paidCard, optionsOpen, gi, si]);
+
+  // 2x while held: forward plays at playbackRate 2, backward steps back 0.2 s every 100 ms
+  // (no browser plays a video in reverse), then playback resumes where the rewind stopped.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !holding) return;
+    if (holding === "forward") {
+      v.playbackRate = 2;
+      return () => {
+        v.playbackRate = 1;
+      };
+    }
+    v.pause();
+    const id = window.setInterval(() => {
+      v.currentTime = Math.max(0, v.currentTime - 0.2);
+      if (v.duration) setPct((v.currentTime / v.duration) * 100);
+    }, 100);
+    return () => {
+      window.clearInterval(id);
+      void v.play().catch(() => {});
+    };
+  }, [holding, gi, si]);
+
+  /*
+    Double-tap = Wow (owner, 2026-10-15: "double on the story to wow on it"): the app's one
+    Wow burst, haptic and sound, and the author gets a 😮 story reply — once per story, never
+    on your own. A single tap now waits 260 ms to know it was not the first of two.
+  */
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [wowKey, setWowKey] = useState(0);
+  const wowed = useRef(new Set<string>());
+  const tapTimer = useRef<number | null>(null);
+  const lastTap = useRef(0);
+  useEffect(
+    () => () => {
+      if (tapTimer.current !== null) window.clearTimeout(tapTimer.current);
+    },
+    [],
+  );
+  const zoneTap = (go: () => void) => {
+    if (wasHold.current) return;
+    const now = Date.now();
+    if (tapTimer.current !== null && now - lastTap.current < 300) {
+      window.clearTimeout(tapTimer.current);
+      tapTimer.current = null;
+      fireWowFeedback();
+      setWowKey((k) => k + 1);
+      if (story && !isOwn && !wowed.current.has(story.id)) {
+        wowed.current.add(story.id);
+        void postStoryReply(group.userId, "😮");
+      }
+      return;
+    }
+    lastTap.current = now;
+    tapTimer.current = window.setTimeout(() => {
+      tapTimer.current = null;
+      go();
+    }, 260);
+  };
+
+  // A single-emoji reply rises up the screen and fades (owner, 2026-10-15)
+  const [rise, setRise] = useState<{ id: number; emoji: string } | null>(null);
 
   // Escape + scroll lock.
   useEffect(() => {
@@ -570,6 +645,7 @@ export function StoryViewer({
   */
   return createPortal(
     <motion.div
+      ref={rootRef}
       className="fixed inset-0 z-[95] flex items-center justify-center bg-black"
       role="dialog"
       aria-modal="true"
@@ -585,6 +661,15 @@ export function StoryViewer({
       onDragEnd={handleDragEnd}
     >
       {paidCard ? <SelfStoryCard ad={paidCard} onDone={() => setPaidCard(null)} /> : null}
+      {holding ? (
+        <div className="pointer-events-none absolute left-1/2 top-[calc(1.5rem+var(--frenz-safe-top))] z-30 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-[13px] font-bold text-white backdrop-blur-md" aria-live="polite">
+          {holding === "back" ? <Rewind className="h-4 w-4 fill-white" aria-hidden /> : null}
+          2×
+          {holding === "forward" ? <FastForward className="h-4 w-4 fill-white" aria-hidden /> : null}
+        </div>
+      ) : null}
+      <WowBurst burstKey={wowKey} anchorRef={rootRef} />
+      {rise ? <EmojiRise key={rise.id} emoji={rise.emoji} onDone={() => setRise(null)} /> : null}
       {/*
         Every piece of chrome below fades out together while `holding` —
         "full clear screen on press and hold" (owner, 2026-08-16). One class
@@ -803,22 +888,22 @@ export function StoryViewer({
       */}
       <button
         type="button"
-        aria-label="Previous"
-        onPointerDown={startHold}
+        aria-label="Previous (hold to rewind at 2x)"
+        onPointerDown={() => startHold("back")}
         onPointerUp={endHold}
         onPointerLeave={endHold}
         onPointerCancel={endHold}
-        onClick={() => { if (!wasHold.current) prev(); }}
+        onClick={() => zoneTap(prev)}
         className="absolute inset-y-0 left-0 z-10 w-1/3"
       />
       <button
         type="button"
-        aria-label="Next"
-        onPointerDown={startHold}
+        aria-label="Next (hold to play at 2x)"
+        onPointerDown={() => startHold("forward")}
         onPointerUp={endHold}
         onPointerLeave={endHold}
         onPointerCancel={endHold}
-        onClick={() => { if (!wasHold.current) next(); }}
+        onClick={() => zoneTap(next)}
         className="absolute inset-y-0 left-1/3 right-0 z-10"
       />
 
@@ -945,6 +1030,7 @@ export function StoryViewer({
           toUserId={group.userId}
           name={group.displayName.split(" ")[0] || group.displayName}
           onFocusChange={setReplying}
+          onEmoji={(emoji) => setRise({ id: Date.now(), emoji })}
         />
       )}
     </motion.div>,
@@ -952,14 +1038,69 @@ export function StoryViewer({
   );
 }
 
+/** A story reply, delivered as a DM to the author (/api/stories/reply). */
+async function postStoryReply(toUserId: string, text: string): Promise<boolean> {
+  try {
+    const r = await fetch("/api/stories/reply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ toUserId, text }),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Seven copies of the emoji rise from the reply bar and fade, at staggered heights and
+ * sideways drifts — Instagram's quick-reaction flourish. Pointer-transparent; one fade
+ * when the viewer prefers reduced motion.
+ */
+const RISE = [
+  { x: -34, h: 0.56, d: 0, r: -14 },
+  { x: 22, h: 0.68, d: 0.06, r: 10 },
+  { x: -8, h: 0.78, d: 0.12, r: -4 },
+  { x: 36, h: 0.5, d: 0.18, r: 16 },
+  { x: -22, h: 0.64, d: 0.24, r: -10 },
+  { x: 10, h: 0.72, d: 0.3, r: 6 },
+  { x: -40, h: 0.6, d: 0.36, r: -18 },
+];
+function EmojiRise({ emoji, onDone }: { emoji: string; onDone: () => void }) {
+  const reduce = useReducedMotion();
+  useEffect(() => {
+    const t = window.setTimeout(onDone, reduce ? 900 : 2200);
+    return () => window.clearTimeout(t);
+  }, [onDone, reduce]);
+  const vh = typeof window === "undefined" ? 800 : window.innerHeight;
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 flex justify-center" aria-hidden>
+      {(reduce ? RISE.slice(0, 1) : RISE).map((p, i) => (
+        <motion.span
+          key={i}
+          className="absolute text-[44px] leading-none drop-shadow-[0_4px_10px_rgba(0,0,0,0.35)]"
+          initial={{ opacity: 0, y: 0, x: 0, scale: 0.5, rotate: 0 }}
+          animate={reduce ? { opacity: [0, 1, 0], scale: 1 } : { opacity: [0, 1, 1, 0], y: -vh * p.h, x: `${p.x}vw`, scale: [0.5, 1.25, 1], rotate: p.r }}
+          transition={{ duration: reduce ? 0.8 : 1.6, delay: reduce ? 0 : p.d, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {emoji}
+        </motion.span>
+      ))}
+    </div>
+  );
+}
+
 function StoryReplyBar({
   toUserId,
   name,
   onFocusChange,
+  onEmoji,
 }: {
   toUserId: string;
   name: string;
   onFocusChange: (v: boolean) => void;
+  /** the reply was one emoji: the viewer plays its rise */
+  onEmoji?: (emoji: string) => void;
 }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -970,21 +1111,17 @@ function StoryReplyBar({
     if (!t || busy) return;
     setBusy(true);
     setText("");
-    try {
-      const r = await fetch("/api/stories/reply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ toUserId, text: t }),
-      });
-      if (r.ok) {
-        setSent(true);
-        setTimeout(() => setSent(false), 1600);
-      }
-    } catch {
-      /* ignore */
-    } finally {
-      setBusy(false);
+    // the rise plays on the tap itself, not after the network answers
+    if (isSingleEmoji(t)) {
+      haptic("light");
+      onEmoji?.(t);
     }
+    const ok = await postStoryReply(toUserId, t);
+    if (ok) {
+      setSent(true);
+      setTimeout(() => setSent(false), 1600);
+    }
+    setBusy(false);
   };
 
   /*

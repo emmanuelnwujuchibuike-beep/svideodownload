@@ -16,3 +16,18 @@ export function anotherModalOpen(except?: Element | null): boolean {
   }
   return false;
 }
+
+/**
+ * Does an open full-screen dialog cover `el`? True when a visible `role="dialog"` + `aria-modal` is on
+ * screen and `el` is not inside it (2026-10-16: an ad video under the History viewer must go quiet).
+ * An element inside the top dialog — a full-screen ad's own video — is not covered by it.
+ */
+export function dialogCovers(el: Element): boolean {
+  if (typeof document === "undefined") return false;
+  // an ARIA modal, or a native <dialog> opened with showModal (the History player)
+  for (const d of document.querySelectorAll('[role="dialog"][aria-modal="true"], dialog[open]')) {
+    if (d.getClientRects().length === 0 || d.contains(el)) continue;
+    return true;
+  }
+  return false;
+}

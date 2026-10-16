@@ -6,7 +6,8 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import type { EligibleAd } from "@/lib/ads-platform/eligibility";
 import { FIT_RULE } from "@/lib/ads-platform/media-spec";
 import { markCreativeFailed } from "@/lib/ads-platform/serving-state";
-import { claimPlayback, releasePlayback } from "@/lib/media/video-coordinator";
+import { claimPlayback, isSuspended, releasePlayback } from "@/lib/media/video-coordinator";
+import { dialogCovers } from "@/lib/ui/modal-open";
 import { cn } from "@/lib/utils";
 
 import { newAdView, observeImpression, trackAdEvent, type AdView } from "../ad-events-client";
@@ -130,7 +131,8 @@ export function SelfAdCreative({
     if (!v || typeof IntersectionObserver === "undefined") return;
     const io = new IntersectionObserver(
       ([e]) => {
-        if (e && e.isIntersecting && e.intersectionRatio >= 0.5 && document.visibilityState === "visible") {
+        // never starts under a dialog that covers it (owner 2026-10-16: no sound in the background)
+        if (e && e.isIntersecting && e.intersectionRatio >= 0.5 && document.visibilityState === "visible" && !isSuspended() && !dialogCovers(v)) {
           claimPlayback(v);
           v.muted = !adSoundOn();
           void v.play().catch(() => {
@@ -145,6 +147,11 @@ export function SelfAdCreative({
       { threshold: [0, 0.5] },
     );
     io.observe(v);
+    /*
+      Owner 2026-10-16: "no sounds should play in background". A full-screen surface over this ad (the History
+      player, the post / image viewers, the reel deck) holds suspendPlayback(), which pauses this video at once
+      (it holds playback via claimPlayback) — and the observer above never starts it while one is open.
+    */
     const onHidden = () => {
       if (document.visibilityState === "hidden") v.pause();
     };

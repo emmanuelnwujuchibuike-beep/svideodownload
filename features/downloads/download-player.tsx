@@ -6,6 +6,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
 
+import { suspendPlayback } from "@/lib/media/video-coordinator";
+
 import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
 import {
   closePlayer,
@@ -838,7 +840,11 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
     } catch {
       el.open = true;
     }
+    // 2026-10-16 (owner: "no sounds should play in background"): the occlusion gate every full-screen
+    // viewer holds — it pauses the video playing underneath (a History-grid ad tile) and keeps it quiet
+    const releasePlayback = suspendPlayback();
     return () => {
+      releasePlayback();
       try {
         if (el.open) el.close();
       } catch {

@@ -44,7 +44,9 @@ const wallpapers = ['Aurora lines', 'Neon tunnel', 'Liquid glow', 'Aurora drift'
   views_boost: 0, likes_boost: 0, saves_boost: 0, width: 1080, height: 1920, created_at: iso(60 * (i + 1)),
   source: 'upload', uploaded_by: null, sort_order: i,
 }));
-const TABLES = { profiles, posts, wallpapers };
+// Landing settings: the Wallpapers tile cover (admin setting landing.wallpaperCtaImageUrl).
+const settings = [{ key: 'landing', value: { wallpaperCtaImageUrl: `${base}/wp2.jpg` } }];
+const TABLES = { profiles, posts, wallpapers, settings };
 
 function parseFilters(u) {
   const f = [];

@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 async function startRecording(page, dir) {
+  dir = path.resolve(dir); // the concat list resolves entries relative to itself
   fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir, { recursive: true });
   const cdp = await page.context().newCDPSession(page);
   const frames = [];

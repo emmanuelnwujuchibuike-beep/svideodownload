@@ -4,3 +4,4 @@ output/picture-*.mp4
 output/mix.wav
 mock/*.pem
 captures/raw/f-*/
+captures/raw/*-end.png

@@ -6,6 +6,7 @@ import { makeSizedWebp } from "@/lib/media/thumbnail";
 import { deletePrivate, hasPrivateR2, presignPrivateGet, presignPrivatePut, readPrivatePrefix } from "@/lib/storage/r2";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { afterCursorFilter, audienceOf, decodeSubCursor, encodeSubCursor, isSubAudience, isUuid, type SubAudience, visibleTo } from "./guards";
 import { hasActiveSub, subConfig } from "./server";
 import { checkUpload } from "./upload-check";
 
@@ -62,7 +63,7 @@ function validCover(url: string | null | undefined): string | null | false {
   }
 }
 
-export async function createSubPost(creatorId: string, input: { caption?: string | null; coverUrl?: string | null; media: { key: string; kind: string; width?: number | null; height?: number | null; thumbKey?: string | null }[] }): Promise<{ ok: true; id: string } | Fail> {
+export async function createSubPost(creatorId: string, input: { caption?: string | null; coverUrl?: string | null; media: { key: string; kind: string; width?: number | null; height?: number | null; thumbKey?: string | null }[]; audience?: unknown }): Promise<{ ok: true; id: string; audience: SubAudience } | Fail> {
   if (!hasPrivateR2) return fail("Private storage isn't set up yet.", 503);
   const db = createAdminClient();
   const { data: s } = await db.from("creator_membership_settings").select("sub_price_cents").eq("creator_id", creatorId).maybeSingle();
@@ -93,7 +94,15 @@ export async function createSubPost(creatorId: string, input: { caption?: string
   );
   const bad = checks.find((c) => !c.ok);
   if (bad && !bad.ok) return fail(bad.error, 422);
-  const { data: post, error } = await db.from("sub_posts").insert({ creator_id: creatorId, caption, cover_url: cover }).select("id").single();
+  // 0248: locked (the default) or hidden. A hidden post is NEVER published as locked: before 0248 it is refused.
+  if (input.audience !== undefined && !isSubAudience(input.audience)) return fail("Choose who can see that this post exists.");
+  const audience: SubAudience = input.audience === "hidden" ? "hidden" : "locked";
+  let ins = await db.from("sub_posts").insert({ creator_id: creatorId, caption, cover_url: cover, audience }).select("id").single();
+  if (ins.error && /audience/.test(ins.error.message)) {
+    if (audience === "hidden") return fail("Hidden posts arrive with the next update. Nothing was posted.", 503);
+    ins = await db.from("sub_posts").insert({ creator_id: creatorId, caption, cover_url: cover }).select("id").single();
+  }
+  const { data: post, error } = ins;
   if (error) return MISSING(error.message) ? fail("Subscriber posts arrive with the next update.", 503) : fail("Couldn't post that.", 500);
   const id = (post as Row).id as string;
   const rowsOf = (withThumb: boolean) => input.media.map((m, idx) => ({ post_id: id, idx, media_kind: m.kind, object_key: m.key, width: m.width ?? null, height: m.height ?? null, ...(withThumb ? { thumb_key: m.thumbKey ?? null } : {}) }));
@@ -104,7 +113,7 @@ export async function createSubPost(creatorId: string, input: { caption?: string
     await db.from("sub_posts").delete().eq("id", id);
     return fail("Couldn't post that.", 500);
   }
-  return { ok: true, id };
+  return { ok: true, id, audience };
 }
 
 /** An opened post: the caption, five-minute links and the two marks. Only ever built AFTER an access check. */
@@ -114,6 +123,8 @@ export interface SubPostOpen {
   expiresAt: string;
   watermark: string | null;
   creatorHandle: string | null;
+  /** 0248: whether non-subscribers see a locked tile or nothing at all (only ever sent to someone with access) */
+  audience?: SubAudience;
 }
 
 /**
@@ -150,6 +161,8 @@ export interface SubPostCard {
   thumbUrl?: string | null;
   /** null for a viewer without access: the caption is part of the paid content */
   caption: string | null;
+  /** only for a viewer WITH access (a non-subscriber never receives a hidden post at all) */
+  audience?: SubAudience;
   coverUrl: string | null;
   items: number;
   hasVideo: boolean;
@@ -160,9 +173,31 @@ export interface SubPostCard {
 export async function listSubPosts(creatorId: string, viewerId: string | null, before?: string | null): Promise<{ posts: SubPostCard[]; access: boolean; isCreator: boolean; next: string | null; ready: boolean; accessUntil?: string | null }> {
   const db = createAdminClient();
   const isCreator = viewerId === creatorId;
-  let q = db.from("sub_posts").select("id, caption, cover_url, created_at").eq("creator_id", creatorId).eq("status", "published").order("created_at", { ascending: false }).limit(PAGE + 1);
-  if (before) q = q.lt("created_at", before);
-  const [postsR, access] = await Promise.all([q, hasActiveSub(viewerId, creatorId)]);
+  /*
+    Part 3 (0248): access is decided BEFORE the posts are read, because it decides WHICH posts
+    exist for this viewer. A viewer without access never gets a 'hidden' row — not its id, its
+    date, its count, nor a page cursor built from it (the cursor is the last row returned, so
+    filtering after the read would have leaked the hidden post's id and timestamp in "next").
+  */
+  const access = await hasActiveSub(viewerId, creatorId);
+  const cursor = decodeSubCursor(before);
+  if (cursor === "invalid") return { posts: [], access, isCreator, next: null, ready: true };
+  const read = (withAudience: boolean) => {
+    let q = db
+      .from("sub_posts")
+      .select(withAudience ? "id, caption, cover_url, created_at, audience" : "id, caption, cover_url, created_at")
+      .eq("creator_id", creatorId)
+      .eq("status", "published")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(PAGE + 1);
+    if (withAudience && !access) q = q.eq("audience", "locked");
+    if (cursor) q = cursor.id ? q.or(afterCursorFilter({ at: cursor.at, id: cursor.id })) : q.lt("created_at", cursor.at);
+    return q;
+  };
+  let postsR = await read(true);
+  // before 0248 there is no audience column, so no post can be hidden: every post is 'locked'
+  if (postsR.error && MISSING(postsR.error.message)) postsR = await read(false);
   // a subscriber sees that they ARE one, and until when (2026-10-12) — read only for a subscriber
   // (read alongside the media below, not before it — one round trip fewer on every open)
   const untilRead =
@@ -170,7 +205,7 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
       ? db.from("creator_memberships").select("period_end").eq("creator_id", creatorId).eq("member_id", viewerId).eq("status", "active").eq("billing", "sub").order("period_end", { ascending: false }).limit(1).maybeSingle()
       : Promise.resolve({ data: null });
   if (postsR.error) return { posts: [], access, isCreator, next: null, ready: !MISSING(postsR.error.message), accessUntil: (((await untilRead).data as Row | null)?.period_end as string | null) ?? null };
-  const rows = (postsR.data ?? []) as Row[];
+  const rows = (postsR.data ?? []) as unknown as Row[];
   const page = rows.slice(0, PAGE);
   const ids = page.map((r) => r.id as string);
   const opening = access && !!viewerId && hasPrivateR2;
@@ -211,16 +246,16 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
         const list = byPost.get(r.id as string) ?? [];
         const firstThumb = list[0]?.thumb_key as string | null | undefined;
         const [signed, thumb] = await Promise.all([signMedia(list), firstThumb ? presignPrivateGet(firstThumb, SIGNED_TTL_SECONDS) : Promise.resolve(null)]);
-        opened.set(r.id as string, { caption: (r.caption as string | null) ?? null, media: signed, expiresAt, ...mk });
+        opened.set(r.id as string, { caption: (r.caption as string | null) ?? null, audience: audienceOf(r.audience), media: signed, expiresAt, ...mk });
         if (thumb) thumbs.set(r.id as string, thumb);
       }),
     );
   }
   return {
-    posts: page.map((r) => ({ id: r.id as string, caption: access ? ((r.caption as string | null) ?? null) : null, coverUrl: (r.cover_url as string | null) ?? null, items: counts.get(r.id as string)?.n ?? 0, hasVideo: counts.get(r.id as string)?.video ?? false, createdAt: r.created_at as string, ...(opened.has(r.id as string) ? { open: opened.get(r.id as string) } : {}), ...(thumbs.has(r.id as string) ? { thumbUrl: thumbs.get(r.id as string) } : {}) })),
+    posts: page.map((r) => ({ id: r.id as string, ...(access ? { audience: audienceOf(r.audience) } : {}), caption: access ? ((r.caption as string | null) ?? null) : null, coverUrl: (r.cover_url as string | null) ?? null, items: counts.get(r.id as string)?.n ?? 0, hasVideo: counts.get(r.id as string)?.video ?? false, createdAt: r.created_at as string, ...(opened.has(r.id as string) ? { open: opened.get(r.id as string) } : {}), ...(thumbs.has(r.id as string) ? { thumbUrl: thumbs.get(r.id as string) } : {}) })),
     access,
     isCreator,
-    next: rows.length > PAGE ? (page[page.length - 1]!.created_at as string) : null,
+    next: rows.length > PAGE ? encodeSubCursor(page[page.length - 1]!.created_at as string, page[page.length - 1]!.id as string) : null,
     ready: true,
     accessUntil,
   };
@@ -231,16 +266,41 @@ export async function openSubPost(postId: string, viewerId: string | null): Prom
   if (!viewerId) return fail("Sign in to view this.", 401);
   const db = createAdminClient();
   // the reads run together; the links are minted only after access says yes
-  const [{ data: post }, { data: media }] = await Promise.all([
-    db.from("sub_posts").select("id, creator_id, caption, status").eq("id", postId).maybeSingle(),
+  const [gate, { data: media }] = await Promise.all([
+    readSubPostGate(postId, true),
     db.from("sub_post_media").select("idx, media_kind, object_key, width, height").eq("post_id", postId).order("idx"),
   ]);
-  const p = post as Row | null;
-  if (!p || p.status !== "published") return fail("This post isn't available.", 404);
-  const [access, mk] = await Promise.all([hasActiveSub(viewerId, p.creator_id as string), marks(viewerId, p.creator_id as string)]);
-  if (!access) return fail("Subscribe to see this post.", 403);
+  if (!gate) return fail("This post isn't available.", 404);
+  const [access, mk] = await Promise.all([hasActiveSub(viewerId, gate.creatorId), marks(viewerId, gate.creatorId)]);
+  // Part 3: a HIDDEN post answers a viewer without access exactly like a post that does not exist
+  if (!access) return visibleTo(gate.audience, false) ? fail("Subscribe to see this post.", 403) : fail("This post isn't available.", 404);
   if (!hasPrivateR2) return fail("Private storage isn't available right now.", 503);
-  return { ok: true, caption: (p.caption as string | null) ?? null, media: await signMedia((media ?? []) as Row[]), expiresAt: new Date(Date.now() + SIGNED_TTL_SECONDS * 1000).toISOString(), ...mk };
+  return { ok: true, caption: gate.caption, audience: gate.audience, media: await signMedia((media ?? []) as Row[]), expiresAt: new Date(Date.now() + SIGNED_TTL_SECONDS * 1000).toISOString(), ...mk };
+}
+
+/**
+ * One published post's gate fields: who made it, and who may know it exists (0248). Null = not
+ * there or not published (archived by a takedown, Part 2). Before 0248 there is no audience
+ * column, and every post is 'locked'.
+ */
+export async function readSubPostGate(postId: string, withCaption = false): Promise<{ creatorId: string; audience: SubAudience; caption: string | null } | null> {
+  if (!isUuid(postId)) return null;
+  const db = createAdminClient();
+  const cols = `creator_id, status${withCaption ? ", caption" : ""}`;
+  let res = await db.from("sub_posts").select(`${cols}, audience`).eq("id", postId).maybeSingle();
+  if (res.error && MISSING(res.error.message)) res = (await db.from("sub_posts").select(cols).eq("id", postId).maybeSingle()) as typeof res;
+  const p = res.data as Row | null;
+  if (res.error || !p || p.status !== "published") return null;
+  return { creatorId: p.creator_id as string, audience: audienceOf(p.audience), caption: (p.caption as string | null | undefined) ?? null };
+}
+
+/** The creator switches one of their posts between 'locked' and 'hidden' (0248). Only their own, only while published. */
+export async function setSubPostAudience(creatorId: string, postId: string, audience: unknown): Promise<{ ok: true } | Fail> {
+  if (!isUuid(creatorId) || !isUuid(postId) || !isSubAudience(audience)) return fail("Invalid request.");
+  const { data, error } = await createAdminClient().from("sub_posts").update({ audience, updated_at: new Date().toISOString() }).eq("id", postId).eq("creator_id", creatorId).eq("status", "published").select("id");
+  if (error) return MISSING(error.message) ? fail("Hidden posts arrive with the next update.", 503) : fail("Couldn't save that.", 500);
+  // someone else's post, a missing one or a taken-down one all answer the same
+  return (data ?? []).length ? { ok: true } : fail("Not found.", 404);
 }
 
 export async function deleteSubPost(creatorId: string, postId: string): Promise<{ ok: true } | Fail> {

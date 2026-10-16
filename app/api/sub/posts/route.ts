@@ -2,6 +2,7 @@ import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { trackLimiter } from "@/lib/rate-limit";
+import { decodeSubCursor } from "@/lib/sub/guards";
 import { createSubPost, listSubPosts } from "@/lib/sub/posts";
 import { createClient } from "@/lib/supabase/server";
 
@@ -15,7 +16,8 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const creator = url.searchParams.get("creator") ?? "";
   const before = url.searchParams.get("before");
-  if (!UUID.test(creator) || (before && Number.isNaN(Date.parse(before)))) return NextResponse.json({ error: "Bad request." }, { status: 400 });
+  // Part 3: "before" is the opaque keyset cursor from the previous page (a bare timestamp is still accepted)
+  if (!UUID.test(creator) || decodeSubCursor(before) === "invalid") return NextResponse.json({ error: "Bad request." }, { status: 400 });
   const supabase = await createClient();
   const {
     data: { user },
@@ -40,6 +42,8 @@ const body = z
     caption: z.string().max(4400).nullable().optional(),
     coverUrl: z.string().max(600).nullable().optional(),
     media: z.array(z.object({ key: z.string().max(300), kind: z.enum(["image", "video"]), width: z.number().int().positive().max(20000).nullable().optional(), height: z.number().int().positive().max(20000).nullable().optional(), thumbKey: z.string().max(300).optional() }).strict()).min(1).max(10),
+    // 0248: locked (default) = non-subscribers see the public tile; hidden = they get nothing at all
+    audience: z.enum(["locked", "hidden"]).optional(),
   })
   .strict();
 
@@ -56,6 +60,7 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ ok: false, error: "Invalid request." }, { status: 400 });
   const out = await createSubPost(user.id, parsed.data);
   // everyone who asked to hear about this creator's private posts — after the response, never in its way
-  if (out.ok) after(() => import("@/lib/sub/private-notify").then((m) => m.notifyNewPrivatePost(user.id)));
+  // a hidden post is announced to active subscribers only (Part 3)
+  if (out.ok) after(() => import("@/lib/sub/private-notify").then((m) => m.notifyNewPrivatePost(user.id, { audience: out.audience })));
   return out.ok ? NextResponse.json(out) : NextResponse.json({ ok: false, error: out.error }, { status: out.status });
 }

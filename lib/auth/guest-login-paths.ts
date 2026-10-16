@@ -21,6 +21,7 @@
 export const GUEST_LOGIN_PREFIXES = [
   "/create",
   "/downloads",
+  "/exclusive", // Frenz Exclusive Part 3: the Exclusive feed (posts from creators you subscribe to)
   "/friends",
   "/home",
   "/members", // Feature 19 Part 13: the creator dashboard and your memberships

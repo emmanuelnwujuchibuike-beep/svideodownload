@@ -59,7 +59,7 @@ beforeEach(() => {
   presign.mockClear();
   audit.mockClear();
   db = fakeDb({
-    sub_posts: [{ id: POST, creator_id: CREATOR, caption: "paid caption", cover_url: null, status: "published", created_at: "2026-10-15T10:00:00.000Z" }],
+    sub_posts: [{ id: POST, creator_id: CREATOR, caption: "paid caption", cover_url: null, status: "published", audience: "locked", created_at: "2026-10-15T10:00:00.000Z" }],
     sub_post_media: [{ id: "m1", post_id: POST, idx: 0, media_kind: "image", object_key: KEY, thumb_key: null, width: 10, height: 10 }],
     sub_post_comments: [{ id: COMMENT, post_id: POST, user_id: SUBSCRIBER, body: "a comment", hidden_at: null }],
     creator_memberships: [{ id: "mem", creator_id: CREATOR, member_id: SUBSCRIBER, status: "active", billing: "sub", period_end: future() }],

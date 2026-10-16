@@ -28,6 +28,47 @@ export interface FakeDb {
   client: () => unknown;
 }
 
+/** Splits a PostgREST logic expression at its top-level commas. */
+function splitTop(expr: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let quoted = false;
+  let cur = "";
+  for (const ch of expr) {
+    if (ch === "\"") quoted = !quoted;
+    if (!quoted && ch === "(") depth++;
+    if (!quoted && ch === ")") depth--;
+    if (!quoted && depth === 0 && ch === ",") {
+      out.push(cur);
+      cur = "";
+    } else cur += ch;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+function termPredicate(term: string): (r: Record<string, unknown>) => boolean {
+  const t = term.trim();
+  const group = t.match(/^(and|or)\((.*)\)$/);
+  if (group) {
+    const parts = splitTop(group[2]!).map(termPredicate);
+    return group[1] === "and" ? (r) => parts.every((p) => p(r)) : (r) => parts.some((p) => p(r));
+  }
+  const m = t.match(/^([\w.]+)\.(eq|neq|lt|lte|gt|gte)\.(.*)$/);
+  if (!m) throw new Error(`fake-supabase: unsupported filter term ${t}`);
+  const [, col, op, rawV] = m as unknown as [string, string, string, string];
+  const v = rawV.startsWith("\"") && rawV.endsWith("\"") ? rawV.slice(1, -1) : rawV;
+  return (r) => {
+    const x = String(r[col] ?? "");
+    return op === "eq" ? x === v : op === "neq" ? x !== v : op === "lt" ? x < v : op === "lte" ? x <= v : op === "gt" ? x > v : x >= v;
+  };
+}
+
+const orPredicate = (expr: string) => {
+  const parts = splitTop(expr).map(termPredicate);
+  return (r: Record<string, unknown>) => parts.some((p) => p(r));
+};
+
 export function fakeDb(seed: Record<string, Row[]> = {}): FakeDb {
   const db: FakeDb = { tables: { ...seed }, unique: {}, defaults: {}, rpc: {}, writes: [], failOn: {}, client: () => client };
   const rows = (t: string) => (db.tables[t] ??= []);
@@ -45,7 +86,7 @@ export function fakeDb(seed: Record<string, Row[]> = {}): FakeDb {
     let ignoreDuplicates = false;
     const preds: ((r: Row) => boolean)[] = [];
     const filters: string[] = [];
-    let order: { col: string; asc: boolean } | null = null;
+    const orders: { col: string; asc: boolean }[] = [];
     let limit: number | null = null;
 
     const val = (r: Row, col: string) => (col.includes(".") ? (r[col.split(".")[0]!] as Row | undefined)?.[col.split(".")[1]!] : r[col]);
@@ -73,8 +114,9 @@ export function fakeDb(seed: Record<string, Row[]> = {}): FakeDb {
       lte: (c: string, v: string) => add(`${c}<=`, (r) => String(val(r, c) ?? "") <= v),
       not: (c: string, _o: string, v: unknown) => add(`${c} not`, (r) => (val(r, c) ?? null) !== v),
       contains: (c: string, v: Row) => add(`${c} @>`, (r) => Object.entries(v).every(([k, x]) => (r[c] as Row | undefined)?.[k] === x)),
-      or: () => b,
-      order: (col: string, o?: { ascending?: boolean }) => ((order = { col, asc: o?.ascending !== false }), b),
+      // PostgREST logic trees: "a.lt.x,and(b.eq.y,c.lt.z)" — evaluated for real, so keyset cursors and blocks are tested
+      or: (expr: string) => add(`or(${expr})`, orPredicate(expr)),
+      order: (col: string, o?: { ascending?: boolean }) => (orders.push({ col, asc: o?.ascending !== false }), b),
       limit: (n: number) => ((limit = n), b),
       range: (from: number, to: number) => ((limit = to - from + 1), b),
       maybeSingle: () => ((single = "maybe"), b),
@@ -122,9 +164,15 @@ export function fakeDb(seed: Record<string, Row[]> = {}): FakeDb {
         return finish(hit);
       }
       let out = matching();
-      if (order) {
-        const { col, asc } = order;
-        out = [...out].sort((a, z) => (String(a[col]) < String(z[col]) ? -1 : String(a[col]) > String(z[col]) ? 1 : 0) * (asc ? 1 : -1));
+      if (orders.length) {
+        out = [...out].sort((a, z) => {
+          for (const { col, asc } of orders) {
+            const x = String(a[col] ?? "");
+            const y = String(z[col] ?? "");
+            if (x !== y) return (x < y ? -1 : 1) * (asc ? 1 : -1);
+          }
+          return 0;
+        });
       }
       const count = out.length;
       if (limit !== null) out = out.slice(0, limit);

@@ -80,6 +80,7 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   { method: "POST", path: "/api/v1/app/security/passkeys/stepup/verify", auth: "session", category: "security", description: "Complete a passkey step-up challenge." },
 
   /* ── Frenz Exclusive / SUB (session; money and access are decided on the server) ── */
+  { method: "GET", path: "/api/sub/feed", auth: "session", category: "subscriptions", description: "The Exclusive feed: posts from creators the viewer subscribes to (keyset-paged) and locked previews to discover." },
   { method: "POST", path: "/api/sub/checkout", auth: "session", category: "subscriptions", description: "Open (or reuse) a Paystack checkout for a creator subscription. Price and fee are the server's." },
   { method: "GET", path: "/api/sub/earnings", auth: "session", category: "subscriptions", description: "The signed-in creator's SUB balance, ledger and withdrawals." },
   { method: "GET", path: "/api/sub/notify", auth: "session-optional", category: "subscriptions", description: "How the viewer hears about a creator's new exclusive posts (off for signed-out)." },

@@ -236,3 +236,68 @@ worker for new uploads. Until then exclusive content is reactive: reports plus a
 | Upload byte check | `lib/sub/upload-check.ts`, `lib/storage/r2.ts` `readPrivatePrefix` | built, tested |
 | `/api/sub/*` in the API registry, with a completeness test | `lib/platform/api-registry.ts` | built, tested |
 | Content scanning of uploads | — | planned (owner decision) |
+
+## Frenz Exclusive Part 3 — the Exclusive feed, locked previews and hidden posts (2026-10-16)
+
+Migration **0248** (`0248_sub_post_audience_feed.sql`, PGlite-tested twice + a mutant:
+`supabase/tests/0248_sub_post_audience.pglite.mjs`). Not applied — the owner runs it. The site works
+before and after: before 0248 every post behaves as `locked` (its old behaviour), a creator who tries
+to publish a hidden post is refused ("arrives with the next update", nothing is published), and the
+discover section stays empty.
+
+**Locked vs hidden (`sub_posts.audience`, default `locked`, every existing post `locked`).**
+
+| | A viewer WITH access (the creator, an active subscriber) | A viewer WITHOUT access |
+|---|---|---|
+| `locked` | everything, as before | the public tile only: the creator's cover (if they set one), the date, the item count and whether there is video. Never the caption, a storage key or a link |
+| `hidden` | everything, with a "Hidden / Subscribers only" mark | **nothing**: no id, no tile, no count, no date, no feed placeholder, no discover card, no notification, and no page cursor built from it |
+
+Enforced on the server before any response is built — never a CSS hide:
+- the gallery (`listSubPosts`) decides access FIRST and then reads with `audience = 'locked'` for a
+  viewer without access, so even the "next page" cursor can only point at a post they may know of;
+- opening a post, likes, comments, the screenshot alert and reporting answer a hidden post exactly
+  like a missing one (the same 404 body) for a viewer without access (`readSubPostGate` + `visibleTo`);
+- "new private post" notifications for a hidden post go to ACTIVE subscribers only;
+- the discover query reads `audience = 'locked'` rows only.
+The creator chooses at publish time (composer: "Locked preview" / "Hidden") and can switch any of
+their own published posts from the viewer (PATCH `/api/sub/posts/[id]` `{ audience }`, own posts only;
+someone else's or a taken-down post answers 404).
+
+**The Exclusive feed (`/exclusive`, `GET /api/sub/feed`, `lib/sub/feed.ts`).**
+- Signed in only (guests are sent to sign-in at the edge). Nothing is cached (`private, no-store`).
+- Each page reads the viewer's ACTIVE subscriptions in one batch — the `hasActiveSub` predicate
+  (active, paid, unexpired) — minus blocks in either direction and suspended or hidden creators, then
+  `sub_posts` of those creators with `status = 'published'`. Expiry, removal, a refund (which ends
+  the membership), a block or a takedown take effect on the very next page.
+- At most `FEED_MAX_CREATORS` (150) subscribed creators feed one page (their ids travel in an
+  `in (…)` filter that must fit in a request URL); the most recently renewed come first.
+- Keyset paging on `(created_at desc, id desc)`, 12 per page, 13 read to know if there is more. The
+  cursor is opaque (base64url of the last row's exact timestamp and id) and validated before use; a
+  bare timestamp (the older gallery cursor) is still accepted. A post published while scrolling never
+  shifts a page; ties on `created_at` never skip or repeat a post.
+- A card carries id, creator, date, caption, item count, has-video, hidden, and ONE five-minute link
+  to the first item's small preview (thumb, else the first photo; a video without a thumb shows a
+  placeholder). Opening a post goes through `/api/sub/posts/[id]`, which checks access again and only
+  then signs the media.
+- First page only: **discover** — the latest LOCKED post of up to 8 creators the viewer follows,
+  takes subscriptions now (price inside the admin's bounds) and does not subscribe to. Each card has
+  the public cover only, and the creator's price + fee from the server (`subscriptionCharge`). Subscribe
+  calls the existing `/api/sub/checkout`, which recomputes the price on the server and refuses any
+  extra field (strict body). The feed itself never creates or settles a purchase.
+
+**Indexes.** `sub_posts_feed_idx (creator_id, created_at desc, id desc) where status = 'published'`.
+Checked with EXPLAIN in PGlite (3,000–20,000 rows): a creator's gallery page is an index-only scan on
+it with no sort. The cross-creator feed query is served by the existing per-creator index plus a
+top-N sort over the subscribed creators' published posts — bounded by those creators' post counts,
+fine at today's scale; if a viewer's subscribed creators ever hold very many posts, a per-creator
+merge (one indexed read per creator, merged in code) is the next step.
+
+**UI.** `features/sub/exclusive-feed.tsx`: one request at a time, the previous one aborted on
+unmount, ids de-duplicated across pages, the next page ~600 px before the end, "Load more" after a
+failed page, skeletons sized like the cards, an empty state with a way to find creators. The
+`LockedPreviewCard` there is the reusable locked card. Entry: Account → Exclusive.
+
+**Known limitations.** Discover only uses creators the viewer follows (no ranking or global
+discovery — later parts). Feed preview links last five minutes: a tab left open longer shows a
+placeholder until refreshed. The profile gallery's own locked tile is unchanged (Part 4 redesigns
+the profile).

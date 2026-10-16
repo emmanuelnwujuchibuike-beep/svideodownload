@@ -4,6 +4,8 @@ import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import { categoryForType } from "@/lib/social/notifications";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { visibleTo } from "./guards";
+import { readSubPostGate } from "./posts";
 import { hasActiveSub } from "./server";
 
 /**
@@ -35,12 +37,12 @@ const WINDOW_MS = 10 * 60_000;
 
 export async function reportSubCapture(postId: string, viewerId: string, kind: CaptureKind): Promise<{ ok: true; notified: boolean } | { ok: false; status: number; error: string }> {
   const db = createAdminClient();
-  const { data: post } = await db.from("sub_posts").select("creator_id, status").eq("id", postId).maybeSingle();
-  const p = post as Row | null;
-  if (!p || p.status !== "published") return { ok: false, status: 404, error: "Not found." };
-  const creatorId = p.creator_id as string;
+  const gate = await readSubPostGate(postId);
+  if (!gate) return { ok: false, status: 404, error: "Not found." };
+  const creatorId = gate.creatorId;
   if (creatorId === viewerId) return { ok: true, notified: false };
-  if (!(await hasActiveSub(viewerId, creatorId))) return { ok: false, status: 403, error: "Forbidden." };
+  // Part 3: a hidden post answers a viewer without access exactly like a missing one
+  if (!(await hasActiveSub(viewerId, creatorId))) return visibleTo(gate.audience, false) ? { ok: false, status: 403, error: "Forbidden." } : { ok: false, status: 404, error: "Not found." };
 
   const since = new Date(Date.now() - WINDOW_MS).toISOString();
   const { data: recent } = await db.from("notifications").select("id").eq("user_id", creatorId).eq("actor_id", viewerId).eq("type", "sub_capture").contains("data", { post_id: postId }).gte("created_at", since).limit(1);

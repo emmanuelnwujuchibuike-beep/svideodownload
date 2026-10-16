@@ -59,3 +59,56 @@ export function classifyVerification(paystackStatus: string | null | undefined, 
   // ongoing, pending, queued, processing, unknown: never terminal
   return { kind: "pending" };
 }
+
+/*
+  ── Exclusive posts: who may know a post exists (Frenz Exclusive Part 3, 0248) ──
+  'locked' (the default): a viewer without access may see the public tile — cover, date, count.
+  'hidden': a viewer without access gets nothing at all, not even the id. Filtered on the
+  server before any response is built; never a CSS hide.
+*/
+export type SubAudience = "locked" | "hidden";
+export const SUB_AUDIENCES: readonly SubAudience[] = ["locked", "hidden"];
+export const isSubAudience = (v: unknown): v is SubAudience => v === "locked" || v === "hidden";
+/** Before 0248 there is no audience column: every post behaves as 'locked', as it always did. */
+export const audienceOf = (v: unknown): SubAudience => (v === "hidden" ? "hidden" : "locked");
+export const visibleTo = (audience: SubAudience, access: boolean): boolean => access || audience !== "hidden";
+
+/*
+  ── Keyset cursors ──────────────────────────────────────────────────────────
+  Pages are ordered by (created_at desc, id desc). The cursor is the last row's pair, opaque
+  to the browser (base64url). The timestamp is kept exactly as Postgres wrote it (microseconds
+  included): rounding it would skip or repeat posts that share a millisecond. Both halves are
+  validated before they go anywhere near a filter string.
+*/
+const PG_TS = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}(:?\d{2})?)$/;
+
+export interface SubCursor {
+  at: string;
+  /** null = a pre-Part-3 cursor (a bare timestamp), still accepted */
+  id: string | null;
+}
+
+export function encodeSubCursor(at: string, id: string): string {
+  return Buffer.from(`${at}|${id}`, "utf8").toString("base64url");
+}
+
+export function decodeSubCursor(raw: string | null | undefined): SubCursor | null | "invalid" {
+  if (!raw) return null;
+  if (raw.length > 200) return "invalid";
+  // the older gallery cursor: a bare timestamp
+  if (PG_TS.test(raw)) return { at: raw, id: null };
+  let text: string;
+  try {
+    text = Buffer.from(raw, "base64url").toString("utf8");
+  } catch {
+    return "invalid";
+  }
+  const [at, id, extra] = text.split("|");
+  if (extra !== undefined || !at || !id || !PG_TS.test(at) || !isUuid(id)) return "invalid";
+  return { at, id };
+}
+
+/** The PostgREST filter for "after this cursor" in (created_at desc, id desc) order. Inputs are validated by decodeSubCursor. */
+export function afterCursorFilter(c: { at: string; id: string }): string {
+  return `created_at.lt."${c.at}",and(created_at.eq."${c.at}",id.lt.${c.id})`;
+}

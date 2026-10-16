@@ -5,7 +5,8 @@ import { writeAuditLog } from "@/lib/security/audit-log";
 import { flagsOf, isAccountVisibleTo } from "@/lib/social/account-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { isUuid } from "./guards";
+import { isUuid, visibleTo } from "./guards";
+import { readSubPostGate } from "./posts";
 import { hasActiveSub } from "./server";
 
 /**
@@ -50,10 +51,11 @@ export async function canReportSubTarget(reporterId: string, type: SubTargetType
   if (!isUuid(reporterId) || !isUuid(targetId) || !isSubTargetType(type)) return fail("Invalid report.");
   const db = createAdminClient();
   if (type === "sub_post") {
-    const { data } = await db.from("sub_posts").select("creator_id, status").eq("id", targetId).maybeSingle();
-    const p = data as Row | null;
-    if (!p || p.status !== "published") return fail("This post isn't available.", 404);
-    const creatorId = p.creator_id as string;
+    const gate = await readSubPostGate(targetId);
+    if (!gate) return fail("This post isn't available.", 404);
+    const creatorId = gate.creatorId;
+    // Part 3: a hidden post exists only for those with access — anyone else meets the same 404 as a missing post
+    if (!visibleTo(gate.audience, await hasActiveSub(reporterId, creatorId))) return fail("This post isn't available.", 404);
     if (creatorId === reporterId) return fail("You can't report your own post.");
     // the tile is visible on the creator's profile to anyone who can see that profile
     const { data: prof } = await db.from("profiles").select("is_suspended, is_hidden").eq("id", creatorId).maybeSingle();

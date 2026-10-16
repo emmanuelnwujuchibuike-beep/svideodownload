@@ -17,6 +17,8 @@ import { paginatedSelect } from "@/lib/supabase/paginate";
 export type PrivatePostMode = "off" | "push" | "email" | "both";
 export const PRIVATE_POST_MODES: readonly PrivatePostMode[] = ["off", "push", "email", "both"];
 const MAX_FANOUT = 2000;
+// how many of a creator's active subscribers a hidden post's announcement reads to check against (Part 3)
+const MAX_SUBSCRIBERS_READ = 20000;
 
 export function isMode(v: unknown): v is PrivatePostMode {
   return typeof v === "string" && (PRIVATE_POST_MODES as readonly string[]).includes(v);
@@ -38,7 +40,7 @@ export async function setPrivatePostMode(viewerId: string, creatorId: string, mo
 }
 
 /** After a creator publishes a private post: everyone who asked, by the way they asked. Bounded; blocks and mutes respected. */
-export async function notifyNewPrivatePost(creatorId: string): Promise<void> {
+export async function notifyNewPrivatePost(creatorId: string, opts: { audience?: "locked" | "hidden" } = {}): Promise<void> {
   try {
     const db = createAdminClient();
     const read = await paginatedSelect<{ viewer_id: string; private_posts: string }>(
@@ -46,6 +48,23 @@ export async function notifyNewPrivatePost(creatorId: string): Promise<void> {
       MAX_FANOUT,
     );
     if (read.error || !read.rows.length) return;
+    /*
+      Part 3 (0248): a HIDDEN post exists only for those with access, so only ACTIVE subscribers
+      hear about it — telling anyone else "they posted something" would announce a post they are
+      never allowed to know exists. One batched read; a failed read sends nothing (fails closed).
+    */
+    if (opts.audience === "hidden") {
+      // the creator's active subscribers, paged (an id list of up to MAX_FANOUT would not fit in a request URL)
+      const now = new Date().toISOString();
+      const subs = await paginatedSelect<{ member_id: string }>(
+        (from, to) => db.from("creator_memberships").select("member_id").eq("creator_id", creatorId).eq("status", "active").eq("billing", "sub").gt("period_end", now).range(from, to),
+        MAX_SUBSCRIBERS_READ,
+      );
+      if (subs.error) return;
+      const allowed = new Set(subs.rows.map((s) => s.member_id));
+      read.rows = read.rows.filter((r) => allowed.has(r.viewer_id));
+      if (!read.rows.length) return;
+    }
     const excluded = await excludedFor(db, creatorId, read.rows.map((r) => r.viewer_id));
     const who = await pushPerson(creatorId);
     const path = who.handle ? `/u/${who.handle}?tab=sub` : "/";

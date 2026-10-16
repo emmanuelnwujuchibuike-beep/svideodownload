@@ -51,7 +51,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
-  const body = (await request.json().catch(() => null)) as { idx?: unknown; thumbKey?: unknown; width?: unknown; height?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { idx?: unknown; thumbKey?: unknown; width?: unknown; height?: unknown; audience?: unknown } | null;
+  // Part 3 (0248): the creator switches a post between locked and hidden — only their own post
+  if (body && "audience" in body) {
+    const { setSubPostAudience } = await import("@/lib/sub/posts");
+    const out = await setSubPostAudience(user.id, id, body.audience);
+    return out.ok ? NextResponse.json(out) : NextResponse.json({ error: out.error }, { status: out.status });
+  }
   const idx = typeof body?.idx === "number" && Number.isInteger(body.idx) && body.idx >= 0 && body.idx < 10 ? body.idx : null;
   const key = typeof body?.thumbKey === "string" ? body.thumbKey : "";
   if (idx === null || !key.startsWith(`sub/${user.id}/`) || key.includes("..") || !/^[A-Za-z0-9/._-]+\.jpg$/.test(key)) return NextResponse.json({ error: "Invalid request." }, { status: 400 });

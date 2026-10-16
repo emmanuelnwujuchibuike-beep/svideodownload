@@ -2,6 +2,8 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { visibleTo } from "./guards";
+import { readSubPostGate } from "./posts";
 import { hasActiveSub } from "./server";
 
 /**
@@ -16,11 +18,13 @@ const MISSING = (m: string) => /schema cache|does not exist|relation/i.test(m);
 
 async function access(postId: string, userId: string | null): Promise<{ ok: true; creatorId: string } | Fail> {
   if (!userId) return fail("Sign in to do that.", 401);
-  const { data } = await createAdminClient().from("sub_posts").select("creator_id, status").eq("id", postId).maybeSingle();
-  const p = data as { creator_id: string; status: string } | null;
-  if (!p || p.status !== "published") return fail("This post isn't available.", 404);
-  if (!(await hasActiveSub(userId, p.creator_id))) return fail("Subscribe to like and comment.", 403);
-  return { ok: true, creatorId: p.creator_id };
+  const gate = await readSubPostGate(postId);
+  if (!gate) return fail("This post isn't available.", 404);
+  if (!(await hasActiveSub(userId, gate.creatorId))) {
+    // Part 3: a hidden post answers exactly like one that does not exist
+    return visibleTo(gate.audience, false) ? fail("Subscribe to like and comment.", 403) : fail("This post isn't available.", 404);
+  }
+  return { ok: true, creatorId: gate.creatorId };
 }
 
 export interface PrivateComment {

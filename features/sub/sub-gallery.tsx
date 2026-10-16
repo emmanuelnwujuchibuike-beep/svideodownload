@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, EyeOff, Film, Flag, Heart, Images, Loader2, Lock, MessageCircle, Plus, Send, Trash2, X } from "lucide-react";
+import { BadgeCheck, Eye, EyeOff, Film, Flag, Heart, Images, Loader2, Lock, MessageCircle, Plus, Send, Trash2, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -48,6 +48,8 @@ interface Card {
   open?: Opened;
   /** the ~480 px private preview (0237) — what the tile loads, instead of the original */
   thumbUrl?: string | null;
+  /** 0248, only ever sent to the creator or a subscriber: hidden = non-subscribers do not know it exists */
+  audience?: "locked" | "hidden";
 }
 
 /**
@@ -254,6 +256,11 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
                     a tile shows the public cover or the small private preview and NEVER the original photo or
                     video — the media loads when the post is opened (and the first one is pre-loaded once the
                     covers are up, below). */}
+                {state.access && p.audience === "hidden" ? (
+                  <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-black/55 px-1.5 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm" title="Only subscribers know this post exists">
+                    <EyeOff className="h-3 w-3" aria-hidden /> Hidden
+                  </span>
+                ) : null}
                 {!state.access ? (
                   <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/35 text-white backdrop-blur-[2px]">
                     <Lock className="h-5 w-5" aria-hidden />
@@ -290,10 +297,12 @@ interface Opened {
   watermark: string | null;
   /** the creator's public handle — the roving mark links to their profile */
   creatorHandle?: string | null;
+  /** 0248: locked or hidden (the creator can switch it from the viewer) */
+  audience?: "locked" | "hidden";
 }
 
 /** The private viewer: a portal with no URL, no share action, covered whenever the app is not in front. */
-function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }: { postId: string; initial: Opened | null; isCreator: boolean; onClose: () => void; onDeleted: (id: string) => void }) {
+export function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }: { postId: string; initial: Opened | null; isCreator: boolean; onClose: () => void; onDeleted: (id: string) => void }) {
   // already opened by the gallery (or earlier in this tab) and still valid: shown at once, no second check
   const [data, setData] = useState<Opened | null>(() => (fresh(openedCache.get(postId)) ? openedCache.get(postId)! : fresh(initial) ? initial : null));
   const [index, setIndex] = useState(0);
@@ -313,6 +322,19 @@ function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }: { pos
   const [covered, setCovered] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [reporting, setReporting] = useState(false);
+  // Part 3 (0248): the creator switches who may know this post exists
+  const [audience, setAudience] = useState<"locked" | "hidden" | null>(null);
+  const [savingAudience, setSavingAudience] = useState(false);
+  const toggleAudience = async (current: "locked" | "hidden") => {
+    const next = current === "hidden" ? "locked" : "hidden";
+    setSavingAudience(true);
+    const res = await fetch(`/api/sub/posts/${postId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ audience: next }) }).catch(() => null);
+    setSavingAudience(false);
+    if (res?.ok) {
+      setAudience(next);
+      haptic("selection");
+    } else setError(((await res?.json().catch(() => null)) as { error?: string } | null)?.error ?? "Couldn't change who can see it.");
+  };
   const dataRef = useRef(data);
   dataRef.current = data;
   const reported = useRef(false);
@@ -469,6 +491,18 @@ function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted }: { pos
             {many ? <span className="ml-1 rounded-full bg-black/45 px-2 py-0.5 text-[11px] normal-case tracking-normal">{index + 1} / {data!.media.length}</span> : null}
           </span>
           <span className="flex items-center gap-1">
+            {isCreator && data ? (
+              <button
+                type="button"
+                aria-pressed={(audience ?? data.audience) === "hidden"}
+                aria-label={(audience ?? data.audience) === "hidden" ? "Hidden from non-subscribers. Show as a locked preview" : "Shown as a locked preview. Hide from non-subscribers"}
+                disabled={savingAudience}
+                onClick={() => void toggleAudience(audience ?? data.audience ?? "locked")}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/35 transition active:bg-white/10"
+              >
+                {savingAudience ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : (audience ?? data.audience) === "hidden" ? <EyeOff className="h-5 w-5" aria-hidden /> : <Eye className="h-5 w-5" aria-hidden />}
+              </button>
+            ) : null}
             {isCreator ? (
               <button type="button" aria-label="Delete this post" disabled={deleting} onClick={() => void del()} className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/35 transition active:bg-white/10">
                 {deleting ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <Trash2 className="h-5 w-5" aria-hidden />}

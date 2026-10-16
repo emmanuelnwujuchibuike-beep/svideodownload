@@ -20,7 +20,8 @@ describe("private post notifications", () => {
     for (const lit of m.match(/'[^']*'/g) ?? []) expect(lit).not.toContain(";");
   });
   it("publishing notifies after the response; push and email follow the chosen mode; blocks and mutes respected", () => {
-    expect(code("app/api/sub/posts/route.ts")).toContain("if (out.ok) after(() => import(\"@/lib/sub/private-notify\").then((m) => m.notifyNewPrivatePost(user.id)));");
+    // Part 3: the post's audience travels with it, so a hidden post is announced to subscribers only
+    expect(code("app/api/sub/posts/route.ts")).toContain("if (out.ok) after(() => import(\"@/lib/sub/private-notify\").then((m) => m.notifyNewPrivatePost(user.id, { audience: out.audience })));");
     const n = code("lib/sub/private-notify.ts");
     expect(n).toContain('if (r.private_posts === "push" || r.private_posts === "both")');
     expect(n).toContain('if (r.private_posts === "email" || r.private_posts === "both")');
@@ -36,7 +37,9 @@ describe("private post likes and comments", () => {
       const body = i.slice(i.indexOf(`export async function ${fn}`));
       expect(body.slice(0, 600), fn).toContain("await access(postId, userId)");
     }
-    expect(i).toContain('if (!(await hasActiveSub(userId, p.creator_id))) return fail("Subscribe to like and comment.", 403);');
+    // Part 3: same gate, and a hidden post answers a non-subscriber like a missing one
+    expect(i).toContain("if (!(await hasActiveSub(userId, gate.creatorId))) {");
+    expect(i).toContain('return visibleTo(gate.audience, false) ? fail("Subscribe to like and comment.", 403) : fail("This post isn\x27t available.", 404);');
   });
   it("there is no save for a private post", () => {
     expect(i.toLowerCase()).not.toContain("save_post");

@@ -37,6 +37,8 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
   const [items, setItems] = useState<Picked[]>([]);
   const [cover, setCover] = useState<File | null>(null);
   const [caption, setCaption] = useState("");
+  // Part 3 (0248): locked = non-subscribers see a locked tile; hidden = they don't know it exists
+  const [audience, setAudience] = useState<"locked" | "hidden">("locked");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pick = useRef<HTMLInputElement>(null);
@@ -87,7 +89,7 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
         coverUrl = await uploadWithPlan(await presignUpload("image", extOf(cover)), cover, cover.type || "image/jpeg");
       }
       setBusy("Publishing…");
-      const res = await fetch("/api/sub/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caption: caption.trim() || null, coverUrl, media }) });
+      const res = await fetch("/api/sub/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caption: caption.trim() || null, coverUrl, media, audience }) });
       const j = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) throw new Error(j?.error ?? "Couldn't publish.");
       items.forEach((it) => URL.revokeObjectURL(it.preview));
@@ -147,6 +149,20 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
         <button type="button" onClick={() => pickCover.current?.click()} className={cn(quietPill, "mt-2")}>
           <ImagePlus className="h-4 w-4" aria-hidden /> {cover ? `Cover: ${cover.name.slice(0, 24)}` : "Add a public cover (optional)"}
         </button>
+        <fieldset className="mt-3">
+          <legend className="mb-1.5 text-[12.5px] font-semibold">Who knows this post exists</legend>
+          <div className="grid grid-cols-2 gap-1.5" role="radiogroup">
+            {([
+              ["locked", "Locked preview", "Everyone sees a locked tile"],
+              ["hidden", "Hidden", "Only subscribers see it"],
+            ] as const).map(([v, title, sub]) => (
+              <button key={v} type="button" role="radio" aria-checked={audience === v} onClick={() => setAudience(v)} disabled={!!busy} className={cn("rounded-2xl border px-3 py-2.5 text-left transition", audience === v ? "border-primary bg-primary/[0.07] ring-1 ring-primary/40" : "border-border")}>
+                <span className="block text-[13.5px] font-semibold">{title}</span>
+                <span className="block text-[11.5px] text-muted-foreground">{sub}</span>
+              </button>
+            ))}
+          </div>
+        </fieldset>
         <p className="mt-1.5 text-[12px] text-muted-foreground">The cover is the only thing non-subscribers see. Without one, they see a locked tile. Photos and videos stay private and can&apos;t be shared or linked.</p>
         {error ? <p className="mt-2 text-[13px] font-medium text-rose-600">{error}</p> : null}
         <button type="button" onClick={() => void post()} disabled={!!busy || !items.length} className={cn(primaryPill, "mt-3 w-full justify-center")}>

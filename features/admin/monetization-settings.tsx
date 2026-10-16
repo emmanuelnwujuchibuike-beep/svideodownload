@@ -2724,10 +2724,10 @@ function DirectLinkEditor({
           inputMode="url"
           className={cn(
             "h-10 w-full rounded-xl bg-background px-3 font-mono text-sm outline-none ring-1 ring-inset focus:ring-2 focus:ring-primary",
-            urlBad ? "ring-destructive" : "ring-border",
+            urlBad ? "ring-rose-500" : "ring-border",
           )}
         />
-        {urlBad ? <p className="mt-1 text-xs text-destructive">Must be a full https:// link.</p> : null}
+        {urlBad ? <p className="mt-1 text-xs text-rose-500">Must be a full https:// link.</p> : null}
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {spots.map((spot) => (

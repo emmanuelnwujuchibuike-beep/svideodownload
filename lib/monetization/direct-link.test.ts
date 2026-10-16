@@ -60,11 +60,12 @@ describe("Monetag direct link (owner, 2026-10-16)", () => {
     expect(code("lib/monetization/settings.ts")).toContain("merged.monetagDirectLink = normalizeDirectLink(merged.monetagDirectLink)");
   });
 
-  it("opens inside the tap (no await before window.open) and only once a session per spot", () => {
-    const hook = code("features/monetization/use-direct-link.ts");
-    const body = hook.slice(hook.indexOf("return useCallback("));
+  it("opens inside the tap (no await before window.open), from its own chunk, once a session per spot", () => {
+    expect(code("features/monetization/use-direct-link.ts")).toContain("return useCallback(() => opener.current?.(), [])");
+    const rt = code("features/monetization/direct-link-runtime.ts");
+    const body = rt.slice(rt.indexOf("return () => {"));
     expect(body).not.toMatch(/await|\.then\(/);
-    expect(body).toContain("sessionStorage.getItem(seenKey(spot))");
+    expect(body).toContain("sessionStorage.getItem(seenKey)");
     expect(body).toContain('window.open(c.url, "_blank", "noopener,noreferrer")');
   });
 

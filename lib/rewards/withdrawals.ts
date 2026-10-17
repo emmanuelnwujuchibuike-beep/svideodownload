@@ -2,7 +2,7 @@ import "server-only";
 
 import { emailMember } from "@/lib/email/member-email";
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
-import { splitWithdrawalUsdCents, withdrawalUsdCents, type RewardsConfig } from "@/lib/rewards/config";
+import { splitWithdrawalUsdCents, withdrawalFlatFeeCents, withdrawalUsdCents, type RewardsConfig } from "@/lib/rewards/config";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { resolveAccount } from "./paystack-banks";
@@ -106,14 +106,22 @@ export async function requestWithdrawal(input: { userId: string; credits: number
   const split = b && Number(b.deposited_cents ?? 0) > 0 ? splitWithdrawalUsdCents(credits, Number(b.withdrawable_cents ?? 0), Number(b.deposited_cents ?? 0), w) : null;
   const usdCents = split ? split.usdCents : withdrawalUsdCents(credits, w.creditsPerUsd);
   const status: WithdrawalStatus = credits > w.manualReviewAboveCredits ? "reviewing" : "pending";
-  const { data, error } = await db.rpc("request_withdrawal", { p_user_id: input.userId, p_credits: credits, p_usd_cents: usdCents, p_method: input.method, p_details: details, p_snapshot: { creditsPerUsd: w.creditsPerUsd, version: input.config.version, depositedPart: split?.depositedPart ?? 0, deposited: w.deposited }, p_status: status });
+  /*
+    The flat withdrawal fee (owner 2026-10-17: "for every withdraw"), the same tiers as private-post
+    money (sub.flatFees), by the withdrawal's USD value. It comes ON TOP: its credits (rounded UP) are
+    reserved with the request, so the withdrawable balance must cover both (request_withdrawal refuses
+    otherwise) and a rejection returns both. The payout is still worth the requested credits only.
+  */
+  const flatFeeUsdCents = withdrawalFlatFeeCents(usdCents, input.config.sub.flatFees);
+  const flatFeeCredits = Math.ceil((flatFeeUsdCents * w.creditsPerUsd) / 100);
+  const { data, error } = await db.rpc("request_withdrawal", { p_user_id: input.userId, p_credits: credits + flatFeeCredits, p_usd_cents: usdCents, p_method: input.method, p_details: details, p_snapshot: { creditsPerUsd: w.creditsPerUsd, version: input.config.version, depositedPart: split?.depositedPart ?? 0, deposited: w.deposited, requestedCredits: credits, flatFeeCredits, flatFeeUsdCents }, p_status: status });
   if (error) {
     console.error("[rewards/withdraw] request failed", { userId: input.userId, message: error.message });
     return { ok: false, status: 503, error: "Couldn't submit that. Try again in a moment." };
   }
   const out = (data ?? {}) as { ok?: boolean; reason?: string; id?: string };
   if (!out.ok || !out.id) {
-    const msg = out.reason === "insufficient_withdrawable" ? "You don't have that many withdrawable credits." : out.reason === "restricted" ? "Withdrawals are paused on this account. Contact support." : "Couldn't submit that.";
+    const msg = out.reason === "insufficient_withdrawable" ? `You don't have that many withdrawable credits (the amount plus the ${flatFeeCredits}-credit withdrawal fee).` : out.reason === "restricted" ? "Withdrawals are paused on this account. Contact support." : "Couldn't submit that.";
     return { ok: false, status: 409, error: msg };
   }
   console.info("[rewards/withdraw] requested", { userId: input.userId, id: out.id, credits, usdCents, status });

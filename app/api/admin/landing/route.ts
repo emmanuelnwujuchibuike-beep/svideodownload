@@ -475,6 +475,17 @@ const schema = z.object({
           autoPayout: z.boolean().optional(),
           requireQualification: z.boolean().optional(),
           watermark: z.boolean().optional(),
+          // 0258 (owner 2026-10-17): the flat fee on every withdrawal, by tier — normalizeFlatFees clamps again
+          flatFees: z
+            .object({
+              underCents: z.number().int().min(0).max(100_000).optional(),
+              midCents: z.number().int().min(0).max(100_000).optional(),
+              overCents: z.number().int().min(0).max(100_000).optional(),
+              midFromCents: z.number().int().min(1).max(100_000_000).optional(),
+              overAboveCents: z.number().int().min(1).max(100_000_000).optional(),
+            })
+            .strict()
+            .optional(),
         })
         .strict()
         .optional(),

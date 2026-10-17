@@ -9,6 +9,7 @@ import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
 import { attributionLink, reportReferralShared, shareOrCopy } from "@/lib/referrals/share-client";
+import { withdrawalFlatFeeCents, withdrawalUsdCents, type WithdrawalFlatFees } from "@/lib/rewards/config";
 import type { RewardsSummary } from "@/lib/rewards/summary";
 import { cn } from "@/lib/utils";
 
@@ -297,7 +298,7 @@ function WithdrawSection({ summary }: { summary: Summary }) {
       </div>
 
       {/* step 3 — withdraw (greyed until approved and above the minimum) */}
-      {w ? <WithdrawForm enabled={canWithdraw} max={Math.min(wallet.withdrawableCredits, w.maxCredits)} min={w.minCredits} creditsPerUsd={w.creditsPerUsd} methods={w.methods} withdrawable={wallet.withdrawableCredits} approved={approved} /> : null}
+      {w ? <WithdrawForm enabled={canWithdraw} max={Math.min(wallet.withdrawableCredits, w.maxCredits)} min={w.minCredits} creditsPerUsd={w.creditsPerUsd} methods={w.methods} withdrawable={wallet.withdrawableCredits} approved={approved} flatFees={w.flatFees} /> : null}
     </section>
   );
 }
@@ -373,7 +374,7 @@ function ShareAppButton() {
   );
 }
 
-function WithdrawForm({ enabled, max, min, creditsPerUsd, methods, withdrawable, approved }: { enabled: boolean; max: number; min: number; creditsPerUsd: number; methods: string[]; withdrawable: number; approved: boolean }) {
+function WithdrawForm({ enabled, max, min, creditsPerUsd, methods, withdrawable, approved, flatFees }: { enabled: boolean; max: number; min: number; creditsPerUsd: number; methods: string[]; withdrawable: number; approved: boolean; flatFees?: WithdrawalFlatFees }) {
   const [credits, setCredits] = useState(String(Math.max(min, max)));
   const [method, setMethod] = useState(methods[0] ?? "bank_transfer");
   // the keys the server validates (lib/rewards/withdrawals.ts validatePayoutDetails)
@@ -459,7 +460,16 @@ function WithdrawForm({ enabled, max, min, creditsPerUsd, methods, withdrawable,
         Credits
         <input inputMode="numeric" value={credits} onChange={(e) => setCredits(e.target.value.replace(/[^\d]/g, ""))} className={field} />
       </label>
-      {enabled && Number.isInteger(n) && n > 0 ? <p className="mt-1 text-[12px] text-slate-500">≈ ${((n * 100) / Math.max(1, creditsPerUsd) / 100).toFixed(2)}</p> : null}
+      {enabled && Number.isInteger(n) && n > 0 ? (
+        <p className="mt-1 text-[12px] text-slate-500">
+          ≈ ${((n * 100) / Math.max(1, creditsPerUsd) / 100).toFixed(2)}
+          {/* the flat withdrawal fee comes on top, in credits (owner 2026-10-17); the server charges the same */}
+          {flatFees ? (() => {
+            const fee = Math.ceil((withdrawalFlatFeeCents(withdrawalUsdCents(n, creditsPerUsd), flatFees) * creditsPerUsd) / 100);
+            return <> · plus a {fee}-credit withdrawal fee ({n + fee} credits in all){n + fee > withdrawable ? <span className="font-medium text-rose-600"> · more than you can withdraw</span> : null}</>;
+          })() : null}
+        </p>
+      ) : null}
       {methods.length > 1 ? (
         <label className="mt-3 block text-[12.5px] font-medium">
           Method

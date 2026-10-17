@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import { decodeSubCursor, encodeSubCursor, isUuid } from "./guards";
 import { usd } from "@/lib/creator/membership/engine";
+import { withdrawalFlatFeeCents, type WithdrawalFlatFees } from "@/lib/rewards/config";
 
 import { subConfig } from "./server";
 
@@ -83,7 +84,7 @@ export interface Overview {
   activeSubscribers: number;
   ending: number;
   posts: { published: number; locked: number; hidden: number };
-  withdrawal: { enabled: boolean; minCents: number; feePercent: number; openRequest: boolean; reason: string | null };
+  withdrawal: { enabled: boolean; minCents: number; feePercent: number; flatFees: WithdrawalFlatFees; openRequest: boolean; reason: string | null };
   period: PeriodSummary | null;
   /** false before 0252 runs: balances and counts still show, period analytics say so */
   analyticsReady: boolean;
@@ -151,7 +152,7 @@ export async function earningsOverview(creatorId: string, days: Period = 30, now
   const hidden = hiddenR.error ? 0 : (hiddenR.count ?? 0);
   const openRequest = ((openR.data ?? []) as Row[]).length > 0;
   // the reason a withdrawal can't be asked for, in the same words the server would answer with
-  const reason = !cfg.withdrawalsEnabled ? "Withdrawals are paused right now." : openRequest ? "You already have a withdrawal in progress." : balances.availableCents < cfg.minWithdrawalCents ? `The minimum withdrawal is ${usd(cfg.minWithdrawalCents)}.` : null;
+  const reason = !cfg.withdrawalsEnabled ? "Withdrawals are paused right now." : openRequest ? "You already have a withdrawal in progress." : balances.availableCents < cfg.minWithdrawalCents + withdrawalFlatFeeCents(cfg.minWithdrawalCents, cfg.flatFees) ? `The minimum withdrawal is ${usd(cfg.minWithdrawalCents)}, plus the ${usd(withdrawalFlatFeeCents(cfg.minWithdrawalCents, cfg.flatFees))} withdrawal fee.` : null;
   const analyticsReady = !sumR.error && !dayR.error;
   return {
     ok: true,
@@ -160,7 +161,7 @@ export async function earningsOverview(creatorId: string, days: Period = 30, now
     // paid up but cancelled for the current period (0250) — counted in the database (0252), 0 before it runs
     ending: sumR.error ? 0 : num((sumR.data as Row | null)?.ending_now),
     posts: { published, locked: Math.max(0, published - hidden), hidden },
-    withdrawal: { enabled: cfg.withdrawalsEnabled, minCents: cfg.minWithdrawalCents, feePercent: cfg.withdrawalFeePercent, openRequest, reason },
+    withdrawal: { enabled: cfg.withdrawalsEnabled, minCents: cfg.minWithdrawalCents, feePercent: cfg.withdrawalFeePercent, flatFees: cfg.flatFees, openRequest, reason },
     period: analyticsReady ? toSummary(days, since, (sumR.data ?? {}) as Row, (dayR.data ?? []) as Row[]) : null,
     analyticsReady,
   };

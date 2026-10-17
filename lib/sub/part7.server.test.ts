@@ -110,7 +110,8 @@ describe("creator earnings", () => {
     db.tables.sub_balances![0]!.available_cents = 100;
     out = await earn.earningsOverview(C, 30);
     if (!out.ok) throw new Error("x");
-    expect(out.withdrawal.reason).toBe("The minimum withdrawal is $5.00.");
+    // 2026-10-17: the flat withdrawal fee comes on top, so the minimum names it ($5.00 is below $300: $0.20)
+    expect(out.withdrawal.reason).toBe("The minimum withdrawal is $5.00, plus the $0.20 withdrawal fee.");
     // another creator's open request never blocks this one
     db.tables.sub_balances![0]!.available_cents = 2500;
     db.tables.withdrawal_requests = [{ id: U(51), user_id: C2, source: "sub", status: "pending", gross_cents: 300 }];

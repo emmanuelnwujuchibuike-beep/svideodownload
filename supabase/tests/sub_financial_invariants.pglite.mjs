@@ -20,6 +20,7 @@
 //   restore-no-claw restore_disputed_sub_purchase skips the clawback check -> a never-earned purchase mints money
 //   restore-own-end restore gives access only to the purchase's own end -> a later paid renewal loses its days
 //   reject-ignores-debt resolve_withdrawal (0256) releases a rejection without settling debt -> withdrawable while owed
+//   flat-not-covered request_sub_withdrawal (0258) checks the balance against the amount only -> the flat fee overdraws
 import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 
@@ -55,10 +56,11 @@ const db = new PGlite();
 await run(db, stub);
 const U = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 await db.exec(`insert into auth.users (id) select ('00000000-0000-4000-8000-' || lpad(g::text, 12, '0'))::uuid from generate_series(1, 40) g`);
-for (const f of ["0227_sub_monetization.sql", "0231_sub_promo_dismiss.sql", "0237_sub_post_thumbs.sql", "0239_private_post_interactions.sql", "0247_sub_settlement_hardening.sql", "0250_sub_membership_lifecycle.sql", "0254_payout_reversal_dispute_restore.sql", "0256_withdrawal_rejection_settles_debt.sql"]) await run(db, readFileSync(`${dir}/${f}`, "utf8"));
+for (const f of ["0227_sub_monetization.sql", "0231_sub_promo_dismiss.sql", "0237_sub_post_thumbs.sql", "0239_private_post_interactions.sql", "0247_sub_settlement_hardening.sql", "0250_sub_membership_lifecycle.sql", "0254_payout_reversal_dispute_restore.sql", "0256_withdrawal_rejection_settles_debt.sql", "0258_withdrawal_flat_fee.sql"]) await run(db, readFileSync(`${dir}/${f}`, "utf8"));
 // 0254 and 0256 applied a second time: they must be idempotent
 await run(db, readFileSync(dir + "/0254_payout_reversal_dispute_restore.sql", "utf8"));
 await run(db, readFileSync(dir + "/0256_withdrawal_rejection_settles_debt.sql", "utf8"));
+await run(db, readFileSync(dir + "/0258_withdrawal_flat_fee.sql", "utf8"));
 // Supabase's defaults: clients hold table privileges on public and RLS is the only wall. Without this
 // the client checks below would pass for the wrong reason (no grant at all instead of RLS).
 await db.exec("grant usage on schema public to anon, authenticated");
@@ -75,6 +77,7 @@ if (MUTANT === "wd-reverse-debt") await db.exec((await fnBody("reverse_paid_with
 if (MUTANT === "restore-no-claw") await db.exec((await fnBody("restore_disputed_sub_purchase")).replace(/if not exists \(select 1 from public\.sub_ledger where kind = 'clawback'[\s\S]*?end if;/, ""));
 if (MUTANT === "restore-own-end") await db.exec((await fnBody("restore_disputed_sub_purchase")).replace("and status = 'paid';", "and id = v_p.id;"));
 if (MUTANT === "dup-resolve") { const b = await fnBody("resolve_withdrawal"); const m = b.replace(/if v_w\.status in \('completed', 'rejected', 'cancelled'(, 'reversed')?\) then return[^;]*;\s*end if;/, ""); if (m === b) throw new Error("mutant dup-resolve did not apply"); await db.exec(m); }
+if (MUTANT === "flat-not-covered") { const b = await fnBody("request_sub_withdrawal"); const m = b.replace("if v_b.available_cents < v_total then", "if v_b.available_cents < p_gross_cents then"); if (m === b) throw new Error("mutant flat-not-covered did not apply"); await db.exec(m); }
 if (MUTANT === "reject-ignores-debt") { const b = await fnBody("resolve_withdrawal"); const m = b.replace("v_pay := least(coalesce(v_b.debt_cents, 0), v_w.gross_cents);", "v_pay := 0;"); if (m === b) throw new Error("mutant reject-ignores-debt did not apply"); await db.exec(m); }
 
 const q = async (s, p) => (await db.query(s, p)).rows;
@@ -420,6 +423,30 @@ ok(first.ok && !second.ok && second.reason === "final", "28g. paid first: the re
 const b28g = await bal(C6);
 ok(b28g.w === 1000 && b28g.h === 0, "28g. the money is withdrawn once, never also released");
 await invariants(C6, "payout then rejection, back to back");
+
+// 29 · the flat withdrawal fee (0258): on top of the amount, the balance must cover both, and it moves with the rest
+const C10 = U(10);
+await settle(await purchase(C10, S(22)));
+const flatW = (gross, flat, k) => call("select request_sub_withdrawal($1, $2, 1000, 500, 'paystack', '{}'::jsonb, '{}'::jsonb, $3, false, $4) as r", [C10, gross, k, flat]);
+const tooMuch = await flatW(1000, 20, "flat-1");
+ok(!tooMuch.ok && tooMuch.reason === "insufficient" && (await bal(C10)).a === 1000, "29. 1000 available, 1000 + a 20 flat fee asked: refused, nothing held");
+const fw = await flatW(980, 20, "flat-2");
+const fwRow = await one("select gross_cents, fee_cents, net_cents, amount_usd_cents from withdrawal_requests where id = $1", [fw.id]);
+ok(fw.ok && fwRow.gross_cents === 1000 && fwRow.net_cents === 882 && fwRow.fee_cents === 118 && fwRow.amount_usd_cents === 882, "29. 980 + 20 flat: 1000 leaves the balance; payout 882 (980 less 10%); fee 98 + 20");
+ok((await bal(C10)).a === 0 && (await bal(C10)).h === 1000, "29. the whole 1000 (amount + flat fee) is held");
+await invariants(C10, "withdrawal with a flat fee held");
+await resolve(fw.id, "rejected");
+ok((await bal(C10)).a === 1000 && (await bal(C10)).h === 0, "29. rejected: all 1000 returns, the flat fee too");
+await invariants(C10, "flat-fee withdrawal rejected");
+const fw2 = await flatW(980, 20, "flat-3");
+await payOut(fw2.id);
+ok((await bal(C10)).w === 1000 && (await bal(C10)).a === 0, "29. paid: withdrawn counts the 1000 that left the balance");
+await invariants(C10, "flat-fee withdrawal paid");
+const below = await flatW(400, 20, "flat-4");
+ok(!below.ok && (below.reason === "below_minimum" || below.reason === "insufficient"), "29. the minimum (500) still applies to the amount itself");
+const legacy = await call("select request_sub_withdrawal($1, 500, 1000, 500, 'paystack', '{}'::jsonb, '{}'::jsonb, 'flat-5', false) as r", [U(11)]);
+ok(legacy && legacy.ok === false, "29. a caller that sends no flat fee still resolves to the one function (default 0)");
+ok((await one("select count(*)::int n from pg_proc where proname = 'request_sub_withdrawal'")).n === 1, "29. exactly one request_sub_withdrawal exists (the 9-argument one was dropped)");
 
 // 18-19 · clients can't run the money functions or write the money tables (Supabase grants + RLS)
 const availBefore = (await bal(C)).a;

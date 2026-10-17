@@ -1,5 +1,6 @@
 import "server-only";
 
+import { withdrawalFlatFeeCents } from "@/lib/rewards/config";
 import { resolveAccount } from "@/lib/rewards/paystack-banks";
 import { validatePayoutDetails } from "@/lib/rewards/withdrawals";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -121,10 +122,16 @@ export async function autoWithdrawSub(creatorId: string, trigger: string): Promi
       db.from("sub_ledger").select("id").eq("creator_id", creatorId).order("id", { ascending: false }).limit(1).maybeSingle(),
     ]);
     const available = Number((b as Row | null)?.available_cents ?? 0);
-    if (available < cfg.minWithdrawalCents) return { requested: false, reason: "below_minimum" };
+    /*
+      0258: the flat withdrawal fee comes ON TOP of the amount, so the sweep withdraws what is left
+      after it. The tiers rise with the amount, so the fee for (available - fee(available)) is never
+      larger than fee(available): amount + its own fee always fits.
+    */
+    const amount = available - withdrawalFlatFeeCents(available, cfg.flatFees);
+    if (amount < cfg.minWithdrawalCents) return { requested: false, reason: "below_minimum" };
     // the same balance state ⇒ the same key ⇒ the SQL answers a replay, never a second payout
     const key = `auto_${String((last as Row | null)?.id ?? "0")}_${creatorId.replace(/-/g, "").slice(0, 12)}`;
-    const out = await requestSubWithdrawal({ userId: creatorId, grossCents: available, details, idempotencyKey: key });
+    const out = await requestSubWithdrawal({ userId: creatorId, grossCents: amount, details, idempotencyKey: key });
     if (!out.ok) {
       if (out.reason !== "open_exists") console.warn("[sub/auto-withdraw] not requested", { creatorId, trigger, reason: out.reason ?? out.error });
       return { requested: false, reason: out.reason ?? "refused" };

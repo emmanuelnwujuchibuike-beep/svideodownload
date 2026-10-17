@@ -749,7 +749,9 @@ describe.skipIf(!buildExists())("route weight budget", () => {
       `Routes over ${formatKb(GLOBAL_CEILING)} of gzipped JS:\n  ${over.join("\n  ")}\n\n` +
         `If this is a genuine, justified increase, raise GLOBAL_CEILING and say why in the commit.`,
     ).toHaveLength(0);
-  });
+    // the first test to gzip every route's chunks (~1 s alone, 23 s once under a full parallel run on
+    // 2026-10-17 — a timeout, never this assertion); the ceiling is unchanged
+  }, 60_000);
 
   it("keeps cold-entry routes under the tighter ceiling", () => {
     const weights = new Map(routeWeights().map((r) => [r.route, r.bytes]));

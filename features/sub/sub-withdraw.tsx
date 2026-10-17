@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 
 import { EX_CARD, exPrimary } from "@/features/sub/ui";
 import { usd, withdrawalSplit } from "@/lib/creator/membership/engine";
+import { withdrawalFlatFeeCents, type WithdrawalFlatFees } from "@/lib/rewards/config";
 import { haptic } from "@/lib/motion/haptics";
 import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,8 @@ export interface SubRules {
   withdrawalsEnabled: boolean;
   withdrawalFeePercent: number;
   minWithdrawalCents: number;
+  /** 0258: the flat fee on top of every withdrawal, by tier (absent from an older server: no flat fee shown) */
+  flatFees?: WithdrawalFlatFees;
   autoPayout: boolean;
   requireQualification: boolean;
 }
@@ -94,9 +97,12 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
   const e = data?.earnings;
   const cents = Math.round(Number(amount) * 100);
   const split = rules && Number.isFinite(cents) && cents > 0 ? withdrawalSplit(cents, rules.withdrawalFeePercent) : null;
+  // the flat fee comes ON TOP: the balance must cover the amount and the fee (owner 2026-10-17)
+  const flat = rules?.flatFees && split ? withdrawalFlatFeeCents(cents, rules.flatFees) : 0;
+  const maxCents = e && rules?.flatFees ? Math.max(0, e.availableCents - withdrawalFlatFeeCents(e.availableCents, rules.flatFees)) : (e?.availableCents ?? 0);
   const accountOk = where === "intl" ? intlOk : viaSaved || lookup.accountOk;
   const open = (e?.withdrawals ?? []).some((w) => ["pending", "reviewing", "approved", "processing"].includes(w.status));
-  const valid = !!rules && !!e && rules.withdrawalsEnabled && !open && !!split && cents >= rules.minWithdrawalCents && cents <= e.availableCents && accountOk;
+  const valid = !!rules && !!e && rules.withdrawalsEnabled && !open && !!split && cents >= rules.minWithdrawalCents && cents + flat <= e.availableCents && accountOk;
 
   const submit = async () => {
     if (!valid || busy) return;
@@ -158,7 +164,7 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
               {e!.debtCents > 0 ? <Stat label="Owed back (refunds)" value={usd(e!.debtCents)} /> : null}
             </div>
             <p className="mt-2 text-[12.5px] text-muted-foreground">
-              Private post money is separate from AI credits. A {rules!.withdrawalFeePercent}% withdrawal fee applies. Minimum {usd(rules!.minWithdrawalCents)}. {where === "intl" ? "Outside Nigeria, our team pays it after a quick review." : rules!.autoPayout ? "Paid out through Paystack straight away." : "Paid through Paystack after a quick review."}
+              Private post money is separate from AI credits. A {rules!.withdrawalFeePercent}% withdrawal fee applies{rules!.flatFees ? <>, plus a flat {usd(rules!.flatFees.underCents)} ({usd(rules!.flatFees.midCents)} from {usd(rules!.flatFees.midFromCents)}, {usd(rules!.flatFees.overCents)} above {usd(rules!.flatFees.overAboveCents)}) taken from your balance</> : null}. Minimum {usd(rules!.minWithdrawalCents)}. {where === "intl" ? "Outside Nigeria, our team pays it after a quick review." : rules!.autoPayout ? "Paid out through Paystack straight away." : "Paid through Paystack after a quick review."}
             </p>
 
             {!rules!.withdrawalsEnabled ? (
@@ -172,14 +178,15 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
             </label>
             <div className="mt-1 flex gap-2">
               <input id="sw-amount" inputMode="decimal" value={amount} onChange={(ev) => setAmount(ev.target.value.replace(/[^0-9.]/g, "").slice(0, 10))} placeholder="0.00" className={field} />
-              <button type="button" onClick={() => setAmount((e!.availableCents / 100).toFixed(2))} className="ex-btn ex-btn--glass ex-btn--sm shrink-0">
+              <button type="button" onClick={() => setAmount((maxCents / 100).toFixed(2))} className="ex-btn ex-btn--glass ex-btn--sm shrink-0">
                 Max
               </button>
             </div>
             {split ? (
               <p className="mt-1.5 text-[13px] text-muted-foreground">
                 {usd(split.grossCents)} − {usd(split.feeCents)} fee = <b className="text-foreground">{usd(split.netCents)}</b> to your bank
-                {cents > e!.availableCents ? <span className="font-medium text-rose-600 dark:text-rose-400"> · more than you have available</span> : cents < rules!.minWithdrawalCents ? <span className="font-medium text-rose-600 dark:text-rose-400"> · below the minimum</span> : null}
+                {flat ? <> · plus a {usd(flat)} withdrawal fee from your balance ({usd(cents + flat)} in all)</> : null}
+                {cents + flat > e!.availableCents ? <span className="font-medium text-rose-600 dark:text-rose-400"> · more than you have available</span> : cents < rules!.minWithdrawalCents ? <span className="font-medium text-rose-600 dark:text-rose-400"> · below the minimum</span> : null}
               </p>
             ) : null}
 

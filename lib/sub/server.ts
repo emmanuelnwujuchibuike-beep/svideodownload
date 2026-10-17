@@ -8,7 +8,7 @@ import { quoteCheckout } from "@/lib/ai/character-replace/topup-fx";
 import { subscriptionCharge, usd, validatePrice, withdrawalSplit } from "@/lib/creator/membership/engine";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { initializeSubCheckout, paystackFailureIsDefinite, SUB_PURPOSE, verifyTransaction } from "@/lib/paystack/paystack";
-import type { SubConfig } from "@/lib/rewards/config";
+import { withdrawalFlatFeeCents, type SubConfig } from "@/lib/rewards/config";
 import { resolveAccount } from "@/lib/rewards/paystack-banks";
 import { payWithdrawalViaPaystack } from "@/lib/rewards/paystack-payouts";
 import { validatePayoutDetails } from "@/lib/rewards/withdrawals";
@@ -498,25 +498,33 @@ export async function requestSubWithdrawal(input: { userId: string; grossCents: 
     details.accountName = name;
   }
   const split = withdrawalSplit(input.grossCents, cfg.withdrawalFeePercent);
-  const { data, error } = await createAdminClient().rpc("request_sub_withdrawal", {
+  // 0258 (owner 2026-10-17): a flat fee ON TOP of the amount, by tier; the balance must cover both
+  const flatFeeCents = withdrawalFlatFeeCents(split.grossCents, cfg.flatFees);
+  const args = {
     p_user: input.userId,
     p_gross_cents: split.grossCents,
     p_fee_bp: split.feeBp,
     p_min_cents: cfg.minWithdrawalCents,
     p_method: method,
     p_details: details,
-    p_snapshot: { withdrawalFeePercent: cfg.withdrawalFeePercent, version: 1 },
+    p_snapshot: { withdrawalFeePercent: cfg.withdrawalFeePercent, flatFeeCents, version: 2 },
     p_idempotency: input.idempotencyKey,
     p_require_qualification: cfg.requireQualification,
-  });
+  };
+  let { data, error } = await createAdminClient().rpc("request_sub_withdrawal", { ...args, p_flat_fee_cents: flatFeeCents });
+  if (error && /p_flat_fee_cents|request_sub_withdrawal|schema cache/i.test(error.message)) {
+    // before 0258 runs the function has no flat-fee argument: withdrawals keep working without it
+    console.warn("[sub/withdraw] flat fee not applied: migration 0258 not run yet", { userId: input.userId });
+    ({ data, error } = await createAdminClient().rpc("request_sub_withdrawal", args));
+  }
   if (error) return MISSING(error.message) ? fail("Private post withdrawals arrive with the next update.", 503) : fail("Couldn't request that withdrawal.", 500);
-  const r = data as { ok?: boolean; reason?: string; id?: string; net?: number; fee?: number; duplicate?: boolean; status?: string } | null;
+  const r = data as { ok?: boolean; reason?: string; id?: string; net?: number; fee?: number; flat_fee?: number; duplicate?: boolean; status?: string } | null;
   if (!r?.ok) {
     const msg: Record<string, string> = {
       not_qualified: "Your account isn't approved for withdrawals yet.",
       restricted: "Withdrawals are paused on your account. Contact support.",
       below_minimum: `The minimum withdrawal is ${usd(cfg.minWithdrawalCents)}.`,
-      insufficient: "That's more than your available private post balance.",
+      insufficient: `That's more than your available private post balance (the amount plus the ${usd(flatFeeCents)} withdrawal fee).`,
       open_exists: "You already have a withdrawal in progress.",
     };
     return fail(msg[r?.reason ?? ""] ?? "Couldn't request that withdrawal.", 409, r?.reason);

@@ -172,9 +172,46 @@ export interface SubConfig {
   requireQualification: boolean;
   /** a light watermark (the viewer's @handle and Frenz) over subscriber-only media; never alters the file */
   watermark: boolean;
+  /**
+   * The flat fee on EVERY withdrawal — private-post money and AI credits alike (owner, 2026-10-17:
+   * "add an additional flat $0.2 fee for every withdraw … below $300; above, 0.5; above 500, $1").
+   * Charged ON TOP of the amount withdrawn (the balance must cover amount + flat fee), beside the
+   * percentage fee. Tiered by the amount withdrawn in USD cents.
+   */
+  flatFees: WithdrawalFlatFees;
 }
 
-export const SUB_DEFAULTS: SubConfig = { purchasesEnabled: true, withdrawalsEnabled: true, purchaseFeePercent: 10, withdrawalFeePercent: 10, minPriceCents: 100, maxPriceCents: 100_000, minWithdrawalCents: 500, holdDays: 0, periodDays: 30, autoPayout: true, requireQualification: false, watermark: true };
+/** The tiers: below `midFromCents` → `underCents`; up to and including `overAboveCents` → `midCents`; above → `overCents`. */
+export interface WithdrawalFlatFees {
+  underCents: number;
+  midCents: number;
+  overCents: number;
+  midFromCents: number;
+  overAboveCents: number;
+}
+
+export const FLAT_FEE_DEFAULTS: WithdrawalFlatFees = { underCents: 20, midCents: 50, overCents: 100, midFromCents: 30_000, overAboveCents: 50_000 };
+
+/** The flat fee for withdrawing `amountCents` (USD cents): $0.20 below $300, $0.50 from $300 to $500, $1.00 above $500 by default. */
+export function withdrawalFlatFeeCents(amountCents: number, f: WithdrawalFlatFees): number {
+  const a = Math.max(0, Math.floor(amountCents));
+  return a < f.midFromCents ? f.underCents : a <= f.overAboveCents ? f.midCents : f.overCents;
+}
+
+export function normalizeFlatFees(raw: unknown): WithdrawalFlatFees {
+  const d = FLAT_FEE_DEFAULTS;
+  const r = isRecord(raw) ? raw : {};
+  const midFromCents = int(r.midFromCents, d.midFromCents, 1, 100_000_000);
+  return {
+    underCents: int(r.underCents, d.underCents, 0, 100_000),
+    midCents: int(r.midCents, d.midCents, 0, 100_000),
+    overCents: int(r.overCents, d.overCents, 0, 100_000),
+    midFromCents,
+    overAboveCents: Math.max(midFromCents, int(r.overAboveCents, d.overAboveCents, 1, 100_000_000)),
+  };
+}
+
+export const SUB_DEFAULTS: SubConfig = { purchasesEnabled: true, withdrawalsEnabled: true, purchaseFeePercent: 10, withdrawalFeePercent: 10, minPriceCents: 100, maxPriceCents: 100_000, minWithdrawalCents: 500, holdDays: 0, periodDays: 30, autoPayout: true, requireQualification: false, watermark: true, flatFees: FLAT_FEE_DEFAULTS };
 
 export function normalizeSubConfig(raw: unknown): SubConfig {
   const d = SUB_DEFAULTS;
@@ -194,6 +231,7 @@ export function normalizeSubConfig(raw: unknown): SubConfig {
     autoPayout: bool(r.autoPayout, d.autoPayout),
     requireQualification: bool(r.requireQualification, d.requireQualification),
     watermark: bool(r.watermark, d.watermark),
+    flatFees: normalizeFlatFees(r.flatFees),
   };
 }
 
@@ -342,6 +380,6 @@ export function publicRewardsConfig(c: RewardsConfig) {
     enabled: c.enabled,
     events: Object.fromEntries(REWARD_EVENTS.filter((e) => c.events[e].enabled && (c.events[e].actorCredits > 0 || c.events[e].referrerCredits > 0)).map((e) => [e, { label: REWARD_EVENT_LABELS[e], actorCredits: c.events[e].actorCredits, referrerCredits: c.events[e].referrerCredits, minDurationSeconds: c.events[e].minDurationSeconds ?? null }])),
     qualification: c.qualification,
-    withdrawals: c.withdrawals.enabled ? { creditsPerUsd: c.withdrawals.creditsPerUsd, minCredits: c.withdrawals.minCredits, maxCredits: c.withdrawals.maxCredits, methods: c.withdrawals.methods } : null,
+    withdrawals: c.withdrawals.enabled ? { creditsPerUsd: c.withdrawals.creditsPerUsd, minCredits: c.withdrawals.minCredits, maxCredits: c.withdrawals.maxCredits, methods: c.withdrawals.methods, flatFees: c.sub.flatFees } : null,
   };
 }

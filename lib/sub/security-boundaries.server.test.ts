@@ -203,7 +203,8 @@ describe("cross-account: creator A against creator B's records", () => {
     for (const path of ["/api/sub/earnings", "/api/sub/earnings/ledger", "/api/sub/earnings/overview", "/api/sub/payout-account", "/api/sub/transactions", "/api/members/subscribers"] as const) {
       const mod = (await ROUTES.find(([p]) => p === path)![1]()) as Record<string, Handler>;
       const res = await mod.GET!(req("GET", undefined, `https://frenzsave.com${path}?creator=${B}&userId=${B}&creatorId=${B}`));
-      expect(await res.text(), path).not.toMatch(/5000|0123456789|purchase:x/);
+      // B's balance is 5000 as a whole number (the fee tiers' 50000 limit is not it)
+      expect(await res.text(), path).not.toMatch(/\b5000\b|0123456789|purchase:x/);
     }
   });
 

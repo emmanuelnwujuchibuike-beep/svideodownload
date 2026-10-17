@@ -70,8 +70,11 @@ const CREATOR = U(1);
 const SUB = U(2);
 const STRANGER = U(3);
 const ADMIN = U(9);
-const PRICE = 500; // $5.00 — the creator keeps all of it
-const FEE = 50; // 10% on top, paid by the subscriber
+const PRICE = 1000; // $10.00 — the creator keeps all of it
+const FEE = 100; // 10% on top, paid by the subscriber
+const CHARGED = (PRICE + FEE) * 1500; // kobo: $11.00 at the pinned 1,500 NGN per $1
+const FLAT = 20; // the flat withdrawal fee below $300 (0258), on top of the amount withdrawn
+const WITHDRAW = PRICE - FLAT; // the most that can be withdrawn from PRICE: amount + flat fee = PRICE
 type Handler = (r: Request, ctx?: { params: Promise<{ id: string }> }) => Promise<Response>;
 const req = (method: string, body?: unknown, url = "https://frenzsave.com/api/x") => new Request(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
 const as = (id: string | null) => {
@@ -122,7 +125,7 @@ describe.skipIf(!PGlite)("the Exclusive journey, end to end (real SQL money func
     });
     bridge = await createSqlBridge(PGlite!, db, {
       setup: [subHarnessStub()],
-      migrations: ["0227_sub_monetization.sql", "0231_sub_promo_dismiss.sql", "0237_sub_post_thumbs.sql", "0239_private_post_interactions.sql", "0247_sub_settlement_hardening.sql", "0248_sub_post_audience_feed.sql", "0250_sub_membership_lifecycle.sql", "0254_payout_reversal_dispute_restore.sql", "0256_withdrawal_rejection_settles_debt.sql"],
+      migrations: ["0227_sub_monetization.sql", "0231_sub_promo_dismiss.sql", "0237_sub_post_thumbs.sql", "0239_private_post_interactions.sql", "0247_sub_settlement_hardening.sql", "0248_sub_post_audience_feed.sql", "0250_sub_membership_lifecycle.sql", "0254_payout_reversal_dispute_restore.sql", "0256_withdrawal_rejection_settles_debt.sql", "0258_withdrawal_flat_fee.sql"],
       userIds: [CREATOR, SUB, STRANGER, ADMIN],
     });
     // JOURNEY_MUTANT=dup-settle breaks ONE protection in the real SQL (settle forgets "already paid"):
@@ -206,10 +209,10 @@ describe.skipIf(!PGlite)("the Exclusive journey, end to end (real SQL money func
     expect(ok.status).toBe(200);
     expect(initialized).toHaveLength(1);
     reference = initialized[0]!.reference;
-    expect(initialized[0]).toMatchObject({ currency: "NGN", amount: 825_000 }); // $5.50 at 1,500 NGN/$ = 8,250.00 NGN
+    expect(initialized[0]).toMatchObject({ currency: "NGN", amount: CHARGED });
     const [p] = await bridge.sql<Record<string, unknown>>("select price_cents, fee_cents, total_cents, charged_minor, charged_currency, status from sub_purchases where reference = $1", [reference]);
     expect(p).toMatchObject({ price_cents: PRICE, fee_cents: FEE, total_cents: PRICE + FEE, charged_currency: "NGN", status: "initiated" });
-    expect(Number(p!.charged_minor)).toBe(825_000);
+    expect(Number(p!.charged_minor)).toBe(CHARGED);
     const again = await (await checkout.POST!(req("POST", { creatorId: CREATOR, returnPath: "/u/amaka?tab=sub" }))).json();
     expect(again).toMatchObject({ reused: true });
     expect(initialized).toHaveLength(1);
@@ -225,7 +228,7 @@ describe.skipIf(!PGlite)("the Exclusive journey, end to end (real SQL money func
 
   it("7 · a wrong amount never settles (mismatch), and grants nothing", async () => {
     const { confirmSubPayment } = await import("./server");
-    verifyAnswer = () => ({ status: "success", amount: 825_000 - 1, currency: "NGN", id: 1, metadata: { purpose: "frenz_sub" } });
+    verifyAnswer = () => ({ status: "success", amount: CHARGED - 1, currency: "NGN", id: 1, metadata: { purpose: "frenz_sub" } });
     expect((await confirmSubPayment(reference)).status).toBe("mismatch");
     const m = await bridge.sql("select 1 from creator_memberships where creator_id = $1 and member_id = $2 and status = 'active'", [CREATOR, SUB]);
     expect(m).toHaveLength(0);
@@ -233,7 +236,7 @@ describe.skipIf(!PGlite)("the Exclusive journey, end to end (real SQL money func
 
   it("8 · the verified charge settles once: membership active for 30 days, the creator earns the PRICE", async () => {
     const { confirmSubPayment } = await import("./server");
-    verifyAnswer = () => ({ status: "success", amount: 825_000, currency: "NGN", id: 77, metadata: { purpose: "frenz_sub" } });
+    verifyAnswer = () => ({ status: "success", amount: CHARGED, currency: "NGN", id: 77, metadata: { purpose: "frenz_sub" } });
     expect(await confirmSubPayment(reference)).toMatchObject({ ok: true, status: "paid" });
     const [m] = await bridge.sql<{ status: string; billing: string; period_end: string }>("select status, billing, period_end from creator_memberships where creator_id = $1 and member_id = $2", [CREATOR, SUB]);
     expect(m).toMatchObject({ status: "active", billing: "sub" });
@@ -248,7 +251,7 @@ describe.skipIf(!PGlite)("the Exclusive journey, end to end (real SQL money func
   it("9 · replays change nothing: the return page again, and a signed webhook for the same charge", async () => {
     const { confirmSubPayment } = await import("./server");
     expect(await confirmSubPayment(reference)).toMatchObject({ ok: true, status: "paid" });
-    const body = JSON.stringify({ event: "charge.success", data: { reference, amount: 825_000, currency: "NGN", status: "success", metadata: { purpose: "frenz_sub" } } });
+    const body = JSON.stringify({ event: "charge.success", data: { reference, amount: CHARGED, currency: "NGN", status: "success", metadata: { purpose: "frenz_sub" } } });
     const sig = createHmac("sha512", SECRET).update(body).digest("hex");
     const { POST } = await import("@/app/api/paystack/webhook/route");
     for (let i = 0; i < 2; i++) expect((await POST(new Request("https://frenzsave.com/api/paystack/webhook", { method: "POST", headers: { "x-paystack-signature": sig }, body }))).status).toBe(200);
@@ -329,16 +332,18 @@ describe.skipIf(!PGlite)("the Exclusive journey, end to end (real SQL money func
     expect(JSON.stringify(await res.json())).toMatch(new RegExp(`\\b${PRICE}\\b`));
   });
 
-  it("16 · a withdrawal holds the money; a second while one is open, or more than available, is refused", async () => {
+  it("16 · a withdrawal holds amount + flat fee; the whole balance (no room for the fee), a second while one is open, are refused", async () => {
     as(CREATOR);
     const w = await route("@/app/api/sub/withdraw/route");
     const details = { bankCode: "058", bankName: "Guaranty Trust Bank", accountNumber: "0123456789" };
-    expect((await w.POST!(req("POST", { grossCents: PRICE + 1, idempotencyKey: "journey-w-0", details }))).status).toBe(409); // more than available
-    const ok = await w.POST!(req("POST", { grossCents: PRICE, idempotencyKey: "journey-w-1", details }));
+    expect((await w.POST!(req("POST", { grossCents: PRICE, idempotencyKey: "journey-w-0", details }))).status).toBe(409); // PRICE + the flat fee is more than available
+    const ok = await w.POST!(req("POST", { grossCents: WITHDRAW, idempotencyKey: "journey-w-1", details }));
     expect(ok.status).toBe(200);
     withdrawalId = ((await ok.json()) as { id: string }).id;
     const [b] = await bridge.sql<{ a: number; h: number }>("select available_cents::int a, held_cents::int h from sub_balances where creator_id = $1", [CREATOR]);
-    expect(b).toEqual({ a: 0, h: PRICE });
+    expect(b).toEqual({ a: 0, h: PRICE }); // the amount and the flat fee
+    const [row] = await bridge.sql<{ gross_cents: number; fee_cents: number; net_cents: number }>("select gross_cents, fee_cents, net_cents from withdrawal_requests where id = $1", [withdrawalId]);
+    expect(row).toEqual({ gross_cents: PRICE, fee_cents: 98 + FLAT, net_cents: WITHDRAW - 98 }); // 10% of 980 = 98
     const second = await w.POST!(req("POST", { grossCents: PRICE, idempotencyKey: "journey-w-2", details }));
     expect(second.status).toBe(409);
     await invariants("withdrawal held");
@@ -363,7 +368,7 @@ describe.skipIf(!PGlite)("the Exclusive journey, end to end (real SQL money func
   it("18 · a new withdrawal paid through Paystack (scripted): completed, withdrawn once", async () => {
     as(CREATOR);
     const w = await route("@/app/api/sub/withdraw/route");
-    const ok = await w.POST!(req("POST", { grossCents: PRICE, idempotencyKey: "journey-w-3", details: { bankCode: "058", bankName: "Guaranty Trust Bank", accountNumber: "0123456789" } }));
+    const ok = await w.POST!(req("POST", { grossCents: WITHDRAW, idempotencyKey: "journey-w-3", details: { bankCode: "058", bankName: "Guaranty Trust Bank", accountNumber: "0123456789" } }));
     expect(ok.status).toBe(200);
     const id = ((await ok.json()) as { id: string }).id;
     transferAnswer = (path) => (path === "/transferrecipient" ? { status: true, data: { recipient_code: "RCP_1" } } : path === "/transfer" ? { status: true, data: { status: "success", transfer_code: "TRF_1" } } : { status: true, data: {} });

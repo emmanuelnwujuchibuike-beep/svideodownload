@@ -15,7 +15,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   const [earnings, cfg] = await Promise.all([subEarnings(user.id), subConfig()]);
   return NextResponse.json(
-    { earnings, rules: { withdrawalsEnabled: cfg.withdrawalsEnabled, withdrawalFeePercent: cfg.withdrawalFeePercent, minWithdrawalCents: cfg.minWithdrawalCents, autoPayout: cfg.autoPayout, requireQualification: cfg.requireQualification } },
+    { earnings, rules: { withdrawalsEnabled: cfg.withdrawalsEnabled, withdrawalFeePercent: cfg.withdrawalFeePercent, minWithdrawalCents: cfg.minWithdrawalCents, flatFees: cfg.flatFees, autoPayout: cfg.autoPayout, requireQualification: cfg.requireQualification } },
     { headers: { "Cache-Control": "private, no-store" } },
   );
 }

@@ -79,6 +79,12 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
     minPrice: (c.minPriceCents / 100).toFixed(2),
     maxPrice: (c.maxPriceCents / 100).toFixed(2),
     minWithdrawal: (c.minWithdrawalCents / 100).toFixed(2),
+    // the flat fee on every withdrawal, by tier (owner 2026-10-17) — private-post money and AI credits
+    feeUnder: (c.flatFees.underCents / 100).toFixed(2),
+    feeMid: (c.flatFees.midCents / 100).toFixed(2),
+    feeOver: (c.flatFees.overCents / 100).toFixed(2),
+    feeMidFrom: (c.flatFees.midFromCents / 100).toFixed(2),
+    feeOverAbove: (c.flatFees.overAboveCents / 100).toFixed(2),
     holdDays: String(c.holdDays),
     periodDays: String(c.periodDays),
   });
@@ -103,6 +109,8 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
 
   const cents = (v: string, d: number) => (Number.isFinite(Number(v)) && v.trim() !== "" ? Math.max(1, Math.round(Number(v) * 100)) : d);
   const pct = (v: string, d: number) => (Number.isFinite(Number(v)) && v.trim() !== "" ? Math.min(50, Math.max(0, Number(v))) : d);
+  // a fee may be $0 (cents() floors at 1 cent)
+  const fee = (v: string, d: number) => (Number.isFinite(Number(v)) && v.trim() !== "" ? Math.max(0, Math.round(Number(v) * 100)) : d);
   const int = (v: string, d: number, lo: number, hi: number) => (Number.isFinite(Number(v)) && v.trim() !== "" ? Math.min(hi, Math.max(lo, Math.floor(Number(v)))) : d);
 
   const save = async () => {
@@ -119,6 +127,14 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
       minPriceCents: cents(f.minPrice, c.minPriceCents),
       maxPriceCents: cents(f.maxPrice, c.maxPriceCents),
       minWithdrawalCents: cents(f.minWithdrawal, c.minWithdrawalCents),
+      // always sent whole: the server normalizes `sub` as one object, so leaving these out would reset them
+      flatFees: {
+        underCents: fee(f.feeUnder, c.flatFees.underCents),
+        midCents: fee(f.feeMid, c.flatFees.midCents),
+        overCents: fee(f.feeOver, c.flatFees.overCents),
+        midFromCents: cents(f.feeMidFrom, c.flatFees.midFromCents),
+        overAboveCents: cents(f.feeOverAbove, c.flatFees.overAboveCents),
+      },
       holdDays: int(f.holdDays, c.holdDays, 0, 90),
       periodDays: int(f.periodDays, c.periodDays, 1, 366),
     };
@@ -175,9 +191,17 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
         <label className="text-xs text-muted-foreground">Lowest price ($)<input inputMode="decimal" value={f.minPrice} onChange={(e) => setF({ ...f, minPrice: e.target.value })} className={cn(input, "mt-1 block")} /></label>
         <label className="text-xs text-muted-foreground">Highest price ($)<input inputMode="decimal" value={f.maxPrice} onChange={(e) => setF({ ...f, maxPrice: e.target.value })} className={cn(input, "mt-1 block")} /></label>
         <label className="text-xs text-muted-foreground">Minimum withdrawal ($)<input inputMode="decimal" value={f.minWithdrawal} onChange={(e) => setF({ ...f, minWithdrawal: e.target.value })} className={cn(input, "mt-1 block")} /></label>
+        <label className="text-xs text-muted-foreground">Flat withdrawal fee, below the first limit ($)<input inputMode="decimal" value={f.feeUnder} onChange={(e) => setF({ ...f, feeUnder: e.target.value })} className={cn(input, "mt-1 block")} /></label>
+        <label className="text-xs text-muted-foreground">First limit ($)<input inputMode="decimal" value={f.feeMidFrom} onChange={(e) => setF({ ...f, feeMidFrom: e.target.value })} className={cn(input, "mt-1 block")} /></label>
+        <label className="text-xs text-muted-foreground">Flat fee from the first limit ($)<input inputMode="decimal" value={f.feeMid} onChange={(e) => setF({ ...f, feeMid: e.target.value })} className={cn(input, "mt-1 block")} /></label>
+        <label className="text-xs text-muted-foreground">Second limit ($)<input inputMode="decimal" value={f.feeOverAbove} onChange={(e) => setF({ ...f, feeOverAbove: e.target.value })} className={cn(input, "mt-1 block")} /></label>
+        <label className="text-xs text-muted-foreground">Flat fee above the second limit ($)<input inputMode="decimal" value={f.feeOver} onChange={(e) => setF({ ...f, feeOver: e.target.value })} className={cn(input, "mt-1 block")} /></label>
         <label className="text-xs text-muted-foreground">Hold before withdrawable (days)<input inputMode="numeric" value={f.holdDays} onChange={(e) => setF({ ...f, holdDays: e.target.value })} className={cn(input, "mt-1 block")} /></label>
         <label className="text-xs text-muted-foreground">Access per payment (days)<input inputMode="numeric" value={f.periodDays} onChange={(e) => setF({ ...f, periodDays: e.target.value })} className={cn(input, "mt-1 block")} /></label>
       </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        The flat fee applies to EVERY withdrawal (private-post money and AI credits), on top of the amount: the balance must cover both. Below the first limit the first fee; from the first limit up to and including the second, the middle fee; above the second, the last fee.
+      </p>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <button type="button" onClick={() => void save()} disabled={saving} className={cn("btn-lux bg-foreground text-background", saving && "opacity-60")}>
           {saving ? "Saving…" : "Save private post rules"}

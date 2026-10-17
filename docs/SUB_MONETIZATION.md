@@ -699,3 +699,14 @@ How: the real route handlers and `lib/sub/*`, with every RPC running the REAL mi
 **Where each journey is covered** — lifecycle states (`lib/sub/lifecycle.test.ts`), subscriptions/cancel/resume (`subscriptions.server.test.ts`), profile tab + studio (`profile-studio.server.test.ts`), favourites, alert preferences, announcements fan-out (`part6.server.test.ts`), earnings + admin (`part7.server.test.ts`), payments race (`payments.server.test.ts`), payout safety (`lib/rewards/payout-safety.server.test.ts`), admin reviews (`app/api/admin/memberships/reviews/route.test.ts`), email consent + unsubscribe (`lib/email/consent.test.ts`, `supabase/tests/0253_*.pglite.mjs`), security boundaries (`security-boundaries.server.test.ts`), Reels ad wiring (`features/ads-platform/serve/reels-ad-slide.test.ts`).
 
 **Not verified in Part 14** — the browser UI at mobile/desktop widths and on a real phone (no DOM test environment; a local dev server would read the production Supabase project, which this phase forbids); live Paystack, R2, Resend and Web Push; scheduled delivery (the 10-minute cron) end to end.
+
+## Flat withdrawal fee (owner, 2026-10-17)
+
+"An additional flat $0.2 fee for every withdraw, balance must cover before withdraw can be made … flat fee covers below $300, above flat fee is 0.5, above 500 is flat of $1." Owner's answers: every withdrawal (private-post money AND AI credits), ON TOP of the amount, tiers `< $300 → $0.20 · $300–$500 → $0.50 · > $500 → $1.00`, adjustable in Admin › Rewards › SUB (next to the minimum withdrawal, which was already adjustable).
+
+- Setting: `frenzRewards.sub.flatFees` (`lib/rewards/config.ts`: `withdrawalFlatFeeCents`, `normalizeFlatFees`, defaults `FLAT_FEE_DEFAULTS`); accepted by `/api/admin/landing`.
+- Private posts: **0258** restates `request_sub_withdrawal` with `p_flat_fee_cents` — the balance must cover amount + fee; the minimum applies to the amount; payout (`net`) = amount − the percentage fee (unchanged); `fee_cents` = percentage + flat; `gross_cents` = amount + flat, so the hold, a rejection, a payout and a bank return move the flat fee with the rest and the Part 12 invariants hold unchanged. Before 0258 runs, the server falls back to the old function (no flat fee) with a warning. The auto-withdrawal sweep withdraws `available − fee`.
+- AI credits: `lib/rewards/withdrawals.ts` reserves `ceil(fee × creditsPerUsd / 100)` extra credits with the request (tier by the withdrawal's USD value); `request_withdrawal` already refuses when withdrawable credits can't cover it, and a rejection returns them. The payout is worth the requested credits only. No SQL change.
+- UI: the creator withdraw sheet and the AI withdraw form show the fee and the total; Max leaves room for it; the earnings "can withdraw" reason names it.
+
+Run order: 0253 → 0254 → 0255 → 0256 → 0257 → 0258.

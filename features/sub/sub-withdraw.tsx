@@ -164,7 +164,7 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
               {e!.debtCents > 0 ? <Stat label="Owed back (refunds)" value={usd(e!.debtCents)} /> : null}
             </div>
             <p className="mt-2 text-[12.5px] text-muted-foreground">
-              Private post money is separate from AI credits. A {rules!.withdrawalFeePercent}% withdrawal fee applies{rules!.flatFees ? <>, plus a flat {usd(rules!.flatFees.underCents)} ({usd(rules!.flatFees.midCents)} from {usd(rules!.flatFees.midFromCents)}, {usd(rules!.flatFees.overCents)} above {usd(rules!.flatFees.overAboveCents)}) taken from your balance</> : null}. Minimum {usd(rules!.minWithdrawalCents)}. {where === "intl" ? "Outside Nigeria, our team pays it after a quick review." : rules!.autoPayout ? "Paid out through Paystack straight away." : "Paid through Paystack after a quick review."}
+              Private post money is separate from AI credits. A {rules!.withdrawalFeePercent}% withdrawal fee applies{rules!.flatFees ? <>, plus a flat {usd(rules!.flatFees.underCents)} ({usd(rules!.flatFees.midCents)} from {usd(rules!.flatFees.midFromCents)}, {usd(rules!.flatFees.overCents)} above {usd(rules!.flatFees.overAboveCents)}) taken from your balance</> : null}. Minimum {usd(rules!.minWithdrawalCents)}. If a withdrawal is declined, or the bank returns it, the whole amount (fees included) comes back to your balance. {where === "intl" ? "Outside Nigeria, our team pays it after a quick review." : rules!.autoPayout ? "Paid out through Paystack straight away." : "Paid through Paystack after a quick review."}
             </p>
 
             {!rules!.withdrawalsEnabled ? (
@@ -183,11 +183,32 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
               </button>
             </div>
             {split ? (
-              <p className="mt-1.5 text-[13px] text-muted-foreground">
-                {usd(split.grossCents)} − {usd(split.feeCents)} fee = <b className="text-foreground">{usd(split.netCents)}</b> to your bank
-                {flat ? <> · plus a {usd(flat)} withdrawal fee from your balance ({usd(cents + flat)} in all)</> : null}
-                {cents + flat > e!.availableCents ? <span className="font-medium text-rose-600 dark:text-rose-400"> · more than you have available</span> : cents < rules!.minWithdrawalCents ? <span className="font-medium text-rose-600 dark:text-rose-400"> · below the minimum</span> : null}
-              </p>
+              <>
+                {/* Part 15: every figure on its own line — what is paid out, and what leaves the balance */}
+                <dl className="mt-2 grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 text-[13px] tabular-nums text-muted-foreground" aria-label="Withdrawal breakdown">
+                  <dt>Amount</dt>
+                  <dd className="text-right">{usd(split.grossCents)}</dd>
+                  <dt>{rules!.withdrawalFeePercent}% withdrawal fee</dt>
+                  <dd className="text-right">−{usd(split.feeCents)}</dd>
+                  <dt className="font-semibold text-foreground">You receive</dt>
+                  <dd className="text-right font-semibold text-foreground">{usd(split.netCents)}</dd>
+                  {flat ? (
+                    <>
+                      <dt className="mt-1 border-t border-black/[0.06] pt-1 dark:border-white/[0.08]">Flat fee, from your balance</dt>
+                      <dd className="mt-1 border-t border-black/[0.06] pt-1 text-right dark:border-white/[0.08]">+{usd(flat)}</dd>
+                      <dt>Taken from your balance</dt>
+                      <dd className="text-right">{usd(cents + flat)}</dd>
+                    </>
+                  ) : null}
+                </dl>
+                {cents + flat > e!.availableCents ? (
+                  <p role="alert" className="mt-1.5 text-[12.5px] font-medium text-rose-600 dark:text-rose-400">
+                    {flat ? `Your available ${usd(e!.availableCents)} must cover the amount plus the ${usd(flat)} flat fee.` : `That's more than your available ${usd(e!.availableCents)}.`}
+                  </p>
+                ) : cents < rules!.minWithdrawalCents ? (
+                  <p role="alert" className="mt-1.5 text-[12.5px] font-medium text-rose-600 dark:text-rose-400">The minimum withdrawal is {usd(rules!.minWithdrawalCents)} (before fees).</p>
+                ) : null}
+              </>
             ) : null}
 
             <div className="mt-3 grid grid-cols-2 gap-1 rounded-2xl bg-black/[0.04] p-1 dark:bg-white/[0.06]" role="group" aria-label="Where should we pay you?">
@@ -212,7 +233,8 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
                   {savedAccount.bankName} ••••{savedAccount.last4}
                 </p>
                 <p className="text-[12.5px] text-muted-foreground">{savedAccount.accountName}</p>
-                <button type="button" onClick={() => setUseNew(true)} className="mt-1 text-[12.5px] font-semibold text-primary">
+                {/* Part 15: a 20px-tall text button was too small for a thumb — 40px tall, same look */}
+                <button type="button" onClick={() => setUseNew(true)} className="-my-1 inline-flex min-h-10 items-center text-[12.5px] font-semibold text-primary">
                   Use a different account
                 </button>
               </div>
@@ -233,7 +255,7 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
                   {e!.withdrawals.map((w) => (
                     <li key={w.id} className="flex items-center justify-between py-2 text-[13.5px]">
                       <span>
-                        {usd(w.netCents)} <span className="text-muted-foreground">({usd(w.grossCents)} − {usd(w.feeCents)} fee)</span>
+                        {usd(w.netCents)} <span className="text-muted-foreground">({usd(w.grossCents)} − {usd(w.feeCents)} in fees)</span>
                         <span className="block text-[12px] text-muted-foreground">{new Date(w.at).toLocaleDateString()}</span>
                       </span>
                       <span className={cn("rounded-full px-2 py-0.5 text-[12px] font-semibold", w.status === "completed" ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400" : ["rejected", "cancelled"].includes(w.status) ? "bg-rose-500/10 text-rose-600 dark:text-rose-400" : "bg-sky-500/10 text-sky-700 dark:text-sky-300")}>{STATUS[w.status] ?? w.status}</span>

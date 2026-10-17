@@ -28,10 +28,11 @@ describe("full-screen ads (image and video)", () => {
 
   it("owner 2026-10-16: the rail and the sound button stand on the CTA block (TikTok), not mid-screen", () => {
     expect(layout).toContain('root.style.setProperty("--ad-cta"');
-    expect(layout).toContain("bottom-[calc(var(--ad-cta,4.125rem)+5.25rem)]");
+    // 2026-10-17: plus --ad-nav, the floating nav's clearance in Reels (0 elsewhere)
+    expect(layout).toContain("bottom-[calc(var(--ad-cta,4.125rem)+var(--ad-nav,0px)+5.25rem)]");
     expect(layout).not.toContain("bottom-[calc(50%-3rem)]");
     const creative = code("features/ads-platform/serve/self-ad-creative.tsx");
-    expect(creative).toContain("bottom-[calc(var(--ad-cta,4.125rem)+1.625rem)] right-3 h-11 w-11");
+    expect(creative).toContain("bottom-[calc(var(--ad-cta,4.125rem)+var(--ad-nav,0px)+1.625rem)] right-3 h-11 w-11");
     expect(creative).not.toContain("top-[calc(50%+3.75rem)]");
   });
 

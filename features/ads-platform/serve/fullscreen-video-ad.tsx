@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronRight, Eye, Heart, Play, Share2 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { toast } from "@/features/ui/toast";
 import type { EligibleAd } from "@/lib/ads-platform/eligibility";
@@ -66,7 +66,18 @@ export function FullscreenVideoAd({
   imageMs = IMAGE_MS,
   imageEnds = false,
   className,
+  ownsSurface = false,
+  navClearance = false,
 }: {
+  /** the ad IS the full-screen surface (the Reels deck): it autoplays despite the deck's playback suspension (SelfAdCreative) */
+  ownsSurface?: boolean;
+  /**
+   * The app's floating bottom nav is drawn over this layout (the Reels deck): the caption, the call to
+   * action and the rail stand above it (owner 2026-10-17: "the bottom NAV is blocking the bottom visit
+   * button"). The nav publishes its real height (--frenz-bottomnav-h, safe area included, 0 when not
+   * shown); only what it needs beyond the safe area is added.
+   */
+  navClearance?: boolean;
   /** an IMAGE ad's on-screen time: its progress line fills over this */
   imageMs?: number;
   /** an image calls onEnded when its time is up (the Stories card moves on); an interstitial's never does */
@@ -228,7 +239,11 @@ export function FullscreenVideoAd({
   );
 
   return (
-    <div ref={rootRef} className={cn("relative h-full w-full overflow-hidden bg-black text-white", className)}>
+    <div
+      ref={rootRef}
+      className={cn("relative h-full w-full overflow-hidden bg-black text-white", className)}
+      style={navClearance ? ({ "--ad-nav": "max(0px, calc(var(--frenz-bottomnav-h, 0px) - env(safe-area-inset-bottom)))" } as CSSProperties) : undefined}
+    >
       {/* the media, inside the safe areas — full width, never cropped, never under the notch or the home bar */}
       <div className="absolute inset-x-0 bottom-[env(safe-area-inset-bottom)] top-[env(safe-area-inset-top)]">
         <SelfAdCreative
@@ -239,6 +254,7 @@ export function FullscreenVideoAd({
           loop={loop}
           eager
           soundAt="rail"
+          ownsSurface={ownsSurface}
           className="h-full w-full"
           onVideo={(el) => {
             video.current = el;
@@ -266,7 +282,7 @@ export function FullscreenVideoAd({
           button, which sits just above the CTA block (its measured height is --ad-cta, set below); an image
           ad has no sound button, so its rail starts right above the CTA.
         */}
-        <div className={cn("absolute right-3 z-20 flex flex-col items-center gap-3.5", isVideo ? "bottom-[calc(var(--ad-cta,4.125rem)+5.25rem)]" : "bottom-[calc(var(--ad-cta,4.125rem)+1.625rem)]")}>
+        <div className={cn("absolute right-3 z-20 flex flex-col items-center gap-3.5", isVideo ? "bottom-[calc(var(--ad-cta,4.125rem)+var(--ad-nav,0px)+5.25rem)]" : "bottom-[calc(var(--ad-cta,4.125rem)+var(--ad-nav,0px)+1.625rem)]")}>
           <button type="button" onClick={open} aria-label={`Visit ${ad.sponsor}`} className="mb-1 transition active:scale-90 motion-reduce:active:scale-100">
             {brandBadge("lg")}
           </button>
@@ -321,7 +337,7 @@ export function FullscreenVideoAd({
       ) : null}
 
       {/* TikTok's caption block, bottom left, overlaid — the video runs under it */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-3.5 pb-[calc(env(safe-area-inset-bottom)+0.875rem)] pt-24">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-3.5 pb-[calc(env(safe-area-inset-bottom)+var(--ad-nav,0px)+0.875rem)] pt-24">
         <div className="pointer-events-auto pr-16">
           {note ? <p className="mb-2 text-[12.5px] leading-snug text-white/85">{note}</p> : null}
           <button type="button" onClick={open} className="flex items-center gap-1.5 text-left text-[16px] font-bold [text-shadow:0_1px_3px_rgba(0,0,0,0.5)]">

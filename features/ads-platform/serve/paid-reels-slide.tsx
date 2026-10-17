@@ -39,7 +39,7 @@ export function PaidReelsSlide({ paid }: { paid: { ads: readonly EligibleAd[]; r
   if (fullVideo && pick) {
     return (
       <div data-ad-slot="reels_interstitial" data-ad-provider="frenzsave" className="relative h-full w-full bg-black">
-        <FullscreenAd ad={pick} placement="reels_banner" page={paid.page} header={false} onFail={() => setVideoFailed(true)} footer={<div className="mt-3">{hint}</div>} />
+        <FullscreenAd ad={pick} placement="reels_banner" page={paid.page} header={false} ownsSurface navClearance onFail={() => setVideoFailed(true)} footer={<div className="mt-3">{hint}</div>} />
       </div>
     );
   }

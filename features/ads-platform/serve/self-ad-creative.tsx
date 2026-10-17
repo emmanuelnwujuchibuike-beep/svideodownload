@@ -47,7 +47,15 @@ export function SelfAdCreative({
   onProgress,
   soundAt = "bottom",
   onVideo,
+  ownsSurface = false,
 }: {
+  /**
+   * The ad IS the full-screen surface (a Reels slide), not a card under one. The Reels deck holds
+   * suspendPlayback() for its whole life so feed videos behind it stay paused — which also kept its
+   * own ad slide from ever autoplaying (owner 2026-10-17: "the video ad doesn't auto play in reels").
+   * Such an ad ignores the suspension; it still plays only while half visible and the tab is shown.
+   */
+  ownsSurface?: boolean;
   /** the video's played fraction, 0–1 (the full-screen layout's progress line) */
   onProgress?: (fraction: number) => void;
   /** where the sound control sits: the corner of a card, or the full-screen layout's right-hand rail */
@@ -132,7 +140,7 @@ export function SelfAdCreative({
     const io = new IntersectionObserver(
       ([e]) => {
         // never starts under a dialog that covers it (owner 2026-10-16: no sound in the background)
-        if (e && e.isIntersecting && e.intersectionRatio >= 0.5 && document.visibilityState === "visible" && !isSuspended() && !dialogCovers(v)) {
+        if (e && e.isIntersecting && e.intersectionRatio >= 0.5 && document.visibilityState === "visible" && (ownsSurface || !isSuspended()) && !dialogCovers(v)) {
           claimPlayback(v);
           v.muted = !adSoundOn();
           void v.play().catch(() => {
@@ -166,7 +174,7 @@ export function SelfAdCreative({
       v.removeAttribute("src");
       v.load();
     };
-  }, [view]);
+  }, [view, ownsSurface]);
 
   const fail = (e?: { currentTarget: HTMLVideoElement | HTMLImageElement }) => {
     const el = e?.currentTarget;
@@ -252,7 +260,7 @@ export function SelfAdCreative({
             soundAt === "rail"
               ? // the TikTok-style rail: a round glass button at the rail's foot, just above the layout's CTA
                 // block (its height is --ad-cta, set by fullscreen-video-ad.tsx), under the rail items
-                "bottom-[calc(var(--ad-cta,4.125rem)+1.625rem)] right-3 h-11 w-11 justify-center rounded-full bg-black/35 ring-1 ring-inset ring-white/15 backdrop-blur-md active:scale-90 motion-reduce:active:scale-100"
+                "bottom-[calc(var(--ad-cta,4.125rem)+var(--ad-nav,0px)+1.625rem)] right-3 h-11 w-11 justify-center rounded-full bg-black/35 ring-1 ring-inset ring-white/15 backdrop-blur-md active:scale-90 motion-reduce:active:scale-100"
               : "bottom-2 right-2 min-h-[2.25rem] gap-1 rounded-full bg-black/55 px-2.5 text-[11px] font-semibold backdrop-blur-sm hover:bg-black/70",
           )}
         >

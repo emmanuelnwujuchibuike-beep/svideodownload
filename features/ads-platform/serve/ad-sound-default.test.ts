@@ -54,7 +54,8 @@ describe("ad sound", () => {
 
   it("an ad never starts under a cover, and the History player holds the occlusion gate", () => {
     const c = readFileSync(join(process.cwd(), "features/ads-platform/serve/self-ad-creative.tsx"), "utf8");
-    expect(c).toContain('document.visibilityState === "visible" && !isSuspended() && !dialogCovers(v)) {');
+    // 2026-10-17: an ad that IS the surface (the Reels slide) ignores the suspension it sits inside; every other ad obeys it
+    expect(c).toContain('document.visibilityState === "visible" && (ownsSurface || !isSuspended()) && !dialogCovers(v)) {');
     expect(c).toContain("claimPlayback(v);"); // so suspendPlayback() can pause it
     expect(c).toMatch(/<video[\s\S]{0,400}\n\s+muted\n/); // the element starts muted: no first frame of sound
     const player = readFileSync(join(process.cwd(), "features/downloads/download-player.tsx"), "utf8");

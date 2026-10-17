@@ -76,6 +76,43 @@ describe("Exclusive glass stays lightweight", () => {
     }
   });
 
+  /*
+    Part 9 (owner, 2026-10-16: "don't leave any section, card or anything exempted from the design").
+    Every Exclusive screen takes its surfaces from features/sub/ui.tsx. The Friends tokens (`GLASS` is a
+    24px backdrop-blur-xl) and the old plain card/input classes were how screens silently stayed outside it.
+  */
+  const EXCLUSIVE_UI = [
+    ...readdirSync(join(process.cwd(), "features", "sub")).filter((x) => x.endsWith(".tsx")).map((x) => join("features", "sub", x)),
+    ...readdirSync(join(process.cwd(), "features", "members")).filter((x) => x.endsWith(".tsx")).map((x) => join("features", "members", x)),
+    join("features", "admin", "sub-admin.tsx"),
+    join("features", "admin", "sub-admin-insights.tsx"),
+    join("app", "(app)", "exclusive", "page.tsx"),
+    join("app", "(app)", "exclusive", "favourites", "page.tsx"),
+    join("app", "(app)", "exclusive", "earnings", "page.tsx"),
+    join("app", "(app)", "account", "subscriptions", "page.tsx"),
+    join("app", "(app)", "account", "subscriptions", "receipt", "[id]", "page.tsx"),
+    join("app", "u", "[handle]", "membership", "page.tsx"),
+  ];
+  const outsideTheDesign = (src: string) =>
+    [
+      /\b(GLASS|primaryPill|quietPill|GlassGroup)\b/,
+      /\bbg-card\b|\bshadow-card\b|\bborder-border\b|\bbg-background\b/,
+      /\bbg-muted\b(?![/\w-])/,
+      /backdrop-blur-(md|lg|xl|2xl|3xl)\b/,
+      /transition-\[(left|width|height)\]/,
+    ].filter((re) => re.test(src));
+
+  it("every Exclusive screen is inside the glass design (no Friends tokens, no plain cards or inputs)", () => {
+    for (const f of EXCLUSIVE_UI) expect(outsideTheDesign(strip(readFileSync(join(process.cwd(), f), "utf8"))), f).toEqual([]);
+  });
+
+  it("teeth: the old card, the Friends glass and a left-animated switch are each caught", () => {
+    expect(outsideTheDesign(`<div className="rounded-3xl border border-border/70 bg-card shadow-card" />`)).toHaveLength(1);
+    expect(outsideTheDesign(`import { GLASS } from "@/features/friends/ui";`)).toHaveLength(1);
+    expect(outsideTheDesign(`<span className="transition-[left]" />`)).toHaveLength(1);
+    expect(outsideTheDesign(`<span className="ex-card ex-skel bg-muted/60" />`)).toEqual([]);
+  });
+
   it("a screen-reader table is never `table.sr-only` (a table ignores the 1px width and grows the page sideways)", () => {
     const dir = join(process.cwd(), "features", "sub");
     for (const f of readdirSync(dir).filter((x) => x.endsWith(".tsx"))) expect(readFileSync(join(dir, f), "utf8"), f).not.toMatch(/<table[^>]*className="[^"]*sr-only/);

@@ -25,21 +25,23 @@ export default async function AccountSubscriptionsPage() {
   const [subs, tx] = await Promise.all([mySubscriptions(user.id), myTransactions(user.id)]);
 
   return (
-    <AppContent>
-      <div className="mx-auto max-w-2xl">
-        <header className="mb-6 flex items-center gap-3">
-          <Link href="/account" aria-label="Back to account" className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-card/80 transition hover:bg-secondary">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-          <div>
-            <h1 className="flex items-center gap-2 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
-              <CreditCard className="h-6 w-6 text-muted-foreground" /> Subscriptions
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">Creators you subscribe to, your access dates and your receipts.</p>
-          </div>
-        </header>
-        <SubscriptionsManager initial={subs.ok ? subs.items : null} initialTx={tx.ok ? { items: tx.items, next: tx.next } : null} />
-      </div>
-    </AppContent>
+    <div className="ex-ground w-full flex-1">
+      <AppContent>
+        <div className="mx-auto max-w-2xl">
+          <header className="mb-6 flex items-center gap-3">
+            <Link href="/account" aria-label="Back to account" className="ex-icon-btn -ml-1">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+            <div>
+              <h1 className="flex items-center gap-2 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
+                <CreditCard className="h-6 w-6 text-muted-foreground" /> Subscriptions
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">Creators you subscribe to, your access dates and your receipts.</p>
+            </div>
+          </header>
+          <SubscriptionsManager initial={subs.ok ? subs.items : null} initialTx={tx.ok ? { items: tx.items, next: tx.next } : null} />
+        </div>
+      </AppContent>
+    </div>
   );
 }

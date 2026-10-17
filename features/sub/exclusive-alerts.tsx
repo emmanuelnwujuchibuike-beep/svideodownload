@@ -3,7 +3,7 @@
 import { Bell, Loader2, Megaphone, Star } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { GLASS } from "@/features/friends/ui";
+import { EX_CARD } from "@/features/sub/ui";
 import { ALERT_OPTIONS, Segmented, type AlertMode } from "@/features/sub/segmented";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -81,7 +81,7 @@ export function ExclusiveAlerts({ creatorId, creatorName }: { creatorId: string;
   };
 
   return (
-    <div className={cn("mb-3 rounded-[22px] p-3.5", GLASS)}>
+    <div className={cn("mb-3 rounded-[22px] p-3.5", EX_CARD)}>
       <div className="flex items-center justify-between gap-3">
         <p className="min-w-0 text-[14px] font-semibold">Stay close to {creatorName}</p>
         <button
@@ -101,7 +101,7 @@ export function ExclusiveAlerts({ creatorId, creatorName }: { creatorId: string;
       <Choice icon={<Bell className="h-4 w-4 text-primary" aria-hidden />} title="New private posts" hint="Get told when they post something new here." label="How to tell you about new private posts" value={mode} onChoose={(m) => save("mode", m, mode, setMode)} />
       <Choice icon={<Megaphone className="h-4 w-4 text-primary" aria-hidden />} title="Announcements" hint="Messages they send to subscribers. Only sent while you're subscribed." label="How to tell you about announcements" value={ann} onChoose={(m) => save("announcements", m, ann, setAnn)} />
       {note ? (
-        <p role="alert" className="mt-2 text-[12.5px] text-rose-600">
+        <p role="alert" className="mt-2 text-[12.5px] text-rose-600 dark:text-rose-400">
           {note}
         </p>
       ) : null}

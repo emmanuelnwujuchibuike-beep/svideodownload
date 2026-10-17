@@ -4,7 +4,7 @@ import { ArrowLeft, Camera, EyeOff, ImagePlus, Images, Loader2, Lock, X } from "
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { primaryPill, quietPill } from "@/features/friends/ui";
+import { exDanger, exField, exPrimary, exQuiet } from "@/features/sub/ui";
 import { haptic } from "@/lib/motion/haptics";
 import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
 import { makeThumb } from "@/lib/media/make-thumb";
@@ -129,7 +129,7 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
 
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label="New exclusive post" className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 sm:items-center">
-      <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-[28px] bg-background p-4 sm:rounded-[28px]" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}>
+      <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto ex-card ex-sheet p-4" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}>
         <div className="mb-3 flex items-center justify-between gap-2">
           {step === "preview" ? (
             <button type="button" onClick={() => setStep("compose")} disabled={!!busy} className="-ml-2 inline-flex h-10 items-center gap-1 rounded-full px-2 text-[14px] font-semibold transition active:bg-black/[0.06]">
@@ -147,14 +147,14 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
         </div>
 
         {confirmDiscard ? (
-          <div role="alertdialog" aria-label="Discard this post?" className="mb-3 rounded-2xl border border-border bg-muted/60 p-3">
+          <div role="alertdialog" aria-label="Discard this post?" className="mb-3 rounded-2xl bg-rose-500/[0.06] p-3 dark:bg-rose-500/10">
             <p className="text-[13.5px] font-semibold">Discard this post?</p>
             <p className="text-[12.5px] text-muted-foreground">Nothing has been published or uploaded.</p>
             <div className="mt-2 flex gap-2">
-              <button type="button" onClick={() => setConfirmDiscard(false)} className={quietPill}>
+              <button type="button" onClick={() => setConfirmDiscard(false)} className={exQuiet}>
                 Keep editing
               </button>
-              <button type="button" onClick={close} className={cn(quietPill, "text-rose-500")}>
+              <button type="button" onClick={close} className={exDanger}>
                 Discard
               </button>
             </div>
@@ -183,10 +183,10 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
               ))}
               {items.length < 10 ? (
                 <>
-                  <button type="button" onClick={() => pick.current?.click()} className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border text-[11.5px] font-semibold text-muted-foreground transition active:scale-95">
+                  <button type="button" onClick={() => pick.current?.click()} className="flex aspect-square flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-primary/30 bg-primary/[0.04] text-[11.5px] font-semibold text-muted-foreground transition active:scale-95">
                     <Images className="h-5 w-5" aria-hidden /> Gallery
                   </button>
-                  <button type="button" onClick={() => shoot.current?.click()} className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border text-[11.5px] font-semibold text-muted-foreground transition active:scale-95">
+                  <button type="button" onClick={() => shoot.current?.click()} className="flex aspect-square flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-primary/30 bg-primary/[0.04] text-[11.5px] font-semibold text-muted-foreground transition active:scale-95">
                     <Camera className="h-5 w-5" aria-hidden /> Camera
                   </button>
                 </>
@@ -195,12 +195,12 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
             <label htmlFor="sub-caption" className="sr-only">
               Caption
             </label>
-            <textarea id="sub-caption" rows={3} maxLength={2200} value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Write a caption for your subscribers" className="mt-3 w-full resize-none rounded-2xl border border-border bg-background px-3 py-2 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-primary/40" />
+            <textarea id="sub-caption" rows={3} maxLength={2200} value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Write a caption for your subscribers" className={cn(exField, "mt-3 resize-none")} />
             <fieldset className="mt-3">
               <legend className="mb-1.5 text-[13px] font-semibold">Who can see that this post exists</legend>
               <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2" role="radiogroup">
                 {audiences.map(({ v, title, sub }) => (
-                  <button key={v} type="button" role="radio" aria-checked={audience === v} onClick={() => setAudience(v)} className={cn("flex items-start gap-2.5 rounded-2xl border px-3 py-2.5 text-left transition", audience === v ? "border-primary bg-primary/[0.07] ring-1 ring-primary/40" : "border-border")}>
+                  <button key={v} type="button" role="radio" aria-checked={audience === v} onClick={() => setAudience(v)} className={cn("flex items-start gap-2.5 rounded-2xl border px-3 py-2.5 text-left transition", audience === v ? "border-primary bg-primary/[0.07] ring-1 ring-primary/40" : "border-black/[0.08] dark:border-white/10")}>
                     {v === "locked" ? <Lock className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden /> : <EyeOff className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />}
                     <span>
                       <span className="block text-[13.5px] font-semibold">{title}</span>
@@ -211,17 +211,17 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
               </div>
             </fieldset>
             {audience === "locked" ? (
-              <button type="button" onClick={() => pickCover.current?.click()} className={cn(quietPill, "mt-2")}>
+              <button type="button" onClick={() => pickCover.current?.click()} className={cn(exQuiet, "mt-2")}>
                 <ImagePlus className="h-4 w-4" aria-hidden /> {cover ? `Cover: ${cover.name.slice(0, 24)}` : "Add a public cover (optional)"}
               </button>
             ) : null}
             <p className="mt-2 text-[12px] text-muted-foreground">Photos and videos stay private and can&apos;t be shared, linked or downloaded.</p>
             {error ? (
-              <p role="alert" className="mt-2 text-[13px] font-medium text-rose-500">
+              <p role="alert" className="mt-2 text-[13px] font-medium text-rose-600 dark:text-rose-400">
                 {error}
               </p>
             ) : null}
-            <button type="button" onClick={() => (setError(null), setStep("preview"))} disabled={!items.length} className={cn(primaryPill, "mt-3 w-full justify-center")}>
+            <button type="button" onClick={() => (setError(null), setStep("preview"))} disabled={!items.length} className={cn(exPrimary, "mt-3 w-full justify-center")}>
               Preview
             </button>
           </>
@@ -230,7 +230,7 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
             <div className="grid grid-cols-2 gap-3">
               <figure>
                 <figcaption className="mb-1.5 text-[12px] font-semibold text-muted-foreground">What subscribers see</figcaption>
-                <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-muted">
+                <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-black/[0.05] dark:bg-white/[0.07]">
                   {first?.kind === "image" ? (
                     // eslint-disable-next-line @next/next/no-img-element -- a local preview
                     <img src={first.preview} alt="" className="h-full w-full object-cover" />
@@ -257,7 +257,7 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
                     </span>
                   </div>
                 ) : (
-                  <div className="flex aspect-[4/5] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border px-3 text-center">
+                  <div className="flex aspect-[4/5] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-primary/30 bg-primary/[0.04] px-3 text-center">
                     <EyeOff className="h-5 w-5 text-muted-foreground" aria-hidden />
                     <span className="text-[12px] leading-snug text-muted-foreground">Nothing. No tile, no count — visitors won&apos;t know it exists.</span>
                   </div>
@@ -265,16 +265,16 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
               </figure>
             </div>
             {progress !== null ? (
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)} aria-label="Upload progress">
-                <div className="h-full rounded-full bg-gradient-to-r from-primary to-accent transition-[width] duration-300" style={{ width: `${Math.max(6, Math.round(progress * 100))}%` }} />
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-black/[0.05] dark:bg-white/[0.07]" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)} aria-label="Upload progress">
+                <div className="h-full w-full origin-left rounded-full bg-gradient-to-r from-primary to-accent transition-transform duration-300 motion-reduce:transition-none" style={{ transform: `scaleX(${Math.max(0.06, progress)})` }} />
               </div>
             ) : null}
             {error ? (
-              <p role="alert" className="mt-2 text-[13px] font-medium text-rose-500">
+              <p role="alert" className="mt-2 text-[13px] font-medium text-rose-600 dark:text-rose-400">
                 {error}
               </p>
             ) : null}
-            <button type="button" onClick={() => void post()} disabled={!!busy || !items.length} className={cn(primaryPill, "mt-3 w-full justify-center bg-gradient-to-r from-primary to-accent")}>
+            <button type="button" onClick={() => void post()} disabled={!!busy || !items.length} className={cn(exPrimary, "mt-3 w-full")}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
               {busy ?? (audience === "hidden" ? "Publish hidden post" : "Publish for subscribers")}
             </button>

@@ -5,7 +5,8 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 
-import { AmbientWash, GLASS, GlassGroup, PersonAvatar, primaryPill, quietPill, SectionHeader } from "@/features/friends/ui";
+import { AmbientWash, PersonAvatar, SectionHeader } from "@/features/friends/ui";
+import { EX_CARD, exCompactField, ExGroup, exPrimary, exQuiet } from "@/features/sub/ui";
 import { useStickyState } from "@/features/ui/use-sticky-state";
 import { haptic } from "@/lib/motion/haptics";
 import { FEEDBACK_ASPECTS, MEMBER_ROLES, RECOGNITIONS, SPONSOR_KINDS, usd, type MemberRole, type Recognition, type SponsorKind } from "@/lib/creator/membership/engine";
@@ -36,7 +37,7 @@ async function post(body: Record<string, unknown>): Promise<{ error: string | nu
 }
 
 const fmt = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-const FIELD = "min-h-[2.5rem] w-full rounded-xl border border-border bg-background px-3 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
+const FIELD = "ex-field";
 
 export function CreatorDashboard({ initial, held, handle }: { initial: Dashboard; held: { membership: Membership; creator: Person }[]; handle: string }) {
   const [tab, setTab] = useState<"community" | "mine">(held.length && !initial.members.length && !initial.settings.setupCompleted ? "mine" : "community");
@@ -72,7 +73,7 @@ export function CreatorDashboard({ initial, held, handle }: { initial: Dashboard
         </div>
       </header>
 
-      <div role="tablist" aria-label="Members" className={cn("mb-5 inline-flex rounded-full p-1", GLASS)}>
+      <div role="tablist" aria-label="Members" className={cn("mb-5 inline-flex rounded-full p-1", EX_CARD)}>
         {(
           [
             ["community", "Your community"],
@@ -85,7 +86,7 @@ export function CreatorDashboard({ initial, held, handle }: { initial: Dashboard
         ))}
       </div>
 
-      <div aria-live="polite">{note ? <p className={cn("mb-4 rounded-2xl px-3.5 py-2.5 text-[13px]", GLASS)}>{note}</p> : null}</div>
+      <div aria-live="polite">{note ? <p className={cn("mb-4 rounded-2xl px-3.5 py-2.5 text-[13px]", EX_CARD)}>{note}</p> : null}</div>
 
       {tab === "mine" ? (
         <Held held={held} />
@@ -98,7 +99,7 @@ export function CreatorDashboard({ initial, held, handle }: { initial: Dashboard
           <Notes d={d} setD={setD} act={act} setNote={setNote} />
           <Sponsors d={d} setD={setD} act={act} setNote={setNote} />
           <section className="mb-8">
-            <a href="/api/members/export" download className={cn(quietPill, "w-full justify-center")}>
+            <a href="/api/members/export" download className={cn(exQuiet, "w-full justify-center")}>
               <Download className="h-4 w-4" aria-hidden /> Export members (CSV)
             </a>
           </section>
@@ -113,21 +114,21 @@ type Act = (draw: (x: Dashboard) => Dashboard, body: Record<string, unknown>) =>
 function Held({ held }: { held: { membership: Membership; creator: Person }[] }) {
   // Part 5: paid subscriptions are managed (cancel, renew, receipts) on one page
   const manage = (
-    <Link href="/account/subscriptions" prefetch={false} className={cn(quietPill, "mb-3 w-full justify-center")}>
+    <Link href="/account/subscriptions" prefetch={false} className={cn(exQuiet, "mb-3 w-full justify-center")}>
       Manage subscriptions and receipts <ArrowRight className="h-4 w-4" aria-hidden />
     </Link>
   );
   if (!held.length)
     return (
       <>
-        <p className={cn("mb-3 rounded-[22px] px-3.5 py-3 text-[13px] text-muted-foreground", GLASS)}>You haven&apos;t joined any memberships. Creators who offer one show it on their profile.</p>
+        <p className={cn("mb-3 rounded-[22px] px-3.5 py-3 text-[13px] text-muted-foreground", EX_CARD)}>You haven&apos;t joined any memberships. Creators who offer one show it on their profile.</p>
         {manage}
       </>
     );
   return (
     <>
     {held.some((h) => h.membership.billing === "sub") ? manage : null}
-    <GlassGroup label="Your memberships">
+    <ExGroup label="Your memberships">
       {held.map(({ membership: m, creator }) => (
         <li key={m.id}>
           <Link href={m.billing === "sub" ? `/u/${creator.handle}?tab=sub` : `/u/${creator.handle}/membership`} prefetch={false} className="flex items-center gap-3 px-3.5 py-3 transition active:bg-black/[0.04]">
@@ -141,7 +142,7 @@ function Held({ held }: { held: { membership: Membership; creator: Person }[] })
           </Link>
         </li>
       ))}
-    </GlassGroup>
+    </ExGroup>
     </>
   );
 }
@@ -162,7 +163,7 @@ function Setup({ d, handle, act }: { d: Dashboard; handle: string; act: Act }) {
         }
       />
       {/* paid: SUB — real money through Paystack, separate from AI credits */}
-      <div className={cn("mb-2 rounded-[22px] px-3.5 py-3", GLASS)}>
+      <div className={cn("mb-2 rounded-[22px] px-3.5 py-3", EX_CARD)}>
         <div className="flex items-start gap-3">
           <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white">
             <Lock className="h-[18px] w-[18px]" />
@@ -193,16 +194,16 @@ function Setup({ d, handle, act }: { d: Dashboard; handle: string; act: Act }) {
           </div>
         ) : null}
         <div className="mt-3 flex flex-wrap gap-2">
-          <Link href={`/u/${handle}?tab=sub`} prefetch={false} className={primaryPill}>
+          <Link href={`/u/${handle}?tab=sub`} prefetch={false} className={exPrimary}>
             {st.setupCompleted ? "Open PRIVATE POSTS" : "Get paid for your content"} <ArrowRight className="h-4 w-4" aria-hidden />
           </Link>
           {st.setupCompleted ? (
-            <button type="button" onClick={() => setWithdrawing(true)} className={quietPill}>
+            <button type="button" onClick={() => setWithdrawing(true)} className={exQuiet}>
               <Wallet className="h-4 w-4" aria-hidden /> Withdraw
             </button>
           ) : null}
           {st.setupCompleted ? (
-            <Link href="/exclusive/earnings" prefetch={false} className={quietPill}>
+            <Link href="/exclusive/earnings" prefetch={false} className={exQuiet}>
               Earnings and analytics
             </Link>
           ) : null}
@@ -210,15 +211,13 @@ function Setup({ d, handle, act }: { d: Dashboard; handle: string; act: Act }) {
         {st.setupCompleted ? <SubPayoutSettings className="mt-3" /> : null}
       </div>
       {/* free: the community membership */}
-      <div className={cn("space-y-3 rounded-[22px] px-3.5 py-3", GLASS)}>
+      <div className={cn("space-y-3 rounded-[22px] px-3.5 py-3", EX_CARD)}>
         <div className="flex items-center gap-3">
           <span className="min-w-0 flex-1">
             <span className="block text-[14.5px] font-semibold">Free community membership</span>
             <span className="block text-[12.5px] text-muted-foreground">{st.open ? "People can join for free from your membership page." : "Closed. Existing members keep their membership."}</span>
           </span>
-          <button type="button" role="switch" aria-checked={st.open} aria-label="Free community membership" disabled={!d.ready} onClick={() => void act((x) => ({ ...x, settings: { ...x.settings, open: !x.settings.open } }), { op: "settings", open: !st.open })} className={cn("relative h-6 w-11 shrink-0 touch-manipulation rounded-full transition", st.open ? "bg-primary" : "bg-muted")}>
-            <span aria-hidden className={cn("absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-[left] motion-reduce:transition-none", st.open ? "left-[1.375rem]" : "left-0.5")} />
-          </button>
+          <button type="button" role="switch" aria-checked={st.open} aria-label="Free community membership" disabled={!d.ready} onClick={() => void act((x) => ({ ...x, settings: { ...x.settings, open: !x.settings.open } }), { op: "settings", open: !st.open })} className="ex-switch" />
         </div>
         <form
           className="border-t border-black/[0.06] pt-3 dark:border-white/[0.07]"
@@ -231,7 +230,7 @@ function Setup({ d, handle, act }: { d: Dashboard; handle: string; act: Act }) {
             Welcome message on your membership page
           </label>
           <textarea id="mb-welcome" rows={2} maxLength={400} value={welcome} onChange={(e) => setWelcome(e.target.value)} className={cn(FIELD, "mt-1 resize-none py-2")} disabled={!d.ready} />
-          <button type="submit" className={cn(quietPill, "mt-2")} disabled={!d.ready || welcome.trim() === (st.welcome ?? "")}>
+          <button type="submit" className={cn(exQuiet, "mt-2")} disabled={!d.ready || welcome.trim() === (st.welcome ?? "")}>
             Save
           </button>
         </form>
@@ -255,13 +254,13 @@ function Insights({ d }: { d: Dashboard }) {
             ["Kept 30 days", i.retention30 ? `${i.retention30.kept}/${i.retention30.of}` : "—"],
           ] as const
         ).map(([l, v]) => (
-          <div key={l} className={cn("rounded-2xl px-3 py-2.5", GLASS)}>
+          <div key={l} className={cn("rounded-2xl px-3 py-2.5", EX_CARD)}>
             <span className="block text-[20px] font-extrabold tabular-nums leading-tight">{v}</span>
             <span className="block truncate text-[12px] font-medium text-muted-foreground">{l}</span>
           </div>
         ))}
       </div>
-      <div className={cn("mt-2 rounded-[22px] px-3.5 py-3", GLASS)}>
+      <div className={cn("mt-2 rounded-[22px] px-3.5 py-3", EX_CARD)}>
         <p className="text-[12.5px] font-semibold text-muted-foreground">New members by month</p>
         <div className="mt-2 flex h-20 items-end gap-2" role="img" aria-label={i.joins.map((j) => `${j.month}: ${j.count}`).join(", ")}>
           {i.joins.map((j) => (
@@ -306,7 +305,7 @@ function Assistant({ d }: { d: Dashboard }) {
   return (
     <section className="mb-6" aria-labelledby="mb-assist">
       <SectionHeader id="mb-assist" title="Ideas for your community" />
-      <GlassGroup label="Ideas">
+      <ExGroup label="Ideas">
         {items.map((s) => (
           <li key={s.id} className="flex items-start gap-3 px-3.5 py-3">
             <Lightbulb className="mt-0.5 h-[18px] w-[18px] shrink-0 text-amber-500" aria-hidden />
@@ -320,7 +319,7 @@ function Assistant({ d }: { d: Dashboard }) {
             </button>
           </li>
         ))}
-      </GlassGroup>
+      </ExGroup>
     </section>
   );
 }
@@ -338,7 +337,7 @@ function Directory({ d, act }: { d: Dashboard; act: Act }) {
   // Part 5: paid subscribers are a server-paged view of this same directory, not a second list
   const [view, setView] = useState<"community" | "subscribers">("community");
   const switcher = d.settings.setupCompleted ? (
-    <div role="tablist" aria-label="Directory" className={cn("mb-2 inline-flex rounded-full p-1", GLASS)}>
+    <div role="tablist" aria-label="Directory" className={cn("mb-2 inline-flex rounded-full p-1", EX_CARD)}>
       {(
         [
           ["community", "Everyone"],
@@ -363,12 +362,12 @@ function Directory({ d, act }: { d: Dashboard; act: Act }) {
     <section className="mb-6" aria-labelledby="mb-dir">
       <SectionHeader id="mb-dir" title="Members" count={list.length} />
       {switcher}
-      <div className={cn("mb-2 flex items-center gap-2 rounded-2xl px-3", GLASS)}>
+      <div className={cn("mb-2 flex items-center gap-2 rounded-2xl px-3", EX_CARD)}>
         <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
         <input aria-label="Search members" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, handle, country, language" className="min-h-[2.75rem] min-w-0 flex-1 bg-transparent text-[15px] outline-none" />
       </div>
       <div className="mb-2 flex flex-wrap gap-1.5">
-        <select aria-label="Role" value={role} onChange={(e) => setRole(e.target.value as MemberRole | "")} className="min-h-[2.25rem] rounded-full border border-border bg-background px-3 text-[13px]">
+        <select aria-label="Role" value={role} onChange={(e) => setRole(e.target.value as MemberRole | "")} className={exCompactField}>
           <option value="">Every role</option>
           {(Object.keys(MEMBER_ROLES) as MemberRole[]).map((r) => (
             <option key={r} value={r}>
@@ -376,12 +375,12 @@ function Directory({ d, act }: { d: Dashboard; act: Act }) {
             </option>
           ))}
         </select>
-        <button type="button" aria-pressed={status === "all"} onClick={() => setStatus(status === "all" ? "active" : "all")} className={cn(quietPill, "min-h-[2.25rem] px-3 text-[12.5px]", status === "all" && "bg-primary/10 text-primary")}>
+        <button type="button" aria-pressed={status === "all"} onClick={() => setStatus(status === "all" ? "active" : "all")} className={"ex-chip"}>
           Include past members
         </button>
       </div>
       {list.length ? (
-        <GlassGroup label="Members">
+        <ExGroup label="Members">
           {list.slice(0, 100).map((m) => {
             const expanded = open === m.person.id;
             return (
@@ -416,7 +415,7 @@ function Directory({ d, act }: { d: Dashboard; act: Act }) {
                         {(Object.keys(RECOGNITIONS) as Recognition[]).map((r) => {
                           const on = m.recognitions.includes(r);
                           return (
-                            <button key={r} type="button" aria-pressed={on} onClick={() => void act((x) => ({ ...x, members: x.members.map((y) => (y.person.id === m.person.id ? { ...y, recognitions: on ? y.recognitions.filter((k) => k !== r) : [...y.recognitions, r] } : y)) }), { op: "recognition", memberId: m.person.id, kind: r, on: !on, shown: r === "super_supporter" })} className={cn(quietPill, "min-h-[2.25rem] px-3 text-[12.5px]", on && "bg-amber-500/15 text-amber-700 dark:text-amber-300")}>
+                            <button key={r} type="button" aria-pressed={on} onClick={() => void act((x) => ({ ...x, members: x.members.map((y) => (y.person.id === m.person.id ? { ...y, recognitions: on ? y.recognitions.filter((k) => k !== r) : [...y.recognitions, r] } : y)) }), { op: "recognition", memberId: m.person.id, kind: r, on: !on, shown: r === "super_supporter" })} className={"ex-chip"}>
                               {RECOGNITIONS[r]}
                             </button>
                           );
@@ -424,11 +423,11 @@ function Directory({ d, act }: { d: Dashboard; act: Act }) {
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Link href={`/messages/new/${m.person.id}`} prefetch={false} className={cn(quietPill, "min-h-[2.25rem] px-3 text-[12.5px]")}>
+                      <Link href={`/messages/new/${m.person.id}`} prefetch={false} className={"ex-btn ex-btn--quiet ex-btn--sm"}>
                         Message
                       </Link>
                       {m.membership.status === "active" ? (
-                        <button type="button" onClick={() => void act(setMember(m.person.id, { status: "removed" }), { op: "remove", memberId: m.person.id })} className={cn(quietPill, "min-h-[2.25rem] px-3 text-[12.5px] text-rose-600")}>
+                        <button type="button" onClick={() => void act(setMember(m.person.id, { status: "removed" }), { op: "remove", memberId: m.person.id })} className={"ex-btn ex-btn--danger ex-btn--sm"}>
                           Remove
                         </button>
                       ) : null}
@@ -438,9 +437,9 @@ function Directory({ d, act }: { d: Dashboard; act: Act }) {
               </li>
             );
           })}
-        </GlassGroup>
+        </ExGroup>
       ) : (
-        <p className={cn("rounded-[22px] px-3.5 py-3 text-[13px] text-muted-foreground", GLASS)}>{d.members.length ? "Nobody matches." : "No members yet. Open your membership and share your page."}</p>
+        <p className={cn("rounded-[22px] px-3.5 py-3 text-[13px] text-muted-foreground", EX_CARD)}>{d.members.length ? "Nobody matches." : "No members yet. Open your membership and share your page."}</p>
       )}
     </section>
   );
@@ -454,7 +453,7 @@ function Notes({ d, setD, act, setNote }: { d: Dashboard; setD: (fn: (x: Dashboa
     <section className="mb-6" aria-labelledby="mb-notes">
       <SectionHeader id="mb-notes" title="Notes for members" />
       <form
-        className={cn("mb-2 space-y-2 rounded-[22px] px-3.5 py-3", GLASS)}
+        className={cn("mb-2 space-y-2 rounded-[22px] px-3.5 py-3", EX_CARD)}
         onSubmit={async (e) => {
           e.preventDefault();
           haptic("selection");
@@ -470,7 +469,7 @@ function Notes({ d, setD, act, setNote }: { d: Dashboard; setD: (fn: (x: Dashboa
         <div className="flex flex-wrap items-center gap-2">
           <label className="text-[12.5px] text-muted-foreground">
             For{" "}
-            <select value={minRole} onChange={(e) => setMinRole(e.target.value as MemberRole)} className="ml-1 min-h-[2.25rem] rounded-full border border-border bg-background px-3 text-[13px] text-foreground">
+            <select value={minRole} onChange={(e) => setMinRole(e.target.value as MemberRole)} className={cn(exCompactField, "ml-1")}>
               {(Object.keys(MEMBER_ROLES) as MemberRole[]).map((r) => (
                 <option key={r} value={r}>
                   {MEMBER_ROLES[r]}s and up
@@ -479,14 +478,14 @@ function Notes({ d, setD, act, setNote }: { d: Dashboard; setD: (fn: (x: Dashboa
             </select>
           </label>
           <span className="flex-1" />
-          <button type="submit" className={primaryPill} disabled={!d.ready || sending || !body.trim()}>
+          <button type="submit" className={exPrimary} disabled={!d.ready || sending || !body.trim()}>
             {sending ? "Posting…" : "Post note"}
           </button>
         </div>
         <p className="text-[12px] text-muted-foreground">Members see it on your membership page. Nobody is notified.</p>
       </form>
       {d.notes.length ? (
-        <GlassGroup label="Your notes">
+        <ExGroup label="Your notes">
           {d.notes.map((n) => (
             <li key={n.id} className="flex items-start gap-2 px-3.5 py-3">
               <div className="min-w-0 flex-1">
@@ -500,7 +499,7 @@ function Notes({ d, setD, act, setNote }: { d: Dashboard; setD: (fn: (x: Dashboa
               </button>
             </li>
           ))}
-        </GlassGroup>
+        </ExGroup>
       ) : null}
     </section>
   );
@@ -512,7 +511,7 @@ function Sponsors({ d, setD, act, setNote }: { d: Dashboard; setD: (fn: (x: Dash
     <section className="mb-6" aria-labelledby="mb-sponsors">
       <SectionHeader id="mb-sponsors" title="Sponsors and partners" />
       <form
-        className={cn("mb-2 flex flex-wrap gap-2 rounded-[22px] px-3.5 py-3", GLASS)}
+        className={cn("mb-2 flex flex-wrap gap-2 rounded-[22px] px-3.5 py-3", EX_CARD)}
         onSubmit={async (e) => {
           e.preventDefault();
           haptic("selection");
@@ -531,13 +530,13 @@ function Sponsors({ d, setD, act, setNote }: { d: Dashboard; setD: (fn: (x: Dash
           ))}
         </select>
         <input aria-label="Link" type="url" maxLength={300} value={s.url} onChange={(e) => setS({ ...s, url: e.target.value })} placeholder="https:// (optional)" className={cn(FIELD, "min-w-[10rem] flex-1")} disabled={!d.ready} />
-        <button type="submit" className={quietPill} disabled={!d.ready || !s.name.trim()}>
+        <button type="submit" className={exQuiet} disabled={!d.ready || !s.name.trim()}>
           <Plus className="h-4 w-4" aria-hidden /> Add
         </button>
         <p className="w-full text-[12px] text-muted-foreground">Shown on your membership page, always: members should know who supports you.</p>
       </form>
       {d.sponsors.length ? (
-        <GlassGroup label="Sponsors">
+        <ExGroup label="Sponsors">
           {d.sponsors.map((sp) => (
             <li key={sp.id} className="flex items-center gap-2 px-3.5 py-2.5">
               <span className="min-w-0 flex-1">
@@ -549,7 +548,7 @@ function Sponsors({ d, setD, act, setNote }: { d: Dashboard; setD: (fn: (x: Dash
               </button>
             </li>
           ))}
-        </GlassGroup>
+        </ExGroup>
       ) : null}
     </section>
   );

@@ -4,7 +4,7 @@ import { Loader2, Wallet, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { GLASS, primaryPill } from "@/features/friends/ui";
+import { EX_CARD, exPrimary } from "@/features/sub/ui";
 import { usd, withdrawalSplit } from "@/lib/creator/membership/engine";
 import { haptic } from "@/lib/motion/haptics";
 import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
@@ -137,7 +137,7 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
 
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label="Withdraw private post earnings" className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 sm:items-center" onClick={(ev) => ev.target === ev.currentTarget && !busy && onClose()}>
-      <div className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-[28px] bg-background p-4 sm:rounded-[28px]" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}>
+      <div className="max-h-[92dvh] w-full max-w-md overflow-y-auto ex-card ex-sheet p-4" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="inline-flex items-center gap-2 text-[17px] font-bold">
             <Wallet className="h-4 w-4 text-emerald-600" aria-hidden /> Withdraw private post earnings
@@ -151,7 +151,7 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
           failed ? <p className="py-6 text-center text-[14px] text-muted-foreground">Couldn&apos;t load your private post balance. Try again in a moment.</p> : <div className="h-40 animate-pulse rounded-2xl bg-black/[0.05] motion-reduce:animate-none" aria-busy="true" />
         ) : (
           <>
-            <div className={cn("grid grid-cols-2 gap-2 rounded-[22px] p-3", GLASS)}>
+            <div className={cn("grid grid-cols-2 gap-2 rounded-[22px] p-3", EX_CARD)}>
               <Stat label="Available" value={usd(e!.availableCents)} strong />
               <Stat label="Being paid out" value={usd(e!.heldCents)} />
               {e!.pendingCents > 0 ? <Stat label="Clearing" value={usd(e!.pendingCents)} /> : null}
@@ -172,14 +172,14 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
             </label>
             <div className="mt-1 flex gap-2">
               <input id="sw-amount" inputMode="decimal" value={amount} onChange={(ev) => setAmount(ev.target.value.replace(/[^0-9.]/g, "").slice(0, 10))} placeholder="0.00" className={field} />
-              <button type="button" onClick={() => setAmount((e!.availableCents / 100).toFixed(2))} className="shrink-0 rounded-2xl border border-border px-3 text-[13px] font-semibold transition active:scale-95">
+              <button type="button" onClick={() => setAmount((e!.availableCents / 100).toFixed(2))} className="ex-btn ex-btn--glass ex-btn--sm shrink-0">
                 Max
               </button>
             </div>
             {split ? (
               <p className="mt-1.5 text-[13px] text-muted-foreground">
                 {usd(split.grossCents)} − {usd(split.feeCents)} fee = <b className="text-foreground">{usd(split.netCents)}</b> to your bank
-                {cents > e!.availableCents ? <span className="font-medium text-rose-600"> · more than you have available</span> : cents < rules!.minWithdrawalCents ? <span className="font-medium text-rose-600"> · below the minimum</span> : null}
+                {cents > e!.availableCents ? <span className="font-medium text-rose-600 dark:text-rose-400"> · more than you have available</span> : cents < rules!.minWithdrawalCents ? <span className="font-medium text-rose-600 dark:text-rose-400"> · below the minimum</span> : null}
               </p>
             ) : null}
 
@@ -190,7 +190,7 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
                   ["intl", "Outside Nigeria"],
                 ] as const
               ).map(([id, label]) => (
-                <button key={id} type="button" onClick={() => setWhere(id)} aria-pressed={where === id} className={cn("min-h-[2.5rem] rounded-xl text-[13.5px] font-semibold transition", where === id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
+                <button key={id} type="button" onClick={() => setWhere(id)} aria-pressed={where === id} className={cn("min-h-[2.5rem] rounded-xl text-[13.5px] font-semibold transition", where === id ? "bg-white text-foreground shadow-sm dark:bg-white/[0.16]" : "text-muted-foreground")}>
                   {label}
                 </button>
               ))}
@@ -199,7 +199,7 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
             {where === "intl" ? (
               <IntlFields value={intl} onChange={setIntl} />
             ) : savedAccount && !useNew ? (
-              <div className="mt-3 rounded-2xl border border-border/70 px-3 py-2.5">
+              <div className="mt-3 rounded-2xl bg-black/[0.03] px-3 py-2.5 dark:bg-white/[0.045]">
                 <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">To your saved account</p>
                 <p className="mt-0.5 text-[14px] font-semibold">
                   {savedAccount.bankName} ••••{savedAccount.last4}
@@ -213,8 +213,8 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
               <BankFields lookup={lookup} idPrefix="sw" />
             )}
 
-            {msg ? <p className={cn("mt-3 text-[13.5px] font-medium", msg.ok ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600")}>{msg.text}</p> : null}
-            <button type="button" onClick={() => void submit()} disabled={!valid || busy} className={cn(primaryPill, "mt-3 w-full justify-center")}>
+            {msg ? <p className={cn("mt-3 text-[13.5px] font-medium", msg.ok ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>{msg.text}</p> : null}
+            <button type="button" onClick={() => void submit()} disabled={!valid || busy} className={cn(exPrimary, "mt-3 w-full justify-center")}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
               {busy ? "Sending…" : split && valid ? `Withdraw ${usd(split.netCents)}` : "Withdraw"}
             </button>
@@ -229,7 +229,7 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
                         {usd(w.netCents)} <span className="text-muted-foreground">({usd(w.grossCents)} − {usd(w.feeCents)} fee)</span>
                         <span className="block text-[12px] text-muted-foreground">{new Date(w.at).toLocaleDateString()}</span>
                       </span>
-                      <span className={cn("rounded-full px-2 py-0.5 text-[12px] font-semibold", w.status === "completed" ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400" : ["rejected", "cancelled"].includes(w.status) ? "bg-rose-500/10 text-rose-600" : "bg-sky-500/10 text-sky-700 dark:text-sky-300")}>{STATUS[w.status] ?? w.status}</span>
+                      <span className={cn("rounded-full px-2 py-0.5 text-[12px] font-semibold", w.status === "completed" ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400" : ["rejected", "cancelled"].includes(w.status) ? "bg-rose-500/10 text-rose-600 dark:text-rose-400" : "bg-sky-500/10 text-sky-700 dark:text-sky-300")}>{STATUS[w.status] ?? w.status}</span>
                     </li>
                   ))}
                 </ul>
@@ -300,7 +300,7 @@ function IntlFields({ value, onChange }: { value: Intl_; onChange: (v: Intl_) =>
             ["paypal", "PayPal"],
           ] as const
         ).map(([id, label]) => (
-          <button key={id} type="button" onClick={() => set({ rail: id })} aria-pressed={value.rail === id} className={cn("min-h-[2.25rem] rounded-xl text-[13px] font-semibold transition", value.rail === id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
+          <button key={id} type="button" onClick={() => set({ rail: id })} aria-pressed={value.rail === id} className={cn("min-h-[2.25rem] rounded-xl text-[13px] font-semibold transition", value.rail === id ? "bg-white text-foreground shadow-sm dark:bg-white/[0.16]" : "text-muted-foreground")}>
             {label}
           </button>
         ))}

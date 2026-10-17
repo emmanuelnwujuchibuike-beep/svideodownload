@@ -29,17 +29,19 @@ export default async function MembershipRoute({ params }: { params: Promise<{ ha
   const data = await creatorPage(handle, viewer);
   if (!data) notFound();
   return (
-    <main className="mx-auto w-full max-w-2xl flex-1 px-3 pb-16 pt-4 sm:px-4">
-      {data === "restricted" ? (
-        <div className="py-16 text-center">
-          <p className="text-[15px] font-semibold">This profile is private.</p>
-          <Link href={`/u/${handle}`} className="mt-2 inline-block text-[14px] font-semibold text-primary">
-            Back to the profile
-          </Link>
-        </div>
-      ) : (
-        <MembershipPage data={data} />
-      )}
-    </main>
+    <div className="ex-ground w-full flex-1">
+      <main className="mx-auto w-full max-w-2xl flex-1 px-3 pb-16 pt-4 sm:px-4">
+        {data === "restricted" ? (
+          <div className="py-16 text-center">
+            <p className="text-[15px] font-semibold">This profile is private.</p>
+            <Link href={`/u/${handle}`} className="mt-2 inline-block text-[14px] font-semibold text-primary">
+              Back to the profile
+            </Link>
+          </div>
+        ) : (
+          <MembershipPage data={data} />
+        )}
+      </main>
+    </div>
   );
 }

@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
  * types a name the money then goes to.
  */
 
-export const FIELD = "w-full rounded-2xl border border-border bg-background px-3 py-2.5 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
+export const FIELD = "ex-field";
 
 export function useBankLookup() {
   const [banks, setBanks] = useState<{ name: string; code: string }[] | null>(null);
@@ -73,7 +73,7 @@ export function BankFields({ lookup, idPrefix }: { lookup: ReturnType<typeof use
       </label>
       <input id={`${idPrefix}-acct`} inputMode="numeric" autoComplete="off" value={acct} onChange={(ev) => setAcct(ev.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10 digits" className={cn(FIELD, "mt-1")} />
       <p className="mt-1.5 text-[12.5px]">
-        {resolved.checking ? <span className="text-muted-foreground">Checking the account…</span> : accountOk ? <span className="font-semibold text-emerald-700 dark:text-emerald-400">✓ {resolved.name}</span> : resolved.error && resolved.key === `${bankCode}:${acct}` ? <span className="text-rose-600">{resolved.error}</span> : <span className="text-muted-foreground">Paystack confirms the account holder before anything is saved or sent.</span>}
+        {resolved.checking ? <span className="text-muted-foreground">Checking the account…</span> : accountOk ? <span className="font-semibold text-emerald-700 dark:text-emerald-400">✓ {resolved.name}</span> : resolved.error && resolved.key === `${bankCode}:${acct}` ? <span className="text-rose-600 dark:text-rose-400">{resolved.error}</span> : <span className="text-muted-foreground">Paystack confirms the account holder before anything is saved or sent.</span>}
       </p>
     </>
   );

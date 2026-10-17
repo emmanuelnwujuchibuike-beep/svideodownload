@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { quietPill } from "@/features/friends/ui";
+import { exQuiet } from "@/features/sub/ui";
 import { haptic } from "@/lib/motion/haptics";
 import { WATERMARK_CORNER_SECONDS, WATERMARK_CORNERS } from "@/lib/media/watermark-mark-geometry";
 import type { OfferMembership } from "@/lib/sub/offer";
@@ -173,7 +173,7 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
       {!state.isCreator ? <CreatorSubscribeCard creatorId={creatorId} creatorName={creatorName} quote={quote} membership={state.membership} signedIn={signedIn} returnPath={loginNext} /> : null}
 
       {state.isCreator && onCompose ? (
-        <button type="button" onClick={onCompose} className={cn(quietPill, "mb-3 w-full justify-center")}>
+        <button type="button" onClick={onCompose} className={cn(exQuiet, "mb-3 w-full justify-center")}>
           <Plus className="h-4 w-4" aria-hidden /> New subscriber post
         </button>
       ) : null}
@@ -234,7 +234,7 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
       )}
 
       {state.next ? (
-        <button type="button" onClick={() => void more()} disabled={loadingMore} className={cn(quietPill, "mt-3 w-full justify-center")}>
+        <button type="button" onClick={() => void more()} disabled={loadingMore} className={cn(exQuiet, "mt-3 w-full justify-center")}>
           {loadingMore ? "Loading…" : "Show more"}
         </button>
       ) : null}
@@ -655,7 +655,7 @@ function PrivateInteractions({ postId, isCreator }: { postId: string; isCreator:
           {/* 2026-10-14 (owner): the same height as the reels and feed comment sheets, not a small strip */}
           <section aria-label="Comments" className="absolute inset-x-0 bottom-0 z-[6] flex h-[68%] flex-col overflow-hidden rounded-t-[28px] bg-zinc-950/[0.97] text-white shadow-[0_-24px_60px_-20px_rgba(0,0,0,0.9)] ring-1 ring-inset ring-white/[0.08]">
             {/* a hairline of gold across the top edge — the private, members-only mark */}
-            <span aria-hidden className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/60 to-transparent" />
+            <span aria-hidden className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
             <span aria-hidden className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-white/25" />
             <header className="flex items-center justify-between gap-3 px-5 pb-3 pt-2.5">
               <div className="min-w-0">
@@ -688,7 +688,7 @@ function PrivateInteractions({ postId, isCreator }: { postId: string; isCreator:
                 </ul>
               ) : comments.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center gap-3 py-8 text-center">
-                  <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300/20 to-rose-400/20 ring-1 ring-inset ring-white/10">
+                  <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400/20 to-violet-400/20 ring-1 ring-inset ring-white/10">
                     <MessageCircle className="h-6 w-6 text-amber-200" aria-hidden />
                   </span>
                   <div>
@@ -700,7 +700,7 @@ function PrivateInteractions({ postId, isCreator }: { postId: string; isCreator:
                 <ul className="space-y-5">
                   {comments.map((c) => (
                     <li key={c.id} className="flex items-start gap-3">
-                      <span className="shrink-0 rounded-full bg-gradient-to-br from-amber-300 via-rose-400 to-violet-500 p-[1.5px]">
+                      <span className="shrink-0 rounded-full bg-gradient-to-br from-sky-400 via-indigo-500 to-violet-500 p-[1.5px]">
                         {c.author.avatarUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={c.author.avatarUrl} alt="" className="h-10 w-10 rounded-full border-2 border-zinc-950 object-cover" />

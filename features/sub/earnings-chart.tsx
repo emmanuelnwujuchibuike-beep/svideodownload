@@ -6,7 +6,7 @@ import { usd } from "@/lib/creator/membership/engine";
  * Daily net earnings as bars (Frenz Exclusive Part 7) — plain SVG, no chart library, no animation.
  * The bars are decoration for what the summary line and the screen-reader table say in words:
  * colour is never the only signal (a day with a net refund is drawn BELOW the baseline and listed
- * as negative). Theme colours come from the tokens (currentColor + text-primary / text-rose-500).
+ * as negative). Theme colours come from the tokens (currentColor + text-primary / text-rose-600 dark:text-rose-400).
  */
 export interface DailyPoint {
   day: string;

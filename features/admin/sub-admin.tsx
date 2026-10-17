@@ -9,7 +9,7 @@ import type { LandingSettings } from "@/lib/landing/settings";
 import { cn } from "@/lib/utils";
 
 // Part 7: overview, search and Exclusive moderation — loaded only when this panel is open
-const SubAdminInsights = dynamic(() => import("./sub-admin-insights").then((m) => m.SubAdminInsights), { ssr: false, loading: () => <div aria-hidden className="mt-6 h-40 animate-pulse rounded-2xl bg-muted motion-reduce:animate-none" /> });
+const SubAdminInsights = dynamic(() => import("./sub-admin-insights").then((m) => m.SubAdminInsights), { ssr: false, loading: () => <div aria-hidden className="mt-6 h-40 animate-pulse rounded-2xl ex-skel motion-reduce:animate-none" /> });
 
 /**
  * Admin → Rewards: SUB (0227, owner briefs 2026-10-11).
@@ -62,7 +62,7 @@ interface Audit {
   created_at: string;
 }
 
-const input = "w-28 rounded-lg border border-border bg-background px-2 py-1.5 text-sm";
+const input = "w-28 rounded-lg border border-black/[0.08] bg-white/70 px-2 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:border-white/10 dark:bg-white/[0.06]";
 
 export function SubAdmin({ settings }: { settings: LandingSettings }) {
   const router = useRouter();
@@ -156,7 +156,7 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
   );
 
   return (
-    <section className="rounded-3xl border border-border bg-card px-3 py-6 shadow-card sm:px-6">
+    <section className="ex-card px-3 py-6 sm:px-6">
       <h2 className="font-semibold">Private posts — paid subscriptions</h2>
       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Real money through Paystack, separate from AI credits. The subscriber pays the creator&apos;s price plus the purchase fee; a private post withdrawal pays out less the withdrawal fee.</p>
 
@@ -180,7 +180,7 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
         <button type="button" onClick={() => void save()} disabled={saving} className={cn("btn-lux bg-foreground text-background", saving && "opacity-60")}>
           {saving ? "Saving…" : "Save private post rules"}
         </button>
-        {saved ? <p className={cn("text-sm", saved.ok ? "text-emerald-600" : "text-rose-600")}>{saved.text}</p> : null}
+        {saved ? <p className={cn("text-sm", saved.ok ? "text-emerald-600" : "text-rose-600 dark:text-rose-400")}>{saved.text}</p> : null}
       </div>
 
       <h3 className="mt-6 text-sm font-semibold">Purchases (last 100)</h3>
@@ -208,7 +208,7 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
               </thead>
               <tbody>
                 {data.purchases.map((p) => (
-                  <tr key={p.id} className="border-t border-border/60 align-top">
+                  <tr key={p.id} className="border-t border-black/[0.06] dark:border-white/[0.07] align-top">
                     <td className="py-2 pr-2 tabular-nums">{new Date(p.created_at).toLocaleString()}</td>
                     <td className="py-2 pr-2 tabular-nums">
                       {usd(p.price_cents)} + {usd(p.fee_cents)} = {usd(p.total_cents)}
@@ -220,13 +220,13 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
                         <span className="capitalize text-muted-foreground">{p.status}</span>
                       ) : (
                         <span className="flex flex-wrap items-center gap-1.5">
-                          <select aria-label="Kind" value={kind[p.id] ?? "reversed"} onChange={(e) => setKind({ ...kind, [p.id]: e.target.value as "refunded" | "disputed" | "reversed" })} className="rounded-lg border border-border bg-background px-1.5 py-1">
+                          <select aria-label="Kind" value={kind[p.id] ?? "reversed"} onChange={(e) => setKind({ ...kind, [p.id]: e.target.value as "refunded" | "disputed" | "reversed" })} className="rounded-lg border border-black/[0.08] bg-white/70 dark:border-white/10 dark:bg-white/[0.06] px-1.5 py-1">
                             <option value="reversed">Reversal</option>
                             <option value="refunded">Refund</option>
                             <option value="disputed">Dispute</option>
                           </select>
-                          <input aria-label="Reason" placeholder="Reason" value={reason[p.id] ?? ""} onChange={(e) => setReason({ ...reason, [p.id]: e.target.value })} className="w-32 rounded-lg border border-border bg-background px-2 py-1" />
-                          <button type="button" disabled={busy === p.id} onClick={() => void reverse(p)} className="rounded-lg border border-rose-500/50 px-2 py-1 font-semibold text-rose-600 transition active:scale-95 disabled:opacity-50">
+                          <input aria-label="Reason" placeholder="Reason" value={reason[p.id] ?? ""} onChange={(e) => setReason({ ...reason, [p.id]: e.target.value })} className="w-32 rounded-lg border border-black/[0.08] bg-white/70 dark:border-white/10 dark:bg-white/[0.06] px-2 py-1" />
+                          <button type="button" disabled={busy === p.id} onClick={() => void reverse(p)} className="rounded-lg border border-rose-500/50 px-2 py-1 font-semibold text-rose-600 dark:text-rose-400 transition active:scale-95 disabled:opacity-50">
                             {busy === p.id ? "Reversing…" : "Reverse"}
                           </button>
                         </span>
@@ -259,12 +259,12 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
               </thead>
               <tbody>
                 {data.balances.map((b) => (
-                  <tr key={b.creator_id} className="border-t border-border/60 tabular-nums">
+                  <tr key={b.creator_id} className="border-t border-black/[0.06] dark:border-white/[0.07] tabular-nums">
                     <td className="py-2 pr-2 font-mono text-[11px]">{b.creator_id.slice(0, 8)}</td>
                     <td className="py-2 pr-2">{usd(b.pending_cents)}</td>
                     <td className="py-2 pr-2">{usd(b.available_cents)}</td>
                     <td className="py-2 pr-2">{usd(b.held_cents)}</td>
-                    <td className={cn("py-2 pr-2", b.debt_cents > 0 && "font-semibold text-rose-600")}>{usd(b.debt_cents)}</td>
+                    <td className={cn("py-2 pr-2", b.debt_cents > 0 && "font-semibold text-rose-600 dark:text-rose-400")}>{usd(b.debt_cents)}</td>
                     <td className="py-2 pr-2">{usd(b.lifetime_cents)}</td>
                     <td className="py-2">{usd(b.withdrawn_cents)}</td>
                   </tr>
@@ -278,7 +278,7 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
       {data?.audit.length ? (
         <>
           <h3 className="mt-6 text-sm font-semibold">Financial audit log (last 100)</h3>
-          <ul className="mt-2 max-h-80 divide-y divide-border/60 overflow-y-auto rounded-2xl border border-border/70 text-xs">
+          <ul className="mt-2 max-h-80 ex-card ex-rows overflow-y-auto text-xs">
             {data.audit.map((a) => (
               <li key={a.id} className="px-3 py-2">
                 <span className="font-semibold">{a.action}</span> <span className="text-muted-foreground">· {new Date(a.created_at).toLocaleString()}</span>

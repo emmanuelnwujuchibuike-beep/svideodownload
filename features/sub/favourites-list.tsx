@@ -4,7 +4,8 @@ import { BadgeCheck, ChevronRight, Loader2, Lock, RefreshCw, Star } from "lucide
 import Link from "next/link";
 import { useState } from "react";
 
-import { GLASS, GlassGroup, PersonAvatar, primaryPill, quietPill } from "@/features/friends/ui";
+import { PersonAvatar } from "@/features/friends/ui";
+import { EX_CARD, ExGroup, exPrimary, exQuiet } from "@/features/sub/ui";
 import { haptic } from "@/lib/motion/haptics";
 import type { FavouriteCreator } from "@/lib/sub/favourites";
 import { cn } from "@/lib/utils";
@@ -48,9 +49,9 @@ export function FavouritesList({ initial }: { initial: Page | null }) {
 
   return (
     <div>
-      <div aria-live="polite">{note ? <p className={cn("mb-3 rounded-2xl px-3.5 py-2.5 text-[13px]", GLASS)}>{note}</p> : null}</div>
+      <div aria-live="polite">{note ? <p className={cn("mb-3 rounded-2xl px-3.5 py-2.5 text-[13px]", EX_CARD)}>{note}</p> : null}</div>
       {page?.items.length ? (
-        <GlassGroup label="Favourite creators">
+        <ExGroup label="Favourite creators">
           {page.items.map((c) => (
             <li key={c.id} className="flex items-center gap-2 px-3.5 py-3">
               <Link href={`/u/${c.handle}`} prefetch={false} className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -75,28 +76,28 @@ export function FavouritesList({ initial }: { initial: Page | null }) {
               </button>
             </li>
           ))}
-        </GlassGroup>
+        </ExGroup>
       ) : !error ? (
-        <div className={cn("rounded-[22px] px-4 py-6 text-center", GLASS)}>
+        <div className={cn("rounded-[22px] px-4 py-6 text-center", EX_CARD)}>
           <span aria-hidden className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gold/15">
             <Star className="h-6 w-6 text-gold" />
           </span>
           <p className="mt-3 text-[15px] font-semibold">No favourite creators yet</p>
           <p className="mx-auto mt-1 max-w-sm text-[13px] text-muted-foreground">Tap &ldquo;Add to favourites&rdquo; on a creator&apos;s Exclusive tab to keep them one tap away.</p>
-          <Link href="/exclusive" prefetch={false} className={cn(primaryPill, "mt-4")}>
+          <Link href="/exclusive" prefetch={false} className={cn(exPrimary, "mt-4")}>
             Back to Exclusive <ChevronRight className="h-4 w-4" aria-hidden />
           </Link>
         </div>
       ) : null}
       {error ? (
-        <div className={cn("mt-2 flex items-center justify-between gap-3 rounded-[22px] px-3.5 py-3", GLASS)}>
+        <div className={cn("mt-2 flex items-center justify-between gap-3 rounded-[22px] px-3.5 py-3", EX_CARD)}>
           <p className="text-[13px] text-muted-foreground">Couldn&apos;t load your favourites.</p>
-          <button type="button" onClick={() => void load(page?.next ?? null)} disabled={loading} className={quietPill}>
+          <button type="button" onClick={() => void load(page?.next ?? null)} disabled={loading} className={exQuiet}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />} Retry
           </button>
         </div>
       ) : page?.next ? (
-        <button type="button" onClick={() => void load(page.next)} disabled={loading} className={cn(quietPill, "mt-2 w-full justify-center")}>
+        <button type="button" onClick={() => void load(page.next)} disabled={loading} className={cn(exQuiet, "mt-2 w-full justify-center")}>
           {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null} {loading ? "Loading…" : "Show more"}
         </button>
       ) : null}

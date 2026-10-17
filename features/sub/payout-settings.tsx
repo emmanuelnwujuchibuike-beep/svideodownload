@@ -3,7 +3,7 @@
 import { Building2, Loader2, Zap } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { primaryPill, quietPill } from "@/features/friends/ui";
+import { exPrimary, exQuiet } from "@/features/sub/ui";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
@@ -80,7 +80,7 @@ export function SubPayoutSettings({ feePercent: feeProp, className }: { feePerce
   if (!state.ready) return null;
 
   return (
-    <div className={cn("rounded-[22px] border border-border/70 bg-background/60 p-3.5", className)}>
+    <div className={cn("rounded-[22px] bg-black/[0.03] p-3.5 dark:bg-white/[0.045]", className)}>
       <div className="flex items-start gap-3">
         <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/12 text-emerald-700 dark:text-emerald-400">
           <Building2 className="h-[18px] w-[18px]" />
@@ -105,15 +105,13 @@ export function SubPayoutSettings({ feePercent: feeProp, className }: { feePerce
               <span className="block text-[13.5px] font-semibold">Auto-withdrawal</span>
               <span className="block text-[12px] text-muted-foreground">Every new subscription goes straight to this account, less the {feePercent}% withdrawal fee.</span>
             </span>
-            <button type="button" role="switch" aria-checked={account.autoWithdraw} aria-label="Auto-withdrawal" onClick={() => void toggle()} className={cn("relative h-6 w-11 shrink-0 touch-manipulation rounded-full transition", account.autoWithdraw ? "bg-emerald-600" : "bg-muted")}>
-              <span aria-hidden className={cn("absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-[left] motion-reduce:transition-none", account.autoWithdraw ? "left-[1.375rem]" : "left-0.5")} />
-            </button>
+            <button type="button" role="switch" aria-checked={account.autoWithdraw} aria-label="Auto-withdrawal" onClick={() => void toggle()} className="ex-switch" />
           </div>
           <div className="mt-2 flex gap-2">
-            <button type="button" onClick={() => setEditing(true)} className={cn(quietPill, "min-h-[2.25rem] px-3 text-[12.5px]")}>
+            <button type="button" onClick={() => setEditing(true)} className={"ex-btn ex-btn--quiet ex-btn--sm"}>
               Change account
             </button>
-            <button type="button" onClick={() => void remove()} className={cn(quietPill, "min-h-[2.25rem] px-3 text-[12.5px] text-rose-600")}>
+            <button type="button" onClick={() => void remove()} className={"ex-btn ex-btn--danger ex-btn--sm"}>
               Remove
             </button>
           </div>
@@ -130,7 +128,7 @@ export function SubPayoutSettings({ feePercent: feeProp, className }: { feePerce
           }}
         />
       )}
-      {note ? <p className={cn("mt-2 text-[12.5px] font-medium", note.ok ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600")}>{note.text}</p> : null}
+      {note ? <p className={cn("mt-2 text-[12.5px] font-medium", note.ok ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>{note.text}</p> : null}
     </div>
   );
 }
@@ -157,14 +155,14 @@ function AccountForm({ initialAuto, canCancel, onCancel, onSaved }: { initialAut
       <label className="mt-2 flex items-center gap-2 text-[13.5px]">
         <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} className="h-4 w-4 accent-emerald-600" /> Turn on auto-withdrawal
       </label>
-      {err ? <p className="mt-2 text-[12.5px] font-medium text-rose-600">{err}</p> : null}
+      {err ? <p className="mt-2 text-[12.5px] font-medium text-rose-600 dark:text-rose-400">{err}</p> : null}
       <div className="mt-3 flex gap-2">
-        <button type="button" onClick={() => void save()} disabled={!lookup.accountOk || busy} className={primaryPill}>
+        <button type="button" onClick={() => void save()} disabled={!lookup.accountOk || busy} className={exPrimary}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
           {busy ? "Saving…" : "Save account"}
         </button>
         {canCancel ? (
-          <button type="button" onClick={onCancel} className={quietPill}>
+          <button type="button" onClick={onCancel} className={exQuiet}>
             Cancel
           </button>
         ) : null}

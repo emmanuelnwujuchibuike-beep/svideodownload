@@ -3,7 +3,7 @@
 import { BellRing, Eye, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { GLASS } from "@/features/friends/ui";
+import { EX_CARD } from "@/features/sub/ui";
 import { ALERT_OPTIONS, Segmented, type AlertMode } from "@/features/sub/segmented";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -42,7 +42,7 @@ export function CreatorNotifySettings({ initial }: { initial: Mode }) {
   };
 
   return (
-    <section aria-labelledby="cns-title" className={cn("mb-3 rounded-[22px] p-3.5", GLASS)}>
+    <section aria-labelledby="cns-title" className={cn("mb-3 rounded-[22px] p-3.5", EX_CARD)}>
       <h2 id="cns-title" className="flex items-center gap-2 text-[14.5px] font-semibold">
         <BellRing className="h-4 w-4 text-primary" aria-hidden /> Notifications
       </h2>
@@ -72,7 +72,7 @@ export function CreatorNotifySettings({ initial }: { initial: Mode }) {
         <p className="mt-1.5 text-[11.5px] text-muted-foreground">It always appears in your notifications. Push also follows your general notification settings.</p>
       </div>
       {note ? (
-        <p role="alert" className="mt-2 text-[12.5px] text-rose-600">
+        <p role="alert" className="mt-2 text-[12.5px] text-rose-600 dark:text-rose-400">
           {note}
         </p>
       ) : null}

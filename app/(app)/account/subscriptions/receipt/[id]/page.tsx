@@ -48,33 +48,35 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
   ];
 
   return (
-    <AppContent>
-      <div className="mx-auto max-w-lg">
-        <header className="mb-5 flex items-center gap-3 print:hidden">
-          <Link href="/account/subscriptions" aria-label="Back to subscriptions" className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-card/80 transition hover:bg-secondary">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-          <h1 className="text-2xl font-bold tracking-[-0.02em]">{tx.receipt ? "Receipt" : "Payment details"}</h1>
-        </header>
+    <div className="ex-ground w-full flex-1">
+      <AppContent>
+        <div className="mx-auto max-w-lg">
+          <header className="mb-5 flex items-center gap-3 print:hidden">
+            <Link href="/account/subscriptions" aria-label="Back to subscriptions" className="ex-icon-btn -ml-1">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+            <h1 className="text-2xl font-bold tracking-[-0.02em]">{tx.receipt ? "Receipt" : "Payment details"}</h1>
+          </header>
 
-        <article className="rounded-3xl border border-border/70 bg-card px-5 py-5 shadow-card print:border-0 print:shadow-none">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Frenzsave · Exclusive subscription</p>
-          <p className="mt-1 text-[22px] font-extrabold tracking-[-0.02em]">{tx.charged ?? tx.breakdown.total}</p>
-          <p className="mt-1 text-[13px] text-muted-foreground">{tx.note}</p>
-          {!tx.receipt ? <p className="mt-3 rounded-2xl bg-muted px-3 py-2 text-[13px] font-medium">This is not a receipt: no payment was confirmed for this checkout.</p> : null}
-          <dl className="mt-4 divide-y divide-border/70 text-[13.5px]">
-            {rows.map(([k, v]) => (
-              <div key={k} className="flex items-start justify-between gap-4 py-2.5">
-                <dt className="shrink-0 text-muted-foreground">{k}</dt>
-                <dd className="text-right font-semibold">{v}</dd>
-              </div>
-            ))}
-          </dl>
-          <p className="mt-4 text-[11.5px] text-muted-foreground">Paid through Paystack. A subscription is one payment for its period and never renews automatically. Quote the reference above if you contact support.</p>
-        </article>
+          <article className="ex-card px-5 py-5 print:border-0 print:shadow-none">
+            <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Frenzsave · Exclusive subscription</p>
+            <p className="mt-1 text-[22px] font-extrabold tracking-[-0.02em]">{tx.charged ?? tx.breakdown.total}</p>
+            <p className="mt-1 text-[13px] text-muted-foreground">{tx.note}</p>
+            {!tx.receipt ? <p className="mt-3 rounded-2xl bg-black/[0.04] px-3 py-2 text-[13px] font-medium dark:bg-white/[0.06]">This is not a receipt: no payment was confirmed for this checkout.</p> : null}
+            <dl className="ex-rows mt-4 text-[13.5px]">
+              {rows.map(([k, v]) => (
+                <div key={k} className="flex items-start justify-between gap-4 py-2.5">
+                  <dt className="shrink-0 text-muted-foreground">{k}</dt>
+                  <dd className="text-right font-semibold">{v}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="mt-4 text-[11.5px] text-muted-foreground">Paid through Paystack. A subscription is one payment for its period and never renews automatically. Quote the reference above if you contact support.</p>
+          </article>
 
-        {tx.receipt ? <PrintButton className="mt-4 w-full justify-center print:hidden" /> : null}
-      </div>
-    </AppContent>
+          {tx.receipt ? <PrintButton className="mt-4 w-full justify-center print:hidden" /> : null}
+        </div>
+      </AppContent>
+    </div>
   );
 }

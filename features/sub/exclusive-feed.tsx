@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { primaryPill, quietPill } from "@/features/friends/ui";
+import { exPrimary, exQuiet } from "@/features/sub/ui";
 import { usd } from "@/lib/creator/membership/engine";
 import { cn } from "@/lib/utils";
 
@@ -141,7 +141,7 @@ export function ExclusiveFeed() {
       <div className="flex flex-col items-center gap-3 py-16 text-center">
         <p className="text-[15px] font-semibold">Couldn&apos;t load your exclusive feed</p>
         <p className="text-[13.5px] text-muted-foreground">Check your connection and try again.</p>
-        <button type="button" onClick={() => (setStatus("loading"), void load(null))} className={quietPill}>
+        <button type="button" onClick={() => (setStatus("loading"), void load(null))} className={exQuiet}>
           <RefreshCw className="h-4 w-4" aria-hidden /> Try again
         </button>
       </div>
@@ -164,7 +164,7 @@ export function ExclusiveFeed() {
       {next ? (
         <div ref={sentinel} className="flex justify-center py-2">
           {more === "error" ? (
-            <button type="button" onClick={() => (setMore("idle"), void load(next))} className={quietPill}>
+            <button type="button" onClick={() => (setMore("idle"), void load(next))} className={exQuiet}>
               <RefreshCw className="h-4 w-4" aria-hidden /> Load more
             </button>
           ) : (
@@ -194,7 +194,7 @@ function Avatar({ c, size = 40 }: { c: Creator | undefined; size?: number }) {
 function FeedCard({ post, creator, eager, onOpen }: { post: Post; creator: Creator | undefined; eager: boolean; onOpen: () => void }) {
   const [broken, setBroken] = useState(false);
   return (
-    <article className="overflow-hidden rounded-3xl border border-border/70 bg-card shadow-card">
+    <article className="ex-card overflow-hidden">
       <header className="flex items-center gap-3 px-4 pb-3 pt-3.5">
         <Avatar c={creator} />
         <div className="min-w-0 flex-1">
@@ -209,12 +209,12 @@ function FeedCard({ post, creator, eager, onOpen }: { post: Post; creator: Creat
           </p>
         </div>
         {post.hidden ? (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11.5px] font-semibold text-muted-foreground" title="Only subscribers know this post exists">
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-black/[0.05] dark:bg-white/[0.07] px-2.5 py-1 text-[11.5px] font-semibold text-muted-foreground" title="Only subscribers know this post exists">
             <EyeOff className="h-3.5 w-3.5" aria-hidden /> Subscribers only
           </span>
         ) : null}
       </header>
-      <button type="button" onClick={onOpen} className="group relative block aspect-[4/5] w-full overflow-hidden bg-muted text-left" aria-label={`Open ${creator?.name ?? "this"} exclusive post`}>
+      <button type="button" onClick={onOpen} className="group relative block aspect-[4/5] w-full overflow-hidden bg-black/[0.05] dark:bg-white/[0.07] text-left" aria-label={`Open ${creator?.name ?? "this"} exclusive post`}>
         {post.previewUrl && !broken ? (
           // eslint-disable-next-line @next/next/no-img-element -- a five-minute private link, never cached or proxied
           <img src={post.previewUrl} alt="" loading={eager ? "eager" : "lazy"} decoding="async" draggable={false} onError={() => setBroken(true)} onContextMenu={(e) => e.preventDefault()} className="h-full w-full object-cover transition duration-300 group-active:scale-[0.99]" />
@@ -235,7 +235,7 @@ function FeedCard({ post, creator, eager, onOpen }: { post: Post; creator: Creat
 
 function EmptyFeed({ subscribed }: { subscribed: boolean }) {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-3xl border border-dashed border-border px-6 py-12 text-center">
+    <div className="flex flex-col items-center gap-3 ex-card px-6 py-12 text-center">
       <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 to-accent/15 ring-1 ring-inset ring-primary/20">
         <Sparkles className="h-6 w-6 text-primary" aria-hidden />
       </span>
@@ -245,7 +245,7 @@ function EmptyFeed({ subscribed }: { subscribed: boolean }) {
           {subscribed ? "When the creators you subscribe to share something for subscribers, it shows up here first." : "Subscribe to a creator to see the posts they share only with subscribers, all in one place."}
         </p>
       </div>
-      <Link href="/explore" prefetch={false} className={cn(quietPill, "mt-1")}>
+      <Link href="/explore" prefetch={false} className={cn(exQuiet, "mt-1")}>
         Find creators
       </Link>
     </div>
@@ -295,8 +295,8 @@ export function LockedPreviewCard({ card, creator }: { card: Card; creator: Disc
     setState({ error: j?.error ?? "Couldn't open the payment. Try again." });
   };
   return (
-    <article className="overflow-hidden rounded-3xl border border-border/70 bg-card shadow-card">
-      <Link href={`/u/${creator.handle}?tab=sub`} prefetch={false} className="relative block aspect-[16/10] overflow-hidden bg-muted" aria-label={`${creator.name}'s exclusive posts`}>
+    <article className="ex-card overflow-hidden">
+      <Link href={`/u/${creator.handle}?tab=sub`} prefetch={false} className="relative block aspect-[16/10] overflow-hidden bg-black/[0.05] dark:bg-white/[0.07]" aria-label={`${creator.name}'s exclusive posts`}>
         {card.coverUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- the creator's PUBLIC teaser, on the CDN
           <img src={card.coverUrl} alt="" loading="lazy" decoding="async" className="h-full w-full scale-105 object-cover blur-[2px] brightness-75" />
@@ -322,13 +322,13 @@ export function LockedPreviewCard({ card, creator }: { card: Card; creator: Disc
             {usd(creator.totalCents)} for {creator.periodDays} days
           </p>
         </div>
-        <button type="button" onClick={() => void subscribe()} disabled={state === "busy"} className={primaryPill}>
+        <button type="button" onClick={() => void subscribe()} disabled={state === "busy"} className={exPrimary}>
           {state === "busy" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Lock className="h-4 w-4" aria-hidden />}
           Subscribe
         </button>
       </div>
       {typeof state === "object" ? (
-        <p role="alert" className="px-3.5 pb-3 text-[12.5px] font-medium text-rose-500">
+        <p role="alert" className="px-3.5 pb-3 text-[12.5px] font-medium text-rose-600 dark:text-rose-400">
           {state.error}
         </p>
       ) : null}
@@ -340,15 +340,15 @@ function FeedSkeleton() {
   return (
     <div className="space-y-4" aria-busy="true" aria-label="Loading your exclusive feed">
       {[0, 1].map((i) => (
-        <div key={i} className="overflow-hidden rounded-3xl border border-border/70 bg-card">
+        <div key={i} className="overflow-hidden ex-card">
           <div className="flex items-center gap-3 px-4 pb-3 pt-3.5">
-            <span className="h-10 w-10 animate-pulse rounded-full bg-muted" />
-            <span className="h-3.5 w-36 animate-pulse rounded-full bg-muted" />
+            <span className="h-10 w-10 animate-pulse rounded-full ex-skel" />
+            <span className="h-3.5 w-36 animate-pulse rounded-full ex-skel" />
           </div>
-          <div className="aspect-[4/5] w-full animate-pulse bg-muted" />
+          <div className="aspect-[4/5] w-full animate-pulse ex-skel" />
           <div className="space-y-2 px-4 py-3">
-            <span className="block h-3 w-4/5 animate-pulse rounded-full bg-muted" />
-            <span className="block h-3 w-2/5 animate-pulse rounded-full bg-muted" />
+            <span className="block h-3 w-4/5 animate-pulse rounded-full ex-skel" />
+            <span className="block h-3 w-2/5 animate-pulse rounded-full ex-skel" />
           </div>
         </div>
       ))}

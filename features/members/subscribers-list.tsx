@@ -4,7 +4,8 @@ import { Loader2, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { GLASS, GlassGroup, PersonAvatar, quietPill } from "@/features/friends/ui";
+import { PersonAvatar } from "@/features/friends/ui";
+import { EX_CARD, ExGroup, exQuiet } from "@/features/sub/ui";
 import { haptic } from "@/lib/motion/haptics";
 import type { SubState } from "@/lib/sub/lifecycle";
 import type { SubscriberRow } from "@/lib/sub/subscriptions";
@@ -20,12 +21,12 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(unde
 const TONE: Record<SubState, string> = {
   active: "bg-primary/10 text-primary",
   ending: "bg-gold/15 text-foreground",
-  pending: "bg-muted text-muted-foreground",
-  expired: "bg-muted text-muted-foreground",
-  refunded: "bg-muted text-foreground",
-  ended: "bg-muted text-muted-foreground",
-  removed: "bg-muted text-muted-foreground",
-  unavailable: "bg-muted text-muted-foreground",
+  pending: "bg-black/[0.05] dark:bg-white/[0.07] text-muted-foreground",
+  expired: "bg-black/[0.05] dark:bg-white/[0.07] text-muted-foreground",
+  refunded: "bg-black/[0.05] dark:bg-white/[0.07] text-foreground",
+  ended: "bg-black/[0.05] dark:bg-white/[0.07] text-muted-foreground",
+  removed: "bg-black/[0.05] dark:bg-white/[0.07] text-muted-foreground",
+  unavailable: "bg-black/[0.05] dark:bg-white/[0.07] text-muted-foreground",
 };
 
 type Page = { items: SubscriberRow[]; next: string | null };
@@ -75,23 +76,23 @@ export function SubscribersList() {
             ["all", "Everyone who subscribed"],
           ] as const
         ).map(([k, l]) => (
-          <button key={k} type="button" aria-pressed={filter === k} onClick={() => setFilter(k)} className={cn(quietPill, "min-h-[2.25rem] px-3 text-[12.5px]", filter === k && "bg-primary/10 text-primary")}>
+          <button key={k} type="button" aria-pressed={filter === k} onClick={() => setFilter(k)} className={"ex-chip"}>
             {l}
           </button>
         ))}
       </div>
-      <div aria-live="polite">{note ? <p className={cn("mb-2 rounded-2xl px-3.5 py-2.5 text-[13px]", GLASS)}>{note}</p> : null}</div>
+      <div aria-live="polite">{note ? <p className={cn("mb-2 rounded-2xl px-3.5 py-2.5 text-[13px]", EX_CARD)}>{note}</p> : null}</div>
       {page === null && loading ? (
-        <ul aria-label="Loading subscribers" className={cn("divide-y divide-black/[0.06] overflow-hidden rounded-[22px] dark:divide-white/[0.07]", GLASS)}>
+        <ul aria-label="Loading subscribers" className={cn("divide-y divide-black/[0.06] overflow-hidden rounded-[22px] dark:divide-white/[0.07]", EX_CARD)}>
           {[0, 1, 2].map((i) => (
             <li key={i} className="flex items-center gap-3 px-3.5 py-3">
-              <span className="h-11 w-11 animate-pulse rounded-full bg-muted motion-reduce:animate-none" />
-              <span className="h-3.5 w-40 animate-pulse rounded-full bg-muted motion-reduce:animate-none" />
+              <span className="h-11 w-11 animate-pulse rounded-full ex-skel motion-reduce:animate-none" />
+              <span className="h-3.5 w-40 animate-pulse rounded-full ex-skel motion-reduce:animate-none" />
             </li>
           ))}
         </ul>
       ) : page?.items.length ? (
-        <GlassGroup label="Subscribers">
+        <ExGroup label="Subscribers">
           {page.items.map((r) => {
             const expanded = open === r.membershipId;
             return (
@@ -113,14 +114,14 @@ export function SubscribersList() {
                       {r.state === "ending" ? " · won't renew" : ""}
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      <Link href={`/u/${r.person.handle}`} prefetch={false} className={cn(quietPill, "min-h-[2.25rem] px-3 text-[12.5px]")}>
+                      <Link href={`/u/${r.person.handle}`} prefetch={false} className={"ex-btn ex-btn--quiet ex-btn--sm"}>
                         Profile
                       </Link>
-                      <Link href={`/messages/new/${r.person.id}`} prefetch={false} className={cn(quietPill, "min-h-[2.25rem] px-3 text-[12.5px]")}>
+                      <Link href={`/messages/new/${r.person.id}`} prefetch={false} className={"ex-btn ex-btn--quiet ex-btn--sm"}>
                         Message
                       </Link>
                       {r.access ? (
-                        <button type="button" onClick={() => void remove(r)} className={cn(quietPill, "min-h-[2.25rem] px-3 text-[12.5px] text-rose-600")}>
+                        <button type="button" onClick={() => void remove(r)} className={"ex-btn ex-btn--danger ex-btn--sm"}>
                           Remove
                         </button>
                       ) : null}
@@ -130,19 +131,19 @@ export function SubscribersList() {
               </li>
             );
           })}
-        </GlassGroup>
+        </ExGroup>
       ) : !error ? (
-        <p className={cn("rounded-[22px] px-3.5 py-3 text-[13px] text-muted-foreground", GLASS)}>{filter === "current" ? "Nobody has access right now. Share your exclusive posts to find subscribers." : "Nobody has subscribed yet."}</p>
+        <p className={cn("rounded-[22px] px-3.5 py-3 text-[13px] text-muted-foreground", EX_CARD)}>{filter === "current" ? "Nobody has access right now. Share your exclusive posts to find subscribers." : "Nobody has subscribed yet."}</p>
       ) : null}
       {error ? (
-        <div className={cn("mt-2 flex items-center justify-between gap-3 rounded-[22px] px-3.5 py-3", GLASS)}>
+        <div className={cn("mt-2 flex items-center justify-between gap-3 rounded-[22px] px-3.5 py-3", EX_CARD)}>
           <p className="text-[13px] text-muted-foreground">Couldn&apos;t load your subscribers.</p>
-          <button type="button" onClick={() => void load(filter, page?.next ?? null)} disabled={loading} className={quietPill}>
+          <button type="button" onClick={() => void load(filter, page?.next ?? null)} disabled={loading} className={exQuiet}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />} Retry
           </button>
         </div>
       ) : page?.next ? (
-        <button type="button" onClick={() => void load(filter, page.next)} disabled={loading} className={cn(quietPill, "mt-2 w-full justify-center")}>
+        <button type="button" onClick={() => void load(filter, page.next)} disabled={loading} className={cn(exQuiet, "mt-2 w-full justify-center")}>
           {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null} {loading ? "Loading…" : "Show more"}
         </button>
       ) : null}

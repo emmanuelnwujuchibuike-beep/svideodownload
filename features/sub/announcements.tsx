@@ -3,7 +3,7 @@
 import { Loader2, Megaphone, RefreshCw, Send, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { GLASS, primaryPill, quietPill } from "@/features/friends/ui";
+import { EX_CARD, exField, exPrimary, exQuiet } from "@/features/sub/ui";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
@@ -84,9 +84,9 @@ function DeliveryChips({ d }: { d: Delivery }) {
   const chip = "inline-flex items-center rounded-full px-2 py-0.5 text-[11.5px] font-semibold tabular-nums";
   return (
     <ul aria-label="Notification status" className="mt-2 flex flex-wrap gap-1.5">
-      {d.state !== "done" ? <li className={cn(chip, d.state === "pending" ? "bg-accent/10 text-accent" : "bg-muted text-muted-foreground")}>{d.state === "pending" ? "Sending…" : "Stopped"}</li> : null}
+      {d.state !== "done" ? <li className={cn(chip, d.state === "pending" ? "bg-accent/10 text-accent" : "bg-black/[0.05] dark:bg-white/[0.07] text-muted-foreground")}>{d.state === "pending" ? "Sending…" : "Stopped"}</li> : null}
       <li className={cn(chip, "bg-primary/10 text-primary")}>Queued {d.handedOff.toLocaleString()}</li>
-      {d.skipped ? <li className={cn(chip, "bg-muted text-muted-foreground")} title="Opted out, or not eligible right now">Skipped {d.skipped.toLocaleString()}</li> : null}
+      {d.skipped ? <li className={cn(chip, "bg-black/[0.05] dark:bg-white/[0.07] text-muted-foreground")} title="Opted out, or not eligible right now">Skipped {d.skipped.toLocaleString()}</li> : null}
       {d.failed ? <li className={cn(chip, "bg-rose-500/10 text-rose-600 dark:text-rose-400")}>Failed {d.failed.toLocaleString()}</li> : null}
     </ul>
   );
@@ -97,13 +97,13 @@ export function SubscriberAnnouncements({ creatorId }: { creatorId: string }) {
   const { page, error, loading, load } = useAnnouncements(creatorId);
   if (!page?.access || (!page.items.length && !error)) return null;
   return (
-    <section id="announcements" aria-labelledby="ann-title" className={cn("mb-3 scroll-mt-20 rounded-[22px] p-3.5", GLASS)}>
+    <section id="announcements" aria-labelledby="ann-title" className={cn("mb-3 scroll-mt-20 rounded-[22px] p-3.5", EX_CARD)}>
       <h2 id="ann-title" className="mb-2 flex items-center gap-2 text-[14px] font-semibold">
         <Megaphone className="h-4 w-4 text-primary" aria-hidden /> Announcements for subscribers
       </h2>
       <List items={page.items} />
       {page.next ? (
-        <button type="button" onClick={() => void load(page.next)} disabled={loading} className={cn(quietPill, "mt-2 w-full justify-center")}>
+        <button type="button" onClick={() => void load(page.next)} disabled={loading} className={cn(exQuiet, "mt-2 w-full justify-center")}>
           {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null} Older announcements
         </button>
       ) : null}
@@ -152,22 +152,22 @@ export function CreatorAnnouncements({ creatorId }: { creatorId: string }) {
 
   const valid = title.trim().length >= 1 && title.trim().length <= 80 && body.trim().length >= 1 && body.trim().length <= 2000;
   return (
-    <section id="announcements" aria-labelledby="cann-title" className={cn("mb-3 rounded-[22px] p-3.5", GLASS)}>
+    <section id="announcements" aria-labelledby="cann-title" className={cn("mb-3 rounded-[22px] p-3.5", EX_CARD)}>
       <h2 id="cann-title" className="flex items-center gap-2 text-[14.5px] font-semibold">
         <Megaphone className="h-4 w-4 text-primary" aria-hidden /> Announce to subscribers
       </h2>
       <p className="mt-0.5 text-[12.5px] text-muted-foreground">Only your active subscribers can read it. They&apos;re notified the way they chose; the notification never shows the message itself.</p>
       <label className="mt-3 block text-[12.5px] font-medium text-muted-foreground">
         Title
-        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} className="mt-1 min-h-[2.75rem] w-full rounded-xl border border-black/[0.08] bg-black/[0.02] px-3 text-[15px] text-foreground outline-none transition-colors focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/30 dark:border-white/10 dark:bg-white/[0.04]" />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} className={cn(exField, "mt-1")} />
       </label>
       <label className="mt-2 block text-[12.5px] font-medium text-muted-foreground">
         Message
-        <textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength={2000} rows={3} className="mt-1 w-full rounded-xl border border-black/[0.08] bg-black/[0.02] px-3 py-2 text-[15px] text-foreground outline-none transition-colors focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/30 dark:border-white/10 dark:bg-white/[0.04]" />
+        <textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength={2000} rows={3} className={cn(exField, "mt-1 resize-none")} />
       </label>
       <div className="mt-2 flex items-center justify-between gap-2">
         <span className="text-[11.5px] tabular-nums text-muted-foreground">{body.length}/2000</span>
-        <button type="button" onClick={() => void publish()} disabled={!valid || busy} className={primaryPill}>
+        <button type="button" onClick={() => void publish()} disabled={!valid || busy} className={exPrimary}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />} {busy ? "Publishing…" : "Publish to subscribers"}
         </button>
       </div>
@@ -177,14 +177,14 @@ export function CreatorAnnouncements({ creatorId }: { creatorId: string }) {
           <List items={page.items} onDelete={(id) => void remove(id)} />
           <p className="mt-2 text-[11.5px] text-muted-foreground">Queued = handed to each subscriber&apos;s push or email; delivery itself can&apos;t be confirmed. Skipped = opted out or no longer eligible.</p>
           {page.next ? (
-            <button type="button" onClick={() => void load(page.next)} disabled={loading} className={cn(quietPill, "mt-2 w-full justify-center")}>
+            <button type="button" onClick={() => void load(page.next)} disabled={loading} className={cn(exQuiet, "mt-2 w-full justify-center")}>
               Older announcements
             </button>
           ) : null}
         </div>
       ) : null}
       {error ? (
-        <button type="button" onClick={() => void load(null)} className={cn(quietPill, "mt-2")}>
+        <button type="button" onClick={() => void load(null)} className={cn(exQuiet, "mt-2")}>
           <RefreshCw className="h-4 w-4" aria-hidden /> Retry loading announcements
         </button>
       ) : null}

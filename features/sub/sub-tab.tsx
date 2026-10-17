@@ -6,10 +6,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { GLASS, primaryPill, quietPill } from "@/features/friends/ui";
 import { SubGallery, type SubQuoteView } from "@/features/sub/sub-gallery";
 import { forgetSubPosts } from "@/features/sub/sub-posts-cache";
 import { useSubEarnings } from "@/features/sub/sub-withdraw";
+import { EX_CARD, EX_WELL, exField, exPrimary, exQuiet } from "@/features/sub/ui";
 import { subscriptionCharge, usd } from "@/lib/creator/membership/engine";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -156,37 +156,87 @@ function GetPaidSetup({ settings, bounds, onChange }: { settings: SubOwnerSettin
   };
 
   const steps = ["Your price", "How you earn", "Getting paid", "Go live"];
+  // quick picks inside the admin's bounds — a tap fills the field, the field stays the authority
+  const picks = [300, 500, 1000, 2000].filter((c) => c >= bounds.minPriceCents && c <= bounds.maxPriceCents);
+  const typed = price !== "" && !priceOk;
   return (
-    <div className={cn("rounded-[26px] p-4 sm:p-5", GLASS)}>
-      <p className="text-[12px] font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">Get paid for your content</p>
-      <ol className="mt-2 flex gap-1.5" aria-label="Setup steps">
+    <section aria-labelledby="get-paid-title" className={cn("p-5", EX_CARD)}>
+      <p id="get-paid-title" className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-primary">
+        Get paid for your content
+      </p>
+      <ol className="mt-3 grid grid-cols-4 gap-2" aria-label={`Setup, step ${step + 1} of ${steps.length}`}>
         {steps.map((label, i) => (
-          <li key={label} className="flex-1" aria-current={i === step ? "step" : undefined}>
-            <span className={cn("block h-1.5 rounded-full", i <= step ? "bg-gradient-to-r from-blue-600 to-violet-600" : "bg-black/[0.08] dark:bg-white/[0.1]")} />
-            <span className={cn("mt-1 block text-[11px] font-semibold", i === step ? "text-foreground" : "text-muted-foreground")}>{label}</span>
+          <li key={label} aria-current={i === step ? "step" : undefined}>
+            <span className="ex-steps__bar" data-done={i <= step} aria-hidden />
+            <span className={cn("mt-1.5 block truncate text-[11px] font-semibold", i === step ? "text-foreground" : "text-muted-foreground/80")}>{label}</span>
           </li>
         ))}
       </ol>
 
       {step === 0 ? (
-        <div className="mt-4">
-          <h3 className="text-[18px] font-extrabold tracking-[-0.01em]">What should a subscription cost?</h3>
-          <p className="mt-1 text-[13.5px] text-muted-foreground">
-            Subscribers get your PRIVATE POSTS for 30 days. Choose from {usd(bounds.minPriceCents)} to {usd(bounds.maxPriceCents)}.
+        <div className="mt-5">
+          <h3 className="text-[19px] font-bold tracking-[-0.015em]">What should a subscription cost?</h3>
+          <p className="mt-1 text-[13.5px] leading-relaxed text-muted-foreground">
+            Subscribers get your private posts for 30 days. Anything from {usd(bounds.minPriceCents)} to {usd(bounds.maxPriceCents)}.
           </p>
-          <label htmlFor="sub-price" className="mt-3 block text-[13px] font-semibold">
-            Monthly price (USD)
+          <label htmlFor="sub-price" className="mt-4 block text-[13px] font-semibold">
+            Monthly price
           </label>
-          <input id="sub-price" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value.replace(/[^0-9.]/g, "").slice(0, 8))} placeholder="5.00" className="mt-1 w-full rounded-2xl border border-border bg-background px-3 py-2.5 text-[16px] outline-none focus-visible:ring-2 focus-visible:ring-primary/40" />
-          {charge ? <p className="mt-2 text-[13px] text-muted-foreground">{usd(charge.priceCents)} a month</p> : null}
-          <button type="button" disabled={!priceOk} onClick={() => go(1, { priceCents: cents })} className={cn(primaryPill, "mt-4 w-full justify-center")}>
+          {/* the well is the field; the input inside it is bare, so the $ and the unit sit in line with the digits */}
+          <div className={cn(exField, "mt-1.5")} data-invalid={typed || undefined}>
+            <div className="flex items-center gap-1.5">
+            <span aria-hidden className="text-[16px] font-semibold text-muted-foreground">
+              $
+            </span>
+            <input
+              id="sub-price"
+              inputMode="decimal"
+              autoComplete="off"
+              value={price}
+              onChange={(e) => setPrice(e.target.value.replace(/[^0-9.]/g, "").slice(0, 8))}
+              placeholder="5.00"
+              aria-invalid={typed}
+              aria-describedby="sub-price-hint"
+              className="h-7 min-w-0 flex-1 bg-transparent text-[16px] font-semibold tabular-nums outline-none placeholder:text-muted-foreground/60"
+            />
+            <span aria-hidden className="shrink-0 text-[13px] font-medium text-muted-foreground">
+              USD / month
+            </span>
+            </div>
+          </div>
+          {picks.length ? (
+            <div className="mt-2.5 flex flex-wrap gap-2" role="group" aria-label="Suggested prices">
+              {picks.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className="ex-chip tabular-nums"
+                  aria-pressed={cents === c}
+                  onClick={() => {
+                    haptic("selection");
+                    setPrice((c / 100).toFixed(2));
+                  }}
+                >
+                  {usd(c)}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <p id="sub-price-hint" aria-live="polite" className={cn("mt-2.5 min-h-[1.25rem] text-[12.5px]", typed ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground")}>
+            {charge
+              ? `Subscribers pay ${usd(charge.totalCents)} a month, with the ${bounds.purchaseFeePercent}% purchase fee. You keep ${usd(charge.priceCents)}.`
+              : typed
+                ? `Choose from ${usd(bounds.minPriceCents)} to ${usd(bounds.maxPriceCents)}.`
+                : "You can change it any time."}
+          </p>
+          <button type="button" disabled={!priceOk} onClick={() => go(1, { priceCents: cents })} className={cn(exPrimary, "mt-4 w-full")}>
             Continue <ArrowRight className="h-4 w-4" aria-hidden />
           </button>
         </div>
       ) : step === 1 ? (
-        <div className="mt-4">
-          <h3 className="text-[18px] font-extrabold tracking-[-0.01em]">How you earn</h3>
-          <ul className="mt-2 space-y-2 text-[13.5px]">
+        <div className="mt-5">
+          <h3 className="text-[19px] font-bold tracking-[-0.015em]">How you earn</h3>
+          <ul className="mt-3 space-y-2.5 text-[13.5px] leading-relaxed">
             <Point>People subscribe from your profile and pay through Paystack.</Point>
             <Point>You keep your full price. The subscriber pays a {bounds.purchaseFeePercent}% purchase fee on top.</Point>
             <Point>Your earnings go to a private post balance of their own, separate from AI credits.</Point>
@@ -195,40 +245,43 @@ function GetPaidSetup({ settings, bounds, onChange }: { settings: SubOwnerSettin
           <Nav onBack={() => go(0)} onNext={() => go(2)} />
         </div>
       ) : step === 2 ? (
-        <div className="mt-4">
-          <h3 className="text-[18px] font-extrabold tracking-[-0.01em]">Getting paid</h3>
-          <ul className="mt-2 space-y-2 text-[13.5px]">
+        <div className="mt-5">
+          <h3 className="text-[19px] font-bold tracking-[-0.015em]">Getting paid</h3>
+          <ul className="mt-3 space-y-2.5 text-[13.5px] leading-relaxed">
             <Point>Withdraw your private post balance to your bank through Paystack.</Point>
             <Point>Paystack checks the account holder&apos;s name before anything is sent.</Point>
             <Point>A {bounds.withdrawalFeePercent}% withdrawal fee applies. You see exactly what reaches your bank before you confirm.</Point>
             <Point>If a payment is refunded or disputed, that subscription ends and the amount comes back off your balance.</Point>
           </ul>
-          <p className="mt-3 text-[12.5px] font-semibold text-muted-foreground">Optional: save your bank now and turn on auto-withdrawal, so every subscription goes straight to it.</p>
+          <p className="mt-4 text-[12.5px] font-medium text-muted-foreground">Optional: save your bank now and turn on auto-withdrawal, so every subscription goes straight to it.</p>
           <SubPayoutSettings feePercent={bounds.withdrawalFeePercent} className="mt-2" />
           <Nav onBack={() => go(1)} onNext={() => go(3)} />
         </div>
       ) : (
-        <div className="mt-4">
-          <h3 className="text-[18px] font-extrabold tracking-[-0.01em]">Ready to go live</h3>
-          <p className="mt-1 text-[13.5px] text-muted-foreground">{charge ? `Your subscription is ${usd(charge.priceCents)} a month. ` : ""}Once live, the PRIVATE POSTS tab on your profile shows your price and a Subscribe button. You can pause or change the price any time.</p>
-          {!priceOk ? <p className="mt-2 text-[13px] font-medium text-rose-600">Go back and set your price first.</p> : null}
-          <button type="button" disabled={!priceOk || busy} onClick={() => void finish()} className={cn(primaryPill, "mt-4 w-full justify-center bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600")}>
+        <div className="mt-5">
+          <h3 className="text-[19px] font-bold tracking-[-0.015em]">Ready to go live</h3>
+          <p className="mt-1 text-[13.5px] leading-relaxed text-muted-foreground">{charge ? `Your subscription is ${usd(charge.priceCents)} a month. ` : ""}Once live, the PRIVATE POSTS tab on your profile shows your price and a Subscribe button. You can pause or change the price any time.</p>
+          {!priceOk ? <p className="mt-2 text-[13px] font-medium text-rose-600 dark:text-rose-400">Go back and set your price first.</p> : null}
+          <button type="button" disabled={!priceOk || busy} onClick={() => void finish()} className={cn(exPrimary, "mt-5 w-full")}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : null}
             {busy ? "Going live…" : "Go live"}
           </button>
-          <button type="button" onClick={() => go(2)} className={cn(quietPill, "mt-2 w-full justify-center")}>
+          <button type="button" onClick={() => go(2)} className={cn(exQuiet, "mt-2 w-full")}>
             Back
           </button>
         </div>
       )}
-      {note ? <p className="mt-3 text-[13px] font-medium text-rose-600">{note}</p> : null}
-    </div>
+      {note ? <p role="alert" className="mt-3 text-[13px] font-medium text-rose-600 dark:text-rose-400">{note}</p> : null}
+    </section>
   );
 }
 
 function Point({ children }: { children: React.ReactNode }) {
   return (
-    <li className="flex gap-2">
-      <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+    <li className="flex gap-2.5">
+      <span aria-hidden className="mt-0.5 inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <Check className="h-3 w-3" strokeWidth={3} />
+      </span>
       <span>{children}</span>
     </li>
   );
@@ -236,11 +289,11 @@ function Point({ children }: { children: React.ReactNode }) {
 
 function Nav({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   return (
-    <div className="mt-4 flex gap-2">
-      <button type="button" onClick={onBack} className={cn(quietPill, "flex-1 justify-center")}>
+    <div className="mt-5 flex gap-2">
+      <button type="button" onClick={onBack} className={cn(exQuiet, "flex-1")}>
         Back
       </button>
-      <button type="button" onClick={onNext} className={cn(primaryPill, "flex-1 justify-center")}>
+      <button type="button" onClick={onNext} className={cn(exPrimary, "flex-[2]")}>
         Continue <ArrowRight className="h-4 w-4" aria-hidden />
       </button>
     </div>
@@ -270,10 +323,10 @@ function ShareCard({ handle }: { handle: string }) {
     }
   };
   return (
-    <div className="mb-3 overflow-hidden rounded-[24px] bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 p-4 text-white">
-      <p className="text-[19px] font-extrabold leading-tight tracking-[-0.01em]">Your Content. Your Earnings.</p>
-      <p className="mt-1 text-[13px] text-white/85">Share your profile so people can subscribe to your PRIVATE POSTS.</p>
-      <button type="button" onClick={() => void share()} className="mt-3 inline-flex min-h-[2.75rem] items-center gap-2 rounded-full bg-white px-4 text-[14px] font-bold text-indigo-700 transition active:scale-[0.97]">
+    <div className="mb-3 overflow-hidden rounded-[24px] bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 p-4 text-white shadow-[0_14px_32px_-22px_rgba(67,56,202,0.9)]">
+      <p className="text-[19px] font-bold leading-tight tracking-[-0.015em]">Your Content. Your Earnings.</p>
+      <p className="mt-1 text-[13px] text-white/85">Share your profile so people can subscribe to your private posts.</p>
+      <button type="button" onClick={() => void share()} className="ex-btn mt-3 bg-white text-indigo-700 shadow-sm">
         {copied ? <Copy className="h-4 w-4" aria-hidden /> : <Share2 className="h-4 w-4" aria-hidden />}
         {copied ? "Link copied" : "Share Profile & Get Paid"}
       </button>
@@ -342,7 +395,7 @@ function CreatorOverview({ settings, bounds, onChange, onCompose, onWithdraw }: 
   };
 
   return (
-    <div className={cn("mb-3 overflow-hidden rounded-[24px]", GLASS)}>
+    <div className={cn("mb-3 overflow-hidden rounded-[24px]", EX_CARD)}>
       {/* the collapsed row — always there */}
       <div className="p-4">
         <div className="flex items-start justify-between gap-3">
@@ -353,16 +406,15 @@ function CreatorOverview({ settings, bounds, onChange, onCompose, onWithdraw }: 
               {settings.priceCents ? " a month" : ""}
             </p>
           </div>
-          <span className={cn("inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold", settings.active ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400" : "bg-amber-500/12 text-amber-700 dark:text-amber-300")}>
-            <span aria-hidden className={cn("h-1.5 w-1.5 rounded-full", settings.active ? "bg-emerald-500" : "bg-amber-500")} />
+          <span className={cn("ex-status shrink-0", settings.active ? "ex-status--good" : "ex-status--warn")}>
             {settings.active ? "Live" : "Paused"}
           </span>
         </div>
         <div className="mt-3 flex gap-2">
-          <button type="button" onClick={onCompose} className={cn(primaryPill, "flex-1 justify-center")}>
+          <button type="button" onClick={onCompose} className={cn(exPrimary, "flex-1 justify-center")}>
             <Plus className="h-4 w-4" aria-hidden /> New private post
           </button>
-          <button type="button" onClick={toggleOpen} aria-expanded={open} aria-controls="sub-dashboard" className={cn(quietPill, "flex-1 justify-center")}>
+          <button type="button" onClick={toggleOpen} aria-expanded={open} aria-controls="sub-dashboard" className={cn(exQuiet, "flex-1 justify-center")}>
             {open ? "Hide dashboard" : "See dashboard"}
             <ChevronDown className={cn("h-4 w-4 transition-transform duration-200 motion-reduce:transition-none", open && "rotate-180")} aria-hidden />
           </button>
@@ -372,11 +424,11 @@ function CreatorOverview({ settings, bounds, onChange, onCompose, onWithdraw }: 
       {open ? (
         <div id="sub-dashboard" className="border-t border-black/[0.06] p-4 dark:border-white/[0.08]">
           {/* the money first: what can leave today */}
-          <div className="rounded-[20px] bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 p-4 text-white shadow-[0_14px_32px_-20px_rgba(67,56,202,0.9)]">
-            <p className="text-[11.5px] font-semibold uppercase tracking-[0.1em] text-white/80">Available to withdraw</p>
-            <div className="mt-1 flex items-end justify-between gap-3">
-              <p className="text-[1.85rem] font-extrabold leading-none tracking-[-0.03em] tabular-nums">{e ? usd(e.availableCents) : failed ? "—" : "…"}</p>
-              <button type="button" onClick={onWithdraw} className="inline-flex min-h-[2.5rem] items-center gap-1.5 rounded-full bg-white px-4 text-[13.5px] font-bold text-indigo-700 transition active:scale-[0.97] motion-reduce:active:scale-100">
+          <div className={cn(EX_WELL, "p-4")}>
+            <p className="text-[13px] font-medium text-muted-foreground">Available to withdraw</p>
+            <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
+              <p className="min-w-0 break-all text-[clamp(1.75rem,8vw,2.1rem)] font-bold leading-none tracking-[-0.035em] tabular-nums">{e ? usd(e.availableCents) : failed ? "—" : "…"}</p>
+              <button type="button" onClick={onWithdraw} className={exPrimary}>
                 <Wallet className="h-4 w-4" aria-hidden /> Withdraw
               </button>
             </div>
@@ -397,20 +449,20 @@ function CreatorOverview({ settings, bounds, onChange, onCompose, onWithdraw }: 
                 New monthly price (USD) — applies to new subscriptions
               </label>
               <div className="mt-1 flex gap-2">
-                <input id="sub-price-edit" inputMode="decimal" value={price} onChange={(ev) => setPrice(ev.target.value.replace(/[^0-9.]/g, "").slice(0, 8))} className="w-full rounded-2xl border border-border bg-background px-3 py-2 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-primary/40" />
-                <button type="button" onClick={() => void savePrice()} disabled={!priceOk || saving} aria-busy={saving} className={cn(primaryPill, "shrink-0")}>
+                <input id="sub-price-edit" inputMode="decimal" value={price} onChange={(ev) => setPrice(ev.target.value.replace(/[^0-9.]/g, "").slice(0, 8))} className={cn(exField, "tabular-nums")} />
+                <button type="button" onClick={() => void savePrice()} disabled={!priceOk || saving} aria-busy={saving} className={cn(exPrimary, "shrink-0")}>
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
                   {saving ? "Saving…" : "Save"}
                 </button>
               </div>
-              {!priceOk && price ? <p className="mt-1 text-[12.5px] text-rose-600">Choose from {usd(bounds.minPriceCents)} to {usd(bounds.maxPriceCents)}.</p> : null}
+              {!priceOk && price ? <p className="mt-1 text-[12.5px] text-rose-600 dark:text-rose-400">Choose from {usd(bounds.minPriceCents)} to {usd(bounds.maxPriceCents)}.</p> : null}
             </div>
           ) : null}
           <div className="mt-3 grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => setEditing((v) => !v)} aria-pressed={editing} className={cn(quietPill, "justify-center")}>
+            <button type="button" onClick={() => setEditing((v) => !v)} aria-pressed={editing} className={cn(exQuiet, "justify-center")}>
               <Pencil className="h-4 w-4" aria-hidden /> {editing ? "Cancel" : "Change price"}
             </button>
-            <button type="button" onClick={toggle} className={cn(quietPill, "justify-center")}>
+            <button type="button" onClick={toggle} className={cn(exQuiet, "justify-center")}>
               {settings.active ? <Pause className="h-4 w-4" aria-hidden /> : <Play className="h-4 w-4" aria-hidden />}
               {settings.active ? "Pause new subs" : "Resume"}
             </button>
@@ -423,7 +475,7 @@ function CreatorOverview({ settings, bounds, onChange, onCompose, onWithdraw }: 
           <Lock className="h-3.5 w-3.5" aria-hidden /> Paused: nobody new can subscribe. Current subscribers keep access until their period ends.
         </p>
       ) : null}
-      {note ? <p className="px-4 pb-3 text-[13px] font-medium text-rose-600">{note}</p> : null}
+      {note ? <p className="px-4 pb-3 text-[13px] font-medium text-rose-600 dark:text-rose-400">{note}</p> : null}
       {saved ? (
         <p role="status" className="flex items-center gap-1.5 px-4 pb-3 text-[13px] font-medium text-emerald-600 dark:text-emerald-400">
           <Check className="h-4 w-4" aria-hidden /> {saved}

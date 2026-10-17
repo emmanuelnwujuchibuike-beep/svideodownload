@@ -1,10 +1,11 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, BadgeCheck, Check, Crown, ExternalLink, Loader2, Lock, Sparkles, Star } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, Crown, ExternalLink, Loader2, Lock, Sparkles, Star } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 
-import { AmbientWash, GLASS, GlassGroup, PersonAvatar, primaryPill, quietPill, SectionHeader } from "@/features/friends/ui";
+import { AmbientWash, PersonAvatar, SectionHeader } from "@/features/friends/ui";
+import { EX_CARD, ExGroup, exPrimary, exQuiet } from "@/features/sub/ui";
 import { useStickyState } from "@/features/ui/use-sticky-state";
 import { haptic } from "@/lib/motion/haptics";
 import { FEEDBACK_ASPECTS, MEMBER_ROLES, RECOGNITIONS, SPONSOR_KINDS, usd, type FeedbackAspect } from "@/lib/creator/membership/engine";
@@ -100,11 +101,11 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
         </div>
       </header>
 
-      <div aria-live="polite">{note ? <p className={cn("mb-4 rounded-2xl px-3.5 py-2.5 text-[13.5px]", GLASS)}>{note}</p> : null}</div>
+      <div aria-live="polite">{note ? <p className={cn("mb-4 rounded-2xl px-3.5 py-2.5 text-[13.5px]", EX_CARD)}>{note}</p> : null}</div>
 
       {/* The member card */}
       {current && membership ? (
-        <section aria-label="Your membership" className="mb-6 overflow-hidden rounded-[24px] bg-gradient-to-br from-slate-900 via-indigo-950 to-violet-900 p-5 text-white shadow-[0_18px_40px_-20px_rgba(49,46,129,0.8)]">
+        <section aria-label="Your membership" className="mb-6 overflow-hidden rounded-[24px] bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 p-5 text-white shadow-[0_18px_40px_-22px_rgba(67,56,202,0.85)]">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-white/60">{MEMBER_ROLES[membership.role]}</p>
@@ -143,7 +144,7 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
           ) : null}
           <div className="mt-5 flex flex-wrap gap-2">
             {isSub ? (
-              <Link href={subTab} prefetch={false} className="inline-flex min-h-[2.5rem] items-center gap-1.5 rounded-full bg-white px-4 text-[13px] font-bold text-indigo-800 transition active:scale-[0.97] motion-reduce:active:scale-100">
+              <Link href={subTab} prefetch={false} className="ex-btn bg-white text-indigo-700 shadow-sm">
                 Open PRIVATE POSTS <ArrowRight className="h-4 w-4" aria-hidden />
               </Link>
             ) : null}
@@ -161,13 +162,13 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
         </section>
       ) : null}
 
-      {data.welcome ? <p className={cn("mb-6 whitespace-pre-line rounded-[22px] px-4 py-3.5 text-[14.5px] leading-relaxed", GLASS)}>{data.welcome}</p> : null}
+      {data.welcome ? <p className={cn("mb-6 whitespace-pre-line rounded-[22px] px-4 py-3.5 text-[14.5px] leading-relaxed", EX_CARD)}>{data.welcome}</p> : null}
 
       {/* Notes for members */}
       {current && data.viewer.notes.length ? (
         <section className="mb-6" aria-labelledby="mp-notes">
           <SectionHeader id="mp-notes" title="For members" />
-          <GlassGroup label="Notes for members">
+          <ExGroup label="Notes for members">
             {data.viewer.notes.map((n) => (
               <li key={n.id} className="px-3.5 py-3">
                 <p className="whitespace-pre-line text-[14.5px] leading-relaxed">{n.body}</p>
@@ -176,7 +177,7 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
                 </p>
               </li>
             ))}
-          </GlassGroup>
+          </ExGroup>
         </section>
       ) : null}
 
@@ -184,13 +185,13 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
       <section className="mb-6" aria-labelledby="mp-offers">
         <SectionHeader id="mp-offers" title="Ways to support" />
         {!data.ready ? (
-          <p className={cn("rounded-[22px] px-3.5 py-3 text-[13px] text-muted-foreground", GLASS)}>Memberships arrive with the next update.</p>
+          <p className={cn("rounded-[22px] px-3.5 py-3 text-[13px] text-muted-foreground", EX_CARD)}>Memberships arrive with the next update.</p>
         ) : !data.open && !data.quote ? (
-          <p className={cn("rounded-[22px] px-3.5 py-3 text-[13px] text-muted-foreground", GLASS)}>{data.viewer.isCreator ? "Nothing is open yet. Turn on your free community in Members, or set up Private Posts from the PRIVATE POSTS tab on your profile." : `${c.displayName} isn't taking members right now.`}</p>
+          <p className={cn("rounded-[22px] px-3.5 py-3 text-[13px] text-muted-foreground", EX_CARD)}>{data.viewer.isCreator ? "Nothing is open yet. Turn on your free community in Members, or set up Private Posts from the PRIVATE POSTS tab on your profile." : `${c.displayName} isn't taking members right now.`}</p>
         ) : (
           <div className="grid gap-3">
             {data.quote ? (
-              <article className={cn("rounded-[22px] px-4 py-4", GLASS, current && isSub && "ring-2 ring-primary/50")}>
+              <article className={cn("rounded-[22px] px-4 py-4", EX_CARD, current && isSub && "ring-2 ring-primary/50")}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="inline-flex items-center gap-1 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-indigo-600 dark:text-indigo-400">
@@ -206,15 +207,15 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
                 <p className="mt-1.5 text-[12.5px] text-muted-foreground">Paid securely through Paystack. No automatic renewal.</p>
                 <div className="mt-3.5">
                   {data.viewer.isCreator ? null : !data.viewer.signedIn ? (
-                    <Link href={`/login?next=${encodeURIComponent(`/u/${c.handle}/membership`)}`} prefetch={false} className={primaryPill}>
+                    <Link href={`/login?next=${encodeURIComponent(`/u/${c.handle}/membership`)}`} prefetch={false} className={exPrimary}>
                       Sign in to subscribe
                     </Link>
                   ) : current && isSub ? (
-                    <span className={cn(quietPill, "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300")}>
-                      <Check className="h-4 w-4" aria-hidden /> Subscribed
+                    <span className="ex-status ex-status--good self-center">
+                      Subscribed
                     </span>
                   ) : (
-                    <button type="button" className={cn(primaryPill, "bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600")} disabled={!!busy} onClick={() => void subscribe()}>
+                    <button type="button" className={exPrimary} disabled={!!busy} onClick={() => void subscribe()}>
                       {busy === "sub" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
                       {busy === "sub" ? "Opening Paystack…" : "Subscribe"}
                     </button>
@@ -223,7 +224,7 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
               </article>
             ) : null}
             {data.open ? (
-              <article className={cn("rounded-[22px] px-4 py-4", GLASS, current && !isSub && "ring-2 ring-primary/50")}>
+              <article className={cn("rounded-[22px] px-4 py-4", EX_CARD, current && !isSub && "ring-2 ring-primary/50")}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Community</p>
@@ -234,15 +235,15 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
                 <p className="mt-2 text-[13.5px] text-foreground/80">Join {c.displayName}&apos;s community for notes and updates for members.</p>
                 <div className="mt-3.5">
                   {data.viewer.isCreator ? null : !data.viewer.signedIn ? (
-                    <Link href={`/login?next=${encodeURIComponent(`/u/${c.handle}/membership`)}`} prefetch={false} className={quietPill}>
+                    <Link href={`/login?next=${encodeURIComponent(`/u/${c.handle}/membership`)}`} prefetch={false} className={exQuiet}>
                       Sign in to join
                     </Link>
                   ) : current ? (
-                    <span className={cn(quietPill, "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300")}>
-                      <Check className="h-4 w-4" aria-hidden /> {isSub ? "Included" : "You're a member"}
+                    <span className="ex-status ex-status--good self-center">
+                      {isSub ? "Included" : "You're a member"}
                     </span>
                   ) : (
-                    <button type="button" className={quietPill} disabled={!!busy} onClick={() => void join()}>
+                    <button type="button" className={exQuiet} disabled={!!busy} onClick={() => void join()}>
                       {busy === "join" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
                       {busy === "join" ? "Joining…" : "Join free"}
                     </button>
@@ -258,7 +259,7 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
       {data.sponsors.length ? (
         <section className="mb-6" aria-labelledby="mp-sponsors">
           <SectionHeader id="mp-sponsors" title="Sponsors and partners" />
-          <GlassGroup label="Sponsors and partners">
+          <ExGroup label="Sponsors and partners">
             {data.sponsors.map((s) => (
               <li key={s.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
                 <span className="min-w-0">
@@ -272,7 +273,7 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
                 ) : null}
               </li>
             ))}
-          </GlassGroup>
+          </ExGroup>
         </section>
       ) : null}
 
@@ -296,7 +297,7 @@ function Feedback({ creatorId, name, initial }: { creatorId: string; name: strin
   return (
     <section className="mb-8" aria-labelledby="mp-feedback">
       <SectionHeader id="mp-feedback" title={`Rate ${name}, privately`} />
-      <div className={cn("rounded-[22px] px-3.5 py-3", GLASS)}>
+      <div className={cn("rounded-[22px] px-3.5 py-3", EX_CARD)}>
         <p className="text-[12.5px] text-muted-foreground">They see only averages, and only once five members have answered. Never who said what.</p>
         <ul className="mt-2 space-y-2">
           {(Object.keys(FEEDBACK_ASPECTS) as FeedbackAspect[]).map((a) => (

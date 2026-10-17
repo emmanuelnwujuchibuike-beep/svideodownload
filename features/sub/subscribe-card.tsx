@@ -4,7 +4,7 @@ import { BadgeCheck, Check, Loader2, Lock, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
-import { GLASS, primaryPill } from "@/features/friends/ui";
+import { EX_CARD, exPrimary } from "@/features/sub/ui";
 import { haptic } from "@/lib/motion/haptics";
 import { offerView, type OfferMembership, type OfferQuote } from "@/lib/sub/offer";
 import { cn } from "@/lib/utils";
@@ -51,7 +51,7 @@ export function CreatorSubscribeCard({
 
   if (v.tone === "active") {
     return (
-      <section aria-label="Your subscription" className={cn("mb-3 rounded-[22px] px-4 py-3.5", GLASS)}>
+      <section aria-label="Your subscription" className={cn("mb-3 rounded-[22px] px-4 py-3.5", EX_CARD)}>
         <div className="flex items-center gap-3">
           <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-accent text-primary-foreground">
             <BadgeCheck className="h-5 w-5" />
@@ -63,7 +63,7 @@ export function CreatorSubscribeCard({
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {v.action === "renew" ? (
-            <button type="button" onClick={() => void checkout()} disabled={busy} className={cn(primaryPill, "bg-gradient-to-r from-primary to-accent")}>
+            <button type="button" onClick={() => void checkout()} disabled={busy} className={exPrimary}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RotateCcw className="h-4 w-4" aria-hidden />}
               {busy ? "Opening secure payment…" : `${v.actionLabel}${v.priceLine ? ` · ${v.priceLine}` : ""}`}
             </button>
@@ -73,7 +73,7 @@ export function CreatorSubscribeCard({
           </Link>
         </div>
         {note ? (
-          <p role="alert" className="mt-1.5 text-[12.5px] font-medium text-rose-500">
+          <p role="alert" className="mt-1.5 text-[12.5px] font-medium text-rose-600 dark:text-rose-400">
             {note}
           </p>
         ) : null}
@@ -83,7 +83,7 @@ export function CreatorSubscribeCard({
 
   if (v.tone === "unavailable") {
     return (
-      <section aria-label="Subscriptions" className="mb-3 rounded-[22px] border border-border/70 px-4 py-3.5">
+      <section aria-label="Subscriptions" className="ex-card mb-3 px-4 py-3.5">
         <p className="text-[14px] font-semibold">{v.title}</p>
         <p className="mt-0.5 text-[12.5px] text-muted-foreground">Check back later.</p>
       </section>
@@ -91,7 +91,7 @@ export function CreatorSubscribeCard({
   }
 
   return (
-    <section aria-label={`Subscribe to ${creatorName}`} className={cn("mb-3 overflow-hidden rounded-[24px]", GLASS)}>
+    <section aria-label={`Subscribe to ${creatorName}`} className={cn("mb-3 overflow-hidden rounded-[24px]", EX_CARD)}>
       <div className="flex items-start gap-3 px-4 pt-4">
         <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-[0_8px_20px_-10px_hsl(var(--primary)/0.8)]">
           {v.tone === "expired" ? <RotateCcw className="h-5 w-5" /> : <Lock className="h-5 w-5" />}
@@ -113,18 +113,18 @@ export function CreatorSubscribeCard({
       </ul>
       <div className="px-4 pb-4 pt-3.5">
         {v.action === "sign_in" ? (
-          <Link href={`/login?next=${encodeURIComponent(returnPath)}`} prefetch={false} className={cn(primaryPill, "w-full justify-center")}>
+          <Link href={`/login?next=${encodeURIComponent(returnPath)}`} prefetch={false} className={cn(exPrimary, "w-full justify-center")}>
             {v.actionLabel}
           </Link>
         ) : (
-          <button type="button" onClick={() => void checkout()} disabled={busy} className={cn(primaryPill, "w-full justify-center bg-gradient-to-r from-primary to-accent")}>
+          <button type="button" onClick={() => void checkout()} disabled={busy} className={cn(exPrimary, "w-full")}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
             {busy ? "Opening secure payment…" : v.actionLabel}
           </button>
         )}
         <p className="mt-2 text-center text-[11.5px] text-muted-foreground">Paid securely with Paystack. Unlocks once the payment is confirmed.</p>
         {note ? (
-          <p role="alert" className="mt-1.5 text-center text-[12.5px] font-medium text-rose-500">
+          <p role="alert" className="mt-1.5 text-center text-[12.5px] font-medium text-rose-600 dark:text-rose-400">
             {note}
           </p>
         ) : null}

@@ -65,8 +65,8 @@ function Overview() {
           ))}
         </div>
       </div>
-      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-      {!s && loading ? <div aria-hidden className="h-40 animate-pulse rounded-2xl bg-muted motion-reduce:animate-none" /> : null}
+      {error ? <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}
+      {!s && loading ? <div aria-hidden className="h-40 animate-pulse rounded-2xl ex-skel motion-reduce:animate-none" /> : null}
       {s ? (
         <div className={cn("space-y-2 transition-opacity motion-reduce:transition-none", loading && "opacity-60")}>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -93,7 +93,7 @@ function Overview() {
             </dl>
             <p className="mt-2 text-xs text-muted-foreground">Charged to subscribers, per currency (never summed):</p>
             <ul className="mt-1 flex flex-wrap gap-1.5">
-              {s.grossByCurrency.length ? s.grossByCurrency.map((g) => <li key={g.currency} className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold tabular-nums">{chargedAmount(g.minor, g.currency)}</li>) : <li className="text-xs text-muted-foreground">None</li>}
+              {s.grossByCurrency.length ? s.grossByCurrency.map((g) => <li key={g.currency} className="rounded-full bg-black/[0.05] dark:bg-white/[0.07] px-2.5 py-0.5 text-xs font-semibold tabular-nums">{chargedAmount(g.minor, g.currency)}</li>) : <li className="text-xs text-muted-foreground">None</li>}
             </ul>
           </div>
           <div className="grid grid-cols-3 gap-2">
@@ -164,7 +164,7 @@ function SearchPanel() {
           {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Search className="h-4 w-4" aria-hidden />} Search
         </button>
       </form>
-      {error ? <p className="mt-2 text-sm text-rose-600">{error}</p> : null}
+      {error ? <p className="mt-2 text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}
       {page ? (
         page.items.length ? (
           <ul className="ex-card ex-rows mt-3 overflow-hidden">
@@ -274,7 +274,7 @@ function Moderation() {
       </div>
       <div aria-live="polite">{result ? <p className="ex-card mb-2 px-3.5 py-2.5 text-sm">{result}</p> : null}</div>
       {error ? (
-        <p className="text-sm text-rose-600">
+        <p className="text-sm text-rose-600 dark:text-rose-400">
           {error}{" "}
           <button type="button" onClick={() => void load(filter, type, null)} className="inline-flex items-center gap-1 font-semibold underline">
             <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Retry

@@ -50,7 +50,7 @@ export function SubPromoCard({ handle, live, onOpen, onClose }: { handle: string
       <img src="/brand/sub-money.webp" alt="" aria-hidden width={420} height={569} loading="lazy" decoding="async" className="pointer-events-none absolute inset-y-0 right-0 h-full w-[62%] object-cover" />
       <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-r from-blue-600 from-[34%] via-indigo-600/65 to-transparent" />
       <div aria-hidden className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/12 blur-2xl" />
-      <div aria-hidden className="pointer-events-none absolute -bottom-24 -left-10 h-48 w-48 rounded-full bg-fuchsia-400/20 blur-3xl" />
+      <div aria-hidden className="pointer-events-none absolute -bottom-24 -left-10 h-48 w-48 rounded-full bg-cyan-300/25 blur-3xl" />
       <div className="relative flex items-start justify-between gap-3">
         <span aria-hidden className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-inset ring-white/25">
           <Lock className="h-[22px] w-[22px]" />

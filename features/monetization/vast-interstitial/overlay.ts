@@ -91,6 +91,17 @@ function adBeacon(kind: "impression" | "click", zone: string, adId: string | und
   }
 }
 
+/**
+ * Is this ad a STORY ad — "Sponsored", no upgrade pitch, a swipe or a side tap skips it (by the
+ * Skip button's rule)? The between-media History ad always is. 🔴 And so is ANY full-screen video
+ * on the History page (owner, 2026-10-16: "the history that shows like reward is when I scroll much
+ * on history"): the idle moment opens there too, and it showed the download gate's chrome — the
+ * countdown plus "Tired of ads? Go Pro" — over someone browsing their own saves.
+ */
+export function isStoryAd(zone: string, pathname: string): boolean {
+  return zone === "history_story_ad" || pathname === "/downloads" || pathname.startsWith("/downloads/");
+}
+
 export function showInterstitial({
   creative,
   config,
@@ -151,7 +162,7 @@ export function showInterstitial({
       by the same rule as the Skip button (after the countdown, and only when the VAST response
       allows skipping), the rule the owner set for History ads on 2026-10-10.
     */
-    const story = zone === "history_story_ad";
+    const story = isStoryAd(zone, window.location.pathname);
     let lastSwipeAt = 0;
     let settled = false;
     let started = false;

@@ -39,6 +39,22 @@ import { useEffect, useState } from "react";
  */
 const IDLE_FALLBACK_MS = 45_000;
 
+/**
+ * 🔴 MOMENTUM IS ACTIVITY (owner, 2026-10-16: "the history that shows like reward is when I scroll
+ * much on history and it starts happening").
+ *
+ * A fling keeps the page moving for seconds after the finger lifts, and none of that is a touch,
+ * wheel or key event — so the 5-second idle countdown ran out MID-SCROLL and the full-screen ad
+ * opened over someone still scrolling their History. A scroll now counts, but only inside a
+ * gesture the visitor started: within MOMENTUM_MS of a real interaction or of the previous scroll
+ * in the same chain. The app's own scroll restoration (no gesture before it) still counts for
+ * nothing, which is why bare "scroll" was left out of ACTIVITY on 2026-10-14.
+ */
+export const MOMENTUM_MS = 1_500;
+export function scrollIsGesture(now: number, lastGestureAt: number): boolean {
+  return lastGestureAt > 0 && now - lastGestureAt <= MOMENTUM_MS;
+}
+
 /** Fire the interstitial, loading it only at that moment. */
 function fire() {
   void import("./request")
@@ -112,7 +128,11 @@ export function VastInterstitialTriggers() {
       only ask for ads we are probably about to show.
     */
     const WARM_AT = 0.6;
+    // the last real gesture and the last re-arm (see MOMENTUM_MS)
+    let gestureAt = 0;
+    let armedAt = 0;
     const arm = () => {
+      gestureAt = armedAt = Date.now();
       window.clearTimeout(timer);
       window.clearTimeout(warmTimer);
       if (document.visibilityState !== "visible") return;
@@ -151,7 +171,15 @@ export function VastInterstitialTriggers() {
         window.clearTimeout(warmTimer);
       }
     };
+    const onScroll = () => {
+      const now = Date.now();
+      if (!scrollIsGesture(now, gestureAt)) return;
+      // the chain extends itself, so a long fling counts to its last frame; re-armed at most every 250ms
+      gestureAt = now;
+      if (now - armedAt >= 250) arm();
+    };
     for (const e of ACTIVITY) window.addEventListener(e, arm, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true, capture: true });
     document.addEventListener("visibilitychange", onVisibility);
 
     /*
@@ -173,6 +201,7 @@ export function VastInterstitialTriggers() {
       // a moment that can no longer happen.
       window.clearTimeout(warmTimer);
       for (const e of ACTIVITY) window.removeEventListener(e, arm);
+      window.removeEventListener("scroll", onScroll, { capture: true });
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("popstate", onPop);
     };

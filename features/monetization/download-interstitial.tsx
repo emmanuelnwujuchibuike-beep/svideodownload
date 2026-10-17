@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { getCompletedCount, onDownloadCompleted } from "@/features/downloads/manager";
 import { getWatchCount, isPlayerOpen, onVideoWatched } from "@/features/downloads/player-store";
-import { upgradeCta, upgradeHeadline } from "@/lib/monetization/upgrade-cta";
 
 import { FullscreenInterstitial } from "./fullscreen-interstitial";
 import { useAdGateCountdown } from "./use-ad-gate-countdown";
@@ -201,10 +200,12 @@ export function DownloadInterstitial({
 
   if (!canPreload) return null;
 
-  // The upsell follows the plan through the SHARED helper, so this can never
-  // drift back into offering a Pro customer another Pro subscription.
-  const offer = upgradeCta(plan);
-  const upsell = offer ? { text: upgradeHeadline(plan), cta: offer.label, href: offer.href } : undefined;
+  /*
+    No upgrade pitch here (owner, 2026-10-16: "the history that shows like reward is when I scroll
+    much on history"). This component only mounts on the History library, where an ad is a plain
+    video between someone's own saves — the countdown plus a "Go Pro" pill read as a reward gate.
+    Same rule as the History story ad (overlay.ts isStoryAd).
+  */
 
   return (
     <FullscreenInterstitial
@@ -215,7 +216,6 @@ export function DownloadInterstitial({
       onAdTiming={onAdTiming}
       canSkip={canSkip}
       remaining={remaining}
-      upsell={upsell}
     />
   );
 }

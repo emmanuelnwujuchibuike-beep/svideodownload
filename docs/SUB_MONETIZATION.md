@@ -608,3 +608,26 @@ Reporting: 0252 functions (service role only). Cron: `cronAuthorized` (secret, h
 2. Paystack test mode: subscribe → unlock → refund → relock; a withdrawal → transfer → completed.
 3. Confirm webhook events `charge.success`, `refund.processed`, `charge.dispute.create`, `transfer.*`.
 4. Publish an announcement to a test subscriber; watch `sub_fanout_jobs` reach `done`.
+
+## Frenz Exclusive Part 10 — notification delivery, the fan-out and the sweep (2026-10-16)
+
+What actually carries an Exclusive notification, and what each word on the creator's screen means.
+
+| Channel | Path | Knows |
+| --- | --- | --- |
+| In-app row | `sendSmartPush` → `recordInApp` (or written by `settle_sub_purchase` in the money transaction) | the row exists |
+| Web Push (VAPID) | `sendSmartPush` → member settings / quiet hours / lock-screen privacy → `sendPushToUser` | per device: sent, retried once, failed, or pruned on 404/410 — in `push_delivery_log`. A push service accepting is not the phone showing it. |
+| Email (Resend REST) | `emailMember` → `sendProductEmail` | Resend ACCEPTED (`sent`) or refused (`failed`); no inbox confirmation |
+
+Fan-out (0251) is **at most once per recipient**: a recipient is claimed (primary key) before any send and a claim is never sent again. So a worker that dies mid-page leaves those recipients **unconfirmed** — shown to the creator as "Unconfirmed N", never retried, never duplicated. Exactly-once external delivery is not claimed anywhere.
+
+Fixed in Part 10 (each with a regression test in `lib/sub/part6.server.test.ts` that failed first):
+
+- **Early finish.** A page that held the creator's own id was read as short, so the job finished and later recipients were never notified (2 of 5 in the test). The last-page check now runs on what the database returned.
+- **Lost counts.** Job counts were "the row I read + my delta", so two workers (the publish request's `after()` beside the sweep) overwrote each other, down to 0. They are now recounted from the delivery rows (three head counts) and written absolute.
+- **Refused email counted as sent.** `emailMember` now returns `sent | skipped | failed` (additive; other callers ignore it). A refusal is `failed / email_failed`.
+- **Suspended creator.** A suspended creator's queued alerts are cancelled ("Stopped"); a failed read of the creator fails closed (nothing sent, nothing cancelled).
+- **Head-of-line.** The sweep took the 3 OLDEST pending jobs every run; now least-recently-worked first, and a failed page writes `last_error = 'page_failed'` (a code — no recipient, provider text or secret) and goes to the back. Cleared on the next good page.
+- **Time budget.** The sweep starts no new page after 45 s (`SWEEP_BUDGET_MS`); the cron function is 120 s and shared with eight other sweeps.
+
+Known limits (not changed): push failures are visible per device in the push log but a fan-out row still says "handed off" for push (the push sender never throws); there is no global email opt-out or unsubscribe link on product email — sending email for announcements is a per-creator choice the member makes ("email" / "both"); an announcement whose job insert failed gets no alerts until the creator retries the same publish (the sweep only works existing jobs). No migration.

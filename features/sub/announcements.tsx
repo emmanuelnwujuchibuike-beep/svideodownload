@@ -18,6 +18,8 @@ interface Delivery {
   handedOff: number;
   skipped: number;
   failed: number;
+  /** Part 10: claimed by a send that was interrupted — not retried, so nobody gets it twice; outcome unknown */
+  unconfirmed?: number;
 }
 interface Item {
   id: string;
@@ -88,6 +90,11 @@ function DeliveryChips({ d }: { d: Delivery }) {
       <li className={cn(chip, "bg-primary/10 text-primary")}>Queued {d.handedOff.toLocaleString()}</li>
       {d.skipped ? <li className={cn(chip, "bg-black/[0.05] dark:bg-white/[0.07] text-muted-foreground")} title="Opted out, or not eligible right now">Skipped {d.skipped.toLocaleString()}</li> : null}
       {d.failed ? <li className={cn(chip, "bg-rose-500/10 text-rose-600 dark:text-rose-400")}>Failed {d.failed.toLocaleString()}</li> : null}
+      {d.unconfirmed ? (
+        <li className={cn(chip, "bg-amber-500/10 text-amber-800 dark:text-amber-300")} title="The send was interrupted for these. They aren't retried, so nobody gets it twice.">
+          Unconfirmed {d.unconfirmed.toLocaleString()}
+        </li>
+      ) : null}
     </ul>
   );
 }
@@ -175,7 +182,7 @@ export function CreatorAnnouncements({ creatorId }: { creatorId: string }) {
       {page?.items.length ? (
         <div className="mt-3">
           <List items={page.items} onDelete={(id) => void remove(id)} />
-          <p className="mt-2 text-[11.5px] text-muted-foreground">Queued = handed to each subscriber&apos;s push or email; delivery itself can&apos;t be confirmed. Skipped = opted out or no longer eligible.</p>
+          <p className="mt-2 text-[11.5px] text-muted-foreground">Queued = handed to each subscriber&apos;s push or email; delivery itself can&apos;t be confirmed. Skipped = opted out or no longer eligible. Unconfirmed = the send was interrupted and isn&apos;t repeated.</p>
           {page.next ? (
             <button type="button" onClick={() => void load(page.next)} disabled={loading} className={cn(exQuiet, "mt-2 w-full justify-center")}>
               Older announcements

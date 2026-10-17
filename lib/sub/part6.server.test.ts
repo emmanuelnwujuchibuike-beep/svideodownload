@@ -12,6 +12,7 @@ let db: FakeDb;
 const pushes: { to: string; payload: Record<string, unknown>; record: unknown }[] = [];
 const emails: { to: string; opts: Record<string, unknown> }[] = [];
 let pushFails = new Set<string>();
+let emailRejects = new Set<string>();
 vi.mock("server-only", () => ({}));
 vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/server")>()), after: () => {} }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => db.client() }));
@@ -36,7 +37,14 @@ vi.mock("@/lib/notifications/smart-delivery", () => ({
     pushes.push({ to, payload, record });
   },
 }));
-vi.mock("@/lib/email/member-email", () => ({ emailMember: async (to: string, opts: Record<string, unknown>) => void emails.push({ to, opts }) }));
+// the real adapter's outcome: Resend refusing a send is "failed", not a quiet success (Part 10)
+vi.mock("@/lib/email/member-email", () => ({
+  emailMember: async (to: string, opts: Record<string, unknown>) => {
+    if (emailRejects.has(to)) return "failed";
+    emails.push({ to, opts });
+    return "sent";
+  },
+}));
 vi.mock("@/lib/push/identity", () => ({ pushPerson: async () => ({ name: "Amaka", handle: "amaka", icon: undefined }) }));
 
 const fav = await import("./favourites");
@@ -80,6 +88,7 @@ beforeEach(() => {
   pushes.length = 0;
   emails.length = 0;
   pushFails = new Set();
+  emailRejects = new Set();
 });
 
 // ─── Favourites ──────────────────────────────────────────────────────────────
@@ -445,5 +454,109 @@ describe("Part 7 review — the fan-out's concurrency is bounded", () => {
     expect(peak).toBeLessThanOrEqual(fan.FANOUT_CONCURRENCY);
     expect(peak).toBeGreaterThan(1);
     spy.mockRestore();
+  });
+});
+
+describe("Part 10 — the fan-out's counts and outcomes are the rows' truth", () => {
+  it("two workers on one job: the job's counts equal what was recorded, never a stale snapshot + delta", async () => {
+    db.tables.profiles!.push(profile(U(70), "a"), profile(U(71), "b"), profile(U(72), "c"));
+    db.tables.creator_memberships = [sub(U(70)), sub(U(71)), sub(U(72))];
+    const job = await announce();
+    // both read the job before either writes (the publish request's after() beside the sweep)
+    await Promise.all([fan.processFanoutPage(job), fan.processFanoutPage(job)]);
+    const handed = db.tables.sub_fanout_deliveries!.filter((r) => r.status === "handed_off").length;
+    expect(handed).toBe(3);
+    expect(db.tables.sub_fanout_jobs![0]).toMatchObject({ handed_off: 3, skipped: 0, failed: 0 });
+  });
+
+  it("a page that loses the creator's own id is not mistaken for the last page", async () => {
+    // a full page of 3 where one row is the creator: the job must NOT finish early
+    for (let i = 0; i < 5; i++) db.tables.profiles!.push(profile(U(80 + i), `q${i}`));
+    const ids = [C, U(80), U(81), U(82), U(83), U(84)].sort();
+    db.tables.creator_memberships = ids.map((id) => sub(id));
+    const job = await announce();
+    await drain(job, 3);
+    expect(sentTo()).toEqual([U(80), U(81), U(82), U(83), U(84)].sort());
+    expect(db.tables.sub_fanout_jobs![0]).toMatchObject({ state: "done", handed_off: 5 });
+  });
+
+  it("an email the provider refuses is failed, not handed off", async () => {
+    db.tables.profiles!.push(profile(U(90), "a"));
+    db.tables.creator_memberships = [sub(U(90))];
+    db.tables.creator_notification_prefs = [{ viewer_id: U(90), target_id: C, announcements: "email" }];
+    emailRejects = new Set([U(90)]);
+    const job = await announce();
+    await drain(job);
+    expect(db.tables.sub_fanout_deliveries!.find((r) => r.recipient_id === U(90))).toMatchObject({ status: "failed", detail: "email_failed" });
+    expect(db.tables.sub_fanout_jobs![0]).toMatchObject({ handed_off: 0, failed: 1 });
+  });
+
+  it("a claim left by a worker that died is reported as unconfirmed, and never re-sent", async () => {
+    db.tables.profiles!.push(profile(U(95), "a"), profile(U(96), "b"));
+    db.tables.creator_memberships = [sub(U(95)), sub(U(96))];
+    const job = await announce();
+    // a worker claimed U(95), then died before recording
+    db.tables.sub_fanout_deliveries!.push({ job_id: job, recipient_id: U(95), status: "claimed", channels: null, detail: null });
+    await drain(job);
+    expect(sentTo()).toEqual([U(96)]);
+    const ref = db.tables.sub_fanout_jobs![0]!.ref_id as string;
+    const st = [...(await fan.fanoutStatuses("announcement", [ref])).values()][0];
+    expect(st).toMatchObject({ state: "done", handedOff: 1, unconfirmed: 1 });
+  });
+});
+
+describe("Part 10 — a suspended creator's alerts stop (Part 8: suspension ends Exclusive everywhere)", () => {
+  it("a job whose creator is suspended mid-fan-out is cancelled, and nothing more is sent", async () => {
+    for (let i = 0; i < 4; i++) {
+      db.tables.profiles!.push(profile(U(100 + i), `s${i}`));
+      db.tables.creator_memberships!.push(sub(U(100 + i)));
+    }
+    const job = await announce();
+    await fan.processFanoutPage(job, 2);
+    expect(pushes).toHaveLength(2);
+    db.tables.profiles!.find((p) => p.id === C)!.is_suspended = true;
+    expect(await fan.processFanoutPage(job, 2)).toMatchObject({ done: true, claimed: 0 });
+    expect(pushes).toHaveLength(2);
+    expect(db.tables.sub_fanout_jobs![0]).toMatchObject({ state: "cancelled" });
+  });
+});
+
+describe("Part 10 — the sweep is fair and leaves a trace", () => {
+  it("round-robin: a fourth job is reached on the next run, not after the first three finish", async () => {
+    db.defaults.sub_fanout_jobs = { ...db.defaults.sub_fanout_jobs, updated_at: "2026-01-01T00:00:00.000Z", created_at: "2026-01-01T00:00:00.000Z" };
+    for (let i = 0; i < fan.FANOUT_PAGE + 50; i++) {
+      db.tables.profiles!.push(profile(U(5000 + i), `r${i}`));
+      db.tables.creator_memberships!.push(sub(U(5000 + i)));
+    }
+    const jobs = [await announce(), await announce(), await announce(), await announce()];
+    await fan.sweepFanout(3, 1);
+    await fan.sweepFanout(3, 1);
+    const fourth = db.tables.sub_fanout_jobs!.find((j) => j.id === jobs[3]);
+    expect(Number(fourth!.runs)).toBeGreaterThan(0);
+  });
+
+  it("a page that fails records a short reason on the job (no secrets, no recipients) and moves it to the back", async () => {
+    db.tables.creator_memberships = [sub(ME)];
+    const job = await announce();
+    db.failOn.blocks = "outage";
+    await fan.sweepFanout(3, 1);
+    const row = db.tables.sub_fanout_jobs!.find((j) => j.id === job)!;
+    expect(row.last_error).toBe("page_failed");
+    expect(row.state).toBe("pending");
+    expect(pushes).toHaveLength(0);
+  });
+});
+
+describe("Part 10 — the sweep starts no page past its time budget", () => {
+  it("with the budget spent, it stops after the page in hand (the rest waits for the next run)", async () => {
+    for (let i = 0; i < fan.FANOUT_PAGE * 2 + 10; i++) {
+      db.tables.profiles!.push(profile(U(7000 + i), `t${i}`));
+      db.tables.creator_memberships!.push(sub(U(7000 + i)));
+    }
+    await announce();
+    const r = await fan.sweepFanout(3, 3, 0);
+    expect(r.pages).toBe(1);
+    expect(pushes).toHaveLength(fan.FANOUT_PAGE);
+    expect(db.tables.sub_fanout_jobs![0]).toMatchObject({ state: "pending" });
   });
 });

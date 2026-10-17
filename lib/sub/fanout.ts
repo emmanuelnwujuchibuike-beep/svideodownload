@@ -40,7 +40,15 @@ import { isUuid } from "./guards";
  * ── Honest outcomes ─────────────────────────────────────────────────────────
  * 'handed_off' means passed to the push / email pipeline (which applies the member's own
  * notification settings, quiet hours and caps); it is not "delivered" — this app cannot observe
- * delivery. 'skipped' = opted out or not eligible. 'failed' = the hand-off threw.
+ * delivery. 'skipped' = opted out or not eligible. 'failed' = the hand-off threw, or the email
+ * provider refused the send (Part 10: emailMember's outcome). A 'claimed' row whose worker died is
+ * reported as UNCONFIRMED and never re-sent: at most once, by design.
+ *
+ * ── Counts are the rows' truth (Part 10) ────────────────────────────────────
+ * The job's handed_off / skipped / failed are RECOUNTED from sub_fanout_deliveries after each page
+ * and at the finish, and written as absolute values. They used to be "the job row I read + my
+ * page's delta", so two workers on one job (the publish request's after() beside the sweep)
+ * overwrote each other — one could reset a sent announcement's count to 0.
  */
 
 type Row = Record<string, unknown>;
@@ -75,7 +83,16 @@ interface Item {
   hidden: boolean;
 }
 
-async function loadItem(db: Db, job: Row): Promise<Item> {
+async function loadItem(db: Db, job: Row): Promise<Item | null> {
+  /*
+    Part 10: a SUSPENDED creator's alerts stop. Part 8 ended their Exclusive everywhere (hasActiveSub
+    refuses), so an alert would announce a suspended account's activity and link to a tab nobody can
+    open. The job is cancelled ("Stopped"), the same as a deleted item.
+  */
+  const { data: creator, error: cErr } = await db.from("profiles").select("is_suspended").eq("id", job.creator_id as string).maybeSingle();
+  // a failed read fails CLOSED: nothing sent, nothing cancelled, the next run retries
+  if (cErr) return null;
+  if ((creator as Row | null)?.is_suspended) return { ok: false, hidden: false };
   if (job.kind === "announcement") {
     const { data } = await db.from("creator_notes").select("id, creator_id, audience, deleted_at").eq("id", job.ref_id as string).maybeSingle();
     const n = data as Row | null;
@@ -119,6 +136,7 @@ export async function processFanoutPage(jobId: string, pageSize = FANOUT_PAGE): 
   const now = new Date().toISOString();
 
   const item = await loadItem(db, job);
+  if (!item) return null;
   if (!item.ok) {
     await db.from("sub_fanout_jobs").update({ state: "cancelled", finished_at: now, updated_at: now }).eq("id", jobId).eq("state", "pending");
     return { ...out, done: true };
@@ -147,11 +165,16 @@ export async function processFanoutPage(jobId: string, pageSize = FANOUT_PAGE): 
       return p.viewer_id as string;
     });
   }
-  page = page.filter((id) => id !== creatorId);
+  // 🔴 Part 10: "last page" is decided on what the DATABASE returned, before the creator's own id is
+  // dropped — a full page that held the creator read as short and finished the job early, leaving
+  // every later recipient un-notified. The cursor is the raw page's last id for the same reason.
   const exhausted = page.length < pageSize;
+  const rawLast = page[page.length - 1] ?? null;
+  page = page.filter((id) => id !== creatorId);
   if (!page.length) {
-    await finish(db, jobId, after);
-    return { ...out, done: true };
+    if (exhausted) await finish(db, jobId, rawLast ?? after);
+    else await db.from("sub_fanout_jobs").update({ cursor: rawLast, updated_at: new Date().toISOString() }).eq("id", jobId).eq("state", "pending");
+    return { ...out, done: exhausted };
   }
 
   // ── eligibility, re-read now (batched) ──
@@ -206,15 +229,18 @@ export async function processFanoutPage(jobId: string, pageSize = FANOUT_PAGE): 
           { type: "news_following", actorId: creatorId },
         );
       }
+      let emailed: "sent" | "skipped" | "failed" | null = null;
       if (m === "email" || m === "both") {
         channels.push("email");
-        await emailMember(
+        emailed = await emailMember(
           id,
           job.kind === "announcement"
             ? { subject: `${who!.name} posted an announcement for subscribers`, heading: `${who!.name} posted an announcement`, intro: "It's for their subscribers. Open their Exclusive tab to read it.", ctaLabel: "Open their Exclusive tab", ctaPath: `${tab}#announcements` }
             : { subject: `${who!.name} posted a new private post`, heading: `${who!.name} posted a new private post`, intro: "You asked to hear when they share something for their subscribers.", ctaLabel: "Open their private posts", ctaPath: tab },
         );
       }
+      // the provider refused the email: failed, never a quiet "handed off" (a push already handed off is named in channels)
+      if (emailed === "failed") return void results.set(id, { status: "failed", channels: channels.join(","), detail: "email_failed" });
       results.set(id, { status: "handed_off", channels: channels.join(","), detail: null });
     } catch (e) {
       results.set(id, { status: "failed", channels: channels.join(",") || null, detail: String(e).slice(0, 120) });
@@ -236,26 +262,29 @@ export async function processFanoutPage(jobId: string, pageSize = FANOUT_PAGE): 
     else out.failed += ids.length;
   }
 
-  const last = page[page.length - 1]!;
+  const last = rawLast!;
+  const counts = await recount(db, jobId);
   await db
     .from("sub_fanout_jobs")
-    .update({
-      cursor: last,
-      handed_off: Number(job.handed_off ?? 0) + out.handedOff,
-      skipped: Number(job.skipped ?? 0) + out.skipped,
-      failed: Number(job.failed ?? 0) + out.failed,
-      runs: Number(job.runs ?? 0) + 1,
-      updated_at: new Date().toISOString(),
-    })
+    .update({ cursor: last, ...(counts ?? {}), runs: Number(job.runs ?? 0) + 1, last_error: null, updated_at: new Date().toISOString() })
     .eq("id", jobId)
     .eq("state", "pending");
   if (exhausted) await finish(db, jobId, last);
   return { ...out, done: exhausted };
 }
 
+/** The job's counts, read from its delivery rows (three head counts on the primary key's prefix). Null when a read fails. */
+async function recount(db: Db, jobId: string): Promise<{ handed_off: number; skipped: number; failed: number } | null> {
+  const n = (status: string) => db.from("sub_fanout_deliveries").select("job_id", { count: "exact", head: true }).eq("job_id", jobId).eq("status", status);
+  const [h, k, f] = await Promise.all([n("handed_off"), n("skipped"), n("failed")]);
+  if (h.error || k.error || f.error) return null;
+  return { handed_off: h.count ?? 0, skipped: k.count ?? 0, failed: f.count ?? 0 };
+}
+
 async function finish(db: Db, jobId: string, cursor: string | null): Promise<void> {
   const at = new Date().toISOString();
-  await db.from("sub_fanout_jobs").update({ state: "done", cursor, finished_at: at, updated_at: at }).eq("id", jobId).eq("state", "pending");
+  const counts = await recount(db, jobId);
+  await db.from("sub_fanout_jobs").update({ state: "done", cursor, ...(counts ?? {}), finished_at: at, updated_at: at }).eq("id", jobId).eq("state", "pending");
 }
 
 /** The first page, right after publishing (inside `after()`): bounded, the rest is the sweep's. */
@@ -266,20 +295,43 @@ export async function startFanout(jobId: string, maxPages = 1): Promise<void> {
   }
 }
 
-/** The 10-minute reconcile run: a few pending jobs, a few pages each. Never a backlog in one call. */
-export async function sweepFanout(maxJobs = 3, pagesPerJob = 3): Promise<{ jobs: number; pages: number; skipped?: string }> {
+/**
+ * The 10-minute reconcile run: a few pending jobs, a few pages each. Never a backlog in one call.
+ *
+ * 🔴 Part 10: LEAST RECENTLY WORKED first, not oldest first. Oldest-first gave the same three jobs
+ * every run until they finished, so a big creator's announcement (or a job whose page keeps
+ * failing) held every slot and newer jobs waited behind it. Every page touches updated_at, and a
+ * failed page records a short reason (last_error) and touches it too, so each job takes its turn.
+ *
+ * 🔴 And a TIME budget: no new page starts after budgetMs. A page can take up to ~2 minutes when
+ * push services are slow (12 s deadline per hand-off, 10 rounds of FANOUT_CONCURRENCY), and the
+ * cron function shares its 120 s with eight other sweeps. A function killed mid-page leaves its
+ * claims unconfirmed — never re-sent — so starting fewer pages is the safe side.
+ */
+export const SWEEP_BUDGET_MS = 45_000;
+export async function sweepFanout(maxJobs = 3, pagesPerJob = 3, budgetMs = SWEEP_BUDGET_MS): Promise<{ jobs: number; pages: number; failed: number; skipped?: string }> {
+  const started = Date.now();
   const db = createAdminClient();
-  const { data, error } = await db.from("sub_fanout_jobs").select("id").eq("state", "pending").order("created_at", { ascending: true }).limit(maxJobs);
-  if (error) return { jobs: 0, pages: 0, skipped: "pending_migration" };
+  const { data, error } = await db.from("sub_fanout_jobs").select("id").eq("state", "pending").order("updated_at", { ascending: true }).order("created_at", { ascending: true }).limit(maxJobs);
+  if (error) return { jobs: 0, pages: 0, failed: 0, skipped: "pending_migration" };
   let pages = 0;
+  let failed = 0;
   for (const j of (data ?? []) as Row[]) {
     for (let i = 0; i < pagesPerJob; i++) {
+      // the first page of a run always goes; after that, only inside the budget
+      if (pages > 0 && Date.now() - started >= budgetMs) return { jobs: (data ?? []).length, pages, failed };
       const r = await processFanoutPage(j.id as string).catch(() => null);
       pages += 1;
-      if (!r || r.done) break;
+      if (!r) {
+        failed += 1;
+        // a code, never an error text: no recipient, no provider message, no secret
+        await db.from("sub_fanout_jobs").update({ last_error: "page_failed", updated_at: new Date().toISOString() }).eq("id", j.id as string).eq("state", "pending");
+        break;
+      }
+      if (r.done) break;
     }
   }
-  return { jobs: (data ?? []).length, pages };
+  return { jobs: (data ?? []).length, pages, failed };
 }
 
 /** What a creator sees about one job: counts, honestly named. */
@@ -288,14 +340,24 @@ export interface FanoutStatus {
   handedOff: number;
   skipped: number;
   failed: number;
+  /** claimed by a worker that stopped before recording: not re-sent (at most once), outcome unknown */
+  unconfirmed: number;
 }
 
 export async function fanoutStatuses(kind: FanoutKind, refIds: string[]): Promise<Map<string, FanoutStatus>> {
   const out = new Map<string, FanoutStatus>();
   const ids = refIds.filter(isUuid);
   if (!ids.length) return out;
-  const { data, error } = await createAdminClient().from("sub_fanout_jobs").select("ref_id, state, handed_off, skipped, failed").eq("kind", kind).in("ref_id", ids);
+  const db = createAdminClient();
+  const { data, error } = await db.from("sub_fanout_jobs").select("id, ref_id, state, handed_off, skipped, failed").eq("kind", kind).in("ref_id", ids);
   if (error) return out;
-  for (const r of (data ?? []) as Row[]) out.set(r.ref_id as string, { state: r.state as FanoutStatus["state"], handedOff: Number(r.handed_off ?? 0), skipped: Number(r.skipped ?? 0), failed: Number(r.failed ?? 0) });
+  const jobs = (data ?? []) as Row[];
+  // claims left 'claimed' — normally none; bounded, and a failed read just reports 0
+  const unconfirmed = new Map<string, number>();
+  if (jobs.length) {
+    const { data: stuck } = await db.from("sub_fanout_deliveries").select("job_id").in("job_id", jobs.map((j) => j.id as string)).eq("status", "claimed").limit(1000);
+    for (const r of (stuck ?? []) as Row[]) unconfirmed.set(r.job_id as string, (unconfirmed.get(r.job_id as string) ?? 0) + 1);
+  }
+  for (const r of jobs) out.set(r.ref_id as string, { state: r.state as FanoutStatus["state"], handedOff: Number(r.handed_off ?? 0), skipped: Number(r.skipped ?? 0), failed: Number(r.failed ?? 0), unconfirmed: unconfirmed.get(r.id as string) ?? 0 });
   return out;
 }

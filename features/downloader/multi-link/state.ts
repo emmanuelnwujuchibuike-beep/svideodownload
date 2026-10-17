@@ -1,3 +1,5 @@
+import type { PreferredQuality } from "@/lib/download-hub/auto-download";
+import { pickFormat } from "@/lib/download-hub/context";
 import { MAX_BATCH_ITEMS } from "@/lib/downloads/multi-link-config";
 import type { MediaKind, PlatformId, VideoMetadata } from "@/types";
 
@@ -124,7 +126,7 @@ export type BatchAction =
   | { type: "editSource"; sourceId: string; url: string }
   | { type: "removeSource"; sourceId: string }
   | { type: "fetchStart"; sourceId: string }
-  | { type: "fetchSuccess"; sourceId: string; metadata: VideoMetadata }
+  | { type: "fetchSuccess"; sourceId: string; metadata: VideoMetadata; /** the member's Download Quality (lib/download-hub/auto-download), "best" when unset */ quality?: PreferredQuality }
   | { type: "fetchError"; sourceId: string; message: string }
   | { type: "toggleItem"; sourceId: string; itemId: string }
   | { type: "setSourceSelection"; sourceId: string; selected: boolean }
@@ -166,7 +168,7 @@ function mapSource(
  * consistent on purpose, because a link that shows 3 items in the single-link
  * flow and 1 here would read as a bug in whichever one the member saw second.
  */
-function itemsFromMetadata(sourceId: string, meta: VideoMetadata): BatchItem[] {
+function itemsFromMetadata(sourceId: string, meta: VideoMetadata, quality: PreferredQuality = "best"): BatchItem[] {
   const separate = meta.formats.filter((f) => f.isSeparateItem);
   const chosen =
     separate.length > 1
@@ -184,7 +186,13 @@ function itemsFromMetadata(sourceId: string, meta: VideoMetadata): BatchItem[] {
             still reachable through the single-link picker, where choosing
             between them is the whole point of the screen.
           */
-          if (video.length > 0) return [video[0]!];
+          /*
+            Owner 2026-10-17: "Batch Download doesn't download in high quality even if I select the
+            highest quality". This took video[0] — the tier that needs no re-encoding, which is not the
+            tallest — and ignored the member's Download Quality. It now takes what that setting picks,
+            the same pickFormat Auto Download uses ("best" = the highest resolution).
+          */
+          if (video.length > 0) return [pickFormat(meta.formats.filter((f) => !f.isSeparateItem), quality) ?? video[0]!];
           if (image.length > 1) return image;
           if (image.length === 1) return [image[0]!];
           return audio.slice(0, 1);
@@ -268,7 +276,7 @@ export function batchReducer(state: BatchState, action: BatchAction): BatchState
       }));
 
     case "fetchSuccess": {
-      const items = itemsFromMetadata(action.sourceId, action.metadata);
+      const items = itemsFromMetadata(action.sourceId, action.metadata, action.quality);
       /*
         The item ceiling is enforced at the moment of DISCOVERY, not at
         download.

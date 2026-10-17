@@ -52,8 +52,16 @@ describe("pickFormat", () => {
     fmt({ formatId: "audio", kind: "audio", label: "Audio", acodec: "aac", vcodec: "none" }),
   ];
 
-  it("takes the first video for 'best'", () => {
+  it("takes the highest video for 'best'", () => {
     expect(pickFormat(formats, "best")?.formatId).toBe("1080");
+  });
+
+  it("'best' is the HIGHEST resolution even when the list puts a no-conversion tier first (owner 2026-10-17)", () => {
+    const tiktok = [fmt({ formatId: "1080", label: "1080p", vcodec: "h264" }), fmt({ formatId: "1920", label: "1920p", vcodec: "bytevc1" }), fmt({ formatId: "720", label: "720p" })];
+    expect(pickFormat(tiktok, "best")?.formatId).toBe("1920");
+    // a tie keeps list order: the stream that needs no conversion wins
+    const tie = [fmt({ formatId: "a", label: "1080p", vcodec: "h264" }), fmt({ formatId: "b", label: "1080p", vcodec: "hevc" })];
+    expect(pickFormat(tie, "best")?.formatId).toBe("a");
   });
 
   it("takes the audio track for 'audio'", () => {

@@ -188,6 +188,24 @@ describe("what one source contributes (§5)", () => {
     expect(s.sources[0]!.items[0]!.formatId).toBe("1080");
   });
 
+  it("takes the HIGHEST quality by default, not the first-listed tier (owner 2026-10-17)", () => {
+    // bestFirst lists the no-re-encode H.264 1080 ahead of a taller HEVC tier; batch used to take it
+    const formats = [fmt({ formatId: "1080", kind: "video", vcodec: "h264" }), fmt({ formatId: "1920", kind: "video", vcodec: "bytevc1" }), fmt({ formatId: "720", kind: "video" })];
+    let s = batchReducer(initialBatchState, { type: "addSource", url: "https://a.com/v" });
+    s = batchReducer(s, { type: "fetchSuccess", sourceId: s.sources[0]!.id, metadata: meta({ formats }) });
+    expect(s.sources[0]!.items.map((i) => i.formatId)).toEqual(["1920"]);
+  });
+
+  it("follows the member's Download Quality setting (720 ceiling, audio only)", () => {
+    const formats = [fmt({ formatId: "1080", kind: "video" }), fmt({ formatId: "720", kind: "video" }), fmt({ formatId: "audio", kind: "audio" })];
+    let s = batchReducer(initialBatchState, { type: "addSource", url: "https://a.com/v" });
+    s = batchReducer(s, { type: "fetchSuccess", sourceId: s.sources[0]!.id, metadata: meta({ formats }), quality: "720" });
+    expect(s.sources[0]!.items[0]!.formatId).toBe("720");
+    let a = batchReducer(initialBatchState, { type: "addSource", url: "https://a.com/v" });
+    a = batchReducer(a, { type: "fetchSuccess", sourceId: a.sources[0]!.id, metadata: meta({ formats }), quality: "audio" });
+    expect(a.sources[0]!.items[0]!.formatId).toBe("audio");
+  });
+
   it("prefers the video on a pin that also offers its cover image", () => {
     // Pinterest video pins now carry both (server/extractors/pinterest.ts).
     // The batch takes the video; the picker is where you choose otherwise.

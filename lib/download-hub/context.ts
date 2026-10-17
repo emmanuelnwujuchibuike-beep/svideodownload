@@ -51,7 +51,17 @@ export function pickFormat(
   const audios = formats.filter((f) => f.kind === "audio");
 
   if (preferred === "audio") return audios[0] ?? videos[0] ?? formats[0];
-  if (preferred === "best") return videos[0] ?? formats[0];
+  /*
+    "Best available" is the HIGHEST resolution (owner, 2026-10-17: "Batch Download doesn't download in
+    high quality even if I select the highest quality"). The list is NOT height-ordered: bestFirst puts
+    the tier that needs no re-encoding first (TikTok's H.264 ahead of a taller HEVC tier), which is the
+    right DEFAULT for the single-link picker but not what someone who chose "best" asked for. Equal
+    heights keep list order, so the stream that needs no conversion still wins a tie.
+  */
+  if (preferred === "best") {
+    const top = videos.map((f, i) => ({ f, i, h: heightOf(f) })).sort((a, b) => b.h - a.h || a.i - b.i)[0]?.f;
+    return top ?? formats[0];
+  }
 
   const ceiling = Number(preferred);
   const atOrBelow = videos

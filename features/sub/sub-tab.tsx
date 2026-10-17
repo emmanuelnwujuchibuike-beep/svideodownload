@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, BadgeCheck, Bell, BadgeDollarSign, Check, ChevronDown, Copy, Landmark, Loader2, Lock, Pause, Pencil, Percent, Play, Plus, Receipt, Rocket, Share2, Undo2, Users, Wallet, type LucideIcon } from "lucide-react";
+import { ArrowRight, BadgeCheck, Bell, Megaphone, BadgeDollarSign, Check, ChevronDown, Copy, Landmark, Loader2, Lock, Pause, Pencil, Percent, Play, Plus, Receipt, Rocket, Share2, Undo2, Users, Wallet, type LucideIcon } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -90,6 +90,7 @@ export function SubTab({
   const [withdrawing, setWithdrawing] = useState(false);
   const [galleryKey, setGalleryKey] = useState(0);
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const [announceOpen, setAnnounceOpen] = useState(false);
   const loginNext = `/u/${handle}?tab=sub`;
 
   if (isOwner && s && !s.setupCompleted) {
@@ -102,7 +103,26 @@ export function SubTab({
         <>
           <ShareCard handle={handle} />
           <CreatorOverview settings={s} bounds={bounds} onChange={setS} onCompose={() => setComposing(true)} onWithdraw={() => setWithdrawing(true)} />
-          <CreatorAnnouncements creatorId={creatorId} />
+          {/* Owner 2026-10-17: the announcement composer lives behind an Announcements button. Mounted (hidden)
+              so its list is already loaded: the tap only shows it. */}
+          <div className="mb-3 flex justify-end">
+            <button
+              type="button"
+              aria-expanded={announceOpen}
+              aria-controls="sub-announce-panel"
+              onClick={() => {
+                haptic("selection");
+                setAnnounceOpen((o) => !o);
+              }}
+              className={cn("ex-btn ex-btn--glass ex-btn--sm touch-manipulation", announceOpen && "text-primary")}
+            >
+              <Megaphone className="h-4 w-4" aria-hidden /> Announcements
+              <ChevronDown className={cn("h-4 w-4 transition-transform duration-150 motion-reduce:transition-none", announceOpen && "rotate-180")} aria-hidden />
+            </button>
+          </div>
+          <div id="sub-announce-panel" hidden={!announceOpen}>
+            <CreatorAnnouncements creatorId={creatorId} />
+          </div>
           <CreatorNotifySettings initial={s.notifySubscribed ?? "both"} />
         </>
       ) : null}

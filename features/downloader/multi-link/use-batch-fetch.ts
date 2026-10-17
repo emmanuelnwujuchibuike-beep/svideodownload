@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 
+import { getPreferredQuality } from "@/lib/download-hub/auto-download";
 import { sourceUrlSchema } from "@/lib/validation";
 import type { ApiError, VideoMetadata } from "@/types";
 
@@ -81,7 +82,7 @@ export function useBatchFetch(
       // than paying for the same extraction twice.
       const cached = seen.current.get(url);
       if (cached) {
-        dispatch({ type: "fetchSuccess", sourceId: source.id, metadata: cached });
+        dispatch({ type: "fetchSuccess", sourceId: source.id, metadata: cached, quality: getPreferredQuality() });
         onDiscovered?.(source.id, cached.formats.length);
         return;
       }
@@ -119,7 +120,7 @@ export function useBatchFetch(
         }
         seen.current.set(url, metadata);
         if (!mounted.current) return;
-        dispatch({ type: "fetchSuccess", sourceId: source.id, metadata });
+        dispatch({ type: "fetchSuccess", sourceId: source.id, metadata, quality: getPreferredQuality() });
         onDiscovered?.(source.id, metadata.formats.length);
       } catch (e) {
         // An abort is a deliberate cancellation, never an error to report.

@@ -52,4 +52,10 @@ describe("Exclusive in the profile tray, alerts behind a button", () => {
     expect(tab).toMatch(/aria-expanded=\{alertsOpen\}[\s\S]{0,400}setAlertsOpen\(\(o\) => !o\)/);
     expect(tab).toMatch(/<div id="sub-alerts-panel" hidden=\{!alertsOpen\}>\s*<ExclusiveAlerts/);
   });
+
+  it("the creator's announcement composer sits behind an Announcements button, mounted and toggled on the tap", () => {
+    const tab = code("features/sub/sub-tab.tsx");
+    expect(tab).toMatch(/aria-expanded=\{announceOpen\}[\s\S]{0,400}setAnnounceOpen\(\(o\) => !o\)/);
+    expect(tab).toMatch(/<div id="sub-announce-panel" hidden=\{!announceOpen\}>\s*<CreatorAnnouncements/);
+  });
 });

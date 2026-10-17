@@ -478,6 +478,16 @@ export async function requestSubWithdrawal(input: { userId: string; grossCents: 
   const cfg = await subConfig();
   if (!cfg.withdrawalsEnabled) return fail("Private post withdrawals are paused right now.", 503, "paused");
   if (!/^[A-Za-z0-9_-]{8,80}$/.test(input.idempotencyKey)) return fail("Invalid request.");
+  /*
+    🔴 Part 13: a SUSPENDED account moves no money out. With autoPayout on, a request goes straight to
+    a Paystack transfer below — so a creator suspended for fraud could empty the balance before the
+    chargebacks land, by hand (/api/sub/withdraw) or through the auto-withdrawal sweep (both come
+    here). Read on every request (a suspension applies at once) and fail CLOSED: no profile, or a
+    failed read, sends nothing.
+  */
+  const { data: who, error: whoError } = await createAdminClient().from("profiles").select("is_suspended").eq("id", input.userId).maybeSingle();
+  if (whoError || !who) return fail("Couldn't request that withdrawal. Try again shortly.", 503, "unavailable");
+  if ((who as Row).is_suspended) return fail("Withdrawals are paused on your account. Contact support.", 403, "suspended");
   // owner 2026-10-12: outside Nigeria → a bank wire or PayPal, paid by hand from the admin queue (never Paystack)
   const method = input.method === "international" ? "international" : "paystack";
   const details = validatePayoutDetails(method, input.details);

@@ -53,6 +53,26 @@ describe("admin money reviews", () => {
     expect((await post({ action: "close_refund_review", id: "42", note: "nope" })).status).toBe(404);
   });
 
+  it("payouts nothing could settle automatically are listed for an admin (paid after release, AI-credit payout returned)", async () => {
+    db.tables.financial_audit_log!.push(
+      { id: 50, action: "withdrawal_paid_after_release", target_id: "w1", reference: "frenz_wd_1", created_at: "2026-10-17T10:00:00Z" },
+      { id: 51, action: "withdrawal_reversal_manual", target_id: "w2", reference: "frenz_wd_2", created_at: "2026-10-17T11:00:00Z" },
+    );
+    const j = await (await route.GET()).json();
+    expect(j.payoutAlerts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "paid_after_release", withdrawalId: "w1", reference: "frenz_wd_1" }),
+      expect.objectContaining({ kind: "ai_credit_returned", withdrawalId: "w2", reference: "frenz_wd_2" }),
+    ]));
+    expect(j.payoutAlerts).toHaveLength(2);
+  });
+
+  it("a restore of a dispute that never clawed anything back is refused with a clear reason", async () => {
+    db.rpc.restore_disputed_sub_purchase = vi.fn(() => ({ data: { ok: false, reason: "nothing_clawed_back" }, error: null }));
+    const res = await post({ action: "restore_dispute", reference: REF, note: "Won: Paystack dispute 9" });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ reason: "nothing_clawed_back" });
+  });
+
   it("'Dispute won' calls the restore with the ADMIN's id and their note; a short note is refused", async () => {
     expect((await post({ action: "restore_dispute", reference: REF, note: "no" })).status).toBe(400);
     expect((await post({ action: "restore_dispute", reference: REF, note: "Won: Paystack dispute 123" })).status).toBe(200);

@@ -221,8 +221,16 @@ function RewardsActivity({ minAge, minEngagements }: { minAge: number; minEngage
   const move = async (id: string, status: string) => {
     const payoutReference = status === "completed" ? window.prompt("Payout reference (the bank transfer id):")?.trim() : undefined;
     if (status === "completed" && !payoutReference) return;
-    const res = await fetch(`/api/admin/rewards/withdrawals/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status, ...(payoutReference ? { payoutReference } : {}) }) });
-    const json = await res.json().catch(() => ({}));
+    const send = (extra: Record<string, unknown>) => fetch(`/api/admin/rewards/withdrawals/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status, ...(payoutReference ? { payoutReference } : {}), ...extra }) });
+    let res = await send({});
+    let json = await res.json().catch(() => ({}));
+    // Part 12: Paystack has no transfer with this reference — release only with a written reason, audited
+    if (res.status === 409 && json.reason === "confirm_not_sent") {
+      const reason = window.prompt(`${json.error}\n\nOnly continue if you checked the Paystack dashboard. Reason (recorded with your name):`)?.trim();
+      if (!reason) return setNote("Nothing changed: the money stays held.");
+      res = await send({ confirmNotSent: true, note: reason });
+      json = await res.json().catch(() => ({}));
+    }
     setNote(res.ok ? `Moved to ${status}.` : (json.error ?? "Failed."));
     if (res.ok) void load();
   };

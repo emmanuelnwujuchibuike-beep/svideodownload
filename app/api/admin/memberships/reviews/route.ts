@@ -29,13 +29,16 @@ export async function GET() {
   const admin = await getAdminUser();
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const db = createAdminClient();
-  const [reviews, closed, disputes, restored] = await Promise.all([
+  const [reviews, closed, disputes, restored, payouts] = await Promise.all([
     db.from("financial_audit_log").select("id, action, reference, details, created_at").in("action", ["sub_partial_refund", "sub_refund_unrecognised"]).order("created_at", { ascending: false }).limit(100),
     db.from("financial_audit_log").select("details, actor_id, created_at").eq("action", "sub_refund_review_closed").order("created_at", { ascending: false }).limit(500),
     db.from("sub_purchases").select("id, reference, price_cents, charged_minor, charged_currency, reversed_at, paid_at").eq("status", "disputed").order("reversed_at", { ascending: false }).limit(100),
     db.from("financial_audit_log").select("reference, created_at").eq("action", "sub_dispute_won_restored").order("created_at", { ascending: false }).limit(100),
+    // payouts the system could not settle by itself: paid after the money was released, or an AI-credit payout the bank returned
+    db.from("financial_audit_log").select("id, action, target_id, reference, created_at").in("action", ["withdrawal_paid_after_release", "withdrawal_reversal_manual"]).order("created_at", { ascending: false }).limit(50),
   ]);
-  if (reviews.error || disputes.error) return NextResponse.json({ refundReviews: [], disputes: [], restored: [], ready: false }, { headers: HEADERS });
+  const payoutAlerts = ((payouts.data ?? []) as Row[]).map((p) => ({ id: String(p.id), kind: p.action === "withdrawal_paid_after_release" ? "paid_after_release" : "ai_credit_returned", withdrawalId: p.target_id, reference: p.reference, at: p.created_at }));
+  if (reviews.error || disputes.error) return NextResponse.json({ refundReviews: [], disputes: [], restored: [], payoutAlerts: [], ready: false }, { headers: HEADERS });
   const closedBy = new Map<string, Row>();
   for (const c of (closed.data ?? []) as Row[]) {
     const id = String((c.details as Row | null)?.review_id ?? "");
@@ -57,7 +60,7 @@ export async function GET() {
       reviewed: c ? { at: c.created_at } : null,
     };
   });
-  return NextResponse.json({ refundReviews, disputes: disputes.data ?? [], restored: restored.data ?? [], ready: true }, { headers: HEADERS });
+  return NextResponse.json({ refundReviews, disputes: disputes.data ?? [], restored: restored.data ?? [], payoutAlerts, ready: true }, { headers: HEADERS });
 }
 
 const body = z.discriminatedUnion("action", [

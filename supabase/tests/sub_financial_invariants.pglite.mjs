@@ -16,6 +16,9 @@
 //   dup-resolve     resolve_withdrawal forgets final states        -> funds released twice
 //   dup-wd-reverse  reverse_paid_withdrawal forgets "already reversed" -> payout returned twice
 //   dup-restore     restore_disputed_sub_purchase forgets "already restored" -> earning restored twice
+//   wd-reverse-debt reverse_paid_withdrawal ignores debt            -> returned payout withdrawable while owed
+//   restore-no-claw restore_disputed_sub_purchase skips the clawback check -> a never-earned purchase mints money
+//   restore-own-end restore gives access only to the purchase's own end -> a later paid renewal loses its days
 import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 
@@ -50,7 +53,7 @@ const run = async (db, sql) => { for (const s of split(sql)) { try { await db.ex
 const db = new PGlite();
 await run(db, stub);
 const U = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
-await db.exec(`insert into auth.users (id) select ('00000000-0000-4000-8000-' || lpad(g::text, 12, '0'))::uuid from generate_series(1, 20) g`);
+await db.exec(`insert into auth.users (id) select ('00000000-0000-4000-8000-' || lpad(g::text, 12, '0'))::uuid from generate_series(1, 40) g`);
 for (const f of ["0227_sub_monetization.sql", "0231_sub_promo_dismiss.sql", "0237_sub_post_thumbs.sql", "0239_private_post_interactions.sql", "0247_sub_settlement_hardening.sql", "0250_sub_membership_lifecycle.sql", "0254_payout_reversal_dispute_restore.sql"]) await run(db, readFileSync(`${dir}/${f}`, "utf8"));
 // 0254 applied a second time: it must be idempotent
 await run(db, readFileSync(dir + "/0254_payout_reversal_dispute_restore.sql", "utf8"));
@@ -66,6 +69,9 @@ if (MUTANT === "dup-reverse") await db.exec((await fnBody("reverse_sub_purchase"
 if (MUTANT === "open-withdrawal") await db.exec("drop index public.withdrawal_requests_one_open_uidx");
 if (MUTANT === "dup-wd-reverse") await db.exec((await fnBody("reverse_paid_withdrawal")).replace(/if v_w\.status = 'reversed' then return[^;]*;\s*end if;/, ""));
 if (MUTANT === "dup-restore") await db.exec((await fnBody("restore_disputed_sub_purchase")).replace(/if v_p\.status = 'paid' and exists[\s\S]*?end if;/, "").replace("if v_p.status <> 'disputed' then", "if v_p.status not in ('disputed', 'paid') then"));
+if (MUTANT === "wd-reverse-debt") await db.exec((await fnBody("reverse_paid_withdrawal")).replace("available_cents = available_cents + v_w.gross_cents - least(debt_cents, v_w.gross_cents)", "available_cents = available_cents + v_w.gross_cents").replace("debt_cents = debt_cents - least(debt_cents, v_w.gross_cents),", ""));
+if (MUTANT === "restore-no-claw") await db.exec((await fnBody("restore_disputed_sub_purchase")).replace(/if not exists \(select 1 from public\.sub_ledger where kind = 'clawback'[\s\S]*?end if;/, ""));
+if (MUTANT === "restore-own-end") await db.exec((await fnBody("restore_disputed_sub_purchase")).replace("and status = 'paid';", "and id = v_p.id;"));
 if (MUTANT === "dup-resolve") await db.exec((await fnBody("resolve_withdrawal")).replace(/if v_w\.status in \('completed', 'rejected', 'cancelled'\) then return[^;]*;\s*end if;/, ""));
 
 const q = async (s, p) => (await db.query(s, p)).rows;
@@ -276,6 +282,61 @@ ok(await access(C2, S(9)), "22. the access the payment bought is back (its perio
 ok((await one("select count(*)::int n from sub_ledger where kind = 'dispute_restore'")).n === 1, "22. one dispute_restore ledger row");
 ok((await call("select restore_disputed_sub_purchase($1, $2, 'x') as r", [r12b, U(19)])).reason === "not_disputed", "22. a purchase that was never disputed can't be 'restored'");
 await invariants(C2, "dispute won and restored");
+
+// 23 · a payout the bank sent back while the creator OWES (a dispute after the payout): debt first
+const C3 = U(3), C4 = U(4), C5 = U(5);
+const r23 = await purchase(C3, S(11));
+await settle(r23);
+const w23 = await withdraw(C3, 1000);
+ok((await payOut(w23.id)).ok, "23. setup: everything withdrawn and paid out");
+await reverse(r23, "disputed");
+ok((await bal(C3)).d === 1000, "23. setup: the dispute left debt 1000");
+await call("select reverse_paid_withdrawal($1::uuid, null, 'bank returned it') as r", [w23.id]);
+const b23 = await bal(C3);
+ok(b23.d === 0 && b23.a === 0 && b23.w === 0, "23. the returned 1000 settles the 1000 debt: nothing withdrawable while owed");
+ok(b23.l === 0, "23. lifetime earnings are not raised by a returned payout");
+await invariants(C3, "payout reversal settles debt first");
+
+// 24 · an AI-credit payout reversal is audited ONCE however often the event repeats
+await call("select reverse_paid_withdrawal($1::uuid, null, 'x') as r", [credId]);
+await call("select reverse_paid_withdrawal($1::uuid, null, 'x') as r", [credId]);
+ok((await one("select count(*)::int n from financial_audit_log where action = 'withdrawal_reversal_manual' and target_id = $1", [credId])).n === 1, "24. three reversal events for an AI-credit payout: one audit row, nothing moved");
+
+// 25 · restoring a disputed purchase gives back a LATER paid renewal's days too
+const r25a = await purchase(C4, S(12));
+await settle(r25a);
+const r25b = await purchase(C4, S(12));
+await settle(r25b);
+const end25 = (await one("select period_end from sub_purchases where reference = $1", [r25b])).period_end.getTime();
+await reverse(r25a, "disputed");
+ok(await access(C4, S(12)), "25. setup: after the dispute the renewal's 30 days still give access");
+await call("select restore_disputed_sub_purchase($1, $2, 'won') as r", [r25a, U(19)]);
+const m25 = await one("select period_end, status, billing from creator_memberships where creator_id = $1 and member_id = $2", [C4, S(12)]);
+ok(m25.period_end.getTime() === end25 && m25.status === "active", "25. restored up to the latest paid end (the renewal's), not the disputed purchase's own end");
+await invariants(C4, "restore with a later renewal");
+
+// 26 · a dispute on a refund_due purchase (paid to a removed member, never earned) can't be 'restored'
+await db.exec(`insert into creator_memberships (creator_id, member_id, status, billing) values ('${C4}', '${S(13)}', 'removed', 'free')`);
+const r26 = await purchase(C4, S(13));
+await settle(r26);
+ok((await one("select status from sub_purchases where reference = $1", [r26])).status === "refund_due", "26. setup: paid by a removed member -> refund_due, nothing earned");
+await reverse(r26, "disputed");
+const b26 = await bal(C4);
+const rs26 = await call("select restore_disputed_sub_purchase($1, $2, 'won') as r", [r26, U(19)]);
+ok(!rs26.ok && rs26.reason === "nothing_clawed_back", "26. restore refused: the dispute never took an earning back");
+ok(JSON.stringify(await bal(C4)) === JSON.stringify(b26) && (await one("select status from creator_memberships where creator_id = $1 and member_id = $2", [C4, S(13)])).status === "removed", "26. no money minted, the removed member stays removed");
+await invariants(C4, "refused restore of a never-earned purchase");
+
+// 27 · an expired paid period gives no access back, and a free membership is never turned into an ended paid one
+const r27 = await purchase(C5, S(14));
+await settle(r27);
+await reverse(r27, "disputed");
+await db.exec(`update sub_purchases set period_start = now() - interval '60 days', period_end = now() - interval '30 days' where reference = '${r27}'`);
+await db.exec(`update creator_memberships set billing = 'free', status = 'active', period_end = null, ended_at = null where creator_id = '${C5}' and member_id = '${S(14)}'`);
+const rs27 = await call("select restore_disputed_sub_purchase($1, $2, 'won late') as r", [r27, U(19)]);
+const m27 = await one("select status, billing, period_end from creator_memberships where creator_id = $1 and member_id = $2", [C5, S(14)]);
+ok(rs27.ok && m27.billing === "free" && m27.status === "active" && m27.period_end === null, "27. the earning comes back, but an expired period changes no membership (the free one is untouched)");
+await invariants(C5, "restore after the paid period ended");
 
 // 18-19 · clients can't run the money functions or write the money tables (Supabase grants + RLS)
 const availBefore = (await bal(C)).a;

@@ -130,38 +130,60 @@ export async function verifyTransferReference(reference: string): Promise<Transf
 }
 
 /**
- * An admin rejecting (or cancelling) a withdrawal. 🔴 Part 12 follow-up: once a transfer reference
- * exists, the withdrawal can only be released on PAYSTACK's word — never on an admin's guess that it
- * failed, or the creator gets the money back AND the bank transfer. Paystack says:
+ * How long a withdrawal must sit untouched after its transfer attempt before "Paystack has no transfer
+ * with this reference" may release it. A transfer Paystack is still accepting (a slow or timed-out
+ * request) may not be listed yet, so a fresh 404 is not proof it was never sent.
+ */
+export const NOT_SENT_MIN_AGE_MS = 60 * 60_000;
+
+/**
+ * An admin rejecting (or cancelling) a withdrawal. 🔴 Part 12 follow-up: once a transfer may exist, the
+ * withdrawal can only be released on PAYSTACK's word — never on an admin's guess that it failed, or the
+ * creator gets the money back AND the bank transfer. Paystack says:
  *   success            -> it is completed instead (the money left)
  *   failed / reversed  -> rejected, the money returns
- *   no such transfer   -> rejected ONLY if the admin explicitly confirms it was never sent (audited)
- *   anything else      -> refused: still processing, OTP pending, or Paystack unreachable
- * A withdrawal with no reference (never sent) is rejected as before.
+ *   no such transfer   -> only once the attempt is NOT_SENT_MIN_AGE_MS old; for a RECORDED reference
+ *                         also only with the admin's explicit confirmation and a reason, audited first
+ *                         (an audit that can't be written releases nothing)
+ *   anything else      -> refused: still processing, OTP pending, Paystack unreachable or ambiguous
+ * "A transfer may exist" = a frenz_wd_ reference is recorded, OR a Paystack withdrawal reached approved /
+ * processing (sending and recording the reference are two steps; the reference is fixed per withdrawal,
+ * so Paystack is asked by it). Anything else was never sent and is rejected as before.
  */
 export async function rejectPaystackWithdrawal(input: { id: string; status: "rejected" | "cancelled"; adminId: string; note: string | null; confirmNotSent?: boolean }): Promise<{ ok: true; outcome: "rejected" | "completed_instead" } | { ok: false; error: string; reason: string }> {
   const db = createAdminClient();
-  const { data } = await db.from("withdrawal_requests").select("id, status, payout_reference").eq("id", input.id).maybeSingle();
-  const w = data as { id: string; status: string; payout_reference: string | null } | null;
+  const { data, error } = await db.from("withdrawal_requests").select("id, status, payout_method, payout_reference, updated_at").eq("id", input.id).maybeSingle();
+  if (error) return { ok: false, error: "Couldn't read the withdrawal. Nothing was changed.", reason: "error" };
+  const w = data as { id: string; status: string; payout_method: string | null; payout_reference: string | null; updated_at: string | null } | null;
   if (!w) return { ok: false, error: "Not found.", reason: "not_found" };
-  if (!w.payout_reference || !w.payout_reference.startsWith("frenz_wd_")) {
+  const recorded = w.payout_reference?.startsWith("frenz_wd_") ? w.payout_reference : null;
+  const maybeSent = !recorded && w.payout_method === PAYSTACK_METHOD && (w.status === "approved" || w.status === "processing");
+  if (!recorded && !maybeSent) {
     const out = await resolveWithdrawal({ id: input.id, status: input.status, adminId: input.adminId, note: input.note });
     return out.ok ? { ok: true, outcome: "rejected" } : { ok: false, error: "Couldn't update it.", reason: out.reason ?? "error" };
   }
-  const v = await verifyTransferReference(w.payout_reference);
+  const reference = recorded ?? REF(w.id);
+  const v = await verifyTransferReference(reference);
   if (v.kind === "success") {
-    const out = await resolveWithdrawal({ id: input.id, status: "completed", adminId: input.adminId, note: "Paystack confirms this transfer was paid, so it can't be rejected" });
+    const out = await resolveWithdrawal({ id: input.id, status: "completed", adminId: input.adminId, note: "Paystack confirms this transfer was paid, so it can't be rejected", payoutReference: reference });
     return out.ok ? { ok: true, outcome: "completed_instead" } : { ok: false, error: "Paystack says it was paid, but the withdrawal didn't update.", reason: out.reason ?? "error" };
   }
   if (v.kind === "failed") {
-    const out = await resolveWithdrawal({ id: input.id, status: "rejected", adminId: input.adminId, note: `${input.note ?? "Rejected"} (Paystack: ${v.status})` });
+    const out = await resolveWithdrawal({ id: input.id, status: "rejected", adminId: input.adminId, note: `${input.note ?? "Rejected"} (Paystack: ${v.status})`, payoutReference: recorded ?? undefined });
     return out.ok ? { ok: true, outcome: "rejected" } : { ok: false, error: "Couldn't update it.", reason: out.reason ?? "error" };
   }
   if (v.kind === "not_found") {
-    if (!input.confirmNotSent) return { ok: false, error: "Paystack has no transfer with this reference. Confirm it was never sent to release the money.", reason: "confirm_not_sent" };
-    await db.from("financial_audit_log").insert({ actor_id: input.adminId, action: "withdrawal_transfer_not_found_confirmed", target_type: "withdrawal", target_id: input.id, reference: w.payout_reference, details: { note: input.note } });
-    const out = await resolveWithdrawal({ id: input.id, status: "rejected", adminId: input.adminId, note: `${input.note ?? "Rejected"} (Paystack has no transfer with this reference; confirmed by an admin)` });
-    return out.ok ? { ok: true, outcome: "rejected" } : { ok: false, error: "Couldn't update it.", reason: out.reason ?? "error" };
+    const age = Date.now() - Date.parse(w.updated_at ?? "");
+    if (!(age >= NOT_SENT_MIN_AGE_MS)) return { ok: false, error: "Paystack doesn't list this transfer yet, but it was attempted less than an hour ago and may still be accepted. It stays held; try again later.", reason: "too_soon" };
+    if (recorded) {
+      if (!input.confirmNotSent) return { ok: false, error: "Paystack has no transfer with this reference. Confirm it was never sent to release the money.", reason: "confirm_not_sent" };
+      const why = (input.note ?? "").trim();
+      if (why.length < 3) return { ok: false, error: "Give the reason before confirming it was never sent.", reason: "reason_required" };
+      const { error: auditError } = await db.from("financial_audit_log").insert({ actor_id: input.adminId, action: "withdrawal_transfer_not_found_confirmed", target_type: "withdrawal", target_id: input.id, reference, details: { note: why, from: w.status, checked_at: new Date().toISOString() } });
+      if (auditError) return { ok: false, error: "The audit record couldn't be written, so nothing was released.", reason: "audit_failed" };
+    }
+    const out = await resolveWithdrawal({ id: input.id, status: "rejected", adminId: input.adminId, note: recorded ? `${(input.note ?? "").trim()} (Paystack has no transfer with this reference; confirmed by an admin)` : `${input.note ?? "Rejected"} (Paystack has no transfer with reference ${reference})`, payoutReference: recorded ?? undefined });
+    return out.ok ? { ok: true, outcome: "rejected" } : { ok: false, error: out.reason === "final" ? "This withdrawal is already finished." : "Couldn't update it.", reason: out.reason ?? "error" };
   }
   return { ok: false, error: `Paystack hasn't settled this transfer yet${v.status ? ` (${v.status})` : ""}. It stays held until Paystack confirms.`, reason: "outcome_unknown" };
 }
@@ -187,6 +209,25 @@ export async function settlePaystackTransfer(event: "transfer.success" | "transf
     const out = r as { ok?: boolean; reason?: string } | null;
     // 'manual' = an AI-credit payout: audited for an admin, nothing more to do here
     return !!out?.ok || out?.reason === "manual";
+  }
+  /*
+    A transfer that LANDED after the withdrawal was released (rejected / cancelled): the creator has the
+    money back AND the bank transfer. Nothing here can claw it back automatically, so it is confirmed
+    with Paystack (a stale "success" after a reversal is not this), recorded once for an admin
+    (the SUB "Needs review" list) and logged loudly. Unconfirmed -> throw, so the webhook is retried.
+  */
+  if (w && (w.status === "rejected" || w.status === "cancelled") && event === "transfer.success") {
+    const v = await verifyTransferReference(reference);
+    if (v.kind === "failed") return true;
+    if (v.kind !== "success") throw new Error("late transfer.success not confirmed by Paystack yet");
+    const { data: seen, error: seenError } = await db.from("financial_audit_log").select("id").eq("action", "withdrawal_paid_after_release").eq("target_id", w.id).limit(1);
+    if (seenError) throw new Error("couldn't check the paid-after-release record");
+    if (!seen?.length) {
+      const { error: auditError } = await db.from("financial_audit_log").insert({ actor_id: null, action: "withdrawal_paid_after_release", target_type: "withdrawal", target_id: w.id, reference, details: { status: w.status } });
+      if (auditError) throw new Error("couldn't record the paid-after-release transfer");
+      console.error("[rewards/payout] 🔴 a transfer landed AFTER its withdrawal was released — the creator was paid twice; recover it manually", { withdrawal: w.id, reference, status: w.status });
+    }
+    return true;
   }
   if (!w || ["completed", "rejected", "cancelled", "reversed"].includes(w.status)) return true;
   const to = event === "transfer.success" ? "completed" : "rejected";

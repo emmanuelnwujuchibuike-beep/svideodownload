@@ -33,11 +33,19 @@ interface Dispute {
   reversed_at: string | null;
 }
 
+interface PayoutAlert {
+  id: string;
+  kind: "paid_after_release" | "ai_credit_returned";
+  withdrawalId: string | null;
+  reference: string | null;
+  at: string;
+}
+
 const money = (minor: number | null, cur: string | null) => (minor != null && cur ? `${(minor / 100).toLocaleString()} ${cur}` : "not sent by Paystack");
 const field = "w-40 rounded-lg border border-black/[0.08] bg-white/70 px-2 py-1 dark:border-white/10 dark:bg-white/[0.06]";
 
 export function SubAdminReviews() {
-  const [data, setData] = useState<{ refundReviews: RefundReview[]; disputes: Dispute[]; ready: boolean } | null>(null);
+  const [data, setData] = useState<{ refundReviews: RefundReview[]; disputes: Dispute[]; payoutAlerts?: PayoutAlert[]; ready: boolean } | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [confirmed, setConfirmed] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -151,6 +159,23 @@ export function SubAdminReviews() {
               ))}
             </ul>
           )}
+          {data.payoutAlerts?.length ? (
+            <>
+              <h4 className="mt-5 text-xs font-semibold">Payouts to settle by hand</h4>
+              <p className="mt-1 text-xs text-muted-foreground">Nothing moved automatically for these. Check each reference in the Paystack dashboard and recover or return the money with the creator.</p>
+              <ul className="mt-2 space-y-2 text-xs">
+                {data.payoutAlerts.map((p) => (
+                  <li key={p.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-black/[0.03] px-3 py-2 dark:bg-white/[0.045]">
+                    <span className="font-mono text-[11px]">{p.reference}</span>
+                    <span className={p.kind === "paid_after_release" ? "font-medium text-rose-600 dark:text-rose-400" : ""}>
+                      {p.kind === "paid_after_release" ? "Paid AFTER the withdrawal was released: the creator was paid twice" : "AI-credit payout returned by the bank: return the credits by hand"}
+                    </span>
+                    <span className="text-muted-foreground">{new Date(p.at).toLocaleString()}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
           {msg ? (
             <p role={msg.ok ? "status" : "alert"} className={msg.ok ? "mt-2 text-xs text-emerald-700 dark:text-emerald-400" : "mt-2 text-xs text-rose-600 dark:text-rose-400"}>
               {msg.text}

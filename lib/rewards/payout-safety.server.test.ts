@@ -134,7 +134,8 @@ describe("an uncertain transfer is held, never treated as failed", () => {
 
 describe("an admin can't release held money without Paystack's word", () => {
   const reject = (body: Record<string, unknown> = {}) => route.POST(new Request(`https://frenzsave.com/api/admin/rewards/withdrawals/${ID}`, { method: "POST", body: JSON.stringify({ status: "rejected", note: "admin says failed", ...body }) }), { params: Promise.resolve({ id: ID }) });
-  const held = () => Object.assign(row(), { status: "processing", payout_reference: REF });
+  const OLD = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
+  const held = (updated_at = OLD) => Object.assign(row(), { status: "processing", payout_reference: REF, updated_at });
   const verify = (answer: () => unknown) => {
     paystack = (path) => {
       if (path.startsWith("/transfer/verify/")) return answer();
@@ -176,17 +177,83 @@ describe("an admin can't release held money without Paystack's word", () => {
     const first = await reject();
     expect(await first.json()).toMatchObject({ reason: "confirm_not_sent" });
     expect(row().status).toBe("processing");
-    const second = await reject({ confirmNotSent: true });
+    expect(await (await reject({ confirmNotSent: true, note: "" })).json()).toMatchObject({ reason: "reason_required" });
+    expect(row().status).toBe("processing");
+    const second = await reject({ confirmNotSent: true, note: "Checked the Paystack dashboard: no such transfer" });
     expect(second.status).toBe(200);
     expect(row().status).toBe("rejected");
-    expect(db.tables.financial_audit_log).toEqual([expect.objectContaining({ action: "withdrawal_transfer_not_found_confirmed", actor_id: "admin-1", reference: REF })]);
+    expect(db.tables.financial_audit_log).toEqual([expect.objectContaining({ action: "withdrawal_transfer_not_found_confirmed", actor_id: "admin-1", reference: REF, details: expect.objectContaining({ note: "Checked the Paystack dashboard: no such transfer", from: "processing", checked_at: expect.any(String) }) })]);
   });
 
-  it("a withdrawal never sent (no reference) is rejected as before, without asking Paystack", async () => {
+  it("a withdrawal never sent (never approved, no reference) is rejected as before, without asking Paystack", async () => {
+    Object.assign(row(), { status: "reviewing" });
     const res = await reject();
     expect(res.status).toBe(200);
     expect(row().status).toBe("rejected");
     expect(calls).toHaveLength(0);
+  });
+
+  const notFound = () => verify(() => {
+    throw new PaystackHttpError("Transfer not found", 404);
+  });
+
+  it("a FRESH 404 is not proof: under an hour after the attempt it stays held, even with confirmation", async () => {
+    held(new Date().toISOString());
+    notFound();
+    const res = await reject({ confirmNotSent: true, note: "looks failed" });
+    expect(await res.json()).toMatchObject({ reason: "too_soon" });
+    expect(row().status).toBe("processing");
+    expect(db.tables.financial_audit_log).toHaveLength(0);
+  });
+
+  it("a 404 that isn't Paystack's own JSON answer (a proxy page, a dropped body) is ambiguous: held", async () => {
+    held();
+    verify(() => {
+      throw new SyntaxError("Unexpected token < in JSON");
+    });
+    expect(await (await reject({ confirmNotSent: true, note: "x-reason" })).json()).toMatchObject({ reason: "outcome_unknown" });
+    expect(row().status).toBe("processing");
+  });
+
+  it("the audit record can't be written: nothing is released", async () => {
+    held();
+    notFound();
+    db.failOn.financial_audit_log = "relation unavailable";
+    const res = await reject({ confirmNotSent: true, note: "Checked the dashboard" });
+    expect(await res.json()).toMatchObject({ reason: "audit_failed" });
+    expect(row().status).toBe("processing");
+  });
+
+  it("two admins confirm at once (back to back here): released ONCE, the second is told it's finished", async () => {
+    held();
+    notFound();
+    const spy = vi.spyOn(db.rpc, "resolve_withdrawal");
+    const [a, b] = [await reject({ confirmNotSent: true, note: "first admin" }), await reject({ confirmNotSent: true, note: "second admin" })];
+    expect(a.status).toBe(200);
+    expect(await b.json()).toMatchObject({ reason: "final" });
+    expect(spy.mock.results.filter((r) => (r.value as { data: { ok: boolean } }).data.ok)).toHaveLength(1);
+    expect(row().status).toBe("rejected");
+  });
+
+  it("APPROVED via Paystack but no reference recorded (sent, then the record failed): Paystack is asked by the fixed reference", async () => {
+    Object.assign(row(), { status: "approved", payout_reference: null, updated_at: OLD });
+    verify(() => ok({ status: "success" }));
+    expect(await (await reject()).json()).toMatchObject({ outcome: "completed_instead" });
+    expect(calls).toEqual([`/transfer/verify/${REF}`]);
+    expect(row()).toMatchObject({ status: "completed", payout_reference: REF });
+  });
+
+  it("approved, no reference, Paystack has none: released after the wait; refused while fresh or unreachable", async () => {
+    for (const [updated_at, answer, expected] of [
+      [new Date().toISOString(), notFound, "approved"],
+      [OLD, () => verify(() => { throw timeout(); }), "approved"],
+      [OLD, notFound, "rejected"],
+    ] as const) {
+      Object.assign(row(), { status: "approved", payout_reference: null, updated_at });
+      answer();
+      await reject();
+      expect(row().status).toBe(expected);
+    }
   });
 
   it("not an admin: 403, nothing changes", async () => {
@@ -223,8 +290,28 @@ describe("a paid transfer that came back (transfer.reversed)", () => {
     Object.assign(row(), { status: "processing", payout_reference: REF });
     await payouts.settlePaystackTransfer("transfer.reversed", REF);
     expect(row().status).toBe("rejected");
+    paystack = () => ok({ status: "reversed" });
     await payouts.settlePaystackTransfer("transfer.success", REF);
     expect(row().status).toBe("rejected");
+    expect(db.tables.financial_audit_log).toHaveLength(0);
+  });
+
+  it("a transfer that LANDS after the money was released is recorded once for an admin (never silently ignored)", async () => {
+    Object.assign(row(), { status: "rejected", payout_reference: REF });
+    paystack = () => ok({ status: "success" });
+    expect(await payouts.settlePaystackTransfer("transfer.success", REF)).toBe(true);
+    expect(await payouts.settlePaystackTransfer("transfer.success", REF)).toBe(true);
+    expect(db.tables.financial_audit_log).toEqual([expect.objectContaining({ action: "withdrawal_paid_after_release", target_id: ID, reference: REF })]);
+    expect(row().status).toBe("rejected");
+  });
+
+  it("…and if Paystack can't confirm that late success, the webhook is retried (nothing recorded on a guess)", async () => {
+    Object.assign(row(), { status: "cancelled", payout_reference: REF });
+    paystack = () => {
+      throw timeout();
+    };
+    await expect(payouts.settlePaystackTransfer("transfer.success", REF)).rejects.toThrow();
+    expect(db.tables.financial_audit_log).toHaveLength(0);
   });
 
   it("a reference that isn't ours is ignored", async () => {

@@ -430,7 +430,7 @@ export async function restoreDisputedSub(reference: string, adminId: string, not
   if (error) return /restore_disputed_sub_purchase|function|schema cache/i.test(error.message) ? fail("Dispute recovery arrives with migration 0254.", 503, "pending_migration") : fail("Couldn't restore it.", 500);
   const r = data as { ok?: boolean; reason?: string; duplicate?: boolean } | null;
   if (r?.ok) return { ok: true, duplicate: !!r.duplicate };
-  return fail(r?.reason === "not_disputed" ? "Only a purchase reversed as disputed can be restored." : r?.reason === "not_found" ? "Not found." : "Couldn't restore it.", 409, r?.reason);
+  return fail(r?.reason === "not_disputed" ? "Only a purchase reversed as disputed can be restored." : r?.reason === "nothing_clawed_back" ? "This dispute never took an earning back (the payment was already owed as a refund), so there is nothing to restore." : r?.reason === "not_found" ? "Not found." : "Couldn't restore it.", 409, r?.reason);
 }
 
 // ─── Earnings ────────────────────────────────────────────────────────────────

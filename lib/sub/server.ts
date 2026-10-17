@@ -385,6 +385,40 @@ export async function reverseSub(reference: string, status: "refunded" | "disput
   return r?.ok ? { ok: true, debtAfter: Number(r.debt_after ?? 0) } : fail(r?.reason === "not_found" ? "Not found." : "Couldn't reverse it.", 409, r?.reason);
 }
 
+/**
+ * A Paystack `refund.processed` on a SUB charge (Part 12 financial audit).
+ *
+ * 🔴 A PARTIAL refund used to be applied as a full reversal: the whole earning was clawed back
+ * and the subscriber lost the access they still paid most of. The ledger has no partial clawback,
+ * so the honest, smallest answer is: only a refund of the WHOLE charge (same currency, at least the
+ * charged amount) reverses the purchase. A smaller one, or one in another currency, changes no
+ * balance and no access — it goes on the financial audit log for an admin to settle by hand.
+ * A payload with no amount (older events) keeps the old meaning: a full refund.
+ */
+export async function reverseSubForRefund(reference: string, refunded: { minor?: unknown; currency?: unknown }): Promise<Result<{ debtAfter: number; review?: true }>> {
+  const minor = typeof refunded.minor === "number" && Number.isInteger(refunded.minor) && refunded.minor > 0 ? refunded.minor : null;
+  if (minor === null) return reverseSub(reference, "refunded", null, "Paystack refund.processed");
+  const db = createAdminClient();
+  const { data, error } = await db.from("sub_purchases").select("id, charged_minor, charged_currency").eq("reference", reference).maybeSingle();
+  if (error) return fail("Couldn't read the purchase.", 500);
+  const p = data as { id: string; charged_minor: number; charged_currency: string } | null;
+  // an unknown reference: the SQL answers not_found, exactly as before
+  if (!p) return reverseSub(reference, "refunded", null, "Paystack refund.processed");
+  const currency = typeof refunded.currency === "string" ? refunded.currency.toUpperCase() : p.charged_currency;
+  const full = currency === p.charged_currency && minor >= Number(p.charged_minor);
+  if (full) return reverseSub(reference, "refunded", null, "Paystack refund.processed");
+  const action = currency === p.charged_currency ? "sub_partial_refund" : "sub_refund_unrecognised";
+  const { error: aErr } = await db.from("financial_audit_log").insert({
+    action,
+    target_type: "sub_purchase",
+    target_id: p.id,
+    reference,
+    details: { refunded_minor: minor, currency, charged_minor: Number(p.charged_minor), charged_currency: p.charged_currency, review: "no balance or access was changed" },
+  });
+  if (aErr) return fail("Couldn't record the refund.", 500);
+  return { ok: true, debtAfter: 0, review: true };
+}
+
 // ─── Earnings ────────────────────────────────────────────────────────────────
 
 export interface SubEarnings {

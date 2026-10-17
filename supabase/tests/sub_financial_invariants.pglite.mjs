@@ -1,0 +1,253 @@
+// Frenz Exclusive Part 12 — financial invariants, against the REAL money functions in PGlite.
+// Run from %TEMP%\pgt (where @electric-sql/pglite is installed):
+//   node sub_financial_invariants.pglite.mjs <repo>/supabase/migrations [--mutant=<name>]
+// Applies 0227, 0231, 0237, 0239, 0247, 0250 for real, then drives settlement, renewal, refunds,
+// disputes, withdrawals and payouts, checking the money invariants after EVERY step.
+//
+// ⚠️ PGlite is ONE connection: two transactions can't interleave here, so true concurrency is NOT
+// exercised. "Concurrent" cases run the same calls back to back; what serialises them in production
+// is the row lock each function takes (`for update` on the purchase / balance / withdrawal) and the
+// unique indexes, which ARE checked below.
+//
+// --mutant=<name> breaks one protection and the run must FAIL:
+//   dup-settle      settle_sub_purchase forgets "already paid"  -> double earning
+//   dup-reverse     reverse_sub_purchase forgets "already reversed" -> double clawback
+//   open-withdrawal drops the one-open-withdrawal unique index    -> two holds on one balance
+//   dup-resolve     resolve_withdrawal forgets final states        -> funds released twice
+import { readFileSync } from "node:fs";
+import { PGlite } from "@electric-sql/pglite";
+
+const dir = process.argv[2];
+const MUTANT = (process.argv.find((a) => a.startsWith("--mutant=")) ?? "").split("=")[1] ?? "";
+
+const stub = `
+create role anon; create role authenticated; create role service_role;
+create schema auth;
+create table auth.users (id uuid primary key, email text);
+create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('test.uid', true), '')::uuid $$;
+create function public.is_admin() returns boolean language sql stable as $$ select false $$;
+create table public.notifications (id bigint generated always as identity primary key, user_id uuid, actor_id uuid, type text, data jsonb, post_id uuid, created_at timestamptz default now());
+create table public.reward_profiles (user_id uuid primary key, qualification_status text, qualified_at timestamptz, restricted boolean default false, qualification_reviewed_by uuid);
+create table public.withdrawal_requests (id uuid primary key default gen_random_uuid(), user_id uuid, credits integer not null default 0, amount_usd_cents integer not null default 0, rate_snapshot jsonb, status text, payout_method text, payout_details jsonb, review_note text, reviewed_by uuid, payout_reference text, created_at timestamptz default now(), updated_at timestamptz default now(), completed_at timestamptz);
+create table public.reports (id uuid primary key default gen_random_uuid(), reporter_id uuid, target_type text not null, target_id uuid not null, reason text not null, note text, status text not null default 'open', created_at timestamptz not null default now(),
+  constraint reports_target_chk check (target_type in ('post','comment','user')), constraint reports_status_chk check (status in ('open','actioned','dismissed')));
+create table public.creator_notification_prefs (viewer_id uuid, target_id uuid);
+-- the AI wallet, so we can prove Exclusive never moves it
+create table public.ai_product_balances (user_id uuid, product text, balance_cents bigint not null default 0, withdrawable_cents bigint not null default 0, updated_at timestamptz default now(), primary key (user_id, product));
+create table public.ai_product_ledger (id bigint generated always as identity primary key, user_id uuid, product text, kind text, status text, delta_cents bigint, balance_after_cents bigint, currency text, reference text, note text, credit_class text, withdrawable_part bigint, metadata jsonb, updated_at timestamptz default now());
+create unique index ai_product_ledger_ref_uidx on public.ai_product_ledger (user_id, product, kind, reference) where reference is not null;`;
+const split = (sql) => { const out = []; let cur = ""; let inD = false; let inQ = false;
+  for (let i = 0; i < sql.length; i++) {
+    if (!inQ && sql.startsWith("$$", i)) { inD = !inD; cur += "$$"; i++; continue; }
+    if (!inD && sql[i] === "'") inQ = !inQ;
+    if (!inD && !inQ && sql.startsWith("--", i)) { const nl = sql.indexOf("\n", i); i = nl < 0 ? sql.length : nl; cur += "\n"; continue; }
+    if (sql[i] === ";" && !inD && !inQ) { if (cur.trim()) out.push(cur); cur = ""; } else cur += sql[i]; }
+  if (cur.trim()) out.push(cur); return out; };
+const run = async (db, sql) => { for (const s of split(sql)) { try { await db.exec(s); } catch (e) { console.log("SQL ERROR:", e.message, "\n", s.slice(0, 300)); process.exit(2); } } };
+
+const db = new PGlite();
+await run(db, stub);
+const U = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+await db.exec(`insert into auth.users (id) select ('00000000-0000-4000-8000-' || lpad(g::text, 12, '0'))::uuid from generate_series(1, 20) g`);
+for (const f of ["0227_sub_monetization.sql", "0231_sub_promo_dismiss.sql", "0237_sub_post_thumbs.sql", "0239_private_post_interactions.sql", "0247_sub_settlement_hardening.sql", "0250_sub_membership_lifecycle.sql"]) await run(db, readFileSync(`${dir}/${f}`, "utf8"));
+// Supabase's defaults: clients hold table privileges on public and RLS is the only wall. Without this
+// the client checks below would pass for the wrong reason (no grant at all instead of RLS).
+await db.exec("grant usage on schema public to anon, authenticated");
+await db.exec("grant select, insert, update, delete on all tables in schema public to anon, authenticated");
+
+// ── mutants: break exactly one protection ──
+const fnBody = async (name) => (await db.query("select pg_get_functiondef(p.oid) as d from pg_proc p where p.proname = $1", [name])).rows[0].d;
+if (MUTANT === "dup-settle") await db.exec((await fnBody("settle_sub_purchase")).replace(/if v_p\.status = 'paid' then return[^;]*;\s*end if;/, ""));
+if (MUTANT === "dup-reverse") await db.exec((await fnBody("reverse_sub_purchase")).replace(/if v_p\.status in \('refunded', 'disputed', 'reversed'\) then return[^;]*;\s*end if;/, ""));
+if (MUTANT === "open-withdrawal") await db.exec("drop index public.withdrawal_requests_one_open_uidx");
+if (MUTANT === "dup-resolve") await db.exec((await fnBody("resolve_withdrawal")).replace(/if v_w\.status in \('completed', 'rejected', 'cancelled'\) then return[^;]*;\s*end if;/, ""));
+
+const q = async (s, p) => (await db.query(s, p)).rows;
+const one = async (s, p) => (await q(s, p))[0];
+const call = async (s, p) => (await one(s, p)).r;
+let failures = 0;
+const ok = (c, m) => { if (!c) { failures++; console.log("FAIL:", m); } else console.log("ok:", m); };
+const throws = async (s) => { try { await db.exec(s); return false; } catch { return true; } };
+
+const C = U(1); // creator
+const C2 = U(2); // another creator
+const S = (n) => U(10 + n); // subscribers
+let refN = 0;
+const purchase = async (creator, sub, { price = 1000, minor = 165000, currency = "NGN", hold = 0 } = {}) => {
+  const ref = `frenz_sub_t${++refN}`;
+  const fee = Math.floor((price * 1000) / 10000);
+  await db.exec(`insert into sub_purchases (creator_id, subscriber_id, price_cents, fee_cents, total_cents, fee_bp, charged_currency, charged_minor, reference, hold_days) values ('${creator}', '${sub}', ${price}, ${fee}, ${price + fee}, 1000, '${currency}', ${minor}, '${ref}', ${hold})`);
+  return ref;
+};
+const settle = (ref, minor = 165000, cur = "NGN") => call("select settle_sub_purchase($1, $2, $3, 'trx') as r", [ref, minor, cur]);
+const reverse = (ref, status) => call("select reverse_sub_purchase($1, $2, null, 'test') as r", [ref, status]);
+let key = 0;
+const withdraw = (user, gross, k = `k-${++key}`) => call("select request_sub_withdrawal($1, $2, 1000, 500, 'paystack', '{}'::jsonb, '{}'::jsonb, $3, false) as r", [user, gross, k]);
+const resolve = (id, status) => call("select resolve_withdrawal($1::uuid, $2, null, 'test', null) as r", [id, status]);
+const bal = (c) => one("select pending_cents::int p, available_cents::int a, held_cents::int h, debt_cents::int d, lifetime_cents::int l, withdrawn_cents::int w from sub_balances where creator_id = $1", [c]);
+const access = async (creator, sub) => !!(await one("select 1 x from creator_memberships where creator_id = $1 and member_id = $2 and status = 'active' and billing = 'sub' and period_end > now()", [creator, sub]));
+const aiSnapshot = async () => JSON.stringify(await q("select * from ai_product_balances order by user_id")) + JSON.stringify(await q("select count(*)::int n from ai_product_ledger"));
+
+/** The money invariants for one creator — checked after every step. */
+const invariants = async (c, label) => {
+  const b = await bal(c);
+  if (!b) return;
+  const paid = (await one("select coalesce(sum(price_cents), 0)::int s from sub_purchases where creator_id = $1 and status = 'paid'", [c])).s;
+  const unreleased = (await one("select coalesce(sum(price_cents), 0)::int s from sub_purchases where creator_id = $1 and status = 'paid' and released_at is null", [c])).s;
+  const ledger = (await one("select coalesce(sum(amount_cents) filter (where kind in ('earning', 'clawback')), 0)::int s from sub_ledger where creator_id = $1", [c])).s;
+  const open = (await one("select coalesce(sum(gross_cents), 0)::int s from withdrawal_requests where user_id = $1 and source = 'sub' and status in ('pending', 'reviewing', 'approved', 'processing')", [c])).s;
+  const done = (await one("select coalesce(sum(gross_cents), 0)::int s from withdrawal_requests where user_id = $1 and source = 'sub' and status = 'completed'", [c])).s;
+  const bad = [];
+  if (b.p < 0 || b.a < 0 || b.h < 0 || b.d < 0) bad.push("a negative balance field");
+  if (b.p + b.a + b.h + b.w - b.d !== b.l) bad.push(`pending+available+held+withdrawn-debt (${b.p + b.a + b.h + b.w - b.d}) != lifetime (${b.l})`);
+  if (b.l !== paid) bad.push(`lifetime ${b.l} != paid purchases ${paid}`);
+  if (ledger !== b.l) bad.push(`ledger earnings+clawbacks ${ledger} != lifetime ${b.l}`);
+  if (b.p !== unreleased) bad.push(`pending ${b.p} != unreleased paid ${unreleased}`);
+  if (b.h !== open) bad.push(`held ${b.h} != open withdrawals ${open}`);
+  if (b.w !== done) bad.push(`withdrawn ${b.w} != completed withdrawals ${done}`);
+  ok(!bad.length, `invariants hold after: ${label}${bad.length ? " — " + bad.join("; ") : ""}`);
+};
+
+await db.exec(`insert into ai_product_balances (user_id, product, balance_cents, withdrawable_cents) values ('${C}', 'character_replace', 5000, 2000), ('${S(1)}', 'character_replace', 700, 0)`);
+const aiBefore = await aiSnapshot();
+
+// 1 · a successful settlement: access, earning, ledger
+const r1 = await purchase(C, S(1));
+const s1 = await settle(r1);
+ok(s1.ok === true && !s1.duplicate, "1. a verified charge settles");
+ok(await access(C, S(1)), "1. the subscriber has access");
+ok((await bal(C)).a === 1000 && (await bal(C)).l === 1000, "1. the creator earns the PRICE (1000); the 100 fee is the platform's, on top");
+await invariants(C, "settlement");
+
+// 2-3 · duplicate and back-to-back settlement (webhook + return page + reconcile)
+const dup = [await settle(r1), await settle(r1), await settle(r1)];
+ok(dup.every((d) => d.ok && d.duplicate), "2/3. three more settles of the same reference: all 'duplicate'");
+ok((await bal(C)).l === 1000 && (await one("select count(*)::int n from sub_ledger where kind = 'earning' and purchase_id = (select id from sub_purchases where reference = $1)", [r1])).n === 1, "2/3. one earning, one ledger row");
+await invariants(C, "duplicate settlement");
+
+// 4 · wrong amount or currency never grants access
+const r4 = await purchase(C, S(2));
+ok((await settle(r4, 164999)).reason === "amount_mismatch", "4. one kobo short: refused");
+ok((await settle(r4, 165000, "USD")).reason === "amount_mismatch", "4. right number, wrong currency: refused");
+ok(!(await access(C, S(2))) && (await one("select status from sub_purchases where reference = $1", [r4])).status === "initiated", "4. no access, purchase still open, nothing credited");
+ok((await one("select count(*)::int n from financial_audit_log where action = 'sub_payment_mismatch' and reference = $1", [r4])).n === 2, "4. both mismatches are on the audit log");
+ok((await settle("frenz_sub_never_issued")).reason === "not_found", "4. an unknown reference settles nothing (and is audited)");
+await invariants(C, "mismatches");
+
+// 6-7 · failed / abandoned, then a late success
+const r6 = await purchase(C, S(3));
+await db.exec(`update sub_purchases set status = 'failed', failure_source = 'verify_abandoned' where reference = '${r6}'`);
+ok(!(await access(C, S(3))), "6. an abandoned checkout grants nothing");
+const s7 = await settle(r6);
+ok(s7.ok && s7.recovered === true && (await access(C, S(3))), "7. Paystack later verifies the charge: it settles (recovered) and access is granted");
+const r6b = await purchase(C, S(4));
+await db.exec(`update sub_purchases set status = 'failed', failure_source = 'provider_reversed' where reference = '${r6b}'`);
+ok((await settle(r6b)).reason === "not_payable" && !(await access(C, S(4))), "6. a provider-final failure (refunded before settling) never settles");
+await invariants(C, "late success");
+
+// 8 · renewal: extends from the current end; its replay changes nothing
+const endBefore = (await one("select period_end from creator_memberships where creator_id = $1 and member_id = $2", [C, S(1)])).period_end;
+const r8 = await purchase(C, S(1));
+await settle(r8);
+const endAfter = (await one("select period_end from creator_memberships where creator_id = $1 and member_id = $2", [C, S(1)])).period_end;
+ok(Math.round((new Date(endAfter) - new Date(endBefore)) / 86400000) === 30, "8. a renewal before expiry adds exactly 30 days to the current end");
+await settle(r8);
+ok((await one("select period_end from creator_memberships where creator_id = $1 and member_id = $2", [C, S(1)])).period_end.getTime() === new Date(endAfter).getTime(), "8. the renewal's replay adds nothing");
+await invariants(C, "renewal");
+
+// 10 · expiry: the access predicate is the period end
+await db.exec(`update creator_memberships set period_end = now() - interval '1 minute' where creator_id = '${C}' and member_id = '${S(3)}'`);
+ok(!(await access(C, S(3))), "10. after the period end there is no access");
+
+// 13 · two withdrawals against one balance; the same key replayed
+const bBefore = await bal(C);
+const w1 = await withdraw(C, 1500, "same-key");
+ok(w1.ok && w1.fee === 150 && w1.net === 1350, "13. a withdrawal holds its gross; fee 10% (150) and net (1350) are the server's");
+const w1again = await withdraw(C, 1500, "same-key");
+ok(w1again.ok && w1again.duplicate && w1again.id === w1.id, "13. the same idempotency key replayed: the same withdrawal");
+const w2 = await withdraw(C, 500);
+ok(!w2.ok && w2.reason === "open_exists", "13. a second open withdrawal on the same balance is refused");
+ok((await bal(C)).h === 1500 && (await bal(C)).a === bBefore.a - 1500, "13. exactly one hold");
+await invariants(C, "withdrawal hold");
+ok(!(await withdraw(C, 0)).ok && !(await withdraw(C, -5)).ok, "17. zero and negative withdrawals are invalid");
+ok((await withdraw(C2, 500)).reason === "insufficient", "19. a creator with no earnings can't withdraw (the user id is the only key; the app passes the session's)");
+
+// 14 · rejection releases once; a duplicate rejection does nothing
+const rej = await resolve(w1.id, "rejected");
+ok(rej.ok, "14. the admin (or a failed transfer) rejects it");
+const rej2 = await resolve(w1.id, "rejected");
+ok(!rej2.ok && rej2.reason === "final", "14. rejecting it again is refused (final)");
+ok((await bal(C)).h === 0 && (await bal(C)).a === bBefore.a, "14. the hold came back exactly once");
+await invariants(C, "rejection");
+
+// 15 · a payout, then a duplicate confirmation
+const w3 = await withdraw(C, 1000);
+await resolve(w3.id, "approved");
+await resolve(w3.id, "processing");
+const done1 = await resolve(w3.id, "completed");
+const done2 = await resolve(w3.id, "completed");
+ok(done1.ok && !done2.ok && done2.reason === "final", "15. a duplicate payout confirmation is refused");
+ok((await bal(C)).w === 1000 && (await one("select count(*)::int n from sub_ledger where kind = 'withdrawal_paid' and withdrawal_id = $1", [w3.id])).n === 1, "15. withdrawn once, one ledger row");
+ok(!(await resolve(w3.id, "rejected")).ok, "15. a completed payout can't be rejected afterwards (no double release)");
+await invariants(C, "payout");
+
+// 11-12 · refunds and disputes: full reversal, duplicate events, debt when the money already left
+const r11 = await purchase(C, S(5));
+await settle(r11);
+const before11 = await bal(C);
+const rv = await reverse(r11, "refunded");
+ok(rv.ok, "11. a full refund reverses the purchase");
+ok(!(await access(C, S(5))), "11. the refund takes the access back");
+ok((await bal(C)).l === before11.l - 1000, "11. lifetime drops by the price");
+const rv2 = [await reverse(r11, "refunded"), await reverse(r11, "disputed")];
+ok(rv2.every((x) => x.ok && x.duplicate), "12. the same refund again, or a dispute on it: 'duplicate', nothing more");
+ok((await one("select count(*)::int n from sub_ledger where kind = 'clawback' and purchase_id = (select id from sub_purchases where reference = $1)", [r11])).n === 1, "12. one clawback row");
+await invariants(C, "refund + duplicates");
+// all the money withdrawn, then a dispute: the shortfall becomes DEBT, never a negative balance
+const w4 = await withdraw(C, (await bal(C)).a);
+await resolve(w4.id, "completed");
+const r12 = (await q("select reference from sub_purchases where creator_id = $1 and status = 'paid' order by created_at limit 1", [C]))[0].reference;
+await reverse(r12, "disputed");
+const b12 = await bal(C);
+ok(b12.a === 0 && b12.d === 1000, "12. a dispute after the money left: available 0, debt 1000 (never negative)");
+await invariants(C, "dispute into debt");
+// the next earning pays the debt first
+const r12b = await purchase(C, S(6));
+await settle(r12b);
+ok((await bal(C)).d === 0 && (await bal(C)).a === 0, "12. the next 1000 earning settles the 1000 debt first");
+await invariants(C, "debt settled by next earning");
+const rbefore = await reverse("frenz_sub_unknown", "refunded");
+ok(!rbefore.ok && rbefore.reason === "not_found", "12. a refund for an unknown reference changes nothing");
+ok((await reverse(r12b, "chargeback_lol")).reason === "invalid", "12. an unknown reversal kind is refused");
+
+// a hold on the earnings (hold_days): pending until released, invariants on the way
+const r16 = await purchase(C2, S(7), { hold: 3 });
+await settle(r16);
+ok((await bal(C2)).p === 1000 && (await bal(C2)).a === 0, "16. a held earning is pending, not withdrawable");
+await invariants(C2, "held earning");
+await reverse(r16, "refunded");
+ok((await bal(C2)).p === 0 && (await bal(C2)).d === 0, "16. refunding an unreleased earning leaves no debt");
+await invariants(C2, "refund of held earning");
+
+// 18-19 · clients can't run the money functions or write the money tables (Supabase grants + RLS)
+const availBefore = (await bal(C)).a;
+await db.exec(`set role authenticated; select set_config('test.uid', '${C}', false)`);
+ok(await throws(`select settle_sub_purchase('${r4}', 165000, 'NGN', 'x')`), "18. a signed-in user can't call settle_sub_purchase");
+ok(await throws(`select request_sub_withdrawal('${C}', 100, 0, 0, 'paystack', '{}', '{}', 'k', false)`), "18. ...nor request_sub_withdrawal directly");
+ok(await throws(`select resolve_withdrawal('${w3.id}', 'rejected', null, null, null)`), "18. ...nor resolve_withdrawal");
+ok(await throws(`select reverse_sub_purchase('${r1}', 'refunded', null, null)`), "18. ...nor reverse_sub_purchase");
+await db.exec(`update sub_balances set available_cents = 999999 where creator_id = '${C}'`); // RLS: no update policy, so 0 rows
+ok(await throws(`insert into sub_ledger (creator_id, kind, amount_cents, pending_after, available_after, reference) values ('${C}', 'earning', 5, 0, 0, 'x')`), "18. ...nor write the ledger (RLS: no insert policy)");
+ok(await throws(`insert into sub_purchases (creator_id, subscriber_id, price_cents, fee_cents, total_cents, fee_bp, charged_currency, charged_minor, reference, status) values ('${C2}', '${C}', 1, 0, 1, 0, 'NGN', 1, 'forged', 'paid')`), "18. ...nor forge a paid purchase");
+ok((await q("select * from sub_balances where creator_id = $1", [C2])).length === 0, "19. a creator can't even read another creator's balance");
+await db.exec("reset role");
+ok((await bal(C)).a === availBefore, "18. ...nor change their own balance (the update matched no row under RLS)");
+
+// 17 · a self-subscription is impossible
+ok(await throws(`insert into sub_purchases (creator_id, subscriber_id, price_cents, fee_cents, total_cents, fee_bp, charged_currency, charged_minor, reference) values ('${C}', '${C}', 1000, 100, 1100, 1000, 'NGN', 1, 'self')`), "17. a creator can't buy their own subscription");
+
+// 20 · none of it touched the AI wallet
+ok((await aiSnapshot()) === aiBefore, "20. after every Exclusive settlement, refund, withdrawal and payout, AI balances and the AI ledger are unchanged");
+
+console.log(failures ? `\n${failures} FAILED` : "\nALL OK");
+process.exit(failures ? 1 : 0);

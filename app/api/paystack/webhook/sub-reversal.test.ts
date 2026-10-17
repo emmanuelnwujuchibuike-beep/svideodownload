@@ -83,3 +83,42 @@ describe("SUB refund / dispute webhook", () => {
     expect(logged("refund.processed")?.outcome).toBe("ignored:not_found");
   });
 });
+
+/*
+  Part 12 (financial audit): a PARTIAL refund used to be applied as a full one — the creator lost the
+  whole earning and the subscriber lost access for, say, a refunded fee. Paystack's refund.processed
+  carries the refunded amount; only a refund of the whole charge reverses the purchase.
+*/
+describe("Part 12 — a partial refund is not a full reversal", () => {
+  const refund = (amount: number | undefined, currency = "NGN") =>
+    POST(new Request("https://frenzsave.com/api/paystack/webhook", { method: "POST", headers: { "x-paystack-signature": "t" }, body: JSON.stringify({ event: "refund.processed", data: { id: 8, transaction_reference: REF, ...(amount === undefined ? {} : { amount }), currency } }) }));
+  beforeEach(() => {
+    db.tables.sub_purchases = [{ id: "p1", reference: REF, status: "paid", charged_minor: 165000, charged_currency: "NGN", creator_id: "c1", subscriber_id: "s1" }];
+    db.tables.financial_audit_log = [];
+    db.rpc.reverse_sub_purchase = vi.fn(() => ({ data: { ok: true, debt_after: 0 }, error: null }));
+  });
+
+  it("a refund of part of the charge reverses NOTHING and is put on the audit log for an admin", async () => {
+    const res = await refund(15000);
+    expect(res.status).toBe(200);
+    expect(reversals()).toBe(0);
+    expect(db.tables.financial_audit_log).toEqual([expect.objectContaining({ action: "sub_partial_refund", reference: REF, details: expect.objectContaining({ refunded_minor: 15000, charged_minor: 165000, currency: "NGN" }) })]);
+    expect(logged("refund.processed")?.processed_at).toBeTruthy();
+  });
+
+  it("a refund of the whole charge reverses it", async () => {
+    await refund(165000);
+    expect(reversals()).toBe(1);
+  });
+
+  it("a refund without an amount (older payloads) is treated as full, as before", async () => {
+    await refund(undefined);
+    expect(reversals()).toBe(1);
+  });
+
+  it("a refund in another currency than the charge is not guessed at: nothing reversed, an admin reviews it", async () => {
+    await refund(100, "USD");
+    expect(reversals()).toBe(0);
+    expect(db.tables.financial_audit_log).toEqual([expect.objectContaining({ action: "sub_refund_unrecognised", details: expect.objectContaining({ currency: "USD", charged_currency: "NGN" }) })]);
+  });
+});

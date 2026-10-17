@@ -5,7 +5,7 @@ import { resolveCredit } from "@/lib/ai/character-replace/topup-fx";
 import { WALLET_UNIT } from "@/lib/ai/credits/units";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { AD_CAMPAIGN_PURPOSE, AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, SUB_PURPOSE, verifyPaystackSignature, type PaystackEventData } from "@/lib/paystack/paystack";
-import { confirmSubPayment, reverseSub } from "@/lib/sub/server";
+import { confirmSubPayment, reverseSub, reverseSubForRefund } from "@/lib/sub/server";
 import { isAiPlanEvent, syncAiPlanEvent } from "@/lib/ai/credits/paystack";
 import { syncPaystackEvent } from "@/lib/paystack/sync";
 import { handlePaystackAdCharge, handlePaystackAdReversal } from "@/lib/ads-platform/payment-server";
@@ -93,9 +93,13 @@ export async function POST(request: Request) {
       */
       const key = `${event.event}:${ref}`;
       if ((await claimProviderEvent("paystack", key, event.event, ref)) === "done") return NextResponse.json({ received: true, duplicate: true });
-      const out = await reverseSub(ref, event.event === "refund.processed" ? "refunded" : "disputed", null, `Paystack ${event.event}`).catch(() => ({ ok: false as const, error: "threw", status: 500, reason: undefined }));
+      // Part 12: a refund reverses only when it refunds the whole charge (reverseSubForRefund); a dispute always does
+      const out = await (event.event === "refund.processed"
+        ? reverseSubForRefund(ref, { minor: event.data?.amount, currency: event.data?.currency })
+        : reverseSub(ref, "disputed", null, `Paystack ${event.event}`)
+      ).catch(() => ({ ok: false as const, error: "threw", status: 500, reason: undefined }));
       if (out.ok) {
-        await markProviderEvent("paystack", key, "reversed");
+        await markProviderEvent("paystack", key, "review" in out && out.review ? "review_partial_refund" : "reversed");
         return NextResponse.json({ received: true });
       }
       if (out.status >= 500) {

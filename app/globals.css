@@ -5148,7 +5148,15 @@ html.dark .streak-recover {
   photo, video or canvas — a feed/chat/carousel media box, a thumbnail button — is never
   scaled; ordinary buttons keep the bounce.
 */
-:where(button, [role="button"], a.ai-btn, a.ai-strip-cta, summary):not(:disabled):not([aria-disabled="true"]):not(:has(img, video, picture, canvas)):active {
+/*
+  🔴 A FULL-COVER LAYER NEVER MOVES (owner, 2026-10-17, with a screenshot of the guest sign-in
+  sheet: the blurred page behind it "shrinks and bounces when tapped … sinks inside"). A modal's
+  backdrop is a full-screen <button> (tap outside to close) — `absolute|fixed inset-0` — so the
+  press scale shrank the whole dimmed page to 95 %. Same for the invisible full-size tap zones over
+  media (tap to pause). Anything stretched over its parent with `inset-0` is excluded; ordinary
+  buttons keep the bounce.
+*/
+:where(button, [role="button"], a.ai-btn, a.ai-strip-cta, summary):not(:disabled):not([aria-disabled="true"]):not(:has(img, video, picture, canvas)):not([class~="inset-0"]):active {
   scale: 0.95;
   transition-duration: 70ms;
 }

@@ -76,7 +76,9 @@ describe("the service-role client never reaches a browser bundle", () => {
     for (const f of sourceFiles()) src[f] = readFileSync(path.join(ROOT, f), "utf8");
     const chain = clientPathTo(TARGET, src);
     expect(chain, chain?.join(" → ")).toBeNull();
-  });
+    // it reads every source file in the repo: ~1-5 s alone, past vitest's 5 s default under a full parallel run
+    // (it timed out — never failed its assertion — in full runs on 2026-10-17); the assertion is unchanged
+  }, 30_000);
 
   it("teeth: a client file importing a helper from a service-role module is caught", () => {
     const fixture = {

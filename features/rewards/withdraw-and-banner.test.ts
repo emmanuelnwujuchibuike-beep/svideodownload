@@ -36,7 +36,7 @@ describe("the referral banner after a download", () => {
     expect(trigger).toContain('dynamic(() => import("@/features/rewards/referral-banner")');
     expect(trigger).not.toMatch(/from "@\/features\/rewards\/referral-banner"/);
   });
-  it("says the LIVE amount (never a hard-coded 2), can be skipped only after a short read, and a guest is sent to sign in", () => {
+  it("says the LIVE amount (never a hard-coded 2), can be skipped instantly, and a guest is sent to sign in", () => {
     expect(banner).toContain('fetch("/api/rewards/public")');
     // the code (comments stripped) never writes a number of credits — the owner's "2" lives in the admin rule
     const live = banner.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
@@ -44,8 +44,10 @@ describe("the referral banner after a download", () => {
     expect(live).toContain("Earn credits with Frenzsave");
     expect(live).toContain("{referralSentence(rules, n)}");
     expect(live).toContain("withdraw once you have been active on");
-    expect(banner).toContain("const SKIP_AFTER_S = 5;");
-    expect(banner).toContain("disabled={!canSkip}");
+    // owner, 2026-10-16: "it should be skipable instantly" — no countdown, no locked Skip, Escape works at once
+    expect(live).not.toMatch(/SKIP_AFTER_S|Skip in|setLeft|disabled=\{!canSkip\}/);
+    expect(live).toContain('onClick={onClose}');
+    expect(live).toContain('if (e.key === "Escape") onClose();');
     expect(banner).toContain("Sign in to get your link");
   });
 });

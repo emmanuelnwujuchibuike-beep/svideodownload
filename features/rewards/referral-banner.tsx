@@ -25,18 +25,18 @@ import { markSharedToday } from "./referral-shared-today";
  *
  *  · The amount and the thresholds are the operator's LIVE rules
  *    (/api/rewards/public, once per session) — "2" is never written here.
- *  · "Skip" unlocks after 5 s (SKIP_AFTER_S); Escape does nothing until then. It only
- *    closes — it never snoozes, so the modal returns on the next day's first download.
+ *  · "Skip" works from the first frame — no countdown (owner, 2026-10-16: "make this section not
+ *    to show timer count down, it should be skipable instantly"); Escape too. It only closes —
+ *    it never snoozes, so the card returns on the next day's first download.
  *  · "I understood, don't show this again this week" is there from the first frame and
  *    snoozes the modal for 7 days (SNOOZE_KEY).
  *  · NOT intrusive (owner, 2026-10-15): a compact card docked at the bottom with no dimming
  *    backdrop — the page and the download's own progress stay visible and tappable.
- *    Reduced motion keeps the countdown, drops the motion.
+ *    Reduced motion drops the motion.
  *  · Signed in → "Share my link" (their attribution link, one share helper).
  *    Guest → "Sign in to get your link": a guest has no account to credit.
  *  · Frenz AI glass (`ai-glass`), portalled to <body> (the fixed-overlay law).
  */
-const SKIP_AFTER_S = 5;
 const RULES_KEY = "frenz:rewards-public";
 
 interface PublicRules {
@@ -72,7 +72,6 @@ async function readRules(): Promise<PublicRules | null> {
 
 export function ReferralBanner({ onClose }: { onClose: () => void }) {
   const [rules, setRules] = useState<PublicRules | null>(null);
-  const [left, setLeft] = useState(SKIP_AFTER_S);
   const [signedIn, setSignedIn] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -91,22 +90,15 @@ export function ReferralBanner({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   useEffect(() => {
-    if (!rules || left <= 0) return;
-    const t = window.setTimeout(() => setLeft((n) => n - 1), 1000);
-    return () => window.clearTimeout(t);
-  }, [rules, left]);
-
-  useEffect(() => {
     if (!rules) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && left <= 0) onClose();
+      if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [rules, left, onClose]);
+  }, [rules, onClose]);
 
   if (!rules) return null;
-  const canSkip = left <= 0;
 
   async function share() {
     if (busy) return;
@@ -139,22 +131,13 @@ export function ReferralBanner({ onClose }: { onClose: () => void }) {
       <div className="referral-banner ai-glass pointer-events-auto relative w-full max-w-md overflow-hidden rounded-[1.5rem] p-4 text-slate-900 shadow-[0_24px_60px_-28px_rgba(49,46,129,0.55)] ring-1 ring-inset ring-white/70">
         <button
           type="button"
-          onClick={canSkip ? onClose : undefined}
-          disabled={!canSkip}
-          aria-label={canSkip ? "Skip" : `Skip in ${left} seconds`}
+          onClick={onClose}
+          aria-label="Skip"
           // z-10: the content block below is `relative` and later in the DOM, so without a layer it
           // painted over this button and swallowed the tap (owner, 2026-10-08).
           className="absolute right-2.5 top-2.5 z-10 inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded-full bg-white/70 px-2.5 text-[12px] font-semibold text-slate-600 ring-1 ring-inset ring-black/[0.06] transition disabled:cursor-default enabled:hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
         >
-          {canSkip ? (
-            <>
-              Skip <X className="h-3.5 w-3.5" aria-hidden />
-            </>
-          ) : (
-            <span className="tabular-nums" aria-live="polite">
-              Skip in {left}
-            </span>
-          )}
+          Skip <X className="h-3.5 w-3.5" aria-hidden />
         </button>
 
         <div className="relative">

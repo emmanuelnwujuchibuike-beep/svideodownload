@@ -71,9 +71,10 @@ describe("owner, 2026-10-15: shown while PREPARING, never at completion, and not
     expect(code.match(/SNOOZE_KEY/g)?.length).toBe(2); // the import and the one write
     expect(t()).toContain("isSnoozed(localStorage.getItem(SNOOZE_KEY), new Date())");
   });
-  it("is a docked card with no dimming backdrop and a 5 s skip", () => {
+  it("is a docked card with no dimming backdrop, and Skip works at once (owner 2026-10-16: no countdown)", () => {
     const b = src("features/rewards/referral-banner.tsx");
-    expect(b).toContain("const SKIP_AFTER_S = 5;");
+    expect(b).not.toContain("SKIP_AFTER_S");
+    expect(b).not.toContain("Skip in {left}");
     expect(b).toContain('aria-modal="false"');
     expect(b).not.toContain("bg-slate-950/55");
   });

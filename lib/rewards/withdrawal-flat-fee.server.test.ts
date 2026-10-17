@@ -43,6 +43,18 @@ describe("the tiers (defaults $0.20 below $300, $0.50 from $300 to $500, $1.00 a
     [1_000_000, 100],
   ])("%i cents → %i cents", (amount, fee) => expect(cfg.withdrawalFlatFeeCents(amount, f)).toBe(fee));
 
+  it("Part 16 worked example: $9.80 requested → $0.20 flat, $10.00 must be available, 10% off the amount → $8.82 paid", async () => {
+    const { withdrawalSplit } = await import("@/lib/creator/membership/engine");
+    const flat = cfg.withdrawalFlatFeeCents(980, f);
+    const split = withdrawalSplit(980, cfg.SUB_DEFAULTS.withdrawalFeePercent);
+    expect({ flat, needed: 980 + flat, fee: split.feeCents, paid: split.netCents }).toEqual({ flat: 20, needed: 1_000, fee: 98, paid: 882 });
+    // and the server sends exactly that to the SQL: the amount as gross, the 10% in basis points, the flat fee apart
+    db.rpc.request_sub_withdrawal = vi.fn(() => ({ data: { ok: true, id: "w1", net: 882, fee: 118 }, error: null }));
+    const out = await requestSubWithdrawal({ userId: U, grossCents: 980, details, idempotencyKey: "k-example-980" });
+    expect(out).toMatchObject({ ok: true, netCents: 882 });
+    expect(db.rpc.request_sub_withdrawal).toHaveBeenCalledWith(expect.objectContaining({ p_gross_cents: 980, p_fee_bp: 1_000, p_min_cents: 500, p_flat_fee_cents: 20 }));
+  });
+
   it("the admin's values are kept, clamped, and the second limit is never below the first", () => {
     expect(cfg.normalizeFlatFees({ underCents: 30, midCents: 75, overCents: 150, midFromCents: 20_000, overAboveCents: 40_000 })).toEqual({ underCents: 30, midCents: 75, overCents: 150, midFromCents: 20_000, overAboveCents: 40_000 });
     expect(cfg.normalizeFlatFees({ underCents: -5, midFromCents: 60_000, overAboveCents: 10 })).toMatchObject({ underCents: 0, midFromCents: 60_000, overAboveCents: 60_000 });

@@ -1,33 +1,46 @@
 "use client";
 
-import { EyeOff, Film, Images, Loader2, Lock, RefreshCw, Sparkles } from "lucide-react";
+import { Check, Clock, EyeOff, Film, ImageOff, Images, Loader2, Lock, RefreshCw, Sparkles } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { VerifiedTick } from "@/components/badges/identity-badges";
+import { itemsLabel, membershipChip, priceLine } from "@/features/sub/exclusive-labels";
+import { firstPageIsReplay, type LinkBirth, mayAutoRefresh, refreshPreview } from "@/features/sub/feed-previews";
+import { cancelOpening, startOpening } from "@/features/sub/opened-cache";
 import { exPrimary, exQuiet } from "@/features/sub/ui";
-import { usd } from "@/lib/creator/membership/engine";
 import { cn } from "@/lib/utils";
 
 // the existing private viewer (access re-checked by /api/sub/posts/[id] on open), loaded on the first tap
 const PrivateViewer = dynamic(() => import("./sub-gallery").then((m) => m.PrivateViewer), { ssr: false });
 
 /**
- * The Exclusive feed (Frenz Exclusive Part 3). Everything shown comes from /api/sub/feed, which
- * decides access on the server on every request: posts from creators the viewer subscribes to,
- * then — first page only — locked previews from followed creators with the server's price.
+ * The Exclusive feed (Frenz Exclusive Part 3). Everything shown comes from the server, which
+ * decides access on every request: posts from creators the viewer subscribes to, then — first
+ * page only — locked previews from followed creators with the server's price.
  *
  * Paging: one request at a time (a ref guards rapid scrolling), the previous request aborted on
  * unmount, ids de-duplicated across pages, the next page asked for ~600 px before the end.
  * Tiles carry ONE five-minute preview link; the post's media are signed when it is opened.
+ *
+ * Part 15 (2026-10-17):
+ *  · The first page arrives with the page itself (`initial`, rendered on the server for this
+ *    viewer, never cached) — no second request after hydration. The app's router cache keeps
+ *    pages for hours, so a first page seen before (or older than a minute) is shown and asked
+ *    for again at once: what the server decides NOW replaces it.
+ *  · A preview that fails after its link ran out is re-signed through the batched, access-checked
+ *    refresh (feed-previews.ts); any other failure says so and offers a retry.
+ *  · A post starts opening at the first touch (opened-cache.ts); a scroll cancels it.
  */
 
-interface Creator {
+export interface Creator {
   id: string;
   handle: string;
   name: string;
   avatarUrl: string | null;
   verified: boolean;
+  accessUntil?: string | null;
 }
 interface Post {
   id: string;
@@ -47,15 +60,21 @@ interface Card {
   items: number;
   hasVideo: boolean;
 }
-type DiscoverCreator = Creator & { priceCents: number; totalCents: number; periodDays: number };
-interface Page {
+type DiscoverCreator = Creator & { priceCents: number; feeCents: number; feePercent: number; totalCents: number; periodDays: number };
+export interface ExclusiveFeedPageView {
   posts: Post[];
   creators: Record<string, Creator>;
   next: string | null;
   subscriptions: number;
   discover?: { cards: Card[]; creators: Record<string, DiscoverCreator> };
   ready: boolean;
+  issuedAt: number;
+  previewTtl: number;
 }
+type Shown = Post & { birth: LinkBirth };
+
+/** first pages already shown in this tab — one replayed from the router cache is asked for again */
+const shownPages = new Set<number>();
 
 const ago = (iso: string) => {
   const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
@@ -65,19 +84,24 @@ const ago = (iso: string) => {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 };
 
-export function ExclusiveFeed() {
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [creators, setCreators] = useState<Record<string, Creator>>({});
-  const [discover, setDiscover] = useState<Page["discover"]>(undefined);
-  const [subscriptions, setSubscriptions] = useState<number | null>(null);
-  const [next, setNext] = useState<string | null>(null);
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+const now = () => (typeof performance !== "undefined" ? performance.now() : 0);
+const born = (page: ExclusiveFeedPageView, receivedAt: number) => (p: Post): Shown => ({ ...p, birth: { issuedAt: page.issuedAt, receivedAt, ttl: page.previewTtl } });
+
+export function ExclusiveFeed({ initial = null }: { initial?: ExclusiveFeedPageView | null }) {
+  const [posts, setPosts] = useState<Shown[]>(() => (initial ? initial.posts.map(born(initial, now())) : []));
+  const [creators, setCreators] = useState<Record<string, Creator>>(() => initial?.creators ?? {});
+  const [discover, setDiscover] = useState<ExclusiveFeedPageView["discover"]>(() => initial?.discover);
+  const [subscriptions, setSubscriptions] = useState<number | null>(() => initial?.subscriptions ?? null);
+  const [next, setNext] = useState<string | null>(() => initial?.next ?? null);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">(() => (initial ? "ready" : "loading"));
   const [more, setMore] = useState<"idle" | "loading" | "error">("idle");
   const [open, setOpen] = useState<string | null>(null);
   const busy = useRef(false);
   const abort = useRef<AbortController | null>(null);
-  const seen = useRef(new Set<string>());
+  const seen = useRef(new Set<string>(initial?.posts.map((p) => p.id) ?? []));
   const sentinel = useRef<HTMLDivElement>(null);
+  // decided once per mount (StrictMode's second effect run must not count the page as replayed)
+  const replayed = useRef<boolean | null>(null);
 
   const load = useCallback(async (cursor: string | null) => {
     if (busy.current) return;
@@ -93,14 +117,15 @@ export function ExclusiveFeed() {
         return;
       }
       if (!res.ok) throw new Error(String(res.status));
-      const page = (await res.json()) as Page;
+      const page = (await res.json()) as ExclusiveFeedPageView;
       if (ctl.signal.aborted) return;
       if (!cursor) seen.current = new Set();
-      const fresh = page.posts.filter((p) => !seen.current.has(p.id));
+      const fresh = page.posts.filter((p) => !seen.current.has(p.id)).map(born(page, now()));
       fresh.forEach((p) => seen.current.add(p.id));
       setPosts((cur) => (cursor ? [...cur, ...fresh] : fresh));
       setCreators((cur) => ({ ...(cursor ? cur : {}), ...page.creators }));
       if (!cursor) {
+        shownPages.add(page.issuedAt);
         setDiscover(page.discover);
         setSubscriptions(page.subscriptions);
       }
@@ -110,7 +135,8 @@ export function ExclusiveFeed() {
     } catch (e) {
       if ((e as { name?: string }).name === "AbortError") return;
       if (cursor) setMore("error");
-      else setStatus("error");
+      // a failed re-check of a page already on screen leaves it there (opening a post asks the server anyway)
+      else setStatus((s) => (s === "ready" ? s : "error"));
     } finally {
       // only the CURRENT request releases the guard (an aborted older one must not free a newer one's)
       if (abort.current === ctl) busy.current = false;
@@ -118,13 +144,20 @@ export function ExclusiveFeed() {
   }, []);
 
   useEffect(() => {
+    if (initial) {
+      if (replayed.current === null) {
+        replayed.current = firstPageIsReplay(initial.issuedAt, shownPages.has(initial.issuedAt));
+        shownPages.add(initial.issuedAt);
+      }
+      if (!replayed.current) return;
+    }
     void load(null);
     return () => {
       abort.current?.abort();
       // an aborted request must not leave the guard set: a remount (or StrictMode's second run) loads again
       busy.current = false;
     };
-  }, [load]);
+  }, [load, initial]);
 
   // the next page, a little before the end; never while one is loading or after an error (Retry asks again)
   useEffect(() => {
@@ -183,53 +216,168 @@ export function ExclusiveFeed() {
 function Avatar({ c, size = 40 }: { c: Creator | undefined; size?: number }) {
   return c?.avatarUrl ? (
     // eslint-disable-next-line @next/next/no-img-element -- a profile photo at its own CDN size
-    <img src={c.avatarUrl} alt="" width={size} height={size} loading="lazy" decoding="async" className="shrink-0 rounded-full object-cover ring-2 ring-background" style={{ width: size, height: size }} />
+    <img src={c.avatarUrl} alt="" width={size} height={size} loading="lazy" decoding="async" className="shrink-0 rounded-full object-cover ring-1 ring-black/[0.06] dark:ring-white/10" style={{ width: size, height: size }} />
   ) : (
-    <span className="flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent font-bold text-primary-foreground ring-2 ring-background" style={{ width: size, height: size, fontSize: size * 0.4 }} aria-hidden>
+    <span className="flex shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-primary ring-1 ring-inset ring-primary/15 dark:bg-primary/20 dark:text-sky-200" style={{ width: size, height: size, fontSize: size * 0.4 }} aria-hidden>
       {(c?.name ?? "?").replace(/^@/, "").charAt(0).toUpperCase()}
     </span>
   );
 }
 
-function FeedCard({ post, creator, eager, onOpen }: { post: Post; creator: Creator | undefined; eager: boolean; onOpen: () => void }) {
-  const [broken, setBroken] = useState(false);
+/** The creator's name with the server's verified flag (profiles.is_verified — users can't set it, 0257). */
+function CreatorName({ c, link, className }: { c: Creator; link: boolean; className?: string }) {
+  const name = link ? (
+    // a 40px-tall hit area around a 22px line (negative margin: the row doesn't grow)
+    <Link href={`/u/${c.handle}?tab=sub`} prefetch={false} className="-my-[9px] truncate py-[9px] hover:underline">
+      {c.name}
+    </Link>
+  ) : (
+    <span className="truncate">{c.name}</span>
+  );
+  return (
+    <span className={cn("flex min-w-0 items-center gap-1", className)}>
+      {name}
+      {c.verified ? <VerifiedTick size="sm" className="h-4 w-4" /> : null}
+    </span>
+  );
+}
+
+const chipTone = {
+  active: "bg-primary/[0.08] text-primary dark:bg-primary/20 dark:text-sky-200",
+  ending: "bg-amber-500/12 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300",
+  ended: "bg-black/[0.05] text-muted-foreground dark:bg-white/[0.07]",
+} as const;
+
+function FeedCard({ post, creator, eager, onOpen }: { post: Shown; creator: Creator | undefined; eager: boolean; onOpen: () => void }) {
+  const chip = membershipChip(creator?.accessUntil);
+  const what = itemsLabel(post.items, post.hasVideo);
+  const preview = usePreview(post);
   return (
     <article className="ex-card overflow-hidden">
       <header className="flex items-center gap-3 px-4 pb-3 pt-3.5">
         <Avatar c={creator} />
         <div className="min-w-0 flex-1">
-          {creator ? (
-            <Link href={`/u/${creator.handle}?tab=sub`} prefetch={false} className="block truncate text-[14.5px] font-semibold hover:underline">
-              {creator.name}
-            </Link>
-          ) : null}
+          {creator ? <CreatorName c={creator} link className="text-[14.5px] font-semibold" /> : null}
           <p className="truncate text-[12.5px] text-muted-foreground">
             {creator ? `@${creator.handle} · ` : ""}
             {ago(post.createdAt)}
           </p>
         </div>
-        {post.hidden ? (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-black/[0.05] dark:bg-white/[0.07] px-2.5 py-1 text-[11.5px] font-semibold text-muted-foreground" title="Only subscribers know this post exists">
-            <EyeOff className="h-3.5 w-3.5" aria-hidden /> Subscribers only
+        {chip ? (
+          <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11.5px] font-semibold", chipTone[chip.tone])} title={chip.label} aria-label={chip.label}>
+            {chip.tone === "active" ? <Check className="h-3.5 w-3.5" aria-hidden /> : <Clock className="h-3.5 w-3.5" aria-hidden />}
+            {chip.text}
           </span>
         ) : null}
       </header>
-      <button type="button" onClick={onOpen} className="group relative block aspect-[4/5] w-full overflow-hidden bg-black/[0.05] dark:bg-white/[0.07] text-left" aria-label={`Open ${creator?.name ?? "this"} exclusive post`}>
-        {post.previewUrl && !broken ? (
-          // eslint-disable-next-line @next/next/no-img-element -- a five-minute private link, never cached or proxied
-          <img src={post.previewUrl} alt="" loading={eager ? "eager" : "lazy"} decoding="async" draggable={false} onError={() => setBroken(true)} onContextMenu={(e) => e.preventDefault()} className="h-full w-full object-cover transition duration-300 group-active:scale-[0.99]" />
-        ) : (
-          <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/15 via-accent/10 to-transparent">
-            {post.hasVideo ? <Film className="h-8 w-8 text-muted-foreground" aria-hidden /> : <Images className="h-8 w-8 text-muted-foreground" aria-hidden />}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={onOpen}
+          // Part 15: the post (and the viewer's code) start loading at the first touch; a scroll cancels it
+          onPointerDown={() => {
+            startOpening(post.id);
+            void import("./sub-gallery");
+          }}
+          onPointerCancel={() => cancelOpening(post.id)}
+          className="relative block aspect-[4/5] w-full overflow-hidden bg-black/[0.04] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary dark:bg-white/[0.06]"
+          aria-label={`Open ${creator?.name ?? "this"} exclusive post, ${what}`}
+        >
+          <PrivatePreview post={post} preview={preview} eager={eager} />
+          <span className="pointer-events-none absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11.5px] font-semibold text-white" aria-hidden>
+            {post.hasVideo ? <Film className="h-3.5 w-3.5" /> : <Images className="h-3.5 w-3.5" />}
+            {post.items}
           </span>
-        )}
-        <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/45 px-2.5 py-1 text-[11.5px] font-semibold text-white backdrop-blur">
-          {post.hasVideo ? <Film className="h-3.5 w-3.5" aria-hidden /> : <Images className="h-3.5 w-3.5" aria-hidden />}
-          {post.items}
-        </span>
-      </button>
+          {post.hidden ? (
+            <span className="pointer-events-none absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11.5px] font-semibold text-white" title="Only subscribers know this post exists">
+              <EyeOff className="h-3.5 w-3.5" aria-hidden /> Subscribers only
+            </span>
+          ) : null}
+        </button>
+        {preview.phase === "failed" ? (
+          // beside the tile's own button, never inside it; runs only when tapped
+          <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center">
+            <button type="button" onClick={() => void preview.refresh()} className={cn(exQuiet, "pointer-events-auto")}>
+              <RefreshCw className="h-4 w-4" aria-hidden /> Retry preview
+            </button>
+          </div>
+        ) : null}
+      </div>
       {post.caption ? <p className="line-clamp-3 whitespace-pre-line px-4 py-3 text-[14.5px] leading-snug">{post.caption}</p> : <div className="h-1" />}
     </article>
+  );
+}
+
+/**
+ * A feed tile's private preview: a plain <img> on its five-minute link (never next/image — the
+ * optimizer would fetch and cache a private file on our server), inside the tile's fixed 4:5 box
+ * so nothing moves while it loads. A link that ran out is re-signed once, automatically; any
+ * other failure shows a retry, which only ever runs when tapped.
+ */
+function usePreview(post: Shown) {
+  const [link, setLink] = useState<{ url: string | null; birth: LinkBirth }>({ url: post.previewUrl, birth: post.birth });
+  const [phase, setPhase] = useState<"show" | "refreshing" | "failed" | "gone">("show");
+  // a newer page re-signed this post: take its link (synchronously, no stale frame)
+  const [lastUrl, setLastUrl] = useState(post.previewUrl);
+  if (post.previewUrl !== lastUrl) {
+    setLastUrl(post.previewUrl);
+    setLink({ url: post.previewUrl, birth: post.birth });
+    setPhase("show");
+  }
+  const refresh = async () => {
+    setPhase("refreshing");
+    const r = await refreshPreview(post.id);
+    if (r.kind === "url") {
+      setLink({ url: r.url, birth: r.birth });
+      setPhase("show");
+    } else if (r.kind === "none") {
+      setLink((l) => ({ ...l, url: null }));
+      setPhase("show");
+    } else setPhase(r.kind);
+  };
+  // a link that ran out is re-signed once per link lifetime (monotonic clock); anything else is a real failure (no loop)
+  const lastAuto = useRef<number | null>(null);
+  const onError = () => {
+    if (!mayAutoRefresh(link.birth, lastAuto.current)) return setPhase("failed");
+    lastAuto.current = now();
+    void refresh();
+  };
+  return { link, phase, refresh, onError };
+}
+
+function PrivatePreview({ post, preview, eager }: { post: Shown; preview: ReturnType<typeof usePreview>; eager: boolean }) {
+  const { link, phase, onError } = preview;
+  const icon = post.hasVideo ? <Film className="h-8 w-8 text-muted-foreground/70" aria-hidden /> : <Images className="h-8 w-8 text-muted-foreground/70" aria-hidden />;
+
+  if (phase === "failed" || phase === "gone")
+    return (
+      <span className="flex h-full w-full flex-col items-center justify-center gap-2 px-6 pb-12 text-center text-muted-foreground">
+        <ImageOff className="h-7 w-7" aria-hidden />
+        <span className="text-[13px] font-medium">{phase === "gone" ? "This post isn't available any more." : "The preview didn't load."}</span>
+      </span>
+    );
+  if (!link.url) return <span className="flex h-full w-full items-center justify-center">{icon}</span>;
+  return (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element -- a five-minute private link, never cached or proxied */}
+      <img
+        key={link.url}
+        src={link.url}
+        alt=""
+        loading={eager ? "eager" : "lazy"}
+        fetchPriority={eager ? "high" : "auto"}
+        decoding="async"
+        draggable={false}
+        onError={onError}
+        onContextMenu={(e) => e.preventDefault()}
+        className="h-full w-full object-cover"
+      />
+      {phase === "refreshing" ? (
+        <span className="absolute inset-0 flex items-center justify-center bg-black/[0.04] dark:bg-white/[0.04]">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Refreshing the preview" />
+        </span>
+      ) : null}
+    </>
   );
 }
 
@@ -276,6 +424,9 @@ function Discover({ cards, creators }: { cards: Card[]; creators: Record<string,
  * A locked exclusive post: what the creator chose to make public (their cover, if any), who it
  * is from, what a subscription costs, and the existing checkout. Never the caption or a private
  * link. The price shown is the server's; checkout recomputes it on the server anyway.
+ *
+ * Part 15: a light tile (no saturated gradient), one lock mark, the standard item wording, and the
+ * total the subscriber pays. The fee breakdown is shown at checkout only (owner, 2026-10-17).
  */
 export function LockedPreviewCard({ card, creator }: { card: Card; creator: DiscoverCreator | undefined }) {
   const [state, setState] = useState<"idle" | "busy" | { error: string }>("idle");
@@ -294,38 +445,40 @@ export function LockedPreviewCard({ card, creator }: { card: Card; creator: Disc
     }
     setState({ error: j?.error ?? "Couldn't open the payment. Try again." });
   };
+  const price = priceLine(creator);
+  const what = itemsLabel(card.items, card.hasVideo);
   return (
     <article className="ex-card overflow-hidden">
-      <Link href={`/u/${creator.handle}?tab=sub`} prefetch={false} className="relative block aspect-[16/10] overflow-hidden bg-black/[0.05] dark:bg-white/[0.07]" aria-label={`${creator.name}'s exclusive posts`}>
+      <Link href={`/u/${creator.handle}?tab=sub`} prefetch={false} className="relative block aspect-[16/10] overflow-hidden bg-gradient-to-br from-primary/[0.07] via-transparent to-accent/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary" aria-label={`${creator.name}'s exclusive posts — ${what}, for subscribers`}>
         {card.coverUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- the creator's PUBLIC teaser, on the CDN
-          <img src={card.coverUrl} alt="" loading="lazy" decoding="async" className="h-full w-full scale-105 object-cover blur-[2px] brightness-75" />
-        ) : (
-          // no public cover: a solid brand ground, dark enough for the white label in light AND dark mode
-          <span className="block h-full w-full bg-gradient-to-br from-primary via-accent to-primary/80" />
-        )}
-        <span className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-white">
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/35 ring-1 ring-inset ring-white/25 backdrop-blur">
-            <Lock className="h-5 w-5" aria-hidden />
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element -- the creator's PUBLIC teaser, on the CDN */}
+            <img src={card.coverUrl} alt="" loading="lazy" decoding="async" className="h-full w-full scale-110 object-cover blur-md" />
+            <span className="absolute inset-0 bg-white/30 dark:bg-black/40" aria-hidden />
+          </>
+        ) : null}
+        <span className="absolute inset-0 flex flex-col items-center justify-center gap-2" aria-hidden>
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-primary shadow-sm ring-1 ring-black/[0.06] dark:bg-neutral-900 dark:text-sky-300 dark:ring-white/10">
+            <Lock className="h-5 w-5" />
           </span>
-          <span className="text-[12.5px] font-semibold [text-shadow:0_1px_3px_rgba(0,0,0,0.5)]">
-            {card.items} {card.hasVideo ? "item" : "photo"}
-            {card.items === 1 ? "" : "s"} for subscribers
+          <span className="rounded-full bg-white/90 px-2.5 py-1 text-[12px] font-semibold text-neutral-800 ring-1 ring-black/[0.05] dark:bg-neutral-900/90 dark:text-neutral-100 dark:ring-white/10">
+            {what} · subscribers only
           </span>
         </span>
       </Link>
-      <div className="flex items-center gap-3 p-3.5">
-        <Avatar c={creator} size={36} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[14px] font-semibold">{creator.name}</p>
-          <p className="truncate text-[12.5px] text-muted-foreground">
-            {usd(creator.totalCents)} for {creator.periodDays} days
-          </p>
+      <div className="space-y-3 p-3.5">
+        <div className="flex items-center gap-3">
+          <Avatar c={creator} size={36} />
+          <CreatorName c={creator} link={false} className="min-w-0 flex-1 text-[14px] font-semibold" />
         </div>
-        <button type="button" onClick={() => void subscribe()} disabled={state === "busy"} className={exPrimary}>
-          {state === "busy" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Lock className="h-4 w-4" aria-hidden />}
-          Subscribe
-        </button>
+        {/* owner: the card shows only what is paid; the fee breakdown belongs to checkout. It wraps, never truncates */}
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <p className="min-w-0 grow basis-[10.5rem] text-[14px] font-semibold tabular-nums">{price}</p>
+          <button type="button" onClick={() => void subscribe()} disabled={state === "busy"} className={exPrimary}>
+            {state === "busy" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Lock className="h-4 w-4" aria-hidden />}
+            Subscribe
+          </button>
+        </div>
       </div>
       {typeof state === "object" ? (
         <p role="alert" className="px-3.5 pb-3 text-[12.5px] font-medium text-rose-600 dark:text-rose-400">
@@ -336,7 +489,7 @@ export function LockedPreviewCard({ card, creator }: { card: Card; creator: Disc
   );
 }
 
-function FeedSkeleton() {
+export function FeedSkeleton() {
   return (
     <div className="space-y-4" aria-busy="true" aria-label="Loading your exclusive feed">
       {[0, 1].map((i) => (

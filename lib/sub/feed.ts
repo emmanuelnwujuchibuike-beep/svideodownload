@@ -38,6 +38,16 @@ import { subConfig } from "./server";
  * Keyset on (created_at desc, id desc): the cursor is the last row returned, so a post added
  * while scrolling never shifts a page, and a tie on created_at never skips or repeats a post.
  * PAGE + 1 rows are read to know whether there is a next page.
+ *
+ * ── Part 15 (2026-10-17) ────────────────────────────────────────────────────
+ *  · Discover needs only who the viewer subscribes to and the block list, so it starts as soon
+ *    as those are read and runs ALONGSIDE the feed's own reads — reusing that one block-list
+ *    read instead of reading it again (same query, same filtering; a failed read still empties it).
+ *  · A feed creator carries `accessUntil` — the membership's own period_end, from the same batched
+ *    read (no extra query). Renewal is manual (Part 5), so access really does end then.
+ *  · Preview links last five minutes. `feedPreviews` re-signs the tiles of posts the viewer may
+ *    STILL see — access decided again, from scratch, exactly as for a feed page — so a tile
+ *    reached after its link ran out can be refreshed. Every page says when its links were signed.
  */
 
 type Row = Record<string, unknown>;
@@ -47,7 +57,9 @@ export const FEED_PAGE = 12;
 export const FEED_MAX_CREATORS = 150;
 const DISCOVER_FOLLOWS = 200;
 const DISCOVER_CARDS = 8;
-const SIGNED_TTL_SECONDS = 300;
+export const SIGNED_TTL_SECONDS = 300;
+/** at most this many tiles are re-signed in one refresh */
+export const PREVIEW_REFRESH_MAX = 24;
 
 export interface FeedCreator {
   id: string;
@@ -55,6 +67,8 @@ export interface FeedCreator {
   name: string;
   avatarUrl: string | null;
   verified: boolean;
+  /** feed creators only: when the viewer's paid access ends (the membership's period_end) */
+  accessUntil?: string | null;
 }
 
 export interface FeedPost {
@@ -82,6 +96,9 @@ export interface DiscoverCard {
 export interface DiscoverCreator extends FeedCreator {
   /** what a subscription costs now — the server's numbers, the same ones checkout charges */
   priceCents: number;
+  /** the purchase fee on top, shown apart from the creator's price (Part 15) */
+  feeCents: number;
+  feePercent: number;
   totalCents: number;
   periodDays: number;
 }
@@ -95,22 +112,48 @@ export interface ExclusiveFeedPage {
   /** first page only */
   discover?: { cards: DiscoverCard[]; creators: Record<string, DiscoverCreator> };
   ready: boolean;
+  /** when this page's preview links were signed (server ms), and how long they last (seconds) */
+  issuedAt: number;
+  previewTtl: number;
 }
 
 type Fail = { ok: false; error: string; status: number };
 
-/** Creators this viewer may see exclusive posts of right now: one batched read, the `hasActiveSub` predicate. */
-export async function activeSubscriptions(viewerId: string): Promise<{ ids: string[]; ready: boolean }> {
-  if (!isUuid(viewerId)) return { ids: [], ready: true };
+interface Access {
+  ids: string[];
+  ready: boolean;
+  /** creator → the latest period_end among the viewer's active memberships */
+  until: Map<string, string>;
+  /** both directions; null = the block list could not be read (discover then stays empty) */
+  blocked: Set<string> | null;
+}
+
+/** The subscriptions and the block list, read ONCE per request and shared by the feed and discover. */
+async function readAccess(viewerId: string): Promise<Access> {
+  if (!isUuid(viewerId)) return { ids: [], ready: true, until: new Map(), blocked: new Set() };
   const db = createAdminClient();
   const [subs, blocks] = await Promise.all([
-    db.from("creator_memberships").select("creator_id").eq("member_id", viewerId).eq("status", "active").eq("billing", "sub").gt("period_end", new Date().toISOString()).order("period_end", { ascending: false }).limit(FEED_MAX_CREATORS),
+    db.from("creator_memberships").select("creator_id, period_end").eq("member_id", viewerId).eq("status", "active").eq("billing", "sub").gt("period_end", new Date().toISOString()).order("period_end", { ascending: false }).limit(FEED_MAX_CREATORS),
     db.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`).limit(5000),
   ]);
+  const blocked = blocks.error ? null : new Set(((blocks.data ?? []) as Row[]).map((b) => (b.blocker_id === viewerId ? b.blocked_id : b.blocker_id) as string));
   // a failed read is "no access": paid content fails CLOSED
-  if (subs.error || blocks.error) return { ids: [], ready: !subs.error || !MISSING(subs.error.message) };
-  const blocked = new Set(((blocks.data ?? []) as Row[]).map((b) => (b.blocker_id === viewerId ? b.blocked_id : b.blocker_id) as string));
-  return { ids: [...new Set(((subs.data ?? []) as Row[]).map((s) => s.creator_id as string))].filter((id) => id !== viewerId && !blocked.has(id)), ready: true };
+  if (subs.error || !blocked) return { ids: [], ready: !subs.error || !MISSING(subs.error.message), until: new Map(), blocked };
+  const until = new Map<string, string>();
+  // newest period_end first, so the first row per creator is the one that counts
+  for (const s of (subs.data ?? []) as Row[]) if (!until.has(s.creator_id as string)) until.set(s.creator_id as string, String(s.period_end));
+  return { ids: [...until.keys()].filter((id) => id !== viewerId && !blocked.has(id)), ready: true, until, blocked };
+}
+
+/** Creators this viewer may see exclusive posts of right now: one batched read, the `hasActiveSub` predicate. */
+export async function activeSubscriptions(viewerId: string): Promise<{ ids: string[]; ready: boolean }> {
+  const { ids, ready } = await readAccess(viewerId);
+  return { ids, ready };
+}
+
+/** A tile's preview: the approved small thumb, else the first PHOTO — never a video original. */
+function previewKey(first: Row | null): string | null {
+  return (first?.thumb_key as string | null | undefined) || (first?.media_kind === "image" ? (first.object_key as string) : null);
 }
 
 async function creatorsById(ids: string[]): Promise<Map<string, FeedCreator>> {
@@ -149,9 +192,14 @@ export async function exclusiveFeed(viewerId: string, cursor?: string | null): P
   const c = decodeSubCursor(cursor);
   if (c === "invalid") return { ok: false, error: "Bad cursor.", status: 400 };
   const db = createAdminClient();
-  const subs = await activeSubscriptions(viewerId);
+  const subs = await readAccess(viewerId);
+  // first page: discover starts now, alongside the feed's reads (the no-op catch keeps an early return from leaving it unhandled)
+  const discovering = c ? null : discover(viewerId, new Set(subs.ids), subs.blocked);
+  discovering?.catch(() => {});
   const creators = await creatorsById(subs.ids);
+  for (const [id, cr] of creators) cr.accessUntil = subs.until.get(id) ?? null;
   const allowed = [...creators.keys()];
+  const issuedAt = Date.now();
 
   let posts: FeedPost[] = [];
   let next: string | null = null;
@@ -170,7 +218,7 @@ export async function exclusiveFeed(viewerId: string, cursor?: string | null): P
     };
     let res = await read(true);
     if (res.error && MISSING(res.error.message)) res = await read(false);
-    if (res.error) return { ok: true, posts: [], creators: {}, next: null, subscriptions: allowed.length, ready: false };
+    if (res.error) return { ok: true, posts: [], creators: {}, next: null, subscriptions: allowed.length, ready: false, issuedAt, previewTtl: SIGNED_TTL_SECONDS };
     const rows = (res.data ?? []) as unknown as Row[];
     const page = rows.slice(0, FEED_PAGE);
     const media = await mediaOf(page.map((r) => r.id as string), true);
@@ -178,8 +226,7 @@ export async function exclusiveFeed(viewerId: string, cursor?: string | null): P
     posts = await Promise.all(
       page.map(async (r) => {
         const m = media.get(r.id as string);
-        const first = m?.first ?? null;
-        const key = (first?.thumb_key as string | null | undefined) || (first?.media_kind === "image" ? (first.object_key as string) : null);
+        const key = previewKey(m?.first ?? null);
         return {
           id: r.id as string,
           creatorId: r.creator_id as string,
@@ -203,9 +250,40 @@ export async function exclusiveFeed(viewerId: string, cursor?: string | null): P
     next,
     subscriptions: allowed.length,
     ready: subs.ready,
+    issuedAt,
+    previewTtl: SIGNED_TTL_SECONDS,
   };
-  if (!c) out.discover = await discover(viewerId, new Set(subs.ids));
+  if (discovering) out.discover = await discovering;
   return { ok: true, ...out };
+}
+
+/**
+ * Fresh preview links for feed tiles whose links ran out (Part 15). The ids come from the
+ * browser, so they prove nothing: access is decided again exactly as for a feed page (active
+ * paid membership, blocks both ways, suspended/hidden accounts, published posts only). A post
+ * the viewer may no longer see — or that is gone — is simply absent from the answer; a post
+ * with no preview (a video with no thumb yet) answers null. At most PREVIEW_REFRESH_MAX ids.
+ */
+export async function feedPreviews(viewerId: string, ids: unknown): Promise<({ ok: true; previews: Record<string, string | null>; issuedAt: number; previewTtl: number }) | Fail> {
+  if (!isUuid(viewerId)) return { ok: false, error: "Sign in to see your exclusive feed.", status: 401 };
+  if (!Array.isArray(ids) || !ids.length || ids.length > PREVIEW_REFRESH_MAX || !ids.every((x) => typeof x === "string" && isUuid(x))) return { ok: false, error: "Bad request.", status: 400 };
+  const issuedAt = Date.now();
+  const previews: Record<string, string | null> = {};
+  const answer = { ok: true as const, previews, issuedAt, previewTtl: SIGNED_TTL_SECONDS };
+  const subs = await readAccess(viewerId);
+  const allowed = [...(await creatorsById(subs.ids)).keys()];
+  if (!allowed.length || !hasPrivateR2) return answer;
+  const { data, error } = await createAdminClient().from("sub_posts").select("id").in("id", [...new Set(ids as string[])]).in("creator_id", allowed).eq("status", "published");
+  if (error) return answer;
+  const rows = (data ?? []) as Row[];
+  const media = await mediaOf(rows.map((r) => r.id as string), true);
+  await Promise.all(
+    rows.map(async (r) => {
+      const key = previewKey(media.get(r.id as string)?.first ?? null);
+      previews[r.id as string] = key ? await presignPrivateGet(key, SIGNED_TTL_SECONDS) : null;
+    }),
+  );
+  return answer;
 }
 
 /**
@@ -213,17 +291,20 @@ export async function exclusiveFeed(viewerId: string, cursor?: string | null): P
  * latest LOCKED post each, with the server's current price. Hidden posts are excluded in the
  * query. Nothing here starts or settles a purchase — the card's button goes to /api/sub/checkout.
  */
-export async function discover(viewerId: string, subscribed: Set<string>): Promise<{ cards: DiscoverCard[]; creators: Record<string, DiscoverCreator> }> {
+export async function discover(viewerId: string, subscribed: Set<string>, knownBlocked?: Set<string> | null): Promise<{ cards: DiscoverCard[]; creators: Record<string, DiscoverCreator> }> {
   const empty = { cards: [], creators: {} };
+  // the feed already read the block list (null = that read failed → nothing to discover, as before)
+  if (knownBlocked === null) return empty;
   const db = createAdminClient();
-  const cfg = await subConfig();
-  if (!cfg.purchasesEnabled) return empty;
-  const [follows, blocks] = await Promise.all([
+  // the settings, the follows and (only when not handed over) the block list, together
+  const [cfg, follows, blocks] = await Promise.all([
+    subConfig(),
     db.from("follows").select("following_id").eq("follower_id", viewerId).limit(DISCOVER_FOLLOWS),
-    db.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`).limit(5000),
+    knownBlocked ? null : db.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`).limit(5000),
   ]);
-  if (follows.error || blocks.error) return empty;
-  const blocked = new Set(((blocks.data ?? []) as Row[]).map((b) => (b.blocker_id === viewerId ? b.blocked_id : b.blocker_id) as string));
+  if (!cfg.purchasesEnabled) return empty;
+  if (follows.error || blocks?.error) return empty;
+  const blocked = knownBlocked ?? new Set(((blocks?.data ?? []) as Row[]).map((b) => (b.blocker_id === viewerId ? b.blocked_id : b.blocker_id) as string));
   const candidates = ((follows.data ?? []) as Row[]).map((f) => f.following_id as string).filter((id) => id !== viewerId && !subscribed.has(id) && !blocked.has(id));
   if (!candidates.length) return empty;
   // only creators taking subscriptions right now, at a price inside the admin's bounds
@@ -254,7 +335,7 @@ export async function discover(viewerId: string, subscribed: Set<string>): Promi
   for (const r of latest) {
     const id = r.creator_id as string;
     const charge = subscriptionCharge(price.get(id)!, cfg.purchaseFeePercent);
-    creators[id] = { ...people.get(id)!, priceCents: charge.priceCents, totalCents: charge.totalCents, periodDays: cfg.periodDays };
+    creators[id] = { ...people.get(id)!, priceCents: charge.priceCents, feeCents: charge.feeCents, feePercent: cfg.purchaseFeePercent, totalCents: charge.totalCents, periodDays: cfg.periodDays };
   }
   return {
     cards: latest.map((r) => ({ id: r.id as string, creatorId: r.creator_id as string, createdAt: r.created_at as string, coverUrl: (r.cover_url as string | null) ?? null, items: media.get(r.id as string)?.n ?? 0, hasVideo: media.get(r.id as string)?.video ?? false })),

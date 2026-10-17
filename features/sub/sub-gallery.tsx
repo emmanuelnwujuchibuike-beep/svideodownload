@@ -11,6 +11,7 @@ import { WATERMARK_CORNER_SECONDS, WATERMARK_CORNERS } from "@/lib/media/waterma
 import type { OfferMembership } from "@/lib/sub/offer";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
+import { claimOpening, fresh, type Opened, openedCache } from "./opened-cache";
 import { forgetSubPosts, loadSubPosts } from "./sub-posts-cache";
 import { CreatorSubscribeCard } from "./subscribe-card";
 
@@ -54,13 +55,7 @@ interface Card {
   removed?: true;
 }
 
-/**
- * Posts opened in this tab, kept until their links are about to expire: reopening a post,
- * or one fetched on its own after the page's links ran out, never waits on the server again.
- * Memory only — never storage, so nothing private outlives the tab.
- */
-const openedCache = new Map<string, Opened>();
-const fresh = (o: Opened | undefined | null): o is Opened => !!o && Date.parse(o.expiresAt) - Date.now() > 30_000;
+// posts opened in this tab (memory only) — shared with the Exclusive feed since Part 15 (opened-cache.ts)
 
 export interface SubQuoteView {
   priceCents: number;
@@ -258,17 +253,6 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
   );
 }
 
-interface Opened {
-  caption: string | null;
-  media: { kind: "image" | "video"; url: string; width: number | null; height: number | null }[];
-  expiresAt: string;
-  watermark: string | null;
-  /** the creator's public handle — the roving mark links to their profile */
-  creatorHandle?: string | null;
-  /** 0248: locked or hidden (the creator can switch it from the viewer) */
-  audience?: "locked" | "hidden";
-}
-
 /** The private viewer: a portal with no URL, no share action, covered whenever the app is not in front. */
 export function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted, onEdited }: { postId: string; initial: Opened | null; isCreator: boolean; onClose: () => void; onDeleted: (id: string) => void; onEdited?: (id: string, caption: string | null) => void }) {
   // already opened by the gallery (or earlier in this tab) and still valid: shown at once, no second check
@@ -325,7 +309,8 @@ export function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted, 
 
   const load = useCallback(async () => {
     setError(null);
-    const res = await fetch(`/api/sub/posts/${postId}`, { cache: "no-store" }).catch(() => null);
+    // Part 15: the feed may have started this exact request at the first touch — claimed once, else asked now
+    const res = await (claimOpening(postId) ?? fetch(`/api/sub/posts/${postId}`, { cache: "no-store" }).catch(() => null));
     const j = (await res?.json().catch(() => null)) as (Opened & { error?: string }) | null;
     if (!res?.ok || !j) {
       setData(null);

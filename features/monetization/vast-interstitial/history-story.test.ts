@@ -41,15 +41,19 @@ describe("any full-screen video on History is a story ad", () => {
     expect(isStoryAd("history_story_ad", "/explore")).toBe(true);
   });
 
-  it("the idle / back-swipe zone on the History library", () => {
+  it("the idle / back-swipe zone on every History surface", () => {
+    // /history is the page the bottom nav opens — the one the owner was scrolling
+    expect(isStoryAd("idle_interstitial", "/history")).toBe(true);
     expect(isStoryAd("idle_interstitial", "/downloads")).toBe(true);
     expect(isStoryAd("idle_interstitial", "/downloads/")).toBe(true);
+    expect(isStoryAd("idle_interstitial", "/library")).toBe(true);
   });
 
   it("not elsewhere, and not a look-alike path", () => {
     expect(isStoryAd("idle_interstitial", "/explore")).toBe(false);
     expect(isStoryAd("download_complete", "/")).toBe(false);
     expect(isStoryAd("idle_interstitial", "/downloadsx")).toBe(false);
+    expect(isStoryAd("idle_interstitial", "/historyx")).toBe(false);
   });
 
   it("the History library's own idle ad carries no upgrade pitch", () => {

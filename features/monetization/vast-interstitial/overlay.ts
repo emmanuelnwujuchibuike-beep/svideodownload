@@ -98,8 +98,11 @@ function adBeacon(kind: "impression" | "click", zone: string, adId: string | und
  * on history"): the idle moment opens there too, and it showed the download gate's chrome — the
  * countdown plus "Tired of ads? Go Pro" — over someone browsing their own saves.
  */
+/** The History surfaces: the History page itself (bottom nav), the signed-in library and the guest library. */
+const HISTORY_PATHS = ["/history", "/downloads", "/library"] as const;
+
 export function isStoryAd(zone: string, pathname: string): boolean {
-  return zone === "history_story_ad" || pathname === "/downloads" || pathname.startsWith("/downloads/");
+  return zone === "history_story_ad" || HISTORY_PATHS.some((h) => pathname === h || pathname.startsWith(`${h}/`));
 }
 
 export function showInterstitial({

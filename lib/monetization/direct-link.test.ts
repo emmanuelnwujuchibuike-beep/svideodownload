@@ -60,12 +60,13 @@ describe("Monetag direct link (owner, 2026-10-16)", () => {
     expect(code("lib/monetization/settings.ts")).toContain("merged.monetagDirectLink = normalizeDirectLink(merged.monetagDirectLink)");
   });
 
-  it("opens inside the tap (no await before window.open), from its own chunk, once a session per spot", () => {
+  it("opens inside the tap (no await before window.open), from its own chunk, on every tap (no session lock)", () => {
     expect(code("features/monetization/use-direct-link.ts")).toContain("return useCallback(() => opener.current?.(), [])");
     const rt = code("features/monetization/direct-link-runtime.ts");
     const body = rt.slice(rt.indexOf("return () => {"));
     expect(body).not.toMatch(/await|\.then\(/);
-    expect(body).toContain("sessionStorage.getItem(seenKey)");
+    // owner, 2026-10-16: "it should show everytime the selected area i told you is tapped"
+    expect(body).not.toContain("sessionStorage");
     expect(body).toContain('window.open(c.url, "_blank", "noopener,noreferrer")');
   });
 

@@ -9,8 +9,9 @@
  *
  * - Where: two spots (`DIRECT_LINK_SPOTS`), each with its own admin switch.
  * - "Randomly": an eligible tap opens the link with `chancePercent` odds.
- * - "Once": after it has opened at a spot, that spot stays quiet for the rest
- *   of the browser session (sessionStorage), so it never fires on every tap.
+ * - Every tap (owner, 2026-10-16: "it should show everytime the selected area
+ *   i told you is tapped"): no once-per-session lock; each tap at an enabled
+ *   spot rolls `chancePercent` — 100 opens it on every tap.
  * - It NEVER replaces the tap's own action: the download, the reward gate and
  *   the preview all carry on; the link opens beside them in a new tab.
  *

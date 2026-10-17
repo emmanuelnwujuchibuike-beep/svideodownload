@@ -12,8 +12,7 @@ import type { DirectLinkSpot } from "@/lib/monetization/direct-link";
  * new tab open synchronously within the gesture, so the opener is loaded ahead
  * (its own chunk, direct-link-runtime.ts, after mount) and the call never awaits.
  * Free plan only (no placement passed to useShowAds), and never on the
- * sign-in/profile routes. Once it has opened at a spot, that spot is quiet for
- * the rest of the session.
+ * sign-in/profile routes. Every tap at the spot may open it (no session lock).
  */
 export function useDirectLink(spot: DirectLinkSpot): () => void {
   const { showAds, ready } = useShowAds();

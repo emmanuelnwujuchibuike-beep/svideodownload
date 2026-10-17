@@ -11,20 +11,14 @@ export async function loadDirectLinkOpener(spot: DirectLinkSpot): Promise<(() =>
   const d = (await loadAdsConfig()) as Record<string, unknown> | null;
   const c = d?.monetagDirectLink as { url: string; spots: string[]; chancePercent: number } | null | undefined;
   if (!c || !c.spots?.includes(spot) || !isValidDirectLinkUrl(c.url)) return null;
-  const seenKey = `frenz:direct-link:${spot}`;
   // Synchronous: browsers only open a new tab inside the tap itself.
   return () => {
-    try {
-      if (sessionStorage.getItem(seenKey)) return;
-    } catch {
-      /* Storage blocked: fall through — the roll still keeps it occasional. */
-    }
+    /*
+      2026-10-16 (owner: "Direct link works only once, it should show everytime the selected area
+      i told you is tapped"): no once-per-session lock any more. Every tap at an enabled spot rolls
+      the admin's chance — at 100% that is every tap.
+    */
     if (!directLinkRollWins(c.chancePercent, Math.random())) return;
-    try {
-      sessionStorage.setItem(seenKey, "1");
-    } catch {
-      /* ignore */
-    }
     /*
       2026-10-16 (owner: "it should open another tab so users can still return where they stop"):
       always a NEW tab, never this one. And announced first: where the pop-under guard is installed

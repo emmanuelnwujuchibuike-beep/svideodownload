@@ -142,7 +142,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
     not merely untidy.
   */
   const { showAds, ready: adsReady } = useShowAds();
-  // Monetag direct link on the media preview (owner, 2026-10-16) — a tap anywhere on the cover, at random, once a visit.
+  // Monetag direct link on the media preview (owner, 2026-10-16) — a tap anywhere on the cover, every tap, by the admin's chance.
   const openDirectLink = useDirectLink("resultPreview");
   const isPremiumBatch = !adsReady || !showAds;
   useEffect(() => setSelected(new Set()), [metadata.id]);

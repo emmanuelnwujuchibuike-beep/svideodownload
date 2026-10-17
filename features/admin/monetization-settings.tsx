@@ -2726,7 +2726,7 @@ function DirectLinkEditor({
         <span className="min-w-0">
           <span className="block text-sm font-semibold">Direct link</span>
           <span className="block text-xs text-muted-foreground">
-            Opens in a new tab, at random, at most once per visit at each spot. The tap&apos;s own action
+            Opens in a new tab on a tap at each chosen spot, by the chance below (100% = every tap). The tap&apos;s own action
             (the download, the preview) still happens. Free plan only; needs the Monetag switch on.
           </span>
         </span>

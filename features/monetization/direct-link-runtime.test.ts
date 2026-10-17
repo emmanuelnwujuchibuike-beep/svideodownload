@@ -40,11 +40,12 @@ describe("Monetag direct link", () => {
     expect(nativeOpen).not.toHaveBeenCalled();
   });
 
-  it("once per session per spot", async () => {
+  it("opens on EVERY tap at the spot, not once per session (owner, 2026-10-16)", async () => {
     guard.installPopunderGuard();
     const open = await loadDirectLinkOpener("wallpaper");
     open!();
     open!();
-    expect(nativeOpen).toHaveBeenCalledTimes(1);
+    open!();
+    expect(nativeOpen).toHaveBeenCalledTimes(3);
   });
 });

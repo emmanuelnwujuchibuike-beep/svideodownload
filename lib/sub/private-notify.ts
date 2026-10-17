@@ -115,7 +115,7 @@ export async function notifyNewPrivatePost(creatorId: string, opts: { audience?:
             intro: "You asked to hear when they share something for their subscribers.",
             ctaLabel: "Open their private posts",
             ctaPath: path,
-          }),
+          }, "exclusive_private_post"),
         );
       }
       await Promise.all(tasks).catch(() => {});

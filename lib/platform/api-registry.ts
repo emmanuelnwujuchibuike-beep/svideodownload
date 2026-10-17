@@ -102,6 +102,9 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   { method: "GET", path: "/api/sub/announcements", auth: "session-optional", category: "subscriptions", description: "A creator's subscriber announcements: the creator, or an active subscriber right now; anyone else gets access:false." },
   { method: "POST", path: "/api/sub/announcements", auth: "session", category: "subscriptions", description: "Publish to YOUR subscribers (idempotency key). Fan-out is queued in bounded pages." },
   { method: "DELETE", path: "/api/sub/announcements", auth: "session", category: "subscriptions", description: "Delete one of your announcements (kept for audit, fan-out stopped)." },
+  // Part 11 (0253): optional-email unsubscribe. No session — the unguessable token in the link is the authority, and it can only switch optional email OFF.
+  { method: "GET", path: "/api/email/unsubscribe", auth: "session-optional", category: "account", description: "Opens the unsubscribe confirmation. Changes nothing (link scanners open links)." },
+  { method: "POST", path: "/api/email/unsubscribe", auth: "session-optional", category: "account", description: "Turn optional email off for the token's member: the page's button, or a mail client's RFC 8058 one-click. Idempotent." },
   { method: "GET", path: "/api/members/subscribers", auth: "session", category: "subscriptions", description: "The signed-in creator's own paid subscribers, paged. No amounts or payment details." },
   { method: "GET", path: "/api/sub/posts", auth: "session-optional", category: "subscriptions", description: "A creator's exclusive gallery: covers and counts for everyone, content only with access." },
   { method: "POST", path: "/api/sub/posts", auth: "session", category: "subscriptions", description: "Publish an exclusive post from files in the creator's own private folder." },

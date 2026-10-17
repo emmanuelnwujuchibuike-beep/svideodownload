@@ -13,6 +13,8 @@ const pushes: { to: string; payload: Record<string, unknown>; record: unknown }[
 const emails: { to: string; opts: Record<string, unknown> }[] = [];
 let pushFails = new Set<string>();
 let emailRejects = new Set<string>();
+// Part 11: members whose optional email is off — the real emailMember answers "skipped" for them
+let emailOptedOut = new Set<string>();
 vi.mock("server-only", () => ({}));
 vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/server")>()), after: () => {} }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => db.client() }));
@@ -40,6 +42,7 @@ vi.mock("@/lib/notifications/smart-delivery", () => ({
 // the real adapter's outcome: Resend refusing a send is "failed", not a quiet success (Part 10)
 vi.mock("@/lib/email/member-email", () => ({
   emailMember: async (to: string, opts: Record<string, unknown>) => {
+    if (emailOptedOut.has(to)) return "skipped";
     if (emailRejects.has(to)) return "failed";
     emails.push({ to, opts });
     return "sent";
@@ -89,6 +92,7 @@ beforeEach(() => {
   emails.length = 0;
   pushFails = new Set();
   emailRejects = new Set();
+  emailOptedOut = new Set();
 });
 
 // ─── Favourites ──────────────────────────────────────────────────────────────
@@ -558,5 +562,33 @@ describe("Part 10 — the sweep starts no page past its time budget", () => {
     expect(r.pages).toBe(1);
     expect(pushes).toHaveLength(fan.FANOUT_PAGE);
     expect(db.tables.sub_fanout_jobs![0]).toMatchObject({ state: "pending" });
+  });
+});
+
+describe("Part 11 — optional email turned off, inside the fan-out", () => {
+  it("an email-only member who turned optional email off is SKIPPED, never 'handed off: email'", async () => {
+    db.tables.profiles!.push(profile(U(110), "a"));
+    db.tables.creator_memberships = [sub(U(110))];
+    db.tables.creator_notification_prefs = [{ viewer_id: U(110), target_id: C, announcements: "email" }];
+    emailOptedOut = new Set([U(110)]);
+    await drain(await announce());
+    expect(db.tables.sub_fanout_deliveries!.find((r) => r.recipient_id === U(110))).toMatchObject({ status: "skipped", detail: "email_skipped" });
+    expect(db.tables.sub_fanout_jobs![0]).toMatchObject({ handed_off: 0, skipped: 1 });
+  });
+
+  it("a push-and-email member still gets the push; the row names push alone", async () => {
+    db.tables.profiles!.push(profile(U(111), "b"));
+    db.tables.creator_memberships = [sub(U(111))];
+    db.tables.creator_notification_prefs = [{ viewer_id: U(111), target_id: C, announcements: "both" }];
+    emailOptedOut = new Set([U(111)]);
+    await drain(await announce());
+    expect(sentTo()).toEqual([U(111)]);
+    expect(db.tables.sub_fanout_deliveries!.find((r) => r.recipient_id === U(111))).toMatchObject({ status: "handed_off", channels: "push" });
+  });
+
+  it("the announcement's kind and the private post's kind are both optional (the switch applies to the fan-out)", async () => {
+    const { MEMBER_EMAIL_KINDS } = await import("@/lib/email/consent");
+    expect(MEMBER_EMAIL_KINDS.exclusive_announcement).toBe("optional");
+    expect(MEMBER_EMAIL_KINDS.exclusive_private_post).toBe("optional");
   });
 });

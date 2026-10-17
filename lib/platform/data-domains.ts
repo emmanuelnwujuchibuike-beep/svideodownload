@@ -373,6 +373,8 @@ export const DATA_DOMAINS: DataDomain[] = [
       "push_subscriptions",
       "push_delivery_log",
       "milestone_log",
+      // 0253 (Part 11): the hash of each member's one-click unsubscribe token (the switch itself is notification_settings.optional_email)
+      "email_unsubscribe_tokens",
     ],
     storage: ["relational"],
   },

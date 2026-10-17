@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getOptionalEmailSetting, setOptionalEmail } from "@/lib/email/consent";
 import { trackLimiter } from "@/lib/rate-limit";
 import { DEFAULT_NOTIFICATION_SETTINGS, getNotificationSettings, setNotificationSettings } from "@/lib/social/notification-settings";
 import { createClient } from "@/lib/supabase/server";
@@ -16,8 +17,10 @@ export async function GET() {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ settings: DEFAULT_NOTIFICATION_SETTINGS });
 
-  const settings = await getNotificationSettings(user.id);
-  return NextResponse.json({ settings }, { headers: { "Cache-Control": "private, no-store" } });
+  // Part 11 (0253): the global optional-email switch rides beside the settings, read on its own so a
+  // database without the column still answers everything else unchanged
+  const [settings, optionalEmail] = await Promise.all([getNotificationSettings(user.id), getOptionalEmailSetting(user.id)]);
+  return NextResponse.json({ settings, optionalEmail }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 const categoryPrefSchema = z.object({
@@ -44,6 +47,8 @@ const schema = z.object({
   // Feature 20 Part 5 (0236): Delivery Rules (re-validated by cleanRules) and lock-screen privacy
   rules: z.array(z.unknown()).max(30).optional(),
   lockScreen: z.enum(["full", "no_preview", "hidden"]).optional(),
+  // Part 11 (0253): optional product email on / off — the SESSION user's own row only
+  optionalEmail: z.boolean().optional(),
 });
 
 /** PATCH /api/notification-settings — update one or more settings (merges into existing category_prefs). */
@@ -78,7 +83,13 @@ export async function PATCH(request: Request) {
     const out = await setNotificationSettings(user.id, { ...defaults, categoryPrefs });
     return out.ok || out.pending ? NextResponse.json({ ok: true }) : NextResponse.json({ error: "Couldn't reset." }, { status: 500 });
   }
-  const res = await setNotificationSettings(user.id, parsed.data);
+  const { optionalEmail, ...rest } = parsed.data;
+  if (optionalEmail !== undefined) {
+    const e = await setOptionalEmail(user.id, optionalEmail);
+    if (e.pending) return NextResponse.json({ error: "The email switch arrives with the next update." }, { status: 503 });
+    if (!e.ok) return NextResponse.json({ error: "Couldn't save." }, { status: 500 });
+  }
+  const res = await setNotificationSettings(user.id, rest);
   if (res.pending) return NextResponse.json({ error: "Smart delivery arrives with the next update." }, { status: 503 });
   if (!res.ok) return NextResponse.json({ error: "Couldn't save." }, { status: 500 });
   return NextResponse.json({ ok: true });

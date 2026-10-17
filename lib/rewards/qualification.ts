@@ -100,6 +100,6 @@ export async function reviewQualification(input: { userId: string; approve: bool
     body: !input.approve && input.note ? input.note : undefined,
     ctaLabel: "View your rewards",
     ctaPath: "/rewards",
-  });
+  }, "withdrawal_decision");
   return { ok: true };
 }

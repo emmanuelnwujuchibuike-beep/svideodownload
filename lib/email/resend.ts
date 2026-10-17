@@ -18,7 +18,7 @@ const EXPIRY_MINUTES = Number(process.env.OTP_EXPIRY_MINUTES || 60);
 
 export const hasResend = !!API_KEY;
 
-async function send(to: string, subject: string, html: string, text: string): Promise<boolean> {
+async function send(to: string, subject: string, html: string, text: string, headers?: Record<string, string>): Promise<boolean> {
   if (!API_KEY) return false;
   try {
     const res = await fetch("https://api.resend.com/emails", {
@@ -27,7 +27,7 @@ async function send(to: string, subject: string, html: string, text: string): Pr
       // A real reply_to (instead of a dead-end noreply) and a from display
       // name that matches the subject's brand mention both read as more
       // trustworthy to spam filters than a bare transactional blast.
-      body: JSON.stringify({ from: FROM, to: [to], subject, html, text, reply_to: SUPPORT_EMAIL }),
+      body: JSON.stringify({ from: FROM, to: [to], subject, html, text, reply_to: SUPPORT_EMAIL, ...(headers ? { headers } : {}) }),
     });
     return res.ok;
   } catch {
@@ -140,10 +140,18 @@ export function sendProductEmail(
      * `avatarUrl` must be an https URL or it is left out (the initial shows instead).
      */
     person?: { name: string; handle: string | null; avatarUrl: string | null };
+    /**
+     * Part 11: an OPTIONAL email's unsubscribe URL (lib/email/consent.ts). It adds a visible
+     * "Unsubscribe" link in the footer and the RFC 8058 one-click headers (List-Unsubscribe +
+     * List-Unsubscribe-Post), which Resend passes through as custom headers. Transactional and
+     * security email never carries it. Must be an https URL on this site.
+     */
+    unsubscribeUrl?: string;
   },
 ): Promise<boolean> {
   const year = new Date().getFullYear();
   const pp = opts.person;
+  const unsub = opts.unsubscribeUrl && opts.unsubscribeUrl.startsWith(`${SITE_URL}/`) && /^[^\s"'<>]+$/.test(opts.unsubscribeUrl) ? opts.unsubscribeUrl : null;
   const avatar = pp?.avatarUrl && /^https:\/\/[^\s"'<>]+$/.test(pp.avatarUrl)
     ? `<img src="${pp.avatarUrl}" width="56" height="56" alt="" style="display:block;margin:0 auto;width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid #ece9fb;">`
     : pp
@@ -192,7 +200,7 @@ export function sendProductEmail(
         <tr><td style="padding:28px 40px 32px;font-family:${FONT};">
           <p style="margin:0;border-top:1px solid #ececf2;padding-top:16px;font-size:12px;line-height:1.6;color:#a0a0aa;">
             Need more help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="color:#6C4DFF;text-decoration:none;">${SUPPORT_EMAIL}</a><br>
-            &copy; ${year} Frenz. All rights reserved.
+            &copy; ${year} Frenz. All rights reserved.${unsub ? `<br>You get this because you chose email updates. <a href="${unsub}" style="color:#6C4DFF;text-decoration:underline;">Unsubscribe from optional emails</a>` : ""}
           </p>
         </td></tr>
       </table>
@@ -201,9 +209,9 @@ export function sendProductEmail(
 </body>
 </html>`;
 
-  const text = `${opts.heading}\n\n${opts.intro}${opts.body ? `\n\n${opts.body}` : ""}${opts.ctaHref ? `\n\n${opts.ctaLabel ?? "Open"}: ${opts.ctaHref}` : ""}\n\nNeed more help? ${SUPPORT_EMAIL}\n(c) ${year} Frenz.`;
+  const text = `${opts.heading}\n\n${opts.intro}${opts.body ? `\n\n${opts.body}` : ""}${opts.ctaHref ? `\n\n${opts.ctaLabel ?? "Open"}: ${opts.ctaHref}` : ""}\n\nNeed more help? ${SUPPORT_EMAIL}\n(c) ${year} Frenz.${unsub ? `\nUnsubscribe from optional emails: ${unsub}` : ""}`;
 
-  return send(to, opts.subject, html, text);
+  return send(to, opts.subject, html, text, unsub ? { "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } : undefined);
 }
 
 /* ────────────────────────────────────────────────────────────────────────────

@@ -88,7 +88,7 @@ export async function notifySubscribed(reference: string): Promise<void> {
         body: `You earned ${earned}. It's in your private post balance now, and if auto-withdrawal is on it is on its way to your saved bank account.`,
         ctaLabel: "See your members",
         ctaPath: "/members",
-      }),
+      }, "creator_new_subscriber"),
     ]);
   } catch (e) {
     console.error("[sub/notify] subscribed failed", { reference, error: String(e).slice(0, 160) });
@@ -114,7 +114,7 @@ export async function notifyJoinedFree(creatorId: string, memberId: string): Pro
         person: { name: m.name, handle: m.handle, avatarUrl: m.avatarUrl },
         ctaLabel: "See your members",
         ctaPath: "/members",
-      }),
+      }, "creator_new_member"),
     ]);
   } catch (e) {
     console.error("[sub/notify] joined failed", { creatorId, error: String(e).slice(0, 160) });

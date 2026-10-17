@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { emailMember } from "@/lib/email/member-email";
 import { sendProductEmail } from "@/lib/email/resend";
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import { SITE_URL } from "@/lib/site";
@@ -95,10 +96,9 @@ function words(n: AdNotice, name: string): { title: string; body: string; money:
  * a free slot — push AND email, once (the waitlist row is claimed before this
  * runs). Best effort, each channel on its own, like notifyAdvertiser.
  */
-export async function notifySlotOpen(db: SupabaseClient, userId: string, placementName: string): Promise<void> {
+export async function notifySlotOpen(_db: SupabaseClient, userId: string, placementName: string): Promise<void> {
   const title = "An ad slot is open";
   const body = `A slot is free in “${placementName}”. Slots go to whoever pays first — create your campaign now.`;
-  const href = `${SITE_URL}/advertise/create`;
   try {
     await sendSmartPush(
       userId,
@@ -107,11 +107,9 @@ export async function notifySlotOpen(db: SupabaseClient, userId: string, placeme
       "system",
       { type: "system" },
     ).catch((e: unknown) => console.warn("[ads-platform] slot push failed", { error: String(e).slice(0, 160) }));
-    const { data: p } = await db.from("profiles").select("email").eq("id", userId).maybeSingle();
-    const to = (p as { email?: string | null } | null)?.email;
-    if (typeof to === "string" && to.includes("@")) {
-      await sendProductEmail(to, { subject: title, heading: esc(title), intro: esc(body), ctaLabel: "Create your campaign", ctaHref: href });
-    }
+    // Part 11: an invitation to buy, so OPTIONAL email — the member's global switch decides, read at send
+    // time, with a one-click unsubscribe (emailMember escapes the text itself)
+    await emailMember(userId, { subject: title, heading: title, intro: body, ctaLabel: "Create your campaign", ctaPath: "/advertise/create" }, "ad_slot_waitlist");
   } catch (e) {
     console.warn("[ads-platform] slot notification failed", { error: String(e).slice(0, 160) });
   }

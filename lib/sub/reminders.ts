@@ -119,7 +119,7 @@ export async function sweepSubReminders(limit = 25, now = Date.now()): Promise<{
         { type: "renewal_reminder", actorId: null },
       ),
     ];
-    if (kind !== "renew_1d") tasks.push(emailMember(mid, { subject: copy.title, heading: copy.title, intro: copy.body, ctaLabel: "Manage subscriptions", ctaPath: "/account/subscriptions" }));
+    if (kind !== "renew_1d") tasks.push(emailMember(mid, { subject: copy.title, heading: copy.title, intro: copy.body, ctaLabel: "Manage subscriptions", ctaPath: "/account/subscriptions" }, "subscription_renewal"));
     await Promise.allSettled(tasks);
     out.sent += 1;
   }

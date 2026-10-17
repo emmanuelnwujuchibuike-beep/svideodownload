@@ -97,6 +97,7 @@ export const NOT_EXPORTED: Record<string, string> = {
   sub_fanout_jobs: "The send queue for a creator's announcement or private-post alerts (0251): counts and a cursor. The announcements themselves are in creator_notes, which is exported.",
   sub_fanout_deliveries: "Bookkeeping that stops one alert being sent to you twice (0251). The alerts themselves are in your notifications, which are exported.",
   sub_membership_reminders: "Bookkeeping that stops a renewal reminder being sent twice (0250). The reminders themselves are in your notifications, which are exported.",
+  email_unsubscribe_tokens: "Only a one-way hash of the secret in your unsubscribe links (0253), so they can be checked without storing a usable link. Your optional-email choice itself is in notification_settings, which is exported.",
   memory_people: "The friends on each of your memories. Exported inside each memory (memories.people) rather than as raw ids.",
   memory_media: "References from your memories to existing posts and media. Exported inside each memory.",
   memory_versions: "Earlier versions of your memories. Exported through the Memories export on /memories; the current version is in memories.",

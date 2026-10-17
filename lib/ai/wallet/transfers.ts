@@ -125,7 +125,7 @@ export async function sendCredits(input: { senderId: string; accountNumber: stri
       body: note ?? undefined,
       ctaLabel: "Open your wallet",
       ctaPath: "/ai/usage",
-    });
+    }, "credits_received");
     console.info("[wallet/transfer] sent", { sender: input.senderId, recipient: recipientId, amount, fee, kind: input.kind });
   }
   return { ok: true, transferId: String(out.transfer_id), amount: Number(out.amount ?? amount), fee: Number(out.fee ?? fee), kind: out.credit_class ?? input.kind, balanceAfter: out.balance_after ?? null, duplicate: !!out.duplicate };

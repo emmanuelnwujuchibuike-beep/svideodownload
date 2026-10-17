@@ -53,7 +53,7 @@ export async function emailAiVideoReady(opts: { userId: string; feature: AiFeatu
       body: opts.earnedLine ?? undefined,
       ctaLabel: "Watch your video",
       ctaPath: opts.resultPath,
-    });
+    }, "ai_video_ready");
     return true;
   } catch (e) {
     console.error("[ai/ready-email] failed", { userId: opts.userId, error: String(e).slice(0, 160) });

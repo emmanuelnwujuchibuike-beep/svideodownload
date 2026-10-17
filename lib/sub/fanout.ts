@@ -237,10 +237,18 @@ export async function processFanoutPage(jobId: string, pageSize = FANOUT_PAGE): 
           job.kind === "announcement"
             ? { subject: `${who!.name} posted an announcement for subscribers`, heading: `${who!.name} posted an announcement`, intro: "It's for their subscribers. Open their Exclusive tab to read it.", ctaLabel: "Open their Exclusive tab", ctaPath: `${tab}#announcements` }
             : { subject: `${who!.name} posted a new private post`, heading: `${who!.name} posted a new private post`, intro: "You asked to hear when they share something for their subscribers.", ctaLabel: "Open their private posts", ctaPath: tab },
+          job.kind === "announcement" ? "exclusive_announcement" : "exclusive_private_post",
         );
       }
       // the provider refused the email: failed, never a quiet "handed off" (a push already handed off is named in channels)
       if (emailed === "failed") return void results.set(id, { status: "failed", channels: channels.join(","), detail: "email_failed" });
+      // Part 11: no email went (optional email turned off, or no address) — an email-only member is
+      // skipped, and a push-and-email member was handed the push alone
+      if (emailed === "skipped") {
+        const sent = channels.filter((c) => c !== "email");
+        if (!sent.length) return void results.set(id, { status: "skipped", channels: null, detail: "email_skipped" });
+        return void results.set(id, { status: "handed_off", channels: sent.join(","), detail: null });
+      }
       results.set(id, { status: "handed_off", channels: channels.join(","), detail: null });
     } catch (e) {
       results.set(id, { status: "failed", channels: channels.join(",") || null, detail: String(e).slice(0, 120) });

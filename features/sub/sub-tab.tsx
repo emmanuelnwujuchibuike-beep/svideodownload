@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, ChevronDown, Copy, Loader2, Lock, Pause, Pencil, Play, Plus, Share2, Wallet } from "lucide-react";
+import { ArrowRight, BadgeCheck, BadgeDollarSign, Check, ChevronDown, Copy, Landmark, Loader2, Lock, Pause, Pencil, Percent, Play, Plus, Receipt, Rocket, Share2, Undo2, Users, Wallet, type LucideIcon } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -122,9 +122,20 @@ export function SubTab({
 }
 
 /** The prominent notice every visitor sees first: what this tab is and how it's protected. */
-/** "Get paid for your content" — four steps, saved as the creator goes. */
+/**
+ * "Get paid for your content" — four steps, saved as the creator goes.
+ *
+ * Owner, 2026-10-16: "upgrade this card to look extremely charming, glass, fast in animation when
+ * selecting … not a simple block card, cause that's the gateway for users who haven't used it."
+ * A glass stage over a static aurora; numbered step dots that fill and lift; the price as the
+ * centrepiece with quick picks on a sliding segmented thumb; what the creator earns and what a
+ * subscriber pays, live; each step slides in. Every motion is a one-shot transform/opacity on
+ * interaction (none loops), reduced motion drops it, and every number comes from the engine the
+ * server settles with.
+ */
 function GetPaidSetup({ settings, bounds, onChange }: { settings: SubOwnerSettings; bounds: SubBounds; onChange: (s: SubOwnerSettings) => void }) {
   const [step, setStep] = useState(Math.min(3, settings.setupStep));
+  const [dir, setDir] = useState<"fwd" | "back">("fwd");
   const [price, setPrice] = useState(settings.priceCents ? (settings.priceCents / 100).toFixed(2) : "");
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -136,6 +147,7 @@ function GetPaidSetup({ settings, bounds, onChange }: { settings: SubOwnerSettin
   const go = (next: number, patch: Record<string, unknown> = {}) => {
     haptic("selection");
     setNote(null);
+    setDir(next > step ? "fwd" : "back");
     setStep(next);
     onChange({ ...settings, setupStep: next, ...(patch.priceCents ? { priceCents: patch.priceCents as number } : {}) });
     void saveSettings({ step: next, ...patch }).then((r) => {
@@ -158,131 +170,185 @@ function GetPaidSetup({ settings, bounds, onChange }: { settings: SubOwnerSettin
   const steps = ["Your price", "How you earn", "Getting paid", "Go live"];
   // quick picks inside the admin's bounds — a tap fills the field, the field stays the authority
   const picks = [300, 500, 1000, 2000].filter((c) => c >= bounds.minPriceCents && c <= bounds.maxPriceCents);
+  const picked = picks.indexOf(cents);
   const typed = price !== "" && !priceOk;
-  return (
-    <section aria-labelledby="get-paid-title" className={cn("p-5", EX_CARD)}>
-      <p id="get-paid-title" className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-primary">
-        Get paid for your content
-      </p>
-      <ol className="mt-3 grid grid-cols-4 gap-2" aria-label={`Setup, step ${step + 1} of ${steps.length}`}>
-        {steps.map((label, i) => (
-          <li key={label} aria-current={i === step ? "step" : undefined}>
-            <span className="ex-steps__bar" data-done={i <= step} aria-hidden />
-            <span className={cn("mt-1.5 block truncate text-[11px] font-semibold", i === step ? "text-foreground" : "text-muted-foreground/80")}>{label}</span>
-          </li>
-        ))}
-      </ol>
+  const enter = cn("animate-in fade-in duration-200 motion-reduce:animate-none", dir === "fwd" ? "slide-in-from-right-3" : "slide-in-from-left-3");
 
-      {step === 0 ? (
-        <div className="mt-5">
-          <h3 className="text-[19px] font-bold tracking-[-0.015em]">What should a subscription cost?</h3>
-          <p className="mt-1 text-[13.5px] leading-relaxed text-muted-foreground">
-            Subscribers get your private posts for 30 days. Anything from {usd(bounds.minPriceCents)} to {usd(bounds.maxPriceCents)}.
-          </p>
-          <label htmlFor="sub-price" className="mt-4 block text-[13px] font-semibold">
-            Monthly price
-          </label>
-          {/* the well is the field; the input inside it is bare, so the $ and the unit sit in line with the digits */}
-          <div className={cn(exField, "mt-1.5")} data-invalid={typed || undefined}>
-            <div className="flex items-center gap-1.5">
-            <span aria-hidden className="text-[16px] font-semibold text-muted-foreground">
-              $
-            </span>
-            <input
-              id="sub-price"
-              inputMode="decimal"
-              autoComplete="off"
-              value={price}
-              onChange={(e) => setPrice(e.target.value.replace(/[^0-9.]/g, "").slice(0, 8))}
-              placeholder="5.00"
-              aria-invalid={typed}
-              aria-describedby="sub-price-hint"
-              className="h-7 min-w-0 flex-1 bg-transparent text-[16px] font-semibold tabular-nums outline-none placeholder:text-muted-foreground/60"
-            />
-            <span aria-hidden className="shrink-0 text-[13px] font-medium text-muted-foreground">
-              USD / month
-            </span>
-            </div>
+  return (
+    <section aria-labelledby="get-paid-title" className={cn("overflow-hidden", EX_CARD)}>
+      <div aria-hidden className="ex-aurora" />
+      <div className="relative px-5 pb-5 pt-5">
+        {/* the hero */}
+        <div className="flex items-center gap-3">
+          <span aria-hidden className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-500 to-violet-500 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_10px_22px_-10px_rgba(79,70,229,0.85)]">
+            <BadgeDollarSign className="h-[22px] w-[22px]" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-primary">Frenz Exclusive</p>
+            <h2 id="get-paid-title" className="text-[19px] font-bold leading-tight tracking-[-0.02em]">
+              Get paid for your content
+            </h2>
           </div>
-          {picks.length ? (
-            <div className="mt-2.5 flex flex-wrap gap-2" role="group" aria-label="Suggested prices">
-              {picks.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  className="ex-chip tabular-nums"
-                  aria-pressed={cents === c}
-                  onClick={() => {
-                    haptic("selection");
-                    setPrice((c / 100).toFixed(2));
-                  }}
-                >
-                  {usd(c)}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <p id="sub-price-hint" aria-live="polite" className={cn("mt-2.5 min-h-[1.25rem] text-[12.5px]", typed ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground")}>
-            {charge
-              ? `Subscribers pay ${usd(charge.totalCents)} a month, with the ${bounds.purchaseFeePercent}% purchase fee. You keep ${usd(charge.priceCents)}.`
-              : typed
-                ? `Choose from ${usd(bounds.minPriceCents)} to ${usd(bounds.maxPriceCents)}.`
-                : "You can change it any time."}
-          </p>
-          <button type="button" disabled={!priceOk} onClick={() => go(1, { priceCents: cents })} className={cn(exPrimary, "mt-4 w-full")}>
-            Continue <ArrowRight className="h-4 w-4" aria-hidden />
-          </button>
         </div>
-      ) : step === 1 ? (
-        <div className="mt-5">
-          <h3 className="text-[19px] font-bold tracking-[-0.015em]">How you earn</h3>
-          <ul className="mt-3 space-y-2.5 text-[13.5px] leading-relaxed">
-            <Point>People subscribe from your profile and pay through Paystack.</Point>
-            <Point>You keep your full price. The subscriber pays a {bounds.purchaseFeePercent}% purchase fee on top.</Point>
-            <Point>Your earnings go to a private post balance of their own, separate from AI credits.</Point>
-            <Point>Post photos and videos only subscribers can open. They stay private: no sharing, links, reposts or downloads.</Point>
-          </ul>
-          <Nav onBack={() => go(0)} onNext={() => go(2)} />
+
+        {/* the step rail: dots that fill, a track that fills between them */}
+        <ol className="mt-5 flex items-center" aria-label={`Setup, step ${step + 1} of ${steps.length}: ${steps[step]}`}>
+          {steps.map((label, i) => (
+            <li key={label} className={cn("flex items-center", i < steps.length - 1 && "flex-1")} aria-current={i === step ? "step" : undefined}>
+              <span className="ex-dot" data-state={i < step ? "done" : i === step ? "current" : "next"} title={label}>
+                {i < step ? <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden /> : i + 1}
+                <span className="sr-only">{label}</span>
+              </span>
+              {i < steps.length - 1 ? <span className="ex-steps__bar mx-1.5 flex-1" data-done={i < step} aria-hidden /> : null}
+            </li>
+          ))}
+        </ol>
+        <p className="mt-2 text-[12px] font-semibold text-muted-foreground" aria-hidden>
+          Step {step + 1} of {steps.length} · <span className="text-foreground">{steps[step]}</span>
+        </p>
+
+        <div key={step} className={cn("mt-4", enter)}>
+          {step === 0 ? (
+            <>
+              <h3 className="text-[17px] font-bold tracking-[-0.015em]">What should a subscription cost?</h3>
+              <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">Subscribers unlock your private posts for 30 days.</p>
+
+              {/* the price is the centrepiece */}
+              <label htmlFor="sub-price" className="ex-pricepad mt-4 block cursor-text text-center" data-invalid={typed || undefined}>
+                <span className="block text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Monthly price</span>
+                <span className="mt-1 flex items-baseline justify-center gap-1">
+                  <span aria-hidden className="text-[26px] font-bold text-muted-foreground">
+                    $
+                  </span>
+                  <input
+                    id="sub-price"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    value={price}
+                    style={{ width: `${Math.max(4, (price || "5.00").length) + 0.2}ch` }}
+                    data-large-text=""
+                    onChange={(e) => setPrice(e.target.value.replace(/[^0-9.]/g, "").slice(0, 8))}
+                    placeholder="5.00"
+                    aria-invalid={typed}
+                    aria-describedby="sub-price-hint"
+                    className="min-w-0 bg-transparent text-center text-[40px] font-bold leading-none tracking-[-0.03em] tabular-nums outline-none placeholder:text-muted-foreground/40"
+                  />
+                  <span aria-hidden className="text-[14px] font-semibold text-muted-foreground">
+                    / month
+                  </span>
+                </span>
+              </label>
+
+              {picks.length ? (
+                <div role="radiogroup" aria-label="Suggested prices" className="ex-seg ex-seg--fast ex-glass mt-3">
+                  {picked >= 0 ? <span aria-hidden className="ex-seg__thumb" style={{ width: `calc((100% - 0.5rem) / ${picks.length})`, transform: `translateX(${picked * 100}%)` }} /> : null}
+                  {picks.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      role="radio"
+                      aria-checked={cents === c}
+                      className="ex-seg__opt tabular-nums"
+                      onClick={() => {
+                        haptic("selection");
+                        setPrice((c / 100).toFixed(2));
+                      }}
+                    >
+                      {usd(c)}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              {/* what it means, live */}
+              <div className="mt-3 grid grid-cols-2 gap-2" aria-hidden={!charge}>
+                <div className={cn(EX_WELL, "px-3.5 py-2.5")}>
+                  <p className="text-[11.5px] font-medium text-muted-foreground">You earn</p>
+                  <p className="mt-0.5 text-[17px] font-bold tabular-nums tracking-[-0.01em]">{charge ? usd(charge.priceCents) : "—"}</p>
+                </div>
+                <div className={cn(EX_WELL, "px-3.5 py-2.5")}>
+                  <p className="text-[11.5px] font-medium text-muted-foreground">Subscribers pay</p>
+                  <p className="mt-0.5 text-[17px] font-bold tabular-nums tracking-[-0.01em]">{charge ? usd(charge.totalCents) : "—"}</p>
+                </div>
+              </div>
+              <p id="sub-price-hint" aria-live="polite" className={cn("mt-2.5 min-h-[1.25rem] text-[12.5px]", typed ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground")}>
+                {typed
+                  ? `Choose from ${usd(bounds.minPriceCents)} to ${usd(bounds.maxPriceCents)}.`
+                  : charge
+                    ? `Subscribers pay your price plus a ${bounds.purchaseFeePercent}% purchase fee. You keep your full price.`
+                    : `Anything from ${usd(bounds.minPriceCents)} to ${usd(bounds.maxPriceCents)}. You can change it any time.`}
+              </p>
+              <button type="button" disabled={!priceOk} onClick={() => go(1, { priceCents: cents })} className={cn(exPrimary, "mt-3 w-full")}>
+                Continue <ArrowRight className="h-4 w-4" aria-hidden />
+              </button>
+            </>
+          ) : step === 1 ? (
+            <>
+              <h3 className="text-[17px] font-bold tracking-[-0.015em]">How you earn</h3>
+              <ul className="mt-3 space-y-3">
+                <Feature icon={Users} title="Subscribers unlock you" body="People subscribe from your profile and pay through Paystack." />
+                <Feature icon={Percent} title="You keep your full price" body={`The subscriber pays a ${bounds.purchaseFeePercent}% purchase fee on top.`} />
+                <Feature icon={Wallet} title="A balance of its own" body="Your earnings go to a private post balance, separate from AI credits." />
+                <Feature icon={Lock} title="Private by design" body="Photos and videos only subscribers can open: no sharing, links, reposts or downloads." />
+              </ul>
+              <Nav onBack={() => go(0)} onNext={() => go(2)} />
+            </>
+          ) : step === 2 ? (
+            <>
+              <h3 className="text-[17px] font-bold tracking-[-0.015em]">Getting paid</h3>
+              <ul className="mt-3 space-y-3">
+                <Feature icon={Landmark} title="Straight to your bank" body="Withdraw your private post balance through Paystack." />
+                <Feature icon={BadgeCheck} title="Name-checked first" body="Paystack confirms the account holder's name before anything is sent." />
+                <Feature icon={Receipt} title="No surprises" body={`A ${bounds.withdrawalFeePercent}% withdrawal fee applies. You see exactly what reaches your bank before you confirm.`} />
+                <Feature icon={Undo2} title="Refunds are fair" body="If a payment is refunded or disputed, that subscription ends and the amount comes off your balance." />
+              </ul>
+              <p className="mt-4 text-[12.5px] font-medium text-muted-foreground">Optional: save your bank now and turn on auto-withdrawal, so every subscription goes straight to it.</p>
+              <SubPayoutSettings feePercent={bounds.withdrawalFeePercent} className="mt-2" />
+              <Nav onBack={() => go(1)} onNext={() => go(3)} />
+            </>
+          ) : (
+            <>
+              <h3 className="text-[17px] font-bold tracking-[-0.015em]">Ready to go live</h3>
+              {charge ? (
+                <div className="ex-pricepad mt-3 text-center">
+                  <p className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Your subscription</p>
+                  <p className="mt-1 text-[34px] font-bold leading-none tracking-[-0.03em] tabular-nums">
+                    {usd(charge.priceCents)}
+                    <span className="ml-1 text-[14px] font-semibold tracking-normal text-muted-foreground">/ month</span>
+                  </p>
+                  <p className="mt-1.5 text-[12.5px] text-muted-foreground">Subscribers pay {usd(charge.totalCents)} with the purchase fee</p>
+                </div>
+              ) : (
+                <p className="mt-2 text-[13px] font-medium text-rose-600 dark:text-rose-400">Go back and set your price first.</p>
+              )}
+              <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground">Once live, the PRIVATE POSTS tab on your profile shows your price and a Subscribe button. You can pause or change the price any time.</p>
+              <button type="button" disabled={!priceOk || busy} onClick={() => void finish()} className={cn(exPrimary, "mt-4 w-full")}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <Rocket className="h-4 w-4" aria-hidden />}
+                {busy ? "Going live…" : "Go live"}
+              </button>
+              <button type="button" onClick={() => go(2)} className={cn(exQuiet, "mt-2 w-full")}>
+                Back
+              </button>
+            </>
+          )}
         </div>
-      ) : step === 2 ? (
-        <div className="mt-5">
-          <h3 className="text-[19px] font-bold tracking-[-0.015em]">Getting paid</h3>
-          <ul className="mt-3 space-y-2.5 text-[13.5px] leading-relaxed">
-            <Point>Withdraw your private post balance to your bank through Paystack.</Point>
-            <Point>Paystack checks the account holder&apos;s name before anything is sent.</Point>
-            <Point>A {bounds.withdrawalFeePercent}% withdrawal fee applies. You see exactly what reaches your bank before you confirm.</Point>
-            <Point>If a payment is refunded or disputed, that subscription ends and the amount comes back off your balance.</Point>
-          </ul>
-          <p className="mt-4 text-[12.5px] font-medium text-muted-foreground">Optional: save your bank now and turn on auto-withdrawal, so every subscription goes straight to it.</p>
-          <SubPayoutSettings feePercent={bounds.withdrawalFeePercent} className="mt-2" />
-          <Nav onBack={() => go(1)} onNext={() => go(3)} />
-        </div>
-      ) : (
-        <div className="mt-5">
-          <h3 className="text-[19px] font-bold tracking-[-0.015em]">Ready to go live</h3>
-          <p className="mt-1 text-[13.5px] leading-relaxed text-muted-foreground">{charge ? `Your subscription is ${usd(charge.priceCents)} a month. ` : ""}Once live, the PRIVATE POSTS tab on your profile shows your price and a Subscribe button. You can pause or change the price any time.</p>
-          {!priceOk ? <p className="mt-2 text-[13px] font-medium text-rose-600 dark:text-rose-400">Go back and set your price first.</p> : null}
-          <button type="button" disabled={!priceOk || busy} onClick={() => void finish()} className={cn(exPrimary, "mt-5 w-full")}>
-            {busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : null}
-            {busy ? "Going live…" : "Go live"}
-          </button>
-          <button type="button" onClick={() => go(2)} className={cn(exQuiet, "mt-2 w-full")}>
-            Back
-          </button>
-        </div>
-      )}
-      {note ? <p role="alert" className="mt-3 text-[13px] font-medium text-rose-600 dark:text-rose-400">{note}</p> : null}
+        {note ? <p role="alert" className="mt-3 text-[13px] font-medium text-rose-600 dark:text-rose-400">{note}</p> : null}
+      </div>
     </section>
   );
 }
 
-function Point({ children }: { children: React.ReactNode }) {
+/** One fact on a setup step: a tinted icon, a short title, the detail. */
+function Feature({ icon: Icon, title, body }: { icon: LucideIcon; title: string; body: string }) {
   return (
-    <li className="flex gap-2.5">
-      <span aria-hidden className="mt-0.5 inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-        <Check className="h-3 w-3" strokeWidth={3} />
+    <li className="flex gap-3">
+      <span aria-hidden className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500/15 to-violet-500/15 text-primary ring-1 ring-inset ring-primary/10 dark:from-blue-400/20 dark:to-violet-400/20">
+        <Icon className="h-[18px] w-[18px]" />
       </span>
-      <span>{children}</span>
+      <span className="min-w-0">
+        <span className="block text-[14px] font-semibold leading-snug">{title}</span>
+        <span className="mt-0.5 block text-[13px] leading-relaxed text-muted-foreground">{body}</span>
+      </span>
     </li>
   );
 }

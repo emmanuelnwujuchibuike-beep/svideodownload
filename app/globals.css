@@ -1382,6 +1382,84 @@
     transform: scaleX(1);
   }
 
+  /* ── the creator setup's stage (owner, 2026-10-16: "the gateway for users who haven't used it") ──
+     A static aurora behind the content (painted once, never animated), step dots that fill and lift
+     on the current step (transform + colour only), a glass price pad, and a faster segmented thumb. */
+  .ex-aurora {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      radial-gradient(22rem 12rem at 10% -12%, hsl(var(--primary) / 0.2), transparent 70%),
+      radial-gradient(18rem 12rem at 100% -4%, hsl(262 90% 65% / 0.18), transparent 70%),
+      radial-gradient(18rem 10rem at 55% 112%, hsl(190 95% 55% / 0.12), transparent 70%);
+  }
+  .dark .ex-aurora {
+    background-image:
+      radial-gradient(22rem 12rem at 10% -12%, hsl(var(--primary) / 0.3), transparent 70%),
+      radial-gradient(18rem 12rem at 100% -4%, hsl(262 90% 65% / 0.26), transparent 70%),
+      radial-gradient(18rem 10rem at 55% 112%, hsl(190 95% 55% / 0.16), transparent 70%);
+  }
+  .ex-dot {
+    position: relative;
+    display: inline-flex;
+    height: 1.75rem;
+    width: 1.75rem;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: hsl(var(--muted-foreground));
+    background-color: rgb(255 255 255 / 0.8);
+    border: 1px solid rgb(15 23 42 / 0.08);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9);
+    transition:
+      transform 200ms var(--ease-out),
+      color 160ms var(--ease-out);
+  }
+  .dark .ex-dot {
+    background-color: rgb(255 255 255 / 0.06);
+    border-color: rgb(255 255 255 / 0.12);
+    box-shadow: none;
+  }
+  .ex-dot[data-state="done"],
+  .ex-dot[data-state="current"] {
+    color: #fff;
+    border-color: transparent;
+    background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(250 90% 62%));
+  }
+  .ex-dot[data-state="current"] {
+    transform: scale(1.14);
+    box-shadow:
+      0 0 0 4px hsl(var(--primary) / 0.14),
+      0 6px 14px -6px hsl(var(--primary) / 0.7);
+  }
+  .ex-pricepad {
+    border-radius: 1.5rem;
+    padding: 1rem 1.25rem 0.9rem;
+    background-color: rgb(255 255 255 / 0.66);
+    border: 1px solid rgb(15 23 42 / 0.07);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.95),
+      0 10px 28px -18px rgb(49 46 129 / 0.45);
+  }
+  .dark .ex-pricepad {
+    background-color: rgb(255 255 255 / 0.05);
+    border-color: rgb(255 255 255 / 0.1);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+  }
+  .ex-pricepad:focus-within {
+    border-color: hsl(var(--primary) / 0.5);
+    box-shadow:
+      0 0 0 3px hsl(var(--primary) / 0.14),
+      inset 0 1px 0 rgb(255 255 255 / 0.95);
+  }
+  .ex-seg--fast .ex-seg__thumb {
+    transition-duration: 160ms;
+  }
+
   /* ── sheet: a near-solid card that rises from the bottom edge (square bottom on phones) ── */
   .ex-card.ex-sheet {
     --ex-fill: 0.97;
@@ -1448,7 +1526,7 @@
       --ex-fill: 0.86;
       --ex-blur: 4px;
     }
-    :where(html:not([data-a11y-motion="full"])) :is(.ex-btn, .ex-icon-btn, .ex-chip, .ex-seg__thumb, .ex-seg__opt, .ex-switch),
+    :where(html:not([data-a11y-motion="full"])) :is(.ex-btn, .ex-icon-btn, .ex-chip, .ex-seg__thumb, .ex-seg__opt, .ex-switch, .ex-dot),
     :where(html:not([data-a11y-motion="full"])) .ex-steps__bar::after,
     :where(html:not([data-a11y-motion="full"])) .ex-switch::after {
       transition: none;
@@ -1461,7 +1539,7 @@
     --ex-fill: 0.86;
     --ex-blur: 4px;
   }
-  :where(html[data-a11y-motion="reduce"]) :is(.ex-btn, .ex-icon-btn, .ex-chip, .ex-seg__thumb, .ex-seg__opt, .ex-switch),
+  :where(html[data-a11y-motion="reduce"]) :is(.ex-btn, .ex-icon-btn, .ex-chip, .ex-seg__thumb, .ex-seg__opt, .ex-switch, .ex-dot),
   :where(html[data-a11y-motion="reduce"]) .ex-steps__bar::after,
   :where(html[data-a11y-motion="reduce"]) .ex-switch::after {
     transition: none;
@@ -1980,9 +2058,11 @@
 
 /* Belt-and-suspenders zoom lock: iOS auto-zooms when a focused control's
    font-size is < 16px. Force 16px on mobile so even older iOS won't zoom.
-   Pairs with maximum-scale=1 viewport in layout.tsx. */
+   Pairs with maximum-scale=1 viewport in layout.tsx.
+   `data-large-text`: an input that is already BIGGER than 16px (the creator setup's 40px price)
+   opts out, so the lock never shrinks it — iOS only zooms below 16px. */
 @media (max-width: 640px) {
-  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([data-large-text]),
   select,
   textarea {
     font-size: 16px !important;

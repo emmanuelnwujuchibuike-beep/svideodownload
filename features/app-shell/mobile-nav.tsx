@@ -9,7 +9,7 @@ import { useBottomAdBarPresent } from "@/lib/dom/bottom-ad-bar";
 import { useScrollDirection } from "@/lib/dom/use-scroll-direction";
 import { useResumeViewportRepair } from "@/lib/pwa/resume-viewport";
 import { warmAvatars } from "@/components/ui/stable-avatar";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
 import { useAiGlassTier } from "@/features/ai/design/glass-tier";
@@ -301,8 +301,27 @@ export function MobileNav({
   */
   const hideForScroll = bottomAdBarPresent && scrollDir === "down";
 
+  /*
+    The tap answers at once (owner, 2026-10-17: "the history page still doesn't have a stripe loader
+    that shows when the tap haven't responded"). loading.tsx only paints once Next has the route's
+    boundary; until then a tap looked dead. The stripe starts on the tap itself and ends when the
+    new path is live. Local to the nav: no history patching, no global listener.
+  */
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  useEffect(() => setPendingHref(null), [pathname]);
+  useEffect(() => {
+    if (!pendingHref) return;
+    const t = window.setTimeout(() => setPendingHref(null), NAV_PENDING_MAX_MS);
+    return () => window.clearTimeout(t);
+  }, [pendingHref]);
+  const go = (href: string) => {
+    if (href.split("?")[0] !== pathname) setPendingHref(href);
+  };
+
   return (
-    /*
+    <>
+    {pendingHref ? <NavPendingStripe /> : null}
+    {/*
       The floating wrapper: inset 14 px from both edges, centred, capped at
       560 px, `--frenz-nav-gap` above the bottom. `pointer-events-none` on the
       wrapper and `auto` on the pill, so the strip of page beside and under the
@@ -312,7 +331,7 @@ export function MobileNav({
       publishing --frenz-bottomnav-h either way, so the docked ad bar can trade
       places with it against a stable number. The travel is the pill's own
       height plus its gap, so it leaves the screen completely.
-    */
+    */}
     <div
       className={cn(
         "pointer-events-none fixed inset-x-0 bottom-[var(--frenz-nav-gap)] z-40 mx-auto flex w-[calc(100%-1.75rem)] max-w-[560px] items-center gap-2.5 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] lg:hidden motion-reduce:transition-none",
@@ -361,7 +380,7 @@ export function MobileNav({
           icon={FrenzHomeOutline}
           activeIcon={FrenzHomeSolid}
           active={pathname === "/downloads" || (!handle && pathname === "/")}
-          onWarm={router.prefetch}
+          onWarm={router.prefetch} onGo={go}
         />
         {handle ? (
           /* The complete feed (posts and videos) lives at /home; the Feed tab is its door. */
@@ -372,16 +391,16 @@ export function MobileNav({
             activeIcon={FrenzFeedSolid}
             active={pathname === "/home" || pathname.startsWith("/feed") || pathname.startsWith("/reels")}
             prefetch={false}
-            onWarm={router.prefetch}
+            onWarm={router.prefetch} onGo={go}
           />
         ) : (
           /* Friends in Earn's place on the landing (owner, 2026-10-16) — a guest sees the page locked behind sign-in. */
-          <NavTab label="Friends" href="/friends" icon={Users} activeIcon={Users} active={pathname.startsWith("/friends")} prefetch={false} onWarm={router.prefetch} />
+          <NavTab label="Friends" href="/friends" icon={Users} activeIcon={Users} active={pathname.startsWith("/friends")} prefetch={false} onWarm={router.prefetch} onGo={go} />
         )}
-        <NavTab label="History" href="/history" icon={History} activeIcon={History} active={pathname.startsWith("/history")} onWarm={router.prefetch} />
+        <NavTab label="History" href="/history" icon={History} activeIcon={History} active={pathname.startsWith("/history")} onWarm={router.prefetch} onGo={go} />
         {/* Chats for everyone (owner, 2026-10-16: Support → Chats on the landing too). A guest sees an empty
             inbox and a sign-in modal (features/social/guest-chat.tsx); Support stays in the menu. */}
-        <NavTab label="Chats" href="/messages" icon={FrenzInboxOutline} activeIcon={FrenzInboxSolid} active={pathname.startsWith("/messages")} badge={handle ? unread : 0} prefetch={false} onWarm={router.prefetch} />
+        <NavTab label="Chats" href="/messages" icon={FrenzInboxOutline} activeIcon={FrenzInboxSolid} active={pathname.startsWith("/messages")} badge={handle ? unread : 0} prefetch={false} onWarm={router.prefetch} onGo={go} />
 
       </nav>
       {/* Profile — the round glass button beside the pill (the reference's Search
@@ -393,6 +412,7 @@ export function MobileNav({
         onClick={() => {
           haptic("light");
           playSound("tap");
+          go(profileHref);
         }}
         aria-label="Profile"
         aria-current={profileActive ? "page" : undefined}
@@ -418,6 +438,7 @@ export function MobileNav({
         </PressIcon>
       </Link>
     </div>
+    </>
   );
 }
 
@@ -460,7 +481,7 @@ function NavLift({ children }: { active?: boolean; children: ReactNode }) {
   return (
     <span
       className={cn(
-        "relative flex h-7 w-7 items-center justify-center",
+        "relative flex h-6 w-6 items-center justify-center",
       )}
     >
       {children}
@@ -476,6 +497,7 @@ function NavTab({
   active,
   badge = 0,
   onWarm,
+  onGo,
   prefetch,
 }: {
   label: string;
@@ -485,6 +507,8 @@ function NavTab({
   active: boolean;
   badge?: number;
   onWarm?: (href: string) => void;
+  /** The tap itself: the nav shows its pending stripe until the new path is live. */
+  onGo?: (href: string) => void;
   /** Passed to the Link; `false` suppresses the viewport prefetch. */
   prefetch?: boolean;
 }) {
@@ -496,9 +520,10 @@ function NavTab({
       aria-label={label}
       aria-current={active ? "page" : undefined}
       onPointerDown={() => onWarm?.(href)}
-      onClick={() => {
+      onClick={(e) => {
         haptic("light");
         playSound("tap");
+        if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) onGo?.(href);
       }}
       className={cn(TAB_CLASS, active && ACTIVE_CAPSULE)}
     >
@@ -518,7 +543,7 @@ function NavTab({
             … bouncing icons"): a 15 s loop that never stopped while the Feed tab
             was inactive, on a bar that is on screen on every page.
           */}
-          <Glyph strokeWidth={2.1} className={cn("h-[26px] w-[26px] transition-colors", active ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
+          <Glyph strokeWidth={2} className={cn("h-[22px] w-[22px] transition-colors", active ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
           {badge > 0 ? (
             <span className="absolute -right-3.5 -top-2.5 flex h-[20px] min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold leading-none text-white shadow-sm">
               {badge > 99 ? "99+" : badge}
@@ -534,4 +559,16 @@ function NavTab({
 /** The tab's description under its glyph (owner, 2026-10-09: "add description to the landing bottom NAVs"). */
 function NavLabel({ active, children }: { active: boolean; children: ReactNode }) {
   return <span className={cn("text-[10.5px] font-semibold leading-none", active ? GLYPH_ACTIVE : GLYPH_INACTIVE)}>{children}</span>;
+}
+
+/** A tap that never resolves (offline, a refused route) stops showing as pending after this. */
+const NAV_PENDING_MAX_MS = 10_000;
+
+/** The same stripe as loading.tsx (LoadingStripe), at the very top, the instant a tab is tapped. */
+function NavPendingStripe() {
+  return (
+    <div role="status" aria-label="Opening" className="pointer-events-none fixed inset-x-0 top-0 z-[70] overflow-hidden bg-primary/10" style={{ height: "2px", marginTop: "var(--frenz-safe-top)" }}>
+      <div className="frenz-loader-bar h-full w-2/5 bg-gradient-to-r from-blue-500 via-violet-500 to-fuchsia-500" />
+    </div>
+  );
 }

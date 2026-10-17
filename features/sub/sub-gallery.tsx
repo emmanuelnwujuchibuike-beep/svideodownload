@@ -71,7 +71,7 @@ export interface SubQuoteView {
 }
 
 export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext, onCompose, onAccess }: { creatorId: string; creatorName: string; quote: SubQuoteView | null; signedIn: boolean; loginNext: string; onCompose?: () => void; onAccess?: (subscribed: boolean) => void }) {
-  const [state, setState] = useState<{ posts: Card[]; access: boolean; isCreator: boolean; next: string | null; ready: boolean; accessUntil?: string | null; membership?: OfferMembership } | null>(null);
+  const [state, setState] = useState<{ posts: Card[]; access: boolean; isCreator: boolean; next: string | null; ready: boolean; accessUntil?: string | null; membership?: OfferMembership; totals?: { images: number; videos: number } } | null>(null);
   // the tab's "for paid subscribers only" notice gives way to "You're subscribed" (2026-10-12)
   useEffect(() => {
     if (state) onAccess?.(state.access && !state.isCreator);
@@ -171,6 +171,20 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
     <div>
       {/* Part 4: ONE card for every visitor — the offer, a renewal, "you're subscribed" or "not taking subscriptions" (lib/sub/offer.ts) */}
       {!state.isCreator ? <CreatorSubscribeCard creatorId={creatorId} creatorName={creatorName} quote={quote} membership={state.membership} signedIn={signedIn} returnPath={loginNext} /> : null}
+
+      {/* Owner 2026-10-17: a non-subscriber sees what the creator has made here (counted on the server, hidden posts excluded) */}
+      {!state.access && !state.isCreator && state.totals && state.totals.images + state.totals.videos > 0 ? (
+        <p className="mb-2 flex items-center gap-3 px-1 text-[13px] font-semibold text-foreground/80" aria-label={`${state.totals.videos} videos and ${state.totals.images} photos for subscribers`}>
+          <span className="inline-flex items-center gap-1.5">
+            <Film className="h-4 w-4 text-primary" aria-hidden />
+            {state.totals.videos.toLocaleString()} {state.totals.videos === 1 ? "video" : "videos"}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Images className="h-4 w-4 text-primary" aria-hidden />
+            {state.totals.images.toLocaleString()} {state.totals.images === 1 ? "photo" : "photos"}
+          </span>
+        </p>
+      ) : null}
 
       {state.isCreator && onCompose ? (
         <button type="button" onClick={onCompose} className={cn(exQuiet, "mb-3 w-full justify-center")}>

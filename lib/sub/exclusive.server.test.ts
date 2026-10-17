@@ -223,6 +223,23 @@ describe("hidden posts are absent for anyone without access", () => {
     expect(presign).not.toHaveBeenCalled();
   });
 
+  it("a non-subscriber sees how many videos and photos there are — counting ONLY locked, published posts (owner 2026-10-17)", async () => {
+    const page = await posts.listSubPosts(C.active, STRANGER);
+    // 30 published, 6 hidden, 1 archived; each post one photo and one video
+    expect(page.totals).toEqual({ images: 24, videos: 24 });
+    const signedOut = await posts.listSubPosts(C.active, null);
+    expect(signedOut.totals).toEqual({ images: 24, videos: 24 });
+  });
+
+  it("the counts come only with the first page, and never to a subscriber or the creator (they see the posts)", async () => {
+    // a stranger's 24 locked posts fit one page, so take a real cursor from the subscriber's 30
+    const cursor = (await posts.listSubPosts(C.active, VIEWER)).next;
+    expect(cursor).toBeTruthy();
+    expect((await posts.listSubPosts(C.active, STRANGER, cursor)).totals).toBeUndefined();
+    expect((await posts.listSubPosts(C.active, VIEWER)).totals).toBeUndefined();
+    expect((await posts.listSubPosts(C.active, C.active)).totals).toBeUndefined();
+  });
+
   it("a subscriber's gallery includes hidden posts, marked", async () => {
     const page = await posts.listSubPosts(C.active, VIEWER);
     expect(page.posts.some((p) => p.audience === "hidden")).toBe(true);

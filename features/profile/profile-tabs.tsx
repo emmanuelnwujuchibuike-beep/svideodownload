@@ -24,6 +24,7 @@ import {
   Wrench,
 } from "lucide-react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { type ComponentType, type ReactNode, useMemo, useRef, useState } from "react";
 
 import { WowOutline } from "@/components/brand/wow-icon";
@@ -256,6 +257,19 @@ export function ProfileTabs({
               </button>
             );
           })}
+          {/* Owner 2026-10-17: the Exclusive feed (every creator this viewer subscribes to) one tap from the tray.
+              A link, not a section: it opens /exclusive, whose loading.tsx answers the tap at once. */}
+          {sub?.signedIn ? (
+            <Link
+              href="/exclusive"
+              aria-label="Exclusive posts feed"
+              title="Exclusive posts feed"
+              className="group relative flex min-h-10 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-semibold text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <Sparkles className="h-[18px] w-[18px] shrink-0 transition-transform group-active:scale-90" />
+              <span className="hidden sm:inline">EXCLUSIVE</span>
+            </Link>
+          ) : null}
         </div>
 
         {/* Grid ⇄ list view toggle — always separated from the dock */}

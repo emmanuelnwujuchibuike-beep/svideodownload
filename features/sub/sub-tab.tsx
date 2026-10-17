@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, BadgeCheck, BadgeDollarSign, Check, ChevronDown, Copy, Landmark, Loader2, Lock, Pause, Pencil, Percent, Play, Plus, Receipt, Rocket, Share2, Undo2, Users, Wallet, type LucideIcon } from "lucide-react";
+import { ArrowRight, BadgeCheck, Bell, BadgeDollarSign, Check, ChevronDown, Copy, Landmark, Loader2, Lock, Pause, Pencil, Percent, Play, Plus, Receipt, Rocket, Share2, Undo2, Users, Wallet, type LucideIcon } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -89,6 +89,7 @@ export function SubTab({
   const [composing, setComposing] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   const [galleryKey, setGalleryKey] = useState(0);
+  const [alertsOpen, setAlertsOpen] = useState(false);
   const loginNext = `/u/${handle}?tab=sub`;
 
   if (isOwner && s && !s.setupCompleted) {
@@ -107,7 +108,26 @@ export function SubTab({
       ) : null}
       {!isOwner && signedIn ? (
         <>
-          <ExclusiveAlerts creatorId={creatorId} creatorName={creatorName} />
+          {/* Owner 2026-10-17: the "Stay close" controls live behind a Notifications button. The card stays
+              mounted (hidden) so its settings are already loaded: the tap only shows it, at once. */}
+          <div className="mb-3 flex justify-end">
+            <button
+              type="button"
+              aria-expanded={alertsOpen}
+              aria-controls="sub-alerts-panel"
+              onClick={() => {
+                haptic("selection");
+                setAlertsOpen((o) => !o);
+              }}
+              className={cn("ex-btn ex-btn--glass ex-btn--sm touch-manipulation", alertsOpen && "text-primary")}
+            >
+              <Bell className="h-4 w-4" aria-hidden /> Notifications
+              <ChevronDown className={cn("h-4 w-4 transition-transform duration-150 motion-reduce:transition-none", alertsOpen && "rotate-180")} aria-hidden />
+            </button>
+          </div>
+          <div id="sub-alerts-panel" hidden={!alertsOpen}>
+            <ExclusiveAlerts creatorId={creatorId} creatorName={creatorName} />
+          </div>
           <SubscriberAnnouncements creatorId={creatorId} />
         </>
       ) : null}

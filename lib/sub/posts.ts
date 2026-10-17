@@ -172,7 +172,7 @@ export interface SubPostCard {
 }
 
 /** The SUB POSTS gallery. A viewer without access sees covers and counts, nothing private. Cursor-paged. */
-export async function listSubPosts(creatorId: string, viewerId: string | null, before?: string | null): Promise<{ posts: SubPostCard[]; access: boolean; isCreator: boolean; next: string | null; ready: boolean; accessUntil?: string | null; membership?: SubMembershipView }> {
+export async function listSubPosts(creatorId: string, viewerId: string | null, before?: string | null): Promise<{ posts: SubPostCard[]; access: boolean; isCreator: boolean; next: string | null; ready: boolean; accessUntil?: string | null; membership?: SubMembershipView; totals?: SubMediaTotals }> {
   const db = createAdminClient();
   const isCreator = viewerId === creatorId;
   /*
@@ -223,10 +223,32 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
     if (!withThumb.error) return withThumb as { data: Row[] | null };
     return (await db.from("sub_post_media").select("post_id, idx, media_kind, object_key, width, height").in("post_id", ids).order("idx")) as { data: Row[] | null };
   };
-  const [{ data: media }, mk, until] = await Promise.all([
+  /*
+    Owner 2026-10-17: a NON-subscriber sees how many videos and photos the creator has made here.
+    Counted in the database over the posts this viewer may know exist (published and locked — a
+    hidden post is never counted, so its existence never leaks), first page only. Null on any error
+    (or before 0248 added audience): the gallery then simply shows no count.
+  */
+  const totalsRead = async (): Promise<SubMediaTotals | null> => {
+    if (cursor || access || isCreator) return null;
+    const count = async (kind: "image" | "video") => {
+      const r = await db
+        .from("sub_post_media")
+        .select("id, sub_posts!inner(creator_id, status, audience)", { count: "exact", head: true })
+        .eq("media_kind", kind)
+        .eq("sub_posts.creator_id", creatorId)
+        .eq("sub_posts.status", "published")
+        .eq("sub_posts.audience", "locked");
+      return r.error ? null : (r.count ?? 0);
+    };
+    const [images, videos] = await Promise.all([count("image"), count("video")]);
+    return images === null || videos === null ? null : { images, videos };
+  };
+  const [{ data: media }, mk, until, totals] = await Promise.all([
     mediaRead(),
     opening && ids.length ? marks(viewerId!, creatorId) : Promise.resolve(null),
     untilRead,
+    totalsRead().catch(() => null),
   ]);
   const membership = viewerId && !isCreator ? membershipView(until.data as Row | null, access) : undefined;
   const accessUntil = membership?.state === "active" ? membership.until : null;
@@ -273,7 +295,14 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
     ready: true,
     accessUntil,
     ...(membership ? { membership } : {}),
+    ...(totals ? { totals } : {}),
   };
+}
+
+/** How many photos and videos a creator's private posts hold, as a non-subscriber may see them. */
+export interface SubMediaTotals {
+  images: number;
+  videos: number;
 }
 
 /** A visitor's own membership, as the offer card shows it (Part 4). Null for the creator and signed-out visitors. */

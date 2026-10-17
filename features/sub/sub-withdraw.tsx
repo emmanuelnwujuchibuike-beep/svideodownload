@@ -45,7 +45,7 @@ export interface SubEarningsView {
   ready: boolean;
 }
 
-const STATUS: Record<string, string> = { pending: "Requested", reviewing: "In review", approved: "Approved", processing: "Sending", completed: "Paid", rejected: "Declined", cancelled: "Cancelled" };
+const STATUS: Record<string, string> = { pending: "Requested", reviewing: "In review", approved: "Approved", processing: "Sending", completed: "Paid", rejected: "Declined", cancelled: "Cancelled", reversed: "Returned to balance" };
 
 export function useSubEarnings(enabled = true) {
   const [data, setData] = useState<{ earnings: SubEarningsView; rules: SubRules } | null>(null);

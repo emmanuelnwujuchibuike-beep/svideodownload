@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { SubAdminReviews } from "@/features/admin/sub-admin-reviews";
 import { usd } from "@/lib/creator/membership/engine";
 import type { LandingSettings } from "@/lib/landing/settings";
 import { cn } from "@/lib/utils";
@@ -158,6 +159,7 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
   return (
     <section className="ex-card px-3 py-6 sm:px-6">
       <h2 className="font-semibold">Private posts — paid subscriptions</h2>
+      <SubAdminReviews />
       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Real money through Paystack, separate from AI credits. The subscriber pays the creator&apos;s price plus the purchase fee; a private post withdrawal pays out less the withdrawal fee.</p>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2">

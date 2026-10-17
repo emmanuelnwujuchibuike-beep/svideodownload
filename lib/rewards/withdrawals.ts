@@ -19,7 +19,7 @@ import { resolveAccount } from "./paystack-banks";
  * which returns the credits as withdrawable (`resolve_withdrawal`, once).
  * Nothing here says "paid" until an admin records the payout.
  */
-export type WithdrawalStatus = "pending" | "reviewing" | "approved" | "processing" | "completed" | "rejected" | "cancelled";
+export type WithdrawalStatus = "pending" | "reviewing" | "approved" | "processing" | "completed" | "rejected" | "cancelled" | "reversed";
 
 export interface PayoutDetails {
   accountName: string;

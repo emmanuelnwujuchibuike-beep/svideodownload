@@ -49,9 +49,35 @@ async function paystack<T = Record<string, unknown>>(
   });
   const json = (await res.json()) as T & { status?: boolean; message?: string };
   if (!res.ok || json.status === false) {
-    throw new Error(json.message || `Paystack ${path} failed`);
+    throw new PaystackHttpError(json.message || `Paystack ${path} failed`, res.status);
   }
   return json;
+}
+
+/**
+ * Paystack ANSWERED with a refusal, and this is its HTTP status (Part 12 follow-up). A 4xx is
+ * Paystack's own decision; a 5xx is Paystack failing, which says nothing about whether the request
+ * took effect. Still an `Error` with the same message, so every existing caller behaves as before.
+ * (A timeout, a dropped connection or a non-JSON body never reaches here — those throw their own
+ * TimeoutError / AbortError / TypeError / SyntaxError.)
+ */
+export class PaystackHttpError extends Error {
+  constructor(
+    message: string,
+    readonly httpStatus: number,
+  ) {
+    super(message);
+    this.name = "PaystackHttpError";
+  }
+}
+
+/**
+ * For a request that MOVES MONEY (a transfer): only a 4xx answer is a definite "this did not
+ * happen". Anything else — 5xx, a timeout, a dropped connection, a body that is not JSON — leaves
+ * the outcome UNKNOWN, and the caller must reconcile by reference instead of assuming failure.
+ */
+export function paystackRefusedForSure(e: unknown): boolean {
+  return e instanceof PaystackHttpError && e.httpStatus >= 400 && e.httpStatus < 500;
 }
 
 /** The same authenticated request, for the payout rail (lib/rewards/paystack-payouts.ts). */

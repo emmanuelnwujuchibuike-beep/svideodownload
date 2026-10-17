@@ -45,6 +45,8 @@ const W_STATUS: Record<string, [string, string]> = {
   rejected: ["Declined", "ex-status--bad"],
   failed: ["Failed", "ex-status--bad"],
   cancelled: ["Cancelled", ""],
+  // 0254: the bank sent a paid payout back — the money is in your available balance again
+  reversed: ["Returned to balance", "ex-status--warn"],
 };
 const H2 = "mb-2 px-1 text-[12.5px] font-semibold uppercase tracking-[0.07em] text-muted-foreground";
 const FIELD = "mt-1 block min-h-11 w-full rounded-2xl border border-black/[0.07] bg-white/70 px-3 text-[14px] text-foreground outline-none transition-colors focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/25 dark:border-white/10 dark:bg-white/[0.05]";

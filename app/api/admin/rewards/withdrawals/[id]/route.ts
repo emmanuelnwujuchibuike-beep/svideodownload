@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getAdminUser } from "@/lib/admin/guard";
+import { rejectPaystackWithdrawal } from "@/lib/rewards/paystack-payouts";
 import { resolveWithdrawal } from "@/lib/rewards/withdrawals";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const schema = z.object({ status: z.enum(["reviewing", "approved", "processing", "completed", "rejected", "cancelled"]), note: z.string().trim().max(500).optional(), payoutReference: z.string().trim().max(120).optional() }).strict();
+const schema = z.object({ status: z.enum(["reviewing", "approved", "processing", "completed", "rejected", "cancelled"]), note: z.string().trim().max(500).optional(), payoutReference: z.string().trim().max(120).optional(), confirmNotSent: z.boolean().optional() }).strict();
 
 /**
  * POST /api/admin/rewards/withdrawals/[id] — move a withdrawal (manual payout,
@@ -29,6 +30,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   if (parsed.data.status === "completed" && !parsed.data.payoutReference) return NextResponse.json({ error: "Record the payout reference (the bank transfer id) before marking it paid." }, { status: 400 });
+  /*
+    Part 12 follow-up: releasing the money (reject / cancel) goes through Paystack's word whenever a
+    transfer was started — see rejectPaystackWithdrawal. A withdrawal never sent is rejected as before.
+  */
+  if (parsed.data.status === "rejected" || parsed.data.status === "cancelled") {
+    const r = await rejectPaystackWithdrawal({ id, status: parsed.data.status, adminId: admin.id, note: parsed.data.note ?? null, confirmNotSent: parsed.data.confirmNotSent === true });
+    console.info("[admin/rewards] withdrawal release", { admin: admin.id, id, ok: r.ok, outcome: r.ok ? r.outcome : r.reason });
+    if (!r.ok) return NextResponse.json({ error: r.error, reason: r.reason }, { status: 409 });
+    return NextResponse.json({ ok: true, outcome: r.outcome });
+  }
   const out = await resolveWithdrawal({ id, status: parsed.data.status, adminId: admin.id, note: parsed.data.note ?? null, payoutReference: parsed.data.payoutReference ?? null });
   if (!out.ok) return NextResponse.json({ error: out.reason === "invalid_transition" ? "That move isn't allowed from its current state." : out.reason === "final" ? "This withdrawal is already finished." : "Couldn't update it." }, { status: 409 });
   console.info("[admin/rewards] withdrawal moved", { admin: admin.id, id, to: parsed.data.status });

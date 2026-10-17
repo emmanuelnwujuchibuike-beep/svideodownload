@@ -631,3 +631,21 @@ Fixed in Part 10 (each with a regression test in `lib/sub/part6.server.test.ts` 
 - **Time budget.** The sweep starts no new page after 45 s (`SWEEP_BUDGET_MS`); the cron function is 120 s and shared with eight other sweeps.
 
 Known limits (not changed): push failures are visible per device in the push log but a fan-out row still says "handed off" for push (the push sender never throws); there is no global email opt-out or unsubscribe link on product email — sending email for announcements is a per-creator choice the member makes ("email" / "both"); an announcement whose job insert failed gets no alerts until the creator retries the same publish (the sweep only works existing jobs). No migration.
+
+## Frenz Exclusive Part 12 — financial verification, payout safety and disputes (2026-10-16)
+
+**Fee rule as built:** the creator keeps the full price; the subscriber pays the purchase fee on top ($10 price + 10% = $11). Not "creator gets 90%".
+
+**Partial refunds** (`reverseSubForRefund`): only a refund of the whole charge, in the charge's currency, reverses a purchase. A partial or other-currency refund changes nothing and is listed for an admin (Admin › Rewards › SUB › Needs review). "Mark reviewed" records that a person looked; it never moves money.
+
+**Uncertain transfers** (`payWithdrawalViaPaystack`): only a Paystack 4xx answer (`PaystackHttpError`, `paystackRefusedForSure`) means "not sent". A timeout, dropped connection, 5xx or non-JSON reply moves the withdrawal to `processing` WITH its `frenz_wd_` reference and an "Outcome unknown" note: the money stays held, no second transfer can start, and the 10-minute sweep asks `/transfer/verify`.
+
+**Releasing held money** (`rejectPaystackWithdrawal`, the admin route): once a reference exists, Paystack decides — success → completed instead; failed / reversed → rejected; a 404 ("no such transfer") → rejected only when the admin ticks "confirm it was never sent" (audited as `withdrawal_transfer_not_found_confirmed`); anything else → refused, still held.
+
+**A paid payout the bank sent back** (0254 `reverse_paid_withdrawal`): `transfer.reversed` on a COMPLETED withdrawal is re-checked with `/transfer/verify` (must say `reversed`), then applied once: status `reversed`, the gross returns to available, withdrawn falls by the same, ledger `withdrawal_reversed`. Unconfirmed → the webhook answers 500 and Paystack retries. AI-credit payouts are audited for a manual return, not moved.
+
+**A dispute the platform won** (0254 `restore_disputed_sub_purchase`): this integration only receives `charge.dispute.create`; no event for a dispute's outcome is wired up, so an ADMIN confirms the outcome in the Paystack dashboard and presses "Dispute won — restore". Once: the earning returns (debt first), and the access comes back up to that purchase's own period end (never for a removed member). Limitation: a purchase restored and then disputed AGAIN hits reverse_sub_purchase's unique clawback key and errors (retry, never a double clawback); it needs manual handling.
+
+**Tests:** `supabase/tests/sub_financial_invariants.pglite.mjs` (83 checks, 6 mutants, 0254 applied twice) — PGlite is one connection, so concurrency rests on the row locks and unique keys, not on a multi-connection test (no local PostgreSQL here). `lib/rewards/payout-safety.server.test.ts`, `app/api/admin/memberships/reviews/route.test.ts`, `app/api/paystack/webhook/sub-reversal.test.ts` — Paystack mocked; nothing is verified against live Paystack.
+
+**Owner must run:** 0253 (Part 11) and 0254, in order. Before 0254: a payout reversal webhook is retried (500) until it runs; the dispute restore says it arrives with 0254.

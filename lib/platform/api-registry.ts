@@ -96,6 +96,8 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   { method: "GET", path: "/api/sub/earnings/ledger", auth: "session", category: "subscriptions", description: "The creator's own ledger, keyset-paged, filtered by type and UTC date range." },
   { method: "GET", path: "/api/admin/memberships/summary", auth: "admin", category: "subscriptions", description: "Exclusive subscription overview for a 7/30/90-day period (database aggregates; currencies kept apart)." },
   { method: "GET", path: "/api/admin/memberships/search", auth: "admin", category: "subscriptions", description: "Bounded search of subscription purchases by creator, subscriber, reference part, status and date." },
+  { method: "GET", path: "/api/admin/memberships/reviews", auth: "admin", category: "subscriptions", description: "Exclusive money reviews: refunds not applied automatically (partial or other currency) and disputed purchases." },
+  { method: "POST", path: "/api/admin/memberships/reviews", auth: "admin", category: "subscriptions", description: "Mark a refund review as looked at (no money moves), or restore a dispute the platform won (0254, once)." },
   { method: "GET", path: "/api/admin/memberships/moderation", auth: "admin", category: "subscriptions", description: "Exclusive moderation by state (open, removed, restored, dismissed), paged." },
   { method: "GET", path: "/api/sub/favourites", auth: "session", category: "subscriptions", description: "The member's own favourite creators (a favourite_creators circle), paged; public profile facts only." },
   { method: "POST", path: "/api/sub/favourites", auth: "session", category: "subscriptions", description: "Add or remove a favourite creator (idempotent). Grants no access; never touches a subscription." },

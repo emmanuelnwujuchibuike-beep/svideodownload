@@ -419,6 +419,20 @@ export async function reverseSubForRefund(reference: string, refunded: { minor?:
   return { ok: true, debtAfter: 0, review: true };
 }
 
+/**
+ * A dispute the platform WON (Part 12 follow-up, 0254). This integration receives no provider event
+ * for a dispute's outcome (only charge.dispute.create), so an ADMIN confirms it in the Paystack
+ * dashboard and calls this. Once only: the earning comes back (any debt first), the access the
+ * payment bought comes back up to its own period end, and both are audited with the admin's id.
+ */
+export async function restoreDisputedSub(reference: string, adminId: string, note: string): Promise<Result<{ duplicate: boolean }>> {
+  const { data, error } = await createAdminClient().rpc("restore_disputed_sub_purchase", { p_reference: reference, p_actor: adminId, p_note: note });
+  if (error) return /restore_disputed_sub_purchase|function|schema cache/i.test(error.message) ? fail("Dispute recovery arrives with migration 0254.", 503, "pending_migration") : fail("Couldn't restore it.", 500);
+  const r = data as { ok?: boolean; reason?: string; duplicate?: boolean } | null;
+  if (r?.ok) return { ok: true, duplicate: !!r.duplicate };
+  return fail(r?.reason === "not_disputed" ? "Only a purchase reversed as disputed can be restored." : r?.reason === "not_found" ? "Not found." : "Couldn't restore it.", 409, r?.reason);
+}
+
 // ─── Earnings ────────────────────────────────────────────────────────────────
 
 export interface SubEarnings {

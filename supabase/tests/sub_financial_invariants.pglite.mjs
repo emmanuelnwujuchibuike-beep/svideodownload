@@ -14,6 +14,8 @@
 //   dup-reverse     reverse_sub_purchase forgets "already reversed" -> double clawback
 //   open-withdrawal drops the one-open-withdrawal unique index    -> two holds on one balance
 //   dup-resolve     resolve_withdrawal forgets final states        -> funds released twice
+//   dup-wd-reverse  reverse_paid_withdrawal forgets "already reversed" -> payout returned twice
+//   dup-restore     restore_disputed_sub_purchase forgets "already restored" -> earning restored twice
 import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 
@@ -49,7 +51,9 @@ const db = new PGlite();
 await run(db, stub);
 const U = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 await db.exec(`insert into auth.users (id) select ('00000000-0000-4000-8000-' || lpad(g::text, 12, '0'))::uuid from generate_series(1, 20) g`);
-for (const f of ["0227_sub_monetization.sql", "0231_sub_promo_dismiss.sql", "0237_sub_post_thumbs.sql", "0239_private_post_interactions.sql", "0247_sub_settlement_hardening.sql", "0250_sub_membership_lifecycle.sql"]) await run(db, readFileSync(`${dir}/${f}`, "utf8"));
+for (const f of ["0227_sub_monetization.sql", "0231_sub_promo_dismiss.sql", "0237_sub_post_thumbs.sql", "0239_private_post_interactions.sql", "0247_sub_settlement_hardening.sql", "0250_sub_membership_lifecycle.sql", "0254_payout_reversal_dispute_restore.sql"]) await run(db, readFileSync(`${dir}/${f}`, "utf8"));
+// 0254 applied a second time: it must be idempotent
+await run(db, readFileSync(dir + "/0254_payout_reversal_dispute_restore.sql", "utf8"));
 // Supabase's defaults: clients hold table privileges on public and RLS is the only wall. Without this
 // the client checks below would pass for the wrong reason (no grant at all instead of RLS).
 await db.exec("grant usage on schema public to anon, authenticated");
@@ -60,6 +64,8 @@ const fnBody = async (name) => (await db.query("select pg_get_functiondef(p.oid)
 if (MUTANT === "dup-settle") await db.exec((await fnBody("settle_sub_purchase")).replace(/if v_p\.status = 'paid' then return[^;]*;\s*end if;/, ""));
 if (MUTANT === "dup-reverse") await db.exec((await fnBody("reverse_sub_purchase")).replace(/if v_p\.status in \('refunded', 'disputed', 'reversed'\) then return[^;]*;\s*end if;/, ""));
 if (MUTANT === "open-withdrawal") await db.exec("drop index public.withdrawal_requests_one_open_uidx");
+if (MUTANT === "dup-wd-reverse") await db.exec((await fnBody("reverse_paid_withdrawal")).replace(/if v_w\.status = 'reversed' then return[^;]*;\s*end if;/, ""));
+if (MUTANT === "dup-restore") await db.exec((await fnBody("restore_disputed_sub_purchase")).replace(/if v_p\.status = 'paid' and exists[\s\S]*?end if;/, "").replace("if v_p.status <> 'disputed' then", "if v_p.status not in ('disputed', 'paid') then"));
 if (MUTANT === "dup-resolve") await db.exec((await fnBody("resolve_withdrawal")).replace(/if v_w\.status in \('completed', 'rejected', 'cancelled'\) then return[^;]*;\s*end if;/, ""));
 
 const q = async (s, p) => (await db.query(s, p)).rows;
@@ -84,6 +90,8 @@ const reverse = (ref, status) => call("select reverse_sub_purchase($1, $2, null,
 let key = 0;
 const withdraw = (user, gross, k = `k-${++key}`) => call("select request_sub_withdrawal($1, $2, 1000, 500, 'paystack', '{}'::jsonb, '{}'::jsonb, $3, false) as r", [user, gross, k]);
 const resolve = (id, status) => call("select resolve_withdrawal($1::uuid, $2, null, 'test', null) as r", [id, status]);
+/** the legal path to a paid payout: approved, processing, completed */
+const payOut = async (id) => { await resolve(id, "approved"); await resolve(id, "processing"); return resolve(id, "completed"); };
 const bal = (c) => one("select pending_cents::int p, available_cents::int a, held_cents::int h, debt_cents::int d, lifetime_cents::int l, withdrawn_cents::int w from sub_balances where creator_id = $1", [c]);
 const access = async (creator, sub) => !!(await one("select 1 x from creator_memberships where creator_id = $1 and member_id = $2 and status = 'active' and billing = 'sub' and period_end > now()", [creator, sub]));
 const aiSnapshot = async () => JSON.stringify(await q("select * from ai_product_balances order by user_id")) + JSON.stringify(await q("select count(*)::int n from ai_product_ledger"));
@@ -94,7 +102,7 @@ const invariants = async (c, label) => {
   if (!b) return;
   const paid = (await one("select coalesce(sum(price_cents), 0)::int s from sub_purchases where creator_id = $1 and status = 'paid'", [c])).s;
   const unreleased = (await one("select coalesce(sum(price_cents), 0)::int s from sub_purchases where creator_id = $1 and status = 'paid' and released_at is null", [c])).s;
-  const ledger = (await one("select coalesce(sum(amount_cents) filter (where kind in ('earning', 'clawback')), 0)::int s from sub_ledger where creator_id = $1", [c])).s;
+  const ledger = (await one("select coalesce(sum(amount_cents) filter (where kind in ('earning', 'clawback', 'dispute_restore')), 0)::int s from sub_ledger where creator_id = $1", [c])).s;
   const open = (await one("select coalesce(sum(gross_cents), 0)::int s from withdrawal_requests where user_id = $1 and source = 'sub' and status in ('pending', 'reviewing', 'approved', 'processing')", [c])).s;
   const done = (await one("select coalesce(sum(gross_cents), 0)::int s from withdrawal_requests where user_id = $1 and source = 'sub' and status = 'completed'", [c])).s;
   const bad = [];
@@ -205,7 +213,7 @@ ok((await one("select count(*)::int n from sub_ledger where kind = 'clawback' an
 await invariants(C, "refund + duplicates");
 // all the money withdrawn, then a dispute: the shortfall becomes DEBT, never a negative balance
 const w4 = await withdraw(C, (await bal(C)).a);
-await resolve(w4.id, "completed");
+ok((await payOut(w4.id)).ok, "12. the payout completes through approved and processing");
 const r12 = (await q("select reference from sub_purchases where creator_id = $1 and status = 'paid' order by created_at limit 1", [C]))[0].reference;
 await reverse(r12, "disputed");
 const b12 = await bal(C);
@@ -229,6 +237,46 @@ await reverse(r16, "refunded");
 ok((await bal(C2)).p === 0 && (await bal(C2)).d === 0, "16. refunding an unreleased earning leaves no debt");
 await invariants(C2, "refund of held earning");
 
+// 21 · a payout the bank sent back (Part 12 follow-up, 0254): once, from completed only
+await settle(await purchase(C, S(10), { price: 2000 }));
+const bR = await bal(C);
+const wR = await withdraw(C, 1500);
+const wrong = await call("select reverse_paid_withdrawal($1::uuid, null, 'early') as r", [wR.id]);
+ok(!wrong.ok && wrong.reason === "not_completed", "21. a withdrawal not yet paid can't be 'reversed' (rejection is its path)");
+ok((await payOut(wR.id)).ok, "21. the payout completes");
+const paidOut = await bal(C);
+const rr1 = await call("select reverse_paid_withdrawal($1::uuid, null, 'Paystack transfer.reversed (verified)') as r", [wR.id]);
+const rr2 = await call("select reverse_paid_withdrawal($1::uuid, null, 'again') as r", [wR.id]);
+ok(rr1.ok && rr2.ok && rr2.duplicate, "21. the reversal applies once; a duplicate event answers 'duplicate'");
+const afterR = await bal(C);
+ok(afterR.a === paidOut.a + wR.gross && afterR.w === paidOut.w - wR.gross, "21. the gross is back in available, withdrawn falls by the same");
+ok((await one("select count(*)::int n from sub_ledger where kind = 'withdrawal_reversed' and withdrawal_id = $1", [wR.id])).n === 1, "21. one ledger row for it");
+ok(!(await resolve(wR.id, "completed")).ok && !(await resolve(wR.id, "rejected")).ok, "21. a reversed payout can't be completed or rejected afterwards");
+await invariants(C, "payout reversed by the bank");
+await db.exec(`insert into withdrawal_requests (user_id, credits, amount_usd_cents, status, source) values ('${S(8)}', 500, 100, 'completed', 'credits')`);
+const credId = (await one("select id from withdrawal_requests where user_id = $1 and source = 'credits'", [S(8)])).id;
+const cr = await call("select reverse_paid_withdrawal($1::uuid, null, 'x') as r", [credId]);
+ok(!cr.ok && cr.reason === "manual" && (await one("select status from withdrawal_requests where id = $1", [credId])).status === "completed", "21. an AI-credit payout reversal is NOT applied here: audited for a manual return, nothing moved");
+
+// 22 · a dispute the platform won (admin, 0254): once, debt first, access back
+const r22 = await purchase(C2, S(9));
+await settle(r22);
+const w22 = await withdraw(C2, 1000);
+ok((await payOut(w22.id)).ok, "22. setup payout completes");
+await reverse(r22, "disputed");
+ok((await bal(C2)).d === 1000 && !(await access(C2, S(9))), "22. setup: the dispute after the payout left debt 1000 and ended the access");
+await invariants(C2, "dispute before restore");
+ok((await call("select restore_disputed_sub_purchase($1, null, 'won') as r", [r22])).reason === "invalid", "22. no admin, no restore");
+const rs1 = await call("select restore_disputed_sub_purchase($1, $2, 'Won in the Paystack dashboard') as r", [r22, U(19)]);
+const rs2 = await call("select restore_disputed_sub_purchase($1, $2, 'again') as r", [r22, U(19)]);
+ok(rs1.ok && rs2.ok && rs2.duplicate, "22. the restore applies once; a second click answers 'duplicate'");
+const b22 = await bal(C2);
+ok(b22.d === 0 && b22.a === 0, "22. the restored 1000 pays the 1000 debt first (nothing double-credited)");
+ok(await access(C2, S(9)), "22. the access the payment bought is back (its period has not ended)");
+ok((await one("select count(*)::int n from sub_ledger where kind = 'dispute_restore'")).n === 1, "22. one dispute_restore ledger row");
+ok((await call("select restore_disputed_sub_purchase($1, $2, 'x') as r", [r12b, U(19)])).reason === "not_disputed", "22. a purchase that was never disputed can't be 'restored'");
+await invariants(C2, "dispute won and restored");
+
 // 18-19 · clients can't run the money functions or write the money tables (Supabase grants + RLS)
 const availBefore = (await bal(C)).a;
 await db.exec(`set role authenticated; select set_config('test.uid', '${C}', false)`);
@@ -236,6 +284,8 @@ ok(await throws(`select settle_sub_purchase('${r4}', 165000, 'NGN', 'x')`), "18.
 ok(await throws(`select request_sub_withdrawal('${C}', 100, 0, 0, 'paystack', '{}', '{}', 'k', false)`), "18. ...nor request_sub_withdrawal directly");
 ok(await throws(`select resolve_withdrawal('${w3.id}', 'rejected', null, null, null)`), "18. ...nor resolve_withdrawal");
 ok(await throws(`select reverse_sub_purchase('${r1}', 'refunded', null, null)`), "18. ...nor reverse_sub_purchase");
+ok(await throws(`select reverse_paid_withdrawal('${w3.id}', null, 'x')`), "18. ...nor reverse_paid_withdrawal (0254)");
+ok(await throws(`select restore_disputed_sub_purchase('${r1}', '${C}', 'x')`), "18. ...nor restore_disputed_sub_purchase (0254)");
 await db.exec(`update sub_balances set available_cents = 999999 where creator_id = '${C}'`); // RLS: no update policy, so 0 rows
 ok(await throws(`insert into sub_ledger (creator_id, kind, amount_cents, pending_after, available_after, reference) values ('${C}', 'earning', 5, 0, 0, 'x')`), "18. ...nor write the ledger (RLS: no insert policy)");
 ok(await throws(`insert into sub_purchases (creator_id, subscriber_id, price_cents, fee_cents, total_cents, fee_bp, charged_currency, charged_minor, reference, status) values ('${C2}', '${C}', 1, 0, 1, 0, 'NGN', 1, 'forged', 'paid')`), "18. ...nor forge a paid purchase");

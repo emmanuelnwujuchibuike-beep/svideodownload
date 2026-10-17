@@ -98,6 +98,7 @@ export const NOT_EXPORTED: Record<string, string> = {
   sub_fanout_deliveries: "Bookkeeping that stops one alert being sent to you twice (0251). The alerts themselves are in your notifications, which are exported.",
   sub_membership_reminders: "Bookkeeping that stops a renewal reminder being sent twice (0250). The reminders themselves are in your notifications, which are exported.",
   email_unsubscribe_tokens: "Only a one-way hash of the secret in your unsubscribe links (0253), so they can be checked without storing a usable link. Your optional-email choice itself is in notification_settings, which is exported.",
+  follower_milestone_checks: "When each follower milestone was last checked (0255), so the check runs at most daily. The milestone rewards themselves are in reward_events, which is exported.",
   memory_people: "The friends on each of your memories. Exported inside each memory (memories.people) rather than as raw ids.",
   memory_media: "References from your memories to existing posts and media. Exported inside each memory.",
   memory_versions: "Earlier versions of your memories. Exported through the Memories export on /memories; the current version is in memories.",
@@ -230,6 +231,10 @@ export const OWNER_COLUMN: Record<string, string> = {
   referral_attributions: "referred_user_id",
   reward_profiles: "user_id",
   reward_events: "beneficiary_id",
+  // 0255: your affiliate status, the commissions you earned, and the one-time rewards update
+  affiliate_accounts: "user_id",
+  affiliate_commissions: "affiliate_id",
+  reward_recompute_log: "user_id",
   withdrawal_requests: "user_id",
   // 0190: the optional plan survey - the member's own answers
   ai_plan_survey_responses: "user_id",

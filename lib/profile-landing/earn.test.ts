@@ -11,14 +11,14 @@ const cfg = (patch: (c: RewardsConfig) => void): RewardsConfig => {
 };
 
 describe("anonymous Profile: earning copy comes only from the live reward rules", () => {
-  it("the defaults: AI creation and sharing, with their real amounts", () => {
+  it("Rewards v2 defaults: joining and inviting, with their real amounts — no AI-creation or download rewards", () => {
     const items = earnOpportunities(normalizeRewardsConfig(null));
     const ids = items.map((i) => i.id);
-    expect(ids).toContain("ai_video_completed");
-    expect(ids).toContain("ai_video_shared");
+    expect(ids).toContain("account_created");
+    expect(ids).toContain("referrals");
+    expect(ids).not.toContain("ai_video_completed");
     expect(ids).not.toContain("download_completed");
-    const create = items.find((i) => i.id === "ai_video_completed")!;
-    expect(create.body).toContain(`${REWARDS_DEFAULTS.events.ai_video_completed.actorCredits} credits`);
+    expect(items.find((i) => i.id === "account_created")!.body).toContain(`${REWARDS_DEFAULTS.events.account_created.actorCredits} credits`);
   });
 
   it("a switched-off event is never mentioned, and a switched-on one uses the configured number", () => {
@@ -34,7 +34,10 @@ describe("anonymous Profile: earning copy comes only from the live reward rules"
 
   it("referrals appear only when an event pays the referrer", () => {
     expect(earnOpportunities(cfg((c) => { for (const e of Object.values(c.events)) e.referrerCredits = 0; })).map((i) => i.id)).not.toContain("referrals");
-    const ref = earnOpportunities(cfg((c) => (c.events.ai_video_completed.referrerCredits = 4)));
+    const ref = earnOpportunities(cfg((c) => {
+      for (const e of Object.values(c.events)) e.referrerCredits = 0;
+      c.events.ai_video_completed = { ...c.events.ai_video_completed, enabled: true, referrerCredits: 4 };
+    }));
     expect(ref[0]?.id).toBe("referrals");
     expect(ref[0]?.body).toContain("4 credits when they create an AI video");
   });

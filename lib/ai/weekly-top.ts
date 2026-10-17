@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { getLandingSettings } from "@/lib/landing/settings";
 import { sendPushToUser } from "@/lib/push/web-push";
 
 import { rankSpenders, spendByUser, weekBounds, weeklyAwards, weekStartOf } from "./weekly-top-rules";
@@ -52,6 +53,8 @@ export async function awardClosedWeek(db: Db, now: number = Date.now()): Promise
   const thisWeek = weekStartOf(now);
   const lastWeek = weekStartOf(Date.parse(`${thisWeek}T00:00:00Z`) - DAY);
   if (now - Date.parse(`${thisWeek}T00:00:00Z`) > DAY) return { skipped: "outside the award window" };
+  // 0255 Rewards v2 (owner 2026-10-16: "remove all rewards for credits and quests"): the prizes are off unless an admin turns them back on
+  if (!(await getLandingSettings()).frenzRewards.weeklyPrizes.enabled) return { skipped: "weekly prizes are off" };
   const { data: done, error } = await db.from("ai_weekly_awards").select("rank").eq("week_start", lastWeek).limit(1);
   if (error) return { skipped: "awards table missing" };
   if (done?.length) return { skipped: "already awarded" };

@@ -11,6 +11,13 @@ import { normalizeRewardsConfig, REWARD_EVENTS, REWARDS_DEFAULTS, versionRewards
  */
 const code = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 const sql = code("supabase/migrations/0187_rewards_referrals.sql");
+// 0255 (Rewards v2) restated the engine's defaults: the newest definition is the one that runs
+const v2 = code("supabase/migrations/0255_rewards_v2.sql");
+const fnV2 = (name: string) => {
+  const start = v2.indexOf(`create or replace function public.${name}(`);
+  expect(start, name).toBeGreaterThan(-1);
+  return v2.slice(start, v2.indexOf("$;", start));
+};
 const fn = (name: string) => {
   const start = sql.indexOf(`create or replace function public.${name}(`);
   expect(start, name).toBeGreaterThan(-1);
@@ -18,18 +25,25 @@ const fn = (name: string) => {
 };
 
 describe("the rules: defaults, bounds, versions", () => {
-  it("the brief's defaults: +5 per paid AI video (and to the referrer once), +3 per AI video shared ≥ 30 s; everything else off until the operator sets it", () => {
-    expect(REWARDS_DEFAULTS.events.ai_video_completed).toMatchObject({ enabled: true, actorCredits: 5, referrerCredits: 5, referrerRepeatable: false, includeComplimentary: false });
-    expect(REWARDS_DEFAULTS.events.ai_video_shared).toMatchObject({ enabled: true, actorCredits: 3, minDurationSeconds: 30 });
-    for (const e of REWARD_EVENTS.filter((x) => x !== "ai_video_completed" && x !== "ai_video_shared")) expect(REWARDS_DEFAULTS.events[e].enabled).toBe(false);
+  it("Rewards v2 defaults (owner 2026-10-16): sign-up 5 (+5 to the inviter, once per invitee), an invitee's top-up or AI plan 10 to the inviter every time; everything else off", () => {
+    expect(REWARDS_DEFAULTS.events.account_created).toMatchObject({ enabled: true, actorCredits: 5, referrerCredits: 5, referrerRepeatable: false, actorOncePerUser: true });
+    expect(REWARDS_DEFAULTS.events.wallet_topup).toMatchObject({ enabled: true, actorCredits: 0, referrerCredits: 10, referrerRepeatable: true });
+    expect(REWARDS_DEFAULTS.events.subscription_started).toMatchObject({ enabled: true, actorCredits: 0, referrerCredits: 10, referrerRepeatable: true });
+    const on = new Set(["account_created", "wallet_topup", "subscription_started"]);
+    for (const e of REWARD_EVENTS.filter((x) => !on.has(x))) expect(REWARDS_DEFAULTS.events[e].enabled, e).toBe(false);
+    expect(REWARDS_DEFAULTS.quests.enabled).toBe(false);
+    expect(REWARDS_DEFAULTS.weeklyPrizes.enabled).toBe(false);
+    expect(REWARDS_DEFAULTS.followers.milestones).toEqual([{ followers: 100, credits: 5 }, { followers: 1000, credits: 50 }]);
+    expect(REWARDS_DEFAULTS.affiliate).toEqual({ enabled: true, rateBp: 1000, minFollowers: 5000 });
     expect(REWARDS_DEFAULTS.qualification).toEqual({ minAccountAgeDays: 30, minEngagements: 100, extraRequirements: [] });
     expect(REWARDS_DEFAULTS.withdrawals.enabled).toBe(false);
   });
-  it("🔴 the SQL engine's defaults are the same numbers (reward_default_rule)", () => {
-    const d = fn("reward_default_rule");
-    expect(d).toMatch(/'ai_video_completed' then '\{"enabled":true,"actorCredits":5,"referrerCredits":5,"referrerRepeatable":false,"includeComplimentary":false/);
-    expect(d).toMatch(/'ai_video_shared'\s+then '\{"enabled":true,"actorCredits":3,"referrerCredits":0,"referrerRepeatable":false,"minDurationSeconds":30\}'/);
-    expect(d).toContain(`"features":["ai_text_to_video","ai_image_to_video"]`);
+  it("🔴 the SQL engine's defaults are the same numbers (reward_default_rule, as 0255 restated it)", () => {
+    const d = fnV2("reward_default_rule");
+    expect(d).toMatch(/'account_created'\s+then '\{"enabled":true,"actorCredits":5,"referrerCredits":5,"referrerRepeatable":false,"actorOncePerUser":true\}'/);
+    expect(d).toMatch(/'wallet_topup'\s+then '\{"enabled":true,"actorCredits":0,"referrerCredits":10,"referrerRepeatable":true/);
+    expect(d).toMatch(/'subscription_started'\s+then '\{"enabled":true,"actorCredits":0,"referrerCredits":10,"referrerRepeatable":true/);
+    expect(d).not.toContain("ai_video_completed");
     expect(fn("grant_reward")).toContain("'{qualification,minAccountAgeDays}', '')::integer, 30)");
     expect(fn("grant_reward")).toContain("'{qualification,minEngagements}', '')::integer, 100)");
   });

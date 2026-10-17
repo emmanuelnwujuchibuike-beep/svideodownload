@@ -128,6 +128,23 @@ export interface RewardsConfig {
    * (`requireQualification` false) — each one an admin switch.
    */
   sub: SubConfig;
+  /**
+   * 0255 Rewards v2 (owner, 2026-10-16): "Get 100 followers 5 credits, 1k followers 50 credits".
+   * Counted on REAL followers only (real_follower_count): not suspended or hidden, a confirmed email,
+   * at least `minAccountAgeDays` old. Each milestone pays once.
+   */
+  followers: { enabled: boolean; minAccountAgeDays: number; milestones: { followers: number; credits: number }[] };
+  /**
+   * 0255: "above 5k followers ... an affiliate programme where they gain 10% from any users transaction
+   * they bring". An admin approves a member with at least `minFollowers` real followers; from then on
+   * `rateBp` (1000 = 10%) of every payment by a member they invited (top-ups, AI plans, ads — never
+   * private-post subscriptions) is paid to them as WITHDRAWABLE credits.
+   */
+  affiliate: { enabled: boolean; rateBp: number; minFollowers: number };
+  /** 0255: the weekly top-3 AI prizes (lib/ai/weekly-top.ts) — off under Rewards v2. */
+  weeklyPrizes: { enabled: boolean };
+  /** 0255 set the v2 rules once; never re-applied over the admin's later changes. */
+  rulesV2Applied: boolean;
   version: number;
   updatedAt: string | null;
 }
@@ -184,17 +201,36 @@ export const REWARDS_DEFAULTS: RewardsConfig = {
   enabled: true,
   events: {
     ...(Object.fromEntries(REWARD_EVENTS.map((e) => [e, { ...OFF }])) as Record<RewardEventType, RewardRule>),
-    ai_video_completed: { enabled: true, actorCredits: 5, referrerCredits: 5, referrerRepeatable: false, actorOncePerUser: false, features: ["ai_text_to_video", "ai_image_to_video"], includeComplimentary: false },
-    ai_video_shared: { enabled: true, actorCredits: 3, referrerCredits: 0, referrerRepeatable: false, actorOncePerUser: false, minDurationSeconds: 30 },
+    // 0255 Rewards v2: the ONLY rewards — sign-up (and the invite that brought it), and an invitee's payments
+    account_created: { enabled: true, actorCredits: 5, referrerCredits: 5, referrerRepeatable: false, actorOncePerUser: true },
+    wallet_topup: { enabled: true, actorCredits: 0, referrerCredits: 10, referrerRepeatable: true, actorOncePerUser: false },
+    subscription_started: { enabled: true, actorCredits: 0, referrerCredits: 10, referrerRepeatable: true, actorOncePerUser: false },
+    ai_video_completed: { enabled: false, actorCredits: 0, referrerCredits: 0, referrerRepeatable: false, actorOncePerUser: false, features: ["ai_text_to_video", "ai_image_to_video"], includeComplimentary: false },
+    ai_video_shared: { enabled: false, actorCredits: 0, referrerCredits: 0, referrerRepeatable: false, actorOncePerUser: false, minDurationSeconds: 30 },
   },
   qualification: { minAccountAgeDays: 30, minEngagements: 100, extraRequirements: [] },
   attribution: { windowDays: 7 },
   quests: QUESTS_DEFAULTS,
   withdrawals: { enabled: false, creditsPerUsd: 10, minCredits: 100, maxCredits: 10_000, maxRequestsPerDay: 1, maxCreditsPerMonth: 50_000, manualReviewAboveCredits: 0, methods: ["paystack", "bank_transfer"], deposited: { creditsPerUsd: 10, feePercent: 10 } },
   sub: SUB_DEFAULTS,
+  followers: { enabled: true, minAccountAgeDays: 7, milestones: [{ followers: 100, credits: 5 }, { followers: 1000, credits: 50 }] },
+  affiliate: { enabled: true, rateBp: 1000, minFollowers: 5000 },
+  weeklyPrizes: { enabled: false },
+  rulesV2Applied: false,
   version: 1,
   updatedAt: null,
 };
+
+/** 0255: the follower milestones, cleaned — ascending, distinct, at most 6, each a positive count and reward. */
+export function normalizeFollowerMilestones(raw: unknown, d: RewardsConfig["followers"]["milestones"]): RewardsConfig["followers"]["milestones"] {
+  if (!Array.isArray(raw)) return d.map((m) => ({ ...m }));
+  const seen = new Set<number>();
+  return raw
+    .map((m) => (isRecord(m) ? { followers: int(m.followers, 0, 0, 100_000_000), credits: int(m.credits, 0, 0, 1_000_000) } : null))
+    .filter((m): m is { followers: number; credits: number } => !!m && m.followers > 0 && m.credits > 0 && !seen.has(m.followers) && !!seen.add(m.followers))
+    .sort((a, b) => a.followers - b.followers)
+    .slice(0, 6);
+}
 
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 function int(v: unknown, d: number, min: number, max: number): number {
@@ -258,6 +294,16 @@ export function normalizeRewardsConfig(raw: unknown): RewardsConfig {
       })(),
     },
     sub: normalizeSubConfig(r.sub),
+    followers: (() => {
+      const f = isRecord(r.followers) ? r.followers : {};
+      return { enabled: bool(f.enabled, d.followers.enabled), minAccountAgeDays: int(f.minAccountAgeDays, d.followers.minAccountAgeDays, 0, 365), milestones: normalizeFollowerMilestones(f.milestones, d.followers.milestones) };
+    })(),
+    affiliate: (() => {
+      const af = isRecord(r.affiliate) ? r.affiliate : {};
+      return { enabled: bool(af.enabled, d.affiliate.enabled), rateBp: int(af.rateBp, d.affiliate.rateBp, 0, 5000), minFollowers: int(af.minFollowers, d.affiliate.minFollowers, 1, 100_000_000) };
+    })(),
+    weeklyPrizes: { enabled: bool(isRecord(r.weeklyPrizes) ? r.weeklyPrizes.enabled : undefined, d.weeklyPrizes.enabled) },
+    rulesV2Applied: bool(r.rulesV2Applied, d.rulesV2Applied),
     version: int(r.version, d.version, 1, 1_000_000_000),
     updatedAt: typeof r.updatedAt === "string" ? r.updatedAt : null,
   };
@@ -265,7 +311,7 @@ export function normalizeRewardsConfig(raw: unknown): RewardsConfig {
 
 /** A save that changes any amount or rule bumps the version stamped on every reward after it. */
 export function versionRewardsConfig(previous: RewardsConfig, next: RewardsConfig, now: Date = new Date()): RewardsConfig {
-  const fp = (c: RewardsConfig) => JSON.stringify({ e: c.enabled, ev: c.events, q: c.qualification, a: c.attribution, w: c.withdrawals, qs: c.quests });
+  const fp = (c: RewardsConfig) => JSON.stringify({ e: c.enabled, ev: c.events, q: c.qualification, a: c.attribution, w: c.withdrawals, qs: c.quests, f: c.followers, af: c.affiliate, wp: c.weeklyPrizes });
   if (fp(previous) === fp(next)) return { ...next, version: previous.version, updatedAt: previous.updatedAt };
   return { ...next, version: previous.version + 1, updatedAt: now.toISOString() };
 }

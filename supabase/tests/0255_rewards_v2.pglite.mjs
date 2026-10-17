@@ -113,6 +113,18 @@ await call("select award_follower_milestones($1) as r", [C]);
 await call("select sweep_follower_milestones(50) as r");
 ok((await q("select 1 from reward_events where beneficiary_id = $1 and event_type = 'followers_milestone'", [C])).length === 1, "2. asking again (the function, the sweep) pays nothing more");
 ok((await q("select 1 from ai_product_ledger where user_id = $1 and note like 'Reward · followers milestone'", [C])).length === 1 && (await q("select 1 from notifications where user_id = $1 and type = 'reward_earned'", [C])).length === 1, "2. it shows in the AI history (ledger) and as a notification");
+// the sweep: followers too new at the 100th follow count once they age, and the sweep RETURNS the grant (the cron pushes it)
+const D = U(10);
+await db.exec(`insert into auth.users (id, email_confirmed_at, created_at) values ('${D}', now() - interval '30 days', now() - interval '30 days'); insert into profiles (id) values ('${D}')`);
+for (let g = 100; g < 160; g++) await db.exec(`insert into follows (follower_id, following_id) values ('${U(g)}', '${D}')`);      // 60 real
+for (let g = 260; g < 300; g++) await db.exec(`insert into follows (follower_id, following_id) values ('${U(g)}', '${D}')`);      // 40 brand new
+ok(!(await one("select 1 x from reward_events where beneficiary_id = $1 and event_type = 'followers_milestone'", [D])), "2. 100 raw followers, 60 real: nothing at the follow");
+await db.exec(`update auth.users set created_at = now() - interval '30 days' where id in (select ('00000000-0000-4000-8000-' || lpad(g::text, 12, '0'))::uuid from generate_series(260, 299) g)`);
+ok((await call("select sweep_follower_milestones(50) as r")).length === 0, "2. the sweep re-checks a member at most once a day");
+await db.exec(`update follower_milestone_checks set checked_at = now() - interval '2 days' where user_id = '${D}'`);
+const swept = await call("select sweep_follower_milestones(50) as r");
+ok(Array.isArray(swept) && swept.length === 1 && swept[0].beneficiary_id === D && swept[0].amount === 5 && swept[0].event === "followers_milestone", "2. a day later the followers have aged: the sweep pays 5 and returns the grant for the push");
+ok((await call("select sweep_follower_milestones(50) as r")).length === 0, "2. the next sweep pays and returns nothing");
 
 // ── 3 · affiliates ──
 const A = U(2), R = U(3), R2 = U(4);

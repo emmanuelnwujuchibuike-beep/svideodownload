@@ -228,17 +228,19 @@ end;
 $$;
 
 -- the 10-minute sweep: members whose raw count passed a milestone they were not paid for, each
--- re-checked at most once a day (a follower who was too new last time may count now)
-create or replace function public.sweep_follower_milestones(p_limit integer) returns integer
+-- re-checked at most once a day (a follower who was too new last time may count now).
+-- Returns what it granted (grant_reward's rows) so the cron can send the push.
+drop function if exists public.sweep_follower_milestones(integer);
+create or replace function public.sweep_follower_milestones(p_limit integer) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
   v_cfg   jsonb;
   v_t     integer;
   v_user  uuid;
-  v_n     integer := 0;
+  v_out   jsonb := '[]'::jsonb;
 begin
   select rules into v_cfg from public.reward_config where id;
-  if coalesce((v_cfg -> 'followers' ->> 'enabled')::boolean, false) = false then return 0; end if;
+  if coalesce((v_cfg -> 'followers' ->> 'enabled')::boolean, false) = false then return v_out; end if;
   for v_t in select (x ->> 'followers')::integer from jsonb_array_elements(coalesce(v_cfg -> 'followers' -> 'milestones', '[]'::jsonb)) x where coalesce((x ->> 'followers')::integer, 0) > 0 loop
     for v_user in
       select p.id from public.profiles p
@@ -247,11 +249,10 @@ begin
          and not exists (select 1 from public.follower_milestone_checks c where c.user_id = p.id and c.threshold = v_t and c.checked_at > now() - interval '1 day')
        limit greatest(1, least(coalesce(p_limit, 50), 200))
     loop
-      perform public.award_follower_milestones(v_user);
-      v_n := v_n + 1;
+      v_out := v_out || public.award_follower_milestones(v_user);
     end loop;
   end loop;
-  return v_n;
+  return v_out;
 end;
 $$;
 

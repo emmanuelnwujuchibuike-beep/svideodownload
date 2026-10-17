@@ -65,7 +65,11 @@ export async function pushRewards(granted: GrantedReward[]): Promise<void> {
           ? `Your AI video earned you ${credits}.`
           : g.event === "ai_video_shared" && g.role === "actor"
             ? `Your AI Reel share earned you ${credits}.`
-            : g.role === "referrer"
+            : g.event === "followers_milestone"
+              ? `A follower milestone earned you ${credits}.`
+              : g.event === "affiliate_commission"
+                ? `Affiliate: a payment by someone you invited earned you ${credits} (withdrawable).`
+                : g.role === "referrer"
               ? `Someone you invited — ${label.toLowerCase()} — earned you ${credits}.`
               : `${label} earned you ${credits}.`;
       try {

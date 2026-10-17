@@ -36,7 +36,10 @@ Owner decisions (2026-10-16, answered in session):
 
 ## Still to build (next session)
 
-1. **Sweeps** in `app/api/cron/ai-reconcile/route.ts`:
+1. ~~Sweeps~~ **DONE 2026-10-17** — `lib/rewards/v2-sweeps.ts`, wired into the cron. `sweep_follower_milestones` now
+   RETURNS its grants (jsonb) so the cron pushes them; the conversion is `lib/rewards/affiliate-fx.ts` (no rate = stays
+   queued). Harness is 52 checks; the new sweep checks FAIL on the old 0255. Original plan:
+   **Sweeps** in `app/api/cron/ai-reconcile/route.ts`:
    - `sweep_follower_milestones(50)` (rpc) + push for what it granted (`pushRewards`).
    - Affiliate commissions: read `affiliate_commissions` where `status = 'queued'` (bounded), convert to USD cents
      (USD as is; else `fx_minor_per_usd`; else `marketRate(currency)` from `lib/ai/character-replace/fx-rate-server`),

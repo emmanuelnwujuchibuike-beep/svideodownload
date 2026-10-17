@@ -5,6 +5,7 @@ import { reconcilePendingAdPayments } from "@/lib/ads-platform/payment-server";
 import { sweepAiJobs } from "@/lib/ai/recovery";
 import { awardClosedWeek } from "@/lib/ai/weekly-top";
 import { verifyProcessingPayouts } from "@/lib/rewards/paystack-payouts";
+import { sweepAffiliateCommissions, sweepFollowerMilestones } from "@/lib/rewards/v2-sweeps";
 import { sweepAutoWithdrawals } from "@/lib/sub/payout-account";
 import { sweepFanout } from "@/lib/sub/fanout";
 import { sweepSubReminders } from "@/lib/sub/reminders";
@@ -45,7 +46,7 @@ async function run(request: Request) {
     reconcilePendingSubPurchases().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
   ]);
   // 0218: any payment alert a webhook did not send yet; and the weekly AI prizes once a week has closed
-  const [fundingAlerts, weeklyAwards, payouts, autoWithdrawals, privacyExpiry, subReminders, subFanout] = await Promise.all([
+  const [fundingAlerts, weeklyAwards, payouts, autoWithdrawals, privacyExpiry, subReminders, subFanout, followerMilestones, affiliateCommissions] = await Promise.all([
     flushFundingAlerts().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
     awardClosedWeek(createAdminClient()).catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
     // Paystack payouts still processing whose webhook never came
@@ -58,8 +59,11 @@ async function run(request: Request) {
     sweepSubReminders().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
     // Part 6: announcement and private-post alerts still queued (0251): a few jobs, a few pages each
     sweepFanout().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
+    // Rewards v2 (0255): follower milestones the follow trigger could not pay yet, and queued affiliate shares
+    sweepFollowerMilestones().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
+    sweepAffiliateCommissions().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
   ]);
-  return NextResponse.json({ ...ai, adPayments, subPurchases, fundingAlerts, weeklyAwards, payouts, autoWithdrawals, privacyExpiry, subReminders, subFanout });
+  return NextResponse.json({ ...ai, adPayments, subPurchases, fundingAlerts, weeklyAwards, payouts, autoWithdrawals, privacyExpiry, subReminders, subFanout, followerMilestones, affiliateCommissions });
 }
 
 export const GET = run;

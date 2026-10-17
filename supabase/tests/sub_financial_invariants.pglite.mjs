@@ -19,6 +19,7 @@
 //   wd-reverse-debt reverse_paid_withdrawal ignores debt            -> returned payout withdrawable while owed
 //   restore-no-claw restore_disputed_sub_purchase skips the clawback check -> a never-earned purchase mints money
 //   restore-own-end restore gives access only to the purchase's own end -> a later paid renewal loses its days
+//   reject-ignores-debt resolve_withdrawal (0256) releases a rejection without settling debt -> withdrawable while owed
 import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 
@@ -54,9 +55,10 @@ const db = new PGlite();
 await run(db, stub);
 const U = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 await db.exec(`insert into auth.users (id) select ('00000000-0000-4000-8000-' || lpad(g::text, 12, '0'))::uuid from generate_series(1, 40) g`);
-for (const f of ["0227_sub_monetization.sql", "0231_sub_promo_dismiss.sql", "0237_sub_post_thumbs.sql", "0239_private_post_interactions.sql", "0247_sub_settlement_hardening.sql", "0250_sub_membership_lifecycle.sql", "0254_payout_reversal_dispute_restore.sql"]) await run(db, readFileSync(`${dir}/${f}`, "utf8"));
-// 0254 applied a second time: it must be idempotent
+for (const f of ["0227_sub_monetization.sql", "0231_sub_promo_dismiss.sql", "0237_sub_post_thumbs.sql", "0239_private_post_interactions.sql", "0247_sub_settlement_hardening.sql", "0250_sub_membership_lifecycle.sql", "0254_payout_reversal_dispute_restore.sql", "0256_withdrawal_rejection_settles_debt.sql"]) await run(db, readFileSync(`${dir}/${f}`, "utf8"));
+// 0254 and 0256 applied a second time: they must be idempotent
 await run(db, readFileSync(dir + "/0254_payout_reversal_dispute_restore.sql", "utf8"));
+await run(db, readFileSync(dir + "/0256_withdrawal_rejection_settles_debt.sql", "utf8"));
 // Supabase's defaults: clients hold table privileges on public and RLS is the only wall. Without this
 // the client checks below would pass for the wrong reason (no grant at all instead of RLS).
 await db.exec("grant usage on schema public to anon, authenticated");
@@ -72,7 +74,8 @@ if (MUTANT === "dup-restore") await db.exec((await fnBody("restore_disputed_sub_
 if (MUTANT === "wd-reverse-debt") await db.exec((await fnBody("reverse_paid_withdrawal")).replace("available_cents = available_cents + v_w.gross_cents - least(debt_cents, v_w.gross_cents)", "available_cents = available_cents + v_w.gross_cents").replace("debt_cents = debt_cents - least(debt_cents, v_w.gross_cents),", ""));
 if (MUTANT === "restore-no-claw") await db.exec((await fnBody("restore_disputed_sub_purchase")).replace(/if not exists \(select 1 from public\.sub_ledger where kind = 'clawback'[\s\S]*?end if;/, ""));
 if (MUTANT === "restore-own-end") await db.exec((await fnBody("restore_disputed_sub_purchase")).replace("and status = 'paid';", "and id = v_p.id;"));
-if (MUTANT === "dup-resolve") await db.exec((await fnBody("resolve_withdrawal")).replace(/if v_w\.status in \('completed', 'rejected', 'cancelled'\) then return[^;]*;\s*end if;/, ""));
+if (MUTANT === "dup-resolve") { const b = await fnBody("resolve_withdrawal"); const m = b.replace(/if v_w\.status in \('completed', 'rejected', 'cancelled'(, 'reversed')?\) then return[^;]*;\s*end if;/, ""); if (m === b) throw new Error("mutant dup-resolve did not apply"); await db.exec(m); }
+if (MUTANT === "reject-ignores-debt") { const b = await fnBody("resolve_withdrawal"); const m = b.replace("v_pay := least(coalesce(v_b.debt_cents, 0), v_w.gross_cents);", "v_pay := 0;"); if (m === b) throw new Error("mutant reject-ignores-debt did not apply"); await db.exec(m); }
 
 const q = async (s, p) => (await db.query(s, p)).rows;
 const one = async (s, p) => (await q(s, p))[0];
@@ -337,6 +340,86 @@ const rs27 = await call("select restore_disputed_sub_purchase($1, $2, 'won late'
 const m27 = await one("select status, billing, period_end from creator_memberships where creator_id = $1 and member_id = $2", [C5, S(14)]);
 ok(rs27.ok && m27.billing === "free" && m27.status === "active" && m27.period_end === null, "27. the earning comes back, but an expired period changes no membership (the free one is untouched)");
 await invariants(C5, "restore after the paid period ended");
+
+// 28 · a REJECTED / CANCELLED withdrawal settles refund debt first (0256), once
+const C6 = U(6), C7 = U(7), C8 = U(8), C9 = U(9);
+const ret = (id) => one("select amount_cents::int a, available_after::int av, note from sub_ledger where kind = 'withdrawal_return' and withdrawal_id = $1", [id]);
+const audited = async (id, action) => (await one("select details from financial_audit_log where action = $1 and target_id = $2 order by id desc limit 1", [action, id]))?.details;
+
+// 28a · no debt: the whole gross comes back to available, lifetime untouched
+await settle(await purchase(C6, S(15)));
+const w28a = await withdraw(C6, 1000);
+ok((await bal(C6)).h === 1000 && (await bal(C6)).a === 0, "28a. setup: 1000 held");
+ok((await resolve(w28a.id, "rejected")).ok, "28a. rejected");
+const b28a = await bal(C6);
+ok(b28a.a === 1000 && b28a.h === 0 && b28a.d === 0 && b28a.l === 1000 && b28a.w === 0, "28a. no debt: 1000 back to available, lifetime still 1000 (no new earning)");
+const r28a = await ret(w28a.id);
+ok(r28a.a === 1000 && r28a.note === "Withdrawal rejected", "28a. one withdrawal_return row for the full gross, plain note");
+await invariants(C6, "rejection with no debt");
+
+// 28b · debt SMALLER than the released amount (cancelled, the same branch)
+const p28b = await purchase(C7, S(16), { price: 500 });
+await settle(p28b);
+await settle(await purchase(C7, S(17), { price: 1000 }));
+const w28b = await withdraw(C7, 1500);
+await reverse(p28b, "disputed");
+ok((await bal(C7)).d === 500 && (await bal(C7)).a === 0, "28b. setup: 1500 held, a dispute left debt 500");
+ok((await resolve(w28b.id, "cancelled")).ok, "28b. cancelled");
+const b28b = await bal(C7);
+ok(b28b.d === 0 && b28b.a === 1000 && b28b.h === 0, "28b. debt 500 settled first, the other 1000 available");
+ok((await ret(w28b.id)).a === 1500 && /500 cents/.test((await ret(w28b.id)).note) && (await audited(w28b.id, "withdrawal_cancelled")).debt_settled === 500, "28b. the ledger keeps the full 1500 released, the note and the audit name the 500 settled");
+await invariants(C7, "cancellation with debt smaller than the release");
+
+// 28c · debt EQUAL to the released amount
+const p28c = await purchase(C8, S(18));
+await settle(p28c);
+const w28c = await withdraw(C8, 1000);
+await reverse(p28c, "disputed");
+ok((await bal(C8)).d === 1000, "28c. setup: 1000 held, debt 1000");
+await resolve(w28c.id, "rejected");
+const b28c = await bal(C8);
+ok(b28c.d === 0 && b28c.a === 0 && b28c.h === 0 && b28c.l === 0, "28c. debt equal to the release: all of it settles the debt, nothing becomes withdrawable");
+await invariants(C8, "rejection with debt equal to the release");
+
+// 28d · debt GREATER than the released amount (an earlier payout already left)
+const p28d = await purchase(C9, S(19));
+await settle(p28d);
+const w28d1 = await withdraw(C9, 1000);
+ok((await payOut(w28d1.id)).ok, "28d. setup: 1000 paid out");
+await settle(await purchase(C9, S(20), { price: 500 }));
+const w28d2 = await withdraw(C9, 500);
+await reverse(p28d, "disputed");
+ok((await bal(C9)).d === 1000 && (await bal(C9)).h === 500, "28d. setup: 500 held, debt 1000");
+await resolve(w28d2.id, "rejected");
+const b28d = await bal(C9);
+ok(b28d.d === 500 && b28d.a === 0 && b28d.h === 0, "28d. debt greater than the release: the 500 pays 500 of it, 500 still owed, nothing withdrawable");
+await invariants(C9, "rejection with debt greater than the release");
+
+// 28e · repeated rejection: once
+const before28e = JSON.stringify(await bal(C6));
+const again = [await resolve(w28a.id, "rejected"), await resolve(w28a.id, "cancelled")];
+ok(again.every((r) => !r.ok && r.reason === "final") && JSON.stringify(await bal(C6)) === before28e, "28e. rejecting (or cancelling) again answers 'final' and moves nothing");
+ok((await one("select count(*)::int n from sub_ledger where kind = 'withdrawal_return' and withdrawal_id = $1", [w28a.id])).n === 1, "28e. still one withdrawal_return row");
+await invariants(C6, "repeated rejection");
+
+// 28f · a PAID withdrawal can't be rejected (nor a reversed one)
+const before28f = JSON.stringify(await bal(C9));
+ok(!(await resolve(w28d1.id, "rejected")).ok && JSON.stringify(await bal(C9)) === before28f, "28f. rejecting a completed payout is refused, nothing released");
+ok((await resolve(wR.id, "rejected")).reason === "final", "28f. a payout the bank returned (reversed) is final too");
+await invariants(C9, "rejection after payout");
+
+// 28g · rejection and payout confirmation BACK TO BACK (one PGlite connection: the second call sees the first's
+// commit; in production the withdrawal row lock serialises them the same way)
+await settle(await purchase(C6, S(21)));
+const w28g = await withdraw(C6, 1000);
+await resolve(w28g.id, "approved");
+await resolve(w28g.id, "processing");
+const first = await resolve(w28g.id, "completed");
+const second = await resolve(w28g.id, "rejected");
+ok(first.ok && !second.ok && second.reason === "final", "28g. paid first: the rejection is refused");
+const b28g = await bal(C6);
+ok(b28g.w === 1000 && b28g.h === 0, "28g. the money is withdrawn once, never also released");
+await invariants(C6, "payout then rejection, back to back");
 
 // 18-19 · clients can't run the money functions or write the money tables (Supabase grants + RLS)
 const availBefore = (await bal(C)).a;

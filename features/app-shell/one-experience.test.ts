@@ -18,7 +18,8 @@ const nav = code("features/app-shell/mobile-nav.tsx");
 function oneTabSet(src: string): boolean {
   return (
     !/fullBleed|useAppMode|FrenzReelsOutline|FrenzFriendsOutline/.test(src) &&
-    /label="Feed"\s+href="\/home"\s+icon=\{FrenzFeedOutline\}/.test(src) &&
+    // the design's feed glyph since 2026-10-18 (design/*.dc.html)
+    /label="Feed"\s+href="\/home"\s+icon=\{FeedIcon\}/.test(src) &&
     src.includes('<NavTab label="Friends" href="/friends" icon={Users} activeIcon={Users}') &&
     src.includes("<NavLabel active={active}>{label}</NavLabel>") &&
     // Profile is the round button beside the pill, labelled for screen readers

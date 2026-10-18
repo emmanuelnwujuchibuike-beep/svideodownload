@@ -9,6 +9,7 @@ import {
   BRAND_TOKENS,
   COLOR_TOKENS,
   type ColorToken,
+  FRENZ_TOKENS,
   renderTokenCss,
   SCALAR_TOKENS,
   TOKEN_MARKERS,
@@ -31,7 +32,7 @@ function colorProblems(tokens: ColorToken[]): string[] {
 
 describe("Design Token Registry — integrity", () => {
   it("colour + brand tokens are unique with valid light/dark HSL channels", () => {
-    const problems = colorProblems([...COLOR_TOKENS, ...BRAND_TOKENS]);
+    const problems = colorProblems([...COLOR_TOKENS, ...BRAND_TOKENS, ...FRENZ_TOKENS]);
     expect(problems, problems.join("\n")).toEqual([]);
   });
 
@@ -92,7 +93,7 @@ function hslChannels(channels: string): Rgb {
 }
 
 function lightValue(name: string): string {
-  const token = [...COLOR_TOKENS, ...BRAND_TOKENS].find((t) => t.name === name);
+  const token = [...COLOR_TOKENS, ...BRAND_TOKENS, ...FRENZ_TOKENS].find((t) => t.name === name);
   if (!token) throw new Error(`no such token: "${name}"`);
   return token.light;
 }
@@ -110,6 +111,11 @@ describe("Design Token Registry — light-theme text contrast (WCAG AA)", () => 
     { fg: "primary-foreground", bg: "primary", usage: "white type on the download button" },
     { fg: "accent", bg: "background", usage: "text-accent" },
     { fg: "accent-foreground", bg: "accent", usage: "white type on an accent surface" },
+    { fg: "frenz-ink", bg: "frenz-page", usage: "Frenz screens: headings and body copy" },
+    { fg: "frenz-muted", bg: "frenz-fill", usage: "Frenz screens: placeholder and label on an input fill" },
+    { fg: "frenz-muted", bg: "frenz-card", usage: "Frenz screens: secondary copy in a card" },
+    { fg: "frenz-card", bg: "frenz-blue", usage: "Frenz screens: white type where the gradient starts" },
+    { fg: "frenz-card", bg: "frenz-violet", usage: "Frenz screens: white type where the gradient ends" },
   ];
 
   it.each(PAIRS)("$fg on $bg is at least 4.5:1 ($usage)", ({ fg, bg }) => {

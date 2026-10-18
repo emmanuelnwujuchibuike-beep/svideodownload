@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Outfit } from "next/font/google";
+import { Hanken_Grotesk, Inter, Outfit, Sora } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { ThemeCacheSync } from "@/components/theme-cache-sync";
@@ -79,6 +79,18 @@ const brandDisplay = Outfit({
   display: "swap",
   preload: false,
 });
+
+/*
+  The Frenz screens' faces (design/*.dc.html, 2026-10-18): Sora for headings,
+  Hanken Grotesk for body. Variable fonts, so one file each whatever the weight.
+  `preload: false` for the same reason as Outfit above: a file is only fetched by
+  a page whose text actually uses it (`font-heading` / `font-body`, scoped by
+  `.frenz-ui`), so the landing and every other page pay nothing for them. The
+  default `adjustFontFallback` sizes the fallback to the face, so the swap does
+  not shift the layout.
+*/
+const frenzHeading = Sora({ subsets: ["latin"], variable: "--font-heading", display: "swap", preload: false });
+const frenzBody = Hanken_Grotesk({ subsets: ["latin"], variable: "--font-body", display: "swap", preload: false });
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -502,7 +514,7 @@ export default function RootLayout({
         {/* GA4 / Google Ads / Tag Manager, from an admin-set ID. */}
         <GoogleTag />
       </head>
-      <body className={`${displaySans.variable} ${brandDisplay.variable} font-sans`}>
+      <body className={`${displaySans.variable} ${brandDisplay.variable} ${frenzHeading.variable} ${frenzBody.variable} font-sans`}>
         {/* Monetag (site-wide) — the owner's network alongside AdSense. The admin
             snippets are parsed server-side into safe tags, then injected on the
             client ONLY for visitors who should see ads, so Pro/Business stay

@@ -1,6 +1,6 @@
 "use client";
 
-import { History, Users } from "lucide-react";
+import { Users } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -13,15 +13,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
 import { useAiGlassTier } from "@/features/ai/design/glass-tier";
-import {
-  FrenzFeedOutline,
-  FrenzFeedSolid,
-  FrenzHomeOutline,
-  FrenzHomeSolid,
-  FrenzInboxOutline,
-  FrenzInboxSolid,
-  FrenzPersonSolid,
-} from "@/components/icons/frenz-icons";
+import { FrenzPersonSolid } from "@/components/icons/frenz-icons";
+import { ChatIcon, FeedIcon, HistoryIcon, HomeIcon } from "@/features/frenz-ui/icons";
 import { FIRST_WARM_ROUTE, GUEST_WARM_ROUTES, afterPageLoad } from "@/features/app-shell/warm-routes";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useQuery } from "@/features/data";
@@ -71,7 +64,7 @@ import { isProfilePath, profilePath } from "@/lib/social/profile-url";
   `text-muted-foreground`, unlike the marketing nav's darker slate: this
   file's immersive (Reels) variant below re-tints every inactive glyph white
   via a selector keyed on the literal class name
-  `[&_.text-foreground]:!text-white/85` — swapping the
+  `[&_.nav-ink]:!text-white/85` — swapping the
   class here would silently stop that selector matching and un-white the
   Reels nav over video, which is a distinct, already-hard-won piece of UI
   (see its own extensive comment below) this pass has no reason to touch.
@@ -93,12 +86,13 @@ import { isProfilePath, profilePath } from "@/lib/social/profile-url";
   BLACK drop-shadow from this constant for the same reason; this removes the
   colour one it left behind.
 */
-const GLYPH_ACTIVE = "text-primary";
+// The design's active ink (design/*.dc.html, 2026-10-18): the violet stop, 4.95:1 on the active capsule.
+const GLYPH_ACTIVE = "text-frenz-violet";
 // Inactive glyphs and labels are `text-foreground` (near-black, white in dark mode). The
 // immersive Reels variant re-tints them white via a selector keyed on that literal class
-// name (`[&_.text-foreground]:!text-white/85`) — rename the class and that selector stops
+// name (`[&_.nav-ink]:!text-white/85`) — rename the class and that selector stops
 // matching.
-const GLYPH_INACTIVE = "text-foreground";
+const GLYPH_INACTIVE = "nav-ink text-frenz-ink/80";
 
 /*
   🔴 THE EXACT SHAPE OF THE OWNER'S REFERENCE (2026-10-15, with a screenshot of
@@ -108,7 +102,8 @@ const GLYPH_INACTIVE = "text-foreground";
   the reference has Search). Inactive icons and labels are near-black. Over
   /reels the same pill is dark glass, so the capsule turns to white there.
 */
-const ACTIVE_CAPSULE = "bg-foreground/[0.08] [.frenz-nav-glass--immersive_&]:bg-white/20";
+// The design's soft violet capsule (design/*.dc.html): a 20 px-radius tile inside the 26 px bar.
+const ACTIVE_CAPSULE = "bg-frenz-violet/10 [.frenz-nav-glass--immersive_&]:bg-white/20";
 
 /*
   Five equal columns across the pill, each the pill's full height — so every tab
@@ -116,7 +111,7 @@ const ACTIVE_CAPSULE = "bg-foreground/[0.08] [.frenz-nav-glass--immersive_&]:bg-
   ring inside the pill's curve.
 */
 const TAB_CLASS =
-  "relative flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";
+  "relative flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-[3px] rounded-[20px] px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";
 
 /**
  * `marketing` is still accepted from the marketing layout but no longer changes the
@@ -322,6 +317,15 @@ export function MobileNav({
   return (
     <>
     {pendingHref ? <NavPendingStripe /> : null}
+    {/* The fade behind the bar (owner, 2026-10-18: "goes from white to transparent") — the page ground, solid
+        for the lowest third, so a list never reads as cut under the bar. Not over Reels' video. */}
+    <div
+      aria-hidden
+      className={cn(
+        "fixed inset-x-0 bottom-0 z-30 pointer-events-none h-[calc(var(--frenz-nav-clearance)+3.5rem)] bg-[linear-gradient(0deg,hsl(var(--frenz-page))_35%,hsl(var(--frenz-page)/0))] transition-opacity duration-300 lg:hidden motion-reduce:transition-none",
+        (immersive || hideForScroll) && "opacity-0",
+      )}
+    />
     {/*
       The floating wrapper: inset 14 px from both edges, centred, capped at
       560 px, `--frenz-nav-gap` above the bottom. `pointer-events-none` on the
@@ -357,8 +361,8 @@ export function MobileNav({
           check the other.
         */
         className={cn(
-          "frenz-nav-glass pointer-events-auto relative flex h-[var(--frenz-nav-height)] min-w-0 flex-1 items-center rounded-full p-1.5",
-          immersive && "frenz-nav-glass--immersive [&_.text-foreground]:!text-white/85",
+          "frenz-nav-glass frenz-ui pointer-events-auto relative flex h-[var(--frenz-nav-height)] min-w-0 flex-1 items-center gap-0.5 rounded-[26px] p-1.5",
+          immersive && "frenz-nav-glass--immersive [&_.nav-ink]:!text-white/85",
         )}
       >
         {/*
@@ -378,8 +382,8 @@ export function MobileNav({
              is known, a member's Home tab does not prefetch "/" at all —
              same guard as the header logo. */
           prefetch={handle || !hasAuthCookie() ? undefined : false}
-          icon={FrenzHomeOutline}
-          activeIcon={FrenzHomeSolid}
+          icon={HomeIcon}
+          activeIcon={HomeIcon}
           active={pathname === "/downloads" || (!handle && pathname === "/")}
           onWarm={router.prefetch} onGo={go}
         />
@@ -388,8 +392,8 @@ export function MobileNav({
           <NavTab
             label="Feed"
             href="/home"
-            icon={FrenzFeedOutline}
-            activeIcon={FrenzFeedSolid}
+            icon={FeedIcon}
+            activeIcon={FeedIcon}
             active={pathname === "/home" || pathname.startsWith("/feed") || pathname.startsWith("/reels")}
             prefetch={false}
             onWarm={router.prefetch} onGo={go}
@@ -398,14 +402,14 @@ export function MobileNav({
           /* Friends in Earn's place on the landing (owner, 2026-10-16) — a guest sees the page locked behind sign-in. */
           <NavTab label="Friends" href="/friends" icon={Users} activeIcon={Users} active={pathname.startsWith("/friends")} prefetch={false} onWarm={router.prefetch} onGo={go} />
         )}
-        <NavTab label="History" href="/history" icon={History} activeIcon={History} active={pathname.startsWith("/history")} onWarm={router.prefetch} onGo={go} />
+        <NavTab label="History" href="/history" icon={HistoryIcon} activeIcon={HistoryIcon} active={pathname.startsWith("/history")} onWarm={router.prefetch} onGo={go} />
         {/* Chats for everyone (owner, 2026-10-16: Support → Chats on the landing too). A guest sees an empty
             inbox and a sign-in modal (features/social/guest-chat.tsx); Support stays in the menu. */}
-        <NavTab label="Chats" href="/messages" icon={FrenzInboxOutline} activeIcon={FrenzInboxSolid} active={pathname.startsWith("/messages")} badge={handle ? unread : 0} prefetch={false} onWarm={router.prefetch} onGo={go} />
+        <NavTab label="Chats" href="/messages" icon={ChatIcon} activeIcon={ChatIcon} active={pathname.startsWith("/messages")} badge={handle ? unread : 0} prefetch={false} onWarm={router.prefetch} onGo={go} />
 
       </nav>
-      {/* Profile — the round glass button beside the pill (the reference's Search
-          circle). It keeps the visitor's own picture when there is one. */}
+      {/* Profile — the design's gradient button beside the bar (design/*.dc.html, 2026-10-18): a
+          3 px brand-gradient frame, a white hairline, the visitor's own picture inside. */}
       <Link
         href={profileHref}
         prefetch={false}
@@ -418,22 +422,17 @@ export function MobileNav({
         aria-label="Profile"
         aria-current={profileActive ? "page" : undefined}
         className={cn(
-          "frenz-nav-glass pointer-events-auto relative flex h-[var(--frenz-nav-height)] w-[var(--frenz-nav-height)] shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-          immersive && "frenz-nav-glass--immersive [&_.text-foreground]:!text-white/85",
+          "pointer-events-auto relative flex h-[var(--frenz-nav-height)] w-[var(--frenz-nav-height)] shrink-0 rounded-[26px] bg-frenz-gradient p-[3px] shadow-frenz-float focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2",
+          profileActive && "ring-[3px] ring-frenz-violet/25",
         )}
       >
-        <PressIcon active={profileActive}>
-          <span
-            className={cn(
-              "flex h-[34px] w-[34px] items-center justify-center overflow-hidden rounded-full",
-              profileActive && "ring-2 ring-primary ring-offset-2 ring-offset-transparent",
-            )}
-          >
+        <PressIcon active={profileActive} className="flex flex-1">
+          <span className="flex flex-1 items-center justify-center overflow-hidden rounded-[23px] border-2 border-white bg-frenz-card">
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
             ) : (
-              <FrenzPersonSolid className={cn("h-[30px] w-[30px]", profileActive ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
+              <FrenzPersonSolid className={cn("h-[34px] w-[34px]", profileActive ? GLYPH_ACTIVE : "text-frenz-ink/80")} />
             )}
           </span>
         </PressIcon>
@@ -544,9 +543,9 @@ function NavTab({
             … bouncing icons"): a 15 s loop that never stopped while the Feed tab
             was inactive, on a bar that is on screen on every page.
           */}
-          <Glyph strokeWidth={2} className={cn("h-[22px] w-[22px] transition-colors", active ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
+          <Glyph strokeWidth={2.2} className={cn("h-[22px] w-[22px] transition-colors", active ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
           {badge > 0 ? (
-            <span className="absolute -right-3.5 -top-2.5 flex h-[20px] min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold leading-none text-white shadow-sm">
+            <span className="absolute -right-3.5 -top-2.5 flex h-[19px] min-w-[19px] items-center justify-center rounded-full border-2 border-frenz-card bg-frenz-magenta px-1 text-[10px] font-extrabold leading-none text-white">
               {badge > 99 ? "99+" : badge}
             </span>
           ) : null}
@@ -559,7 +558,7 @@ function NavTab({
 
 /** The tab's description under its glyph (owner, 2026-10-09: "add description to the landing bottom NAVs"). */
 function NavLabel({ active, children }: { active: boolean; children: ReactNode }) {
-  return <span className={cn("text-[10.5px] font-semibold leading-none", active ? GLYPH_ACTIVE : GLYPH_INACTIVE)}>{children}</span>;
+  return <span className={cn("text-xs leading-none", active ? "font-bold" : "font-semibold", active ? GLYPH_ACTIVE : GLYPH_INACTIVE)}>{children}</span>;
 }
 
 /** A tap that never resolves (offline, a refused route) stops showing as pending after this. */

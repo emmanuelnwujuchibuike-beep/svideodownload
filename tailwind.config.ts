@@ -47,6 +47,18 @@ const config: Config = {
           DEFAULT: "hsl(var(--gold))",
           foreground: "hsl(var(--gold-foreground))",
         },
+        // The Frenz screen palette (design/*.dc.html) — values in lib/platform/design-tokens.ts FRENZ_TOKENS.
+        frenz: {
+          blue: "hsl(var(--frenz-blue) / <alpha-value>)",
+          violet: "hsl(var(--frenz-violet) / <alpha-value>)",
+          magenta: "hsl(var(--frenz-magenta) / <alpha-value>)",
+          ink: "hsl(var(--frenz-ink) / <alpha-value>)",
+          muted: "hsl(var(--frenz-muted) / <alpha-value>)",
+          page: "hsl(var(--frenz-page) / <alpha-value>)",
+          card: "hsl(var(--frenz-card) / <alpha-value>)",
+          line: "hsl(var(--frenz-line) / <alpha-value>)",
+          fill: "hsl(var(--frenz-fill) / <alpha-value>)",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -66,6 +78,10 @@ const config: Config = {
           "0 0 28px hsl(252 95% 70% / 0.28), 0 0 64px hsl(270 95% 72% / 0.1)",
         "glow-gold":
           "0 0 28px hsl(43 96% 56% / 0.32), 0 0 64px hsl(43 96% 56% / 0.12)",
+        // The Frenz screens' elevations — neutral ink only, never a coloured glow (owner, 2026-10-18).
+        "frenz-card": "0 1px 2px hsl(var(--frenz-ink) / 0.05)",
+        "frenz-raised": "0 1px 2px hsl(var(--frenz-ink) / 0.05), 0 12px 28px -20px hsl(var(--frenz-ink) / 0.25)",
+        "frenz-float": "0 16px 36px -12px hsl(var(--frenz-ink) / 0.28)",
       },
       fontFamily: {
         /*
@@ -81,8 +97,14 @@ const config: Config = {
           declaration valid: the phone's own sans instead of a serif.
         */
         sans: ["var(--font-sans, -apple-system)", "-apple-system", "BlinkMacSystemFont", "system-ui", "Segoe UI", "Roboto", "sans-serif"],
+        // The Frenz screens (design/*.dc.html): Sora for headings, Hanken Grotesk for body. Same var() fallback reason as above.
+        heading: ["var(--font-heading, -apple-system)", "-apple-system", "BlinkMacSystemFont", "system-ui", "sans-serif"],
+        body: ["var(--font-body, -apple-system)", "-apple-system", "BlinkMacSystemFont", "system-ui", "sans-serif"],
       },
       backgroundImage: {
+        // The brand gradient: the full three stops (avatars, rings, profile button) and the two-stop button fill.
+        "frenz-gradient": "linear-gradient(135deg, hsl(var(--frenz-blue)), hsl(var(--frenz-violet)) 55%, hsl(var(--frenz-magenta)))",
+        "frenz-gradient-x": "linear-gradient(90deg, hsl(var(--frenz-blue)), hsl(var(--frenz-violet)))",
         "grid-pattern":
           "linear-gradient(to right, hsl(var(--border) / 0.4) 1px, transparent 1px), linear-gradient(to bottom, hsl(var(--border) / 0.4) 1px, transparent 1px)",
       },

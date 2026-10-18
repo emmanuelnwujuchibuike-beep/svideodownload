@@ -91,6 +91,27 @@ export const BRAND_TOKENS: ColorToken[] = [
   { name: "brand-purple-accent", light: "252 100% 71%", dark: "252 100% 73%" },
 ];
 
+/**
+ * The Frenz screen palette (design/*.dc.html, 2026-10-18): the gradient's three
+ * stops, ink, muted ink, the page (white — owner: "every page background is pure
+ * white"), the card, the hairline that separates a card from the white page, and
+ * the light fill of inputs, search bars and segmented controls. Light values are
+ * the owner's; the designs are light-only, so dark reuses the existing dark
+ * theme's values (background, card, foreground, muted-foreground, border,
+ * secondary) rather than inventing new ones. The gradient stops are the same in both.
+ */
+export const FRENZ_TOKENS: ColorToken[] = [
+  { name: "frenz-blue", light: "231 99% 62%", dark: "231 99% 62%", comment: "#3D5AFE" },
+  { name: "frenz-violet", light: "262 75% 57%", dark: "262 75% 57%", comment: "#7B3FE4" },
+  { name: "frenz-magenta", light: "294 61% 53%", dark: "294 61% 53%", comment: "#C23FD1" },
+  { name: "frenz-ink", light: "247 21% 8%", dark: "220 25% 97%", comment: "#12111A" },
+  { name: "frenz-muted", light: "247 13% 39%", dark: "220 15% 68%", comment: "#5A5770" },
+  { name: "frenz-page", light: "0 0% 100%", dark: "229 55% 5%", comment: "#FFFFFF" },
+  { name: "frenz-card", light: "0 0% 100%", dark: "226 36% 10%", comment: "#FFFFFF" },
+  { name: "frenz-line", light: "253 47% 94%", dark: "225 28% 16%", comment: "#ECE9F7" },
+  { name: "frenz-fill", light: "250 25% 95%", dark: "224 30% 14%", comment: "#F1F0F6" },
+];
+
 /** Radius + the shared motion language. `:root`-only (inherited by `.dark`). */
 export const SCALAR_TOKENS: ScalarToken[] = [
   { name: "radius", value: "0.875rem" },
@@ -123,6 +144,7 @@ export function renderTokenCss(): string {
     ...COLOR_TOKENS.map((t) => decl(t.name, t.light, t.comment)),
     ...SCALAR_TOKENS.filter((t) => t.name === "radius").map((t) => decl(t.name, t.value)),
     ...BRAND_TOKENS.map((t) => decl(t.name, t.light)),
+    ...FRENZ_TOKENS.map((t) => decl(t.name, t.light, t.comment)),
     ...SCALAR_TOKENS.filter((t) => t.name !== "radius").map((t) => decl(t.name, t.value, t.comment)),
     "  }",
   ];
@@ -131,6 +153,7 @@ export function renderTokenCss(): string {
     "    color-scheme: dark;",
     ...COLOR_TOKENS.map((t) => decl(t.name, t.dark, t.comment)),
     ...BRAND_TOKENS.map((t) => decl(t.name, t.dark)),
+    ...FRENZ_TOKENS.map((t) => decl(t.name, t.dark)),
     "  }",
   ];
   return [...root, "", ...dark].join("\n");
@@ -139,7 +162,7 @@ export function renderTokenCss(): string {
 /** Every token → its value for a theme. For code that needs a real value. */
 export function tokenValues(theme: "light" | "dark"): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const t of [...COLOR_TOKENS, ...BRAND_TOKENS]) out[t.name] = theme === "light" ? t.light : t.dark;
+  for (const t of [...COLOR_TOKENS, ...BRAND_TOKENS, ...FRENZ_TOKENS]) out[t.name] = theme === "light" ? t.light : t.dark;
   for (const t of SCALAR_TOKENS) out[t.name] = t.value;
   return out;
 }

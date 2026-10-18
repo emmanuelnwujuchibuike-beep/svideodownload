@@ -28,6 +28,15 @@
     --brand-blue-accent: 210 100% 62%;
     --brand-purple: 250 100% 65%;
     --brand-purple-accent: 252 100% 71%;
+    --frenz-blue: 231 99% 62%; /* #3D5AFE */
+    --frenz-violet: 262 75% 57%; /* #7B3FE4 */
+    --frenz-magenta: 294 61% 53%; /* #C23FD1 */
+    --frenz-ink: 247 21% 8%; /* #12111A */
+    --frenz-muted: 247 13% 39%; /* #5A5770 */
+    --frenz-page: 0 0% 100%; /* #FFFFFF */
+    --frenz-card: 0 0% 100%; /* #FFFFFF */
+    --frenz-line: 253 47% 94%; /* #ECE9F7 */
+    --frenz-fill: 250 25% 95%; /* #F1F0F6 */
     --ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* shared easing */
     --ease-spring: cubic-bezier(0.34, 1.4, 0.5, 1);
     --dur-fast: 160ms;
@@ -58,6 +67,15 @@
     --brand-blue-accent: 210 100% 64%;
     --brand-purple: 250 100% 68%;
     --brand-purple-accent: 252 100% 73%;
+    --frenz-blue: 231 99% 62%;
+    --frenz-violet: 262 75% 57%;
+    --frenz-magenta: 294 61% 53%;
+    --frenz-ink: 220 25% 97%;
+    --frenz-muted: 220 15% 68%;
+    --frenz-page: 229 55% 5%;
+    --frenz-card: 226 36% 10%;
+    --frenz-line: 225 28% 16%;
+    --frenz-fill: 224 30% 14%;
   }
   /* design-tokens:end */
 
@@ -452,7 +470,7 @@
      ~8px off the bottom — so the pill sits 12px INSIDE the inset (~22px up,
      ~9px above the bar), and 8px up on phones with no inset. */
   :root {
-    --frenz-nav-height: 3.75rem;
+    --frenz-nav-height: 4.25rem; /* 68 px — the design's bar (design/*.dc.html, 2026-10-18) */
     --frenz-nav-gap: max(0.5rem, calc(env(safe-area-inset-bottom) - 0.75rem));
     --frenz-nav-clearance: calc(var(--frenz-nav-height) + var(--frenz-nav-gap));
   }
@@ -940,16 +958,14 @@
      under the blur while it scrolls. */
   .frenz-nav-glass {
     --nav-glass-rgb: 255 255 255;
-    --nav-glass-fill: 0.72;
+    --nav-glass-fill: 0.82;
     --nav-glass-blur: 12px;
     background-color: rgb(var(--nav-glass-rgb) / var(--nav-glass-fill));
     -webkit-backdrop-filter: blur(var(--nav-glass-blur)) saturate(160%);
     backdrop-filter: blur(var(--nav-glass-blur)) saturate(160%);
-    border: 1px solid rgb(255 255 255 / 0.65);
-    box-shadow:
-      0 10px 30px -12px rgb(15 23 42 / 0.28),
-      0 1px 2px rgb(15 23 42 / 0.06),
-      inset 0 1px 0 rgb(255 255 255 / 0.7);
+    /* the design's hairline and lift (design/*.dc.html, 2026-10-18) */
+    border: 1px solid hsl(var(--frenz-line));
+    box-shadow: 0 16px 36px -12px hsl(var(--frenz-ink) / 0.32);
   }
   /* Theme and surface set the COLOUR only, never the fill: these selectors are
      more specific than the tiers below, so a fill here would defeat them. */
@@ -960,6 +976,14 @@
       0 12px 32px -12px rgb(0 0 0 / 0.6),
       inset 0 1px 0 rgb(255 255 255 / 0.06);
   }
+  /* The Frenz screens (design/*.dc.html, 2026-10-18): Hanken Grotesk body and the
+     design's ink on whatever a screen's root grounds it with. Headings opt in
+     with `font-heading` (Sora). Scoped, so no other page fetches either face. */
+  .frenz-ui {
+    font-family: var(--font-body, -apple-system), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    color: hsl(var(--frenz-ink));
+  }
+
   /* Over full-bleed video (/reels): dark glass whatever the theme, so the white
      glyphs read on any frame. */
   .frenz-nav-glass.frenz-nav-glass--immersive {
@@ -976,7 +1000,7 @@
       --ai-glass-blur: 4px;
     }
     :where(html:not([data-a11y-motion="full"])) .frenz-nav-glass {
-      --nav-glass-fill: 0.86;
+      --nav-glass-fill: 0.9;
       --nav-glass-blur: 6px;
     }
   }
@@ -985,7 +1009,7 @@
     --ai-glass-blur: 4px;
   }
   :where(html[data-a11y-motion="reduce"], html[data-glass="reduced"]) .frenz-nav-glass {
-    --nav-glass-fill: 0.86;
+    --nav-glass-fill: 0.9;
     --nav-glass-blur: 6px;
   }
 

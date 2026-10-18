@@ -9,6 +9,7 @@ import { EX_CARD, ExGroup, exPrimary, exQuiet } from "@/features/sub/ui";
 import { haptic } from "@/lib/motion/haptics";
 import type { FavouriteCreator } from "@/lib/sub/favourites";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Favourite creators (Frenz Exclusive Part 6) — the member's own list, 24 at a time from
@@ -54,7 +55,7 @@ export function FavouritesList({ initial }: { initial: Page | null }) {
         <ExGroup label="Favourite creators">
           {page.items.map((c) => (
             <li key={c.id} className="flex items-center gap-2 px-3.5 py-3">
-              <Link href={`/u/${c.handle}`} prefetch={false} className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <Link href={`${profilePath(c.handle)}`} prefetch={false} className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <PersonAvatar user={c} size={44} />
                 <span className="min-w-0">
                   <span className="flex items-center gap-1 text-[14.5px] font-semibold">
@@ -65,7 +66,7 @@ export function FavouritesList({ initial }: { initial: Page | null }) {
                 </span>
               </Link>
               {c.offersSubscriptions ? (
-                <Link href={`/u/${c.handle}?tab=sub`} prefetch={false} aria-label={`${c.displayName}'s Exclusive posts`} className="inline-flex h-10 min-w-10 shrink-0 items-center justify-center gap-1.5 rounded-full bg-primary/10 px-2.5 text-[12.5px] font-semibold text-primary transition hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <Link href={`${profilePath(c.handle)}?tab=sub`} prefetch={false} aria-label={`${c.displayName}'s Exclusive posts`} className="inline-flex h-10 min-w-10 shrink-0 items-center justify-center gap-1.5 rounded-full bg-primary/10 px-2.5 text-[12.5px] font-semibold text-primary transition hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <Lock className="h-3.5 w-3.5" aria-hidden />
                   {/* the word only where it fits: on a narrow phone the name keeps the room */}
                   <span className="hidden min-[400px]:inline">Exclusive</span>

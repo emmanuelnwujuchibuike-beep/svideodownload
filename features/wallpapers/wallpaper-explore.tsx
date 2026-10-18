@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronLeft,
   CloudUpload,
+  Crown,
   Download,
   Image as ImageIcon,
   LayoutGrid,
@@ -102,6 +103,10 @@ const WallpaperLimitSheet = dynamic(
   () => import("@/features/wallpapers/wallpaper-reward-ad").then((m) => m.WallpaperLimitSheet),
   { ssr: false },
 );
+const WallpaperProSheet = dynamic(
+  () => import("@/features/wallpapers/wallpaper-reward-ad").then((m) => m.WallpaperProSheet),
+  { ssr: false },
+);
 
 /** How many the Popular section shows before "View all" opens the rest. */
 const POPULAR_PREVIEW = 12;
@@ -148,7 +153,8 @@ export function WallpaperExplore({
 }) {
   const router = useRouter();
   const [viewer, setViewer] = useState<number | null>(openReels ? 0 : null);
-  const { allowance, download, adOpen, closeAd, limitHit, closeLimit, adSeconds } = useWallpaperDownload();
+  const { allowance, download, adOpen, closeAd, limitHit, closeLimit, proRequired, closeProRequired, adSeconds } =
+    useWallpaperDownload();
   // The name shown on the ad card — the wallpaper whose download is running.
   const [adFor, setAdFor] = useState("");
 
@@ -867,6 +873,7 @@ export function WallpaperExplore({
         />
       ) : null}
       {limitHit ? <WallpaperLimitSheet limit={allowance?.limit ?? 5} onClose={closeLimit} /> : null}
+      {proRequired ? <WallpaperProSheet onClose={closeProRequired} /> : null}
 
       {/*
         The upload button (owner, 2026-08-23) — a premium, hard-to-miss floating
@@ -1117,10 +1124,16 @@ function ExploreTile({
       <button
         type="button"
         onClick={onDownload}
-        aria-label={`Download ${wp.name}`}
-        className="absolute right-1.5 top-1.5 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-inset ring-white/20 backdrop-blur-md transition hover:bg-black/65 active:scale-90"
+        aria-label={wp.proOnly ? `Download ${wp.name} (Pro)` : `Download ${wp.name}`}
+        className={cn(
+          "absolute right-1.5 top-1.5 z-30 flex h-8 w-8 items-center justify-center rounded-full ring-1 ring-inset backdrop-blur-md transition active:scale-90",
+          // A Pro wallpaper (admin upload, owner 2026-10-18) wears the gold crown.
+          wp.proOnly
+            ? "bg-gradient-to-b from-neutral-900 to-black text-amber-300 shadow-md shadow-amber-500/30 ring-amber-300/60"
+            : "bg-black/45 text-white ring-white/20 hover:bg-black/65",
+        )}
       >
-        <Download className="h-4 w-4" />
+        {wp.proOnly ? <Crown className="h-4 w-4" /> : <Download className="h-4 w-4" />}
       </button>
     </div>
   );

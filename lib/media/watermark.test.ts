@@ -93,11 +93,12 @@ describe("the watermark hops corners every 3 seconds (owner, 2026-10-14)", () =>
     const g = src("features/sub/sub-gallery.tsx");
     expect(g).not.toContain("Array.from({ length: 40 }");
     expect(g).not.toContain("rotate-[-24deg]");
-    expect(g).toContain("<RovingWatermark viewer={data.watermark} creatorHandle={data.creatorHandle ?? null} />");
+    expect(g).toContain("{data?.creatorHandle ? <RovingWatermark creatorHandle={data.creatorHandle} /> : null}");
     // the moving badge is the ONLY mark — no second, fixed creator address on the media
     expect(g).not.toContain("frenzsave.com/u/{data.creatorHandle}");
-    expect(g).toContain("const where = creatorHandle ? `frenzsave.com/u/${creatorHandle}` : \"frenzsave.com\";");
-    expect(g).toContain("<a href={`/u/${encodeURIComponent(creatorHandle)}`}");
+    // owner 2026-10-17: only the domain and the creator's username, linking to their /:handle profile
+    expect(g).toContain("const text = `frenzsave.com${profilePath(creatorHandle)}`;");
+    expect(g).toContain("<a href={profilePath(creatorHandle)}");
     expect(g).toContain("(v + 1) % WATERMARK_CORNERS.length), WATERMARK_CORNER_SECONDS * 1000)");
   });
 });

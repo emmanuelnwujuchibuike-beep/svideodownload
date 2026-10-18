@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Check, Clapperboard, LayoutGrid, LayoutTemplate, Maximize2, PanelTop, RectangleHorizontal, Sparkles } from "lucide-react";
+import { Check, Clapperboard, LayoutGrid, LayoutTemplate, Maximize2, PanelTop, RectangleHorizontal, Lightbulb } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { AiStepRail } from "@/features/ai/design/ai-step-rail";
@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
  * treatment `.dark .ai-strip-cta` uses.
  */
 
-/** Presentation only: an icon per format. An admin-added format falls back to Sparkles. */
+/** Presentation only: an icon per format. An admin-added format falls back to Lightbulb. */
 const FORMAT_ICONS: Record<string, LucideIcon> = {
   TOP_BANNER: PanelTop,
   CONTENT_BANNER: RectangleHorizontal,
@@ -30,7 +30,7 @@ const FORMAT_ICONS: Record<string, LucideIcon> = {
   // 0211: every slot at once
   ALL_SLOTS: LayoutGrid,
 };
-export const formatIcon = (code: string): LucideIcon => FORMAT_ICONS[code] ?? Sparkles;
+export const formatIcon = (code: string): LucideIcon => FORMAT_ICONS[code] ?? Lightbulb;
 
 export function IconChip({ icon: Icon, active }: { icon: LucideIcon; active?: boolean }) {
   return (

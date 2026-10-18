@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
 import { timeAgo } from "@/features/notifications/meta";
 import type { FriendActivityEntry } from "@/lib/social/friend-activity";
+import { profilePath } from "@/lib/social/profile-url";
 
 const ICONS: Record<FriendActivityEntry["kind"], typeof Heart> = {
   post: ImageIcon,
@@ -45,9 +46,9 @@ function FriendActivityRow({ item }: { item: FriendActivityEntry }) {
   const Icon = item.kind === "post" && item.mediaKind === "video" ? Video : ICONS[item.kind];
   const href =
     item.kind === "story"
-      ? `/u/${item.actor.handle}`
+      ? `${profilePath(item.actor.handle)}`
       : item.kind === "follow"
-        ? `/u/${item.target?.handle}`
+        ? `${profilePath(item.target?.handle)}`
         : `/p/${item.postId}`;
 
   return (

@@ -11,12 +11,12 @@ import {
   Minus,
   Plus,
   Quote,
-  Sparkles,
   Trash2,
   Type,
   Video as VideoIcon,
   Wand2,
   X,
+  Lightbulb,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -276,7 +276,7 @@ function StudioInner() {
         {recover ? (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden border-b border-border/60 bg-gradient-to-r from-blue-600/10 to-violet-600/10">
             <div className="flex items-center gap-3 px-4 py-3">
-              <Sparkles className="h-4 w-4 shrink-0 text-foreground" />
+              <Lightbulb className="h-4 w-4 shrink-0 text-foreground" />
               <p className="min-w-0 flex-1 text-sm">
                 <span className="font-semibold">Recover your draft?</span>{" "}
                 <span className="text-muted-foreground">You have unsaved work from {new Date(recover.savedAt).toLocaleString()}.</span>
@@ -459,7 +459,7 @@ function PublishButtonMorph({ phase, disabled, accent, onClick }: { phase: "idle
       whileTap={{ scale: 0.95 }}
       className={cn("relative inline-flex h-9 items-center gap-1.5 overflow-hidden rounded-full bg-gradient-to-r px-4 text-sm font-bold text-white shadow-md shadow-violet-500/25 disabled:opacity-60", accent)}
     >
-      <Sparkles className="h-4 w-4" /> Publish
+      <Lightbulb className="h-4 w-4" /> Publish
     </motion.button>
   );
 }

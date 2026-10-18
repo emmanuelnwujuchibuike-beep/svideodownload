@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import type { GraphConnection } from "@/lib/social/graph/overview";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * "Been a while" — reconnect suggestions (Part 17).
@@ -34,7 +35,7 @@ export function ReconnectStrip({ items }: { items: GraphConnection[] }) {
               </span>
               <span className="min-w-0">
                 <Link
-                  href={`/u/${c.user.handle}`}
+                  href={`${profilePath(c.user.handle)}`}
                   prefetch={false}
                   className="block truncate text-sm font-semibold hover:underline"
                 >

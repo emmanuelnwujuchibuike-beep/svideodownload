@@ -1,12 +1,13 @@
 "use client";
 
-import { Eye, Loader2, ShieldAlert, Sparkles } from "lucide-react";
+import { Eye, Loader2, ShieldAlert, Lightbulb } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import type { ModAction, ReportedTarget } from "@/lib/social/moderation";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 const TYPE_LABEL = { post: "Post", comment: "Comment", user: "User", sub_post: "Exclusive post", sub_comment: "Exclusive comment" } as const;
 const isSub = (t: ReportedTarget) => t.targetType === "sub_post" || t.targetType === "sub_comment";
@@ -94,7 +95,7 @@ export function ModerationQueue({ targets }: { targets: ReportedTarget[] }) {
                   {t.targetType === "post" ? (
                     <Link href={`/p/${t.targetId}`} className="hover:underline">{t.title}</Link>
                   ) : t.targetType === "user" && t.handle ? (
-                    <Link href={`/u/${t.handle}`} className="hover:underline">{t.title}</Link>
+                    <Link href={`${profilePath(t.handle)}`} className="hover:underline">{t.title}</Link>
                   ) : (
                     t.title
                   )}
@@ -104,7 +105,7 @@ export function ModerationQueue({ targets }: { targets: ReportedTarget[] }) {
                 </p>
                 {t.aiAssessment ? (
                   <p className="mt-1.5 flex items-start gap-1.5 text-xs">
-                    <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-violet-500" />
+                    <Lightbulb className="mt-0.5 h-3 w-3 shrink-0 text-violet-500" />
                     <span>
                       <span className={cn("mr-1.5 rounded-full px-1.5 py-0.5 font-semibold", severityTint(t.aiAssessment.severity))}>
                         {t.aiAssessment.category} · {t.aiAssessment.severity}/100

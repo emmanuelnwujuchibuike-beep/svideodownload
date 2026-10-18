@@ -1,5 +1,6 @@
 import { QrCode } from "lucide-react";
 import Link from "next/link";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * The way into the Digital Business Card (Part 18).
@@ -16,7 +17,7 @@ import Link from "next/link";
 export function ProfileCardLink({ handle }: { handle: string }) {
   return (
     <Link
-      href={`/u/${handle}/card`}
+      href={`${profilePath(handle)}/card`}
       prefetch={false}
       aria-label="Digital card and QR code"
       title="Digital card and QR code"

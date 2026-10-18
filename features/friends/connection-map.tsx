@@ -9,6 +9,7 @@ import { circleColorClasses } from "@/lib/social/graph/circles";
 import type { GraphConnection } from "@/lib/social/graph/overview";
 import type { CircleRow } from "@/lib/social/graph/store";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Connection Map™ — the graph, drawn (Feature 18 · Part 17).
@@ -217,7 +218,7 @@ export function ConnectionMap({
         {shown.map((c) => (
           <li key={c.user.id}>
             <Link
-              href={`/u/${c.user.handle}`}
+              href={`${profilePath(c.user.handle)}`}
               prefetch={false}
               onMouseEnter={() => setFocused(c)}
               onMouseLeave={() => setFocused(null)}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, ArchiveRestore, ArrowLeft, BellOff, CalendarHeart, Hourglass, MessageCircle, Sparkles, UserPlus } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowLeft, BellOff, CalendarHeart, Hourglass, MessageCircle, UserPlus, Lightbulb } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -8,6 +8,7 @@ import { AmbientWash, GLASS, GlassGroup, PersonAvatar, quietPill, SectionHeader 
 import { STAGE_COPY, STAGE_ORDER, type RelationshipStage } from "@/lib/social/intelligence/stage";
 import type { IntelRelationship, RelationshipIntelligence } from "@/lib/social/intelligence/server";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Your connections — the private Social Intelligence dashboard (Feature 19 · Part 8).
@@ -144,12 +145,12 @@ export function InsightsPage({ intel }: { intel: RelationshipIntelligence }) {
                   <p className="text-[12.5px] leading-snug text-muted-foreground">{evolution.reason}</p>
                 </div>
                 {evolution.kind === "follow_to_friend" ? (
-                  <Link href={`/u/${person.handle}`} prefetch={false} className={cn(quietPill, "min-h-[2.25rem] px-3 text-[12.5px] text-primary")}>
+                  <Link href={`${profilePath(person.handle)}`} prefetch={false} className={cn(quietPill, "min-h-[2.25rem] px-3 text-[12.5px] text-primary")}>
                     <UserPlus className="h-4 w-4" aria-hidden /> <span className="max-[359px]:sr-only">Profile</span>
                   </Link>
                 ) : (
                   <Link href="/friends/circles" prefetch={false} className={cn(quietPill, "min-h-[2.25rem] px-3 text-[12.5px] text-primary")}>
-                    <Sparkles className="h-4 w-4" aria-hidden /> <span className="max-[359px]:sr-only">Label</span>
+                    <Lightbulb className="h-4 w-4" aria-hidden /> <span className="max-[359px]:sr-only">Label</span>
                   </Link>
                 )}
               </li>

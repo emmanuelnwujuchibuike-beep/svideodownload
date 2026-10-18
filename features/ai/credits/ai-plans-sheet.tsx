@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Crown, Sparkles, Wallet } from "lucide-react";
+import { Check, Crown, Wallet, Lightbulb } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useState } from "react";
 
@@ -57,7 +57,7 @@ export function AiPlansSheet({
 }) {
   const [busy, setBusy] = useState<"ai_pro" | "ai_max" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // 2026-10-07: Paystack or Bachs per plan, when the admin lets members choose and both can sell it here
+  // a provider choice per plan, only when the admin lets members choose and two can sell it here (Paystack alone today)
   const options = usePaymentOptions(open);
   const [provider, setProvider] = useState<PaymentProvider | null>(null);
   const providersFor = (plan: "ai_pro" | "ai_max") => options?.plans[plan] ?? [];
@@ -157,7 +157,7 @@ export function AiPlansSheet({
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className={cn("flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em]", top ? "text-white/85" : "text-muted-foreground")}>
-                        {top ? <Crown className="h-3.5 w-3.5" aria-hidden /> : <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />}
+                        {top ? <Crown className="h-3.5 w-3.5" aria-hidden /> : <Lightbulb className="h-3.5 w-3.5 text-primary" aria-hidden />}
                         {p.label}
                       </p>
                       <p className="mt-1.5 text-[26px] font-bold leading-none tabular-nums tracking-[-0.03em]">

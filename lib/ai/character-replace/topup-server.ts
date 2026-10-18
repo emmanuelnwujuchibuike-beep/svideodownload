@@ -7,8 +7,6 @@ import { after } from "next/server";
 import { resolveCheckoutRate } from "@/lib/ai/character-replace/fx-rate-server";
 import { checkoutMetadata, quoteCheckout } from "@/lib/ai/character-replace/topup-fx";
 import { resolvePurchase, type PaymentMarket, type Purchase, type TopupProviderId } from "@/lib/ai/credits/wallet-config";
-import { beginBachsTopup } from "@/lib/ai/wallet/bachs-topup";
-import { bachsConfigured } from "@/lib/payments/bachs";
 import { routePayment } from "@/lib/payments/router";
 import { recordTopupAttempt } from "@/lib/ai/topup-attempts";
 import { getLandingSettings } from "@/lib/landing/settings";
@@ -54,29 +52,19 @@ export async function beginCharacterReplaceTopup(opts: {
   if ("error" in purchase) return { ok: false, status: 400, error: purchase.error };
 
   /*
-    ── WHICH RAIL (owner, 2026-10-07) ─────────────────────────────────────
+    ── WHICH RAIL ─────────────────────────────────────────────────────────
     The router orders the providers for this market; a provider is skipped
     when it is not configured. The next one is tried ONLY when the previous
     could not CREATE a checkout — the member never saw a payment page, so
-    nothing can have been paid. Once a checkout URL exists it is returned and
-    nothing else is opened.
+    nothing can have been paid. Since Bachs was removed (2026-10-17) the
+    only rail is Paystack.
   */
   const paystackOk = await paystackEnabled();
-  const candidates = routePayment({ purpose: "wallet_topup", market: opts.market ?? "other", routing: plans.wallet.routing, usable: (p) => (p === "bachs" ? bachsConfigured() : paystackOk), preferred: plans.wallet.memberChoice ? opts.provider : undefined });
+  const candidates = routePayment({ purpose: "wallet_topup", market: opts.market ?? "other", routing: plans.wallet.routing, usable: () => paystackOk, preferred: plans.wallet.memberChoice ? opts.provider : undefined });
   if (!candidates.length) return { ok: false, status: 503, error: "Payments aren't available right now." };
   let last: TopupStart = { ok: false, status: 503, error: "Payments aren't available right now." };
   for (const [i, provider] of candidates.entries()) {
     if (i > 0) console.warn("[payments] fallback_triggered", { purpose: "wallet_topup", from: candidates[i - 1], to: provider, userId: opts.userId });
-    if (provider === "bachs") {
-      const returnPath = `${SITE_URL}${safeReturnTo(opts.returnTo)}`;
-      const started = await beginBachsTopup({ userId: opts.userId, email: opts.email, purchase, successUrl: returnPath, cancelUrl: returnPath });
-      if (started.ok) {
-        console.info("[payments] checkout_created", { provider, purpose: "wallet_topup", userId: opts.userId, credits: purchase.credits });
-        return { ok: true, url: started.url, credits: purchase.credits, bonusCredits: purchase.bonusCredits, priceUsdCents: purchase.priceUsdCents, provider };
-      }
-      last = started;
-      continue;
-    }
     last = await beginPaystackTopup(opts, settings, purchase);
     if (last.ok) return last;
   }

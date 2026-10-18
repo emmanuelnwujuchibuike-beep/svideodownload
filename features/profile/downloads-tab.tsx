@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, HardDrive, Layers, Lock, Search, Sparkles } from "lucide-react";
+import { CalendarClock, HardDrive, Layers, Lock, Search, Lightbulb } from "lucide-react";
 import { useMemo, useState } from "react";
 import { IoDownloadOutline, IoPlay } from "react-icons/io5";
 
@@ -208,7 +208,7 @@ export function DownloadsTab({ emptyText }: { emptyText: string }) {
 
       {/* Honest roadmap — the cloud/AI/vault layer needs a server library + encryption */}
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-2xl border border-dashed border-border/60 p-3 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> AI Collections</span>
+        <span className="inline-flex items-center gap-1.5"><Lightbulb className="h-3.5 w-3.5" /> AI Collections</span>
         <span className="inline-flex items-center gap-1.5"><Lock className="h-3.5 w-3.5" /> Private Vault</span>
         <span className="inline-flex items-center gap-1.5"><HardDrive className="h-3.5 w-3.5" /> Cloud Sync</span>
 

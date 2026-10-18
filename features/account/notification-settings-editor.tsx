@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, BellOff, Download, EyeOff, Heart, Inbox, Loader2, Mail, MessageCircle, Moon, Newspaper, ShieldCheck, Sparkles, Users2, Wrench } from "lucide-react";
+import { Bell, BellOff, Download, EyeOff, Heart, Inbox, Loader2, Mail, MessageCircle, Moon, Newspaper, ShieldCheck, Users2, Wrench, Lightbulb } from "lucide-react";
 import { useState } from "react";
 
 import type { CategoryPref, NotificationSettings } from "@/lib/social/notification-settings";
@@ -12,7 +12,7 @@ const CATEGORY_META: Record<NotificationCategory, { label: string; icon: typeof 
   downloads: { label: "Downloads", icon: Download },
   community: { label: "Communities", icon: MessageCircle },
   news: { label: "News", icon: Newspaper },
-  premium: { label: "Premium & billing", icon: Sparkles },
+  premium: { label: "Premium & billing", icon: Lightbulb },
   security: { label: "Security", icon: ShieldCheck },
   system: { label: "System & announcements", icon: Wrench },
 };

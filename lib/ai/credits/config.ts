@@ -52,13 +52,6 @@ export interface AiPlanConfig {
   /** PLN_… from the Paystack dashboard. Empty = Paystack cannot sell this plan. */
   paystackPlanCode: string;
   /**
-   * prod_… — the plan's RECURRING product in the Bachs dashboard (owner,
-   * 2026-10-07: "set in admin where I can set up Bachs for plans"). Bachs
-   * starts a subscription only by a checkout of such a product. Empty = Bachs
-   * cannot sell this plan. A plan with neither is "coming soon".
-   */
-  bachsProductId: string;
-  /**
    * 0194 (owner 2026-10-07: "credits used for subscription should not be calculated with the normal
    * rate — the credit price for a subscription can be set by admin"): what ONE period of this plan
    * costs when paid with wallet credits. 0 = priced at the normal credit rate (priceCents ÷ centsPerCredit).
@@ -126,8 +119,8 @@ export const AI_PLANS_BOUNDS = {
 export const AI_PLANS_DEFAULTS: AiPlansConfig = {
   enabled: true,
   plans: {
-    ai_pro: { enabled: true, label: "AI Pro", priceCents: 1000, interval: "monthly", dailyCredits: 15, weeklyCredits: 70, paystackPlanCode: "", bachsProductId: "", creditsPrice: 0, blurb: "Every Frenz AI tool — video, audio, voice cloning and lip sync — with a daily allowance of credits." },
-    ai_max: { enabled: true, label: "AI Max", priceCents: 2000, interval: "monthly", dailyCredits: 50, weeklyCredits: 250, paystackPlanCode: "", bachsProductId: "", creditsPrice: 0, blurb: "Everything in AI Pro with the largest allowance — the maximum AI usage tier." },
+    ai_pro: { enabled: true, label: "AI Pro", priceCents: 1000, interval: "monthly", dailyCredits: 15, weeklyCredits: 70, paystackPlanCode: "", creditsPrice: 0, blurb: "Every Frenz AI tool — video, audio, voice cloning and lip sync — with a daily allowance of credits." },
+    ai_max: { enabled: true, label: "AI Max", priceCents: 2000, interval: "monthly", dailyCredits: 50, weeklyCredits: 250, paystackPlanCode: "", creditsPrice: 0, blurb: "Everything in AI Pro with the largest allowance — the maximum AI usage tier." },
   },
   // null = the count on the Character Replace tab (`freeAccess.creationsPerAccount`) — one control until the operator sets a plan apart
   freeCreations: { enabled: true, free: null, pro: null, business: null },
@@ -196,13 +189,6 @@ export function isPaystackPlanCode(v: unknown): v is string {
 function planCode(v: unknown): string {
   return isPaystackPlanCode(v) ? v.trim() : "";
 }
-/** A Bachs product id is `prod_` + id characters — a payment-page link or anything else is dropped (the 2026-09-21 Paystack lesson). */
-export function isBachsProductId(v: unknown): v is string {
-  return typeof v === "string" && /^prod_[A-Za-z0-9]{4,60}$/.test(v.trim());
-}
-function bachsProduct(v: unknown): string {
-  return isBachsProductId(v) ? v.trim() : "";
-}
 /** An IANA zone the runtime knows; otherwise the default (a typo must not stop every day from rolling over). */
 export function validTimezone(v: unknown, fallback: string): string {
   if (typeof v !== "string" || !v.trim()) return fallback;
@@ -226,7 +212,6 @@ function normalizePlan(raw: unknown, d: AiPlanConfig): AiPlanConfig {
     // a week can never allow less than a day
     weeklyCredits: Math.max(daily, int(r.weeklyCredits, d.weeklyCredits, AI_PLANS_BOUNDS.weeklyCredits.min, AI_PLANS_BOUNDS.weeklyCredits.max)),
     paystackPlanCode: planCode(r.paystackPlanCode),
-    bachsProductId: bachsProduct(r.bachsProductId),
     creditsPrice: int(r.creditsPrice, 0, 0, 10_000_000),
     blurb: text(r.blurb, d.blurb, 160),
   };
@@ -309,7 +294,7 @@ export function publicAiPlansConfig(c: AiPlansConfig, currency: { code: string; 
     symbol: currency.symbol,
     plans: AI_PLAN_IDS.filter((id) => c.plans[id].enabled).map((id) => {
       const p = c.plans[id];
-      return { id, label: p.label, priceCents: p.priceCents, interval: p.interval, dailyCredits: p.dailyCredits, weeklyCredits: p.weeklyCredits, blurb: p.blurb, purchasable: c.enabled && (p.paystackPlanCode.length > 0 || p.bachsProductId.length > 0), creditsPrice: planCreditsPrice(p, c.credits.centsPerCredit) };
+      return { id, label: p.label, priceCents: p.priceCents, interval: p.interval, dailyCredits: p.dailyCredits, weeklyCredits: p.weeklyCredits, blurb: p.blurb, purchasable: c.enabled && p.paystackPlanCode.length > 0, creditsPrice: planCreditsPrice(p, c.credits.centsPerCredit) };
     }),
     walletFallback: c.walletFallback,
     centsPerCredit: c.credits.centsPerCredit,

@@ -23,12 +23,12 @@ import {
   Send,
   Smile,
   SmilePlus,
-  Sparkles,
   Trash2,
   Users,
   VolumeX,
   Wand2,
   X,
+  Lightbulb,
 } from "lucide-react";
 import { VerifiedTick } from "@/components/badges/identity-badges";
 import dynamic from "next/dynamic";
@@ -53,6 +53,7 @@ import { supportsRecording } from "@/lib/media/comment-recording";
 import { haptic } from "@/lib/motion/haptics";
 import { createClient } from "@/lib/supabase/client";
 import { cn, formatCompactNumber } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 // Code-split: MediaRecorder/camera-mic UI most viewers never trigger, kept out
 // of every comment section's initial bundle (mirrors CollectionPicker/
@@ -393,7 +394,7 @@ export function Comments({
             aria-label="Summarize thread"
             className={cn("rounded-full p-1.5 transition", summaryOpen ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground")}
           >
-            <Sparkles className="h-4 w-4" />
+            <Lightbulb className="h-4 w-4" />
           </button>
         ) : null}
         {nodes.length > 3 ? (
@@ -421,7 +422,7 @@ export function Comments({
                   <motion.span layoutId={`sortpill-${postId}-${variant}`} className="absolute inset-0 -z-0 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 shadow-sm shadow-violet-500/30" transition={{ type: "spring", stiffness: 500, damping: 40 }} />
                 ) : null}
                 <span className="relative z-10 inline-flex items-center gap-1">
-                  {s.id === "smart" ? <Sparkles className="h-3 w-3" /> : null}
+                  {s.id === "smart" ? <Lightbulb className="h-3 w-3" /> : null}
                   {s.label}
                 </span>
               </button>
@@ -959,7 +960,7 @@ function Composer({
           {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
         </button>
         <button type="button" onClick={() => setShowMoods((s) => !s)} aria-label="Tag a mood" className={cn("shrink-0 rounded-full p-2 transition hover:bg-secondary", mood ? "text-primary" : "text-muted-foreground")}>
-          <Sparkles className="h-5 w-5" />
+          <Lightbulb className="h-5 w-5" />
         </button>
         {body.trim() ? (
           <button type="button" onClick={() => setShowAssist((s) => !s)} aria-label="AI writing assist" className={cn("shrink-0 rounded-full p-2 transition hover:bg-secondary", showAssist ? "text-primary" : "text-muted-foreground")}>
@@ -1161,7 +1162,7 @@ function ReactionInsights({ commentId, onClose }: { commentId: string; onClose: 
           <ul className="space-y-1.5">
             {reactors.map((r, i) => (
               <li key={i} className="flex items-center gap-3">
-                <Link href={`/u/${r.handle}`} onClick={onClose} className="shrink-0">
+                <Link href={`${profilePath(r.handle)}`} onClick={onClose} className="shrink-0">
                   {r.avatarUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={r.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
@@ -1169,7 +1170,7 @@ function ReactionInsights({ commentId, onClose }: { commentId: string; onClose: 
                     <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-sm font-bold text-white">{r.displayName.charAt(0).toUpperCase()}</span>
                   )}
                 </Link>
-                <Link href={`/u/${r.handle}`} onClick={onClose} className="min-w-0 flex-1 truncate text-sm font-semibold hover:underline">{r.displayName}</Link>
+                <Link href={`${profilePath(r.handle)}`} onClick={onClose} className="min-w-0 flex-1 truncate text-sm font-semibold hover:underline">{r.displayName}</Link>
                 <span className="text-lg">{r.emoji}</span>
               </li>
             ))}
@@ -1417,7 +1418,7 @@ function CommentItemImpl({
       {chained ? (
         <span className={cn(avatarSize, "shrink-0")} />
       ) : a ? (
-        <Link href={`/u/${a.handle}`} className="shrink-0">
+        <Link href={`${profilePath(a.handle)}`} className="shrink-0">
           {a.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={a.avatarUrl} alt="" className={cn(avatarSize, "rounded-full object-cover ring-2 ring-border/50")} />
@@ -1477,7 +1478,7 @@ function CommentItemImpl({
                 (mood, timestamp, edited, menu) still change reply to reply. */}
             {!chained ? (
               <>
-                {a ? <Link href={`/u/${a.handle}`} className="max-w-[55vw] truncate font-semibold hover:underline">{a.displayName}</Link> : <span className="font-semibold text-muted-foreground">Unknown</span>}
+                {a ? <Link href={`${profilePath(a.handle)}`} className="max-w-[55vw] truncate font-semibold hover:underline">{a.displayName}</Link> : <span className="font-semibold text-muted-foreground">Unknown</span>}
                 {a?.isVerified ? <VerifiedTick className="h-3.5 w-3.5" /> : null}
                 {a ? <DiamondCrownBadge plan={a.plan} size="xs" /> : null}
                 {a?.isFriend ? <Users className="h-3 w-3 shrink-0 text-blue-500" aria-label="Friend" /> : null}

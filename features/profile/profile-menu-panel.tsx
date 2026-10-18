@@ -13,9 +13,9 @@ import {
   MessageCircle,
   Music,
   Settings,
-  Sparkles,
   UsersRound,
   X,
+  Lightbulb,
 } from "lucide-react";
 import { VerifiedTick } from "@/components/badges/identity-badges";
 import Link from "next/link";
@@ -31,6 +31,7 @@ import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
 import { signOutClient } from "@/lib/auth/sign-out";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * The profile menu's CONTENT — the owner's premium control center, built to the
@@ -94,7 +95,7 @@ const NAV: NavItem[] = [
   the doorway rule working rather than being switched off.
 */
 const SPACES: { label: string; sub: string; icon: ComponentType<{ className?: string }>; tint: string; href: string }[] = [
-  { label: "Frenz AI", sub: "AI tools for your videos", icon: Sparkles, tint: "from-violet-500/15 to-purple-500/15 text-violet-500", href: "/studio/ai" },
+  { label: "Frenz AI", sub: "AI tools for your videos", icon: Lightbulb, tint: "from-violet-500/15 to-purple-500/15 text-violet-500", href: "/studio/ai" },
 ];
 
 /** The reference's boxed glyph: a hairline rounded tile that turns violet when the row is active. */
@@ -146,7 +147,7 @@ export function ProfileMenuPanel({
   */
   useEffect(() => {
     for (const item of NAV) if (item.href) router.prefetch(item.href);
-    if (user.handle) router.prefetch(`/u/${user.handle}`);
+    if (user.handle) router.prefetch(`${profilePath(user.handle)}`);
     if (user.plan === "free") router.prefetch("/account/plan");
   }, [router, user.handle, user.plan]);
 
@@ -180,7 +181,7 @@ export function ProfileMenuPanel({
 
       {/* Identity card */}
       <Link
-        href={user.handle ? `/u/${user.handle}` : "/account/identity"}
+        href={user.handle ? `${profilePath(user.handle)}` : "/account/identity"}
         onClick={onNavigate}
         className="mx-4 mt-4 flex items-center gap-3 rounded-2xl bg-gradient-to-r from-violet-100 via-fuchsia-50 to-pink-100 p-3 ring-1 ring-inset ring-border/40 transition active:scale-[0.99] dark:from-violet-500/15 dark:via-fuchsia-500/10 dark:to-pink-500/15"
       >

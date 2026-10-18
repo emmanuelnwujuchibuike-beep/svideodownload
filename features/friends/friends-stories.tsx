@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Sparkles } from "lucide-react";
+import { Plus, Lightbulb } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -176,7 +176,7 @@ export function FriendsStories({
               aria-hidden
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground"
             >
-              <Sparkles className="h-[18px] w-[18px]" />
+              <Lightbulb className="h-[18px] w-[18px]" />
             </span>
             <p className="min-w-0 text-[13px] leading-snug text-muted-foreground">
               {scope === "friends" ? "No friend stories right now." : "No stories from people you follow yet."}

@@ -5,9 +5,10 @@ import type { PaymentMarket, PaymentPurpose, PaymentRouting, TopupProviderId } f
  *  THE PAYMENT ROUTER — which rail takes this payment (pure)
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * Owner, 2026-10-07: "Nigeria: Bachs primary, Paystack fallback. Other
- * markets: Paystack … Do not hard-code provider selection in pages … Do not
- * trust a country value sent from the client."
+ * Owner, 2026-10-07: "Do not hard-code provider selection in pages … Do not
+ * trust a country value sent from the client." Paystack is the only provider
+ * since Bachs was removed (2026-10-17); the router stays the one place a
+ * provider is chosen, so a future provider needs no page changes.
  *
  * The ONE place a provider is chosen. Every paid flow asks `routePayment`
  * with the purpose; the market comes from `paymentMarket(headers)`, which

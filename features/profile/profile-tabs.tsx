@@ -19,9 +19,9 @@ import {
   Package,
   Repeat2,
   Rows3,
-  Sparkles,
   Trophy,
   Wrench,
+  Lightbulb,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -34,6 +34,7 @@ import { loadSubPosts } from "@/features/sub/sub-posts-cache";
 import { useStickyState } from "@/features/ui/use-sticky-state";
 import type { PostCard } from "@/lib/social/posts";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 // These tabs render only when selected, so defer their chunks off first load.
 const CollectionsTab = dynamic(() => import("@/features/profile/collections-tab").then((m) => m.CollectionsTab), { ssr: false });
@@ -80,7 +81,7 @@ const ICONS: Record<string, IconType> = {
   BadgeCheck,
   Award,
   BookOpen,
-  Sparkles,
+  Lightbulb,
   FileText,
   Package,
   Wrench,
@@ -164,7 +165,7 @@ export function ProfileTabs({
     setActive(id);
     // Reflect the section in the URL for shareability — WITHOUT a navigation.
     if (typeof window !== "undefined") {
-      const url = id === (keys[0] ?? "posts") ? `/u/${handle}` : `/u/${handle}?tab=${id}`;
+      const url = id === (keys[0] ?? "posts") ? `${profilePath(handle)}` : `${profilePath(handle)}?tab=${id}`;
       window.history.replaceState(window.history.state, "", url);
     }
   };
@@ -266,7 +267,7 @@ export function ProfileTabs({
               title="Exclusive posts feed"
               className="group relative flex min-h-10 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-semibold text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
-              <Sparkles className="h-[18px] w-[18px] shrink-0 transition-transform group-active:scale-90" />
+              <Lightbulb className="h-[18px] w-[18px] shrink-0 transition-transform group-active:scale-90" />
               <span className="hidden sm:inline">EXCLUSIVE</span>
             </Link>
           ) : null}

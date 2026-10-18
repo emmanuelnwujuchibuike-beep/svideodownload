@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Check, ChevronRight, Clock, Lightbulb, Loader2, ShieldCheck, Sparkles, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Clock, Lightbulb, Loader2, ShieldCheck, X } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 
@@ -238,7 +238,7 @@ export function PrivacyCenterPage({ initial }: { initial: PrivacyCenter }) {
                 ))}
               </ul>
               <button type="button" disabled={busy === `preset-${k}`} onClick={() => void run(`preset-${k}`, { op: "preset", key: k }, `${p.label} applied. You can still change anything.`)} className={cn(quietPill, "mt-auto min-h-[2.25rem] justify-center pt-0 text-[12.5px]")}>
-                {busy === `preset-${k}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Sparkles className="h-3.5 w-3.5" aria-hidden />} Apply
+                {busy === `preset-${k}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Lightbulb className="h-3.5 w-3.5" aria-hidden />} Apply
               </button>
             </div>
           ))}

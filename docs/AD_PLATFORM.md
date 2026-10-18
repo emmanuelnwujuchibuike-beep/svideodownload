@@ -1,5 +1,7 @@
 # Advertising Platform — Part 1: engine + data foundation
 
+> **Bachs removed (2026-10-17).** Ads, top-ups and AI plans are paid through Paystack only. Mentions of Bachs below are the build record of earlier parts; the current state is in `docs/PAYMENTS.md` → "Bachs removed".
+
 Owner brief, 2026-10-07: a premium self-serve advertising platform. **Part 1**
 (this document) is the engine and the data model. It has no advertiser screens
 and no admin screens. Parts 2–7 build on it.
@@ -16,7 +18,7 @@ and no admin screens. Parts 2–7 build on it.
 | Area | What is there | Verdict |
 |---|---|---|
 | Auth / roles | `auth.users` + `profiles`, `public.is_admin()` (0144: `is_admin or role='admin'`) | **Reused.** An advertiser is a member with an `advertisers` row. There is no second auth system. |
-| Payments | `ai_topup_attempts` is the one payment-attempt ledger for Paystack **and** Bachs (0186, `purpose`). Webhooks: `app/api/paystack/webhook`, `app/api/bachs/webhook`, de-duplicated by `payment_provider_events`. | **Extended.** `purpose` gains `ad_campaign`. A campaign stores the attempt `reference`. No new payment table. |
+| Payments | `ai_topup_attempts` is the one payment-attempt ledger (0186, `purpose`; Paystack — rows from the removed Bachs rail kept as history). Webhooks: `app/api/paystack/webhook`, de-duplicated by `payment_provider_events`. | **Extended.** `purpose` gains `ad_campaign`. A campaign stores the attempt `reference`. No new payment table. |
 | Wallet | `ai_product_balances` / `ai_product_ledger` hold CREDIT units (0184). `buy_ai_plan_with_credits` (0194) is the "spend credits atomically" pattern. Non-withdrawable credit is spent first (0187). | **Reused.** `pay_ad_campaign_with_credits` copies that pattern line for line. |
 | Network ads | `public.ads` / `ad_impressions` / `ad_clicks` (0004, 0090). The operator pastes in AdSense, ExoClick, HilltopAds and Monetag zones, catalogued in `lib/monetization/ad-schema.ts` (`AD_ZONES`). | **Left alone.** It is a different product: inventory the operator configures, with no advertiser, payment or end date. Merging the two would have put a money contract into a table that holds pasted scripts. |
 | "House ad" | the `native` format in `public.ads` | Operator-only, with no payment, schedule or validation. Kept as-is. Self-serve campaigns are the new path. |
@@ -246,11 +248,10 @@ Migration: `0197_ad_platform_payments.sql`. Code: `lib/ads-platform/payment-serv
 |---|---|
 | Payment record | `ai_topup_attempts` (purpose `ad_campaign`), extended in 0197 with the quote, provider amount and currency, FX rate, stored Bachs request, charge id, verified/refund/dispute fields |
 | Webhook dedupe | `payment_provider_events` (Paystack key = `event:reference`) |
-| Provider choice | `lib/payments/router.ts`, with a new purpose `ad_campaign`. Admin edits it in AI plans → Payment routing → "Ad campaigns". Default: NG → Bachs then Paystack, elsewhere Paystack. |
+| Provider choice | `lib/payments/router.ts`, with a new purpose `ad_campaign`. Paystack in every market since Bachs was removed (2026-10-17). |
 | USD → NGN | `resolveCheckoutRate` + `quoteCheckout`: the live rate, cached, plus the operator's markup. The rate is stored on the attempt. |
-| Bachs client | `lib/payments/bachs.ts` + `bachsCheckoutRequest`/`postBachsCheckout` |
 | Paystack client | `lib/paystack/paystack.ts` + `initializeAdCheckout` (purpose `frenz_ad_campaign`) |
-| Webhooks | the existing `/api/bachs/webhook` and `/api/paystack/webhook`. The ad branch sits **before** every wallet/plan line, so an ad payment can never credit AI credits. |
+| Webhooks | the existing `/api/paystack/webhook`. The ad branch sits **before** every wallet/plan line, so an ad payment can never credit AI credits. (`/api/bachs/webhook` was removed 2026-10-17.) |
 
 Ads are **not** paid from AI credits (owner, Part 3). Part 1's
 `pay_ad_campaign_with_credits` and `settle_ad_campaign_payment` are dropped.
@@ -317,15 +318,11 @@ signed webhook / verify-on-return → ad_payment_settle (lock, idempotent: provi
    top banner at $5:
    `insert into ad_pricing_plans (placement_id, duration_id, currency, price_minor) select p.id, d.id, 'USD', 500 from ad_placements p, ad_durations d where p.code='global_top_banner' and d.duration_days=7;`
 2. **Open applications:** `update ad_platform_settings set applications_open = true;`
-3. **Bachs API key permissions:** `payments:read`, `payments:write`,
-   `products:read`, `refunds:read`, `disputes:read`.
-4. **Bachs webhook endpoint `/api/bachs/webhook`:** subscribe it to
-   `collection.succeeded`, `collection.failed`, `collection.underpaid`,
-   `refund.paid`, `dispute.created` and `dispute.updated`, alongside the
-   existing subscription events.
+3. ~~Bachs API key permissions~~ and 4. ~~Bachs webhook endpoint~~ — **obsolete:
+   Bachs was removed on 2026-10-17** (revoke the key and delete the webhook in the
+   Bachs dashboard instead; docs/PAYMENTS.md → "Bachs removed").
 5. **Paystack:** the existing webhook URL already receives all events.
-6. **Env vars:** nothing new. `BACHS_SECRET_KEY`, `BACHS_WEBHOOK_SECRET` and
-   the Paystack secret (admin settings) are already in use.
+6. **Env vars:** nothing new. The Paystack secret (admin settings) is already in use.
 
 ## Gap Ledger (Part 3)
 

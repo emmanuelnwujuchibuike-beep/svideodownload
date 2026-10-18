@@ -1,16 +1,37 @@
 import type { Metadata } from "next";
 
+import { postPageMetadata } from "@/lib/social/post-metadata";
 import { ReelsFeed } from "@/features/reels/reels-feed";
 import { getFeedItemById, getHomeFeed } from "@/lib/social/home-feed";
+import { postHref } from "@/lib/social/post-url";
+import { getPost } from "@/lib/social/posts";
 import { newReelsSeed } from "@/lib/social/reels-session";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
+const REELS_METADATA: Metadata = {
   title: "Reels",
   robots: { index: false, follow: false },
 };
+
+/**
+ * A video post's own links land here since 2026-10-17 (owner: "all route of view should open
+ * in reels viewer") — /p/<id> and the category URL redirect a video to `?start=<id>`. A shared
+ * link's preview (WhatsApp, X…) is then built from THIS page, so with `start` naming a public
+ * post it carries that post's title and image, exactly as the post page did. Still noindex: the
+ * Reels deck is an app page.
+ */
+export async function generateMetadata({ searchParams }: { searchParams: Promise<{ start?: string }> }): Promise<Metadata> {
+  const { start } = await searchParams;
+  if (!start || !UUID.test(start)) return REELS_METADATA;
+  const post = await getPost(start, null).catch(() => null);
+  if (!post) return REELS_METADATA;
+  const meta = postPageMetadata(post, postHref(post));
+  return { ...meta, alternates: undefined, robots: REELS_METADATA.robots };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * /reels — the full-screen, infinite, TikTok-style reels experience. Tapping a

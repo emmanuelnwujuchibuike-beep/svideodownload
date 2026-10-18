@@ -2,7 +2,12 @@ import { getUserPlan } from "@/lib/monetization/plan";
 import { alreadyCounted, clientId, consumeDaily } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { getBuiltInWallpaper, sourceFor, type WallpaperSize } from "@/lib/wallpapers";
-import { wallpaperDailyLimit, wallpaperLimitMessage } from "@/lib/wallpapers-limits";
+import {
+  planCanDownloadProWallpaper,
+  WALLPAPER_PRO_ONLY_MESSAGE,
+  wallpaperDailyLimit,
+  wallpaperLimitMessage,
+} from "@/lib/wallpapers-limits";
 import { recordWallpaperDownload, wallpaperImageUrl } from "@/lib/wallpapers-server";
 
 export const runtime = "nodejs";
@@ -50,6 +55,8 @@ async function enforceWallpaperAllowance(
   downloadId: string | null,
   /** The wallpaper id — binds the receipt to THIS wallpaper (2026-10-06). */
   wallpaperId: string,
+  /** Admin-uploaded — downloads on Pro and above only (owner, 2026-10-18). */
+  proOnly: boolean,
 ): Promise<{ denied: Response | null; userId: string | null }> {
   let userId: string | null = null;
   // Skip the Supabase round-trip when there is plainly no session — this
@@ -66,7 +73,19 @@ async function enforceWallpaperAllowance(
     }
   }
 
-  const limit = wallpaperDailyLimit(await getUserPlan(userId));
+  const plan = await getUserPlan(userId);
+  // Checked before the allowance so a refused Pro wallpaper never spends a free unit.
+  if (proOnly && !planCanDownloadProWallpaper(plan)) {
+    return {
+      denied: new Response(JSON.stringify({ error: WALLPAPER_PRO_ONLY_MESSAGE, code: "PRO_REQUIRED" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      }),
+      userId,
+    };
+  }
+
+  const limit = wallpaperDailyLimit(plan);
   if (limit === 0) return { denied: null, userId }; // Pro / Business — no cap, no ad.
 
   const key = userId ? `wp:u:${userId}` : `wp:ip:${clientId(request.headers)}`;
@@ -103,19 +122,13 @@ export async function GET(request: Request) {
      member in the admin's activity feed — the check already resolves the
      session, and doing it twice would be a second Supabase round-trip on the
      hottest path in this route. */
-  let viewerId: string | null = null;
-  if (isDownload) {
-    const downloadId = (params.get("t") ?? "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || null;
-    const { denied, userId } = await enforceWallpaperAllowance(request, downloadId, id);
-    viewerId = userId;
-    if (denied) return denied;
-  }
-
   // Built-ins keep their thumb/full split; a real wallpaper has one stored
-  // image and its own thumbnail, so `size` doesn't apply to it.
+  // image and its own thumbnail, so `size` doesn't apply to it. Resolved BEFORE
+  // the gate, because whether it is Pro-only comes from its row.
   const builtIn = getBuiltInWallpaper(id);
   let upstreamUrl: string;
   let name: string;
+  let proOnly = false;
   if (builtIn) {
     const size: WallpaperSize = params.get("size") === "full" ? "full" : "thumb";
     upstreamUrl = sourceFor(id, size);
@@ -125,6 +138,15 @@ export async function GET(request: Request) {
     if (!found) return new Response("Not found", { status: 404 });
     upstreamUrl = found.url;
     name = found.name;
+    proOnly = found.proOnly;
+  }
+
+  let viewerId: string | null = null;
+  if (isDownload) {
+    const downloadId = (params.get("t") ?? "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || null;
+    const { denied, userId } = await enforceWallpaperAllowance(request, downloadId, id, proOnly);
+    viewerId = userId;
+    if (denied) return denied;
   }
 
   let upstream: Response;
@@ -136,7 +158,10 @@ export async function GET(request: Request) {
   if (!upstream.ok || !upstream.body) return new Response("Upstream error", { status: 502 });
 
   const contentType = upstream.headers.get("content-type") || "image/jpeg";
-  const headers = new Headers({ "Content-Type": contentType, "Cache-Control": IMMUTABLE });
+  // A Pro download is per-viewer: an edge-cached copy would hand the file to the
+  // next Free visitor who requests the same URL without passing the gate.
+  const cacheControl = isDownload && proOnly ? "private, no-store" : IMMUTABLE;
+  const headers = new Headers({ "Content-Type": contentType, "Cache-Control": cacheControl });
   const len = upstream.headers.get("content-length");
   if (len) headers.set("Content-Length", len);
   if (isDownload) {

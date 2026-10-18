@@ -8,7 +8,7 @@
  *
  * See `docs/ARCHITECTURE.md` → "Adding a new product".
  */
-import { Cloud, Compass, Download, Home, Image as ImageIcon, Shield, Sparkles, Users, Wand2 } from "lucide-react";
+import { Cloud, Compass, Download, Home, Image as ImageIcon, Shield, Users, Wand2, Lightbulb } from "lucide-react";
 
 import {
   adminOnly,
@@ -106,7 +106,7 @@ export const MODULES: PlatformModule[] = [
     shortName: "AI",
     tagline: "AI video, audio, voice and lip sync — paid in credits you can also earn.",
     basePath: "/ai",
-    icon: Sparkles,
+    icon: Lightbulb,
     accent: "from-blue-600 to-violet-600",
     status: "live",
     veracity: {
@@ -159,7 +159,7 @@ export const MODULES: PlatformModule[] = [
     shortName: "Smart",
     tagline: "Summaries, captions and smart search.",
     basePath: "/smart",
-    icon: Sparkles,
+    icon: Lightbulb,
     accent: "from-violet-500 to-indigo-600",
     status: "beta",
     veracity: {

@@ -657,7 +657,7 @@ export function PaymentList({ rows, onOpen }: { rows: PaymentRow[]; onOpen?: (id
               {p.provider_currency && p.provider_currency !== "USD" && p.provider_amount ? <span className="ml-1.5 text-[12px] font-normal text-muted-foreground">({p.provider_currency} {(p.provider_amount / 100).toLocaleString()})</span> : null}
             </p>
             <p className="mt-0.5 text-[12px] text-muted-foreground">
-              {p.kind === "extension" ? "Campaign extension" : "Campaign payment"} · {p.provider === "bachs" ? "Card" : p.provider === "paystack" ? "Paystack" : p.provider} · {date(p.created_at)}
+              {p.kind === "extension" ? "Campaign extension" : "Campaign payment"} · {p.provider === "paystack" ? "Paystack" : "Card" /* a historical payment through a since-removed provider: shown as what it was, never relabelled Paystack */} · {date(p.created_at)}
               {p.bonus_days ? ` · +${p.bonus_days} bonus days` : ""}
             </p>
             <p className="mt-0.5 break-all font-mono text-[11px] text-muted-foreground">{p.reference}</p>

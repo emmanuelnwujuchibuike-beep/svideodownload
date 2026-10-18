@@ -11,9 +11,9 @@ import {
   Music,
   Send,
   ShoppingBag,
-  Sparkles,
   Subtitles,
   Wand2,
+  Lightbulb,
 } from "lucide-react";
 
 import type { DownloadContext, GatewayAction } from "./types";
@@ -104,7 +104,7 @@ export const GATEWAY_ACTIONS: GatewayAction[] = [
     label: "Add to your story",
     plannedLabel: "Add to your story",
     description: "Share it for 24 hours.",
-    icon: Sparkles,
+    icon: Lightbulb,
     group: "create",
     productId: "community",
     target: { type: "route", href: "/create/story" },
@@ -160,7 +160,7 @@ export const GATEWAY_ACTIONS: GatewayAction[] = [
     label: "Enhance quality",
     plannedLabel: "Quality enhancement — coming soon",
     description: "Sharpen and upscale lower-resolution media.",
-    icon: Sparkles,
+    icon: Lightbulb,
     group: "enhance",
     productId: "studio",
     target: { type: "waitlist", product: "studio" },

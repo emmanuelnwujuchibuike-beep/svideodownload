@@ -4,14 +4,13 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import { AI_WALLET_DEFAULTS, normalizePaymentRouting, type TopupProviderId } from "@/lib/ai/credits/wallet-config";
-import { bachsFailureIsDefinite } from "@/lib/payments/bachs";
 import { routePayment } from "@/lib/payments/router";
 import { paystackFailureIsDefinite } from "@/lib/paystack/paystack";
 
 import { firstCheckout, paymentState, type PaymentStart } from "./payment-server";
 
 /**
- * Part 3 — ads paid through the EXISTING Paystack + Bachs rails.
+ * Part 3 — ads paid through the EXISTING Paystack rail (Bachs was removed on 2026-10-17).
  *
  * The money state machine (begin, release, settle, reverse, reconciliation)
  * was EXECUTED against a real Postgres when 0197 was written: 41 checks
@@ -28,29 +27,31 @@ describe("routing — the existing router, a new purpose", () => {
   const routing = normalizePaymentRouting(null);
   const both = () => true;
 
-  it("T1/T4 default: Nigeria → Bachs then Paystack; elsewhere → Paystack", () => {
-    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: both })).toEqual(["bachs", "paystack"]);
+  it("default: Paystack in every market, no fallback (Bachs removed 2026-10-17)", () => {
+    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: both })).toEqual(["paystack"]);
     expect(routePayment({ purpose: "ad_campaign", market: "other", routing, usable: both })).toEqual(["paystack"]);
   });
-  it("configurable, not hard-coded: an admin route wins", () => {
-    const custom = normalizePaymentRouting({ NG: { ad_campaign: { primary: "paystack", fallback: null } } });
-    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing: custom, usable: both })).toEqual(["paystack"]);
+  it("a SAVED route that still names Bachs reads as Paystack — never an error, never Bachs", () => {
+    const saved = normalizePaymentRouting({ NG: { ad_campaign: { primary: "bachs", fallback: "paystack" }, wallet_topup: { primary: "bachs", fallback: null } } });
+    expect(saved.NG.ad_campaign).toEqual({ primary: "paystack", fallback: null });
+    expect(saved.NG.wallet_topup).toEqual({ primary: "paystack", fallback: null });
+    expect(JSON.stringify(normalizePaymentRouting(saved))).not.toContain("bachs");
   });
   it("a saved config from before 0197 gains the ads row with the defaults", () => {
     const old = { NG: { wallet_topup: { primary: "paystack", fallback: null } }, other: {} };
     expect(normalizePaymentRouting(old).NG.ad_campaign).toEqual(AI_WALLET_DEFAULTS.routing.NG.ad_campaign);
   });
-  it("T20 a provider the route does not allow, or an unconfigured one, is ignored", () => {
-    expect(routePayment({ purpose: "ad_campaign", market: "other", routing, usable: both, preferred: "bachs" })).toEqual(["paystack"]);
-    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: both, preferred: "stripe" })).toEqual(["bachs", "paystack"]);
-    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: (p) => p !== "bachs" })).toEqual(["paystack"]);
+  it("T20 a provider the route does not allow (a removed one included), or an unconfigured one, is ignored", () => {
+    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: both, preferred: "bachs" })).toEqual(["paystack"]);
+    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: both, preferred: "stripe" })).toEqual(["paystack"]);
+    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: () => false })).toEqual([]);
   });
 });
 
-describe("the fallback rule — only after a REFUSAL", () => {
-  const run = async (answers: Partial<Record<TopupProviderId, PaymentStart>>) => {
+describe("the fallback rule — only after a REFUSAL (generic: shown with two stand-in providers)", () => {
+  const run = async (answers: Record<string, PaymentStart>) => {
     const tried: string[] = [];
-    const r = await firstCheckout(["bachs", "paystack"], async (p) => {
+    const r = await firstCheckout(["first", "second"] as unknown as TopupProviderId[], async (p) => {
       tried.push(p);
       return answers[p]!;
     });
@@ -58,45 +59,37 @@ describe("the fallback rule — only after a REFUSAL", () => {
   };
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-  it("T1 Bachs creates the checkout → Paystack is never touched", async () => {
-    const { r, tried } = await run({ bachs: { kind: "redirect", url: "https://pay.bachs.io/x", reference: "a", provider: "bachs" } });
+  it("T1 the first creates the checkout → the second is never touched", async () => {
+    const { r, tried } = await run({ first: { kind: "redirect", url: "https://checkout.example/x", reference: "a", provider: "paystack" } });
     expect(r.kind).toBe("redirect");
-    expect(tried).toEqual(["bachs"]);
+    expect(tried).toEqual(["first"]);
   });
-  it("T2 Bachs refused BEFORE a session existed → Paystack", async () => {
+  it("T2 the first refused BEFORE a session existed → the second", async () => {
     const { r, tried } = await run({
-      bachs: { kind: "refused", code: "provider_refused", status: 502 },
-      paystack: { kind: "redirect", url: "https://checkout.paystack.com/y", reference: "b", provider: "paystack" },
+      first: { kind: "refused", code: "provider_refused", status: 502 },
+      second: { kind: "redirect", url: "https://checkout.paystack.com/y", reference: "b", provider: "paystack" },
     });
-    expect(tried).toEqual(["bachs", "paystack"]);
+    expect(tried).toEqual(["first", "second"]);
     expect(r).toMatchObject({ kind: "redirect", provider: "paystack" });
   });
-  it("T3 Bachs outcome UNKNOWN → verifying, and Paystack is NOT tried", async () => {
-    const { r, tried } = await run({ bachs: { kind: "verifying", reference: "frenz_bachs_ad_1" }, paystack: { kind: "redirect", url: "x", reference: "z", provider: "paystack" } });
-    expect(tried).toEqual(["bachs"]);
-    expect(r).toEqual({ kind: "verifying", reference: "frenz_bachs_ad_1" });
+  it("T3 an UNKNOWN outcome → verifying, and the next is NOT tried", async () => {
+    const { r, tried } = await run({ first: { kind: "verifying", reference: "frenz_ad_1" }, second: { kind: "redirect", url: "x", reference: "z", provider: "paystack" } });
+    expect(tried).toEqual(["first"]);
+    expect(r).toEqual({ kind: "verifying", reference: "frenz_ad_1" });
   });
   it("a business refusal (expired quote) never tries another rail", async () => {
-    const { tried } = await run({ bachs: { kind: "refused", code: "quote_expired", status: 409 } });
-    expect(tried).toEqual(["bachs"]);
+    const { tried } = await run({ first: { kind: "refused", code: "quote_expired", status: 409 } });
+    expect(tried).toEqual(["first"]);
   });
   it("everything refused → payment_not_started (nobody was charged)", async () => {
-    const { r } = await run({ bachs: { kind: "refused", code: "provider_refused", status: 502 }, paystack: { kind: "refused", code: "provider_refused", status: 502 } });
+    const { r } = await run({ first: { kind: "refused", code: "provider_refused", status: 502 }, second: { kind: "refused", code: "provider_refused", status: 502 } });
     expect(r).toEqual({ kind: "refused", code: "payment_not_started", status: 502 });
     warn.mockClear();
   });
 });
 
-describe("what counts as a refusal (docs.bachs.io/guides/idempotency, Paystack's own message)", () => {
+describe("what counts as a refusal (Paystack's own message)", () => {
   const err = (m: string, name = "Error") => Object.assign(new Error(m), { name });
-  it("Bachs: a 4xx is a refusal; 5xx, 408, 409 (in progress), 429, timeouts and network errors are UNKNOWN", () => {
-    expect(bachsFailureIsDefinite(err("bachs POST /v1/checkout-sessions → 422: invalid amount"))).toBe(true);
-    expect(bachsFailureIsDefinite(err("bachs POST /v1/checkout-sessions → 401: bad key"))).toBe(true);
-    for (const m of ["→ 500: x", "→ 502: x", "→ 503: x", "→ 409: IDEMPOTENCY_IN_PROGRESS", "→ 408: x", "→ 429: x"]) expect(bachsFailureIsDefinite(err(`bachs POST /v1/checkout-sessions ${m}`)), m).toBe(false);
-    expect(bachsFailureIsDefinite(err("The operation was aborted due to timeout", "TimeoutError"))).toBe(false);
-    expect(bachsFailureIsDefinite(err("fetch failed", "TypeError"))).toBe(false);
-    expect(bachsFailureIsDefinite("weird")).toBe(false);
-  });
   it("Paystack: its own message is a refusal; a timeout, a network drop or a non-JSON 5xx page is UNKNOWN", () => {
     expect(paystackFailureIsDefinite(err("Duplicate Transaction Reference"))).toBe(true);
     expect(paystackFailureIsDefinite(err("aborted", "TimeoutError"))).toBe(false);
@@ -104,12 +97,22 @@ describe("what counts as a refusal (docs.bachs.io/guides/idempotency, Paystack's
     expect(paystackFailureIsDefinite(err("fetch failed", "TypeError"))).toBe(false);
     expect(paystackFailureIsDefinite(err("Unexpected token <", "SyntaxError"))).toBe(false);
   });
-  it("an uncertain Bachs write is recovered with the SAME key and the UNCHANGED stored body - never a new key", () => {
-    const pay = src("lib/ads-platform/payment-server.ts");
-    expect(pay).toContain('await db.from("ai_topup_attempts").update({ provider_request: body }).eq("reference", reference);');
-    expect(pay).toContain("const checkout = await postBachsCheckout(a.provider_request, a.reference);");
-    expect(pay.indexOf("update({ provider_request: body })")).toBeLessThan(pay.indexOf("const checkout = await postBachsCheckout(body, reference);"));
-    expect(pay).toMatch(/BACHS_IDEMPOTENCY_WINDOW_MS = 23 \* 3600_000/);
+});
+
+describe("Bachs removed (2026-10-17): its historical rows are held, never touched", () => {
+  const pay = src("lib/ads-platform/payment-server.ts");
+  it("a removed provider's open checkout is never handed back (that would send the advertiser to Bachs)", () => {
+    expect(pay).toMatch(/if \(legacyProvider\(open\)\) return \{ kind: "verifying", reference: open\.reference \};\s*if \(open\.status === "pending" && open\.checkout_url\)/);
+    expect(pay).toContain("if (open?.checkout_url && !legacyProvider(open)) return");
+  });
+  it("never re-asked, released or settled by code: resolve, askProvider and the reconcile sweep all stop at it", () => {
+    expect(pay).toMatch(/export async function resolveUncertainAttempt\(db: Db, a: Attempt\): Promise<PaymentStart> \{\s*if \(legacyProvider\(a\)\) return \{ kind: "verifying", reference: a\.reference \};/);
+    expect(pay).toMatch(/async function askProvider\(db: Db, a: Attempt\): Promise<void> \{\s*\/\/[^\n]*\n\s*if \(legacyProvider\(a\)\) return;/);
+    expect(pay).toMatch(/\.eq\("purpose", "ad_campaign"\)\s*\.eq\("provider", "paystack"\)\s*\.in\("status", \["pending", "verification_required"\]\)/);
+    expect(pay).toContain('const legacyProvider = (a: { provider: string }) => a.provider !== "paystack";');
+  });
+  it("no Bachs code is left to call", () => {
+    expect(pay).not.toMatch(/postBachsCheckout|getBachsCheckout|handleBachsAd|beginBachs|@\/lib\/payments\/bachs/);
   });
 });
 
@@ -132,8 +135,6 @@ describe("the advertiser sees the server's truth", () => {
     expect(page).toContain("if (!reference) return;\n    // a deploy landing meanwhile");
     expect(page).toContain("const release = beginCriticalActivity();");
     expect(page).toContain("if (res.status === 401) {");
-    // the server's checkout read now recognises a paid Bachs session (lib/payments/bachs.ts bachsCheckoutStatus)
-    expect(src("lib/payments/bachs.ts")).toContain("return { status: bachsCheckoutStatus(raw),");
   });
   it("the return page checks a handful of times on a widening backoff, then stops", () => {
     const page = src("features/ads-platform/payment-return.tsx");
@@ -191,14 +192,8 @@ describe("the advertiser sees the server's truth", () => {
 });
 
 describe("webhooks: the existing endpoints, an ad branch BEFORE every wallet line", () => {
-  it("Bachs: an ad attempt settles campaigns and can never reach the wallet credit", () => {
-    const w = src("app/api/bachs/webhook/route.ts");
-    const adBranch = w.indexOf('if (attempt.purpose === "ad_campaign") return handleBachsAdCollection(');
-    expect(adBranch).toBeGreaterThan(-1);
-    expect(adBranch).toBeLessThan(w.indexOf("creditBachsTopup(attempt"));
-    expect(adBranch).toBeLessThan(w.indexOf('if (attempt.purpose === "ai_subscription")'));
-    expect(w.indexOf("verifyBachsSignature(raw")).toBeLessThan(w.indexOf("claimProviderEvent("));
-    expect(w).toMatch(/type === "refund\.paid" \|\| type === "dispute\.created" \|\| type === "dispute\.updated"/);
+  it("there is no Bachs webhook any more — the route is gone, so a late Bachs delivery can credit or settle nothing", () => {
+    expect(() => src("app/api/bachs/webhook/route.ts")).toThrow();
   });
   it("Paystack: the ad branch comes after the signature and before the top-up and plan branches", () => {
     const w = src("app/api/paystack/webhook/route.ts");
@@ -210,9 +205,8 @@ describe("webhooks: the existing endpoints, an ad branch BEFORE every wallet lin
     expect(ad).toBeLessThan(w.indexOf("isAiPlanEvent("));
     expect(w).toContain('claimProviderEvent("paystack", key, event.event, ref)');
   });
-  it("refunds and disputes are matched by the stored charge id (Bachs) or our reference prefix (Paystack) - nothing else is touched", () => {
+  it("refunds and disputes are matched by our reference prefix (Paystack) - nothing else is touched", () => {
     const pay = src("lib/ads-platform/payment-server.ts");
-    expect(pay).toContain('.eq("provider", "bachs").eq("charge_id", chargeId).eq("purpose", "ad_campaign")');
     expect(pay).toMatch(/\[data\.transaction_reference, tx\?\.reference, data\.reference\]\.find\(\(v\): v is string => typeof v === "string" && v\.startsWith\(AD_PAYSTACK_PREFIX\)\)/);
   });
 });
@@ -282,10 +276,10 @@ describe("2026-10-09: pending ad payments are confirmed with nobody watching", (
 });
 
 describe("2026-10-09: ad payments go through Paystack alone; a paid campaign goes live by itself", () => {
-  it("the ad checkout router can only choose Paystack (Bachs stays wired for payments already started)", () => {
+  it("the ad checkout router can only choose Paystack", () => {
     const pay = src("lib/ads-platform/payment-server.ts");
     expect(pay).toContain('usable: (p) => p === "paystack" && paystackOk,');
-    expect(pay).toContain("export async function handleBachsAdCollection("); // in-flight Bachs payments still settle
+    expect(pay).toContain("return beginPaystack(db, input, applicationId, input.quoteId, totalUsd, landing);");
   });
   it("0210: only HARD reasons hold activation — a pending link or a safety review does not", () => {
     const m = src("supabase/migrations/0210_ad_auto_activation.sql");

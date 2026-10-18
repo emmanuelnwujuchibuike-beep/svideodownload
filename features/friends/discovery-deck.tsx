@@ -15,6 +15,7 @@ import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
 import { getApi } from "@/lib/sdk/browser";
 import type { DiscoveryItem, DiscoveryResult } from "@/lib/social/discovery";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Full-screen, TikTok-style continuous deck for the Friends → Discover grid.
@@ -230,7 +231,7 @@ function DiscoverySlide({ item, isActive }: { item: DiscoveryItem; isActive: boo
           "pb-[max(1.25rem,env(safe-area-inset-bottom))]",
         )}
       >
-        <Link href={`/u/${item.handle}`} className="pointer-events-auto flex w-fit items-center gap-2">
+        <Link href={`${profilePath(item.handle)}`} className="pointer-events-auto flex w-fit items-center gap-2">
           {item.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={item.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover ring-2 ring-white/20" />

@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertCircle, ArrowUp, Clock, Sparkles, X } from "lucide-react";
+import { AlertCircle, ArrowUp, Clock, X, Lightbulb } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1243,7 +1243,7 @@ function ZeroEmptyFeed({
     <div className="space-y-4">
       <div className="rounded-2xl border border-dashed border-border/70 p-8 text-center">
         <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-secondary text-primary">
-          <Sparkles className="h-6 w-6" />
+          <Lightbulb className="h-6 w-6" />
         </span>
         <p className="text-sm font-semibold">{heading}</p>
         <p className="mt-1 text-sm text-muted-foreground">Here&apos;s where to start</p>

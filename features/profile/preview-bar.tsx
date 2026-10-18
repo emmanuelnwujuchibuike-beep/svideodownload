@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { PREVIEWABLE_ROLES, roleLabel, type ViewerRole } from "@/lib/profile/audience";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Profile Preview — see your own profile as someone else does
@@ -61,7 +62,7 @@ export function ProfilePreviewBar({
               return (
                 <Link
                   key={role}
-                  href={on ? `/u/${handle}` : `/u/${handle}?preview=${role}`}
+                  href={on ? `${profilePath(handle)}` : `${profilePath(handle)}?preview=${role}`}
                   scroll={false}
                   aria-pressed={on}
                   className={cn(
@@ -77,7 +78,7 @@ export function ProfilePreviewBar({
 
           {active ? (
             <Link
-              href={`/u/${handle}`}
+              href={`${profilePath(handle)}`}
               scroll={false}
               className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground transition hover:text-foreground"
             >

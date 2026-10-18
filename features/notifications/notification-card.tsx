@@ -14,6 +14,7 @@ import { explainDelivery } from "@/lib/notifications/explain";
 import { cleanLabels } from "@/lib/notifications/search";
 import type { NotificationGroup } from "@/lib/social/notifications";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /** "John, Emma and 27 others" style summary of who triggered a grouped notification. */
 function actorSummary(g: NotificationGroup): string {
@@ -51,7 +52,7 @@ function hrefFor(g: NotificationGroup): string {
     g.totalActors === 1 &&
     first
   ) {
-    return `/u/${first.handle}`;
+    return `${profilePath(first.handle)}`;
   }
   return g.href;
 }

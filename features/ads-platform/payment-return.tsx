@@ -134,7 +134,7 @@ const TONE_CHIP: Record<Tone, string> = {
 export function PaymentReturn() {
   /*
     🔴 2026-10-09 (owner: "after payment it showed white screen for long … and
-    even after getting email from Bachs for Successful it still loading"). The
+    even after getting [the provider's] email for Successful it still loading"). The
     first check used to WAIT for the browser's own sign-in state — after a
     round trip to an external checkout that can mean a token refresh first
     (production logs: the page at 20:57:15, its first check at 20:57:30). The

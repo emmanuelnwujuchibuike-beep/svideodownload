@@ -25,6 +25,7 @@ import {
   type OpeningHours,
   type ProfileDetails,
 } from "@/lib/social/profile-platform-shared";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Module panels — what each Smart Profile Module™ actually renders
@@ -142,7 +143,7 @@ export function AboutPanel({
               route re-applies this profile's privacy before it emits anything. */}
           {details.contactEmail || details.contactPhone ? (
             <a
-              href={`/u/${handle}/vcard`}
+              href={`${profilePath(handle)}/vcard`}
               download
               className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
             >

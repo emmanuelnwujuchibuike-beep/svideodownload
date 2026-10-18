@@ -55,7 +55,7 @@ export async function listAdPayments(db: Db, f: AdminPaymentFilters): Promise<{ 
     .eq("purpose", "ad_campaign")
     .order("created_at", { ascending: false })
     .limit(Math.min(200, Math.max(1, f.limit ?? 50)));
-  if (f.provider === "paystack" || f.provider === "bachs") q = q.eq("provider", f.provider);
+  if (f.provider === "paystack") q = q.eq("provider", f.provider);
   if (f.status && STATUSES.includes(f.status)) q = q.eq("status", f.status);
   if (f.currency && /^[A-Z]{3,6}$/.test(f.currency)) q = q.eq("provider_currency", f.currency);
   if (iso(f.from)) q = q.gte("created_at", iso(f.from)!);

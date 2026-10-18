@@ -12,6 +12,7 @@ import { SITE_URL } from "@/lib/site";
 import { getPublicProfile } from "@/lib/social/profile";
 import { getProfileDetails } from "@/lib/social/profile-platform";
 import { createClient } from "@/lib/supabase/server";
+import { profilePath } from "@/lib/social/profile-url";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +64,7 @@ export default async function ProfileCardPage({ params }: { params: Promise<{ ha
   if (!profile || profile.restricted) notFound();
 
   const [details, plan] = await Promise.all([getProfileDetails(profile.id), getUserPlan(profile.id)]);
-  const url = `${SITE_URL}/u/${profile.handle}`;
+  const url = `${SITE_URL}${profilePath(profile.handle)}`;
 
   const location = [details.city, details.country].filter(Boolean).join(", ");
   const contacts = [
@@ -91,7 +92,7 @@ export default async function ProfileCardPage({ params }: { params: Promise<{ ha
     >
       <div className="mx-auto w-full max-w-md">
         <Link
-          href={`/u/${profile.handle}`}
+          href={`${profilePath(profile.handle)}`}
           className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" /> Back to profile
@@ -171,7 +172,7 @@ export default async function ProfileCardPage({ params }: { params: Promise<{ ha
               handle={profile.handle}
               displayName={profile.displayName}
               url={url}
-              vcardHref={`/u/${profile.handle}/vcard`}
+              vcardHref={`${profilePath(profile.handle)}/vcard`}
             />
           </div>
         </article>

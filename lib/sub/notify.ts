@@ -5,6 +5,7 @@ import { emailMember } from "@/lib/email/member-email";
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import { categoryForType } from "@/lib/social/notifications";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * "Someone subscribed" — push and email to the creator (owner, 2026-10-11: "let
@@ -71,7 +72,7 @@ export async function notifySubscribed(reference: string): Promise<void> {
           title: sub.name,
           body: `subscribed to your PRIVATE POSTS · You earned ${earned}`,
           genericBody: "You have a new subscriber.",
-          url: sub.handle ? `/u/${sub.handle}` : "/members",
+          url: sub.handle ? `${profilePath(sub.handle)}` : "/members",
           icon: sub.avatarUrl ?? undefined,
           tag: `sub-${reference}`,
           actorId: sub.id,
@@ -102,7 +103,7 @@ export async function notifyJoinedFree(creatorId: string, memberId: string): Pro
     await Promise.allSettled([
       sendSmartPush(
         creatorId,
-        { title: m.name, body: "joined your community", genericBody: "You have a new member.", url: m.handle ? `/u/${m.handle}` : "/members", icon: m.avatarUrl ?? undefined, tag: `join-${memberId}`, actorId: m.id },
+        { title: m.name, body: "joined your community", genericBody: "You have a new member.", url: m.handle ? `${profilePath(m.handle)}` : "/members", icon: m.avatarUrl ?? undefined, tag: `join-${memberId}`, actorId: m.id },
         "medium",
         categoryForType("member_joined"),
         { recorded: { type: "member_joined", actorId: m.id } },

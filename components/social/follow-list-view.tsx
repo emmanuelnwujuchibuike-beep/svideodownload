@@ -6,6 +6,7 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { UserList } from "@/components/social/user-list";
 import { getPublicProfile, listFollowers, listFollowing } from "@/lib/social/profile";
 import { createClient } from "@/lib/supabase/server";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Shared page body for /u/[handle]/followers and /following. Privacy-gated:
@@ -48,7 +49,7 @@ export async function FollowListView({
       <SiteHeader social desktopHidden />
       <main className="container max-w-2xl pb-24 pt-28 sm:pt-32 lg:pt-8">
         <Link
-          href={`/u/${profile.handle}`}
+          href={`${profilePath(profile.handle)}`}
           className="mb-5 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" /> {profile.displayName}

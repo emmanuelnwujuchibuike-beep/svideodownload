@@ -113,10 +113,9 @@ export function AdCampaignPayments() {
   return (
     <div ref={root} className="space-y-3">
       <p className="text-xs leading-relaxed text-muted-foreground">
-        Payments for self-serve ad campaigns. The provider&apos;s signed webhook is the authority; a payment is never settled by the browser. Routing for ads is set in AI plans → Payment routing (&quot;Ad campaigns&quot;).
+        Payments for self-serve ad campaigns, through Paystack. Paystack&apos;s signed webhook is the authority; a payment is never settled by the browser.
       </p>
       <div className="flex flex-wrap items-end gap-2">
-        {sel("provider", ["bachs", "paystack"], "Provider")}
         {sel("status", ["pending", "success", "verification_required", "mismatch", "failed", "abandoned", "expired", "refunded", "partially_refunded", "chargeback"], "Payment")}
         {sel("campaignStatus", ["payment_processing", "paid", "validating", "active", "paused", "expired", "removed"], "Campaign")}
         {sel("currency", ["USD", "NGN"], "Currency")}

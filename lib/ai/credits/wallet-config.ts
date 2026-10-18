@@ -19,8 +19,13 @@
  * operator's configuration now and whose size matches what was paid for.
  */
 
-export type TopupProviderId = "paystack" | "bachs";
-export const TOPUP_PROVIDER_IDS: readonly TopupProviderId[] = ["paystack", "bachs"];
+/**
+ * The providers a NEW payment may use. Bachs was removed on 2026-10-17 (owner): a row written
+ * before then may still say `provider = 'bachs'` in the database (kept for history, typed as a
+ * plain string where it is read) — but no setting, route or checkout can name it any more.
+ */
+export type TopupProviderId = "paystack";
+export const TOPUP_PROVIDER_IDS: readonly TopupProviderId[] = ["paystack"];
 
 export interface CreditPack {
   /** Stable id the browser sends back ("pack_100"). */
@@ -52,17 +57,14 @@ export interface AiWalletConfig {
   /** A member-typed amount of credits, within bounds. Off = packs only. */
   custom: { enabled: boolean; minCredits: number; maxCredits: number };
   /**
-   * Which provider takes a payment, per market and purpose (owner, 2026-10-07:
-   * "Nigeria: Bachs primary, Paystack fallback; other countries: Paystack").
-   * Payments already started with a provider still credit through that
-   * provider's webhook whatever this says now.
+   * Which provider takes a payment, per market and purpose. Since Bachs was removed
+   * (2026-10-17) every route is Paystack with no fallback; the shape is kept so a
+   * future provider slots in without a config migration.
    */
   routing: PaymentRouting;
   /**
-   * Owner, 2026-10-07: "checkout doesn't show to choose Paystack or Bachs" —
-   * on: when a market's route has BOTH providers usable, the member picks
-   * one in the sheet (the route's primary pre-selected). Off: the route
-   * decides silently. Either way the server offers only what the route allows.
+   * On: when a market's route has TWO usable providers, the member picks one in the
+   * sheet (the primary pre-selected). With Paystack alone there is never a choice.
    */
   memberChoice: boolean;
   /**
@@ -86,7 +88,7 @@ export const AI_WALLET_DEFAULTS: AiWalletConfig = {
   packs: [50, 100, 250, 500, 1000].map((credits) => ({ id: `pack_${credits}`, credits, bonusCredits: 0, enabled: true, highlight: credits === 100 })),
   custom: { enabled: true, minCredits: 10, maxCredits: 5000 },
   routing: {
-    NG: { wallet_topup: { primary: "bachs", fallback: "paystack" }, ai_subscription: { primary: "bachs", fallback: "paystack" }, ad_campaign: { primary: "bachs", fallback: "paystack" } },
+    NG: { wallet_topup: { primary: "paystack", fallback: null }, ai_subscription: { primary: "paystack", fallback: null }, ad_campaign: { primary: "paystack", fallback: null } },
     other: { wallet_topup: { primary: "paystack", fallback: null }, ai_subscription: { primary: "paystack", fallback: null }, ad_campaign: { primary: "paystack", fallback: null } },
   },
   memberChoice: true,
@@ -146,10 +148,13 @@ function normalizeTransfers(raw: unknown): CreditTransferConfig {
   };
 }
 
+/** Only a provider that still exists is kept: a saved "bachs" (removed 2026-10-17) reads as the default, Paystack. */
+const knownProvider = (v: unknown): v is TopupProviderId => (TOPUP_PROVIDER_IDS as readonly unknown[]).includes(v);
+
 function normalizeRoute(raw: unknown, d: PaymentRoute): PaymentRoute {
   const r = isRecord(raw) ? raw : {};
-  const primary: TopupProviderId = r.primary === "bachs" || r.primary === "paystack" ? r.primary : d.primary;
-  const fb = r.fallback === null ? null : r.fallback === "bachs" || r.fallback === "paystack" ? r.fallback : d.fallback;
+  const primary: TopupProviderId = knownProvider(r.primary) ? r.primary : d.primary;
+  const fb = r.fallback === null ? null : knownProvider(r.fallback) ? r.fallback : d.fallback;
   // a fallback to the primary itself is no fallback
   return { primary, fallback: fb === primary ? null : fb };
 }
@@ -198,7 +203,7 @@ export function normalizeAiWalletConfig(raw: unknown): AiWalletConfig {
     routing: normalizePaymentRouting(raw.routing),
     memberChoice: typeof raw.memberChoice === "boolean" ? raw.memberChoice : d.memberChoice,
     transfers: normalizeTransfers(raw.transfers),
-    provider: raw.provider === "bachs" ? "bachs" : "paystack",
+    provider: "paystack",
   };
 }
 

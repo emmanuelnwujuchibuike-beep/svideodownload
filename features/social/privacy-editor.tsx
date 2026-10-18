@@ -1,7 +1,23 @@
 "use client";
 
 import {
-  Activity, Award, Bookmark, Camera, CheckCheck, Clock, Crown, Eye, Loader2, MessageSquare, Repeat2, Search, ShieldOff, Sparkles, UserPlus, Users, X
+  Activity,
+  Award,
+  Bookmark,
+  Camera,
+  CheckCheck,
+  Clock,
+  Crown,
+  Eye,
+  Loader2,
+  MessageSquare,
+  Repeat2,
+  Search,
+  ShieldOff,
+  UserPlus,
+  Users,
+  X,
+  Lightbulb,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -82,7 +98,7 @@ export function PrivacyEditor({ settings }: { settings: PrivacySettings }) {
           <SegRow icon={UserPlus} tint="blue" title="Friend requests" desc="Who can send you one. Mutuals = friends of your friends." value={state.friend_requests_policy} choices={REQUEST_POLICY} onChange={(v) => set("friend_requests_policy", v as PrivacySettings["friend_requests_policy"])} />
           <SelectRow icon={Users} tint="violet" title="Who can follow you" desc="With approval, new followers ask first. Friends can always follow unless you choose Nobody." value={state.follow_policy} choices={FOLLOW_POLICY} onChange={(v) => set("follow_policy", v as PrivacySettings["follow_policy"])} />
           <ToggleRow icon={Search} tint="slate" title="Search engine indexing" desc="Let Google show your profile" on={state.allow_indexing} onToggle={() => set("allow_indexing", !state.allow_indexing)} />
-          <ToggleRow icon={Sparkles} tint="purple" title="Recommendations" desc="Show me in suggestions & trending" on={state.show_in_recommendations} onToggle={() => set("show_in_recommendations", !state.show_in_recommendations)} />
+          <ToggleRow icon={Lightbulb} tint="purple" title="Recommendations" desc="Show me in suggestions & trending" on={state.show_in_recommendations} onToggle={() => set("show_in_recommendations", !state.show_in_recommendations)} />
           {/* Public-by-default, hideable (owner). */}
           <ToggleRow icon={Award} tint="amber" title="Show my reputation" desc="Display your rank on your public profile" on={state.show_reputation} onToggle={() => set("show_reputation", !state.show_reputation)} />
           <ToggleRow icon={Crown} tint="violet" title="Show my Pro / Business badge" desc="Display your plan badge next to your name" on={state.show_plan_badge} onToggle={() => set("show_plan_badge", !state.show_plan_badge)} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, BadgeCheck, Crown, ExternalLink, Loader2, Lock, Sparkles, Star } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, Crown, ExternalLink, Loader2, Lock, Star, Lightbulb } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 
@@ -11,6 +11,7 @@ import { haptic } from "@/lib/motion/haptics";
 import { FEEDBACK_ASPECTS, MEMBER_ROLES, RECOGNITIONS, SPONSOR_KINDS, usd, type FeedbackAspect } from "@/lib/creator/membership/engine";
 import type { CreatorPage, Membership } from "@/lib/creator/membership/server";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * A creator's membership page (Feature 19 · Part 13).
@@ -42,7 +43,7 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
   const c = data.creator;
   const current = !!membership?.current;
   const isSub = membership?.billing === "sub";
-  const subTab = `/u/${c.handle}?tab=sub`;
+  const subTab = `${profilePath(c.handle)}?tab=sub`;
 
   const join = async () => {
     haptic("selection");
@@ -86,7 +87,7 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
     <div className="relative isolate">
       <AmbientWash />
       <header className="mb-5 flex items-start gap-2 pt-1">
-        <Link href={`/u/${c.handle}`} aria-label="Back to profile" className="-ml-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition hover:bg-black/[0.04] active:bg-black/[0.08]">
+        <Link href={`${profilePath(c.handle)}`} aria-label="Back to profile" className="-ml-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition hover:bg-black/[0.04] active:bg-black/[0.08]">
           <ArrowLeft className="h-5 w-5" aria-hidden />
         </Link>
         <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -130,7 +131,7 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
           </dl>
           {data.viewer.milestone ? (
             <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[12.5px] font-semibold">
-              <Sparkles className="h-3.5 w-3.5 text-amber-300" aria-hidden /> {data.viewer.milestone.label}
+              <Lightbulb className="h-3.5 w-3.5 text-amber-300" aria-hidden /> {data.viewer.milestone.label}
             </p>
           ) : null}
           {data.viewer.recognitions.length ? (
@@ -207,7 +208,7 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
                 <p className="mt-1.5 text-[12.5px] text-muted-foreground">Paid securely through Paystack. No automatic renewal.</p>
                 <div className="mt-3.5">
                   {data.viewer.isCreator ? null : !data.viewer.signedIn ? (
-                    <Link href={`/login?next=${encodeURIComponent(`/u/${c.handle}/membership`)}`} prefetch={false} className={exPrimary}>
+                    <Link href={`/login?next=${encodeURIComponent(`${profilePath(c.handle)}/membership`)}`} prefetch={false} className={exPrimary}>
                       Sign in to subscribe
                     </Link>
                   ) : current && isSub ? (
@@ -235,7 +236,7 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
                 <p className="mt-2 text-[13.5px] text-foreground/80">Join {c.displayName}&apos;s community for notes and updates for members.</p>
                 <div className="mt-3.5">
                   {data.viewer.isCreator ? null : !data.viewer.signedIn ? (
-                    <Link href={`/login?next=${encodeURIComponent(`/u/${c.handle}/membership`)}`} prefetch={false} className={exQuiet}>
+                    <Link href={`/login?next=${encodeURIComponent(`${profilePath(c.handle)}/membership`)}`} prefetch={false} className={exQuiet}>
                       Sign in to join
                     </Link>
                   ) : current ? (

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, PersonStanding, Plus, ScanFace, Shirt, Sparkles, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, PersonStanding, Plus, ScanFace, Shirt, UserRound, Lightbulb } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -478,7 +478,7 @@ export function CharacterReplaceWorkspace({
                 className="mt-4 flex w-full items-center gap-3 rounded-2xl border border-primary/25 bg-primary/[0.06] px-4 py-3 text-left transition hover:border-primary/40 active:scale-[0.995]"
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
-                  <Sparkles className="h-4 w-4" aria-hidden />
+                  <Lightbulb className="h-4 w-4" aria-hidden />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[13.5px] font-bold">You have {activeBatch.size} video{activeBatch.size === 1 ? "" : "s"} in progress</span>
@@ -656,7 +656,7 @@ export function CharacterReplaceWorkspace({
                     "transition motion-safe:hover:-translate-y-0.5 active:scale-[0.99]",
                   )}
                 >
-                  <Sparkles className="h-4 w-4" aria-hidden />
+                  <Lightbulb className="h-4 w-4" aria-hidden />
                   Get more AI credits
                 </button>
               ) : step === "review" && shortOfBalance && project.consent && !launching ? (
@@ -683,7 +683,7 @@ export function CharacterReplaceWorkspace({
                     "disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none disabled:hover:translate-y-0",
                   )}
                 >
-                  <Sparkles className="h-4 w-4" aria-hidden />
+                  <Lightbulb className="h-4 w-4" aria-hidden />
                   {launching
                     ? "Starting…"
                     : batch.isBatch
@@ -840,7 +840,7 @@ function TerminalNotice({ body, historyHref, onNew }: { body: string; historyHre
       <p className="mx-auto max-w-sm text-[13.5px] leading-relaxed text-muted-foreground">{body}</p>
       <div className="mt-5 flex flex-wrap justify-center gap-2">
         <button type="button" onClick={onNew} className="btn-lux bg-foreground text-background">
-          <Sparkles className="h-4 w-4" aria-hidden />
+          <Lightbulb className="h-4 w-4" aria-hidden />
           Start a new video
         </button>
         <Link href={historyHref} prefetch={false} className="btn-lux bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] text-foreground hover:border-foreground/25">

@@ -15,6 +15,7 @@ import type { PlaceResult } from "@/lib/social/places";
 import type { SearchPerson, SearchResult, SearchType } from "@/lib/social/search";
 import type { Sound } from "@/lib/social/sounds";
 import { formatCompactNumber } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Search results, per tab, plus the searching / empty / error states.
@@ -233,7 +234,7 @@ function ActionRow({
 function PersonRow({ person: p, canFollow }: { person: SearchPerson; canFollow: boolean }) {
   return (
     <LinkRow
-      href={`/u/${p.handle}`}
+      href={`${profilePath(p.handle)}`}
       leading={<Avatar src={p.avatarUrl} size={46} />}
       title={<NameLine name={p.displayName} verified={p.isVerified} className="text-[14.5px] font-semibold" />}
       subtitle={`@${p.handle} · ${formatCompactNumber(p.followersCount)} followers`}

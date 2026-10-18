@@ -1,9 +1,9 @@
-import { Award, BadgeCheck, Bookmark, CalendarDays, Flame, Layers, Lock, Rocket, ShieldCheck, Sparkles, TrendingUp, Trophy, Users, type LucideIcon } from "lucide-react";
+import { Award, BadgeCheck, Bookmark, CalendarDays, Flame, Layers, Lock, Rocket, ShieldCheck, TrendingUp, Trophy, Users, type LucideIcon, Lightbulb } from "lucide-react";
 
 import { earnedCount, RARITY_META, type EarnedAchievement } from "@/lib/social/achievements";
 
 const ICONS: Record<string, LucideIcon> = {
-  sparkles: Sparkles,
+  sparkles: Lightbulb,
   layers: Layers,
   users: Users,
   bookmark: Bookmark,

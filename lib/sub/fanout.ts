@@ -7,6 +7,7 @@ import { excludedFor } from "@/lib/social/creator-notify-emit";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { isUuid } from "./guards";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * The Exclusive notification fan-out (Frenz Exclusive Part 6, 0251) — for a creator's subscriber
@@ -208,7 +209,7 @@ export async function processFanoutPage(jobId: string, pageSize = FANOUT_PAGE): 
   out.claimed = mine.length;
 
   const who = mine.length ? await pushPerson(creatorId) : null;
-  const tab = who?.handle ? `/u/${who.handle}?tab=sub` : "/exclusive";
+  const tab = who?.handle ? `${profilePath(who.handle)}?tab=sub` : "/exclusive";
   const results = new Map<string, { status: "handed_off" | "skipped" | "failed"; channels: string | null; detail: string | null }>();
   const handOff = async (id: string): Promise<void> => {
     if (excluded.has(id) || suspended.has(id) || (allowed && !allowed.has(id))) return void results.set(id, { status: "skipped", channels: null, detail: "not_eligible" });

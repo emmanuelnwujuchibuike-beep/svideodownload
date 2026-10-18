@@ -3,6 +3,7 @@ import { pushPerson } from "@/lib/push/identity";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { subscribersFor, type CreatorNotificationChannel } from "./creator-notifications";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Fan-out for per-creator notification subscriptions ("Notify me when Sarah posts").
@@ -154,14 +155,17 @@ export async function notifyNewStory(publisherId: string, storyId?: string | nul
     if (!subscribers.length) return;
     // one story notification per person per hour — five stories in a row are one "added to their story"
     const since = new Date(Date.now() - 60 * 60_000).toISOString();
+    const who = await pushPerson(publisherId);
+    // a story notification links to the publisher's profile — matched in BOTH spellings, the /u/ one written
+    // before 2026-10-17 and the /:handle one written since (lib/social/profile-url.ts)
+    const storyUrls = who.handle ? ["/u/" + who.handle, profilePath(who.handle)] : ["/friends"];
     const [excluded, recent] = await Promise.all([
       excludedFor(db, publisherId, subscribers),
-      inChunks<{ user_id: string }>(subscribers, (c) => db.from("notifications").select("user_id").eq("type", "news_following").eq("actor_id", publisherId).is("post_id", null).like("data->>url", "/u/%").gte("created_at", since).in("user_id", c)),
+      inChunks<{ user_id: string }>(subscribers, (c) => db.from("notifications").select("user_id").eq("type", "news_following").eq("actor_id", publisherId).is("post_id", null).in("data->>url", storyUrls).gte("created_at", since).in("user_id", c)),
     ]);
     for (const r of recent) excluded.add(r.user_id);
     const viewers = eligibleViewers({ publisherId, subscribers, visibility: "public", follows: new Set(), excluded });
     if (!viewers.length) return;
-    const who = await pushPerson(publisherId);
     await deliver(viewers, (userId) => ({
       userId,
       type: "news_following",
@@ -171,7 +175,7 @@ export async function notifyNewStory(publisherId: string, storyId?: string | nul
         body: "Added to their story",
         genericBody: "New story from someone you follow.",
         // Stories are viewed from the person's profile, where their story tray lives.
-        url: who.handle ? `/u/${who.handle}` : "/friends",
+        url: who.handle ? `${profilePath(who.handle)}` : "/friends",
         icon: who.icon,
         tag: `new-story:${publisherId}${storyId ? `:${storyId}` : ""}`,
       },

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Award, BookOpen, Briefcase, Check, CheckCircle2, ChevronDown, Circle, Compass, Download, FileText, GraduationCap, Handshake, IdCard, Lightbulb, Quote, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowLeft, Award, BookOpen, Briefcase, Check, CheckCircle2, ChevronDown, Circle, Compass, Download, FileText, GraduationCap, Handshake, IdCard, Lightbulb, Quote, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 
@@ -11,6 +11,7 @@ import { haptic } from "@/lib/motion/haptics";
 import { OPPORTUNITY_KINDS, PRO_OPEN_TO, PRO_OPEN_TO_KEYS, REC_KINDS, relationshipHistory, ROLE_GROUP, type OpportunityKind, type ProOpenTo } from "@/lib/social/professional/engine";
 import type { NetworkDashboard, ProConnection, ProRecommendation } from "@/lib/social/professional/server";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Professional Network™ — the member's own dashboard (Feature 19 · Part 12).
@@ -100,10 +101,10 @@ export function NetworkDashboard({ initial }: { initial: NetworkDashboard }) {
         </Link>
         {d.me.handle ? (
           <>
-            <Link href={`/u/${d.me.handle}/network`} prefetch={false} className={quietPill}>
+            <Link href={`${profilePath(d.me.handle)}/network`} prefetch={false} className={quietPill}>
               <FileText className="h-4 w-4" aria-hidden /> Your public page
             </Link>
-            <Link href={`/u/${d.me.handle}/card`} prefetch={false} className={quietPill}>
+            <Link href={`${profilePath(d.me.handle)}/card`} prefetch={false} className={quietPill}>
               <IdCard className="h-4 w-4" aria-hidden /> Business card
             </Link>
           </>
@@ -172,7 +173,7 @@ export function NetworkDashboard({ initial }: { initial: NetworkDashboard }) {
             {d.incoming.map((c) => (
               <li key={c.id} className="px-3.5 py-3">
                 <div className="flex items-center gap-3">
-                  <PersonLine p={c.person} href={`/u/${c.person.handle}/network`} sub={`Says they were your ${roleLabel(c.theirRole, c.customLabel).toLowerCase()}${c.context ? `, ${c.context}` : ""}`} />
+                  <PersonLine p={c.person} href={`${profilePath(c.person.handle)}/network`} sub={`Says they were your ${roleLabel(c.theirRole, c.customLabel).toLowerCase()}${c.context ? `, ${c.context}` : ""}`} />
                 </div>
                 {c.note ? <p className="mt-2 rounded-xl bg-black/[0.03] px-3 py-2 text-[13px] dark:bg-white/[0.05]">{c.note}</p> : null}
                 <div className="mt-2 flex gap-2 pl-14">
@@ -187,7 +188,7 @@ export function NetworkDashboard({ initial }: { initial: NetworkDashboard }) {
             ))}
             {d.outgoing.map((c) => (
               <li key={c.id} className="flex items-center gap-3 px-3.5 py-3">
-                <PersonLine p={c.person} href={`/u/${c.person.handle}/network`} sub={`Waiting for them to confirm: ${roleLabel(c.theirRole, c.customLabel)}`} />
+                <PersonLine p={c.person} href={`${profilePath(c.person.handle)}/network`} sub={`Waiting for them to confirm: ${roleLabel(c.theirRole, c.customLabel)}`} />
                 <button type="button" className={cn(quietPill, "min-h-[2.25rem] px-3 text-[12.5px]")} onClick={() => respond(c, "withdraw")}>
                   Withdraw
                 </button>
@@ -204,7 +205,7 @@ export function NetworkDashboard({ initial }: { initial: NetworkDashboard }) {
           <GlassGroup label="Recommendations to review">
             {pendingRecs.map((r) => (
               <li key={r.id} className="px-3.5 py-3">
-                <PersonLine p={r.person} href={`/u/${r.person.handle}/network`} sub={`${REC_KINDS[r.kind]} for you`} />
+                <PersonLine p={r.person} href={`${profilePath(r.person.handle)}/network`} sub={`${REC_KINDS[r.kind]} for you`} />
                 <blockquote className="mt-2 whitespace-pre-line rounded-xl bg-black/[0.03] px-3 py-2 text-[13.5px] leading-relaxed dark:bg-white/[0.05]">{r.body}</blockquote>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button type="button" className={cn(primaryPill, "min-h-[2.25rem] px-3.5 text-[12.5px]")} onClick={() => decide(r, "show")}>
@@ -231,7 +232,7 @@ export function NetworkDashboard({ initial }: { initial: NetworkDashboard }) {
             {suggestions.map((s) => (
               <li key={s.id} className="px-3.5 py-3">
                 <div className="flex items-center gap-3">
-                  <PersonLine p={s.person} href={`/u/${s.person.handle}/network`} />
+                  <PersonLine p={s.person} href={`${profilePath(s.person.handle)}/network`} />
                   <button type="button" aria-label={`Not now: ${s.person.displayName}`} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-black/[0.04] active:bg-black/[0.08]" onClick={() => setDismissed((x) => [...x, s.id])}>
                     <X className="h-4 w-4" aria-hidden />
                   </button>
@@ -239,7 +240,7 @@ export function NetworkDashboard({ initial }: { initial: NetworkDashboard }) {
                 <ul className="mt-1.5 flex flex-wrap gap-1.5 pl-14">
                   {s.reasons.map((r) => (
                     <li key={r} className="inline-flex items-center gap-1 rounded-full bg-primary/[0.08] px-2 py-0.5 text-[12px] font-medium text-primary">
-                      <Sparkles className="h-3 w-3" aria-hidden /> {r}
+                      <Lightbulb className="h-3 w-3" aria-hidden /> {r}
                     </li>
                   ))}
                 </ul>
@@ -266,7 +267,7 @@ export function NetworkDashboard({ initial }: { initial: NetworkDashboard }) {
               return (
                 <li key={c.id}>
                   <div className="flex items-center gap-2 px-3.5 py-2.5">
-                    <PersonLine p={c.person} href={`/u/${c.person.handle}/network`} sub={`${roleLabel(c.theirRole, c.customLabel)}${c.context ? `, ${c.context}` : ""}`} />
+                    <PersonLine p={c.person} href={`${profilePath(c.person.handle)}/network`} sub={`${roleLabel(c.theirRole, c.customLabel)}${c.context ? `, ${c.context}` : ""}`} />
                     <button type="button" aria-expanded={expanded} aria-label={`History with ${c.person.displayName}`} onClick={() => setOpen(expanded ? null : c.id)} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-black/[0.04] active:bg-black/[0.08]">
                       <ChevronDown className={cn("h-4 w-4 transition-transform motion-reduce:transition-none", expanded && "rotate-180")} aria-hidden />
                     </button>
@@ -418,7 +419,7 @@ export function NetworkDashboard({ initial }: { initial: NetworkDashboard }) {
             {shownRecs.map((r) => (
               <li key={r.id} className="px-3.5 py-3">
                 <div className="flex items-center gap-2">
-                  <PersonLine p={r.person} href={`/u/${r.person.handle}/network`} sub={`${REC_KINDS[r.kind]}${r.status === "hidden" ? " · private" : ""}`} />
+                  <PersonLine p={r.person} href={`${profilePath(r.person.handle)}/network`} sub={`${REC_KINDS[r.kind]}${r.status === "hidden" ? " · private" : ""}`} />
                   <button type="button" className={cn(quietPill, "min-h-[2.25rem] px-3 text-[12.5px]")} onClick={() => decide(r, r.status === "shown" ? "hide" : "show")}>
                     {r.status === "shown" ? "Hide" : "Show"}
                   </button>

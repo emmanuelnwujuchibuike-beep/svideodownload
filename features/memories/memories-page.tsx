@@ -16,10 +16,10 @@ import {
   Plus,
   RotateCcw,
   Search,
-  Sparkles,
   Trash2,
   Users,
   X,
+  Lightbulb,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -31,6 +31,7 @@ import { FEELINGS, MEMORY_CATEGORIES, VISIBILITY, suggestCategory, type MemoryCa
 import type { Memory, MemoryLibrary, MemorySuggestion, PersonLite } from "@/lib/social/memories/server";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Shared Memories™ and Life Journey™ (Feature 19 · Part 14).
@@ -358,7 +359,7 @@ function Journey({ memories, joinedAt, important, onOpen }: { memories: Memory[]
                       {fmt(m.occurredOn)} · {MEMORY_CATEGORIES[m.category]}
                       {m.people.length ? ` · with ${m.people.map((p) => p.name).slice(0, 2).join(", ")}${m.people.length > 2 ? ` +${m.people.length - 2}` : ""}` : ""}
                     </span>
-                    {star.get(m.id) ? <span className="mt-1 inline-flex items-center gap-1 text-[11.5px] font-semibold text-amber-600 dark:text-amber-300"><Sparkles className="h-3 w-3" aria-hidden /> {star.get(m.id)![0]}</span> : null}
+                    {star.get(m.id) ? <span className="mt-1 inline-flex items-center gap-1 text-[11.5px] font-semibold text-amber-600 dark:text-amber-300"><Lightbulb className="h-3 w-3" aria-hidden /> {star.get(m.id)![0]}</span> : null}
                   </span>
                 </button>
               </li>
@@ -464,7 +465,7 @@ function Collections({ lib, byId, act, refresh, onOpen }: { lib: MemoryLibrary; 
           <GlassGroup label="Suggested collections">
             {lib.collectionSuggestions.map((s) => (
               <li key={s.key} className="flex items-center gap-3 px-3.5 py-3">
-                <Sparkles className="h-[18px] w-[18px] shrink-0 text-violet-500" aria-hidden />
+                <Lightbulb className="h-[18px] w-[18px] shrink-0 text-violet-500" aria-hidden />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[14px] font-semibold">{s.title}</span>
                   <span className="block truncate text-[12.5px] text-muted-foreground">{s.memoryIds.length} memories · {s.why}</span>
@@ -860,7 +861,7 @@ function Detail({ memory: m, mine, onClose, onEdit, onState, onRestored }: { mem
           <div className="flex flex-wrap items-center gap-2">
             <Users className="h-4 w-4 text-muted-foreground" aria-hidden />
             {m.people.map((p) => (
-              <Link key={p.id} href={`/u/${p.handle}`} prefetch={false} className="inline-flex items-center gap-1.5 text-[13.5px] font-semibold">
+              <Link key={p.id} href={`${profilePath(p.handle)}`} prefetch={false} className="inline-flex items-center gap-1.5 text-[13.5px] font-semibold">
                 <PersonAvatar user={{ displayName: p.name, avatarUrl: p.avatarUrl }} size={36} /> {p.name}
               </Link>
             ))}

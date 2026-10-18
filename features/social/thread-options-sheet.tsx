@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { BadgeCheck, Check, ChevronRight, Clock, Coins, Image as ImageIcon, Loader2, Palette, ShieldBan, Sparkles, Trash2, User, X } from "lucide-react";
+import { BadgeCheck, Check, ChevronRight, Clock, Coins, Image as ImageIcon, Loader2, Palette, ShieldBan, Trash2, User, X, Lightbulb } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -23,6 +23,7 @@ import {
 import { CONVERSATION_THEMES, type ConversationTheme } from "@/lib/social/message-meta";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 const THEME_SWATCH: Record<ConversationTheme, string> = {
   blue: "bg-blue-500",
@@ -334,7 +335,7 @@ export function ThreadOptionsSheet({
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Link
-                    href={`/u/${otherHandle}`}
+                    href={`${profilePath(otherHandle)}`}
                     onClick={onClose}
                     className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-full bg-white px-4 text-[13.5px] font-bold text-indigo-700 shadow-sm transition active:scale-95 motion-reduce:active:scale-100"
                   >
@@ -526,7 +527,7 @@ export function ThreadOptionsSheet({
                   }}
                   className={row}
                 >
-                  <IconTile icon={Sparkles} />
+                  <IconTile icon={Lightbulb} />
                   Font style &amp; bubble style
                   <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
                 </button>

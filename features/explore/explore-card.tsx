@@ -8,7 +8,7 @@ import { useState } from "react";
 import { MoreShareButton } from "@/features/media/more-share-button";
 import { categoryLabel } from "@/lib/social/categories";
 import type { PostCard } from "@/lib/social/posts";
-import { postHref } from "@/lib/social/post-url";
+import { postViewHref } from "@/lib/social/post-url";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 /**
@@ -47,7 +47,7 @@ export function ExploreCard({
 }) {
   const [broken, setBroken] = useState(false);
   const cover = post.thumbnailUrl;
-  const href = postHref(post);
+  const href = postViewHref(post);
 
   return (
     <article

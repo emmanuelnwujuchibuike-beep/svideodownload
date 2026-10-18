@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 interface AdminUser {
   id: string;
@@ -204,7 +205,7 @@ export function UserModeration() {
               </span>
               <span className="min-w-0 flex-1">
                 <Link
-                  href={`/u/${u.handle}`}
+                  href={`${profilePath(u.handle)}`}
                   className="block truncate text-sm font-semibold hover:underline"
                 >
                   {u.display_name || `@${u.handle}`}

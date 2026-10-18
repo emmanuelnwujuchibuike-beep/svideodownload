@@ -12,6 +12,7 @@ import { haptic } from "@/lib/motion/haptics";
 import { FEEDBACK_ASPECTS, MEMBER_ROLES, RECOGNITIONS, SPONSOR_KINDS, usd, type MemberRole, type Recognition, type SponsorKind } from "@/lib/creator/membership/engine";
 import type { CreatorDashboard as Dashboard, Membership, Person } from "@/lib/creator/membership/server";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 const SubscribersList = dynamic(() => import("@/features/members/subscribers-list").then((m) => m.SubscribersList), { ssr: false });
 const SubPayoutSettings = dynamic(() => import("@/features/sub/payout-settings").then((m) => m.SubPayoutSettings), { ssr: false });
@@ -131,7 +132,7 @@ function Held({ held }: { held: { membership: Membership; creator: Person }[] })
     <ExGroup label="Your memberships">
       {held.map(({ membership: m, creator }) => (
         <li key={m.id}>
-          <Link href={m.billing === "sub" ? `/u/${creator.handle}?tab=sub` : `/u/${creator.handle}/membership`} prefetch={false} className="flex items-center gap-3 px-3.5 py-3 transition active:bg-black/[0.04]">
+          <Link href={m.billing === "sub" ? `${profilePath(creator.handle)}?tab=sub` : `${profilePath(creator.handle)}/membership`} prefetch={false} className="flex items-center gap-3 px-3.5 py-3 transition active:bg-black/[0.04]">
             <PersonAvatar user={creator} size={44} />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[14.5px] font-semibold">{creator.displayName}</span>
@@ -157,7 +158,7 @@ function Setup({ d, handle, act }: { d: Dashboard; handle: string; act: Act }) {
         id="mb-setup"
         title="Your membership"
         action={
-          <Link href={`/u/${handle}/membership`} prefetch={false} className="text-[13px] font-semibold text-primary">
+          <Link href={`${profilePath(handle)}/membership`} prefetch={false} className="text-[13px] font-semibold text-primary">
             View page
           </Link>
         }
@@ -194,7 +195,7 @@ function Setup({ d, handle, act }: { d: Dashboard; handle: string; act: Act }) {
           </div>
         ) : null}
         <div className="mt-3 flex flex-wrap gap-2">
-          <Link href={`/u/${handle}?tab=sub`} prefetch={false} className={exPrimary}>
+          <Link href={`${profilePath(handle)}?tab=sub`} prefetch={false} className={exPrimary}>
             {st.setupCompleted ? "Open PRIVATE POSTS" : "Get paid for your content"} <ArrowRight className="h-4 w-4" aria-hidden />
           </Link>
           {st.setupCompleted ? (

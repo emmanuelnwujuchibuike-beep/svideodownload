@@ -1,4 +1,4 @@
-import { Flame, HelpCircle, MessageCircle, Reply, Sparkles, Users } from "lucide-react";
+import { Flame, HelpCircle, MessageCircle, Reply, Users, Lightbulb } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -44,7 +44,7 @@ export default async function CreatorLoungePage() {
       <div className="mx-auto max-w-3xl">
         <header className="mb-8">
           <h1 className="flex items-center gap-2 text-3xl font-bold tracking-[-0.03em] sm:text-4xl">
-            <Sparkles className="h-7 w-7 text-primary" /> Creator Lounge
+            <Lightbulb className="h-7 w-7 text-primary" /> Creator Lounge
           </h1>
           <p className="mt-2 text-muted-foreground">What&apos;s happening in the comments on your posts.</p>
         </header>

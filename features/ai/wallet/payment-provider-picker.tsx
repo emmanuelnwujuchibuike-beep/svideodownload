@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 
+import type { TopupProviderId } from "@/lib/ai/credits/wallet-config";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
 /**
- * "Pay with Paystack / Pay with Bachs" — shown in the top-up and plan sheets
- * (owner, 2026-10-07: "checkout doesn't show to choose Paystack or Bachs").
+ * A "Pay with …" choice for the top-up and plan sheets, when a route offers
+ * TWO configured providers. Since Bachs was removed (2026-10-17) Paystack is
+ * the only provider, so nothing is drawn — kept for the next provider.
  *
  * The list is the server's (`/api/payments/options`, read once when a sheet
  * opens): the admin's route for this member's country, only providers that
@@ -16,10 +18,10 @@ import { cn } from "@/lib/utils";
  * pick is a preference the checkout honours only among what it allows.
  *
  * Owner brief 2026-10-11: Paystack is RECOMMENDED for every top-up and deposit —
- * pre-selected and shown first with the label — and any other method (Bachs)
- * sits behind "More payment methods" until the member asks for it.
+ * pre-selected and shown first with the label — and any other method sits
+ * behind "More payment methods" until the member asks for it.
  */
-export type PaymentProvider = "paystack" | "bachs";
+export type PaymentProvider = TopupProviderId;
 export interface PaymentOptionsView {
   walletTopup: PaymentProvider[];
   plans: Record<"ai_pro" | "ai_max", PaymentProvider[]>;
@@ -27,7 +29,6 @@ export interface PaymentOptionsView {
 
 const COPY: Record<PaymentProvider, { label: string; hint: string }> = {
   paystack: { label: "Paystack", hint: "Card, bank, transfer" },
-  bachs: { label: "Bachs", hint: "Card, bank, transfer" },
 };
 
 /** Paystack when the route allows it (the recommended method), else the route's first. */

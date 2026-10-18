@@ -2419,8 +2419,8 @@ Owner asked: "take the For You, Following and Reels [tabs] upwards to the top na
 - **Two new Signature Icon System glyphs** in `components/icons/frenz-icons.tsx`,
   built from the same straight-line/`rect rx`/`circle` primitive language as
   the rest of the set:
-  - `FrenzSparkleOutline`/`Solid` — a 4-point sparkle/twinkle polygon for "For
-    You" (personalization).
+  - `FrenzForYouOutline`/`Solid` — a heart for "For You" (personalization). It
+    replaced a 4-point sparkle on 2026-10-17: the owner bans any sparkle / "AI star" icon.
   - `FrenzReelsOutline`/`Solid` — a portrait reel frame with a play notch.
     The outline draws the notch as an open stroke triangle (matching how
     `FrenzInboxOutline`'s flap is drawn); the **solid** variant needed the

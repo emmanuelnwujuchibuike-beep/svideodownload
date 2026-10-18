@@ -39,6 +39,7 @@ import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
 import { isSlowConnection } from "@/lib/pwa/use-network-status";
+import { profilePath } from "@/lib/social/profile-url";
 
 type IconType = ComponentType<{ className?: string }>;
 
@@ -84,7 +85,7 @@ export function AppSidebar({ handle: _handle }: { handle: string | null }) {
   const nav = buildNav(handle);
   const { showAds, ready } = useShowAds();
   const isPremium = ready && !showAds;
-  const profileHref = handle ? `/u/${handle}` : "/account";
+  const profileHref = handle ? `${profilePath(handle)}` : "/account";
 
   // Same prefetch-warming MobileNav already does — was desktop-only missing
   // this entirely, so the sidebar's first click on Friends/Messages/profile

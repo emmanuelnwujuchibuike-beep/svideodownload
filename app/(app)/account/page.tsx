@@ -24,12 +24,12 @@ import {
   Palette,
   Search,
   ShieldCheck,
-  Sparkles,
   Star,
   Store,
   UserCog,
   Users,
   type LucideIcon,
+  Lightbulb,
 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -60,6 +60,7 @@ import { getPrivacySettings } from "@/lib/social/profile";
 import { getVerificationState, verificationSummary } from "@/lib/social/verification";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 export const dynamic = "force-dynamic";
 
@@ -234,7 +235,7 @@ export default async function AccountPage() {
            it is the front door, and the analytics screen is one of the things
            it links to. Analytics keeps its own row — it is Business-gated and
            people already know where it is. */
-        { href: "/studio", Icon: Sparkles, title: "Creator Studio", sub: "Content, audience, calendar & goals", tint: "amber" },
+        { href: "/studio", Icon: Lightbulb, title: "Creator Studio", sub: "Content, audience, calendar & goals", tint: "amber" },
         { href: "/advertise", Icon: Megaphone, title: "Advertise", sub: "Promote your business on Frenzsave", tint: "rose" },
         { href: "/account/analytics", Icon: BarChart3, title: "Analytics", sub: "Your performance", tint: "emerald" },
         {
@@ -293,7 +294,7 @@ export default async function AccountPage() {
                 <DiamondCrownBadge plan={plan as BillingPlan} size="md" className="absolute -bottom-1 -right-1" />
               </div>
               {ownProfile?.handle ? (
-                <Link href={`/u/${ownProfile.handle}`} prefetch className="mb-1 inline-flex items-center rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary">
+                <Link href={`${profilePath(ownProfile.handle)}`} prefetch className="mb-1 inline-flex items-center rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary">
                   View profile
                 </Link>
               ) : (
@@ -317,7 +318,7 @@ export default async function AccountPage() {
                 ) : null}
                 {!isPremium ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                    <Sparkles className="h-3 w-3" /> {planLabel}
+                    <Lightbulb className="h-3 w-3" /> {planLabel}
                   </span>
                 ) : null}
               </div>

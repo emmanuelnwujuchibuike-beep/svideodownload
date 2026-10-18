@@ -13,6 +13,7 @@ import { PeopleYouMayKnow } from "@/features/friends/people-you-may-know";
 import type { SearchPerson } from "@/lib/social/search";
 import type { PersonSuggestion } from "@/lib/social/people/engine";
 import { cn, formatCompactNumber } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 type Person = {
   id: string;
@@ -101,7 +102,7 @@ export function FriendsDiscover({ initialSuggestions, handle = null }: { initial
           <p className="mt-1.5 text-[13.5px] text-muted-foreground">Find people you know, or invite them to Frenz.</p>
         </div>
         {handle ? (
-          <GlassIconLink href={`/u/${handle}/card`} label="My QR card">
+          <GlassIconLink href={`${profilePath(handle)}/card`} label="My QR card">
             <QrCode className="h-5 w-5" aria-hidden />
           </GlassIconLink>
         ) : null}
@@ -252,11 +253,11 @@ function PersonRow({ person }: { person: Person }) {
   return (
     <li className="flex items-center gap-3 px-3.5 py-2.5 transition-colors duration-150 hover:bg-black/[0.02] dark:hover:bg-white/[0.03]">
       {/* Real presence, from the channel the signed-in shell already joins. Not a made-up dot. */}
-      <Link href={`/u/${person.handle}`} prefetch={false} aria-label={isOnline ? `${person.displayName}, online` : person.displayName} className="shrink-0">
+      <Link href={`${profilePath(person.handle)}`} prefetch={false} aria-label={isOnline ? `${person.displayName}, online` : person.displayName} className="shrink-0">
         <PersonAvatar user={person} size={52} online={isOnline} />
       </Link>
 
-      <Link href={`/u/${person.handle}`} prefetch={false} className="min-w-0 flex-1 py-0.5">
+      <Link href={`${profilePath(person.handle)}`} prefetch={false} className="min-w-0 flex-1 py-0.5">
         <span className="flex min-w-0 items-center gap-1">
           <span className="truncate text-[15px] font-semibold tracking-[-0.01em]">{person.displayName}</span>
           {person.isVerified ? <VerifiedTick size="sm" className="h-[15px] w-[15px] shrink-0" /> : null}

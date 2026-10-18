@@ -32,6 +32,7 @@ import {
 import { WowSolid } from "@/components/brand/wow-icon";
 
 import type { NotificationCategory, NotificationType } from "@/lib/social/notifications";
+import { profilePath } from "@/lib/social/profile-url";
 
 type LucideIcon = typeof Bell;
 
@@ -314,7 +315,7 @@ export function hrefFor(n: {
 }): string {
   if (n.type === "friend_request") return "/friends";
   if ((n.type === "friend_accepted" || n.type === "friend_reminder" || n.type === "follow") && n.actor) {
-    return `/u/${n.actor.handle}`;
+    return `${profilePath(n.actor.handle)}`;
   }
   if ((n.type === "message" || n.type === "message_reaction" || n.type === "message_mention") && n.conversationId) return `/messages/${n.conversationId}`;
   if (n.type === "moderation_appeal_resolved") return "/account/appeals";

@@ -130,7 +130,7 @@ export const SCHOOLS: School[] = [
     kind: "product",
     productId: "studio",
     order: 8,
-    icon: "Sparkles",
+    icon: "Lightbulb",
   },
   {
     id: "cloud",

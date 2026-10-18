@@ -13,6 +13,7 @@ import { haptic } from "@/lib/motion/haptics";
 import type { SuggestionFilter } from "@/lib/social/graph/suggestions";
 import type { PersonSuggestion } from "@/lib/social/people/engine";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * People You May Know™ (Feature 19 · Part 6), on Add friends.
@@ -262,10 +263,10 @@ function SuggestionRow({ person, onAnswer }: { person: PersonSuggestion; onAnswe
   return (
     <li className="px-3.5 py-2.5">
       <div className="flex items-center gap-2.5">
-        <Link href={`/u/${person.handle}`} prefetch={false} aria-label={isOnline ? `${person.displayName}, online` : person.displayName} className="shrink-0">
+        <Link href={`${profilePath(person.handle)}`} prefetch={false} aria-label={isOnline ? `${person.displayName}, online` : person.displayName} className="shrink-0">
           <PersonAvatar user={person} size={52} online={isOnline} />
         </Link>
-        <Link href={`/u/${person.handle}`} prefetch={false} className="min-w-0 flex-1 py-0.5">
+        <Link href={`${profilePath(person.handle)}`} prefetch={false} className="min-w-0 flex-1 py-0.5">
           <span className="flex min-w-0 items-center gap-1">
             <span className="truncate text-[15px] font-semibold tracking-[-0.01em]">{person.displayName}</span>
             {person.isVerified ? <VerifiedTick size="sm" className="h-[15px] w-[15px] shrink-0" /> : null}

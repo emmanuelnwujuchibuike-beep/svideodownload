@@ -10,6 +10,7 @@ import { haptic } from "@/lib/motion/haptics";
 import type { SubState, TxState } from "@/lib/sub/lifecycle";
 import type { SubscriptionItem, TxPage } from "@/lib/sub/subscriptions";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Subscriptions (Frenz Exclusive Part 5) — the member's own paid subscriptions and payments.
@@ -125,12 +126,12 @@ export function SubscriptionsManager({ initial, initialTx }: { initial: Subscrip
             {items.map((it) => (
               <li key={it.id} className={cn("rounded-[22px] px-4 py-3.5", EX_CARD)}>
                 <div className="flex items-start gap-3">
-                  <Link href={`/u/${it.creator.handle}`} prefetch={false} className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <Link href={`${profilePath(it.creator.handle)}`} prefetch={false} className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                     <PersonAvatar user={it.creator} size={44} />
                   </Link>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <Link href={`/u/${it.creator.handle}`} prefetch={false} className="flex min-w-0 items-center gap-1 text-[15px] font-bold leading-tight hover:underline">
+                      <Link href={`${profilePath(it.creator.handle)}`} prefetch={false} className="flex min-w-0 items-center gap-1 text-[15px] font-bold leading-tight hover:underline">
                         <span className="truncate">{it.creator.displayName}</span>
                         {it.creator.verified ? <BadgeCheck className="h-4 w-4 shrink-0 text-primary" aria-label="Verified" /> : null}
                       </Link>
@@ -157,7 +158,7 @@ export function SubscriptionsManager({ initial, initialTx }: { initial: Subscrip
                 </dl>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {it.access ? (
-                    <Link href={`/u/${it.creator.handle}?tab=sub`} prefetch={false} className={exQuiet}>
+                    <Link href={`${profilePath(it.creator.handle)}?tab=sub`} prefetch={false} className={exQuiet}>
                       Open exclusive posts <ChevronRight className="h-4 w-4" aria-hidden />
                     </Link>
                   ) : null}

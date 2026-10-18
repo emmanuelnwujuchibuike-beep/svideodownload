@@ -17,6 +17,9 @@ describe("the container health check costs nothing", () => {
     for (const costly of ["cacheSet(", "checkStream()", "push_subscriptions", "extractorHealth()"]) expect(get.indexOf(costly), costly).toBeGreaterThan(live);
   });
   it("the middleware skips the health check", () => {
-    expect(readFileSync("middleware.ts", "utf8")).toContain('if (path === "/api/health") return NextResponse.next();');
+    // the very first line of the middleware — before the profile routing and every session check
+    const mw = readFileSync("middleware.ts", "utf8");
+    expect(mw).toContain('if (request.nextUrl.pathname === "/api/health") return NextResponse.next();');
+    expect(mw.indexOf('"/api/health"')).toBeLessThan(mw.indexOf("profileRoute("));
   });
 });

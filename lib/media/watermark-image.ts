@@ -30,7 +30,8 @@ export async function stampImageWatermark(photo: Blob, handle: string): Promise<
 }
 
 async function loadMark(handle: string): Promise<ImageBitmap> {
-  const res = await fetch(`/api/watermark/mark?h=${encodeURIComponent(handle)}`);
+  // &v=2: the mark became "frenzsave.com/<handle>" on 2026-10-17 — the old one is cached immutable for a year
+  const res = await fetch(`/api/watermark/mark?h=${encodeURIComponent(handle)}&v=2`);
   if (!res.ok) throw new Error("mark unavailable");
   return createImageBitmap(await res.blob());
 }

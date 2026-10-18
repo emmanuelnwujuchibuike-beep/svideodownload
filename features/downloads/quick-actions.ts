@@ -1,4 +1,4 @@
-import { Bookmark, Heart, Image as ImageIcon, Sparkles, type LucideIcon } from "lucide-react";
+import { Bookmark, Heart, Image as ImageIcon, type LucideIcon, Lightbulb } from "lucide-react";
 
 /**
  * The quick actions — ONE list, read by the in-page grid on /downloads and by
@@ -63,7 +63,7 @@ export const QUICK_ACTIONS: readonly QuickAction[] = [
   */
   {
     id: "frenz-ai",
-    icon: Sparkles,
+    icon: Lightbulb,
     title: "Frenz AI",
     sub: "AI tools for your videos",
     href: "/studio/ai",

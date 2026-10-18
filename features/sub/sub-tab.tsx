@@ -13,6 +13,7 @@ import { EX_CARD, EX_WELL, exField, exPrimary, exQuiet } from "@/features/sub/ui
 import { subscriptionCharge, usd } from "@/lib/creator/membership/engine";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 const SubComposer = dynamic(() => import("@/features/sub/sub-composer").then((m) => m.SubComposer), { ssr: false });
 const SubPayoutSettings = dynamic(() => import("@/features/sub/payout-settings").then((m) => m.SubPayoutSettings), { ssr: false });
@@ -91,7 +92,8 @@ export function SubTab({
   const [galleryKey, setGalleryKey] = useState(0);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [announceOpen, setAnnounceOpen] = useState(false);
-  const loginNext = `/u/${handle}?tab=sub`;
+  const [notifyOpen, setNotifyOpen] = useState(false);
+  const loginNext = `${profilePath(handle)}?tab=sub`;
 
   if (isOwner && s && !s.setupCompleted) {
     return <GetPaidSetup settings={s} bounds={bounds} onChange={setS} />;
@@ -103,9 +105,22 @@ export function SubTab({
         <>
           <ShareCard handle={handle} />
           <CreatorOverview settings={s} bounds={bounds} onChange={setS} onCompose={() => setComposing(true)} onWithdraw={() => setWithdrawing(true)} />
-          {/* Owner 2026-10-17: the announcement composer lives behind an Announcements button. Mounted (hidden)
-              so its list is already loaded: the tap only shows it. */}
-          <div className="mb-3 flex justify-end">
+          {/* Owner 2026-10-17: the announcement composer AND the creator's own notification settings each live
+              behind a button. Both stay mounted (hidden) so they're already loaded: a tap only shows them. */}
+          <div className="mb-3 flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              aria-expanded={notifyOpen}
+              aria-controls="sub-notify-panel"
+              onClick={() => {
+                haptic("selection");
+                setNotifyOpen((o) => !o);
+              }}
+              className={cn("ex-btn ex-btn--glass ex-btn--sm touch-manipulation", notifyOpen && "text-primary")}
+            >
+              <Bell className="h-4 w-4" aria-hidden /> Notifications
+              <ChevronDown className={cn("h-4 w-4 transition-transform duration-150 motion-reduce:transition-none", notifyOpen && "rotate-180")} aria-hidden />
+            </button>
             <button
               type="button"
               aria-expanded={announceOpen}
@@ -120,10 +135,12 @@ export function SubTab({
               <ChevronDown className={cn("h-4 w-4 transition-transform duration-150 motion-reduce:transition-none", announceOpen && "rotate-180")} aria-hidden />
             </button>
           </div>
+          <div id="sub-notify-panel" hidden={!notifyOpen}>
+            <CreatorNotifySettings initial={s.notifySubscribed ?? "both"} />
+          </div>
           <div id="sub-announce-panel" hidden={!announceOpen}>
             <CreatorAnnouncements creatorId={creatorId} />
           </div>
-          <CreatorNotifySettings initial={s.notifySubscribed ?? "both"} />
         </>
       ) : null}
       {!isOwner && signedIn ? (
@@ -411,7 +428,7 @@ function ShareCard({ handle }: { handle: string }) {
   const [copied, setCopied] = useState(false);
   const share = async () => {
     haptic("selection");
-    const url = `${window.location.origin}/u/${handle}?tab=sub`;
+    const url = `${window.location.origin}${profilePath(handle)}?tab=sub`;
     try {
       if (navigator.share) {
         await navigator.share({ title: "Subscribe to my content on Frenz", url });

@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { MembershipPage } from "@/features/members/membership-page";
 import { creatorPage } from "@/lib/creator/membership/server";
 import { createClient } from "@/lib/supabase/server";
+import { profilePath } from "@/lib/social/profile-url";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export default async function MembershipRoute({ params }: { params: Promise<{ ha
         {data === "restricted" ? (
           <div className="py-16 text-center">
             <p className="text-[15px] font-semibold">This profile is private.</p>
-            <Link href={`/u/${handle}`} className="mt-2 inline-block text-[14px] font-semibold text-primary">
+            <Link href={`${profilePath(handle)}`} className="mt-2 inline-block text-[14px] font-semibold text-primary">
               Back to the profile
             </Link>
           </div>

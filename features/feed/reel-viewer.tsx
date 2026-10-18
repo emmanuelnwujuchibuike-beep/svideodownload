@@ -156,6 +156,7 @@ import type { CommentPreview } from "@/lib/social/reel-extras";
 import { cn, formatCompactNumber, formatPostedOn } from "@/lib/utils";
 import { allowWindowOpen } from "@/lib/monetization/popunder-guard";
 import { useCloseOnNavigate } from "@/features/app-shell/use-close-on-navigate";
+import { profilePath } from "@/lib/social/profile-url";
 
 interface CommentsData {
   comments: CommentNode[];
@@ -2534,7 +2535,7 @@ function ReelCard({
           page it's routing away from.
         */}
         <Link
-          href={item.sound ? `/sound/${item.sound.id}` : `/u/${item.publisher.handle}`}
+          href={item.sound ? `/sound/${item.sound.id}` : `${profilePath(item.publisher.handle)}`}
           aria-label={item.sound ? `Sound: ${item.sound.title}` : "View profile"}
           className="mt-1 block h-8 w-8 shrink-0 overflow-hidden rounded-md ring-1 ring-white/50"
         >
@@ -2651,7 +2652,7 @@ function ReelCard({
           the reference's own proportions relative to the username line).
         */}
         <div className="flex items-center gap-2">
-          <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="shrink-0">
+          <Link href={`${profilePath(item.publisher.handle)}`} onClick={onClose} className="shrink-0">
             <span
               className={cn(
                 "block rounded-full",
@@ -2673,7 +2674,7 @@ function ReelCard({
               )}
             </span>
           </Link>
-          <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="inline-flex items-center gap-1.5 text-white">
+          <Link href={`${profilePath(item.publisher.handle)}`} onClick={onClose} className="inline-flex items-center gap-1.5 text-white">
             <span className="font-bold">@{item.publisher.handle}</span>
             {item.publisher.isVerified ? <VerifiedTick className="h-4 w-4" /> : null}
           </Link>
@@ -2734,7 +2735,7 @@ function ReelCard({
           never inventing a title or an artist for audio that has neither.
         */}
         <Link
-          href={item.sound ? `/sound/${item.sound.id}` : `/u/${item.publisher.handle}`}
+          href={item.sound ? `/sound/${item.sound.id}` : `${profilePath(item.publisher.handle)}`}
           onClick={onClose}
           className={cn(
             "mt-2 inline-flex max-w-[min(70vw,20rem)] items-center gap-2 rounded-full px-2.5 py-1",
@@ -2889,7 +2890,7 @@ function ReelCard({
         ? createPortal(
             <aside className="fixed inset-y-0 right-0 z-30 hidden w-[400px] flex-col overflow-y-auto border-l border-white/10 bg-card p-5 lg:flex">
               <div className="flex items-center gap-3">
-                <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="shrink-0">
+                <Link href={`${profilePath(item.publisher.handle)}`} onClick={onClose} className="shrink-0">
                   {item.publisher.avatarUrl ? (
                     <Image src={item.publisher.avatarUrl} alt="" width={44} height={44} className="h-11 w-11 rounded-full object-cover ring-1 ring-border" />
                   ) : (
@@ -2898,7 +2899,7 @@ function ReelCard({
                     </span>
                   )}
                 </Link>
-                <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="min-w-0 flex-1">
+                <Link href={`${profilePath(item.publisher.handle)}`} onClick={onClose} className="min-w-0 flex-1">
                   <span className="flex items-center gap-1 font-semibold leading-tight">
                     <span className="truncate">{item.publisher.displayName}</span>
                     {item.publisher.isVerified ? <VerifiedTick className="h-4 w-4 shrink-0" /> : null}

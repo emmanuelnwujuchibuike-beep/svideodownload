@@ -79,7 +79,7 @@ describe("one share link for every surface", () => {
   });
 });
 
-describe("Paystack or Bachs — the member picks only among what the route allows", () => {
+describe("a provider choice — the member picks only among what the route allows (Paystack alone today)", () => {
   it("no picker unless there are two providers", () => {
     expect(code("features/ai/wallet/payment-provider-picker.tsx")).toContain("if (providers.length < 2) return null;");
   });

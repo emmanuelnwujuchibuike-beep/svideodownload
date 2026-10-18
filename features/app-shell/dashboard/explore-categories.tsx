@@ -1,8 +1,8 @@
-import { Compass, Gamepad2, Laugh, Music, Plane, Shirt, Smartphone, Sparkles, Trophy } from "lucide-react";
+import { Compass, Gamepad2, Laugh, Music, Plane, Shirt, Smartphone, Trophy, Lightbulb } from "lucide-react";
 import Link from "next/link";
 
 const CATS = [
-  { label: "For You", Icon: Sparkles, href: "/explore", tint: "from-blue-500 to-violet-600" },
+  { label: "For You", Icon: Lightbulb, href: "/explore", tint: "from-blue-500 to-violet-600" },
   { label: "Funny", Icon: Laugh, href: "/explore?category=comedy", tint: "from-amber-400 to-orange-500" },
   { label: "Music", Icon: Music, href: "/explore?category=music", tint: "from-violet-500 to-purple-600" },
   { label: "Sports", Icon: Trophy, href: "/explore?category=sports", tint: "from-emerald-500 to-teal-600" },

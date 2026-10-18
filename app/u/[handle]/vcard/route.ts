@@ -3,6 +3,7 @@ import { getPublicProfile } from "@/lib/social/profile";
 import { getProfileDetails } from "@/lib/social/profile-platform";
 import { SITE_URL } from "@/lib/site";
 import { createClient } from "@/lib/supabase/server";
+import { profilePath } from "@/lib/social/profile-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,7 +50,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ han
     city: details.city,
     country: details.country,
     note: profile.bio,
-    profileUrl: `${SITE_URL}/u/${profile.handle}`,
+    profileUrl: `${SITE_URL}${profilePath(profile.handle)}`,
     avatarUrl: profile.avatarUrl,
   });
 

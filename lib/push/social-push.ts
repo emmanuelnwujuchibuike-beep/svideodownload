@@ -2,6 +2,7 @@ import { defaultPriorityFor } from "@/lib/notifications/priority";
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import { pushPerson } from "@/lib/push/identity";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Device push for social events (like/save/comment/follow). The in-app
@@ -70,7 +71,7 @@ export async function pushSocialEvent(opts: {
         title: who.name,
         body: cap(postTitle ? `${VERB[opts.type]} · ${postTitle}` : VERB[opts.type]),
         genericBody: "New activity on Frenz",
-        url: opts.postId ? `/p/${opts.postId}` : who.handle ? `/u/${who.handle}` : "/notifications",
+        url: opts.postId ? `/p/${opts.postId}` : who.handle ? `${profilePath(who.handle)}` : "/notifications",
         icon: who.icon,
         // Collapse repeats (e.g. a like-unlike-like burst) into one notification.
         tag: opts.postId ? `${opts.type}:${opts.postId}` : `follow:${opts.actorId}`,

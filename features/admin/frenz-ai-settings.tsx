@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { Lightbulb } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
@@ -140,7 +140,7 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
   return (
     <section className="rounded-3xl border border-border bg-card px-3 py-6 shadow-card sm:px-6">
       <h2 className="mb-1 flex items-center gap-2 font-semibold">
-        <Sparkles className="h-5 w-5 text-primary" /> Frenz AI access
+        <Lightbulb className="h-5 w-5 text-primary" /> Frenz AI access
       </h2>
       <p className="mb-6 text-sm text-muted-foreground">
         Who may use Frenz AI, and what it costs them. Every job costs real provider

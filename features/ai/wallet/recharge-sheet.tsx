@@ -72,7 +72,7 @@ export function AiWalletRechargeSheet({
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [custom, setCustom] = useState("");
-  // 2026-10-07: Paystack or Bachs, when the admin lets members choose and both are live here
+  // a provider choice, only when the admin lets members choose and two providers are live here (Paystack alone today)
   const options = usePaymentOptions(open);
   const providers = options?.walletTopup ?? [];
   const [provider, setProvider] = useState<PaymentProvider | null>(null);

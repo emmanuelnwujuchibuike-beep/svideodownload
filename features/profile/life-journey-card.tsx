@@ -1,4 +1,4 @@
-import { CalendarClock, Flag, FileText, Layers, Lock, Shield, Sparkles, Trophy, Users, type LucideIcon } from "lucide-react";
+import { CalendarClock, Flag, FileText, Layers, Lock, Shield, Trophy, Users, type LucideIcon, Lightbulb } from "lucide-react";
 
 import { SETTINGS_TINTS } from "@/features/account/settings-ui";
 import type { JourneyEntry } from "@/lib/social/life-journey";
@@ -28,7 +28,7 @@ export function LifeJourneyCard({ entries }: { entries: JourneyEntry[] }) {
     <section className="lux-card p-5 sm:p-6">
       <div className="mb-5 flex items-center gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-brand-tile text-white shadow-sm">
-          <Sparkles className="h-[18px] w-[18px]" />
+          <Lightbulb className="h-[18px] w-[18px]" />
         </span>
         <div className="min-w-0">
           <h2 className="text-base font-bold leading-tight">Life Journey</h2>

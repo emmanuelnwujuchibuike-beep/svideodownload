@@ -8,8 +8,8 @@ import {
   FrenzFriendsOutline,
   FrenzFriendsSolid,
   FrenzReelsOutline,
-  FrenzSparkleOutline,
-  FrenzSparkleSolid,
+  FrenzForYouOutline,
+  FrenzForYouSolid,
 } from "@/components/icons/frenz-icons";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
@@ -20,10 +20,10 @@ import { cn } from "@/lib/utils";
 const TABS: {
   key: HomeFeedSort;
   label: string;
-  outline: typeof FrenzSparkleOutline;
-  solid: typeof FrenzSparkleSolid;
+  outline: typeof FrenzForYouOutline;
+  solid: typeof FrenzForYouSolid;
 }[] = [
-  { key: "for_you", label: "For You", outline: FrenzSparkleOutline, solid: FrenzSparkleSolid },
+  { key: "for_you", label: "For You", outline: FrenzForYouOutline, solid: FrenzForYouSolid },
   { key: "following", label: "Following", outline: FrenzFriendsOutline, solid: FrenzFriendsSolid },
 ];
 

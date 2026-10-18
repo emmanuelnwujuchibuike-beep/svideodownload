@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Check, ImageIcon, RotateCcw, ScanFace, Sparkles, Video, X } from "lucide-react";
+import { ArrowLeft, Check, ImageIcon, RotateCcw, ScanFace, Video, X, Lightbulb } from "lucide-react";
 
 import type { CharacterReplacePreflight, PricingSnapshot } from "@/lib/ai/character-replace/types";
 import { formatCents } from "@/lib/ai/economy";
@@ -58,7 +58,7 @@ export function CharacterReplacePreflightPanel({
             state.phase === "attention" ? "bg-gradient-to-br from-amber-500 to-orange-500 shadow-amber-500/30" : state.phase === "unavailable" ? "bg-gradient-to-br from-slate-500 to-slate-700 shadow-slate-500/30" : "bg-gradient-to-br from-blue-500 to-violet-600 shadow-violet-500/30",
           )}
         >
-          {state.phase === "attention" ? <ScanFace className="h-5 w-5" aria-hidden /> : state.phase === "unavailable" ? <RotateCcw className="h-5 w-5" aria-hidden /> : <Sparkles className={cn("h-5 w-5", ticking && "motion-safe:animate-pulse")} aria-hidden />}
+          {state.phase === "attention" ? <ScanFace className="h-5 w-5" aria-hidden /> : state.phase === "unavailable" ? <RotateCcw className="h-5 w-5" aria-hidden /> : <Lightbulb className={cn("h-5 w-5", ticking && "motion-safe:animate-pulse")} aria-hidden />}
         </span>
         <div className="min-w-0 flex-1">
           <h2 className="text-[1.15rem] font-extrabold tracking-[-0.02em]">
@@ -131,7 +131,7 @@ export function CharacterReplacePreflightPanel({
               }}
               className="inline-flex min-h-[46px] flex-1 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-fuchsia-500 px-5 text-[14px] font-bold text-white shadow-[0_12px_28px_-14px_rgba(79,70,229,0.8)] transition active:scale-[0.98] motion-safe:hover:-translate-y-0.5"
             >
-              <Sparkles className="h-4 w-4" aria-hidden />
+              <Lightbulb className="h-4 w-4" aria-hidden />
               {state.snapshot ? `Create Video · ${formatCents(state.snapshot.totalCents, state.snapshot.symbol)}` : "Create Video"}
             </button>
           </div>

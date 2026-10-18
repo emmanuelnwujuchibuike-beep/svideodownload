@@ -2,7 +2,7 @@
 
 import { AnimatePresence } from "framer-motion";
 import { allowWindowOpen } from "@/lib/monetization/popunder-guard";
-import { Archive, ArchiveRestore, ArrowUp, BellRing, CheckCheck, CheckSquare, CircleDot, Download, History, LayoutList, MoreHorizontal, Pin, Rows3, Search, Sparkles, Tag, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowUp, BellRing, CheckCheck, CheckSquare, CircleDot, Download, History, LayoutList, MoreHorizontal, Pin, Rows3, Search, Tag, Trash2, X, Lightbulb } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { mutate, revalidate, useQuery } from "@/features/data";
@@ -665,7 +665,7 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
       {showCleanup && cleanup ? (
         <div className="mb-4 rounded-3xl border border-indigo-500/20 bg-indigo-500/[0.05] p-4">
           <div className="flex items-start gap-3">
-            <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600 dark:text-indigo-300" aria-hidden />
+            <Lightbulb className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600 dark:text-indigo-300" aria-hidden />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">Tidy up your inbox?</p>
               <p className="mt-0.5 text-[12.5px] text-muted-foreground">Archiving keeps everything searchable and restorable. Pinned notifications are never touched.</p>

@@ -11,10 +11,10 @@ import {
   Lock,
   MessageCircle,
   Plus,
-  Sparkles,
   Star,
   Trash2,
   UserRound,
+  Lightbulb,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -23,6 +23,7 @@ import { AmbientWash, GLASS, GlassGroup, PersonAvatar, primaryPill, quietPill, S
 import type { FriendCapsule, FriendGoal, FriendshipStory } from "@/lib/social/friendship/server";
 import { HEALTH_LABEL, HIDEABLE_KINDS, monthLabel, type StoryEvent } from "@/lib/social/friendship/story";
 import { cn, formatCompactNumber } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Friend Profile™ — one friendship, told as a story (Feature 19 · Part 7).
@@ -117,7 +118,7 @@ export function FriendshipPage({ story }: { story: FriendshipStory }) {
           <Link href={`/messages/new/${friend.id}`} prefetch={false} className={primaryPill}>
             <MessageCircle className="h-4 w-4" aria-hidden /> Message
           </Link>
-          <Link href={`/u/${friend.handle}`} prefetch={false} className={quietPill}>
+          <Link href={`${profilePath(friend.handle)}`} prefetch={false} className={quietPill}>
             <UserRound className="h-4 w-4" aria-hidden /> Profile
           </Link>
           <button type="button" onClick={exportJson} className={quietPill} aria-label="Download our story">
@@ -194,7 +195,7 @@ export function FriendshipPage({ story }: { story: FriendshipStory }) {
           <ul className="-mx-3 flex gap-3 overflow-x-auto px-3 pb-1 [scrollbar-width:none] sm:-mx-4 sm:px-4 [&::-webkit-scrollbar]:hidden">
             {story.mutuals.shown.map((m) => (
               <li key={m.id} className="w-16 shrink-0 text-center">
-                <Link href={`/u/${m.handle}`} prefetch={false} className="block">
+                <Link href={`${profilePath(m.handle)}`} prefetch={false} className="block">
                   <span className="mx-auto block w-fit">
                     <PersonAvatar user={m} size={52} />
                   </span>
@@ -318,7 +319,7 @@ function TimelineRow({ event, last, editing, onHide }: { event: StoryEvent; last
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-[14px] font-semibold leading-snug">
-          {special && event.kind === "anniversary" ? <Sparkles className="mr-1 inline h-3.5 w-3.5 text-rose-500" aria-hidden /> : null}
+          {special && event.kind === "anniversary" ? <Lightbulb className="mr-1 inline h-3.5 w-3.5 text-rose-500" aria-hidden /> : null}
           {event.title}
         </p>
         <p className="text-[12px] text-muted-foreground">
@@ -493,7 +494,7 @@ function Capsules({ friendId, first, initial, ready, anniversary }: { friendId: 
           {capsules.map((c) => (
             <li key={c.id} className="flex gap-3 px-3.5 py-3">
               <span aria-hidden className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl", c.locked ? "bg-black/[0.04] text-muted-foreground dark:bg-white/[0.07]" : "bg-primary/10 text-primary")}>
-                {c.locked ? <Hourglass className="h-[18px] w-[18px]" /> : <Sparkles className="h-[18px] w-[18px]" />}
+                {c.locked ? <Hourglass className="h-[18px] w-[18px]" /> : <Lightbulb className="h-[18px] w-[18px]" />}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-[14px] font-semibold">{c.title}</p>

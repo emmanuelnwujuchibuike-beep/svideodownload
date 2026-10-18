@@ -31,6 +31,7 @@ import { playSound } from "@/lib/notifications/sound-fx";
 import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
 import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { cn } from "@/lib/utils";
+import { isProfilePath, profilePath } from "@/lib/social/profile-url";
 
 /**
  * Bottom navigation — a FLOATING GLASS PILL (owner, 2026-10-09: "a genuinely
@@ -186,8 +187,8 @@ export function MobileNav({
     marketing doorway the OTHER nav correctly used. `/profile` is that
     doorway (app/(marketing)/profile).
   */
-  const profileHref = handle ? `/u/${handle}` : "/profile";
-  const profileActive = pathname.startsWith("/u/") || pathname.startsWith("/account") || pathname.startsWith("/profile");
+  const profileHref = handle ? profilePath(handle) : "/profile";
+  const profileActive = isProfilePath(pathname) || pathname.startsWith("/account") || pathname.startsWith("/profile");
   /*
     Surfaces where the CONTENT is full-bleed video and the nav should float over
     it rather than slab across it — see the note on the <nav> below. Only /reels

@@ -24,8 +24,8 @@ import {
   Repeat2,
   Send as SendIcon,
   Share2,
-  Sparkles,
   UserPlus,
+  Lightbulb,
 } from "lucide-react";
 import { VerifiedTick } from "@/components/badges/identity-badges";
 import { FrenzLogo } from "@/components/brand/frenz-logo";
@@ -76,12 +76,13 @@ import { isCategory } from "@/lib/social/categories";
 import { prefetchPostComments } from "@/lib/social/comments-cache";
 import { FrenzsaveError } from "@/lib/sdk";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
-import { postHref } from "@/lib/social/post-url";
+import { postHref, postViewHref } from "@/lib/social/post-url";
 import type { RepostAudience } from "@/lib/social/repost/audience";
 import { toggleRepost, useRepostState } from "@/lib/social/repost-store";
 import type { FeedItem } from "@/lib/social/home-feed";
 import type { SmartReason, SmartReasonTone } from "@/lib/social/smart-feed";
 import { cn, formatCompactNumber, formatDuration } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 // The mockup's eyebrow keeps its text muted and carries the tone in the DOT
 // (solid blue for follow, etc.) — replaces the old all-colored text chip.
@@ -664,7 +665,7 @@ function FeedPostCardImpl({
       */}
       <div className="flex gap-2 px-2 sm:px-3">
         <Link
-          href={`/u/${item.publisher.handle}`}
+          href={`${profilePath(item.publisher.handle)}`}
           className="shrink-0 self-start rounded-full bg-gradient-to-br from-primary/70 to-accent/70 p-[2px] "
         >
           {item.publisher.avatarUrl ? (
@@ -682,7 +683,7 @@ function FeedPostCardImpl({
               piece keeps a long name or handle from pushing the trailing
               F-mark/menu off the row instead of wrapping. */}
           <div className="flex items-center gap-1.5 text-[15px] leading-tight">
-            <Link href={`/u/${item.publisher.handle}`} className="flex min-w-0 shrink items-center gap-1 font-semibold hover:underline">
+            <Link href={`${profilePath(item.publisher.handle)}`} className="flex min-w-0 shrink items-center gap-1 font-semibold hover:underline">
               <span className="truncate">{item.publisher.displayName}</span>
               {item.publisher.isVerified ? <VerifiedTick className="h-3.5 w-3.5 shrink-0" /> : null}
             </Link>
@@ -770,7 +771,7 @@ function FeedPostCardImpl({
                       ) : null}
                       <MenuItem icon={FolderPlus} label="Save to collection" onClick={() => { setMenuOpen(false); setPickerReady(true); setPickerOpen(true); }} />
                       {item.category ? (
-                        <MenuItem icon={Sparkles} label="Content preferences" onClick={() => { setMenuOpen(false); setPrefsReady(true); setPrefsOpen(true); }} />
+                        <MenuItem icon={Lightbulb} label="Content preferences" onClick={() => { setMenuOpen(false); setPrefsReady(true); setPrefsOpen(true); }} />
                       ) : null}
                       <MenuItem icon={EyeOff} label="Hide this post" onClick={() => onRemove(item.id)} />
                       <MenuItem icon={Ban} label="Not interested" onClick={() => onRemove(item.id)} />
@@ -812,7 +813,7 @@ function FeedPostCardImpl({
               */}
               <FeedCaption text={title}>
                 <Link
-                  href={postHref(item)}
+                  href={postViewHref(item)}
                   onClick={(e) => {
                     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1) return;
                     e.preventDefault();

@@ -1,11 +1,11 @@
 "use client";
 
-import { Crown, Sparkles } from "lucide-react";
+import { Crown, Lightbulb } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { AiPlansSheet, relative } from "@/features/ai/credits/ai-plans-sheet";
 import { aiButtonClass } from "@/features/ai/design/ai-button";
-import { cancelAiPlan, getAiCredits, openAiPlanManage, type AiCreditsAnswer } from "@/lib/ai/credits/client";
+import { getAiCredits, openAiPlanManage, type AiCreditsAnswer } from "@/lib/ai/credits/client";
 import { formatCents } from "@/lib/ai/economy";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -103,23 +103,12 @@ export function AiCreditsCard({ className, refreshKey = 0, returnTo, compact = f
 
   const manage = useCallback(async () => {
     haptic("selection");
-    // 2026-10-07: a Bachs-billed plan has no hosted manage page — the member cancels through us, at the end of the paid period, after confirming
-    if (data?.entitlement.subscription?.provider === "bachs") {
-      const ends = data.entitlement.subscription.currentPeriodEnd ? new Date(data.entitlement.subscription.currentPeriodEnd).toLocaleDateString() : "the end of this period";
-      if (!window.confirm(`Cancel your plan? It stays active until ${ends}, then stops renewing.`)) return;
-      setManaging(true);
-      const res = await cancelAiPlan();
-      setManaging(false);
-      if (res.ok) void load();
-      else setError(res.error);
-      return;
-    }
     setManaging(true);
     const res = await openAiPlanManage();
     setManaging(false);
     if (res.ok) window.location.assign(res.url);
     else setError(res.error);
-  }, [data, load]);
+  }, []);
 
   if (!data) {
     return <div className={cn("h-28 animate-pulse rounded-[1.5rem] bg-secondary/60", className)} aria-busy="true" aria-label="Loading your AI allowance" />;
@@ -136,7 +125,7 @@ export function AiCreditsCard({ className, refreshKey = 0, returnTo, compact = f
         <section className={cn("relative overflow-hidden rounded-[1.5rem] bg-card px-4 py-4 ring-1 ring-inset ring-black/[0.07] shadow-[0_8px_24px_-20px_rgba(30,40,90,0.45)]", className)}>
           <div className="relative flex items-center gap-3">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500 text-white">
-              <Sparkles className="h-5 w-5" aria-hidden />
+              <Lightbulb className="h-5 w-5" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-[14px] font-bold">AI plans</p>
@@ -171,7 +160,7 @@ export function AiCreditsCard({ className, refreshKey = 0, returnTo, compact = f
         <div className="relative flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-              {top ? <Crown className="h-3.5 w-3.5 text-primary" aria-hidden /> : <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />}
+              {top ? <Crown className="h-3.5 w-3.5 text-primary" aria-hidden /> : <Lightbulb className="h-3.5 w-3.5 text-primary" aria-hidden />}
               {e.planLabel}
             </p>
             <p className="mt-1 text-[13px] text-muted-foreground">
@@ -207,9 +196,9 @@ export function AiCreditsCard({ className, refreshKey = 0, returnTo, compact = f
                 Upgrade to {data.plans.plans.find((p) => p.id === "ai_max")?.label ?? "AI Max"}
               </button>
             ) : null}
-            {e.subscription?.manageable && !(e.subscription.provider === "bachs" && e.subscription.cancelAtPeriodEnd) ? (
+            {e.subscription?.manageable ? (
               <button type="button" onClick={() => void manage()} disabled={managing} className={aiButtonClass({ variant: "secondary", size: "sm" })}>
-                {managing ? "Opening…" : e.subscription.provider === "bachs" ? "Cancel plan" : "Manage"}
+                {managing ? "Opening…" : "Manage"}
               </button>
             ) : null}
             {e.subscription?.cancelAtPeriodEnd && e.subscription.currentPeriodEnd ? <span className="text-[12px] text-muted-foreground">Ends {new Date(e.subscription.currentPeriodEnd).toLocaleDateString()}</span> : null}

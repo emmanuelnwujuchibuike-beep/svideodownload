@@ -1,3 +1,5 @@
+import { profilePath } from "@/lib/social/profile-url";
+
 /**
  * Creator Universe™ (Feature 15 · Part 9) — a map of the real connections
  * around a creator's work.
@@ -141,7 +143,7 @@ export function buildCreatorUniverse(input: UniverseInput): UniverseGraph {
         label: `@${c.handle}`,
         value: c.posts,
         avatarUrl: c.avatarUrl,
-        href: `/u/${c.handle}`,
+        href: `${profilePath(c.handle)}`,
       })),
       30,
     ),

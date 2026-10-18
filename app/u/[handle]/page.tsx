@@ -73,6 +73,8 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { subTabFor } from "@/lib/sub/profile";
 import { cn, formatCompactNumber } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
+import { SITE_URL } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
@@ -108,10 +110,12 @@ export async function generateMetadata({
   return {
     title: `${profile.displayName} (@${profile.handle})`,
     description: profile.bio ?? `${profile.displayName} on FrenzSave.`,
-    alternates: { canonical: `/u/${profile.handle}` },
+    alternates: { canonical: profilePath(profile.handle) },
     robots: { index: indexable, follow: indexable },
     openGraph: {
       type: "profile",
+      // the canonical /:handle (2026-10-17) — share previews and crawlers see the new form
+      url: profilePath(profile.handle),
       title: `${profile.displayName} (@${profile.handle})`,
       description: profile.bio ?? `${profile.displayName} on FrenzSave.`,
       images: profile.avatarUrl ? [{ url: profile.avatarUrl }] : undefined,
@@ -422,6 +426,7 @@ async function ProfileData({
   const ld = {
     "@context": "https://schema.org",
     "@type": "ProfilePage",
+    url: `${SITE_URL}${profilePath(profile.handle)}`,
     mainEntity: {
       "@type": "Person",
       name: profile.displayName,
@@ -737,9 +742,9 @@ async function ProfileData({
                           value={s.value}
                           href={
                             s.label === "Followers"
-                              ? `/u/${profile.handle}/followers`
+                              ? `${profilePath(profile.handle)}/followers`
                               : s.label === "Following"
-                                ? `/u/${profile.handle}/following`
+                                ? `${profilePath(profile.handle)}/following`
                                 : undefined
                           }
                         />
@@ -1001,8 +1006,8 @@ async function ProfileData({
                 {!profile.restricted ? (
                   <div className="mt-5 grid grid-cols-4 divide-x divide-border/50 overflow-hidden rounded-2xl border border-border/60 bg-card/50 ring-hairline">
                     <StatCell label="Posts" value={postsTotal} />
-                    <StatCell label="Followers" value={profile.followersCount} href={`/u/${profile.handle}/followers`} />
-                    <StatCell label="Following" value={profile.followingCount} href={`/u/${profile.handle}/following`} />
+                    <StatCell label="Followers" value={profile.followersCount} href={`${profilePath(profile.handle)}/followers`} />
+                    <StatCell label="Following" value={profile.followingCount} href={`${profilePath(profile.handle)}/following`} />
                     <StatCell label="Likes" value={totals.likes} />
                   </div>
                 ) : null}

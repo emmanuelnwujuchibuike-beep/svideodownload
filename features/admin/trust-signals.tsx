@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Admin → Moderation → Trust signals (Feature 19 · Part 16). Accounts that look
@@ -28,7 +29,7 @@ export function TrustSignals() {
           <ul className="mt-3 divide-y divide-border/60 rounded-2xl border border-border/70 text-sm">
             {rows.map((r) => (
               <li key={r.userId} className="px-3 py-2">
-                <a href={r.handle ? `/u/${r.handle}` : "#"} className="font-semibold">
+                <a href={r.handle ? `${profilePath(r.handle)}` : "#"} className="font-semibold">
                   {r.handle ? `@${r.handle}` : r.userId.slice(0, 8)}
                 </a>
                 <span className="block text-xs text-muted-foreground">{r.flags.map((f) => f.why).join(" · ")}</span>

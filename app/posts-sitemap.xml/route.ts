@@ -39,6 +39,8 @@ async function loadPosts(): Promise<Row[]> {
     .select("id, slug, category, created_at")
     .eq("status", "published")
     .eq("visibility", "public")
+    // a video post opens in the Reels viewer (noindex) since 2026-10-17 — its page redirects, so it is not listed
+    .neq("media_kind", "video")
     .order("created_at", { ascending: false })
     .limit(10000);
   if (!rich.error) return (rich.data ?? []) as Row[];
@@ -48,6 +50,8 @@ async function loadPosts(): Promise<Row[]> {
     .select("id, created_at")
     .eq("status", "published")
     .eq("visibility", "public")
+    // a video post opens in the Reels viewer (noindex) since 2026-10-17 — its page redirects, so it is not listed
+    .neq("media_kind", "video")
     .order("created_at", { ascending: false })
     .limit(10000);
   return ((fallback.data ?? []) as { id: string; created_at: string }[]).map((r) => ({

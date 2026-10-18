@@ -10,6 +10,7 @@ import {
   normalizeDirectLink,
   publicDirectLink,
 } from "./direct-link";
+import { planSeesAd } from "./plan-ads";
 
 const code = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 const OWNER_LINK = "https://uplcm.com/4/11476379";
@@ -68,6 +69,20 @@ describe("Monetag direct link (owner, 2026-10-16)", () => {
     // owner, 2026-10-16: "it should show everytime the selected area i told you is tapped"
     expect(body).not.toContain("sessionStorage");
     expect(body).toContain('window.open(c.url, "_blank", "noopener,noreferrer")');
+  });
+
+  it("Pro and Business never get it (owner, 2026-10-18) — the plain Free-only answer, no placement", () => {
+    const hook = code("features/monetization/use-direct-link.ts");
+    // useShowAds() with NO placement = ads only for Free. A placement would let
+    // Pro through wherever planSeesAd lists it (Reels, Feed, the download result).
+    expect(hook).toMatch(/useShowAds\(\)/);
+    expect(hook).toContain("if (!ready || !showAds) return;");
+    expect(planSeesAd("pro", null)).toBe(false);
+    expect(planSeesAd("business", null)).toBe(false);
+    expect(planSeesAd("free", null)).toBe(true);
+    // teeth: the same check fails on a hook that passes a Pro placement
+    expect("useShowAds(\"reels_interstitial\")").not.toMatch(/useShowAds\(\)/);
+    expect(planSeesAd("pro", "reels_interstitial")).toBe(true);
   });
 
   it("teeth: a broken normalizer or a served link that ignores the Monetag switch fails", () => {

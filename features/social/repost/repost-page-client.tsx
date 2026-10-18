@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { RepostGlyph } from "./repost-glyph";
 import { RepostInsightsSheet } from "./repost-insights-sheet";
 import { SocialRippleLoader } from "./social-ripple";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * The interactive half of the Repost Page (Feature 15 · Part 4).
@@ -149,7 +150,7 @@ export function RepostPageClient({
             {shown.map((e) => (
               <li key={e.repostId} className="rounded-2xl bg-secondary/40 p-3">
                 <div className="flex items-center gap-2.5">
-                  <Link href={`/u/${e.handle}`} className="shrink-0">
+                  <Link href={`${profilePath(e.handle)}`} className="shrink-0">
                     {e.avatarUrl ? (
                       <Image
                         src={e.avatarUrl}
@@ -163,7 +164,7 @@ export function RepostPageClient({
                     )}
                   </Link>
                   <div className="min-w-0 flex-1">
-                    <Link href={`/u/${e.handle}`} className="flex items-center gap-1 text-sm font-semibold hover:underline">
+                    <Link href={`${profilePath(e.handle)}`} className="flex items-center gap-1 text-sm font-semibold hover:underline">
                       <span className="truncate">{e.displayName || `@${e.handle}`}</span>
                       {e.isVerified ? <VerifiedTick className="h-3.5 w-3.5 shrink-0" /> : null}
                     </Link>

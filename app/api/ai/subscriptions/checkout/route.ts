@@ -2,12 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { aiPlanRank } from "@/lib/ai/credits/config";
-import { beginBachsPlanCheckout } from "@/lib/ai/credits/bachs-plans";
 import { AI_PLAN_PURPOSE } from "@/lib/ai/credits/paystack";
 import { getAiSubscription } from "@/lib/ai/credits/subscription";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { initializeTransaction, isPaystackPlanNotFound, paystackEnabled } from "@/lib/paystack/paystack";
-import { bachsConfigured } from "@/lib/payments/bachs";
 import { paymentMarket, routePayment } from "@/lib/payments/router";
 import { aiJobCreateLimiter } from "@/lib/rate-limit";
 import { SITE_URL } from "@/lib/site";
@@ -24,7 +22,9 @@ export const dynamic = "force-dynamic";
  * activated here — the webhook and the verify-on-return route do that
  * after Paystack confirms the charge.
  */
-const schema = z.object({ plan: z.enum(["ai_pro", "ai_max"]), returnTo: z.string().max(200).optional(), provider: z.enum(["paystack", "bachs"]).optional() }).strict();
+// `provider` is only a preference the router may honour among what it offers (Paystack alone since 2026-10-17);
+// a cached app still sending "bachs" is not refused — the preference is simply not offered
+const schema = z.object({ plan: z.enum(["ai_pro", "ai_max"]), returnTo: z.string().max(200).optional(), provider: z.string().max(20).optional() }).strict();
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -60,25 +60,15 @@ export async function POST(request: Request) {
   const returnTo = parsed.data.returnTo && /^\/(?!\/)[A-Za-z0-9\-._~/?#[\]@!$&'()*+,;=%]*$/.test(parsed.data.returnTo) ? parsed.data.returnTo : "/studio/ai/usage";
 
   /*
-    ── WHICH RAIL (owner, 2026-10-07) ─────────────────────────────────────
-    Nigeria → Bachs (the plan's recurring product), Paystack the fallback;
-    elsewhere Paystack — the admin's routing table, the market from the edge
-    only (lib/payments/router.ts). A rail is usable when it is configured AND
-    this plan has its id on it. The next is tried only when the previous could
-    not CREATE a checkout — nothing was shown, so nothing can have been paid.
+    ── WHICH RAIL ─────────────────────────────────────────────────────────
+    The admin's routing table, the market from the edge only
+    (lib/payments/router.ts). Paystack is the only rail since Bachs was
+    removed (2026-10-17); it is usable when configured AND this plan has a
+    Paystack plan code.
   */
   const paystackOk = (await paystackEnabled()) && !!plan.paystackPlanCode;
-  const candidates = routePayment({ purpose: "ai_subscription", market: paymentMarket(request.headers), routing: plans.wallet.routing, usable: (p) => (p === "bachs" ? bachsConfigured() && !!plan.bachsProductId : paystackOk), preferred: plans.wallet.memberChoice ? parsed.data.provider : undefined });
+  const candidates = routePayment({ purpose: "ai_subscription", market: paymentMarket(request.headers), routing: plans.wallet.routing, usable: () => paystackOk, preferred: plans.wallet.memberChoice ? parsed.data.provider : undefined });
   if (!candidates.length) return NextResponse.json({ error: "That plan isn't available for purchase yet." }, { status: 503 });
-  if (candidates[0] === "bachs") {
-    const started = await beginBachsPlanCheckout({ userId: user.id, email: user.email, plan: parsed.data.plan, config: plans, successUrl: `${base}${returnTo}`, cancelUrl: `${base}${returnTo}` });
-    if (started.ok) {
-      console.info("[payments] checkout_created", { provider: "bachs", purpose: "ai_subscription", userId: user.id, plan: parsed.data.plan });
-      return NextResponse.json({ url: started.url, provider: "bachs" });
-    }
-    if (!candidates.includes("paystack")) return NextResponse.json({ error: started.error }, { status: started.status });
-    console.warn("[payments] fallback_triggered", { purpose: "ai_subscription", from: "bachs", to: "paystack", userId: user.id });
-  }
 
   try {
     const url = await initializeTransaction({

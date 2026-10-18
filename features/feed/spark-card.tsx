@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowRight, Download, PartyPopper, Sparkles, Users, UsersRound } from "lucide-react";
+import { ArrowRight, Download, PartyPopper, Users, UsersRound, Lightbulb } from "lucide-react";
 import Link from "next/link";
 import { memo, type ComponentType } from "react";
 
@@ -17,7 +17,7 @@ const TINT: Record<SparkCardData["kind"], string> = {
 
 // Colorless line icons in place of emoji (see [[no-emoji-design]]).
 const ICON: Record<SparkCardData["kind"], ComponentType<{ className?: string }>> = {
-  creator: Sparkles,
+  creator: Lightbulb,
   download: Download,
   friends: UsersRound,
   community: Users,

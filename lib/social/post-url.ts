@@ -49,3 +49,17 @@ export function postHref(post: PostLinkable): string {
   }
   return `/p/${post.id}`;
 }
+
+/** A post opened in the Reels viewer, starting on it (app/(app)/reels/page.tsx `?start=`). */
+export function reelsViewHref(id: string): string {
+  return `/reels?start=${encodeURIComponent(id)}`;
+}
+
+/**
+ * Where tapping a post goes (owner, 2026-10-17: "all route of view should open in reels
+ * viewer"): a VIDEO opens in the Reels viewer; a photo or text post keeps its post page.
+ * The post pages redirect a video the same way, so an old or shared link lands there too.
+ */
+export function postViewHref(post: PostLinkable & { mediaKind?: string | null; media_kind?: string | null }): string {
+  return (post.mediaKind ?? post.media_kind) === "video" ? reelsViewHref(post.id) : postHref(post);
+}

@@ -66,19 +66,20 @@ export function InboxMobileChrome() {
       // `bg-background` (so the list scrolls UNDER it, never shows through), the
       // same `px-3 pt-3.5` insets, and pinned below the status-bar safe area.
       // `lg:hidden` — desktop keeps the inbox in the Glass Split pane, untouched.
-      className="fixed inset-x-0 top-[var(--frenz-safe-top)] z-30 mx-auto max-w-[1600px] bg-background px-3 pt-3 lg:hidden"
+      className="frenz-ui fixed inset-x-0 top-[var(--frenz-safe-top)] z-30 mx-auto max-w-[1600px] bg-frenz-page px-3 pt-4 lg:hidden"
     >
       {/* Tighter (2026-10-09 reference: "tighter header … less vertical space"). */}
+      {/* The design's header (design/Messages.dc.html, 2026-10-18): the title in Sora and the three
+          circles. The "Stay connected…" line is not in the design and went with it. */}
       <div className="mb-2.5">
-        <div className="flex items-start justify-between gap-2">
-          <h1 className="flex items-center gap-1.5 pl-1 text-[24px] font-bold leading-tight tracking-[-0.03em] min-[360px]:text-[28px]">
+        <div className="flex items-center justify-between gap-2">
+          <h1 className="m-0 flex items-center gap-1.5 pl-1 font-heading text-[23px] font-extrabold leading-tight tracking-[-1px] text-frenz-ink min-[360px]:text-[26px] min-[390px]:text-[30px]">
             Messages
             <InboxUnreadDot />
           </h1>
           <InboxHeaderActions />
         </div>
         {/* owner 2026-10-09: the streak moved to your own profile page (StreakHeaderChip). */}
-        <p className="mt-1 min-w-0 pl-1.5 text-xs text-muted-foreground">Stay connected with the people you care about</p>
       </div>
       {/* no stories for a signed-out visitor: no "Your story" placeholder, nothing fetched (owner, 2026-10-16) */}
       {guest ? null : <InboxStoriesRow />}

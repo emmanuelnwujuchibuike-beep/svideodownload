@@ -20,9 +20,10 @@ describe("inbox header actions", () => {
     expect(header).toMatch(/<TapOnceLink\s+href="\/friends"\s+spinner=\{false\}/);
     expect(header).not.toContain("SuggestionsLauncher");
   });
-  it("all three circles share one class; a bolder stroke; no animation library on the trigger", () => {
-    expect(header).toContain('const CIRCLE = "frenz-inbox-action flex h-9 w-9 items-center justify-center rounded-full text-foreground min-[360px]:h-10 min-[360px]:w-10";');
-    expect(header).toContain("<ComposeLauncher className={CIRCLE} iconClassName={ICON} strokeWidth={STROKE} />");
+  it("the circles share one class at 44px; New message is the gradient one (design, 2026-10-18); no animation library on the trigger", () => {
+    expect(header).toContain('const CIRCLE = "frenz-inbox-action flex h-11 w-11 items-center justify-center rounded-full text-frenz-ink";');
+    expect(header).toContain('const COMPOSE = "frenz-inbox-action frenz-inbox-action--primary flex h-11 w-11 items-center justify-center rounded-full text-white";');
+    expect(header).toContain("<ComposeLauncher className={COMPOSE} iconClassName={ICON} strokeWidth={STROKE} />");
     expect(header).not.toContain("whileTap");
   });
   it("presses on finger-down and stays pressed while the page is on its way", () => {

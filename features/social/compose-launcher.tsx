@@ -1,6 +1,8 @@
 "use client";
 
-import { PenSquare, UsersRound, X } from "lucide-react";
+import { UsersRound, X } from "lucide-react";
+
+import { PencilIcon } from "@/features/frenz-ui/icons";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -77,7 +79,7 @@ export function ComposeLauncher({ className, iconClassName = "h-[18px] w-[18px]"
         // a caller's className is the whole look (the inbox's glass circle); the default is the plain icon button
         className={className ? cn("flex shrink-0 items-center justify-center", className) : "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"}
       >
-        <PenSquare className={iconClassName} strokeWidth={strokeWidth} aria-hidden />
+        <PencilIcon className={iconClassName} strokeWidth={strokeWidth ?? 2.2} />
       </button>
 
       {open

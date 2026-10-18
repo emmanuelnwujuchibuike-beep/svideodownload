@@ -11,7 +11,8 @@ const inbox = strip(code("features/social/inbox.ts"));
 
 function searchOk(src: string): boolean {
   const input = src.match(/aria-label="Search conversations"[\s\S]*?className="([^"]*)"/)?.[1] ?? "";
-  return /\bh-\[3\.25rem\]/.test(input) && /\btext-base\b/.test(input) && !/\bglass\b/.test(input) && /deferredQ\.trim\(\)/.test(src);
+  // 2026-10-18 (design): a 48px field on the input fill — still 16px text, still no frosted glass
+  return /\bh-12\b/.test(input) && /\bbg-frenz-fill\b/.test(input) && /\btext-base\b/.test(input) && !/\bglass\b/.test(input) && /deferredQ\.trim\(\)/.test(src);
 }
 
 function patchesOnly(src: string): boolean {
@@ -26,21 +27,21 @@ function patchesOnly(src: string): boolean {
 }
 
 describe("Messages: search, tabs and rows", () => {
-  it("search is a plain 52px pill, 16px text (no iOS zoom), filtered from a deferred query", () => {
+  it("search is a plain 48px field on the input fill, 16px text (no iOS zoom), filtered from a deferred query", () => {
     expect(searchOk(list)).toBe(true);
   });
   it("teeth: the frosted field or a 14px input fails", () => {
-    expect(searchOk(list.replace("h-[3.25rem] w-full rounded-full", "glass h-[3.25rem] w-full rounded-full"))).toBe(false);
+    expect(searchOk(list.replace("h-12 w-full rounded-2xl", "glass h-12 w-full rounded-2xl"))).toBe(false);
     expect(searchOk(list.replace("pr-12 text-base", "pr-12 text-sm"))).toBe(false);
   });
-  it("tabs scroll sideways instead of squeezing, with 44px targets", () => {
-    expect(list).toMatch(/sticky top-0 z-10 mb-1 flex items-center gap-0.5 overflow-x-auto/);
-    expect(list).toMatch(/relative flex h-11 shrink-0 items-center gap-1\.5 whitespace-nowrap px-2/);
+  it("filter chips scroll sideways instead of squeezing, with 44px targets (a 36px pill + its hit area)", () => {
+    expect(list).toMatch(/sticky top-0 z-10 mb-2 flex items-center gap-2 overflow-x-auto/);
+    expect(list).toMatch(/relative flex h-9 shrink-0 items-center gap-1\.5 whitespace-nowrap rounded-full px-3\.5[^"]*before:-inset-y-1/);
   });
   it("row avatars are sized and lazy; unread without a count still shows a dot", () => {
     // 2026-10-09: StableAvatar (never reloads on back-swipe) carries the size and lazy loading; it decodes async until seen
-    expect((list.match(/<StableAvatar width=\{52\} height=\{52\} loading="lazy"/g) ?? []).length).toBe(2);
-    expect(list).toMatch(/\) : c\.unread \? \(\s*<span className="mt-1 h-2\.5 w-2\.5 rounded-full bg-blue-600/);
+    expect((list.match(/<StableAvatar width=\{50\} height=\{50\} loading="lazy"/g) ?? []).length).toBe(2);
+    expect(list).toMatch(/\) : c\.unread \? \(\s*<span className="mt-1 h-2\.5 w-2\.5 rounded-full bg-frenz-blue/);
   });
   it("stories sit 12px above the search pill — not flush, not a gap (owner, 2026-10-09)", () => {
     expect(code("features/social/inbox-stories-row.tsx")).toContain('<section aria-label="Stories" className="pb-2">');

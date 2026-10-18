@@ -41,6 +41,7 @@ import type { FriendRequestItem } from "@/lib/social/friends";
 import type { ConversationSummary } from "@/lib/social/messages";
 import { ChatStreakBadge, ChatStreakCelebrations } from "@/features/social/chat-streak";
 import { cn } from "@/lib/utils";
+import { VerifiedBadge } from "@/features/frenz-ui/primitives";
 
 /** How many threads the inbox pre-loads, in display order. The room's own
  *  thread cache holds 10, so warming past this would only evict what it just
@@ -483,17 +484,17 @@ export function ConversationList({
   const empty = conversations.length === 0 && requests.length === 0;
   if (empty) {
     return (
-      <div className={cn("rounded-2xl border border-dashed border-border/70 p-10 text-center text-sm text-muted-foreground", pane && "m-3")}>
+      <div className={cn("rounded-[22px] border border-frenz-line bg-frenz-card p-10 text-center text-sm text-frenz-muted", pane && "m-3")}>
         No conversations yet. Open someone&apos;s profile and tap Message to start one.
       </div>
     );
   }
 
+  const unreadChats = notArchived.filter((c) => c.unread).length;
   const tabs: { id: InboxTab; label: string; badge: number }[] = [
     { id: "all", label: "All", badge: notArchived.length },
-    // No counts on Unread / Groups (2026-10-09 reference): all five tabs now fit a
-    // 390px phone. The unread rows carry their own counts, and the Chats tab its badge.
-    { id: "unread", label: "Unread", badge: 0 },
+    // The design's chips (design/Messages.dc.html, 2026-10-18) count All and Unread — real numbers.
+    { id: "unread", label: "Unread", badge: unreadChats },
     { id: "groups", label: "Groups", badge: 0 },
     { id: "requests", label: "Requests", badge: requests.length },
     // Owner-scoped: a real tab in the filter row (matching the mockup) backed
@@ -514,15 +515,15 @@ export function ConversationList({
         iOS Safari does not zoom the page when it takes focus.
       */}
       <label className={cn("relative block", pane ? "mx-3 mb-2" : "mb-2.5")}>
-        <Search aria-hidden className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground" />
+        <Search aria-hidden className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-frenz-muted" />
         <input
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search messages, users, groups…"
+          placeholder="Search people and messages"
           aria-label="Search conversations"
           enterKeyHint="search"
-          className="h-[3.25rem] w-full rounded-full border border-slate-200 bg-white pl-11 pr-12 text-base shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition placeholder:text-[15px] placeholder:text-muted-foreground/70 focus:border-violet-400/60 focus:ring-2 focus:ring-violet-500/20 dark:border-white/10 dark:bg-white/[0.04]"
+          className="h-12 w-full rounded-2xl border-0 bg-frenz-fill pl-11 pr-12 text-base text-frenz-ink outline-none transition placeholder:text-[15px] placeholder:text-frenz-muted focus:ring-2 focus:ring-frenz-violet/40"
         />
         <button
           type="button"
@@ -535,7 +536,7 @@ export function ConversationList({
           className={cn(
             // a 40px target (was 24px) for the filter control
             "absolute right-1.5 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-            showArchived ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+            showArchived ? "bg-frenz-violet/10 text-frenz-violet" : "text-frenz-muted hover:bg-frenz-card hover:text-frenz-ink",
           )}
         >
           <SlidersHorizontal className="h-[18px] w-[18px]" aria-hidden />
@@ -563,7 +564,8 @@ export function ConversationList({
       <div
         className={cn(
           // Scrolls sideways rather than squeezing on a narrow phone (2026-10-09).
-          "sticky top-0 z-10 mb-1 flex items-center gap-0.5 overflow-x-auto border-b border-border/40 bg-background [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          // the design's pill chips on the white page; still sticky under the header (owner, 2026-08-16)
+          "sticky top-0 z-10 mb-2 flex items-center gap-2 overflow-x-auto bg-frenz-page py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
           pane && "mx-3",
         )}
         role="tablist"
@@ -583,31 +585,22 @@ export function ConversationList({
                 setTab(t.id);
               }}
               className={cn(
-                // 44px tall, padded each side — a real target, not just the word
-                "relative flex h-11 shrink-0 items-center gap-1.5 whitespace-nowrap px-2 text-[15px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
-                active ? "font-bold text-foreground" : "font-medium text-muted-foreground hover:text-foreground",
+                // a 36 px pill with a 44 px hit area (the ::before), as drawn
+                "relative flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-sm transition-colors before:absolute before:-inset-y-1 before:inset-x-0 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet",
+                active ? "bg-frenz-ink font-bold text-frenz-page" : "border border-frenz-line bg-frenz-card font-semibold text-frenz-ink/80 hover:text-frenz-ink",
               )}
             >
               {t.label}
               {t.badge > 0 ? (
                 <span
                   className={cn(
-                    "flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold",
-                    active ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white" : "bg-secondary text-muted-foreground",
+                    "rounded-full px-1.5 py-px text-[11px] font-bold tabular-nums",
+                    active ? "bg-white/20 text-frenz-page" : "bg-frenz-violet/10 text-frenz-violet",
                   )}
                 >
                   {t.badge > 99 ? "99+" : t.badge}
                 </span>
               ) : null}
-              {/* The indicator is always present and only scales in (transform + opacity), so
-                  switching tabs is a composited fade rather than an element appearing. */}
-              <span
-                aria-hidden
-                className={cn(
-                  "absolute -bottom-px left-1.5 right-1.5 h-[3px] rounded-full bg-gradient-to-r from-blue-600 to-violet-600 transition-[transform,opacity] duration-200 motion-reduce:transition-none",
-                  active ? "scale-x-100 opacity-100" : "scale-x-50 opacity-0",
-                )}
-              />
             </button>
           );
         })}
@@ -634,7 +627,7 @@ export function ConversationList({
       {tab === "requests" && !showArchived ? (
         <ul className={cn("space-y-2", pane && "min-h-0 flex-1 overflow-y-auto overscroll-y-none px-3 pb-3")}>
           {requests.map((req) => (
-            <li key={req.id} className="glass flex items-center gap-3 rounded-2xl p-3">
+            <li key={req.id} className="flex items-center gap-3 rounded-[22px] border border-frenz-line bg-frenz-card p-3">
               {req.user.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={req.user.avatarUrl} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover ring-2 ring-violet-500/25" />
@@ -655,7 +648,7 @@ export function ConversationList({
                     type="button"
                     disabled={requestBusyId === req.id}
                     onClick={() => respondToRequest(req, "accept")}
-                    className="bg-brand flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:opacity-95 disabled:opacity-50"
+                    className="flex min-h-9 items-center gap-1.5 rounded-full bg-frenz-violet px-4 text-xs font-bold text-white transition hover:opacity-95 disabled:opacity-50"
                   >
                     {requestBusyId === req.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                     Accept
@@ -664,7 +657,7 @@ export function ConversationList({
                     type="button"
                     disabled={requestBusyId === req.id}
                     onClick={() => respondToRequest(req, "decline")}
-                    className="flex items-center gap-1.5 rounded-full border border-border/70 px-4 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-50"
+                    className="flex min-h-9 items-center gap-1.5 rounded-full border border-frenz-line px-4 text-xs font-bold text-frenz-ink/80 transition hover:bg-frenz-fill disabled:opacity-50"
                   >
                     <X className="h-3.5 w-3.5" /> Decline
                   </button>
@@ -687,6 +680,9 @@ export function ConversationList({
             // a WhatsApp/iMessage chat list. (Was space-y-2 / 8px, which read
             // as detached cards rather than one continuous list.)
             "space-y-0",
+            // edge to edge (owner, 2026-10-18: "Chats should reach the extreme edges") — out past the page gutter,
+            // white rows divided by the hairline, no card around them
+            !pane && "-mx-3 border-y border-frenz-line bg-frenz-card",
             pane && "min-h-0 flex-1 overflow-y-auto overscroll-y-none px-2 pb-3",
           )}
         >
@@ -849,7 +845,7 @@ function ConversationRow({
     // `border-b` per row (last row omits it) gives exactly one divider line
     // between adjacent rows instead of the previous stacked top+bottom borders
     // that a between-row gap forced.
-    <li className="relative flex items-center overflow-hidden border-b border-border/40 last:border-b-0">
+    <li className="relative flex items-center overflow-hidden border-b border-frenz-line last:border-b-0">
       {/* Revealed strip — sits BEHIND the row, only visible once dragged/opened. */}
       <div className="absolute inset-y-0 right-0 flex items-center gap-1.5 pr-1" style={{ width: SWIPE_STRIP_WIDTH }}>
         <button
@@ -913,7 +909,7 @@ function ConversationRow({
           setSwipeOpen(shouldOpen);
           if (shouldOpen) haptic("light");
         }}
-        className="relative z-10 flex w-full items-center bg-background"
+        className="relative z-10 flex w-full items-center bg-frenz-card"
       >
       {/* Owner ask: the avatar should sit at the very edge on mobile — was
           double-inset (the page container's own px-3 PLUS this row's own
@@ -941,10 +937,9 @@ function ConversationRow({
           // rounded-none (2026-07-16): rows are flush WhatsApp-style now, so
           // the tap/active highlight fills the full-width row rectangle instead
           // of a floating rounded card.
-          "frenz-conversation-row -ml-2 flex min-w-0 flex-1 items-center gap-3 rounded-none py-4 pl-0 pr-3 transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
-          active
-            ? "bg-gradient-to-r from-blue-500/[0.10] to-violet-500/[0.10] ring-1 ring-inset ring-violet-500/25"
-            : "hover:bg-secondary/40",
+          // the design's 74 px row inside the card (design/Messages.dc.html, 2026-10-18)
+          "frenz-conversation-row flex min-h-[74px] min-w-0 flex-1 items-center gap-3 rounded-none px-4 py-3 text-frenz-ink transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-frenz-violet",
+          active ? "bg-frenz-violet/10" : "hover:bg-frenz-fill",
         )}
       >
         {/* Left-edge unread dot (owner mockup) — a small bullet ahead of the
@@ -953,44 +948,40 @@ function ConversationRow({
             rows still align instead of the row visibly shifting. */}
         {/* The unread mark moved to the RIGHT, under the time (2026-10-09 reference:
             "stronger unread state — unread dot / count"); a spacer keeps the edge. */}
-        <span aria-hidden className="w-1.5 shrink-0" />
+        {/* The design's plain 50 px avatar (design/Messages.dc.html, 2026-10-18) — no ring on every row;
+            the green dot when the person is online now (the presence set this row already gets). */}
         <span className="relative shrink-0">
-          {/* Vivid gradient ring (owner mockup) — a padded `bg-brand` wrapper,
-              not a thin `ring-*` outline, so every avatar in the list reads as
-              distinctly bordered like the mockup, matching the same trick
-              used on the pinned strip above and stories-row.tsx elsewhere. */}
-          <span className="bg-brand block rounded-full p-[2.5px]">
-            {isGroup ? (
-              c.avatarUrl ? (
-                <StableAvatar width={52} height={52} loading="lazy" src={c.avatarUrl} className="h-[52px] w-[52px] rounded-full object-cover ring-2 ring-card" />
-              ) : (
-                // The inbox list doesn't fetch per-member avatars (would add a
-                // query per group just for this) — a group without a custom
-                // photo falls back to the stack placeholder; the real
-                // overlapping-avatars rendering lives in the thread header.
-                <span className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-brand-tile ring-2 ring-card">
-                  <GroupAvatarStack avatars={[]} />
-                </span>
-              )
-            ) : c.other!.avatarUrl ? (
-              <StableAvatar width={52} height={52} loading="lazy" src={c.other!.avatarUrl} className="h-[52px] w-[52px] rounded-full object-cover ring-2 ring-card" />
+          {isGroup ? (
+            c.avatarUrl ? (
+              <StableAvatar width={50} height={50} loading="lazy" src={c.avatarUrl} className="h-[50px] w-[50px] rounded-full object-cover" />
             ) : (
-              <span className="bg-brand flex h-[52px] w-[52px] items-center justify-center rounded-full text-lg font-bold text-white ring-2 ring-card">
-                {name.charAt(0).toUpperCase()}
+              // The inbox list doesn't fetch per-member avatars (a query per group just for this) — a
+              // group without a custom photo falls back to the stack placeholder.
+              <span className="flex h-[50px] w-[50px] items-center justify-center rounded-full bg-brand-tile">
+                <GroupAvatarStack avatars={[]} />
               </span>
-            )}
-          </span>
+            )
+          ) : c.other!.avatarUrl ? (
+            <StableAvatar width={50} height={50} loading="lazy" src={c.other!.avatarUrl} className="h-[50px] w-[50px] rounded-full object-cover" />
+          ) : (
+            <span className="flex h-[50px] w-[50px] items-center justify-center rounded-full bg-frenz-gradient font-heading text-lg font-bold text-white">
+              {name.charAt(0).toUpperCase()}
+            </span>
+          )}
+          {!isGroup && onlineSet.has(c.other!.id) ? (
+            <span role="img" aria-label="Online" className="absolute bottom-px right-px h-[13px] w-[13px] rounded-full border-[2.5px] border-frenz-card bg-emerald-500" />
+          ) : null}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className={cn("truncate text-base leading-tight", c.unread ? "font-bold" : "font-semibold")}>{name}</span>
-            {!isGroup && c.other!.isVerified ? <VerifiedTick className="h-3.5 w-3.5 shrink-0" /> : null}
+            <span className={cn("truncate text-base leading-tight", c.unread ? "font-extrabold" : "font-bold")}>{name}</span>
+            {!isGroup && c.other!.isVerified ? <VerifiedBadge size={15} /> : null}
             {/* 0200 (owner, 2026-10-09): the streak lives here now — beside anyone you have both talked to on 2+ days in a row */}
             {!isGroup ? <ChatStreakBadge days={c.streakDays ?? 0} /> : null}
-            {c.muted ? <BellOff className="h-3 w-3 shrink-0 text-muted-foreground" /> : null}
+            {c.muted ? <BellOff className="h-3 w-3 shrink-0 text-frenz-muted" /> : null}
           </div>
           {isTyping ? (
-            <p className="mt-0.5 flex items-center gap-1 truncate text-sm font-medium text-violet-500 dark:text-violet-300">
+            <p className="mt-0.5 flex items-center gap-1 truncate text-sm font-bold text-frenz-violet">
               <span className="truncate">Typing…</span>
               <span className="flex items-center gap-0.5" aria-hidden>
                 <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:-0.2s]" />
@@ -999,7 +990,7 @@ function ConversationRow({
               </span>
             </p>
           ) : (
-            <p className={cn("mt-1 flex items-center gap-1 truncate text-sm", c.unread ? "font-semibold text-foreground" : "text-muted-foreground")}>
+            <p className={cn("mt-1 flex items-center gap-1 truncate text-sm", c.unread ? "font-bold text-frenz-ink" : "font-medium text-frenz-muted")}>
               {c.fromMe ? <LastStatusTicks status={c.lastStatus} /> : null}
               {/* A real icon for what kind of message this was — never an
                   emoji standing in for one (standing app rule). */}
@@ -1012,19 +1003,20 @@ function ConversationRow({
           )}
         </div>
         <span className="flex shrink-0 flex-col items-end gap-1.5 self-stretch py-0.5">
-          <span className={cn("text-xs", c.unread ? "font-semibold text-violet-500 dark:text-violet-300" : "text-muted-foreground")}>{timeAgo(c.lastAt)}</span>
+          <span className={cn("text-xs font-semibold", c.unread ? "text-frenz-violet" : "text-frenz-muted")}>{timeAgo(c.lastAt)}</span>
           {c.unreadCount > 0 && !c.muted ? (
-            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-1.5 text-[10px] font-bold text-white">
+            /* an unread count — a small badge, so the brand gradient is allowed (owner, 2026-10-18) */
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-frenz-gradient-x px-1.5 text-[11px] font-extrabold text-white">
               {c.unreadCount > 99 ? "99+" : c.unreadCount}
               <span className="sr-only"> unread</span>
             </span>
           ) : c.unread ? (
             // unread without a count (or muted): the reference's quiet blue dot
-            <span className="mt-1 h-2.5 w-2.5 rounded-full bg-blue-600 dark:bg-blue-400">
+            <span className="mt-1 h-2.5 w-2.5 rounded-full bg-frenz-blue">
               <span className="sr-only">Unread</span>
             </span>
           ) : c.pinned ? (
-            <Pin className="h-3.5 w-3.5 text-muted-foreground/70" />
+            <Pin role="img" aria-label="Pinned" className="h-3.5 w-3.5 text-frenz-muted" />
           ) : null}
         </span>
       </Link>

@@ -7,7 +7,7 @@ review before the next one starts.
 - [x] 0. Foundation (tokens, fonts, BottomNav, VerifiedBadge, Avatar, IconButton, SectionHeader, Card, Input, SegmentedControl) — frenz-* tokens + Sora/Hanken fonts, shared primitives in features/frenz-ui, the existing bottom nav restyled to the design with a white fade.
 - [x] 1. Home / Download → design/Main.dc.html — existing H1 in Bricolage, the paste card on the real download flow, Batch download, live transfers, Tools (Frenz AI, Wallpapers, Earn, Exclusive, Explore) where Recent was, Cloud storage; lighter page.
 - [x] 2. Feed → design/Feed.dc.html — tab row (For You · Following · Reels · Exclusive) above the stories, 64 px story rings, the stacked post card, full-width media capped to one screen.
-- [ ] 3. Messages → design/Messages.dc.html
+- [x] 3. Messages → design/Messages.dc.html — Sora header with Add friends / More / gradient New message, stories above the fill search, pill filters with real counts, edge-to-edge rows.
 - [ ] 4. Chat → design/Chat.dc.html
 - [ ] 5. Profile → design/Profile.dc.html (updated 2026-10-18: the "Private" tab is "Exclusive" and opens the Exclusive tab view)
 - [ ] 6. History → design/History.dc.html (owner's screenshot, 2026-10-18; the .dc.html is not in the folder yet)
@@ -134,6 +134,30 @@ they are applied while each page is built and there is no separate cleanup step.
   pill and "Explore everything" are white cards or flat violet now.
 - Not matched: the design's heart + "1" like — the app's like is the Wow reaction with
   its picker; kept, coloured magenta when active.
+
+### Step 3 · Messages (/messages)
+- Header: "Messages" in Sora 30 px (23–26 px under 390 px so it fits 320 px), then three
+  44 px circles: Add friends (opens the existing /friends flow, go-once link), More (the
+  existing tools menu: search, presence, notifications, Secret Chats) and New message —
+  the one gradient circle (compose is a primary action). The avatar menu left the row;
+  the bottom nav's profile button opens the same profile. The "Stay connected…" line is
+  not in the design and is gone.
+- Stories stay above the search field (owner, 2026-10-18), compact rings — not in the
+  design, kept on the owner's word.
+- Search: the #F1F0F6 field, "Search people and messages", 16 px text; the archived
+  toggle stays inside it.
+- Filters: the design's pills (ink when chosen). All and Unread show real counts again
+  (the 2026-10-09 rule hid the Unread count; the newer design shows it), Requests its real
+  count, Channels keeps its "coming soon" state.
+- List: edge to edge (owner: "Chats should reach the extreme edges") — white rows divided
+  by the hairline, no card. Plain 50 px avatars (the gradient ring on every row is gone),
+  the green online dot from the real presence set, the design seal, gradient unread badge
+  (a small badge — allowed). Swipe actions, menus, typing, streaks and pins unchanged.
+- Removed: the inbox page's decorative blue corner glow (owner: no washes).
+- Not matched: the design's "OFFICIAL" tag — the app has no official-account flag; not
+  invented.
+- The uncommitted typing fix (0259/0260) also edits conversation-list.tsx: only the
+  redesign hunks were committed; the typing fix stays unstaged for the owner's review.
 
 ### Outside the page steps (owner, 2026-10-18)
 - `a50b9cd`: full-screen ads lost the engagement tray (brand badge, Like, views,

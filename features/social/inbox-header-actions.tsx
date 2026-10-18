@@ -1,12 +1,12 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Lock, MoreVertical, PenSquare, UserPlus } from "lucide-react";
+import { Lock } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { UserMenu } from "@/features/auth/user-menu";
+import { DotsIcon, PencilIcon, UserPlusIcon } from "@/features/frenz-ui/icons";
 import { ComposeLauncher } from "@/features/social/compose-launcher";
 import { GuestSignInModal, useIsGuest } from "@/features/social/guest-chat";
 import { MessageSearchLauncher } from "@/features/social/message-search-launcher";
@@ -22,9 +22,15 @@ import { springs } from "@/lib/motion/springs";
    with no extra JS. It presses on finger-DOWN (:active / data-pending), and the icons
    use a heavier stroke. */
 // below 360 px the row was 12 px wider than the screen (the avatar clipped): 36 px circles and 4 px gaps there
-const CIRCLE = "frenz-inbox-action flex h-9 w-9 items-center justify-center rounded-full text-foreground min-[360px]:h-10 min-[360px]:w-10";
-const ICON = "h-[19px] w-[19px]";
-const STROKE = 2.3;
+/*
+  The design's header buttons (design/Messages.dc.html, 2026-10-18): 44 px white circles with the
+  hairline; New message is the one gradient circle (a primary action — allowed). The press still
+  shows on finger-down (.frenz-inbox-action:active / [data-pending]).
+*/
+const CIRCLE = "frenz-inbox-action flex h-11 w-11 items-center justify-center rounded-full text-frenz-ink";
+const COMPOSE = "frenz-inbox-action frenz-inbox-action--primary flex h-11 w-11 items-center justify-center rounded-full text-white";
+const ICON = "h-5 w-5";
+const STROKE = 2.2;
 const MENU_WIDTH = 248;
 
 /**
@@ -56,16 +62,16 @@ function GuestHeaderActions() {
     setAsk(true);
   };
   return (
-    <span className="ml-auto flex shrink-0 items-center gap-1 min-[360px]:gap-1.5">
+    <span className="ml-auto flex shrink-0 items-center gap-1.5 min-[375px]:gap-2">
       {/* Add friends opens the Friends page, locked behind sign-in for a guest (owner, 2026-10-16) */}
       <Link href="/friends" prefetch={false} aria-label="Add friends" title="Add friends" onClick={() => haptic("light")} className={CIRCLE}>
-        <UserPlus className={ICON} strokeWidth={STROKE} aria-hidden />
+        <UserPlusIcon className={ICON} strokeWidth={STROKE} />
       </Link>
-      <button type="button" aria-label="New message" onClick={open} className={CIRCLE}>
-        <PenSquare className={ICON} strokeWidth={STROKE} aria-hidden />
-      </button>
       <button type="button" aria-label="More tools" onClick={open} className={CIRCLE}>
-        <MoreVertical className={ICON} strokeWidth={STROKE} aria-hidden />
+        <DotsIcon className={ICON} />
+      </button>
+      <button type="button" aria-label="New message" onClick={open} className={COMPOSE}>
+        <PencilIcon className={ICON} strokeWidth={STROKE} />
       </button>
       <GuestSignInModal open={ask} onClose={() => setAsk(false)} />
     </span>
@@ -93,8 +99,7 @@ function MemberHeaderActions() {
   };
 
   return (
-    <span className="ml-auto flex shrink-0 items-center gap-1 min-[360px]:gap-1.5">
-      {/* Owner mockup's top-right cluster: add-friends, compose, "…", avatar. */}
+    <span className="ml-auto flex shrink-0 items-center gap-1.5 min-[375px]:gap-2">
       {/* 2026-10-08 (owner): Add friends opens the main Friends page, and it goes once, at once, like Earn */}
       <TapOnceLink
         href="/friends"
@@ -107,9 +112,8 @@ function MemberHeaderActions() {
         }}
         className={CIRCLE}
       >
-        <UserPlus className={ICON} strokeWidth={STROKE} aria-hidden />
+        <UserPlusIcon className={ICON} strokeWidth={STROKE} />
       </TapOnceLink>
-      <ComposeLauncher className={CIRCLE} iconClassName={ICON} strokeWidth={STROKE} />
       <button
         ref={triggerRef}
         type="button"
@@ -119,9 +123,11 @@ function MemberHeaderActions() {
         onClick={toggle}
         className={CIRCLE}
       >
-        <MoreVertical className={ICON} strokeWidth={STROKE} aria-hidden />
+        <DotsIcon className={ICON} />
       </button>
-      <UserMenu />
+      {/* the design's order: add friends, more, then the gradient New message. The avatar menu left this
+          row (2026-10-18) — the bottom nav's profile button opens the same profile. */}
+      <ComposeLauncher className={COMPOSE} iconClassName={ICON} strokeWidth={STROKE} />
 
       {open && pos
         ? createPortal(

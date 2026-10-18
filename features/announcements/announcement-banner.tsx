@@ -4,6 +4,7 @@ import { Gift, Megaphone, Rocket, Sparkles, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { type ComponentType, useEffect, useRef, useState } from "react";
 
+import { announcementHiddenOn } from "@/features/announcements/hidden-paths";
 import type { PublicAnnouncement } from "@/lib/announcement";
 import { haptic } from "@/lib/motion/haptics";
 import { cdnBucket } from "@/lib/net/cdn-bucket";
@@ -83,7 +84,7 @@ export function AnnouncementBanner({ showOn }: { showOn?: string[] }) {
 
   // GLOBAL by default (owner: it must reach every visitor, incl. anonymous, on every
   // page). A `showOn` allowlist is optional; when omitted the bar shows everywhere.
-  const onPath = showOn ? showOn.includes(pathname) : true;
+  const onPath = !announcementHiddenOn(pathname) && (showOn ? showOn.includes(pathname) : true);
 
   useEffect(() => {
     if (!onPath) return;

@@ -31,7 +31,8 @@ export type ApiCategory =
   | "devices"
   | "sessions"
   | "security"
-  | "subscriptions";
+  | "subscriptions"
+  | "messaging";
 
 export interface ApiEndpoint {
   method: ApiMethod;
@@ -78,6 +79,9 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   { method: "POST", path: "/api/v1/app/security/passkeys/register/verify", auth: "session", category: "security", description: "Complete passkey registration." },
   { method: "POST", path: "/api/v1/app/security/passkeys/stepup/options", auth: "session", category: "security", description: "Begin a passkey step-up challenge." },
   { method: "POST", path: "/api/v1/app/security/passkeys/stepup/verify", auth: "session", category: "security", description: "Complete a passkey step-up challenge." },
+
+  /* ── Messaging ── */
+  { method: "POST", path: "/api/messages/[id]/typing", auth: "session", category: "messaging", description: "\"… is typing\" push for a direct chat whose other member's app is closed: at most once per 5 minutes per sender, blocks/mute/Ghost Mode re-checked." },
 
   /* ── Frenz Exclusive / SUB (session; money and access are decided on the server) ── */
   { method: "GET", path: "/api/sub/feed", auth: "session", category: "subscriptions", description: "The Exclusive feed: posts from creators the viewer subscribes to (keyset-paged) and locked previews to discover." },

@@ -92,7 +92,8 @@ import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { toast } from "@/features/ui/toast";
 import { profilePath } from "@/lib/social/profile-url";
-import { roomTypingTopic, TYPING_REVOKED_EVENT, type TypingRevokedDetail } from "@/features/social/typing-privacy";
+import { requestTypingPush, roomTypingTopic, TYPING_REVOKED_EVENT, type TypingRevokedDetail } from "@/features/social/typing-privacy";
+import { isOnlineNow } from "@/features/friends/use-presence";
 
 /**
  * Layout effect on the client, plain effect during SSR (where layout effects
@@ -232,6 +233,7 @@ export function ConversationRoom({
   viewerRole = null,
   onlyAdminsCanSend = false,
   otherName = null,
+  otherId = null,
   viewerTypingIndicatorsEnabled = true,
   otherStoryGroup = null,
   initialAppearance,
@@ -253,6 +255,8 @@ export function ConversationRoom({
   /** Direct threads: the other party's display name (drives the mockup's
    *  personalized "Message Maya…" composer placeholder). */
   otherName?: string | null;
+  /** Direct threads: the other party's user id — the typing push asks only while they're off the app. */
+  otherId?: string | null;
   /** Part 11b privacy toggle — the VIEWER's own "show when I'm typing" choice. Reciprocal since 2026-10-18: false means this thread neither sends nor shows typing (no typing channel is joined). */
   viewerTypingIndicatorsEnabled?: boolean;
   /** The other party's active stories (direct threads only) — the mockup's
@@ -493,6 +497,19 @@ export function ConversationRoom({
     viewerName,
     viewerTypingIndicatorsEnabled,
   );
+  // Every composer keystroke: the live indicator, plus — at most once per 5 minutes, direct chats
+  // only, only while the other person is OFF the app — a "… is typing" push (owner, 2026-10-18).
+  // Presence is read at this moment (isOnlineNow), not subscribed, so the thread never re-renders for it.
+  const onComposerTyping = useCallback(() => {
+    notifyTyping();
+    requestTypingPush(conversationId, {
+      conversationType: type,
+      typingEnabled: viewerTypingIndicatorsEnabled,
+      revoked: typingRevoked,
+      otherId,
+      otherOnline: otherId ? isOnlineNow(otherId) : false,
+    });
+  }, [notifyTyping, conversationId, type, viewerTypingIndicatorsEnabled, typingRevoked, otherId]);
   // A single soft tick when someone STARTS typing — not per keystroke, and
   // not re-triggered while they keep typing or a second person joins in.
   const wasTypingRef = useRef(false);
@@ -2666,7 +2683,7 @@ export function ConversationRoom({
               onChange={(e) => {
                 setBody(e.target.value);
                 checkMentionTrigger(e.target.value, e.target.selectionStart ?? e.target.value.length);
-                if (e.target.value.trim()) notifyTyping();
+                if (e.target.value.trim()) onComposerTyping();
                 else clearTyping();
               }}
               onKeyDown={onComposerKeyDown}
@@ -2690,7 +2707,7 @@ export function ConversationRoom({
                 const caret = textareaRef.current?.selectionStart ?? body.length;
                 const next = `${body.slice(0, caret)}${emoji}${body.slice(caret)}`;
                 setBody(next);
-                if (next.trim()) notifyTyping();
+                if (next.trim()) onComposerTyping();
                 requestAnimationFrame(() => {
                   const pos = caret + emoji.length;
                   textareaRef.current?.focus();

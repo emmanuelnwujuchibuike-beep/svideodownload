@@ -45,3 +45,45 @@ export function announceTypingRevoked(conversationId: string): void {
   if (typeof window === "undefined" || !conversationId) return;
   window.dispatchEvent(new CustomEvent<TypingRevokedDetail>(TYPING_REVOKED_EVENT, { detail: { conversationId } }));
 }
+
+// ── "… is typing" push (owner, 2026-10-18) ─────────────────────────────────────
+// Direct chats only, only when the other person's app is closed, at most once per 5 minutes
+// per chat from this device. The server re-checks blocks, mute and Ghost Mode and keeps its
+// own 5-minute window, so this is the cheap first gate, not the only one.
+
+export const TYPING_PUSH_COOLDOWN_MS = 5 * 60_000;
+
+export interface TypingPushContext {
+  conversationType: string;
+  /** The sender's own typing setting — Ghost Mode sends nothing, push included. */
+  typingEnabled: boolean;
+  /** A block or messaging restriction was just confirmed from this chat. */
+  revoked: boolean;
+  otherId: string | null;
+  /** The other person is on the app right now (presence) — they already see typing live. */
+  otherOnline: boolean;
+}
+
+/** Should this keystroke ask the server for a typing push? `last` = when this chat last asked. */
+export function shouldRequestTypingPush(ctx: TypingPushContext, now: number, last: number | undefined): boolean {
+  return (
+    ctx.conversationType === "direct" &&
+    ctx.typingEnabled &&
+    !ctx.revoked &&
+    !!ctx.otherId &&
+    !ctx.otherOnline &&
+    (last === undefined || now - last >= TYPING_PUSH_COOLDOWN_MS)
+  );
+}
+
+const lastTypingPush = new Map<string, number>();
+
+/** Ask once (fire-and-forget) when allowed; returns whether it asked. Never blocks typing. */
+export function requestTypingPush(conversationId: string, ctx: TypingPushContext, now = Date.now()): boolean {
+  if (!conversationId || !shouldRequestTypingPush(ctx, now, lastTypingPush.get(conversationId))) return false;
+  lastTypingPush.set(conversationId, now);
+  if (typeof fetch === "function") {
+    void fetch(`/api/messages/${encodeURIComponent(conversationId)}/typing`, { method: "POST", keepalive: true }).catch(() => {});
+  }
+  return true;
+}

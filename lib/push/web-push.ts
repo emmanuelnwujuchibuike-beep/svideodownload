@@ -89,6 +89,13 @@ export interface PushPayload {
    * saying "this is a non-personalised generic ad". Rides in the delivered
    * payload (unlike genericBody). */
   sponsored?: boolean;
+  /**
+   * How long the push service may hold this push for an offline device, in seconds
+   * (default one day). A push that is only true for a moment — "Chris is typing…" —
+   * passes a short value so it is dropped rather than delivered stale. Like
+   * genericBody, it is stripped before the payload is sent.
+   */
+  ttlSeconds?: number;
 }
 
 interface SubRow {
@@ -177,13 +184,13 @@ async function withDeadline<T>(work: Promise<T>, ms: number, onTimeout: T): Prom
 
 const TIMED_OUT: SendOutcome = { ok: false, message: "timed out waiting for the push service" };
 
-async function sendOnce(s: SubRow, body: string, topic: string | undefined): Promise<SendOutcome> {
+async function sendOnce(s: SubRow, body: string, topic: string | undefined, ttlSeconds = 60 * 60 * 24): Promise<SendOutcome> {
   try {
     await webpush.sendNotification(
       { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
       body,
       {
-        TTL: 60 * 60 * 24, // hold for a day if the device is offline
+        TTL: ttlSeconds, // a day by default, if the device is offline
         urgency: "high",
         // 🔴 See the block above. Without this the request can never end.
         timeout: PUSH_SOCKET_TIMEOUT_MS,
@@ -286,7 +293,7 @@ async function sendPushToIdentity(identity: PushIdentity, payload: PushPayload):
 
     // genericBody is a hint for THIS function's caller-facing type only —
     // never part of the actual payload delivered to the service worker.
-    const { genericBody: _genericBody, ...deliverable } = payload;
+    const { genericBody: _genericBody, ttlSeconds, ...deliverable } = payload;
     const body = JSON.stringify(deliverable);
     const dead: string[] = [];
     const logRows: {
@@ -312,7 +319,7 @@ async function sendPushToIdentity(identity: PushIdentity, payload: PushPayload):
     const tag = payload.tag ?? null;
 
     const deliverToOne = async (s: SubRow) => {
-      const first = await sendOnce(s, body, topic);
+      const first = await sendOnce(s, body, topic, ttlSeconds);
       if (first.ok) {
         logRows.push({ user_id: userId, anon_id: anonId, subscription_id: s.id, tag, status: "sent", status_code: 201, error: null, attempt: 1 });
         return;
@@ -333,7 +340,7 @@ async function sendPushToIdentity(identity: PushIdentity, payload: PushPayload):
         return;
       }
       await new Promise((resolve) => setTimeout(resolve, 400));
-      const retry = await sendOnce(s, body, topic);
+      const retry = await sendOnce(s, body, topic, ttlSeconds);
       if (retry.ok) {
         logRows.push({ user_id: userId, anon_id: anonId, subscription_id: s.id, tag, status: "retried", status_code: 201, error: null, attempt: 2 });
       } else {

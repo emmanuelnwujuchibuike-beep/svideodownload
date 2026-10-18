@@ -173,6 +173,54 @@ export async function viewerTypingIndicatorsEnabled(userId: string): Promise<boo
   }
 }
 
+export interface TypingPushTarget {
+  recipientId: string;
+  senderName: string;
+  senderAvatar: string | null;
+}
+
+/**
+ * Who should get a "… is typing" push (owner, 2026-10-18: direct chats only, only when the
+ * recipient's app is closed — the caller decides that — at most once per 5 minutes).
+ *
+ * Null unless ALL hold, so a typing push can never reveal more than the chat itself would:
+ *   · a DIRECT conversation, the sender and the other person both active members;
+ *   · no block or messaging restriction either way (bothBlocked — the rule sendMessage uses);
+ *   · both people show typing (Ghost Mode is reciprocal — off on either side means no typing);
+ *   · the recipient has not muted the chat.
+ */
+export async function typingPushTarget(senderId: string, conversationId: string): Promise<TypingPushTarget | null> {
+  if (!hasSupabase) return null;
+  try {
+    const db = createAdminClient();
+    const { data: conv } = await db.from("conversations").select("type, user_low, user_high").eq("id", conversationId).maybeSingle();
+    if (!conv || conv.type !== "direct") return null;
+    const low = conv.user_low as string | null;
+    const high = conv.user_high as string | null;
+    if (!low || !high || (senderId !== low && senderId !== high)) return null;
+    const recipientId = senderId === low ? high : low;
+
+    const [{ data: members }, { data: privacy }, { data: sender }] = await Promise.all([
+      db.from("conversation_members").select("user_id, muted").eq("conversation_id", conversationId).is("left_at", null).in("user_id", [senderId, recipientId]),
+      db.from("privacy_settings").select("user_id, typing_indicators_enabled").in("user_id", [senderId, recipientId]),
+      db.from("profiles").select("display_name, handle, avatar_url").eq("id", senderId).maybeSingle(),
+    ]);
+    const rows = (members ?? []) as { user_id: string; muted: boolean | null }[];
+    if (!rows.some((m) => m.user_id === senderId)) return null;
+    const recipient = rows.find((m) => m.user_id === recipientId);
+    if (!recipient || recipient.muted) return null;
+    for (const p of (privacy ?? []) as { user_id: string; typing_indicators_enabled: boolean | null }[]) {
+      if (p.typing_indicators_enabled === false) return null;
+    }
+    if (await bothBlocked(db, senderId, recipientId)) return null;
+
+    const name = (sender?.display_name as string | null) || (sender?.handle ? `@${sender.handle as string}` : "Someone");
+    return { recipientId, senderName: name, senderAvatar: (sender?.avatar_url as string | null) ?? null };
+  } catch {
+    return null;
+  }
+}
+
 /** Can `senderId` start/continue a DIRECT conversation with `recipientId`? */
 export async function canMessage(senderId: string, recipientId: string): Promise<MessageGate> {
   if (!hasSupabase) return { ok: false, reason: "unavailable" };

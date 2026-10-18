@@ -23,7 +23,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   if (!UUID.test(id)) return NextResponse.json({ error: "Bad id." }, { status: 400 });
   const out = await interactionSummary(id, await me());
-  return out.ok ? NextResponse.json(out, { headers }) : NextResponse.json({ error: out.error }, { status: out.status, headers });
+  return out.ok ? NextResponse.json(out, { headers }) : NextResponse.json({ error: out.error, ...("code" in out && out.code ? { code: out.code } : {}) }, { status: out.status, headers });
 }
 
 /** POST { like: boolean } — like or unlike. */
@@ -38,5 +38,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const body = (await request.json().catch(() => null)) as { like?: unknown } | null;
   if (typeof body?.like !== "boolean") return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   const out = await setLike(id, uid, body.like);
-  return out.ok ? NextResponse.json(out) : NextResponse.json({ error: out.error }, { status: out.status });
+  return out.ok ? NextResponse.json(out) : NextResponse.json({ error: out.error, ...("code" in out && out.code ? { code: out.code } : {}) }, { status: out.status });
 }

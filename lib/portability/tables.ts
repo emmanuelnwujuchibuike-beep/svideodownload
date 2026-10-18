@@ -190,6 +190,7 @@ export const OWNER_COLUMN: Record<string, string> = {
   account_security_settings: "user_id",
   trusted_devices: "user_id",
   privacy_settings: "user_id",
+  age_checks: "user_id", // 0261: your age check — adult or minor and when, never your date of birth
 
   /* Frenz AI — the member own record of what they asked for and what happened. */
   ai_jobs: "user_id",

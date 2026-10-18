@@ -2,6 +2,7 @@ import "server-only";
 
 import { after } from "next/server";
 
+import { isAdult } from "@/lib/age/server";
 import { makeSizedWebp } from "@/lib/media/thumbnail";
 import { deletePrivate, hasPrivateR2, presignPrivateGet, presignPrivatePut, readPrivatePrefix } from "@/lib/storage/r2";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -27,6 +28,13 @@ import { checkUpload } from "./upload-check";
  * gets presigned links that expire in five minutes, minted AFTER `hasActiveSub`
  * says yes; an expired or revoked subscription gets nothing. Responses are
  * `no-store`, so no cache can serve one viewer's links to another.
+ *
+ * ── Mature (18+) posts (0261, owner 2026-10-18) ───────────────────────────
+ * A creator may mark a post Mature: suggestive, violent or strong-language — never sexually
+ * explicit, which stays banned. Its media, preview, caption and public cover reach only a viewer
+ * whose age check says adult (lib/age/server.ts); the creator always sees their own post. Anyone
+ * else gets the tile marked `mature` and `ageLocked`, and opening it answers 403 `age_required`.
+ * Before 0261 runs there is no such column, and no post is Mature.
  */
 
 type Row = Record<string, unknown>;
@@ -38,8 +46,16 @@ const PAGE = 24;
 const IMAGE_EXT = new Set(["jpg", "jpeg", "png", "webp", "avif", "gif"]);
 const VIDEO_EXT = new Set(["mp4", "webm", "mov"]);
 
-export type Fail = { ok: false; error: string; status: number };
+export type Fail = { ok: false; error: string; status: number; code?: "age_required" };
 const fail = (error: string, status = 400): Fail => ({ ok: false, error, status });
+const AGE_REQUIRED: Fail = { ok: false, error: "Confirm your age to see this post.", status: 403, code: "age_required" };
+
+/**
+ * The post columns a gallery or gate reads, newest schema first: with Mature (0261) and audience
+ * (0248), then audience only, then neither. Each step down is taken only when a column is missing —
+ * so a database with 0248 but not 0261 still filters hidden posts (it never falls back past it).
+ */
+const POST_COLS = ["mature, audience", "audience", ""] as const;
 
 /** A presigned upload into the creator's own private folder. */
 export async function subUploadPlan(creatorId: string, kind: string, ext: string): Promise<{ ok: true; uploadUrl: string; key: string } | Fail> {
@@ -63,7 +79,7 @@ function validCover(url: string | null | undefined): string | null | false {
   }
 }
 
-export async function createSubPost(creatorId: string, input: { caption?: string | null; coverUrl?: string | null; media: { key: string; kind: string; width?: number | null; height?: number | null; thumbKey?: string | null }[]; audience?: unknown }): Promise<{ ok: true; id: string; audience: SubAudience } | Fail> {
+export async function createSubPost(creatorId: string, input: { caption?: string | null; coverUrl?: string | null; media: { key: string; kind: string; width?: number | null; height?: number | null; thumbKey?: string | null }[]; audience?: unknown; mature?: unknown }): Promise<{ ok: true; id: string; audience: SubAudience; mature: boolean } | Fail> {
   if (!hasPrivateR2) return fail("Private storage isn't set up yet.", 503);
   const db = createAdminClient();
   const { data: s } = await db.from("creator_membership_settings").select("sub_price_cents").eq("creator_id", creatorId).maybeSingle();
@@ -97,7 +113,11 @@ export async function createSubPost(creatorId: string, input: { caption?: string
   // 0248: locked (the default) or hidden. A hidden post is NEVER published as locked: before 0248 it is refused.
   if (input.audience !== undefined && !isSubAudience(input.audience)) return fail("Choose who can see that this post exists.");
   const audience: SubAudience = input.audience === "hidden" ? "hidden" : "locked";
-  let ins = await db.from("sub_posts").insert({ creator_id: creatorId, caption, cover_url: cover, audience }).select("id").single();
+  if (input.mature !== undefined && typeof input.mature !== "boolean") return fail("Invalid request.");
+  const mature = input.mature === true;
+  let ins = await db.from("sub_posts").insert({ creator_id: creatorId, caption, cover_url: cover, audience, ...(mature ? { mature } : {}) }).select("id").single();
+  // 0261 not applied: a Mature post is NEVER published as an ordinary one
+  if (ins.error && /mature/.test(ins.error.message)) return fail("Mature posts arrive with the next update. Nothing was posted.", 503);
   if (ins.error && /audience/.test(ins.error.message)) {
     if (audience === "hidden") return fail("Hidden posts arrive with the next update. Nothing was posted.", 503);
     ins = await db.from("sub_posts").insert({ creator_id: creatorId, caption, cover_url: cover }).select("id").single();
@@ -113,7 +133,7 @@ export async function createSubPost(creatorId: string, input: { caption?: string
     await db.from("sub_posts").delete().eq("id", id);
     return fail("Couldn't post that.", 500);
   }
-  return { ok: true, id, audience };
+  return { ok: true, id, audience, mature };
 }
 
 /** An opened post: the caption, five-minute links and the two marks. Only ever built AFTER an access check. */
@@ -125,6 +145,8 @@ export interface SubPostOpen {
   creatorHandle: string | null;
   /** 0248: whether non-subscribers see a locked tile or nothing at all (only ever sent to someone with access) */
   audience?: SubAudience;
+  /** 0261: Mature (18+) — only ever opened for an adult or the creator */
+  mature?: boolean;
 }
 
 /**
@@ -165,6 +187,10 @@ export interface SubPostCard {
   audience?: SubAudience;
   /** Part 4, creator only: Frenzsave took this post down (archived) — shown marked, not openable */
   removed?: true;
+  /** 0261: Mature (18+). Sent to everyone who may see the tile, so it can carry its 18+ mark. */
+  mature?: true;
+  /** 0261: Mature and this viewer hasn't confirmed they're 18+ — no media, preview, caption or cover was sent */
+  ageLocked?: true;
   coverUrl: string | null;
   items: number;
   hasVideo: boolean;
@@ -184,10 +210,12 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
   const access = await hasActiveSub(viewerId, creatorId);
   const cursor = decodeSubCursor(before);
   if (cursor === "invalid") return { posts: [], access, isCreator, next: null, ready: true };
-  const read = (withAudience: boolean) => {
+  const read = (level: number) => {
+    const extra = POST_COLS[level]!;
+    const withAudience = extra.includes("audience");
     let q = db
       .from("sub_posts")
-      .select(withAudience ? "id, caption, cover_url, created_at, status, audience" : "id, caption, cover_url, created_at, status")
+      .select(`id, caption, cover_url, created_at, status${extra ? `, ${extra}` : ""}`)
       .eq("creator_id", creatorId)
       // Part 4: the CREATOR also sees what Frenzsave took down (archived, Part 2) — marked, never openable.
       // Nobody else ever receives an archived row.
@@ -199,9 +227,10 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
     if (cursor) q = cursor.id ? q.or(afterCursorFilter({ at: cursor.at, id: cursor.id })) : q.lt("created_at", cursor.at);
     return q;
   };
-  let postsR = await read(true);
-  // before 0248 there is no audience column, so no post can be hidden: every post is 'locked'
-  if (postsR.error && MISSING(postsR.error.message)) postsR = await read(false);
+  let postsR = await read(0);
+  // before 0261 no post is Mature; before 0248 there is no audience column, so no post can be hidden
+  if (postsR.error && MISSING(postsR.error.message)) postsR = await read(1);
+  if (postsR.error && MISSING(postsR.error.message)) postsR = await read(2);
   // the visitor's OWN membership: subscribed until when, or ended when (Part 4: the offer card says
   // "Renew" to a lapsed subscriber). Read alongside the media below — one round trip fewer on every open.
   const untilRead =
@@ -214,6 +243,9 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
   }
   const rows = (postsR.data ?? []) as unknown as Row[];
   const page = rows.slice(0, PAGE);
+  // 0261: a Mature post is withheld from anyone but the creator and a viewer who confirmed they're 18+ — asked once, only when the page has one
+  const adult = isCreator || !page.some((r) => r.mature === true) ? true : await isAdult(viewerId).catch(() => false);
+  const ageLocked = (r: Row) => r.mature === true && !adult;
   const ids = page.map((r) => r.id as string);
   const opening = access && !!viewerId && hasPrivateR2;
   const mediaRead = async (): Promise<{ data: Row[] | null }> => {
@@ -274,6 +306,8 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
     await Promise.all(
       page.map(async (r) => {
         const list = byPost.get(r.id as string) ?? [];
+        // a Mature post this viewer may not see yet: no links of any kind
+        if (ageLocked(r)) return;
         // a taken-down post is shown to its creator as a marked tile only: no media links
         if (r.status === "archived") {
           const t = list[0]?.thumb_key as string | null | undefined;
@@ -282,13 +316,13 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
         }
         const firstThumb = list[0]?.thumb_key as string | null | undefined;
         const [signed, thumb] = await Promise.all([signMedia(list), firstThumb ? presignPrivateGet(firstThumb, SIGNED_TTL_SECONDS) : Promise.resolve(null)]);
-        opened.set(r.id as string, { caption: (r.caption as string | null) ?? null, audience: audienceOf(r.audience), media: signed, expiresAt, ...mk });
+        opened.set(r.id as string, { caption: (r.caption as string | null) ?? null, audience: audienceOf(r.audience), ...(r.mature === true ? { mature: true } : {}), media: signed, expiresAt, ...mk });
         if (thumb) thumbs.set(r.id as string, thumb);
       }),
     );
   }
   return {
-    posts: page.map((r) => ({ id: r.id as string, ...(access ? { audience: audienceOf(r.audience) } : {}), caption: access ? ((r.caption as string | null) ?? null) : null, coverUrl: (r.cover_url as string | null) ?? null, items: counts.get(r.id as string)?.n ?? 0, hasVideo: counts.get(r.id as string)?.video ?? false, createdAt: r.created_at as string, ...(r.status === "archived" ? { removed: true } : {}), ...(opened.has(r.id as string) ? { open: opened.get(r.id as string) } : {}), ...(thumbs.has(r.id as string) ? { thumbUrl: thumbs.get(r.id as string) } : {}) })),
+    posts: page.map((r) => ({ id: r.id as string, ...(access ? { audience: audienceOf(r.audience) } : {}), ...(r.mature === true ? { mature: true as const } : {}), ...(ageLocked(r) ? { ageLocked: true as const } : {}), caption: access && !ageLocked(r) ? ((r.caption as string | null) ?? null) : null, coverUrl: ageLocked(r) ? null : ((r.cover_url as string | null) ?? null), items: counts.get(r.id as string)?.n ?? 0, hasVideo: counts.get(r.id as string)?.video ?? false, createdAt: r.created_at as string, ...(r.status === "archived" ? { removed: true } : {}), ...(opened.has(r.id as string) ? { open: opened.get(r.id as string) } : {}), ...(thumbs.has(r.id as string) ? { thumbUrl: thumbs.get(r.id as string) } : {}) })),
     access,
     isCreator,
     next: rows.length > PAGE ? encodeSubCursor(page[page.length - 1]!.created_at as string, page[page.length - 1]!.id as string) : null,
@@ -329,8 +363,10 @@ export async function openSubPost(postId: string, viewerId: string | null): Prom
   const [access, mk] = await Promise.all([hasActiveSub(viewerId, gate.creatorId), marks(viewerId, gate.creatorId)]);
   // Part 3: a HIDDEN post answers a viewer without access exactly like a post that does not exist
   if (!access) return visibleTo(gate.audience, false) ? fail("Subscribe to see this post.", 403) : fail("This post isn't available.", 404);
+  // 0261: a Mature post opens only for the creator or a viewer who confirmed they're 18+
+  if (gate.mature && viewerId !== gate.creatorId && !(await isAdult(viewerId).catch(() => false))) return AGE_REQUIRED;
   if (!hasPrivateR2) return fail("Private storage isn't available right now.", 503);
-  return { ok: true, caption: gate.caption, audience: gate.audience, media: await signMedia((media ?? []) as Row[]), expiresAt: new Date(Date.now() + SIGNED_TTL_SECONDS * 1000).toISOString(), ...mk };
+  return { ok: true, caption: gate.caption, audience: gate.audience, ...(gate.mature ? { mature: true } : {}), media: await signMedia((media ?? []) as Row[]), expiresAt: new Date(Date.now() + SIGNED_TTL_SECONDS * 1000).toISOString(), ...mk };
 }
 
 /**
@@ -338,15 +374,25 @@ export async function openSubPost(postId: string, viewerId: string | null): Prom
  * there or not published (archived by a takedown, Part 2). Before 0248 there is no audience
  * column, and every post is 'locked'.
  */
-export async function readSubPostGate(postId: string, withCaption = false): Promise<{ creatorId: string; audience: SubAudience; caption: string | null } | null> {
+export async function readSubPostGate(postId: string, withCaption = false): Promise<{ creatorId: string; audience: SubAudience; caption: string | null; mature: boolean } | null> {
   if (!isUuid(postId)) return null;
   const db = createAdminClient();
   const cols = `creator_id, status${withCaption ? ", caption" : ""}`;
-  let res = await db.from("sub_posts").select(`${cols}, audience`).eq("id", postId).maybeSingle();
-  if (res.error && MISSING(res.error.message)) res = (await db.from("sub_posts").select(cols).eq("id", postId).maybeSingle()) as typeof res;
+  const at = (level: number) => db.from("sub_posts").select(POST_COLS[level] ? `${cols}, ${POST_COLS[level]}` : cols).eq("id", postId).maybeSingle();
+  let res = await at(0);
+  if (res.error && MISSING(res.error.message)) res = await at(1);
+  if (res.error && MISSING(res.error.message)) res = await at(2);
   const p = res.data as Row | null;
   if (res.error || !p || p.status !== "published") return null;
-  return { creatorId: p.creator_id as string, audience: audienceOf(p.audience), caption: (p.caption as string | null | undefined) ?? null };
+  return { creatorId: p.creator_id as string, audience: audienceOf(p.audience), caption: (p.caption as string | null | undefined) ?? null, mature: p.mature === true };
+}
+
+/** The creator marks one of their own published posts Mature (18+) or not (0261). */
+export async function setSubPostMature(creatorId: string, postId: string, mature: unknown): Promise<{ ok: true; mature: boolean } | Fail> {
+  if (!isUuid(creatorId) || !isUuid(postId) || typeof mature !== "boolean") return fail("Invalid request.");
+  const { data, error } = await createAdminClient().from("sub_posts").update({ mature, updated_at: new Date().toISOString() }).eq("id", postId).eq("creator_id", creatorId).eq("status", "published").select("id");
+  if (error) return MISSING(error.message) ? fail("Mature posts arrive with the next update.", 503) : fail("Couldn't save that.", 500);
+  return (data ?? []).length ? { ok: true, mature } : fail("Not found.", 404);
 }
 
 /** The creator switches one of their posts between 'locked' and 'hidden' (0248). Only their own, only while published. */

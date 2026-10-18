@@ -54,6 +54,8 @@ they are applied while each page is built and there is no separate cleanup step.
 - If explicit content can be posted as exclusive content: age verification and
   content gating are needed before launch, and sexually explicit content is not
   allowed in App Store apps. Age verification is NOT to be built without asking.
+  → Asked and answered 2026-10-18: date of birth + an 18+ confirmation, protecting posts
+    marked Mature (18+); sexually explicit content stays banned. Built — see "Age checks" below.
 - Glass (blur + translucent fill) only over images; solid white cards on white.
 
 ## Notes — where the design and the app differ
@@ -287,3 +289,35 @@ they are applied while each page is built and there is no separate cleanup step.
 - 2026-10-18: the first two commits (`ac4b834`, `a50b9cd`) were made on local `main`
   before the branch was named; they were moved to `ui-redesign` and local `main`
   points back at `3739e7c`. `origin/main` is 9 commits ahead and was not pulled.
+
+### Age checks and Mature (18+) exclusive posts (owner, 2026-10-18)
+The owner chose: a date of birth plus an 18+ confirmation (self-declared), protecting exclusive
+posts a creator marks Mature (18+). Sexually explicit content stays banned everywhere — that keeps
+the app allowed in the App Store and Play (the Android app is a TWA), and Paystack's terms forbid it.
+- **0261_age_checks.sql** (NOT applied — it applies when the branch reaches main; nothing is pushed):
+  `age_checks` keeps only the outcome — adult, or minor with the day they turn 18 — never the date
+  of birth. Server-written only: a member reads their own row and cannot write one.
+  `sub_posts.mature` (default false; every existing post stays as it is).
+- **Server** (lib/age, app/api/age, lib/sub/posts.ts, feed.ts, interactions.ts): a Mature post's
+  media, preview, caption and public cover go only to the creator and to viewers whose check says
+  adult — in the profile grid, opening a post, likes and comments, the Exclusive feed, its preview
+  refresh and discover. Anyone else gets the tile marked 18+ and nothing in it; opening answers 403
+  `age_required`. An adult answer is final; a minor's stands until they turn 18 (another date
+  changes nothing). Fails closed: a read error or a database without 0261 opens no Mature post, and
+  a Mature post is never published as an ordinary one before 0261 runs.
+- **App**: the composer's "Mature (18+)" switch, an 18+ mark on Mature tiles and cards, and the age
+  sheet (date of birth, the 18+ confirmation; a minor is told the date they can open them). The
+  sheet loads only when a Mature post is tapped.
+- **Tests**: lib/age/age.test.ts (birthdays, 29 February); lib/sub/age-gate.server.test.ts (the real
+  routes: nothing of a Mature post reaches an unconfirmed viewer, nothing is even signed for it —
+  4 cases fail with the gate removed); supabase/tests/0261_age_checks.pglite.mjs (RLS and the
+  constraints; three mutants, each caught).
+- **For the owner to decide** (not built):
+  · Should a creator also confirm 18+ before marking a post Mature? Today only viewers are checked.
+  · An admin way to reset someone's answer (e.g. a typo on a real adult's date). Today an answer
+    can only be cleared in the database.
+  · A self-declared date is the weakest kind of check. Where a country requires real age assurance
+    for adult content (UK Online Safety Act, some US states), a provider check would be needed —
+    not needed while explicit content is banned.
+- The locked-content blurred preview (the owner's required fix above) is a separate, still-open job.
+

@@ -15,6 +15,8 @@ import { profilePath } from "@/lib/social/profile-url";
 
 // the existing private viewer (access re-checked by /api/sub/posts/[id] on open), loaded on the first tap
 const PrivateViewer = dynamic(() => import("./sub-gallery").then((m) => m.PrivateViewer), { ssr: false });
+// 0261: the age check, loaded only when a Mature post is tapped
+const AgeGateSheet = dynamic(() => import("@/features/age/age-gate-sheet").then((m) => m.AgeGateSheet), { ssr: false });
 
 /**
  * The Exclusive feed (Frenz Exclusive Part 3). Everything shown comes from the server, which
@@ -52,6 +54,10 @@ interface Post {
   hasVideo: boolean;
   previewUrl: string | null;
   hidden: boolean;
+  /** 0261: Mature (18+) */
+  mature?: true;
+  /** 0261: Mature and not confirmed 18+ — the server sent no preview or caption */
+  ageLocked?: true;
 }
 interface Card {
   id: string;
@@ -60,6 +66,8 @@ interface Card {
   coverUrl: string | null;
   items: number;
   hasVideo: boolean;
+  /** 0261: Mature (18+); its cover is only sent to a viewer who confirmed they're 18+ */
+  mature?: true;
 }
 type DiscoverCreator = Creator & { priceCents: number; feeCents: number; feePercent: number; totalCents: number; periodDays: number };
 export interface ExclusiveFeedPageView {
@@ -97,6 +105,7 @@ export function ExclusiveFeed({ initial = null }: { initial?: ExclusiveFeedPageV
   const [status, setStatus] = useState<"loading" | "ready" | "error">(() => (initial ? "ready" : "loading"));
   const [more, setMore] = useState<"idle" | "loading" | "error">("idle");
   const [open, setOpen] = useState<string | null>(null);
+  const [ageGate, setAgeGate] = useState(false);
   const busy = useRef(false);
   const abort = useRef<AbortController | null>(null);
   const seen = useRef(new Set<string>(initial?.posts.map((p) => p.id) ?? []));
@@ -187,7 +196,7 @@ export function ExclusiveFeed({ initial = null }: { initial?: ExclusiveFeedPageV
         <ul className="space-y-4">
           {posts.map((p, i) => (
             <li key={p.id}>
-              <FeedCard post={p} creator={creators[p.creatorId]} eager={i < 2} onOpen={() => setOpen(p.id)} />
+              <FeedCard post={p} creator={creators[p.creatorId]} eager={i < 2} onOpen={() => (p.ageLocked ? setAgeGate(true) : setOpen(p.id))} />
             </li>
           ))}
         </ul>
@@ -210,6 +219,16 @@ export function ExclusiveFeed({ initial = null }: { initial?: ExclusiveFeedPageV
       {discover?.cards.length ? <Discover cards={discover.cards} creators={discover.creators} /> : null}
 
       {open ? <PrivateViewer postId={open} initial={null} isCreator={false} onClose={() => setOpen(null)} onDeleted={() => setOpen(null)} /> : null}
+      {ageGate ? (
+        <AgeGateSheet
+          onClose={() => setAgeGate(false)}
+          onVerified={() => {
+            setAgeGate(false);
+            // the first page again: the server now sends the Mature posts' previews
+            void load(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -277,14 +296,29 @@ function FeedCard({ post, creator, eager, onOpen }: { post: Shown; creator: Crea
           onClick={onOpen}
           // Part 15: the post (and the viewer's code) start loading at the first touch; a scroll cancels it
           onPointerDown={() => {
+            // a Mature post the viewer hasn't confirmed their age for would only answer 403
+            if (post.ageLocked) return void import("@/features/age/age-gate-sheet");
             startOpening(post.id);
             void import("./sub-gallery");
           }}
           onPointerCancel={() => cancelOpening(post.id)}
           className="relative block aspect-[4/5] w-full overflow-hidden bg-black/[0.04] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary dark:bg-white/[0.06]"
-          aria-label={`Open ${creator?.name ?? "this"} exclusive post, ${what}`}
+          aria-label={post.ageLocked ? `${creator?.name ?? "This"} exclusive post is Mature (18+). Confirm your age to open it.` : `Open ${creator?.name ?? "this"} exclusive post, ${what}`}
         >
-          <PrivatePreview post={post} preview={preview} eager={eager} />
+          {post.ageLocked ? (
+            <span className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-frenz-ink px-6 text-center text-white">
+              <span className="font-heading text-2xl font-extrabold">18+</span>
+              <span className="text-[14px] font-semibold">Mature post</span>
+              <span className="text-[12.5px] text-white/75">Tap to confirm your age</span>
+            </span>
+          ) : (
+            <PrivatePreview post={post} preview={preview} eager={eager} />
+          )}
+          {post.mature && !post.ageLocked ? (
+            <span className="pointer-events-none absolute bottom-3 left-3 rounded-full bg-black/55 px-2.5 py-1 text-[11.5px] font-extrabold text-white" aria-hidden>
+              18+
+            </span>
+          ) : null}
           <span className="pointer-events-none absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11.5px] font-semibold text-white" aria-hidden>
             {post.hasVideo ? <Film className="h-3.5 w-3.5" /> : <Images className="h-3.5 w-3.5" />}
             {post.items}
@@ -463,7 +497,7 @@ export function LockedPreviewCard({ card, creator }: { card: Card; creator: Disc
             <Lock className="h-5 w-5" />
           </span>
           <span className="rounded-full bg-white/90 px-2.5 py-1 text-[12px] font-semibold text-neutral-800 ring-1 ring-black/[0.05] dark:bg-neutral-900/90 dark:text-neutral-100 dark:ring-white/10">
-            {what} · subscribers only
+            {what} · subscribers only{card.mature ? " · 18+" : ""}
           </span>
         </span>
       </Link>

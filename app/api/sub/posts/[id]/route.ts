@@ -22,7 +22,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   } = await supabase.auth.getUser();
   const out = await openSubPost(id, user?.id ?? null);
   const headers = { "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex, nofollow, noarchive" };
-  return out.ok ? NextResponse.json(out, { headers }) : NextResponse.json({ error: out.error }, { status: out.status, headers });
+  // 0261: "age_required" tells the browser to show the age check rather than an error
+  return out.ok ? NextResponse.json(out, { headers }) : NextResponse.json({ error: out.error, ...("code" in out && out.code ? { code: out.code } : {}) }, { status: out.status, headers });
 }
 
 /** DELETE — the creator removes their own post and its private files. */
@@ -54,7 +55,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   const { success } = await trackLimiter.limit(`sub-post-edit:${user.id}`);
   if (!success) return NextResponse.json({ error: "Too many changes — try again in a moment." }, { status: 429 });
-  const body = (await request.json().catch(() => null)) as { idx?: unknown; thumbKey?: unknown; width?: unknown; height?: unknown; audience?: unknown; caption?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { idx?: unknown; thumbKey?: unknown; width?: unknown; height?: unknown; audience?: unknown; caption?: unknown; mature?: unknown } | null;
+  // 0261: the creator marks their own post Mature (18+) or not
+  if (body && "mature" in body) {
+    const { setSubPostMature } = await import("@/lib/sub/posts");
+    const out = await setSubPostMature(user.id, id, body.mature);
+    return out.ok ? NextResponse.json(out) : NextResponse.json({ error: out.error }, { status: out.status });
+  }
   // Part 4: the creator edits the caption of their own published post
   if (body && "caption" in body) {
     const { setSubPostCaption } = await import("@/lib/sub/posts");

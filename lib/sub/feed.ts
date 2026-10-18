@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isAdult } from "@/lib/age/server";
 import { subscriptionCharge } from "@/lib/creator/membership/engine";
 import { flagsOf, isAccountVisibleTo } from "@/lib/social/account-visibility";
 import { hasPrivateR2, presignPrivateGet } from "@/lib/storage/r2";
@@ -48,6 +49,12 @@ import { subConfig } from "./server";
  *  · Preview links last five minutes. `feedPreviews` re-signs the tiles of posts the viewer may
  *    STILL see — access decided again, from scratch, exactly as for a feed page — so a tile
  *    reached after its link ran out can be refreshed. Every page says when its links were signed.
+ *
+ * ── Mature (18+), 0261 (owner 2026-10-18) ───────────────────────────────────
+ * A Mature post's preview link, caption and public cover go only to a viewer whose age check says
+ * adult. Anyone else gets the card marked `mature` and `ageLocked` with none of them — in the feed,
+ * in a preview refresh and in discover. The age is read once per request, and only when a page
+ * holds a Mature post. Before 0261 runs, no post is Mature.
  */
 
 type Row = Record<string, unknown>;
@@ -81,6 +88,10 @@ export interface FeedPost {
   /** a five-minute link to the first item's small preview; null for a video with no preview yet */
   previewUrl: string | null;
   hidden: boolean;
+  /** 0261: Mature (18+) */
+  mature?: true;
+  /** 0261: Mature and this viewer hasn't confirmed they're 18+ — no preview or caption was sent */
+  ageLocked?: true;
 }
 
 export interface DiscoverCard {
@@ -91,6 +102,8 @@ export interface DiscoverCard {
   coverUrl: string | null;
   items: number;
   hasVideo: boolean;
+  /** 0261: Mature (18+); the cover is withheld from a viewer who hasn't confirmed they're 18+ */
+  mature?: true;
 }
 
 export interface DiscoverCreator extends FeedCreator {
@@ -204,10 +217,12 @@ export async function exclusiveFeed(viewerId: string, cursor?: string | null): P
   let posts: FeedPost[] = [];
   let next: string | null = null;
   if (allowed.length) {
-    const read = (withAudience: boolean) => {
+    // newest schema first: Mature (0261) + audience (0248), then audience only, then neither
+    const read = (level: number) => {
+      const extra = ["mature, audience", "audience", ""][level]!;
       let q = db
         .from("sub_posts")
-        .select(withAudience ? "id, creator_id, caption, created_at, audience" : "id, creator_id, caption, created_at")
+        .select(`id, creator_id, caption, created_at${extra ? `, ${extra}` : ""}`)
         .in("creator_id", allowed)
         .eq("status", "published")
         .order("created_at", { ascending: false })
@@ -216,26 +231,33 @@ export async function exclusiveFeed(viewerId: string, cursor?: string | null): P
       if (c) q = c.id ? q.or(afterCursorFilter({ at: c.at, id: c.id })) : q.lt("created_at", c.at);
       return q;
     };
-    let res = await read(true);
-    if (res.error && MISSING(res.error.message)) res = await read(false);
+    let res = await read(0);
+    if (res.error && MISSING(res.error.message)) res = await read(1);
+    if (res.error && MISSING(res.error.message)) res = await read(2);
     if (res.error) return { ok: true, posts: [], creators: {}, next: null, subscriptions: allowed.length, ready: false, issuedAt, previewTtl: SIGNED_TTL_SECONDS };
     const rows = (res.data ?? []) as unknown as Row[];
     const page = rows.slice(0, FEED_PAGE);
+    const adult = page.some((r) => r.mature === true) ? await isAdult(viewerId).catch(() => false) : true;
     const media = await mediaOf(page.map((r) => r.id as string), true);
     // ONE preview link per post, for the tile only — the post's media are signed when it is opened
     posts = await Promise.all(
       page.map(async (r) => {
         const m = media.get(r.id as string);
-        const key = previewKey(m?.first ?? null);
+        const mature = r.mature === true;
+        const locked = mature && !adult;
+        // a Mature post the viewer may not see yet: no link is even signed
+        const key = locked ? null : previewKey(m?.first ?? null);
         return {
           id: r.id as string,
           creatorId: r.creator_id as string,
           createdAt: r.created_at as string,
-          caption: (r.caption as string | null) ?? null,
+          caption: locked ? null : ((r.caption as string | null) ?? null),
           items: m?.n ?? 0,
           hasVideo: m?.video ?? false,
           previewUrl: key && hasPrivateR2 ? await presignPrivateGet(key, SIGNED_TTL_SECONDS) : null,
           hidden: audienceOf(r.audience) === "hidden",
+          ...(mature ? { mature: true as const } : {}),
+          ...(locked ? { ageLocked: true as const } : {}),
         };
       }),
     );
@@ -273,9 +295,15 @@ export async function feedPreviews(viewerId: string, ids: unknown): Promise<({ o
   const subs = await readAccess(viewerId);
   const allowed = [...(await creatorsById(subs.ids)).keys()];
   if (!allowed.length || !hasPrivateR2) return answer;
-  const { data, error } = await createAdminClient().from("sub_posts").select("id").in("id", [...new Set(ids as string[])]).in("creator_id", allowed).eq("status", "published");
-  if (error) return answer;
-  const rows = (data ?? []) as Row[];
+  const wanted = [...new Set(ids as string[])];
+  const pick = (cols: string) => createAdminClient().from("sub_posts").select(cols).in("id", wanted).in("creator_id", allowed).eq("status", "published");
+  let res = await pick("id, mature");
+  if (res.error && MISSING(res.error.message)) res = await pick("id");
+  if (res.error) return answer;
+  // 0261: a Mature post is refreshed only for a viewer who confirmed they're 18+ — otherwise it is left out
+  const all = (res.data ?? []) as unknown as Row[];
+  const adult = all.some((r) => r.mature === true) ? await isAdult(viewerId).catch(() => false) : true;
+  const rows = all.filter((r) => adult || r.mature !== true);
   const media = await mediaOf(rows.map((r) => r.id as string), true);
   await Promise.all(
     rows.map(async (r) => {
@@ -319,18 +347,26 @@ export async function discover(viewerId: string, subscribed: Set<string>, knownB
   const [people, postsR] = await Promise.all([
     creatorsById(live),
     // LOCKED only: a hidden post of a creator the viewer does not subscribe to never leaves the database
-    db.from("sub_posts").select("id, creator_id, cover_url, created_at").in("creator_id", live).eq("status", "published").eq("audience", "locked").order("created_at", { ascending: false }).order("id", { ascending: false }).limit(DISCOVER_CARDS * 4),
+    (async () => {
+      const q = (cols: string) => db.from("sub_posts").select(cols).in("creator_id", live).eq("status", "published").eq("audience", "locked").order("created_at", { ascending: false }).order("id", { ascending: false }).limit(DISCOVER_CARDS * 4);
+      const r = await q("id, creator_id, cover_url, created_at, mature");
+      // before 0261 there is no Mature column — the same read without it (the audience filter stays)
+      return r.error && MISSING(r.error.message) && /mature/.test(r.error.message) ? q("id, creator_id, cover_url, created_at") : r;
+    })(),
   ]);
   // before 0248 (no audience column) discover stays empty rather than risk anything
   if (postsR.error) return empty;
   const seen = new Set<string>();
-  const latest = ((postsR.data ?? []) as Row[]).filter((r) => {
+  const latest = ((postsR.data ?? []) as unknown as Row[]).filter((r) => {
     const id = r.creator_id as string;
     if (seen.has(id) || !people.has(id)) return false;
     seen.add(id);
     return true;
   }).slice(0, DISCOVER_CARDS);
-  const media = await mediaOf(latest.map((r) => r.id as string), false);
+  const [media, adult] = await Promise.all([
+    mediaOf(latest.map((r) => r.id as string), false),
+    latest.some((r) => r.mature === true) ? isAdult(viewerId).catch(() => false) : Promise.resolve(true),
+  ]);
   const creators: Record<string, DiscoverCreator> = {};
   for (const r of latest) {
     const id = r.creator_id as string;
@@ -338,7 +374,8 @@ export async function discover(viewerId: string, subscribed: Set<string>, knownB
     creators[id] = { ...people.get(id)!, priceCents: charge.priceCents, feeCents: charge.feeCents, feePercent: cfg.purchaseFeePercent, totalCents: charge.totalCents, periodDays: cfg.periodDays };
   }
   return {
-    cards: latest.map((r) => ({ id: r.id as string, creatorId: r.creator_id as string, createdAt: r.created_at as string, coverUrl: (r.cover_url as string | null) ?? null, items: media.get(r.id as string)?.n ?? 0, hasVideo: media.get(r.id as string)?.video ?? false })),
+    // 0261: a Mature post's public cover only for a viewer who confirmed they're 18+
+    cards: latest.map((r) => ({ id: r.id as string, creatorId: r.creator_id as string, createdAt: r.created_at as string, coverUrl: r.mature === true && !adult ? null : ((r.cover_url as string | null) ?? null), items: media.get(r.id as string)?.n ?? 0, hasVideo: media.get(r.id as string)?.video ?? false, ...(r.mature === true ? { mature: true as const } : {}) })),
     creators,
   };
 }

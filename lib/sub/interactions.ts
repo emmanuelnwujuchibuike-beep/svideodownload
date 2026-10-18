@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isAdult } from "@/lib/age/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { visibleTo } from "./guards";
@@ -12,7 +13,7 @@ import { hasActiveSub } from "./server";
  * save"). Every read and write checks access first: the creator, or an active subscriber — the
  * same check that guards opening the post. There is no save action at all. Tables 0239.
  */
-type Fail = { ok: false; error: string; status: number };
+type Fail = { ok: false; error: string; status: number; code?: "age_required" };
 const fail = (error: string, status = 400): Fail => ({ ok: false, error, status });
 const MISSING = (m: string) => /schema cache|does not exist|relation/i.test(m);
 
@@ -24,6 +25,8 @@ async function access(postId: string, userId: string | null): Promise<{ ok: true
     // Part 3: a hidden post answers exactly like one that does not exist
     return visibleTo(gate.audience, false) ? fail("Subscribe to like and comment.", 403) : fail("This post isn't available.", 404);
   }
+  // 0261: a Mature post's likes and comments follow the post — the creator, or a subscriber who confirmed they're 18+
+  if (gate.mature && userId !== gate.creatorId && !(await isAdult(userId).catch(() => false))) return { ok: false, error: "Confirm your age to see this post.", status: 403, code: "age_required" };
   return { ok: true, creatorId: gate.creatorId };
 }
 

@@ -23,7 +23,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   if (!UUID.test(id)) return NextResponse.json({ error: "Bad id." }, { status: 400 });
   const out = await listComments(id, await me());
-  return out.ok ? NextResponse.json(out, { headers }) : NextResponse.json({ error: out.error }, { status: out.status, headers });
+  return out.ok ? NextResponse.json(out, { headers }) : NextResponse.json({ error: out.error, ...("code" in out && out.code ? { code: out.code } : {}) }, { status: out.status, headers });
 }
 
 /** POST { body } — add a comment. */
@@ -38,7 +38,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const body = (await request.json().catch(() => null)) as { body?: unknown } | null;
   if (typeof body?.body !== "string") return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   const out = await addComment(id, uid, body.body);
-  return out.ok ? NextResponse.json(out) : NextResponse.json({ error: out.error }, { status: out.status });
+  return out.ok ? NextResponse.json(out) : NextResponse.json({ error: out.error, ...("code" in out && out.code ? { code: out.code } : {}) }, { status: out.status });
 }
 
 /** DELETE { commentId } — your own comment, or any comment on your own post. */
@@ -47,5 +47,5 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const body = (await request.json().catch(() => null)) as { commentId?: unknown } | null;
   if (!UUID.test(id) || typeof body?.commentId !== "string" || !UUID.test(body.commentId)) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   const out = await deleteComment(id, body.commentId, await me());
-  return out.ok ? NextResponse.json(out) : NextResponse.json({ error: out.error }, { status: out.status });
+  return out.ok ? NextResponse.json(out) : NextResponse.json({ error: out.error, ...("code" in out && out.code ? { code: out.code } : {}) }, { status: out.status });
 }

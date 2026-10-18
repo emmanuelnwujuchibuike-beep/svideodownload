@@ -55,7 +55,14 @@ interface Card {
   audience?: "locked" | "hidden";
   /** Part 4, creator only: Frenzsave took it down — shown marked, never opened */
   removed?: true;
+  /** 0261: Mature (18+) */
+  mature?: true;
+  /** 0261: Mature, and this viewer hasn't confirmed they're 18+ — the server sent no media, preview, caption or cover */
+  ageLocked?: true;
 }
+
+// 0261: the age check loads only when a Mature post is tapped
+const AgeGateSheet = dynamic(() => import("@/features/age/age-gate-sheet").then((m) => m.AgeGateSheet), { ssr: false });
 
 // posts opened in this tab (memory only) — shared with the Exclusive feed since Part 15 (opened-cache.ts)
 
@@ -75,6 +82,9 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
   }, [state, onAccess]);
   const [loadingMore, setLoadingMore] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
+  // 0261: the age check, opened from a Mature post; a confirmed adult reloads the page of posts once
+  const [ageGate, setAgeGate] = useState(false);
+  const [reload, setReload] = useState(0);
 
   // once per creator, shared with the tab warm-up and kept four minutes (sub-posts-cache.ts) — no polling
   useEffect(() => {
@@ -85,7 +95,7 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
     return () => {
       cancelled = true;
     };
-  }, [creatorId]);
+  }, [creatorId, reload]);
 
   /*
     Once the covers are on screen and the browser is idle, the FIRST post's first photo is fetched
@@ -209,9 +219,9 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
             <li key={p.id}>
               <button
                 type="button"
-                onClick={() => (state.access && !p.removed ? setOpen(p.id) : void 0)}
+                onClick={() => (state.access && p.ageLocked ? setAgeGate(true) : state.access && !p.removed ? setOpen(p.id) : void 0)}
                 disabled={!!p.removed}
-                aria-label={p.removed ? "Removed by Frenzsave. Under review." : state.access ? `Open subscriber post${p.caption ? `: ${p.caption.slice(0, 60)}` : ""}` : "Subscriber only. Subscribe to unlock."}
+                aria-label={p.removed ? "Removed by Frenzsave. Under review." : state.access && p.ageLocked ? "Mature (18+). Confirm your age to open." : state.access ? `Open subscriber post${p.caption ? `: ${p.caption.slice(0, 60)}` : ""}` : p.mature ? "Mature (18+). Subscriber only." : "Subscriber only. Subscribe to unlock."}
                 className="relative block aspect-[3/4] w-full overflow-hidden bg-frenz-fill transition active:scale-[0.98] sm:rounded-lg motion-reduce:active:scale-100"
               >
                 {p.coverUrl ? (
@@ -244,7 +254,14 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
                     <Lock className="h-5 w-5" aria-hidden />
                     <span className="text-[10.5px] font-bold uppercase tracking-[0.08em]">Subscriber only</span>
                   </span>
+                ) : p.ageLocked ? (
+                  <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-frenz-ink/80 px-2 text-center text-white">
+                    <span className="text-[15px] font-extrabold">18+</span>
+                    <span className="text-[10.5px] font-semibold leading-tight">Confirm your age</span>
+                  </span>
                 ) : null}
+                {/* 0261: every Mature tile carries its mark, for the creator and an adult subscriber too */}
+                {p.mature && !p.ageLocked ? <span className="absolute bottom-1.5 left-1.5 rounded-full bg-black/55 px-1.5 py-0.5 text-[10px] font-extrabold text-white">18+</span> : null}
                 <span className="absolute right-1.5 top-1.5 inline-flex items-center gap-0.5 rounded-full bg-black/45 px-1.5 py-0.5 text-[10.5px] font-semibold text-white">
                   {p.hasVideo ? <Film className="h-3 w-3" aria-hidden /> : <Images className="h-3 w-3" aria-hidden />}
                   {p.items > 1 ? p.items : null}
@@ -263,6 +280,16 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
         </button>
       ) : null}
 
+      {ageGate ? (
+        <AgeGateSheet
+          onClose={() => setAgeGate(false)}
+          onVerified={() => {
+            setAgeGate(false);
+            forgetSubPosts(creatorId);
+            setReload((n) => n + 1);
+          }}
+        />
+      ) : null}
       {open ? <PrivateViewer postId={open} initial={state.posts.find((p) => p.id === open)?.open ?? null} isCreator={state.isCreator} onClose={() => setOpen(null)} onDeleted={(id) => { removed(id); setOpen(null); }} onEdited={(id, caption) => { forgetSubPosts(creatorId); setState((st) => (st ? { ...st, posts: st.posts.map((x) => (x.id === id ? { ...x, caption, ...(x.open ? { open: { ...x.open, caption } } : {}) } : x)) } : st)); }} /> : null}
     </div>
   );

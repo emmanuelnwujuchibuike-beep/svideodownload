@@ -39,6 +39,8 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
   const [caption, setCaption] = useState("");
   // Part 3 (0248): locked = non-subscribers see a locked tile; hidden = they don't know it exists
   const [audience, setAudience] = useState<"locked" | "hidden">("locked");
+  // 0261: Mature (18+) — opened only by subscribers who confirmed they're 18+. Never explicit.
+  const [mature, setMature] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Part 4: compose → preview → publish. Nothing is uploaded or published before Publish.
@@ -106,7 +108,7 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
         coverUrl = await uploadWithPlan(await presignUpload("image", extOf(cover)), cover, cover.type || "image/jpeg");
       }
       setBusy("Publishing…");
-      const res = await fetch("/api/sub/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caption: caption.trim() || null, coverUrl, media, audience }) });
+      const res = await fetch("/api/sub/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caption: caption.trim() || null, coverUrl, media, audience, mature }) });
       const j = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) throw new Error(j?.error ?? "Couldn't publish.");
       items.forEach((it) => URL.revokeObjectURL(it.preview));
@@ -210,6 +212,29 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
                 ))}
               </div>
             </fieldset>
+            {/*
+              0261 (owner 2026-10-18): Mature (18+). Suggestive, violent or strong-language posts only —
+              sexually explicit content is not allowed at all (App Store / Play rules and the payment
+              provider's terms). The server withholds a Mature post from anyone who hasn't confirmed 18+.
+            */}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={mature}
+              onClick={() => setMature((m) => !m)}
+              className={cn("mt-3 flex w-full items-start gap-3 rounded-2xl border px-3 py-2.5 text-left transition", mature ? "border-primary bg-primary/[0.07] ring-1 ring-primary/40" : "border-black/[0.08] dark:border-white/10")}
+            >
+              <span aria-hidden className="mt-0.5 flex h-6 min-w-[2.25rem] shrink-0 items-center justify-center rounded-md bg-black/[0.06] px-1 text-[11px] font-extrabold dark:bg-white/10">
+                18+
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13.5px] font-semibold">Mature (18+)</span>
+                <span className="block text-[11.5px] leading-snug text-muted-foreground">Only subscribers who confirm they&apos;re 18 or older can open it. Sexually explicit content isn&apos;t allowed.</span>
+              </span>
+              <span aria-hidden className={cn("mt-0.5 flex h-6 w-10 shrink-0 items-center rounded-full p-0.5 transition-colors", mature ? "bg-primary" : "bg-black/15 dark:bg-white/20")}>
+                <span className={cn("h-5 w-5 rounded-full bg-white shadow transition-transform motion-reduce:transition-none", mature ? "translate-x-4" : "translate-x-0")} />
+              </span>
+            </button>
             {audience === "locked" ? (
               <button type="button" onClick={() => pickCover.current?.click()} className={cn(exQuiet, "mt-2")}>
                 <ImagePlus className="h-4 w-4" aria-hidden /> {cover ? `Cover: ${cover.name.slice(0, 24)}` : "Add a public cover (optional)"}
@@ -240,6 +265,7 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
                   <span className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white">
                     {items.length} {items.length === 1 ? "item" : "items"}
                   </span>
+                  {mature ? <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-extrabold text-white">18+</span> : null}
                 </div>
                 {caption.trim() ? <p className="mt-1.5 line-clamp-3 text-[12.5px]">{caption.trim()}</p> : null}
               </figure>

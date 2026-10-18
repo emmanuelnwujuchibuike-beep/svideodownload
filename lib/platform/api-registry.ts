@@ -106,6 +106,8 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   { method: "POST", path: "/api/sub/announcements", auth: "session", category: "subscriptions", description: "Publish to YOUR subscribers (idempotency key). Fan-out is queued in bounded pages." },
   { method: "DELETE", path: "/api/sub/announcements", auth: "session", category: "subscriptions", description: "Delete one of your announcements (kept for audit, fan-out stopped)." },
   // Part 11 (0253): optional-email unsubscribe. No session — the unguessable token in the link is the authority, and it can only switch optional email OFF.
+  { method: "GET", path: "/api/age", auth: "session-optional", category: "account", description: "The member age check: adult, minor (with the day they may answer again) or none. Never the date of birth." },
+  { method: "POST", path: "/api/age", auth: "session", category: "account", description: "Answer the age check (date of birth + 18+ confirmation). The server decides and keeps only the outcome." },
   { method: "GET", path: "/api/email/unsubscribe", auth: "session-optional", category: "account", description: "Opens the unsubscribe confirmation. Changes nothing (link scanners open links)." },
   { method: "POST", path: "/api/email/unsubscribe", auth: "session-optional", category: "account", description: "Turn optional email off for the token's member: the page's button, or a mail client's RFC 8058 one-click. Idempotent." },
   { method: "GET", path: "/api/members/subscribers", auth: "session", category: "subscriptions", description: "The signed-in creator's own paid subscribers, paged. No amounts or payment details." },
@@ -113,7 +115,7 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   { method: "POST", path: "/api/sub/posts", auth: "session", category: "subscriptions", description: "Publish an exclusive post from files in the creator's own private folder." },
   { method: "POST", path: "/api/sub/posts/upload", auth: "session", category: "subscriptions", description: "A five-minute upload link into the creator's own private-bucket folder." },
   { method: "GET", path: "/api/sub/posts/[id]", auth: "session", category: "subscriptions", description: "Open one exclusive post: access re-checked, then five-minute media links." },
-  { method: "PATCH", path: "/api/sub/posts/[id]", auth: "session", category: "subscriptions", description: "The creator saves a missing preview for their own post." },
+  { method: "PATCH", path: "/api/sub/posts/[id]", auth: "session", category: "subscriptions", description: "The creator edits their own post: a missing preview, the caption, who sees it exists, or Mature (18+)." },
   { method: "DELETE", path: "/api/sub/posts/[id]", auth: "session", category: "subscriptions", description: "The creator deletes their own post and its private files (not while taken down)." },
   { method: "GET", path: "/api/sub/posts/[id]/like", auth: "session", category: "subscriptions", description: "Likes, comment count and whether I liked it (subscribers and the creator)." },
   { method: "POST", path: "/api/sub/posts/[id]/like", auth: "session", category: "subscriptions", description: "Like or unlike an exclusive post (subscribers and the creator)." },

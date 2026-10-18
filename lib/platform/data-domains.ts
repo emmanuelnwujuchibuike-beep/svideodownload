@@ -45,6 +45,8 @@ export const DATA_DOMAINS: DataDomain[] = [
       "trusted_devices",
       "user_encryption_keys",
       "privacy_settings",
+      // 0261: the age check — the outcome only (adult, or minor until the day they turn 18), never the date of birth
+      "age_checks",
     ],
     storage: ["relational"],
   },

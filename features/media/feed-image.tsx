@@ -10,6 +10,7 @@ import { useTapOrDoubleTap } from "@/lib/hooks/use-tap-or-double-tap";
 import { clampFeedRatio } from "@/lib/media/aspect";
 import { prefetchImage } from "@/lib/media/prefetch-image";
 import { cn } from "@/lib/utils";
+import { feedFrameStyle } from "@/features/media/feed-frame";
 
 /**
  * Inline feed image — shown full-size (like a video), with Instagram-style
@@ -28,7 +29,10 @@ export function FeedImage({
   className,
   children,
   priority = false,
+  fit = "natural",
 }: {
+  /** "frame": full card width, height capped to the screen, the photo shown whole (feed-frame.ts). */
+  fit?: "natural" | "frame";
   src: string;
   alt: string;
   /** Natural pixel size — when known, the photo renders via next/image (AVIF/WebP). */
@@ -177,7 +181,7 @@ export function FeedImage({
       // as the image itself shifting/wobbling under a finger, not a subtle
       // press cue. The image now stays perfectly still through any touch,
       // press, or press-and-hold.
-      style={ratio ? { aspectRatio: ratio } : undefined}
+      style={fit === "frame" ? feedFrameStyle(ratio) : ratio ? { aspectRatio: ratio } : undefined}
       className={cn(
         // 🔴 REVERTED — BACK IN THE AVATAR COLUMN, NOT SHRUNK (owner,
         // 2026-08-18: "single video... shouldn't break through the avatar
@@ -190,14 +194,16 @@ export function FeedImage({
         // Plain `mx-auto` — no `w-fit` — lets this box fill its column like
         // a normal block element again; centering only matters on the rare
         // photo whose `max-h` cap narrows it below that column's width.
-        "relative mx-auto flex max-h-[85vh] items-center justify-center overflow-hidden rounded-2xl bg-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
+        "relative flex items-center justify-center overflow-hidden rounded-2xl bg-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
+        // "frame" (the feed card, 2026-10-18): full width, the height set by feedFrameStyle
+        fit === "frame" ? "w-full" : "mx-auto max-h-[85vh]",
         // Placeholder shape ONLY until `ratio` resolves (see the note above) —
         // without this the container would collapse to zero height (no aspect-
         // ratio style, no explicit height) for the brief window before the
         // backdrop image loads. A common portrait-photo ratio is the least-bad
         // guess; it self-corrects to the real shape via the state update, and
         // in practice resolves before the card is ever scrolled into view.
-        !ratio && "aspect-[4/5]",
+        fit !== "frame" && !ratio && "aspect-[4/5]",
         className,
       )}
       // Keyboard access (owner spec, 2026-08-17: "Keyboard users can still

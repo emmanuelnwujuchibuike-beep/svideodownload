@@ -5,12 +5,12 @@ import { AlertCircle, ArrowUp, Clock, X, Lightbulb } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import dynamic from "next/dynamic";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { lockTopbarVisible } from "@/features/app-shell/topbar-visibility";
-import { setTopbarCenter } from "@/features/app-shell/topbar-slot";
 import { ContinueInReels } from "@/features/feed/continue-in-reels";
 import { FeedAdSlot } from "@/features/feed/feed-ad-slot";
 import { HilltopFeedAd } from "@/features/feed/hilltop-feed-ad";
@@ -19,6 +19,7 @@ import { FeedPostCard } from "@/features/feed/feed-post-card";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
 import { ImageOpenFallback } from "@/features/feed/image-open-fallback";
 import { FeedTopbarTabs } from "@/features/feed/feed-topbar-tabs";
+import { FEED_TABS_SLOT_ID } from "@/features/feed/feed-tabs-slot";
 import { SparkCard } from "@/features/feed/spark-card";
 import { FEED_AD_INTERVAL } from "@/lib/feed/ad-slots";
 import { haptic } from "@/lib/motion/haptics";
@@ -620,15 +621,18 @@ export function SmartFeed({
   // directly under ReelsFeed's OWN `ReelTabs` (For You / Following / Feed) —
   // two different controls, two different meanings for "Following", fighting
   // over the same taps. Only one can own this screen region at a time.
+  /*
+    The tab row (design/Feed.dc.html, 2026-10-18) is the Feed's own row under the top bar, ABOVE the
+    stories — so on /home it portals into the slot the page puts there (FEED_TABS_SLOT_ID), and renders
+    inline at the top of the feed anywhere that slot does not exist. It used to live in the top bar's
+    centre slot. Still hidden while the in-place Reels overlay is open: only one control owns the
+    screen at a time (owner, 2026-08-18).
+  */
+  const [tabsSlot, setTabsSlot] = useState<HTMLElement | null>(null);
   useEffect(() => {
-    if (reel) {
-      setTopbarCenter(null);
-      return;
-    }
-    setTopbarCenter(<FeedTopbarTabs sort={sort} onSegment={onSegment} showReelsLink={pathname === "/feed" || pathname === "/home"} />);
-    return () => setTopbarCenter(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sort, !!reel, pathname]);
+    setTabsSlot(document.getElementById(FEED_TABS_SLOT_ID));
+  }, [pathname]);
+  const tabs = reel ? null : <FeedTopbarTabs sort={sort} onSegment={onSegment} showReelsLink={pathname === "/feed" || pathname === "/home"} />;
 
   // Restores the scroll position saved for a tab, once its content has
   // actually rendered (so the page is tall enough to scroll to it). Guarded so
@@ -1005,6 +1009,7 @@ export function SmartFeed({
         1600px row on a laptop-width screen.
       */}
       <div className="mx-auto w-full max-w-2xl">
+      {tabs ? (tabsSlot ? createPortal(tabs, tabsSlot) : <div className="-mx-3 mb-3 sm:-mx-4">{tabs}</div>) : null}
       {/* Premium pull-to-refresh indicator */}
       <div
         aria-hidden
@@ -1040,7 +1045,7 @@ export function SmartFeed({
             <button
               type="button"
               onClick={refreshTop}
-              className="pointer-events-auto -mt-1 mb-3 flex items-center gap-1.5 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-violet-500/30"
+              className="pointer-events-auto -mt-1 mb-3 flex min-h-11 items-center gap-1.5 rounded-full bg-frenz-violet px-4 text-sm font-bold text-white shadow-frenz-float"
             >
               <ArrowUp className="h-4 w-4" /> {freshCount} new {freshCount === 1 ? "post" : "posts"}
             </button>
@@ -1058,7 +1063,7 @@ export function SmartFeed({
             exit={{ opacity: 0, height: 0 }}
             className="mb-4 overflow-hidden"
           >
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600/15 to-violet-600/15 p-4 ring-1 ring-inset ring-violet-500/20">
+            <div className="relative overflow-hidden rounded-[22px] border border-frenz-line bg-frenz-card p-4 shadow-frenz-card">
               <button
                 type="button"
                 onClick={() => setAway(null)}
@@ -1253,7 +1258,7 @@ function ZeroEmptyFeed({
       ))}
       <Link
         href="/explore"
-        className="block rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-5 py-3 text-center text-sm font-semibold text-white"
+        className="block rounded-2xl bg-frenz-violet px-5 py-3 text-center text-sm font-bold text-white"
       >
         Explore everything
       </Link>

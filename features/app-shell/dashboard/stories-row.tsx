@@ -48,9 +48,10 @@ const SelfStoryCard = dynamic(() => import("@/features/ads-platform/serve/self-s
   stories section — reduced height, compact avatar, more space for chats"):
   60px avatars in 72px columns instead of 68 / 82. /home keeps the full size.
 */
-const AV = "h-[4.25rem] w-[4.25rem]";
+// /home: the design's 64 px ring (design/Feed.dc.html, 2026-10-18) — a 54 px face inside a 2.5 px ring and gap.
+const AV = "h-[54px] w-[54px]";
 const AV_COMPACT = "h-[3.75rem] w-[3.75rem]";
-const COL = "w-[5.1rem]";
+const COL = "w-16";
 const COL_COMPACT = "w-[4.5rem]";
 
 function StoryRing({
@@ -78,8 +79,9 @@ function StoryRing({
   return (
     <PressIcon className="shrink-0">
       <button type="button" onClick={onOpen} className={cn("flex flex-col items-center", col, compact ? "gap-1" : "gap-1.5")}>
-        <span className={cn("rounded-full p-0.5", unseen ? "bg-brand" : "ring-1 ring-inset ring-border/70")}>
-          <span className="block overflow-hidden rounded-full bg-background p-0.5">
+        {/* unseen: the brand-gradient ring (identity — allowed); seen: the hairline */}
+        <span className={cn("rounded-full p-[2.5px]", unseen ? "bg-frenz-gradient" : "ring-1 ring-inset ring-frenz-line")}>
+          <span className="block overflow-hidden rounded-full bg-frenz-page p-[2.5px]">
             {/* One <Image> for BOTH image stories and video stories (via the
                 stored first-frame poster, 0083). `bg-secondary` paints a neutral
                 fill the instant the ring mounts, so a video story's cover never
@@ -109,7 +111,7 @@ function StoryRing({
             )}
           </span>
         </span>
-        <span className={cn(col, "truncate text-center text-[11px]", unseen ? "font-semibold text-foreground" : "font-medium text-muted-foreground")}>
+        <span className={cn(col, "truncate text-center text-xs", unseen ? "font-semibold text-frenz-ink" : "font-medium text-frenz-muted")}>
           {label}
         </span>
       </button>
@@ -188,7 +190,7 @@ export function StoriesRow({
   useEffect(() => setSeen(loadSeenMap()), [data]);
 
   return (
-    <div className={cn("-mx-1 flex overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", compact ? "gap-2.5" : "gap-4")}>
+    <div className={cn("frenz-ui -mx-1 flex overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", compact ? "gap-2.5" : "gap-3.5")}>
       {/* Order is the owner's, 2026-07-16: "i want it in the same line with other
           stories but it should be the first" —
             [+ Add story] [Your story] [friends…]
@@ -209,8 +211,9 @@ export function StoriesRow({
           aria-label="Add to your story"
           className={cn("flex flex-col items-center", compact ? cn(COL_COMPACT, "gap-1") : cn(COL, "gap-1.5"))}
         >
-          <span className="relative rounded-full p-0.5 ring-1 ring-inset ring-border/70">
-            <span className="block rounded-full bg-background p-0.5">
+          {/* the design's "Your story": a dashed ring, the gradient plus badge */}
+          <span className="relative rounded-full border-2 border-dashed border-frenz-violet/30 p-[1.5px]">
+            <span className="block rounded-full bg-frenz-page p-[1.5px]">
               {viewerAvatarUrl ? (
                 <Image src={viewerAvatarUrl} alt="" width={68} height={68} className={cn(av, "rounded-full object-cover")} />
               ) : (
@@ -219,11 +222,12 @@ export function StoriesRow({
                 </span>
               )}
             </span>
-            <span className={cn("absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white ring-2 ring-background", compact ? "h-6 w-6" : "h-7 w-7")}>
-              <Plus className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
+            <span className={cn("absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full bg-frenz-gradient-x text-white ring-2 ring-frenz-page", compact ? "h-6 w-6" : "h-[22px] w-[22px]")}>
+              <Plus className={compact ? "h-3.5 w-3.5" : "h-3 w-3"} strokeWidth={3.2} />
             </span>
           </span>
-          <span className="text-[11px] font-medium text-muted-foreground">Add story</span>
+          {/* "Your story" as designed until you have one — then your ring carries that name and this is "Add story" */}
+          <span className="text-xs font-semibold text-frenz-ink/80">{ownGroup ? "Add story" : "Your story"}</span>
         </button>
       </PressIcon>
 

@@ -6,7 +6,7 @@ review before the next one starts.
 
 - [x] 0. Foundation (tokens, fonts, BottomNav, VerifiedBadge, Avatar, IconButton, SectionHeader, Card, Input, SegmentedControl) — frenz-* tokens + Sora/Hanken fonts, shared primitives in features/frenz-ui, the existing bottom nav restyled to the design with a white fade.
 - [x] 1. Home / Download → design/Main.dc.html — existing H1 in Bricolage, the paste card on the real download flow, Batch download, live transfers, Tools (Frenz AI, Wallpapers, Earn, Exclusive, Explore) where Recent was, Cloud storage; lighter page.
-- [ ] 2. Feed → design/Feed.dc.html
+- [x] 2. Feed → design/Feed.dc.html — tab row (For You · Following · Reels · Exclusive) above the stories, 64 px story rings, the stacked post card, full-width media capped to one screen.
 - [ ] 3. Messages → design/Messages.dc.html
 - [ ] 4. Chat → design/Chat.dc.html
 - [ ] 5. Profile → design/Profile.dc.html (updated 2026-10-18: the "Private" tab is "Exclusive" and opens the Exclusive tab view)
@@ -110,6 +110,30 @@ they are applied while each page is built and there is no separate cleanup step.
   download interstitial, exit intent, the trademark disclaimer.
 - Not matched: the design's "Open in Photos" check and the "saved" row state — finished
   downloads belong to History now (owner).
+
+### Step 2 · Feed (/home)
+- Header: the app's top bar (logo, create, search, bell) — the design's gradient "F"
+  square is not used (owner: keep the existing logo).
+- Tabs: their own underlined row under the top bar, ABOVE the stories (portalled from
+  SmartFeed into a slot on /home): For You · Following · Reels · Exclusive with a lock
+  (owner: Exclusive in the top row). Exclusive opens the existing /exclusive feed until
+  step 13 builds the in-feed tab. Framer-motion dropped from the tabs.
+- Stories: 64 px rings, gradient when unseen, hairline when seen; the add button is the
+  dashed "Your story" ring until you have one, then "Add story" (your own ring carries
+  "Your story" — two rings with one name would be ambiguous).
+- Post card: the design's stacked card — avatar, name, seal, date, then "Following" (a
+  status, not a button: unfollow stays in the ⋯ menu) or a "Follow" button; the Frenz
+  F-mark stays on each post (owner, 2026-08-17); caption; media edge to edge; action
+  row (Wow — the app's like — comment, repost, send … save) on 44 px targets.
+- Media frame (owner, 2026-10-18): every video and photo fills the card width; height is
+  the smaller of its natural height and the screen less ~25rem, so a 9:16 clip is shown
+  whole with the creator row, caption, actions and the next post's header on one screen.
+  Sides fill with the existing blurred backdrop. Video views show as a glass chip on the
+  video (glass over imagery only); photos keep the count under the media.
+- Gradients removed from content: Discover cards, "While you were away", the "new posts"
+  pill and "Explore everything" are white cards or flat violet now.
+- Not matched: the design's heart + "1" like — the app's like is the Wow reaction with
+  its picker; kept, coloured magenta when active.
 
 ### Outside the page steps (owner, 2026-10-18)
 - `a50b9cd`: full-screen ads lost the engagement tray (brand badge, Like, views,

@@ -12,6 +12,7 @@ import { cancelVideoPrefetch, prefetchVideo } from "@/lib/media/prefetch-video";
 import { streamHlsUrl, streamIframeUrl } from "@/lib/media/stream";
 import { claimPlayback, isSuspended, recentlyScrolled, recordView, recordWatch, releasePlayback } from "@/lib/media/video-coordinator";
 import { cn } from "@/lib/utils";
+import { feedFrameStyle } from "@/features/media/feed-frame";
 
 // A tap only counts if the pointer barely moved AND the page isn't mid-scroll.
 const TAP_MOVE_TOLERANCE = 18;
@@ -57,7 +58,10 @@ export function FeedVideo({
   children,
   priority = false,
   nextSrc,
+  fit = "natural",
 }: {
+  /** "frame": full card width, height capped to the screen, the clip shown whole (feed-frame.ts). */
+  fit?: "natural" | "frame";
   /**
    * The clip's natural pixel size, when the server knows it (`posts.media_width`
    * / `media_height`).
@@ -521,7 +525,7 @@ export function FeedVideo({
       // server-known width/height) arrives, 4/5 is just a reasonable guess,
       // never a ceiling applied to a KNOWN ratio (see aspect.ts's 2026-08-17
       // reversal note — `ratio` itself is the media's true, unclamped shape).
-      style={{ aspectRatio: ratio ?? 4 / 5 }}
+      style={fit === "frame" ? feedFrameStyle(ratio) : { aspectRatio: ratio ?? 4 / 5 }}
       className={cn(
         // 🔴 BACK IN THE AVATAR COLUMN, NO SPECIAL ALIGNMENT NEEDED (owner,
         // 2026-08-18: "single video... shouldn't break through the avatar
@@ -565,7 +569,7 @@ export function FeedVideo({
           overflowing the card. With no slack left inside, alignment is
           decided entirely by `mr-auto` above.
         */
-        "max-h-[60vh] lg:flex lg:!aspect-auto lg:w-fit lg:max-w-full lg:max-h-[60vh] lg:items-center lg:justify-center",
+        fit === "frame" ? "w-full" : "max-h-[60vh] lg:flex lg:!aspect-auto lg:w-fit lg:max-w-full lg:max-h-[60vh] lg:items-center lg:justify-center",
         className,
       )}
     >
@@ -624,7 +628,7 @@ export function FeedVideo({
           the page whose stillness is load-bearing, and the pause indicator
           already gives the gesture unambiguous feedback.
         */
-        className="pointer-events-none h-full max-h-[60vh] w-full object-cover lg:h-auto lg:max-h-[60vh] lg:w-auto"
+        className={fit === "frame" ? "pointer-events-none h-full w-full object-contain" : "pointer-events-none h-full max-h-[60vh] w-full object-cover lg:h-auto lg:max-h-[60vh] lg:w-auto"}
         draggable={false}
         // Keyboard access (owner spec, 2026-08-17: "Keyboard users can still
         // open media") — purely additive: Enter/Space opens directly,

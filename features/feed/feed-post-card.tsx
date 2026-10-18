@@ -8,27 +8,23 @@ import {
   Ban,
   Bell,
   BellOff,
-  Bookmark,
-  Check,
   Download,
   EyeOff,
   Flag,
   FolderPlus,
   Heart,
   Link as LinkIcon,
-  MessageCircle,
-  MoreHorizontal,
   Music,
   Pencil,
   Play,
   Repeat2,
-  Send as SendIcon,
   Share2,
   UserPlus,
   Lightbulb,
 } from "lucide-react";
-import { VerifiedTick } from "@/components/badges/identity-badges";
 import { FrenzLogo } from "@/components/brand/frenz-logo";
+import { BookmarkIcon, ChatIcon, DotsIcon, PlayIcon, RepostIcon, SendIcon as FrenzSendIcon } from "@/features/frenz-ui/icons";
+import { VerifiedBadge } from "@/features/frenz-ui/primitives";
 import Link from "next/link";
 import { memo, useEffect, useRef, useState } from "react";
 
@@ -478,10 +474,10 @@ function FeedPostCardImpl({
         // a real dark ground rather than a light haze, on any video frame.
         light
           ? "absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-1.5 pb-1 pt-8"
-          : "mt-1 pb-1",
+          : "px-2 pt-1",
       )}
     >
-      <div className={cn("flex min-w-0 items-center", light ? "gap-0.5" : "gap-1")}>
+      <div className={cn("flex min-w-0 items-center", light ? "gap-0.5" : "gap-0")}>
         <span className="relative inline-flex">
           <ActionButton
             active={liked}
@@ -501,7 +497,7 @@ function FeedPostCardImpl({
             }}
             icon={myEmotion ? makeEmotionIcon(reactionGlyph(myEmotion)!) : liked ? WowSolid : WowOutline}
             count={likes}
-            activeClass="text-violet-500"
+            activeClass="text-frenz-magenta"
             label="Wow"
             press={wowPress}
             light={light}
@@ -516,7 +512,7 @@ function FeedPostCardImpl({
           />
         </span>
         <ActionButton
-          icon={MessageCircle}
+          icon={ChatIcon as typeof Heart}
           count={item.commentsCount}
           onClick={() => {
             if (!requireAuth()) return;
@@ -529,11 +525,11 @@ function FeedPostCardImpl({
         {!item.isOwner ? (
           <span className="relative inline-flex">
             <RepostBurst triggerKey={repostBurst} />
-            <ActionButton icon={Repeat2} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-500" onClick={repost} label="Repost" press={repostPress} light={light} />
+            <ActionButton icon={RepostIcon as typeof Heart} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-600" onClick={repost} label="Repost" press={repostPress} light={light} />
           </span>
         ) : null}
         <ActionButton
-          icon={SendIcon}
+          icon={FrenzSendIcon as typeof Heart}
           onClick={() => {
             if (!requireAuth()) return;
             setShareReady(true);
@@ -543,7 +539,7 @@ function FeedPostCardImpl({
           light={light}
         />
       </div>
-      <ActionButton active={saved} onClick={() => react("save")} icon={Bookmark} fill={saved} activeClass="text-blue-500" label="Save" light={light} />
+      <ActionButton active={saved} onClick={() => react("save")} icon={BookmarkIcon as typeof Heart} fill={saved} activeClass="text-frenz-violet" label="Save" light={light} />
     </div>
   );
 
@@ -582,7 +578,8 @@ function FeedPostCardImpl({
         low-opacity white in dark). `space-y-4` between cards is gone too (see
         smart-feed.tsx) — posts now sit edge to edge, the border IS the gap.
       */
-      className="group relative cv-auto border-b border-border/70 py-3 last:border-b-0 dark:border-white/[0.07]"
+      // the design's post: white, a hairline above it; the page is white too (owner, 2026-10-18)
+      className="frenz-ui group relative cv-auto border-t border-frenz-line bg-frenz-card pb-1 max-sm:-mx-3"
     >
       {/* Repost discovery — lightweight "@x reposted" attribution when someone you
           follow reposted this, plus their recommendation caption when they wrote
@@ -646,76 +643,42 @@ function FeedPostCardImpl({
       ) : null}
 
       {/*
-        🔴 TWO-COLUMN TWITTER LAYOUT (owner, 2026-08-17: "the profile ring
-        and header should be at the far left end like twitter... the media
-        and profile position" — after an earlier message of the owner's had
-        read as walking this back, a later message in the same day clarified
-        it was still wanted: "you have not done feed card arangement"). The
-        avatar is now its OWN fixed-width left column, top-aligned; every-
-        thing else — name/handle/time, the F-mark + menu, caption, poll,
-        media, and the action row — lives in ONE right column next to it,
-        matching X's actual two-column tweet layout instead of Instagram's
-        stacked "avatar+name spans full width, media spans full width below"
-        arrangement this card used before. Card padding also tightened from
-        p-4/p-5 to px-2 (owner: "go to the extreme right end with just
-        padding 2") so the whole row sits closer to the screen edge. Avatar
-        shrunk again 40px->36px and the gap to its content column tightened
-        (owner, same day: "the space on the left for the profile ring
-        shouldnt be that big").
+        The design's stacked card (design/Feed.dc.html, 2026-10-18): a header row (avatar, name, seal,
+        date, Following / Follow, the F-mark, options), the caption, the media edge to edge, then the
+        action row. It replaces the two-column X layout (2026-08-17); every handler, gesture, sheet and
+        menu item below is the same as before — only the arrangement and the palette changed.
       */}
-      <div className="flex gap-2 px-2 sm:px-3">
-        <Link
-          href={`${profilePath(item.publisher.handle)}`}
-          className="shrink-0 self-start rounded-full bg-gradient-to-br from-primary/70 to-accent/70 p-[2px] "
-        >
+      <div className="flex items-center gap-2.5 py-3 pl-4 pr-2">
+        <Link href={profilePath(item.publisher.handle)} aria-label={`${item.publisher.displayName}'s profile`} className="shrink-0 rounded-full">
           {item.publisher.avatarUrl ? (
-            <Image src={item.publisher.avatarUrl} alt="" width={36} height={36} className="h-9 w-9 rounded-full object-cover ring-2 ring-card" />
+            <Image src={item.publisher.avatarUrl} alt="" width={40} height={40} className="h-10 w-10 rounded-full object-cover" />
           ) : (
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-base font-bold text-white ring-2 ring-card">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-frenz-gradient font-heading text-base font-bold text-white">
               {item.publisher.displayName.charAt(0).toUpperCase()}
             </span>
           )}
         </Link>
-
-        <div className="min-w-0 flex-1 pt-0.5">
-          {/* Name row — ONE line like X (name, verified tick, @handle · time),
-              not the old two-line Instagram-style stack. `truncate` on each
-              piece keeps a long name or handle from pushing the trailing
-              F-mark/menu off the row instead of wrapping. */}
-          <div className="flex items-center gap-1.5 text-[15px] leading-tight">
-            <Link href={`${profilePath(item.publisher.handle)}`} className="flex min-w-0 shrink items-center gap-1 font-semibold hover:underline">
-              <span className="truncate">{item.publisher.displayName}</span>
-              {item.publisher.isVerified ? <VerifiedTick className="h-3.5 w-3.5 shrink-0" /> : null}
+        <div className="flex min-w-0 flex-1 flex-col gap-px">
+          <div className="flex min-w-0 items-center gap-[5px]">
+            <Link href={profilePath(item.publisher.handle)} className="truncate text-[15px] font-bold text-frenz-ink hover:underline">
+              {item.publisher.displayName}
             </Link>
-            <span className="shrink-0 truncate text-xs text-muted-foreground">@{item.publisher.handle} · {timeAgo(item.createdAt)}</span>
-            <span className="min-w-2 flex-1" />
-
-            {!item.isOwner ? (
-              <button
-                type="button"
-                onClick={toggleFollow}
-                disabled={busy}
-                className={cn(
-                  "hidden shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-60 sm:inline-flex",
-                  following ? "bg-secondary text-foreground" : "bg-gradient-to-r from-blue-600 to-violet-600 text-white hover:opacity-95",
-                )}
-              >
-                {following ? <Check className="h-3.5 w-3.5" /> : <UserPlus className="h-3.5 w-3.5" />}
-                {following ? "Following" : "Follow"}
-              </button>
-            ) : null}
-
-            {/*
-              🔴 F-MARK WATERMARK, TOP-RIGHT OF EVERY POST (owner, 2026-08-17,
-              with reference screenshots of the real X app: "the X logo by
-              top side of every post . all should be the same , replace the
-              X logo with F logo"). Real X stamps its own brand mark in this
-              exact spot on every tweet's header row — decorative, not
-              interactive (no link, no click target), same treatment here
-              with Frenz's own mark instead.
-            */}
-            <FrenzLogo size={16} alt="" className="shrink-0 opacity-50" />
-
+            {item.publisher.isVerified ? <VerifiedBadge size={15} /> : null}
+            <span className="shrink-0 text-[13px] text-frenz-muted">· {timeAgo(item.createdAt)}</span>
+          </div>
+          {item.isOwner ? (
+            <span className="truncate text-xs text-frenz-muted">@{item.publisher.handle}</span>
+          ) : following ? (
+            /* a status, not a button — unfollowing stays in the ⋯ menu, never one stray tap away */
+            <span className="text-xs font-semibold text-frenz-violet">Following</span>
+          ) : (
+            <button type="button" onClick={toggleFollow} disabled={busy} className="relative self-start text-xs font-bold text-frenz-blue transition hover:text-frenz-violet disabled:opacity-60 before:absolute before:-inset-x-2 before:-inset-y-3 before:content-['']">
+              Follow
+            </button>
+          )}
+        </div>
+        {/* The Frenz mark stays on every post (owner, 2026-08-17; the existing logo, never the design's) */}
+        <FrenzLogo size={16} alt="" className="shrink-0 opacity-50" />
             {/* Overflow menu */}
             <div className="relative shrink-0">
               <button
@@ -723,9 +686,9 @@ function FeedPostCardImpl({
                 onClick={() => setMenuOpen((v) => !v)}
                 aria-label="Post options"
                 aria-expanded={menuOpen}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full text-frenz-ink/80 transition hover:bg-frenz-fill"
               >
-                <MoreHorizontal className="h-5 w-5" />
+                <DotsIcon size={20} />
               </button>
               <AnimatePresence>
                 {menuOpen ? (
@@ -781,7 +744,7 @@ function FeedPostCardImpl({
                 ) : null}
               </AnimatePresence>
             </div>
-          </div>
+        </div>
 
           {/* Caption — a real <a href> to the post's canonical URL (postHref:
               lib/social/post-url.ts), not just an onClick target. Section 8 of
@@ -801,7 +764,7 @@ function FeedPostCardImpl({
               use) — only Ctrl/Cmd/middle-click, right-click → copy link, and
               a crawler's DOM parser see the real navigation. */}
           {title ? (
-            <div className="pb-3 pt-0.5">
+            <div className="px-4 pb-3 text-[15px] leading-snug text-frenz-ink">
               {/*
                 Clamped to seven lines with See more / Show less (owner,
                 2026-08-23) — see feed-caption.tsx for why the controls are
@@ -829,7 +792,7 @@ function FeedPostCardImpl({
                 // real indexable hub — see category-hub-view.tsx's note on
                 // the owner's "search for news/sports should land on the
                 // hashtag page for that topic" (2026-08-18).
-                <Link href={`/${item.category}`} className="mt-1 inline-block text-xs font-medium text-primary hover:underline">
+                <Link href={`/${item.category}`} className="mt-1 inline-block text-xs font-semibold text-frenz-blue hover:underline">
                   #{item.category}
                 </Link>
               ) : null}
@@ -838,7 +801,7 @@ function FeedPostCardImpl({
 
           {/* Poll (vote) — below the caption */}
           {item.hasPoll ? (
-            <div className="pb-3">
+            <div className="px-4 pb-3">
               <PostPollInline postId={item.id} />
             </div>
           ) : null}
@@ -856,8 +819,9 @@ function FeedPostCardImpl({
               column as the caption, at that column's own natural width.
           */}
           {item.mediaItems && item.mediaItems.length > 1 ? (
-            <div className="mb-3">
+            <div>
               <MediaGrid
+                className="rounded-none"
                 items={item.mediaItems}
                 onExpandItem={(index) => open(item, false, index)}
                 onDoubleTapLike={() => {
@@ -878,6 +842,8 @@ function FeedPostCardImpl({
             */
             <div className="relative">
               <FeedVideo
+                fit="frame"
+                className="rounded-none"
                 src={item.mediaUrl}
                 streamUid={item.streamUid}
                 streamReady={item.streamReady}
@@ -914,11 +880,20 @@ function FeedPostCardImpl({
                     {formatDuration(item.durationSec)}
                   </span>
                 ) : null}
+                {/* the design's views chip: glass over the picture (glass is allowed over images) */}
+                {item.viewsCount > 0 ? (
+                  <span className="pointer-events-none absolute bottom-3 left-3 z-10 inline-flex items-center gap-[5px] rounded-full bg-black/55 px-2.5 py-1 text-xs font-bold text-white backdrop-blur-md">
+                    <PlayIcon size={11} />
+                    {formatCompactNumber(item.viewsCount)} views
+                  </span>
+                ) : null}
               </FeedVideo>
             </div>
           ) : item.mediaKind === "image" && (item.mediaUrl || item.thumbnailUrl) ? (
             <div className="relative">
               <FeedImage
+                fit="frame"
+                className="rounded-none"
                 src={item.mediaUrl || item.thumbnailUrl!}
                 alt={item.title}
                 width={item.mediaWidth ?? undefined}
@@ -950,8 +925,8 @@ function FeedPostCardImpl({
             */
             null
           ) : item.mediaKind === "audio" ? (
-        <button type="button" onClick={() => open(item)} className="block w-full text-left" aria-label="Play">
-          <div className="mb-3 flex items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600/10 to-violet-600/10 p-3 ring-1 ring-inset ring-violet-500/15">
+        <button type="button" onClick={() => open(item)} className="block w-full px-4 text-left" aria-label="Play">
+          <div className="flex items-center gap-3 rounded-2xl border border-frenz-line bg-frenz-fill p-3">
             <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-violet-600 text-white">
               <Music className="h-5 w-5" />
             </span>
@@ -968,7 +943,7 @@ function FeedPostCardImpl({
         </button>
       ) : (
         <button type="button" onClick={() => open(item)} className="block w-full text-left" aria-label="Open">
-          <div className="relative mb-3 aspect-video overflow-hidden rounded-2xl bg-neutral-900">
+          <div className="relative aspect-video overflow-hidden bg-neutral-900">
             {item.thumbnailUrl ? (
               // No hover zoom (owner, 2026-08-11): the same "media stays still"
               // rule as FeedVideo. A poster that grows under the pointer is the
@@ -995,46 +970,12 @@ function FeedPostCardImpl({
         </button>
       )}
 
-      {/*
-        🔴 LIGHTWEIGHT INLINE ROW, NOT A BOXED PILL (owner, 2026-08-17 redesign
-        spec, section 11): "Replace the current large enclosed reaction
-        container. Use a clean inline engagement row." The `bg-secondary/40
-        ring-1 ...` capsule is gone — icons now sit directly on the post's own
-        surface with breathing room between them, matching X's density rather
-        than a boxed toolbar. Icons bumped 19px→20px (spec: "approximately
-        20-22px"). Colors restrained to the brand palette (spec section 18:
-        "do not introduce random additional accent colors") — Save's old
-        amber-500 had no brand justification and is now blue, distinct from
-        Wow's purple.
-
-        Repost KEEPS its established emerald rather than switching to the
-        spec's suggested indigo — deliberately: `RepostBurst` (the "Reposted!"
-        bubble) and this same active-color are a SHARED, cross-surface pair
-        also used by reel-viewer.tsx, which section 26 explicitly puts out of
-        scope ("Only update the feed experience"). Recoloring just this one
-        instance would split one interaction into two different colors
-        depending on which surface you're on — a worse inconsistency than
-        keeping the existing, already-established accent.
-
-        🔴 2026-08-18: only rendered HERE (below the content, on the card's own
-        surface) for the cases with no full-bleed media box to blend onto — a
-        multi-photo grid, an audio card, or a text-only post. Video and single-
-        image posts get this SAME row rendered as an overlay on the media
-        itself instead (see `engagementRow`'s own note) — `overlayEngagement`
-        below is true for exactly those two cases.
-      */}
           {/*
-            🔴 THE TRAY IS ALWAYS BELOW THE MEDIA NOW (owner, 2026-10-14: "Bring
-            the engagement Tray out of the media card, it should stay outside
-            below on the white section so users gets a clear view of the
-            video"). It used to sit on the bottom of a single video or image
-            over a dark scrim (`overlayEngagement`), which covered the frame.
-            For those two shapes the views count follows the tray.
+            🔴 THE TRAY IS ALWAYS BELOW THE MEDIA (owner, 2026-10-14) — on the white card, never over
+            the frame. The design's row: like, comment, repost, send … save.
           */}
           {engagementRow(false)}
-          {mediaBox ? <ViewsRow count={item.viewsCount} /> : null}
-        </div>
-      </div>
+          {mediaBox && item.mediaKind !== "video" ? <ViewsRow count={item.viewsCount} /> : null}
 
       {shareReady ? (
         <ShareSheet
@@ -1244,7 +1185,7 @@ function ActionButton({
       >
         <Icon
           className={cn(
-            light ? "h-4 w-4" : "h-5 w-5",
+            light ? "h-4 w-4" : "h-[22px] w-[22px]",
             fill && "fill-current",
             light && "drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]",
           )}
@@ -1255,8 +1196,8 @@ function ActionButton({
         <AnimatedCount
           value={count}
           className={cn(
-            "text-xs tabular-nums",
-            light ? "font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]" : "font-semibold",
+            "tabular-nums",
+            light ? "text-xs font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]" : "text-sm font-bold",
           )}
         />
       ) : null}
@@ -1277,10 +1218,10 @@ function ActionButton({
   // card width) is untouched since it never hits this narrow-container case.
   const cls = cn(
     "group/act inline-flex shrink-0 items-center rounded-full transition-colors active:scale-95",
-    light ? "gap-1 px-1.5 py-1.5" : "gap-1.5 px-2.5 py-2",
+    light ? "gap-1 px-1.5 py-1.5" : "h-11 min-w-11 justify-center gap-1.5 px-2.5",
     light
       ? "text-white/90 drop-shadow-sm hover:bg-white/15 hover:text-white"
-      : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground",
+      : "text-frenz-ink hover:bg-frenz-fill",
     active && activeClass,
   );
   if (href) {

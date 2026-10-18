@@ -14,6 +14,7 @@ import { StoriesRow } from "@/features/app-shell/dashboard/stories-row";
 import { TrendingReels } from "@/features/app-shell/dashboard/trending-reels";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
 import { SmartFeed } from "@/features/feed/smart-feed";
+import { FEED_TABS_SLOT_ID } from "@/features/feed/feed-tabs-slot";
 import { LoadingStripe } from "@/features/ui/page-loader";
 import { Skeleton } from "@/features/ui/skeleton";
 import { friendsCount } from "@/lib/social/friends";
@@ -123,6 +124,8 @@ async function HomeData() {
       }
     >
       {firstVisit ? <BrandSplash /> : null}
+      {/* The Feed's tab row lands here, above the stories (design/Feed.dc.html) — SmartFeed portals it in. */}
+      <div id={FEED_TABS_SLOT_ID} className="-mx-3 -mt-4 mb-1 sm:-mx-4" />
       <div className="space-y-6">
         {/* Every optional module is RENDERED here in the viewer's chosen order;
             whether it's DISPLAYED is decided on the client by HomeModuleGate.

@@ -10,6 +10,11 @@ import { describe, expect, it } from "vitest";
  */
 const code = (f: string) => readFileSync(path.resolve(process.cwd(), f), "utf8");
 
+/** The removed engagement tray, as a function of the source so the teeth can run it on a broken copy. */
+function hasTray(src: string): boolean {
+  return /loadAdEngagement|reactToAd|Like this ad|Share this ad|counts\.views|RailLabel/.test(src);
+}
+
 describe("full-screen ads (image and video)", () => {
   const layout = code("features/ads-platform/serve/fullscreen-video-ad.tsx");
 
@@ -26,36 +31,27 @@ describe("full-screen ads (image and video)", () => {
     expect(foot).toContain("{ad.body}");
   });
 
-  it("owner 2026-10-16: the rail and the sound button stand on the CTA block (TikTok), not mid-screen", () => {
+  it("owner 2026-10-16: the sound button stands on the CTA block (TikTok), not mid-screen", () => {
     expect(layout).toContain('root.style.setProperty("--ad-cta"');
-    // 2026-10-17: plus --ad-nav, the floating nav's clearance in Reels (0 elsewhere)
-    expect(layout).toContain("bottom-[calc(var(--ad-cta,4.125rem)+var(--ad-nav,0px)+5.25rem)]");
     expect(layout).not.toContain("bottom-[calc(50%-3rem)]");
     const creative = code("features/ads-platform/serve/self-ad-creative.tsx");
     expect(creative).toContain("bottom-[calc(var(--ad-cta,4.125rem)+var(--ad-nav,0px)+1.625rem)] right-3 h-11 w-11");
     expect(creative).not.toContain("top-[calc(50%+3.75rem)]");
   });
 
-  it("TikTok/Snapchat grammar: rail of real actions, CTA that lights up, tap to pause", () => {
-    expect(layout).toContain('"Share this ad"');
+  it("TikTok/Snapchat grammar: CTA that lights up, tap to pause", () => {
     expect(layout).toMatch(/setTimeout\(\(\) => setCtaLit\(true\), CTA_HIGHLIGHT_MS\)/);
     expect(layout).toMatch(/aria-label=\{paused \? "Play the ad" : "Pause the ad"\}/);
   });
 
-  it("🔴 likes, views and shares are the campaign's REAL counts — none shown before they load (owner, 2026-10-15)", () => {
-    // read from the engagement route only, never computed or seeded here
-    expect(layout).toContain("void loadAdEngagement(ad.c).then((e) => {");
-    expect(layout).toContain("const [counts, setCounts] = useState<AdEngagement | null>(null);");
-    // the views item exists only once counts are in; the like button says "Like" until then
-    expect(layout).toContain("{counts ? (\n            <div className=\"flex flex-col items-center gap-1\" aria-label={`${counts.views} views`}>");
-    expect(layout).toContain('{counts ? formatCompactNumber(counts.likes) : "Like"}');
-    // no literal number is ever rendered as a count
-    expect(layout).not.toMatch(/formatCompactNumber\(\d/);
-    // an optimistic like is rolled back when the server refuses it, and moves the count by one, never by the ×10
-    // (likesAfterTap: lib/ads-platform/likes-after-tap.test.ts proves both)
-    expect(layout).toContain("setCounts(likesAfterTap(before, after));");
-    // a share is counted only after it really happened
-    expect(layout.indexOf('void reactToAd(ad.c, "share", true)')).toBeGreaterThan(layout.indexOf("await navigator.share(data);"));
+  it("🔴 no engagement tray (owner, 2026-10-18): no like, views or share rail, and no engagement fetch", () => {
+    expect(hasTray(layout)).toBe(false);
+  });
+
+  it("teeth: a like button or the engagement fetch coming back fails", () => {
+    expect(hasTray(layout + '\n<button aria-label="Like this ad" />')).toBe(true);
+    expect(hasTray(layout + "\nvoid loadAdEngagement(ad.c);")).toBe(true);
+    expect(hasTray(layout + '\n"Share this ad"')).toBe(true);
   });
 
   it("🔴 the interstitial, the Stories card and the Reels slide use it for EVERY ad, image or video", () => {

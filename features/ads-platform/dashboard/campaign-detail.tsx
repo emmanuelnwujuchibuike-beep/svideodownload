@@ -501,7 +501,8 @@ function Performance({ id }: { id: string }) {
   const [range, setRange] = useState<number | null>(30);
   const rows: StatRow[] | null = useDash(`perf:${id}:${range ?? "all"}`, () => loadStats([id], fromDay(range))).data ?? null;
   const t = useMemo(() => (rows ? totalsOf(rows) : null), [rows]);
-  // 0246: likes and shares from the full-screen ad — lifetime, whatever the range (null before 0246: not shown)
+  // 0246: shares from the full-screen ad — lifetime, whatever the range (null before 0246: not shown).
+  // No Likes figure (owner, 2026-10-18: "remove likes from users ad dashboard").
   const reactions = useDash(`engagement:${id}`, () => loadEngagementCounts(id)).data ?? null;
   return (
     <AiPanel>
@@ -525,9 +526,9 @@ function Performance({ id }: { id: string }) {
               { l: "Conversions", v: num(t.conversions) },
               { l: "Site visits", v: num(t.outbounds) },
               { l: "Video ends", v: num(t.videoCompletes + t.rewardCompletes) },
-              ...(reactions ? [{ l: "Likes", v: num(reactions.likes) }, { l: "Shares", v: num(reactions.shares) }] : []),
+              ...(reactions ? [{ l: "Shares", v: num(reactions.shares) }] : []),
             ].map((k) => (
-              <div key={k.l} className="min-w-0 bg-card px-3 py-3">
+              <div key={k.l} className={cn("min-w-0 bg-card px-3 py-3", reactions && "last:col-span-2 sm:last:col-span-2")}>
                 <p className="truncate text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{k.l}</p>
                 <p className="mt-1.5 text-[1.2rem] font-semibold leading-none tracking-tight tabular-nums">{k.v}</p>
               </div>

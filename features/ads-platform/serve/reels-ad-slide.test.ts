@@ -45,11 +45,9 @@ describe("the call to action stands above the floating nav in Reels", () => {
     expect(full).toMatch(/style=\{navClearance \?/);
   });
 
-  it("the caption + CTA block and the rail both rise by it (the rail stands on the CTA)", () => {
+  it("the caption + CTA block rises by it (the engagement rail was removed, owner 2026-10-18)", () => {
     expect(full).toContain("pb-[calc(env(safe-area-inset-bottom)+var(--ad-nav,0px)+0.875rem)]");
-    expect(full).toContain("bottom-[calc(var(--ad-cta,4.125rem)+var(--ad-nav,0px)+5.25rem)]");
-    expect(full).toContain("bottom-[calc(var(--ad-cta,4.125rem)+var(--ad-nav,0px)+1.625rem)]");
-    // the sound button lives in the creative and stands on the CTA too
+    // the sound button lives in the creative and stands on the CTA
     expect(creative).toContain("bottom-[calc(var(--ad-cta,4.125rem)+var(--ad-nav,0px)+1.625rem)] right-3 h-11 w-11");
   });
 

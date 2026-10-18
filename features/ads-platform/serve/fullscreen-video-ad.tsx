@@ -1,17 +1,14 @@
 "use client";
 
-import { ChevronRight, Eye, Heart, Play, Share2 } from "lucide-react";
+import { ChevronRight, Play } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
-import { toast } from "@/features/ui/toast";
 import type { EligibleAd } from "@/lib/ads-platform/eligibility";
-import { likesAfterTap, type AdEngagement } from "@/lib/ads-platform/engagement";
 import { haptic } from "@/lib/motion/haptics";
-import { cn, formatCompactNumber } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 import type { AdView } from "../ad-events-client";
 import { visitAd } from "./ad-detail-store";
-import { loadAdEngagement, reactToAd } from "./ad-engagement";
 import { destinationHost, SelfAdCreative } from "./self-ad-creative";
 
 /** How long an IMAGE ad's progress line takes to fill, as a Snapchat image Snap does. */
@@ -29,13 +26,8 @@ const CTA_HIGHLIGHT_MS = 2500;
  *
  *   · Snapchat's top: a thin progress line, the brand's badge, name and "Ad" tag, and the
  *     skip countdown / close at the right
- *   · TikTok's right rail: the brand's badge (opens the ad's details, like a profile), Like,
- *     the views, Share, and the sound button. The counts are the campaign's REAL ones
- *     (0246, owner 2026-10-15: "Make users to be able to see the views, share, and likes of a
- *     full screen ad like tiktok. The views should be the x10 multiplier"): likes and shares
- *     as counted, views as the advertiser's own dashboard shows them (the admin x10 sample
- *     mode included). Until they load — or if they can't — the rail shows no number at all,
- *     never a made-up one. Anyone can like, signed in or not.
+ *   · the sound button on the right, standing on the call-to-action block. The engagement
+ *     tray (brand badge, Like, views, Share) was removed by the owner on 2026-10-18.
  *   · TikTok's caption block, bottom left: the brand in bold, the headline and description
  *     (a long one opens with "more"), the "Sponsored" tag, then the call-to-action bar that
  *     starts see-through and fills with colour after a moment
@@ -136,38 +128,11 @@ export function FullscreenVideoAd({
   const host = destinationHost(ad.url);
   const initial = ad.sponsor.trim().charAt(0).toUpperCase() || "A";
 
-  // the campaign's likes, shares and views (0246) — null until they load, and on any failure
-  const [counts, setCounts] = useState<AdEngagement | null>(null);
-  useEffect(() => {
-    let live = true;
-    setCounts(null);
-    void loadAdEngagement(ad.c).then((e) => {
-      if (live) setCounts(e);
-    });
-    return () => {
-      live = false;
-    };
-  }, [ad.c]);
-  const liking = useRef(false);
-  const toggleLike = async () => {
-    if (!counts || liking.current) return;
-    liking.current = true;
-    const on = !counts.liked;
-    haptic(on ? "medium" : "light");
-    const before = counts;
-    // at once, as TikTok does — the server's answer then replaces it (or rolls it back)
-    setCounts({ ...counts, liked: on, likes: Math.max(0, counts.likes + (on ? 1 : -1)) });
-    const after = await reactToAd(ad.c, "like", on);
-    /*
-      Owner, 2026-10-16: "the ad likes shouldn't show the x10 like count when the like is clicked …
-      it should show the x1 count but when refreshed or reloaded it should count to the x10".
-      The server's `likes` is the stored count × the campaign's multiplier (0249), so taking it here
-      made one tap jump by 10. The tap moves the number by exactly one — in the direction the
-      SERVER confirmed (`liked`) — and the multiplied total appears on the next load.
-    */
-    setCounts(likesAfterTap(before, after));
-    liking.current = false;
-  };
+  /*
+    No engagement tray (owner, 2026-10-18: "remove the engagement tray from the video ad"). The
+    TikTok-style right rail — brand badge, Like, views, Share — is gone, and with it the per-ad
+    engagement fetch. The sponsor name and the call-to-action bar still open the advertiser.
+  */
 
   useEffect(() => {
     const t = window.setTimeout(() => setCtaLit(true), CTA_HIGHLIGHT_MS);
@@ -204,25 +169,6 @@ export function FullscreenVideoAd({
     } else {
       v.pause();
       setPaused(true);
-    }
-  };
-
-  const share = async () => {
-    haptic("selection");
-    const data = { title: ad.headline ?? ad.sponsor, url: ad.url };
-    try {
-      if (navigator.share) {
-        await navigator.share(data);
-      } else {
-        await navigator.clipboard.writeText(ad.url);
-        toast("Link copied.", "success");
-      }
-      // counted once per person, after the share really happened
-      void reactToAd(ad.c, "share", true).then((e) => {
-        if (e) setCounts(e);
-      });
-    } catch {
-      /* the share sheet was dismissed */
     }
   };
 
@@ -276,44 +222,6 @@ export function FullscreenVideoAd({
         ) : null}
         <div className="absolute inset-0 z-[7] [&>*]:pointer-events-auto pointer-events-none">{children}</div>
 
-        {/*
-          TikTok's right rail: the brand (opens its details), Like, views, Share. Owner 2026-10-16: it sits
-          down by the call-to-action like a TikTok ad, not mid-screen. It grows UP from just above the sound
-          button, which sits just above the CTA block (its measured height is --ad-cta, set below); an image
-          ad has no sound button, so its rail starts right above the CTA.
-        */}
-        <div className={cn("absolute right-3 z-20 flex flex-col items-center gap-3.5", isVideo ? "bottom-[calc(var(--ad-cta,4.125rem)+var(--ad-nav,0px)+5.25rem)]" : "bottom-[calc(var(--ad-cta,4.125rem)+var(--ad-nav,0px)+1.625rem)]")}>
-          <button type="button" onClick={open} aria-label={`Visit ${ad.sponsor}`} className="mb-1 transition active:scale-90 motion-reduce:active:scale-100">
-            {brandBadge("lg")}
-          </button>
-          <button
-            type="button"
-            onClick={() => void toggleLike()}
-            disabled={!counts}
-            aria-pressed={counts?.liked ?? false}
-            aria-label={counts ? `${counts.liked ? "Unlike" : "Like"} this ad, ${counts.likes} ${counts.likes === 1 ? "like" : "likes"}` : "Like this ad"}
-            className="flex flex-col items-center gap-1 transition active:scale-90 disabled:opacity-80 motion-reduce:active:scale-100"
-          >
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/35 ring-1 ring-inset ring-white/15 backdrop-blur-md">
-              <Heart className={cn("h-5 w-5 transition-transform duration-150", counts?.liked && "scale-110 fill-rose-500 text-rose-500")} aria-hidden />
-            </span>
-            <RailLabel>{counts ? formatCompactNumber(counts.likes) : "Like"}</RailLabel>
-          </button>
-          {counts ? (
-            <div className="flex flex-col items-center gap-1" aria-label={`${counts.views} views`}>
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/35 ring-1 ring-inset ring-white/15 backdrop-blur-md" aria-hidden>
-                <Eye className="h-5 w-5" />
-              </span>
-              <RailLabel>{formatCompactNumber(counts.views)}</RailLabel>
-            </div>
-          ) : null}
-          <button type="button" onClick={() => void share()} aria-label={counts ? `Share this ad, ${counts.shares} shares` : "Share this ad"} className="flex flex-col items-center gap-1 transition active:scale-90 motion-reduce:active:scale-100">
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/35 ring-1 ring-inset ring-white/15 backdrop-blur-md">
-              <Share2 className="h-5 w-5" aria-hidden />
-            </span>
-            <RailLabel>{counts && counts.shares > 0 ? formatCompactNumber(counts.shares) : "Share"}</RailLabel>
-          </button>
-        </div>
       </div>
 
       {/* Snapchat's top: progress, brand, Ad, skip — on a soft shade so it reads over any frame */}
@@ -388,10 +296,6 @@ export function FullscreenVideoAd({
       </div>
     </div>
   );
-}
-
-function RailLabel({ children }: { children: ReactNode }) {
-  return <span className="text-[11px] font-semibold tabular-nums [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]">{children}</span>;
 }
 
 /** The same layout under its general name — it shows images as well as videos. */

@@ -15,7 +15,6 @@ import {
   CloudStorageCard,
   DownloadsHero,
   DownloadStats,
-  RecentDownloads,
 } from "@/features/downloads/downloads-sections";
 import { useHistory } from "@/features/history/use-history";
 import { AdSurface } from "@/features/monetization/ad-surface";
@@ -296,9 +295,7 @@ export function DownloadPageCore({
         </div>
       )}
 
-      <div className="mt-3">
-        <RecentDownloads items={items} />
-      </div>
+      {/* No Recent section (owner, 2026-10-18: "dont put the recent section in the landing or download page, they should be in history"). */}
 
       {showDisclaimer ? (
         <div className="mt-3">

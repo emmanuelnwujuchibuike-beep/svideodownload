@@ -90,7 +90,8 @@ describe("small fixes", () => {
     expect(core).not.toContain("<PromoteButton");
     // the strip itself still exists for a caller that asks for it — /downloads no longer does (owner 2026-10-12)
     expect(core).toContain('<AiCreditStrip base="/ai" className="mb-3" />');
-    expect(code("features/downloads/downloads-page.tsx")).toContain('topCredits="none"');
+    // the redesigned /downloads (2026-10-18) renders no credits strip at all
+    expect(code("features/downloads/downloads-page.tsx")).not.toMatch(/AiCreditStrip|topCredits="strip"/);
   });
 
   it("Save. Discover. Create. sits under the credits card on /downloads, without the paragraph", () => {

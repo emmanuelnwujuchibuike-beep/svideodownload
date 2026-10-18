@@ -1,8 +1,6 @@
 "use client";
 
 import {
-  ArrowRight,
-  ArrowUpRight,
   Check,
   Cloud,
   CloudDownload,
@@ -12,19 +10,13 @@ import {
   Heart,
   Image as ImageIcon,
   Lock,
-  MoreVertical,
   Shield,
-  ShieldCheck,
-  Zap,
   Lightbulb,
 } from "lucide-react";
-import Link from "next/link";
 import { useMemo } from "react";
 
 import { useEntitlements } from "@/features/auth/use-entitlements";
-import { QUICK_ACTIONS } from "@/features/downloads/quick-actions";
 import { estimateBytes, limitForPlan, totalUsedBytes } from "@/features/history/usage";
-import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { DownloadRecord } from "@/types";
 import type { ReactNode } from "react";
 import { cn, formatBytes, formatCompactNumber } from "@/lib/utils";
@@ -320,138 +312,5 @@ export function DownloadStats({ items }: { items: DownloadRecord[] }) {
         </div>
       ))}
     </div>
-  );
-}
-
-/* ───────────────────────────── Recent downloads ──────────────────────────── */
-
-export function RecentDownloads({ items }: { items: DownloadRecord[] }) {
-  const recent = items.slice(0, 4);
-  if (recent.length === 0) return null;
-
-  return (
-    <section>
-      <div className="mb-3 flex items-end justify-between gap-3">
-        <h2 className="text-lg font-bold tracking-tight">Recent downloads</h2>
-        {/* Opens the dedicated history page. `prefetch` warms the route while
-            this section is on screen, so the tap is an instant transition rather
-            than a load (owner). */}
-        <Link href="/history" prefetch className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
-          View all <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
-      </div>
-
-      <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2 [scrollbar-width:none] sm:grid sm:grid-cols-4 sm:overflow-visible [&::-webkit-scrollbar]:hidden">
-        {recent.map((r) => {
-          const Brand = BRAND_ICONS[r.platform];
-          return (
-            <article key={r.id} className="w-40 shrink-0 sm:w-auto">
-              <div className="relative aspect-square overflow-hidden rounded-2xl bg-neutral-800">
-                {r.thumbnail ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={r.thumbnail} alt="" loading="lazy" className="h-full w-full object-cover" />
-                ) : null}
-                {Brand ? (
-                  <span className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-lg bg-black/50 text-white backdrop-blur-md">
-                    <Brand className="h-3.5 w-3.5" />
-                  </span>
-                ) : null}
-                <span className="absolute bottom-2 left-2 rounded-md bg-black/65 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                  {r.qualityLabel}
-                </span>
-              </div>
-              <div className="mt-2 flex items-start justify-between gap-1">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{r.title}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {formatBytes(estimateBytes(r))} · {relativeTime(r.createdAt)}
-                  </p>
-                </div>
-                <MoreVertical aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
-              </div>
-            </article>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function relativeTime(at: number): string {
-  const diff = Date.now() - at;
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "Just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return d === 1 ? "Yesterday" : `${d}d ago`;
-}
-
-/* ───────────────────────────── Quick actions ─────────────────────────────── */
-
-/**
- * The reference's four action cards, on the page itself. The list is
- * `QUICK_ACTIONS` — the same one the hero's Quick actions sheet shows
- * (quick-actions.ts) — and the card is the same card, so the sheet and the
- * page can never disagree about what a quick action is or where it goes.
- *
- * Every entry is a real link. The "Soon" state is gone (owner, 2026-09-20):
- * a destination that does not exist yet is not listed.
- */
-export function DownloadQuickActions() {
-  return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      {QUICK_ACTIONS.map((a) => (
-        <Link
-          key={a.id}
-          href={a.href}
-          prefetch
-          className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-border/60 bg-card p-3 shadow-soft transition-[transform,box-shadow,border-color] duration-200 [transition-timing-function:var(--ease-out)] hover:-translate-y-0.5 hover:border-transparent hover:shadow-[0_16px_32px_-16px_rgba(15,23,42,0.35)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
-        >
-          {/* the hover glow — desktop only, so a phone never paints a blur */}
-          <span aria-hidden className={cn("absolute -right-8 -top-8 hidden h-24 w-24 rounded-full opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-100 sm:block", a.glow)} />
-          <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-lg transition-transform duration-300 [transition-timing-function:var(--ease-out)] group-hover:scale-105", a.tile)}>
-            <a.icon className="h-5 w-5" aria-hidden />
-          </span>
-          <span className="min-w-0 flex-1 text-left">
-            <span className="block truncate text-sm font-bold">{a.title}</span>
-            <span className="block truncate text-[11px] text-muted-foreground">{a.sub}</span>
-          </span>
-          {/* the arrow only where there is room for it — on a phone the two-up card needs every pixel for its title */}
-          <ArrowUpRight className="hidden h-4 w-4 shrink-0 text-muted-foreground/60 transition-all duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground sm:block" aria-hidden />
-        </Link>
-      ))}
-    </div>
-  );
-}
-
-/* ─────────────────────────────── Trust strip ─────────────────────────────── */
-
-/**
- * The reference closed with "2M+ Downloads" and "120K+ Happy users". Those are
- * numbers we do not have, and inventing them is the one thing the owner has
- * ruled out repeatedly. This states the four guarantees instead — every one of
- * which is a property of the product that can be checked.
- */
-export function DownloadTrustStrip() {
-  const items = [
-    { icon: Zap, tint: "text-amber-500", title: "Ultra fast", sub: "Streamed straight to you" },
-    { icon: ShieldCheck, tint: "text-emerald-500", title: "100% secure", sub: "Your privacy first" },
-    { icon: Lock, tint: "text-blue-500", title: "No account needed", sub: "To download and go" },
-    { icon: Cloud, tint: "text-violet-500", title: "Watermark free", sub: "Original quality" },
-  ];
-  return (
-    <section className="grid grid-cols-2 gap-3 rounded-3xl border border-border/60 bg-card p-4 shadow-soft lg:grid-cols-4">
-      {items.map((i) => (
-        <div key={i.title} className="flex items-center gap-2.5">
-          <i.icon className={cn("h-5 w-5 shrink-0", i.tint)} />
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-bold">{i.title}</span>
-            <span className="block truncate text-[11px] text-muted-foreground">{i.sub}</span>
-          </span>
-        </div>
-      ))}
-    </section>
   );
 }

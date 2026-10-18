@@ -56,7 +56,7 @@ export function MultiLinkButton({
   className,
 }: {
   config?: MultiLinkPublicConfig;
-  surface?: "hero" | "card";
+  surface?: "hero" | "card" | "frenz";
   className?: string;
 }) {
   const [open, setOpen] = useState(false);

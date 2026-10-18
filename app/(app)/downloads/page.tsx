@@ -8,7 +8,6 @@ import { DownloadsSkeleton } from "@/features/downloads/downloads-skeleton";
 import { getHomeProfile } from "@/lib/social/home";
 import { getAiPromo } from "@/lib/ai/promo/server";
 import { getMultiLinkSettings, publicMultiLinkConfig } from "@/lib/downloads/multi-link";
-import { getLandingSettings } from "@/lib/landing/settings";
 import { getPlatformStatus } from "@/lib/platform-status-store";
 import { listWallpapers } from "@/lib/wallpapers-server";
 import { createClient } from "@/lib/supabase/server";
@@ -134,12 +133,12 @@ async function DownloadsData() {
     as a PROMISE, which React streams in behind the page. The paste box, the
     credits card and the tiles render as soon as the cached reads below are in.
   */
-  const wallpapers = listWallpapers(user.id);
-  const [profile, landing, platformStatus, multiLink, aiPromo] = await Promise.all([
+  // 2026-10-18 (the redesign, owner: "everything must be light weight"): the in-page gallery is
+  // gone, so only the Wallpapers card's 10 rotating photos are read — not 600 rows plus this
+  // member's likes and saves. Still a streamed promise: nothing above waits for it.
+  const wallpapers = listWallpapers(null, 10);
+  const [profile, platformStatus, multiLink, aiPromo] = await Promise.all([
     getHomeProfile(user.id),
-    // The admin-uploaded tile background (admin → Landing page). Resolved HERE
-    // because DownloadsPage is a client component and cannot read the DB itself.
-    getLandingSettings(),
     // Same reason: the supported-platforms strip lives inside a client
     // component, so its status has to arrive as a prop from this boundary.
     getPlatformStatus(),
@@ -164,8 +163,6 @@ async function DownloadsData() {
        skeleton rather than waiting for this data. */
     <DownloadsPage
       wallpapers={wallpapers}
-      ctaWallpaperUrl={landing.wallpaperCtaImageUrl || null}
-      frenzAiTileImageUrl={landing.frenzAiTileImageUrl || null}
       platformStatus={platformStatus}
       multiLink={publicMultiLinkConfig(multiLink)}
       aiPromo={aiPromo}

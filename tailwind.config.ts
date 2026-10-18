@@ -100,6 +100,8 @@ const config: Config = {
         // The Frenz screens (design/*.dc.html): Sora for headings, Hanken Grotesk for body. Same var() fallback reason as above.
         heading: ["var(--font-heading, -apple-system)", "-apple-system", "BlinkMacSystemFont", "system-ui", "sans-serif"],
         body: ["var(--font-body, -apple-system)", "-apple-system", "BlinkMacSystemFont", "system-ui", "sans-serif"],
+        // The Home hero's H1 only (Bricolage Grotesque 800).
+        display: ["var(--font-display, -apple-system)", "-apple-system", "BlinkMacSystemFont", "system-ui", "sans-serif"],
       },
       backgroundImage: {
         // The brand gradient: the full three stops (avatars, rings, profile button) and the two-stop button fill.

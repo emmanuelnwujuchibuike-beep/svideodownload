@@ -642,7 +642,8 @@ describe("Ad slots — no decorated empty boxes", () => {
 
     // Guards a vacuous pass: if the panel is renamed, this must not silently
     // stop checking anything.
-    expect(surfaces.length, "found no surface rendering the download history").toBeGreaterThanOrEqual(3);
+    // 2 since 2026-10-18: /downloads carried a never-shown copy of the panel and the redesign dropped it
+    expect(surfaces.length, "found no surface rendering the download history").toBeGreaterThanOrEqual(2);
 
     const missing = surfaces.filter(
       (file) => !stripComments(readFileSync(path.join(ROOT, file), "utf8")).includes(ad),

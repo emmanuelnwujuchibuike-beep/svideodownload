@@ -2,6 +2,8 @@
 
 import { ChevronDown, Download } from "lucide-react";
 
+import { FrenzBatchRow } from "./multi-link-frenz-row";
+
 import { ProBadge } from "@/features/monetization/pro-badge";
 import { cn } from "@/lib/utils";
 
@@ -48,8 +50,11 @@ export function MultiLinkIntro({
   /** What the Pro plan allows — the number the pill shows. */
   proLimit: number;
   isPro: boolean;
-  surface?: "hero" | "card";
+  surface?: "hero" | "card" | "frenz";
 }) {
+  if (surface === "frenz") {
+    return <FrenzBatchRow open={open} onToggle={onToggle} sourceLimit={sourceLimit} proLimit={proLimit} isPro={isPro} />;
+  }
   const onHero = surface === "hero";
   // The badge says "this needs Pro" only when Pro actually unlocks more — or,
   // for a Pro member, that this is their plan's allowance.
@@ -127,3 +132,4 @@ export function MultiLinkIntro({
     </section>
   );
 }
+

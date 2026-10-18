@@ -4,7 +4,8 @@ import { ClipboardPaste, Loader2, Search, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { SupportedPlatforms } from "@/components/landing/supported-platforms";
+import { MORE_PLATFORMS, SUPPORTED_PLATFORMS, SupportedPlatforms } from "@/components/landing/supported-platforms";
+import { DownloadIcon, LinkIcon } from "@/features/frenz-ui/icons";
 import { PreparingAd } from "@/features/monetization/preparing-ad";
 import { MultiLinkButton } from "@/features/downloader/multi-link/multi-link-button";
 import { DEFAULT_MULTI_LINK_PUBLIC, type MultiLinkPublicConfig } from "@/lib/downloads/multi-link-config";
@@ -131,12 +132,14 @@ export function DownloadBox({
   /** Rendered between the paste box and the Multi-Link block — see below. */
   afterForm,
 }: {
-  surface?: "hero" | "card";
+  /** "frenz" — the redesigned Home (design/Main.dc.html): the batch card is rendered by the page, outside this box. */
+  surface?: "hero" | "card" | "frenz";
   platformStatus?: PlatformStatusMap;
   multiLink?: MultiLinkPublicConfig;
   afterForm?: ReactNode;
 } = {}) {
-  const onCard = surface === "card";
+  const frenz = surface === "frenz";
+  const onCard = surface !== "hero";
   const [url, setUrl] = useState("");
   /*
     A platform tile names itself in the placeholder (Download page refinement,
@@ -290,9 +293,22 @@ export function DownloadBox({
     built once per real change of their own inputs instead, and the platform is
     detected once per URL.
   */
-  const multiLinkBlock = useMemo(() => <MultiLinkButton config={multiLink} surface={surface} />, [multiLink, surface]);
+  const multiLinkBlock = useMemo(() => (frenz ? null : <MultiLinkButton config={multiLink} surface={onCard ? "card" : "hero"} />), [multiLink, frenz, onCard]);
   const platformsStrip = useMemo(
-    () => (
+    () => frenz ? (
+      /* The design's one line of names (design/Main.dc.html); "+N more" opens the full, tappable grid with each platform's status. */
+      <>
+        <p className="mt-3 px-0.5 text-[13px] text-frenz-muted">
+          {FRENZ_PLATFORM_NAMES.join(", ")}{" "}
+          <button type="button" onClick={toggleMore} aria-expanded={morePlatforms} className="font-bold text-frenz-blue hover:text-frenz-violet">
+            {morePlatforms ? "Show less" : `+${FRENZ_MORE_COUNT} more`}
+          </button>
+        </p>
+        {morePlatforms ? (
+          <SupportedPlatforms surface="light" className="mt-3" statuses={platformStatus} onPick={pickPlatform} expanded onToggleMore={toggleMore} />
+        ) : null}
+      </>
+    ) : (
       <SupportedPlatforms
         surface={onCard ? "light" : "onGradient"}
         className="mt-4"
@@ -302,7 +318,7 @@ export function DownloadBox({
         onToggleMore={toggleMore}
       />
     ),
-    [onCard, platformStatus, pickPlatform, morePlatforms, toggleMore],
+    [frenz, onCard, platformStatus, pickPlatform, morePlatforms, toggleMore],
   );
   const detected = useMemo(() => (url ? detectPlatform(url) : null), [url]);
 
@@ -350,44 +366,12 @@ export function DownloadBox({
         it used to sit in was a third frame inside the card and the input's own
         gradient rim. The hero keeps its glass well: there it is the ground.
       */}
-      <form onSubmit={onSubmit} className={cn(onCard ? "" : "rounded-2xl bg-white/10 p-1.5 ring-1 ring-inset ring-white/15 backdrop-blur")}>
-        <div className={cn("flex flex-col sm:flex-row", onCard ? "gap-3" : "gap-2")}>
-          {/*
-            🔴 THE PURPLE STRIPE GOES AROUND THE PLACEHOLDER (owner, 2026-08-11:
-            "the stripe … is supposed to be around this placeholder and not the
-            parent container, and the stripe should be a bit bigger … so it can
-            fill in the existing white line around the placeholder").
-
-            It was first built as a `p-px` wrapper around the whole paste CARD.
-            That is one level too high: the thing the owner pointed at is the
-            input, and the card's own edge is a different boundary.
-
-            So the gradient sits here, and at `p-0.5` (2px) rather than a
-            hairline — it now OCCUPIES the pale ring the input used to draw for
-            itself, instead of adding a second line beside it. The input's
-            `ring-1 ring-border` is removed for exactly that reason: a grey
-            hairline immediately inside a violet one reads as a double border,
-            which is the same mistake already corrected once on the card.
-
-            Radii differ by 2px (0.9rem outer / 0.7rem inner) so the inner corner
-            sits concentrically inside the outer one. Equal radii leave a visibly
-            thick spot at each corner.
-
-            Focus moves to the WRAPPER (`focus-within`) because the input no
-            longer owns a ring. It is a real 2px ring plus a halo, not a colour
-            change — a gradient that merely brightens is not a focus indicator
-            anyone can see, and this is the primary control on the page.
-          */}
-          <div className="relative flex-1 rounded-[0.9rem] bg-gradient-to-r from-blue-500 via-violet-500 to-purple-500 p-0.5 transition focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-1 focus-within:ring-offset-transparent">
-            {/*
-              The short placeholder (Download page refinement, 2026-10-09): the old
-              line listed four platforms and was cut off mid-word on every phone.
-              The platforms are in the grid below; this only says what to do.
-              `text-base` (16 px) is load-bearing: anything smaller makes iOS
-              Safari zoom the page when the field takes focus. Only the
-              PLACEHOLDER is set at 15 px — that does not trigger the zoom — so
-              the whole line fits beside the Paste button on a 390 px phone.
-            */}
+      {frenz ? (
+        /* The redesigned Home's paste box (design/Main.dc.html): the link well on the input fill with Paste inside it, the
+           gradient Download button under it. Same handlers, same validation, same fetch as every other surface. */
+        <form onSubmit={onSubmit} className="flex flex-col gap-3">
+          <div className="flex h-[54px] items-center gap-2.5 rounded-2xl bg-frenz-fill pl-3.5 pr-1.5 focus-within:ring-2 focus-within:ring-frenz-violet/40">
+            <LinkIcon size={18} className="shrink-0 text-frenz-violet" />
             <input
               ref={inputRef}
               type="url"
@@ -398,57 +382,134 @@ export function DownloadBox({
               enterKeyHint="go"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder={picked ? `Paste ${picked}...` : "Paste a video or image link..."}
+              placeholder={picked ? `Paste ${picked}` : "Paste a video or image link"}
               aria-label="Video or image link"
-              className={`h-[3.25rem] w-full rounded-[0.7rem] bg-background px-4 ${url ? "pr-36" : "pr-[6.25rem]"} text-base text-foreground outline-none text-ellipsis placeholder:text-[15px] placeholder:text-slate-400 dark:placeholder:text-white/40`}
+              className="min-w-0 flex-1 bg-transparent text-base text-frenz-ink outline-none text-ellipsis placeholder:text-frenz-muted"
             />
-            <div className="absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
-              {url ? (
-                /*
-                  🔴 THIS is the button the landing page actually renders — the
-                  earlier "make it visible" fix (2026-08-17) landed on
-                  features/downloader/downloader.tsx, a component the landing
-                  page never mounts (it renders THIS file, download-box.tsx,
-                  per the 2026-08-16 "landing = DownloadPageCore" merge). Same
-                  two bugs as that fix: `pr-24` didn't grow to fit this
-                  button's width, so it overlapped the pasted URL text; and
-                  `bg-secondary`/`ring-border` are only a few points of
-                  lightness from `bg-background`, so a filled circle in those
-                  tokens is invisible on this near-white input. `foreground`
-                  is always the opposite pole from `background` in this token
-                  system, so `bg-foreground/10` + `ring-foreground/20` give
-                  real contrast in both themes.
-                */
-                <button
-                  type="button"
-                  onClick={clear}
-                  aria-label="Clear — paste a different link"
-                  title="Clear"
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-foreground/10 text-foreground ring-1 ring-inset ring-foreground/20 transition hover:bg-rose-500/15 hover:text-rose-600 hover:ring-rose-500/40 active:scale-90 dark:hover:text-rose-400"
-                >
-                  <X className="h-4 w-4" strokeWidth={2.75} />
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={handlePaste}
-                aria-label="Paste link from clipboard"
-                className="inline-flex h-9 items-center gap-1.5 rounded-[0.6rem] bg-white px-2.5 text-sm font-semibold text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.08)] ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:bg-white/10 dark:text-white dark:ring-white/15 dark:hover:bg-white/15"
-              >
-                <ClipboardPaste className="h-4 w-4" aria-hidden /> Paste
+            {url ? (
+              <button type="button" onClick={clear} aria-label="Clear — paste a different link" className="flex h-11 w-9 shrink-0 items-center justify-center rounded-full text-frenz-muted active:scale-90">
+                <X className="h-4 w-4" strokeWidth={2.6} aria-hidden />
               </button>
-            </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={handlePaste}
+              aria-label="Paste link from clipboard"
+              className="h-[42px] shrink-0 rounded-xl bg-frenz-card px-3.5 text-sm font-bold text-frenz-violet shadow-frenz-raised transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet"
+            >
+              Paste
+            </button>
           </div>
           <button
             type="submit"
             disabled={isBusy}
             aria-busy={isBusy || undefined}
-            className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-7 text-[17px] font-semibold text-white shadow-[0_10px_22px_-12px_rgba(79,70,229,0.75)] transition hover:opacity-95 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:opacity-60"
+            className="flex h-[54px] items-center justify-center gap-2.5 rounded-2xl bg-frenz-gradient-x font-heading text-[17px] font-bold text-white shadow-frenz-card transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2 disabled:opacity-60"
           >
-            {isBusy ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <Search className="h-5 w-5" aria-hidden />} Save
+            {isBusy ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <DownloadIcon size={20} strokeWidth={2.4} />} Download
           </button>
-        </div>
-      </form>
+        </form>
+      ) : (
+        <form onSubmit={onSubmit} className={cn(onCard ? "" : "rounded-2xl bg-white/10 p-1.5 ring-1 ring-inset ring-white/15 backdrop-blur")}>
+          <div className={cn("flex flex-col sm:flex-row", onCard ? "gap-3" : "gap-2")}>
+            {/*
+              🔴 THE PURPLE STRIPE GOES AROUND THE PLACEHOLDER (owner, 2026-08-11:
+              "the stripe … is supposed to be around this placeholder and not the
+              parent container, and the stripe should be a bit bigger … so it can
+              fill in the existing white line around the placeholder").
+
+              It was first built as a `p-px` wrapper around the whole paste CARD.
+              That is one level too high: the thing the owner pointed at is the
+              input, and the card's own edge is a different boundary.
+
+              So the gradient sits here, and at `p-0.5` (2px) rather than a
+              hairline — it now OCCUPIES the pale ring the input used to draw for
+              itself, instead of adding a second line beside it. The input's
+              `ring-1 ring-border` is removed for exactly that reason: a grey
+              hairline immediately inside a violet one reads as a double border,
+              which is the same mistake already corrected once on the card.
+
+              Radii differ by 2px (0.9rem outer / 0.7rem inner) so the inner corner
+              sits concentrically inside the outer one. Equal radii leave a visibly
+              thick spot at each corner.
+
+              Focus moves to the WRAPPER (`focus-within`) because the input no
+              longer owns a ring. It is a real 2px ring plus a halo, not a colour
+              change — a gradient that merely brightens is not a focus indicator
+              anyone can see, and this is the primary control on the page.
+            */}
+            <div className="relative flex-1 rounded-[0.9rem] bg-gradient-to-r from-blue-500 via-violet-500 to-purple-500 p-0.5 transition focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-1 focus-within:ring-offset-transparent">
+              {/*
+                The short placeholder (Download page refinement, 2026-10-09): the old
+                line listed four platforms and was cut off mid-word on every phone.
+                The platforms are in the grid below; this only says what to do.
+                `text-base` (16 px) is load-bearing: anything smaller makes iOS
+                Safari zoom the page when the field takes focus. Only the
+                PLACEHOLDER is set at 15 px — that does not trigger the zoom — so
+                the whole line fits beside the Paste button on a 390 px phone.
+              */}
+              <input
+                ref={inputRef}
+                type="url"
+                inputMode="url"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                enterKeyHint="go"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder={picked ? `Paste ${picked}...` : "Paste a video or image link..."}
+                aria-label="Video or image link"
+                className={`h-[3.25rem] w-full rounded-[0.7rem] bg-background px-4 ${url ? "pr-36" : "pr-[6.25rem]"} text-base text-foreground outline-none text-ellipsis placeholder:text-[15px] placeholder:text-slate-400 dark:placeholder:text-white/40`}
+              />
+              <div className="absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
+                {url ? (
+                  /*
+                    🔴 THIS is the button the landing page actually renders — the
+                    earlier "make it visible" fix (2026-08-17) landed on
+                    features/downloader/downloader.tsx, a component the landing
+                    page never mounts (it renders THIS file, download-box.tsx,
+                    per the 2026-08-16 "landing = DownloadPageCore" merge). Same
+                    two bugs as that fix: `pr-24` didn't grow to fit this
+                    button's width, so it overlapped the pasted URL text; and
+                    `bg-secondary`/`ring-border` are only a few points of
+                    lightness from `bg-background`, so a filled circle in those
+                    tokens is invisible on this near-white input. `foreground`
+                    is always the opposite pole from `background` in this token
+                    system, so `bg-foreground/10` + `ring-foreground/20` give
+                    real contrast in both themes.
+                  */
+                  <button
+                    type="button"
+                    onClick={clear}
+                    aria-label="Clear — paste a different link"
+                    title="Clear"
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-foreground/10 text-foreground ring-1 ring-inset ring-foreground/20 transition hover:bg-rose-500/15 hover:text-rose-600 hover:ring-rose-500/40 active:scale-90 dark:hover:text-rose-400"
+                  >
+                    <X className="h-4 w-4" strokeWidth={2.75} />
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={handlePaste}
+                  aria-label="Paste link from clipboard"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-[0.6rem] bg-white px-2.5 text-sm font-semibold text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.08)] ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:bg-white/10 dark:text-white dark:ring-white/15 dark:hover:bg-white/15"
+                >
+                  <ClipboardPaste className="h-4 w-4" aria-hidden /> Paste
+                </button>
+              </div>
+            </div>
+            <button
+              type="submit"
+              disabled={isBusy}
+              aria-busy={isBusy || undefined}
+              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-7 text-[17px] font-semibold text-white shadow-[0_10px_22px_-12px_rgba(79,70,229,0.75)] transition hover:opacity-95 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:opacity-60"
+            >
+              {isBusy ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <Search className="h-5 w-5" aria-hidden />} Save
+            </button>
+          </div>
+        </form>
+      )}
 
       {/*
         Whatever the page wants between the paste box and the Multi-Link block.
@@ -577,3 +638,9 @@ export function DownloadBox({
     </div>
   );
 }
+
+/** The redesigned Home's one-line platform list: the first four, by the names people use. */
+const FRENZ_SHORT_NAME: Partial<Record<PlatformId, string>> = { tiktok: "TikTok", instagram: "Instagram", twitter: "X", snapchat: "Snapchat" };
+const FRENZ_PLATFORM_NAMES = SUPPORTED_PLATFORMS.slice(0, 4).map((id) => FRENZ_SHORT_NAME[id] ?? id);
+/** The real count behind "+N more" — every other platform the grid lists. */
+const FRENZ_MORE_COUNT = SUPPORTED_PLATFORMS.length + MORE_PLATFORMS.length - FRENZ_PLATFORM_NAMES.length;

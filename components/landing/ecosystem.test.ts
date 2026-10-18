@@ -83,7 +83,8 @@ describe("the landing page structure", () => {
   });
 
   it("owner 2026-10-12: no credits strip on /downloads (Earn moved to the top bar); the landing has no Earn at the top", () => {
-    expect(src("features/downloads/downloads-page.tsx")).toMatch(/topCredits="none"/);
+    // the redesigned /downloads (2026-10-18) renders no credits strip at all
+    expect(src("features/downloads/downloads-page.tsx")).not.toMatch(/AiCreditStrip|topCredits="strip"/);
     // 2026-10-16 (owner): neither Earn nor Add friend in the /downloads top bar
     expect(src("features/app-shell/app-topbar.tsx")).not.toContain('aria-label="Earn credits"');
     expect(src("features/app-shell/app-topbar.tsx")).not.toContain('aria-label="Add friend"');

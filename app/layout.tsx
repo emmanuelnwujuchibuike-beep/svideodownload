@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Hanken_Grotesk, Inter, Outfit, Sora } from "next/font/google";
+import { Bricolage_Grotesque, Hanken_Grotesk, Inter, Outfit, Sora } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { ThemeCacheSync } from "@/components/theme-cache-sync";
@@ -91,6 +91,13 @@ const brandDisplay = Outfit({
 */
 const frenzHeading = Sora({ subsets: ["latin"], variable: "--font-heading", display: "swap", preload: false });
 const frenzBody = Hanken_Grotesk({ subsets: ["latin"], variable: "--font-body", display: "swap", preload: false });
+/*
+  The Home hero's H1 (owner, 2026-10-18: "use a different font, more unique and
+  premium"): Bricolage Grotesque, ONE static weight (800) and Latin only, so it is
+  a single small file — "everything must be light weight". Only `font-display`
+  text fetches it.
+*/
+const frenzDisplay = Bricolage_Grotesque({ subsets: ["latin"], weight: ["800"], variable: "--font-display", display: "swap", preload: false });
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -514,7 +521,7 @@ export default function RootLayout({
         {/* GA4 / Google Ads / Tag Manager, from an admin-set ID. */}
         <GoogleTag />
       </head>
-      <body className={`${displaySans.variable} ${brandDisplay.variable} ${frenzHeading.variable} ${frenzBody.variable} font-sans`}>
+      <body className={`${displaySans.variable} ${brandDisplay.variable} ${frenzHeading.variable} ${frenzBody.variable} ${frenzDisplay.variable} font-sans`}>
         {/* Monetag (site-wide) — the owner's network alongside AdSense. The admin
             snippets are parsed server-side into safe tags, then injected on the
             client ONLY for visitors who should see ads, so Pro/Business stay

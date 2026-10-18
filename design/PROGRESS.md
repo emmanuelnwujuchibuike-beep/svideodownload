@@ -1,15 +1,23 @@
 # Design rebuild — progress
 
-One page at a time, in order. Each step is committed locally (never pushed) and
-stops for the owner's review before the next one starts.
+One page at a time, in order. Each step is committed locally on the `ui-redesign`
+branch (never pushed, no PR until the owner says "push") and stops for the owner's
+review before the next one starts.
 
 - [x] 0. Foundation (tokens, fonts, BottomNav, VerifiedBadge, Avatar, IconButton, SectionHeader, Card, Input, SegmentedControl) — frenz-* tokens + Sora/Hanken fonts, shared primitives in features/frenz-ui, the existing bottom nav restyled to the design with a white fade.
-- [ ] 1. Home / Download → design/Main.dc.html
+- [x] 1. Home / Download → design/Main.dc.html — existing H1 in Bricolage, the paste card on the real download flow, Batch download, live transfers, Tools (Frenz AI, Wallpapers, Earn, Exclusive, Explore) where Recent was, Cloud storage; lighter page.
 - [ ] 2. Feed → design/Feed.dc.html
 - [ ] 3. Messages → design/Messages.dc.html
 - [ ] 4. Chat → design/Chat.dc.html
-- [ ] 5. Profile → design/Profile.dc.html
+- [ ] 5. Profile → design/Profile.dc.html (updated 2026-10-18: the "Private" tab is "Exclusive" and opens the Exclusive tab view)
 - [ ] 6. History → design/History.dc.html (owner's screenshot, 2026-10-18; the .dc.html is not in the folder yet)
+- [ ] 7. Landing page → the same system: white page, iOS glass chrome, no Recent section
+- [ ] 8. Wallpapers → design/Wallpapers.dc.html
+- [ ] 9. Profile menu → design/Menu.dc.html
+- [ ] 10. Settings → design/Settings.dc.html
+- [ ] 11. Profile Exclusive tab (owner view) → design/ProfileExclusive.dc.html
+- [ ] 12. Exclusive page (subscriber view) → design/Exclusive.dc.html
+- [ ] 13. Exclusive feed tab → design/ExclusiveFeed.dc.html
 
 No page had been approved when the white-background rules arrived (2026-10-18), so
 they are applied while each page is built and there is no separate cleanup step.
@@ -23,11 +31,30 @@ they are applied while each page is built and there is no separate cleanup step.
 - Keep the My ads button in the top header.
 - Every page background is white. Cards are white with a 1px #ECE9F7 border and at
   most a very soft shadow. Inputs, search bars and segmented controls use #F1F0F6.
+- Home hero: the existing H1 "Save. Discover. Create and earn." and its description,
+  in a more unique, premium face (Bricolage Grotesque, one static weight).
+- Everything lightweight: no new libraries, one static font weight for the hero,
+  below-the-fold pieces code-split, sections the design drops come off the page.
+- iOS glass, lightweight: on the CHROME only (top header, bottom nav, sticky
+  search/tab bars, sheets), through the existing `frenz-nav-glass` tiers (blur
+  drops on low-power devices / reduced motion, solid for reduced transparency).
+  Page grounds and cards stay white.
 - The brand gradient only on: primary actions (Download, new message, chat
   mic/send), active indicators, identity (logo, avatar/story rings, nav profile
   button), small badges (PRO, counts), and the AI Studio / Wallpapers showcase
   cards. Never on backgrounds, rows, plain cards, secondary/icon buttons, text,
   dividers, borders, washes or glows.
+
+## Required with the Exclusive steps (11–13) — owner, 2026-10-18
+- Non-subscribers must never receive the original media of a locked post: the
+  server makes a heavily blurred, low-resolution preview and sends only that; the
+  original is served only after an active-subscription check. Every place a locked
+  post renders (profile Exclusive tab, Exclusive page, Exclusive feed, the top of
+  the current exclusive feed, anywhere else) must use the preview.
+- If explicit content can be posted as exclusive content: age verification and
+  content gating are needed before launch, and sexually explicit content is not
+  allowed in App Store apps. Age verification is NOT to be built without asking.
+- Glass (blur + translucent fill) only over images; solid white cards on white.
 
 ## Notes — where the design and the app differ
 
@@ -56,3 +83,39 @@ they are applied while each page is built and there is no separate cleanup step.
   fade, so it ships, hidden on Reels and whenever the nav slides away.
 - Guests keep Friends in place of Feed (the design shows only the member set).
 
+
+### Step 1 · Home / Download (/downloads)
+- Header: the app's top bar stays (logo, Install, **My ads**, bell) — owner: keep My ads
+  there. The design's "Download" title is replaced by the existing H1 "Save. Discover.
+  Create and earn." and its line (owner), in Bricolage Grotesque 800. "Discover." is
+  flat violet, not gradient text (gradient is not allowed on text).
+- Paste card: the existing DownloadBox flow (paste, validate, fetch, preview card,
+  format choice, quota gate, auto-download) with a new `frenz` look. The button says
+  "Download" (was "Save"). "+7 more" is the real count and opens the full tappable
+  platform grid with each platform's status (the design said "+4 more").
+- Batch download: the existing Multi-Link card and panel; the subtitle shows this
+  visitor's real limit (3 free / 6 Pro) with the PRO badge.
+- No Recent section here or on the landing (owner) — it lives in History. In its place
+  a "Downloading" list appears only while transfers are in flight: progress, pause /
+  resume, failed + Retry + report, cancel. A finished save leaves it for History.
+- Tools: Frenz AI (keeps the admin promotion media) and Wallpapers (the 10 rotating
+  photos) are the two gradient showcase cards; Earn, Exclusive (owner) and Explore are
+  white cards. Copy is the app's existing wording; the design's "AI Studio · Restyle
+  any photo" and "NEW" badge were not used. Icon tiles are flat violet, not gradient.
+- Cloud storage: real bytes against the plan's ceiling; tap opens the existing usage
+  detail (breakdown, upgrade-or-clear) inline, loaded only then.
+- Lighter: removed from /downloads — stat tiles, quick actions, the side rail, the trust
+  strip, the in-page wallpaper gallery (and its 600-row read per visit; now 10 rows),
+  the per-visit landing-settings read. Kept: the three ad zones, Tired of ads, the
+  download interstitial, exit intent, the trademark disclaimer.
+- Not matched: the design's "Open in Photos" check and the "saved" row state — finished
+  downloads belong to History now (owner).
+
+### Outside the page steps (owner, 2026-10-18)
+- `a50b9cd`: full-screen ads lost the engagement tray (brand badge, Like, views,
+  Share) and its per-ad fetch; the advertiser dashboard lost Likes. Shares stays on
+  the dashboard as the lifetime count, but nothing new can be shared now that the
+  button is gone — say if Shares should go too.
+- 2026-10-18: the first two commits (`ac4b834`, `a50b9cd`) were made on local `main`
+  before the branch was named; they were moved to `ui-redesign` and local `main`
+  points back at `3739e7c`. `origin/main` is 9 commits ahead and was not pulled.

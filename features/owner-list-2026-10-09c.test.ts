@@ -135,7 +135,7 @@ describe("no flash on page entry", () => {
     expect(t).toMatch(/onLoad=\{\(e\) => \{\s*markImageSeen\(src, e\.currentTarget\);/);
     const g = code("features/history/media-gallery.tsx");
     expect(g).toContain("sorted.slice(0, effCols * 5)");
-    expect(g).toContain("eager={i < cols * 5}");
+    expect(g).toContain("eager={i < effCols * 5}");
     // never "everything eager": no tile is eager without the bound
     expect(g).not.toMatch(/eager=\{true\}|<(GalleryTile|SmartThumb)\b[^>]*\seager[\s/>]/);
   });

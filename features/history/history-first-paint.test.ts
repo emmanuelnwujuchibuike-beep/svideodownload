@@ -15,8 +15,11 @@ const built = join(process.cwd(), ".next", "server", "app", "history.html");
 describe("/history paints its own layout before the records load", () => {
   it.skipIf(!existsSync(built))("the prerendered HTML already has the search box and the filter chips", () => {
     const html = readFileSync(built, "utf8");
-    expect(html).toContain('aria-label="Search downloads"');
-    expect(html).toContain("Favorites");
+    // 2026-10-18 redesign: a real <label> for the search, the segmented filter (Favorites moved into the options menu)
+    expect(html).toContain('id="history-search"');
+    expect(html).toContain("Search downloads");
+    expect(html).toContain('role="radiogroup"');
+    expect(html).toContain(">Videos<");
   });
 
   it("teeth: the not-ready pass no longer returns early for the page hosts", () => {

@@ -97,7 +97,9 @@ describe("the AI button (owner, 2026-09-14, twice)", () => {
     expect(src("features/ai/frenz-ai-fab.tsx")).toContain('const SHOWN_PREFIXES = ["/history"];');
     expect(src("app/(app)/layout.tsx")).not.toContain("FrenzAiFab");
     expect(src("app/u/layout.tsx")).not.toContain("FrenzAiFab");
-    expect(src("app/(marketing)/history/page.tsx")).toContain("<FrenzAiFab />");
+    // 2026-10-18 (owner): no floating button on History either — Frenz AI is an entry in its options menu
+    expect(src("app/(marketing)/history/page.tsx")).not.toContain("<FrenzAiFab />");
+    expect(src("features/history/history-panel.tsx")).toContain(`<Link href="/ai" role="menuitem"`);
   });
 });
 

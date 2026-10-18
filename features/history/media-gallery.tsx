@@ -40,6 +40,8 @@ import { playSound } from "@/lib/notifications/sound-fx";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
 import { cn, formatBytes } from "@/lib/utils";
+import { Portal } from "@/components/ui/portal";
+import { useLongPress } from "@/lib/hooks/use-long-press";
 import type { DownloadRecord, MediaKind } from "@/types";
 import { RotatingAdStack } from "@/features/monetization/rotating-ad-stack";
 import { keepHistoryThumb } from "@/features/history/thumb-keep";
@@ -128,7 +130,7 @@ const AD_AFTER_GROUP = new Map<string, ExoClickInsSlot>([
  */
 
 export type SortKey = "time" | "az" | "size" | "platform";
-type ViewMode = "grid" | "list";
+export type ViewMode = "grid" | "list";
 
 /** Premium tactile feedback fired on every history control — a soft haptic + the
  *  same nav "tap" tone the bottom nav uses (owner: "haptic sound in all the buttons
@@ -144,14 +146,14 @@ const KIND_ICON: Record<MediaKind, ComponentType<{ className?: string }>> = {
   image: ImageIcon,
 };
 
-const SORTS: { key: SortKey; label: string }[] = [
+export const SORTS: { key: SortKey; label: string }[] = [
   { key: "time", label: "Recent" },
   { key: "az", label: "Alphabetical" },
   { key: "size", label: "Largest" },
   { key: "platform", label: "Top platform" },
 ];
 
-const COLUMN_CHOICES = [2, 3, 4, 5] as const;
+export const COLUMN_CHOICES = [2, 3, 4, 5] as const;
 
 /**
  * Roughly how much of a caption survives one clamped line on a grid tile.
@@ -164,10 +166,10 @@ const COLUMN_CHOICES = [2, 3, 4, 5] as const;
  */
 const CAPTION_PREVIEW_CHARS = 40;
 
-const VIEW_KEY = "frenz:gallery-view";
-const COLS_KEY = "frenz:gallery-cols";
+export const VIEW_KEY = "frenz:gallery-view";
+export const COLS_KEY = "frenz:gallery-cols";
 /** A saved view preference, read synchronously (client-only: this gallery paints only after the local history loads). */
-function readPref(key: string): string | null {
+export function readPref(key: string): string | null {
   if (typeof window === "undefined") return null;
   try {
     return localStorage.getItem(key);
@@ -175,7 +177,7 @@ function readPref(key: string): string | null {
     return null;
   }
 }
-const SORT_KEY = "frenz:gallery-sort";
+export const SORT_KEY = "frenz:gallery-sort";
 
 /** `137` → `2:17`. Used for the duration chip on a history tile. */
 function formatClock(seconds: number): string {
@@ -242,6 +244,7 @@ export function MediaGallery({
   emptyText = "No downloads yet.",
   groupByDay = false,
   selection,
+  frenz,
 }: {
   items: DownloadRecord[];
   onToggleFavorite: (id: string) => void;
@@ -256,6 +259,13 @@ export function MediaGallery({
   groupByDay?: boolean;
   /** Multi-select mode: tiles toggle instead of opening the player. */
   selection?: GallerySelection;
+  /**
+   * The redesigned History (owner's screenshot, 2026-10-18): no toolbar here — sort, view and
+   * columns live behind the page's one options button and arrive as `controls`; the grid runs
+   * edge to edge; tiles show only the type icon and the source, with the caption and the actions
+   * on a long press; and a long list loads more as you scroll, not with a "Show more" button.
+   */
+  frenz?: { sort: SortKey; view: ViewMode; cols: number };
 }) {
   /*
     Paid tiles in the grid, every 4th square (owner, 2026-10-09). Resolved once
@@ -328,7 +338,11 @@ export function MediaGallery({
     }
   };
 
-  const sorted = useMemo(() => sortItems(items, sort), [items, sort]);
+  // frenz mode: the page's options menu owns these (the persisted prefs still seed the page's own state)
+  const effSort = frenz?.sort ?? sort;
+  const effView = frenz?.view ?? view;
+  const effCols = frenz?.cols ?? cols;
+  const sorted = useMemo(() => sortItems(items, effSort), [items, effSort]);
   /*
     The first screenful loads EAGERLY (owner 2026-10-12: grey tiles "for a while" on every
     entry). Lazy images wait for layout + an intersection pass before they even ask the
@@ -336,8 +350,8 @@ export function MediaGallery({
     what is on screen at entry — skip that; everything below stays lazy, section by
     section (the 2026-10-09 rule: never load the whole history at once).
   */
-  const eagerIds = useMemo(() => new Set(sorted.slice(0, cols * 5).map((r) => r.id)), [sorted, cols]);
-  const initial = view === "grid" ? initialGrid : initialList;
+  const eagerIds = useMemo(() => new Set(sorted.slice(0, effCols * 5).map((r) => r.id)), [sorted, effCols]);
+  const initial = effView === "grid" ? initialGrid : initialList;
   const shown = sorted.slice(0, limit);
 
   /*
@@ -348,7 +362,7 @@ export function MediaGallery({
   */
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const grouped = useMemo(() => {
-    if (!groupByDay || sort !== "time") return null;
+    if (!groupByDay || effSort !== "time") return null;
     const midnight = new Date();
     midnight.setHours(0, 0, 0, 0);
     const today = midnight.getTime();
@@ -374,7 +388,7 @@ export function MediaGallery({
       buckets[bucket]!.items.push(item);
     }
     return buckets.filter((b) => b.items.length > 0);
-  }, [groupByDay, sort, sorted]);
+  }, [groupByDay, effSort, sorted]);
   const openAt = (idx: number) => {
     haptic("light");
     /*
@@ -411,9 +425,24 @@ export function MediaGallery({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sorted]);
 
+  // frenz mode: the next page loads as the end comes near (owner: "infinite scroll instead of page numbers")
+  const moreRef = useRef<HTMLDivElement | null>(null);
+  const hasMore = sorted.length > limit;
+  useEffect(() => {
+    if (!frenz || !hasMore) return;
+    const el = moreRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) setLimit((n) => n + initial);
+    }, { rootMargin: "600px 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [frenz, hasMore, initial]);
+
   return (
     <div>
-      {/* Controls: sort · view · (grid) columns */}
+      {/* Controls: sort · view · (grid) columns — in frenz mode they live in the page's options menu */}
+      {frenz ? null : (
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <label className="inline-flex h-11 items-center gap-2 rounded-xl bg-secondary/60 px-3.5 text-sm shadow-sm ring-1 ring-inset ring-border/40">
           <span className="text-muted-foreground">Sort</span>
@@ -458,6 +487,7 @@ export function MediaGallery({
           </div>
         ) : null}
       </div>
+      )}
 
       {/*
         The history placement (owner, 2026-08-30: "put an exoclick in video
@@ -526,8 +556,8 @@ export function MediaGallery({
 
       {sorted.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground">{emptyText}</p>
-      ) : view === "grid" && grouped ? (
-        <div className="space-y-5">
+      ) : effView === "grid" && grouped ? (
+        <div className={frenz ? "space-y-4" : "space-y-5"}>
           {grouped.map((g) => (
             /*
               🔴 `content-visibility: auto` per day section (owner, 2026-08-10:
@@ -567,19 +597,20 @@ export function MediaGallery({
                 type="button"
                 onClick={() => { tap(); setCollapsed((c) => ({ ...c, [g.key]: !c[g.key] })); }}
                 aria-expanded={!collapsed[g.key]}
-                className="mb-2 flex w-full items-center justify-between gap-3 text-left"
+                className={cn("mb-2 flex w-full items-center justify-between gap-3 text-left", frenz && "frenz-ui min-h-11 px-1")}
               >
-                <span className="text-lg font-bold tracking-tight">{g.label}</span>
-                <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <span className={frenz ? "font-heading text-xl font-bold tracking-[-0.5px] text-frenz-ink" : "text-lg font-bold tracking-tight"}>{g.label}</span>
+                <span className={cn("flex items-center gap-1.5 text-sm", frenz ? "font-semibold text-frenz-muted" : "text-muted-foreground")}>
                   {g.items.length} item{g.items.length === 1 ? "" : "s"}
                   <ChevronDown className={cn("h-4 w-4 transition-transform", collapsed[g.key] && "-rotate-90")} />
                 </span>
               </button>
               {collapsed[g.key] ? null : (
-                <div className="grid gap-1.5 sm:gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+                <div className={frenz ? "-mx-2 grid gap-0.5 sm:mx-0 sm:gap-1" : "grid gap-1.5 sm:gap-2"} style={{ gridTemplateColumns: `repeat(${effCols}, minmax(0, 1fr))` }}>
                   {withGridAds(
                     g.items.map((item) => (
                       <GalleryTile
+                        frenz={!!frenz}
                         key={item.id}
                         item={item}
                         eager={eagerIds.has(item.id)}
@@ -653,17 +684,17 @@ export function MediaGallery({
             </Fragment>
           ))}
         </div>
-      ) : view === "grid" ? (
-        <div className="grid gap-1.5 sm:gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+      ) : effView === "grid" ? (
+        <div className={frenz ? "-mx-2 grid gap-0.5 sm:mx-0 sm:gap-1" : "grid gap-1.5 sm:gap-2"} style={{ gridTemplateColumns: `repeat(${effCols}, minmax(0, 1fr))` }}>
           {withGridAds(
             shown.map((item, i) => (
-              <GalleryTile key={item.id} item={item} eager={i < cols * 5} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} onRemove={() => onRemove(item.id)} onPublishSound={() => setPublishTarget(item)} onRetry={() => retry.begin(item)} selection={selection} />
+              <GalleryTile frenz={!!frenz} key={item.id} item={item} eager={i < effCols * 5} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} onRemove={() => onRemove(item.id)} onPublishSound={() => setPublishTarget(item)} onRetry={() => retry.begin(item)} selection={selection} />
             )),
             gridAds,
           )}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-border/70 bg-card">
+        <div className={frenz ? "-mx-2 overflow-hidden border-y border-frenz-line bg-frenz-card sm:mx-0 sm:rounded-2xl sm:border" : "overflow-hidden rounded-2xl border border-border/70 bg-card"}>
           {shown.map((item, i) => (
             <ListRow key={item.id} item={item} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} onRemove={() => onRemove(item.id)} onPublishSound={() => setPublishTarget(item)} onRetry={() => retry.begin(item)} selection={selection} />
           ))}
@@ -672,7 +703,9 @@ export function MediaGallery({
 
       {/* Grouped view renders everything under its headings, so paging would
           only get in the way of them. */}
-      {grouped && view === "grid" ? null : sorted.length > limit ? (
+      {grouped && effView === "grid" ? null : frenz ? (
+        hasMore ? <div ref={moreRef} aria-hidden className="h-px" /> : null
+      ) : sorted.length > limit ? (
         <div className="mt-5 text-center">
           <button type="button" onClick={() => setLimit((n) => n + initial)} className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-5 py-2.5 text-sm font-semibold shadow-soft transition hover:bg-secondary">
             Show more ({sorted.length - limit})
@@ -733,6 +766,7 @@ export function MediaGallery({
  * would be a statement about the file rather than a gap in what we know.
  */
 function GalleryTile({
+  frenz = false,
   item,
   eager = false,
   onOpen,
@@ -754,6 +788,8 @@ function GalleryTile({
      (owner, 2026-08-24). Supplied by MediaGallery via useGatedRetry. */
   onRetry: () => void;
   selection?: GallerySelection;
+  /** The redesigned History's tile — see MediaGallery's `frenz`. */
+  frenz?: boolean;
 }) {
   const platform = PLATFORMS[item.platform] ?? PLATFORMS.generic;
   const Icon = BRAND_ICONS[item.platform];
@@ -795,10 +831,13 @@ function GalleryTile({
     };
   }, [menuOpen]);
 
+  // frenz: a long press opens the caption and the actions (they left the tile's face)
+  const hold = useLongPress(() => setMenuOpen(true));
   return (
-    <div className={cn("group relative aspect-square overflow-hidden rounded-2xl bg-black/40", picked && "ring-2 ring-primary")}>
+    <div className={cn("group relative overflow-hidden bg-black/40", frenz ? "aspect-[3/4] sm:rounded-lg" : "aspect-square rounded-2xl", picked && "ring-2 ring-inset ring-primary")}>
       <button
         type="button"
+        {...(frenz && !selecting ? hold : {})}
         // In select mode the whole tile toggles instead of opening the player —
         // otherwise picking items would launch a video on every tap.
         onClick={selecting ? () => { tap(); selection!.onToggle(item.id); } : onOpen}
@@ -807,6 +846,13 @@ function GalleryTile({
         className="absolute inset-0 h-full w-full"
       >
         <SmartThumb src={item.thumbnail} alt="" eager={eager} onLoaded={keepHistoryThumb} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]" fallback={<KindIcon className="h-7 w-7" />} />
+        {frenz ? (
+          /* only what the item is and where it came from (owner's screenshot): the type icon and the source */
+          <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-8 text-white">
+            <KindIcon className="h-4 w-4 shrink-0 drop-shadow" aria-hidden />
+            <span className="truncate text-[11px] font-bold drop-shadow">{item.platformName}</span>
+          </span>
+        ) : (
         <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent px-2 pb-1.5 pt-10">
           {/* The duration chip sits ABOVE the title, as in the reference. */}
           <span className="mb-1 flex items-center gap-1 text-[11px] font-semibold text-white/90">
@@ -846,6 +892,7 @@ function GalleryTile({
             </span>
           ) : null}
         </span>
+        )}
         {/*
           🔴 No `backdrop-blur` on anything that repeats per tile (owner,
           2026-08-10: performance on the history page).
@@ -876,9 +923,11 @@ function GalleryTile({
         </span>
       </button>
 
+      {frenz ? null : (
       <span className={cn("pointer-events-none absolute left-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br text-white shadow", platform.accent)}>
         {Icon ? <Icon className="h-3.5 w-3.5" /> : <KindIcon className="h-3.5 w-3.5" />}
       </span>
+      )}
 
       {/*
         FAILED / CANCELLED, IN GRID VIEW TOO (owner, 2026-08-23: "i dont see the
@@ -932,6 +981,7 @@ function GalleryTile({
         </span>
       ) : (
         <>
+          {frenz ? null : (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); tap(); setMenuOpen((o) => !o); }}
@@ -942,21 +992,39 @@ function GalleryTile({
           >
             <MoreHorizontal className="h-4 w-4" />
           </button>
+          )}
 
           {/* A favourite is worth seeing at a glance without opening anything,
               so it keeps a corner of its own once it is set. */}
-          {item.favorite ? (
+          {item.favorite && !frenz ? (
             <span aria-hidden className="pointer-events-none absolute right-1.5 top-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/55">
               <Heart className="h-3.5 w-3.5 fill-rose-500 text-rose-500" />
             </span>
           ) : null}
 
           {menuOpen ? (
+            <MaybePortal on={frenz}>
+            {/* frenz: the long-press menu is a sheet from the bottom (a 3-across tile is too narrow for it).
+                Portalled: the day sections' content-visibility would otherwise contain a fixed element. */}
+            {frenz ? <span aria-hidden className="fixed inset-0 z-[79] bg-black/30 animate-in fade-in duration-150 motion-reduce:animate-none" /> : null}
             <div
               role="menu"
+              aria-label={`Actions for ${item.title}`}
               onPointerDown={(e) => e.stopPropagation()}
-              className="absolute right-1.5 top-10 z-20 w-40 overflow-hidden rounded-xl border border-border/70 bg-card/95 text-left shadow-elevated backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 motion-reduce:animate-none"
+              className={cn(
+                "overflow-hidden border border-border/70 text-left shadow-elevated",
+                frenz
+                  ? "frenz-ui fixed inset-x-0 bottom-0 z-[80] mx-auto max-w-lg rounded-t-3xl bg-frenz-card p-2 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] animate-in slide-in-from-bottom-4 duration-200 motion-reduce:animate-none [&_[role=menuitem]]:min-h-12 [&_[role=menuitem]]:rounded-xl [&_[role=menuitem]]:text-[15px]"
+                  : "absolute right-1.5 top-10 z-20 w-40 rounded-xl bg-card/95 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 motion-reduce:animate-none",
+              )}
             >
+              {/* frenz: the caption the tile's face no longer shows, at the top of its long-press menu */}
+              {frenz ? (
+                <>
+                  <span aria-hidden className="mx-auto mb-2 mt-0.5 block h-1 w-10 rounded-full bg-frenz-line" />
+                  <p className="line-clamp-3 border-b border-frenz-line px-3 pb-2.5 text-sm font-semibold leading-snug text-frenz-ink">{item.title}</p>
+                </>
+              ) : null}
               <TileAction
                 icon={<Heart className={cn("h-3.5 w-3.5", item.favorite && "fill-rose-500 text-rose-500")} />}
                 label={item.favorite ? "Unfavourite" : "Favourite"}
@@ -995,11 +1063,17 @@ function GalleryTile({
                 onClick={() => { onRemove(); setMenuOpen(false); }}
               />
             </div>
+            </MaybePortal>
           ) : null}
         </>
       )}
     </div>
   );
+}
+
+/** Renders into <body> when `on` (the frenz long-press sheet); in place otherwise. */
+function MaybePortal({ on, children }: { on: boolean; children: ReactNode }) {
+  return on ? <Portal>{children}</Portal> : <>{children}</>;
 }
 
 function TileAction({

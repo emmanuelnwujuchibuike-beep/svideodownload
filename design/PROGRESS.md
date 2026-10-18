@@ -10,12 +10,12 @@ review before the next one starts.
 - [x] 3. Messages → design/Messages.dc.html — Sora header with Add friends / More / gradient New message, stories above the fill search, pill filters with real counts, edge-to-edge rows.
 - [x] 4. Chat → design/Chat.dc.html — design header, one time per message group (tested rule), 20 px bubbles with the tail on a group's last, day pill, round attach + fill pill + gradient mic/send.
 - [x] 5. Profile → design/Profile.dc.html (updated: Private → Exclusive) — one shared hero (cover, overlapping avatar, Sora name, stats card, ink Edit/Follow + Share), underlined tabs with Exclusive, edge-to-edge 3:4 grid.
-- [ ] 6. History → design/History.dc.html (owner's screenshot, 2026-10-18; the .dc.html is not in the folder yet)
+- [x] 6. History → design/History.dc.html (owner's screenshot) — large title with real count · size (opens storage), one options button, Select, fill search, segmented filter, edge-to-edge day groups, icon + source tiles with long-press sheet, infinite scroll, lightbulb → options menu.
 - [ ] 7. Landing page → the same system: white page, iOS glass chrome, no Recent section
 - [ ] 8. Wallpapers → design/Wallpapers.dc.html
 - [ ] 9. Profile menu → design/Menu.dc.html
 - [ ] 10. Settings → design/Settings.dc.html
-- [ ] 11. Profile Exclusive tab (owner view) → design/ProfileExclusive.dc.html
+- [ ] 11. Profile Exclusive tab (owner view) → design/ProfileExclusive.dc.html (moved forward, done right after step 6 — owner asked for it, 2026-10-18)
 - [ ] 12. Exclusive page (subscriber view) → design/Exclusive.dc.html
 - [ ] 13. Exclusive feed tab → design/ExclusiveFeed.dc.html
 
@@ -225,9 +225,33 @@ they are applied while each page is built and there is no separate cleanup step.
 - Infinite scroll: ungrouped views (another sort, list view) load the next page as the end
   comes near instead of "Show more". The day-grouped view already renders everything, each
   section skipped by the browser until near (content-visibility), as before.
+- Found, not caused here: /history logs a React hydration mismatch and a 500 from one request in dev, on the committed code before this step too (checked with these changes set aside). Worth a look on its own.
 - Select mode, its Share / Download again / Delete bar, the ad slots between periods and
   above the grid, the player queue with story ads, review deep links and the reward gate
   for retries are unchanged.
+
+### Step 11 · Profile Exclusive tab, owner view (ProfileExclusive.dc.html) — moved forward
+- One dashboard card: "Your subscription", the real monthly price in Sora 30 px with LIVE
+  (green) or PAUSED (amber); three real figures — Subscribers, Last 30 days, Posts — read
+  once from the creator's own earnings overview when the tab opens ("—" until in, never a
+  guess). The design's "This month" is "Last 30 days": the data is a rolling 30 days.
+- "New exclusive post" is the gradient primary (it opens the existing composer). "Share link"
+  is the old "Your Content. Your Earnings." banner's share (that banner is gone). "Dashboard"
+  opens the existing panel: balance + Withdraw, metrics, earnings link, change price, pause /
+  resume, payout account.
+- Announcements and Subscriber notifications are rows on the card (were two dropdowns); each
+  opens the same, already-mounted panel under the card.
+- Exclusive posts: "Exclusive posts N · Manage" over the grid (Manage opens Members, where
+  the paid subscribers are managed); tiles edge to edge, 3:4, with the design's "Subs" lock
+  tag (Hidden posts keep "Hidden"); the decorative gradient placeholder is a flat fill.
+- More on this profile: three iOS lists — Showcase (About, Products, Services, Hours &
+  location, Top friends, Life journey + the other showcase sections), Insights (Analytics,
+  Achievements, Daily streak, Reputation, Profile health, Recent activity), Only you (Creator
+  tools, Private journal, Time capsules). Empty sections show "Add" (it opens the section)
+  instead of "Nothing here yet". Appearance is not listed (it belongs to Settings, step 10).
+  Visitors see the same lists without the owner-only subtitles.
+- Not built here: the design's compact sticky header (small avatar, name, share) — the
+  profile hero above the tabs already carries these; the visitor's subscribe view is step 12.
 
 ### Outside the page steps (owner, 2026-10-18)
 - `a50b9cd`: full-screen ads lost the engagement tray (brand badge, Like, views,

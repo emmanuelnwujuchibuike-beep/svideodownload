@@ -1,18 +1,15 @@
 "use client";
 
 import {
-  CheckCircle2,
-  ChevronDown,
   ChevronLeft,
   Cloud,
   Download,
-  HardDrive,
   Heart,
   History,
-  Layers,
   RotateCcw,
   Search,
   Share2,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
@@ -27,7 +24,14 @@ import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { cn, formatBytes } from "@/lib/utils";
 
-import { MediaGallery } from "./media-gallery";
+import dynamic from "next/dynamic";
+
+import { ChevronRightIcon, CloudIcon, SearchIcon } from "@/features/frenz-ui/icons";
+import { Input, SegmentedControl } from "@/features/frenz-ui/primitives";
+
+import { COLS_KEY, COLUMN_CHOICES, MediaGallery, readPref, SORTS, SORT_KEY, VIEW_KEY, type SortKey, type ViewMode } from "./media-gallery";
+
+const UsageDashboard = dynamic(() => import("@/features/downloads/usage-dashboard").then((m) => m.UsageDashboard), { ssr: false });
 import { useHistory } from "./use-history";
 
 /** Premium tactile feedback on every history-page control (owner). */
@@ -49,171 +53,6 @@ const KIND_FILTERS: { key: KindFilter; label: string }[] = [
   { key: "image", label: "Images" },
   { key: "audio", label: "Audio" },
 ];
-
-/**
- * The /history page's top bar.
- *
- * 🔴 Owner, 2026-08-30: "remove that top section in history page, the one above
- * the search placeholder, and put the storage details in a drop d menu, that
- * drops down and show storage used and all and can be closed back."
- *
- * ── What was here, and why it went ────────────────────────────────────────────
- *
- * A full gradient "Your Downloads" hero card (2026-08-17): eyebrow, gradient
- * headline, a paragraph of description, a drawn folder illustration, and the
- * stats as always-open pills. It pushed the actual downloads — the reason
- * anyone opens this page — most of a phone screen down, and it restated a page
- * title the navigation already makes obvious.
- *
- * The storage facts were worth keeping; a screenful of chrome to present two
- * numbers was not. They now live behind a disclosure that starts CLOSED, so the
- * default view is the grid, and opening it is one tap.
- *
- * ── Nothing functional was dropped ────────────────────────────────────────────
- *
- * Select and Clear all were both inside that card, so both are re-homed here
- * rather than lost — Clear all keeps its confirm-before-destroy step. The same
- * rule the hero itself was held to when it replaced the plain header before it.
- *
- * Every number is still real (`itemCount`/`usedBytes` come from the caller's own
- * `useHistory()` read) — no seeded stats, per this codebase's standing rule
- * against invented figures.
- */
-function HistoryStorageBar({
-  itemCount,
-  usedBytes,
-  selecting,
-  onToggleSelect,
-  confirmClear,
-  onRequestClear,
-  onConfirmClear,
-  onCancelClear,
-}: {
-  itemCount: number;
-  usedBytes: number | null;
-  selecting: boolean;
-  onToggleSelect: () => void;
-  confirmClear: boolean;
-  onRequestClear: () => void;
-  onConfirmClear: () => void;
-  onCancelClear: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="mb-3">
-      <div className="flex items-center gap-2">
-        {/*
-          The disclosure. The headline figure — storage used — stays on the
-          button itself, so the number the owner asked to keep is readable
-          WITHOUT opening anything; the panel is for the breakdown.
-        */}
-        <button
-          type="button"
-          onClick={() => {
-            tap();
-            setOpen((v) => !v);
-          }}
-          aria-expanded={open}
-          aria-controls="history-storage-details"
-          className="inline-flex items-center gap-2 rounded-2xl bg-card px-3.5 py-2 text-[13px] font-bold text-foreground shadow-sm ring-1 ring-inset ring-border/50 transition active:scale-95"
-        >
-          <HardDrive className="h-4 w-4 text-primary" aria-hidden />
-          Storage
-          {usedBytes === null ? null : <span className="font-extrabold text-primary">{formatBytes(usedBytes)}</span>}
-          <ChevronDown
-            aria-hidden
-            className={cn("h-4 w-4 text-muted-foreground transition-transform duration-200", open && "rotate-180")}
-          />
-        </button>
-
-        <div className="ml-auto flex items-center gap-1">
-          {confirmClear ? (
-            <span className="flex items-center gap-1 text-sm">
-              <button
-                type="button"
-                onClick={onConfirmClear}
-                className="rounded-lg px-2.5 py-1.5 font-bold text-rose-500 transition active:scale-95"
-              >
-                Clear all?
-              </button>
-              <button
-                type="button"
-                onClick={onCancelClear}
-                className="rounded-lg px-2.5 py-1.5 font-semibold text-muted-foreground transition active:scale-95"
-              >
-                Cancel
-              </button>
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={onRequestClear}
-              aria-label="Clear all downloads"
-              className="rounded-lg p-2 text-muted-foreground/70 transition hover:text-rose-500 active:scale-95"
-            >
-              <Trash2 className="h-[18px] w-[18px]" />
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={onToggleSelect}
-            aria-pressed={selecting}
-            className={cn(
-              "lux-btn inline-flex items-center gap-1.5 rounded-2xl px-3.5 py-2 text-[13px] font-bold transition duration-150 active:scale-95",
-              selecting
-                ? "bg-foreground text-background shadow-sm"
-                : "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md shadow-violet-500/25",
-            )}
-          >
-            <span className="relative z-[2] inline-flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4" /> {selecting ? "Done" : "Select"}
-            </span>
-          </button>
-        </div>
-      </div>
-
-      {/*
-        Unmounted rather than hidden while closed: this is the page held to the
-        cold-entry budget, and a closed panel should cost nothing to paint. The
-        facts are two pills and a badge, so there is no state worth preserving
-        across a close.
-      */}
-      {open ? (
-        <div
-          id="history-storage-details"
-          className="lux-enter mt-2 flex flex-wrap items-center gap-2 rounded-2xl bg-card/60 p-3 ring-1 ring-inset ring-border/50"
-        >
-          <StatPill icon={Layers} value={String(itemCount)} label={itemCount === 1 ? "Item" : "Items"} />
-          <StatPill icon={HardDrive} value={formatBytes(usedBytes)} label="Total Size" />
-          <span className="inline-flex items-center gap-1.5 rounded-2xl bg-card px-3.5 py-2.5 text-[13px] font-bold text-primary shadow-sm ring-1 ring-inset ring-border/50">
-            Private Cloud <Cloud className="h-4 w-4" />
-          </span>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function StatPill({
-  icon: Icon,
-  value,
-  label,
-}: {
-  icon: typeof Layers;
-  value: string;
-  label: string;
-}) {
-  return (
-    <span className="inline-flex items-center gap-2 rounded-2xl bg-card px-3.5 py-2 shadow-sm ring-1 ring-inset ring-border/50">
-      <Icon className="h-4 w-4 text-primary" aria-hidden />
-      <span className="flex flex-col leading-none">
-        <span className="text-sm font-extrabold text-foreground">{value}</span>
-        <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
-      </span>
-    </span>
-  );
-}
 
 export function HistoryPanel({
   standalone = false,
@@ -250,6 +89,25 @@ export function HistoryPanel({
   const [confirmClear, setConfirmClear] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  // the redesigned /history (standalone): sort, view and columns live behind ONE options button
+  const [sort, setSort] = useState<SortKey>(() => {
+    const v = readPref(SORT_KEY);
+    return v && SORTS.some((o) => o.key === v) ? (v as SortKey) : "time";
+  });
+  const [view, setView] = useState<ViewMode>(() => (readPref(VIEW_KEY) === "list" ? "list" : "grid"));
+  // three across by default, as drawn; a saved choice still wins
+  const [cols, setCols] = useState<number>(() => {
+    const c = Number(readPref(COLS_KEY));
+    return COLUMN_CHOICES.includes(c as (typeof COLUMN_CHOICES)[number]) ? c : 3;
+  });
+  const [storageOpen, setStorageOpen] = useState(false);
+  const save = (key: string, value: string) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      /* private mode — the choice still applies for this visit */
+    }
+  };
 
   /*
     Open straight into Favorites from the download page's quick action. Read
@@ -432,17 +290,104 @@ export function HistoryPanel({
           counts stayed on the filter pills, Favorites keeps its own chip.
         */}
         {standalone ? (
-          <HistoryStorageBar
-            itemCount={items.length}
-            usedBytes={ready ? usedBytes : null}
-            selecting={selecting}
-            onToggleSelect={() => { tap(); setSelecting((v) => !v); setSelected(new Set()); }}
-            confirmClear={confirmClear}
-            onRequestClear={() => { tap(); setConfirmClear(true); }}
-            onConfirmClear={() => { tap(); clearHistory(); setConfirmClear(false); }}
-            onCancelClear={() => { tap(); setConfirmClear(false); }}
-          />
-        ) : (
+          /*
+            The redesigned History (owner's screenshot, 2026-10-18): a large "History" with
+            "items · size ›" under it (it opens the storage detail), the one options button (sort,
+            view, columns, filters, Frenz AI, Clear all) and Select; then a native search field and
+            the All · Videos · Images · Audio control. Every number is real.
+          */
+          <div className="frenz-ui">
+            <div className="flex items-start justify-between gap-3 px-1 pt-1">
+              <div className="min-w-0">
+                <h1 className="m-0 font-heading text-[38px] font-extrabold leading-none tracking-[-1.5px] text-frenz-ink">History</h1>
+                <button
+                  type="button"
+                  onClick={() => { tap(); setStorageOpen((v) => !v); }}
+                  aria-expanded={storageOpen}
+                  aria-controls="history-storage"
+                  className="mt-2 inline-flex min-h-8 items-center gap-1.5 text-[15px] font-semibold text-frenz-muted"
+                >
+                  <CloudIcon size={18} strokeWidth={2} />
+                  {ready ? `${items.length} item${items.length === 1 ? "" : "s"} · ${formatBytes(usedBytes)}` : "Your downloads"}
+                  <ChevronRightIcon size={14} strokeWidth={2.6} className={cn("transition-transform", storageOpen && "rotate-90")} />
+                </button>
+              </div>
+              <div className="flex shrink-0 items-center gap-2.5 pt-0.5">
+                <HistoryOptions
+                  sort={sort}
+                  view={view}
+                  cols={cols}
+                  onSort={(v) => { setSort(v); save(SORT_KEY, v); }}
+                  onView={(v) => { setView(v); save(VIEW_KEY, v); }}
+                  onCols={(n) => { setCols(n); save(COLS_KEY, String(n)); }}
+                  tab={tab}
+                  onTab={setTab}
+                  favCount={ready ? favCount : null}
+                  failedCount={ready ? failedCount : null}
+                  onClearAll={() => {
+                    if (!confirm("Clear your whole download history? This removes every item from this device.")) return;
+                    clearHistory();
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => { tap(); setSelecting((v) => !v); setSelected(new Set()); }}
+                  aria-pressed={selecting}
+                  className={cn(
+                    "h-11 rounded-full px-5 text-base font-bold transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet",
+                    selecting ? "bg-frenz-ink text-frenz-page" : "bg-frenz-violet/10 text-frenz-violet",
+                  )}
+                >
+                  {selecting ? "Done" : "Select"}
+                </button>
+              </div>
+            </div>
+
+            <div id="history-storage">{storageOpen ? <div className="mt-3"><UsageDashboard /></div> : null}</div>
+
+            <Input
+              id="history-search"
+              label="Search downloads"
+              type="search"
+              enterKeyHint="search"
+              icon={<SearchIcon size={18} />}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search downloads"
+              className="mt-4 h-12"
+              trailing={
+                query ? (
+                  <button type="button" onClick={() => { tap(); setQuery(""); }} aria-label="Clear search" className="flex h-9 w-9 items-center justify-center rounded-full text-frenz-muted">
+                    <X className="h-4 w-4" />
+                  </button>
+                ) : null
+              }
+            />
+
+            <SegmentedControl
+              label="Show"
+              className="mt-3"
+              value={tab === "recent" ? kind : "all"}
+              onChange={(k) => { tap(); setTab("recent"); setKind(k); }}
+              options={KIND_FILTERS.map((f) => ({ value: f.key, label: f.label }))}
+            />
+
+            {/* Favorites / Failed are picked in the options menu; while one is on, say so and let it go in one tap */}
+            {tab !== "recent" ? (
+              <button
+                type="button"
+                onClick={() => { tap(); setTab("recent"); }}
+                className="mt-3 inline-flex min-h-9 items-center gap-1.5 rounded-full bg-frenz-violet/10 px-3 text-sm font-bold text-frenz-violet"
+              >
+                {tab === "favorites" ? "Favorites" : "Failed & cancelled"} <X className="h-3.5 w-3.5" aria-hidden />
+                <span className="sr-only">— show all</span>
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {standalone ? null : (
+          <>
+        {(
           <>
             <div className="mb-4 flex items-center justify-between gap-3">
               {embedded ? (
@@ -588,6 +533,9 @@ export function HistoryPanel({
           ) : null}
         </div>
 
+
+          </>
+        )}
         {/*
           Directly above the grid, below the search and the filter chips
           (owner, 2026-08-09, with a screenshot: "the history page ad should be
@@ -615,6 +563,7 @@ export function HistoryPanel({
           onRemove={removeDownload}
           groupByDay
           selection={{ active: selecting, selected, onToggle: toggleSelected }}
+          frenz={standalone ? { sort, view, cols } : undefined}
           emptyText={tab === "favorites" ? "No favorites yet — tap the heart on any download to save it here." : "No downloads match your search."}
         />
         )}
@@ -765,5 +714,134 @@ function Count({ children }: { children: ReactNode }) {
     >
       {children}
     </span>
+  );
+}
+
+/**
+ * History's ONE options button (owner's screenshot, 2026-10-18): sort, view and columns, the
+ * Favorites / Failed filters, Frenz AI — which was the floating lightbulb button on this page
+ * (owner, 2026-09-14) and moved here when that button went — and Clear all, with a confirm.
+ * A popover under the button; closes on an outside tap or Escape.
+ */
+function HistoryOptions({
+  sort,
+  view,
+  cols,
+  onSort,
+  onView,
+  onCols,
+  tab,
+  onTab,
+  favCount,
+  failedCount,
+  onClearAll,
+}: {
+  sort: SortKey;
+  view: ViewMode;
+  cols: number;
+  onSort: (v: SortKey) => void;
+  onView: (v: ViewMode) => void;
+  onCols: (n: number) => void;
+  tab: "recent" | "favorites" | "failed";
+  onTab: (t: "recent" | "favorites" | "failed") => void;
+  favCount: number | null;
+  failedCount: number | null;
+  onClearAll: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+  const choose = (fn: () => void) => () => {
+    tap();
+    fn();
+  };
+  const row = "flex min-h-11 w-full items-center justify-between gap-3 rounded-xl px-3 text-left text-[15px] font-semibold text-frenz-ink transition hover:bg-frenz-fill";
+  const mark = (on: boolean) => (on ? <span aria-hidden className="h-2 w-2 rounded-full bg-frenz-violet" /> : null);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => { tap(); setOpen((v) => !v); }}
+        aria-label="Sort, view and filters"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="flex h-11 w-11 items-center justify-center rounded-full border border-frenz-line bg-frenz-card text-frenz-ink transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet"
+      >
+        {/* three lines, shorter each time — the design's filter glyph */}
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+          <path d="M4 7h16" />
+          <path d="M7 12h10" />
+          <path d="M10 17h4" />
+        </svg>
+      </button>
+      {open ? (
+        <>
+          <button type="button" aria-label="Close menu" onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />
+          <div role="menu" className="frenz-ui absolute right-0 top-[calc(100%+0.5rem)] z-50 w-64 overflow-hidden rounded-2xl border border-frenz-line bg-frenz-card p-1.5 shadow-frenz-float">
+            <p className="px-3 pb-1 pt-2 text-xs font-bold uppercase tracking-wide text-frenz-muted">Sort by</p>
+            {SORTS.map((o) => (
+              <button key={o.key} type="button" role="menuitemradio" aria-checked={sort === o.key} onClick={choose(() => onSort(o.key))} className={row}>
+                {o.label} {mark(sort === o.key)}
+              </button>
+            ))}
+            <div className="my-1 h-px bg-frenz-line" />
+            <p className="px-3 pb-1 pt-1 text-xs font-bold uppercase tracking-wide text-frenz-muted">View</p>
+            <div className="flex gap-1 px-1.5 pb-1">
+              {(["grid", "list"] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={view === v}
+                  onClick={choose(() => onView(v))}
+                  className={cn("min-h-10 flex-1 rounded-xl text-sm font-bold", view === v ? "bg-frenz-ink text-frenz-page" : "bg-frenz-fill text-frenz-ink/80")}
+                >
+                  {v === "grid" ? "Grid" : "List"}
+                </button>
+              ))}
+            </div>
+            {view === "grid" ? (
+              <div className="flex gap-1 px-1.5 pb-1">
+                {COLUMN_CHOICES.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={cols === n}
+                    aria-label={`${n} columns`}
+                    onClick={choose(() => onCols(n))}
+                    className={cn("min-h-10 flex-1 rounded-xl text-sm font-bold tabular-nums", cols === n ? "bg-frenz-ink text-frenz-page" : "bg-frenz-fill text-frenz-ink/80")}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <div className="my-1 h-px bg-frenz-line" />
+            <button type="button" role="menuitemcheckbox" aria-checked={tab === "favorites"} onClick={choose(() => { onTab(tab === "favorites" ? "recent" : "favorites"); setOpen(false); })} className={row}>
+              <span className="inline-flex items-center gap-2"><Heart className="h-4 w-4" aria-hidden /> Favorites</span>
+              <span className="flex items-center gap-2 text-sm text-frenz-muted">{favCount ?? ""}{mark(tab === "favorites")}</span>
+            </button>
+            {failedCount ? (
+              <button type="button" role="menuitemcheckbox" aria-checked={tab === "failed"} onClick={choose(() => { onTab(tab === "failed" ? "recent" : "failed"); setOpen(false); })} className={row}>
+                <span className="inline-flex items-center gap-2"><RotateCcw className="h-4 w-4" aria-hidden /> Failed &amp; cancelled</span>
+                <span className="flex items-center gap-2 text-sm text-frenz-muted">{failedCount}{mark(tab === "failed")}</span>
+              </button>
+            ) : null}
+            <Link href="/ai" role="menuitem" onClick={() => { tap(); setOpen(false); }} className={row}>
+              <span className="inline-flex items-center gap-2"><Sparkles className="h-4 w-4" aria-hidden /> Frenz AI</span>
+            </Link>
+            <div className="my-1 h-px bg-frenz-line" />
+            <button type="button" role="menuitem" onClick={() => { tap(); setOpen(false); onClearAll(); }} className={cn(row, "text-rose-600 hover:bg-rose-50")}>
+              <span className="inline-flex items-center gap-2"><Trash2 className="h-4 w-4" aria-hidden /> Clear all</span>
+            </button>
+          </div>
+        </>
+      ) : null}
+    </div>
   );
 }

@@ -183,7 +183,7 @@ export function ExclusiveFeed({ initial = null }: { initial?: ExclusiveFeedPageV
   return (
     <div className="space-y-6">
       {posts.length ? (
-        <ul className="space-y-4">
+        <ul className="-mx-3 space-y-2.5 sm:-mx-4">
           {posts.map((p, i) => (
             <li key={p.id}>
               <FeedCard post={p} creator={creators[p.creatorId]} eager={i < 2} onOpen={() => setOpen(p.id)} />
@@ -253,7 +253,7 @@ function FeedCard({ post, creator, eager, onOpen }: { post: Shown; creator: Crea
   const what = itemsLabel(post.items, post.hasVideo);
   const preview = usePreview(post);
   return (
-    <article className="ex-card overflow-hidden">
+    <article className="ex-card ex-card--bleed overflow-hidden">
       <header className="flex items-center gap-3 px-4 pb-3 pt-3.5">
         <Avatar c={creator} />
         <div className="min-w-0 flex-1">
@@ -491,9 +491,9 @@ export function LockedPreviewCard({ card, creator }: { card: Card; creator: Disc
 
 export function FeedSkeleton() {
   return (
-    <div className="space-y-4" aria-busy="true" aria-label="Loading your exclusive feed">
+    <div className="-mx-3 space-y-2.5 sm:-mx-4" aria-busy="true" aria-label="Loading your exclusive feed">
       {[0, 1].map((i) => (
-        <div key={i} className="overflow-hidden ex-card">
+        <div key={i} className="overflow-hidden ex-card ex-card--bleed">
           <div className="flex items-center gap-3 px-4 pb-3 pt-3.5">
             <span className="h-10 w-10 animate-pulse rounded-full ex-skel" />
             <span className="h-3.5 w-36 animate-pulse rounded-full ex-skel" />

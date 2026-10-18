@@ -438,6 +438,23 @@
     border-color: hsl(0 0% 100% / 0.08);
     box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.06);
   }
+  /* chat redesign (2026-10-18), style only: the composer floats as a glass bar inset from the
+     edges (form.x outranks the single-class utilities on the element), bubbles get a softer shadow */
+  form.frenz-message-composer {
+    margin-inline: 0.5rem;
+    border: 1px solid hsl(var(--border) / 0.6);
+    border-radius: 1.75rem;
+    box-shadow: 0 12px 32px -18px hsl(230 40% 8% / 0.5), inset 0 1px 0 hsl(0 0% 100% / 0.14);
+  }
+  .dark form.frenz-message-composer {
+    border-color: hsl(0 0% 100% / 0.1);
+  }
+  form.frenz-message-composer > div {
+    border-radius: 1.5rem;
+  }
+  .frenz-message-bubble {
+    box-shadow: 0 6px 16px -13px hsl(230 30% 12% / 0.4);
+  }
   .frenz-inbox-page {
     background-image: radial-gradient(circle at 100% 0%, hsl(var(--brand-blue) / 0.06), transparent 28%);
   }
@@ -1083,6 +1100,15 @@
     box-shadow:
       inset 0 1px 0 rgb(255 255 255 / 0.06),
       0 14px 34px -18px rgb(0 0 0 / 0.7);
+  }
+  /* a feed card that runs edge to edge (Exclusive feed, 2026-10-18): the list pulls it out of the
+     page gutters; here it loses its radius, side hairlines and side shadow, keeping the top and
+     bottom hairlines as the divider between posts */
+  .ex-card--bleed {
+    border-radius: 0;
+    border-left-width: 0;
+    border-right-width: 0;
+    box-shadow: none;
   }
   /* rows inside a card: hairline dividers, no nested cards */
   .ex-rows > * + * {

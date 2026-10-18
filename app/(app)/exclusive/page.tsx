@@ -33,7 +33,9 @@ export default async function ExclusiveRoute() {
       <div className="mx-auto w-full max-w-xl flex-1 px-3 pt-4 sm:px-4" style={{ paddingBottom: "calc(var(--frenz-bottom-nav) + 1rem)" }}>
         <header className="mb-4 flex items-start justify-between gap-3 px-1">
           <div>
-            <h1 className="text-[22px] font-extrabold tracking-[-0.02em]">Exclusive</h1>
+            <h1 className="flex items-center gap-1.5 text-[22px] font-extrabold tracking-[-0.02em]">
+              Exclusive <Star className="h-5 w-5 fill-amber-400 text-amber-400" aria-hidden />
+            </h1>
             <p className="text-[13.5px] text-muted-foreground">Posts from creators you subscribe to.</p>
           </div>
           <Link href="/exclusive/favourites" prefetch={false} className="ex-btn ex-btn--glass ex-btn--sm shrink-0">

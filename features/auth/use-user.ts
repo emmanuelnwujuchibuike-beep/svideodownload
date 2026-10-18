@@ -1,7 +1,7 @@
 "use client";
 
 import type { User } from "@supabase/supabase-js";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { clearIdentity } from "@/lib/auth/identity-cache";
 import { getClient } from "@/lib/supabase/client-lazy";
@@ -95,5 +95,24 @@ export function useUser() {
     };
   }, []);
 
+  /*
+    🔴 THE HYDRATION PASS RENDERS WHAT THE SERVER DID (2026-10-18, the /history hydration error).
+
+    The server always renders `loading: hasSupabase` with no user — it has no `cachedUser`. But
+    `cachedUser` is module state: on a cold load the shell outside a page's Suspense boundary hydrates
+    first, its effect resolves the session, and a header inside the boundary then hydrated with
+    `loading` already false. On /history (a page with its own loading boundary) a signed-out
+    visitor's UserMenu rendered nothing where the server HTML had its placeholder, the menu button
+    slid into that slot, and React threw the server HTML away and re-rendered the page. The same
+    fix useEntitlements got on 2026-10-14: `useSyncExternalStore`'s server snapshot is used exactly
+    for the hydration pass; React re-renders with the real value right after. A component mounted
+    by a client navigation never takes this path and stays instant.
+  */
+  const hydrating = useSyncExternalStore(noopSubscribe, notHydrating, isHydrating);
+  if (hydrating) return { user: null, loading: hasSupabase, enabled: hasSupabase };
   return { user, loading, enabled: hasSupabase };
 }
+
+const noopSubscribe = () => () => {};
+const notHydrating = () => false;
+const isHydrating = () => true;

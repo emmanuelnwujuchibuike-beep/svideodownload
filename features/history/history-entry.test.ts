@@ -31,6 +31,24 @@ describe("a cold load hydrates without throwing the page away", () => {
     expect(e).toContain("const isHydrating = () => true;");
     expect(e).toContain("const notHydrating = () => false;");
   });
+
+  it("the session renders the server's answer during hydration too (2026-10-18: UserMenu's placeholder vs the menu button)", () => {
+    const u = src("features/auth/use-user.ts");
+    expect(u).toContain("const hydrating = useSyncExternalStore(noopSubscribe, notHydrating, isHydrating);");
+    // exactly what the server renders: no user, still loading wherever Supabase is configured
+    expect(u).toContain("if (hydrating) return { user: null, loading: hasSupabase, enabled: hasSupabase };");
+    expect(u).toContain("const isHydrating = () => true;");
+    expect(u).toContain("const notHydrating = () => false;");
+    // the guard runs before the cached value is returned, never after
+    expect(u.indexOf("if (hydrating) return")).toBeLessThan(u.indexOf("return { user, loading, enabled: hasSupabase };"));
+  });
+});
+
+describe("/icon.png is served by one file", () => {
+  it("public/ has no icon.png to collide with app/icon.png (dev answered 500 on every page)", () => {
+    expect(existsSync(join(process.cwd(), "app/icon.png"))).toBe(true);
+    expect(existsSync(join(process.cwd(), "public/icon.png"))).toBe(false);
+  });
 });
 
 describe("History thumbnails are kept on the device", () => {

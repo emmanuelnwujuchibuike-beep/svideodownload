@@ -72,4 +72,3 @@ export const CalendarIcon = (p: GlyphProps) => <Glyph {...p}><rect x="3" y="5" w
 export const FlameIcon = (p: GlyphProps) => <Glyph {...p}><path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.2 1-3.6 2-4.6.3 1.6 1.1 2.6 2.2 2.6C10.5 8.5 11 5.5 12 3z" /></Glyph>;
 export const ShareUpIcon = (p: GlyphProps) => <Glyph {...p}><path d="M12 3v12" /><path d="M7 8l5-5 5 5" /><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" /></Glyph>;
 export const ListViewIcon = (p: GlyphProps) => <Glyph {...p}><rect x="4" y="4" width="16" height="7" rx="2" /><rect x="4" y="13" width="16" height="7" rx="2" /></Glyph>;
-export const SparkIcon = (p: GlyphProps) => <Glyph {...p}><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" /><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" /></Glyph>;

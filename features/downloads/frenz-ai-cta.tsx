@@ -54,19 +54,19 @@ export function FrenzAICta({
       */
       className={cn(
         "group relative block rounded-[1.75rem] bg-gradient-to-br from-blue-400 via-violet-500 to-fuchsia-500 p-[1.5px] text-left",
-        "shadow-[0_18px_40px_-16px_rgba(99,102,241,0.65)]",
+        "shadow-[0_22px_52px_-14px_rgba(124,58,237,0.8),0_0_0_1px_rgba(168,85,247,0.25)]",
         "transition-transform duration-200 hover:-translate-y-0.5 active:scale-[0.99] motion-reduce:transition-none",
         className,
       )}
     >
-      <span className="relative isolate flex min-h-[8.25rem] items-center gap-3.5 overflow-hidden rounded-[calc(1.75rem-1.5px)] bg-[#0b1020] p-4 text-white">
+      <span className="relative isolate flex min-h-[9.75rem] items-center gap-4 overflow-hidden rounded-[calc(1.75rem-1.5px)] bg-[#0b1020] p-5 text-white">
         {/* the field: blue and violet light on deep navy, painted once */}
         <span
           aria-hidden
           className="pointer-events-none absolute inset-0 -z-10"
           style={{
             background:
-              "radial-gradient(90% 120% at 0% 100%, rgba(37,99,235,0.55) 0%, transparent 62%), radial-gradient(80% 120% at 100% 0%, rgba(168,85,247,0.55) 0%, rgba(217,70,239,0.18) 45%, transparent 72%), linear-gradient(135deg, #0f1733 0%, #1a1245 100%)",
+              "radial-gradient(90% 120% at 0% 100%, rgba(37,99,235,0.7) 0%, transparent 62%), radial-gradient(80% 120% at 100% 0%, rgba(168,85,247,0.7) 0%, rgba(217,70,239,0.28) 45%, transparent 72%), linear-gradient(135deg, #0f1733 0%, #1a1245 100%)",
           }}
         />
         {/* a still sheen across the top edge */}
@@ -74,23 +74,23 @@ export function FrenzAICta({
 
         <span
           aria-hidden
-          className="relative flex h-[3.4rem] w-[3.4rem] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 shadow-[0_10px_24px_-8px_rgba(124,58,237,0.9)] ring-4 ring-white/15"
+          className="relative flex h-[4rem] w-[4rem] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 shadow-[0_10px_24px_-8px_rgba(124,58,237,0.9)] ring-4 ring-white/15"
         >
-          <Wand2 className="h-[1.5rem] w-[1.5rem] text-white" />
+          <Wand2 className="h-[1.75rem] w-[1.75rem] text-white" />
           <Spark className="absolute -right-2 -top-2 h-3.5 w-3.5 text-fuchsia-300" />
           <Spark className="absolute -bottom-1.5 -left-2 h-2.5 w-2.5 text-sky-300" />
         </span>
 
         <span className="min-w-0 flex-1">
-          <span className="block text-[1.3rem] font-extrabold leading-tight tracking-[-0.02em]">
+          <span className="block text-[1.55rem] font-extrabold leading-tight tracking-[-0.02em]">
             Frenz <span className="text-gradient">AI</span>
           </span>
           {/* one still line (the 2026-10-09 refinement); the tool names live on /ai */}
-          <span className="mt-1 block text-[13px] leading-snug text-white/75">Create amazing videos with AI</span>
+          <span className="mt-1 block text-[13.5px] leading-snug text-white/80">Create amazing videos with AI</span>
         </span>
 
         {/* the button: white on a dark card, with its own violet glow — the loudest pixels on the page */}
-        <span className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full bg-white pl-4 pr-3 text-[14px] font-bold text-slate-900 shadow-[0_8px_24px_-6px_rgba(168,85,247,0.8)] transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none">
+        <span className="inline-flex h-12 shrink-0 items-center gap-1.5 rounded-full bg-white pl-4 pr-3 text-[14px] font-bold text-slate-900 shadow-[0_10px_30px_-6px_rgba(192,132,252,0.95)] transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none">
           Try now
           <ArrowRight className="h-4 w-4 text-violet-600" aria-hidden />
         </span>

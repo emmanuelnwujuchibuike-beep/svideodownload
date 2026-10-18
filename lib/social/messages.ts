@@ -151,6 +151,28 @@ export async function existingDirectConversationId(viewerId: string, otherId: st
   }
 }
 
+/**
+ * The viewer's own "show when I'm typing" setting (0060, default on), for the inbox
+ * (owner, 2026-10-18: Ghost Mode is reciprocal, so the inbox needs it to decide whether
+ * rows subscribe). One primary-key read per FULL inbox load — never per typing event.
+ * Undefined when the read fails: the inbox then treats it as unknown and subscribes to
+ * nothing, so a fault can never show typing to someone who hid theirs.
+ */
+export async function viewerTypingIndicatorsEnabled(userId: string): Promise<boolean | undefined> {
+  if (!hasSupabase) return undefined;
+  try {
+    const { data, error } = await createAdminClient()
+      .from("privacy_settings")
+      .select("typing_indicators_enabled")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) return undefined;
+    return (data?.typing_indicators_enabled as boolean | null | undefined) ?? true;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Can `senderId` start/continue a DIRECT conversation with `recipientId`? */
 export async function canMessage(senderId: string, recipientId: string): Promise<MessageGate> {
   if (!hasSupabase) return { ok: false, reason: "unavailable" };

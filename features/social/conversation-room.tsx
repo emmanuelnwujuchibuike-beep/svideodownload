@@ -92,6 +92,7 @@ import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { toast } from "@/features/ui/toast";
 import { profilePath } from "@/lib/social/profile-url";
+import { roomTypingTopic, TYPING_REVOKED_EVENT, type TypingRevokedDetail } from "@/features/social/typing-privacy";
 
 /**
  * Layout effect on the client, plain effect during SSR (where layout effects
@@ -252,7 +253,7 @@ export function ConversationRoom({
   /** Direct threads: the other party's display name (drives the mockup's
    *  personalized "Message Maya…" composer placeholder). */
   otherName?: string | null;
-  /** Part 11b privacy toggle — the VIEWER's own "show when I'm typing" choice; false mutes OUR OWN outbound typing broadcast only (receiving others' typing is unaffected). */
+  /** Part 11b privacy toggle — the VIEWER's own "show when I'm typing" choice. Reciprocal since 2026-10-18: false means this thread neither sends nor shows typing (no typing channel is joined). */
   viewerTypingIndicatorsEnabled?: boolean;
   /** The other party's active stories (direct threads only) — the mockup's
    *  "Name · N stories" strip at the top of the thread. Null when they have
@@ -474,7 +475,24 @@ export function ConversationRoom({
     cacheThread(conversationId, { messages, syncedAt: lastSyncedAt.current });
   }, [messages, conversationId]);
 
-  const { typingNames, notifyTyping, clearTyping } = useTypingIndicator(conversationId, viewerId, viewerName, viewerTypingIndicatorsEnabled);
+  // Ghost Mode is reciprocal (owner, 2026-10-18): typing off ⇒ this thread joins NO typing
+  // channel, so it neither sends nor shows typing. A block or messaging restriction made
+  // from this thread drops the channel as soon as the server confirms it (typing-privacy.ts).
+  const [typingRevoked, setTypingRevoked] = useState(false);
+  useEffect(() => {
+    setTypingRevoked(false);
+    const onRevoked = (e: Event) => {
+      if ((e as CustomEvent<TypingRevokedDetail>).detail?.conversationId === conversationId) setTypingRevoked(true);
+    };
+    window.addEventListener(TYPING_REVOKED_EVENT, onRevoked);
+    return () => window.removeEventListener(TYPING_REVOKED_EVENT, onRevoked);
+  }, [conversationId]);
+  const { typingNames, notifyTyping, clearTyping } = useTypingIndicator(
+    roomTypingTopic(conversationId, viewerTypingIndicatorsEnabled, typingRevoked),
+    viewerId,
+    viewerName,
+    viewerTypingIndicatorsEnabled,
+  );
   // A single soft tick when someone STARTS typing — not per keystroke, and
   // not re-triggered while they keep typing or a second person joins in.
   const wasTypingRef = useRef(false);

@@ -22,6 +22,12 @@ export const INBOX_KEY = "inbox";
 export interface Inbox {
   conversations: ConversationSummary[];
   unread: number;
+  /**
+   * The viewer's own "show when I'm typing" setting, from the FULL inbox load only.
+   * Undefined until known (a device-cached paint, a partial patch before any full load) —
+   * rows don't subscribe to typing until it is known to be on (typing-privacy.ts).
+   */
+  typingIndicatorsEnabled?: boolean;
 }
 
 export async function loadInbox(): Promise<Inbox> {
@@ -36,7 +42,11 @@ export async function loadInbox(): Promise<Inbox> {
   const res = await fetch("/api/messages");
   if (!res.ok) return { conversations: [], unread: 0 };
   const d = (await res.json()) as Inbox;
-  return { conversations: d.conversations ?? [], unread: d.unread ?? 0 };
+  return {
+    conversations: d.conversations ?? [],
+    unread: d.unread ?? 0,
+    typingIndicatorsEnabled: typeof d.typingIndicatorsEnabled === "boolean" ? d.typingIndicatorsEnabled : undefined,
+  };
 }
 
 /** Incoming friend requests (the inbox's Requests tab), in the shared cache beside the inbox. */
@@ -92,7 +102,8 @@ export function mergeInboxRows(prev: Inbox, ids: string[], fresh: ConversationSu
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
     return new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime();
   });
-  return { conversations, unread: conversations.filter((c) => c.unread).length };
+  // `...prev` keeps what a partial patch doesn't carry — the viewer's typing setting.
+  return { ...prev, conversations, unread: conversations.filter((c) => c.unread).length };
 }
 
 /** Rebuilds only `ids` on the server and patches them into the cache. False ⇒ the caller does a full reload. */

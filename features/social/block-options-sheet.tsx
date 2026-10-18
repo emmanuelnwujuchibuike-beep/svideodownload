@@ -44,12 +44,16 @@ export function BlockOptionsSheet({
   otherUserId,
   otherHandle,
   otherName,
+  onTypingRevoked,
 }: {
   open: boolean;
   onClose: () => void;
   otherUserId: string;
   otherHandle: string;
   otherName?: string;
+  /** Called once the SERVER confirms a full block or a messaging restriction turned on — the
+   *  open thread then leaves its typing channel at once (typing-privacy.ts). Never on failure. */
+  onTypingRevoked?: () => void;
 }) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
@@ -97,6 +101,7 @@ export function BlockOptionsSheet({
         body: JSON.stringify({ scope }),
       });
       if (!res.ok) throw new Error();
+      if (next && scope === "messaging") onTypingRevoked?.();
     } catch {
       setState((prev) => (prev ? { ...prev, [scope]: !next } : prev));
       toast("Couldn't save that change.", "error");
@@ -119,6 +124,7 @@ export function BlockOptionsSheet({
       });
       if (!res.ok) throw new Error();
       if (next) {
+        onTypingRevoked?.();
         toast(`Blocked @${otherHandle}.`, "success");
         onClose();
         router.push("/messages");

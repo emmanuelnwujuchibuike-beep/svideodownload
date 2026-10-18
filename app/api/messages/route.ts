@@ -6,7 +6,7 @@ import { messageLimiter } from "@/lib/rate-limit";
 import { parseMentionedHandles } from "@/lib/social/message-meta";
 import { ALLOWED_MIME, MAX_ATTACHMENTS_PER_MESSAGE, MAX_SIZE_BYTES } from "@/lib/social/message-media";
 import { listIncomingFriendRequests } from "@/lib/social/friends";
-import { listConversations, sendMessage, type AttachmentInput } from "@/lib/social/messages";
+import { listConversations, sendMessage, viewerTypingIndicatorsEnabled, type AttachmentInput } from "@/lib/social/messages";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -47,9 +47,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ conversations, partial: true });
   }
 
-  const conversations = await listConversations(user.id);
+  // The viewer's typing setting rides on the FULL inbox only (read in parallel, so no added
+  // latency); the ?ids= partial above leaves it to the cache (mergeInboxRows keeps it).
+  const [conversations, typingIndicatorsEnabled] = await Promise.all([
+    listConversations(user.id),
+    viewerTypingIndicatorsEnabled(user.id),
+  ]);
   const unread = conversations.filter((c) => c.unread).length;
-  return NextResponse.json({ conversations, unread });
+  return NextResponse.json({ conversations, unread, typingIndicatorsEnabled });
 }
 
 // `.url()` alone only checks shape — it happily accepts any external URL

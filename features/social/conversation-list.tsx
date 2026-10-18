@@ -33,6 +33,7 @@ import { usePresence } from "@/features/friends/use-presence";
 import { isThreadWarm, warmThread } from "@/features/social/thread-cache";
 import { GroupAvatarStack } from "@/features/social/group-avatar-stack";
 import { INBOX_KEY, INBOX_REQUESTS_KEY, loadInbox, loadInboxRequests, usePersistInbox, type Inbox } from "@/features/social/inbox";
+import { rowSubscribesTyping, TYPING_REVOKED_EVENT, type TypingRevokedDetail } from "@/features/social/typing-privacy";
 import { useTypingIndicator } from "@/features/social/use-typing";
 import { haptic } from "@/lib/motion/haptics";
 import { isSlowConnection } from "@/lib/pwa/use-network-status";
@@ -191,6 +192,7 @@ export function ConversationList({
   variant = "page",
   initialRequests = [],
   viewerId,
+  typingEnabled,
 }: {
   initial: ConversationSummary[];
   variant?: "page" | "pane";
@@ -199,6 +201,9 @@ export function ConversationList({
    *  used to skip our own presence key and to cap how many rows subscribe
    *  (below) — the list never broadcasts its own typing state. */
   viewerId: string;
+  /** The viewer's own typing setting (GET /api/messages). Ghost Mode is reciprocal, so off
+   *  — or not known yet — means no row subscribes (typing-privacy.ts). */
+  typingEnabled?: boolean;
 }) {
   // Live updates come from InboxRealtimeTracker (mounted once in the app
   // shell) revalidating this same shared cache — no second subscription here.
@@ -764,7 +769,7 @@ export function ConversationList({
               // list) — `useTypingIndicator`'s channel is a shared, ref-
               // counted singleton per conversationId now (see use-typing.ts),
               // not one realtime channel per observer.
-              subscribeTyping={i < 25}
+              subscribeTyping={rowSubscribesTyping(i, typingEnabled)}
               onCloseMenu={() => setOpenMenuId(null)}
               onUpdatePref={updatePref}
               onDelete={deleteConversation}
@@ -808,7 +813,7 @@ function ConversationRow({
   onDelete,
   menuWidth,
   viewerId,
-  subscribeTyping,
+  subscribeTyping: typingAllowed,
   swipeOpen,
   onSwipeOpen,
 }: {
@@ -834,6 +839,17 @@ function ConversationRow({
   // must never emit its own typing:true) use of the SAME hook the open thread
   // already relies on. `subscribeTyping` (capped upstream) avoids opening a
   // realtime channel per row for a very long inbox.
+  // A block or messaging restriction confirmed from the open thread drops this row's hold on
+  // the same shared channel too — otherwise the desktop pane's row would keep it joined.
+  const [typingRevoked, setTypingRevoked] = useState(false);
+  useEffect(() => {
+    const onRevoked = (e: Event) => {
+      if ((e as CustomEvent<TypingRevokedDetail>).detail?.conversationId === c.id) setTypingRevoked(true);
+    };
+    window.addEventListener(TYPING_REVOKED_EVENT, onRevoked);
+    return () => window.removeEventListener(TYPING_REVOKED_EVENT, onRevoked);
+  }, [c.id]);
+  const subscribeTyping = typingAllowed && !typingRevoked;
   const { typingNames } = useTypingIndicator(subscribeTyping ? c.id : "", viewerId, "", false);
   const isTyping = subscribeTyping && typingNames.length > 0;
   // Swipe-to-reveal More/Archive/Delete (owner mockup) — a drag gesture

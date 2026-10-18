@@ -212,23 +212,10 @@ export function DownloadPageCore({
         with the frenz Ai button" — was written when Frenz AI was a public
         feature. It still holds, on the page where a member is signed in.
       */}
-      {/*
-        🔴 FRENZ AI IS THE FEATURED DOOR (owner, 2026-10-18: "premium professional, high class structure … so
-        the Frenz AI button gets very noticeable"). With it on, it takes the full width straight under the
-        paste card and Wallpapers becomes a full-width row beneath it; without it (a caller that opts out),
-        the old [ Explore Features | Wallpapers ] pair stays.
-      */}
-      {showFrenzAi ? (
-        <div className="mt-4 space-y-3">
-          <FrenzAICta promo={aiPromo} />
-          <WallpaperCta variant="row" backgroundUrl={ctaWallpaperUrl} rotateUrls={rotateUrls} />
-        </div>
-      ) : (
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <ExploreFeaturesBar variant="tile" />
-          <WallpaperCta variant="card" backgroundUrl={ctaWallpaperUrl} rotateUrls={rotateUrls} />
-        </div>
-      )}
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        {showFrenzAi ? <FrenzAICta promo={aiPromo} /> : <ExploreFeaturesBar variant="tile" />}
+        <WallpaperCta variant="card" backgroundUrl={ctaWallpaperUrl} rotateUrls={rotateUrls} />
+      </div>
 
 
       {/* The full-width Features bar exists only where Frenz AI took its slot

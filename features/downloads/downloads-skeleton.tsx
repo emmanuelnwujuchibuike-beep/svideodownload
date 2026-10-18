@@ -89,8 +89,7 @@ export function DownloadsSkeleton() {
         </div>
       </section>
 
-      {/* Frenz AI banner, then the wallpaper row — matches their real heights. */}
-      <Bone className="h-[10.25rem] w-full rounded-[1.75rem]" />
+      {/* Wallpaper tile — matches WallpaperCta's row height. */}
       <Bone className="h-[4.75rem] w-full rounded-2xl" />
 
       {/* Stat tiles */}

@@ -58,13 +58,16 @@ describe("Exclusive in the profile tray, alerts behind a button", () => {
 
   it("the creator's announcement composer sits behind an Announcements button, mounted and toggled on the tap", () => {
     const tab = code("features/sub/sub-tab.tsx");
-    expect(tab).toMatch(/aria-expanded=\{announceOpen\}[\s\S]{0,400}setAnnounceOpen\(\(o\) => !o\)/);
+    // 2026-10-18: a row on the dashboard card (ProfileExclusive.dc.html) — still a toggle for a mounted panel
+    expect(tab).toContain('label="Announce to subscribers" expanded={announceOpen} controls="sub-announce-panel"');
+    expect(tab).toContain("setAnnounceOpen((o) => !o)");
     expect(tab).toMatch(/<div id="sub-announce-panel" hidden=\{!announceOpen\}>\s*<CreatorAnnouncements/);
   });
 
   it("the creator's OWN notification settings sit behind a Notifications button too — never an open card (owner 2026-10-17)", () => {
     const tab = code("features/sub/sub-tab.tsx");
-    expect(tab).toMatch(/aria-expanded=\{notifyOpen\}[\s\S]{0,400}setNotifyOpen\(\(o\) => !o\)/);
+    expect(tab).toContain('label="Subscriber notifications" expanded={notifyOpen} controls="sub-notify-panel"');
+    expect(tab).toContain("setNotifyOpen((o) => !o)");
     expect(tab).toMatch(/<div id="sub-notify-panel" hidden=\{!notifyOpen\}>\s*<CreatorNotifySettings/);
     // exactly one place renders it, and that place is the hidden panel
     expect(tab.match(/<CreatorNotifySettings\b/g)).toHaveLength(1);

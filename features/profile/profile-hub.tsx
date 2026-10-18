@@ -1,37 +1,10 @@
 "use client";
 
-import {
-  Activity,
-  Award,
-  BadgeCheck,
-  BarChart3,
-  BookOpen,
-  Briefcase,
-  ChevronRight,
-  Clock,
-  FileText,
-  Flag,
-  Flame,
-  GraduationCap,
-  HeartPulse,
-  Hourglass,
-  IdCard,
-  LayoutGrid,
-  NotebookPen,
-  Package,
-  ShieldCheck,
-  SunMoon,
-  Trophy,
-  Users,
-  Wand2,
-  Wrench,
-  type LucideIcon,
-  Lightbulb,
-} from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { HUB_META, type HubEntry, type HubKey } from "@/lib/profile/hub";
+import { HUB_GROUPS, HUB_META, type HubEntry, type HubKey } from "@/lib/profile/hub";
 import { prefetchHubSection } from "@/lib/profile/hub-client";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -43,33 +16,6 @@ import { cn } from "@/lib/utils";
   the profile pays on landing.
 */
 const ProfileHubModal = dynamic(() => import("@/features/profile/profile-hub-modal").then((m) => m.ProfileHubModal), { ssr: false });
-
-const ICONS: Record<string, LucideIcon> = {
-  IdCard,
-  Trophy,
-  LayoutGrid,
-  Briefcase,
-  GraduationCap,
-  BadgeCheck,
-  Award,
-  BookOpen,
-  Lightbulb,
-  FileText,
-  Package,
-  Wrench,
-  Clock,
-  Flame,
-  ShieldCheck,
-  HeartPulse,
-  BarChart3,
-  Flag,
-  Hourglass,
-  NotebookPen,
-  Users,
-  Activity,
-  Wand2,
-  SunMoon,
-};
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -91,7 +37,7 @@ const ICONS: Record<string, LucideIcon> = {
  * gradient tile in the section's own colour and a chevron, pressed with
  * the same haptic and scale the rest of the app uses.
  */
-export function ProfileHub({ handle, entries, className }: { handle: string; entries: HubEntry[]; className?: string }) {
+export function ProfileHub({ handle, entries, owner = false, className }: { handle: string; entries: HubEntry[]; owner?: boolean; className?: string }) {
   const [open, setOpen] = useState<HubKey | null>(null);
   const [mounted, setMounted] = useState(false);
 
@@ -102,16 +48,45 @@ export function ProfileHub({ handle, entries, className }: { handle: string; ent
   }, []);
   const close = useCallback(() => setOpen(null), []);
 
-  if (entries.length === 0) return null;
+  const byKey = new Map(entries.map((e) => [e.key, e]));
+  const groups = HUB_GROUPS.map((g) => ({ ...g, rows: g.keys.map((k) => byKey.get(k)).filter((e): e is HubEntry => !!e) })).filter((g) => g.rows.length > 0);
+  if (groups.length === 0) return null;
 
+  /*
+    Three iOS lists (ProfileExclusive.dc.html, 2026-10-18): Showcase, Insights and Only you, each a white
+    card of rows under a small titled header; an owner's empty section says "Add" instead of "Nothing here
+    yet". Appearance is in Settings now and is not listed. Each row still opens its section in the one lazy
+    sheet, and still prefetches as it comes into view.
+  */
   return (
-    <section aria-label="More on this profile" className={cn("mt-6", className)}>
-      <h2 className="mb-3 px-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">More on this profile</h2>
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-        {entries.map((entry) => (
-          <HubButton key={entry.key} handle={handle} entry={entry} onOpen={openKey} />
-        ))}
-      </div>
+    <section aria-label="More on this profile" className={cn("frenz-ui mt-6", className)}>
+      <h2 className="mb-1 px-1 text-[11px] font-bold uppercase tracking-[0.1em] text-frenz-muted">More on this profile</h2>
+      {groups.map((g) => (
+        <div key={g.id} className="mt-3">
+          <div className="mb-2 flex items-center gap-2.5 px-1">
+            <span
+              aria-hidden
+              className={cn(
+                "flex h-7 w-7 items-center justify-center rounded-lg font-heading text-[13px] font-extrabold text-white",
+                g.id === "showcase" ? "bg-frenz-blue" : g.id === "insights" ? "bg-frenz-violet" : "bg-frenz-ink",
+              )}
+            >
+              {g.mark}
+            </span>
+            <span className="flex min-w-0 flex-col">
+              <span className="font-heading text-[15px] font-bold text-frenz-ink">{g.title}</span>
+              {owner ? <span className="text-xs text-frenz-muted">{g.ownerSub}</span> : null}
+            </span>
+          </div>
+          <ul className="overflow-hidden rounded-[20px] border border-frenz-line bg-frenz-card">
+            {g.rows.map((entry, i) => (
+              <li key={entry.key} className={cn(i > 0 && "border-t border-frenz-line")}>
+                <HubButton handle={handle} entry={entry} onOpen={openKey} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
       {mounted ? <ProfileHubModal handle={handle} open={open} onClose={close} /> : null}
     </section>
   );
@@ -119,14 +94,9 @@ export function ProfileHub({ handle, entries, className }: { handle: string; ent
 
 function HubButton({ handle, entry, onOpen }: { handle: string; entry: HubEntry; onOpen: (key: HubKey) => void }) {
   const meta = HUB_META[entry.key];
-  const Icon = ICONS[meta.icon] ?? Lightbulb;
   const ref = useRef<HTMLButtonElement | null>(null);
 
-  /*
-    Prefetch when the button is about to be seen — 160px before it enters the
-    viewport — and only once. The queue serialises the reads, so a fast
-    scroll past every button still costs one request at a time.
-  */
+  // Prefetch when the row is about to be seen — 160px before it enters the viewport — and only once.
   useEffect(() => {
     const node = ref.current;
     if (!node || typeof IntersectionObserver === "undefined") return;
@@ -148,27 +118,17 @@ function HubButton({ handle, entry, onOpen }: { handle: string; entry: HubEntry;
       ref={ref}
       type="button"
       onClick={() => onOpen(entry.key)}
-      className={cn(
-        "group flex min-h-[64px] items-center gap-2.5 rounded-2xl border border-border/70 bg-card px-3 py-2.5 text-left sm:gap-3",
-        "shadow-[0_1px_0_rgb(255_255_255/0.6)_inset,0_10px_24px_-18px_rgb(15_23_42/0.35)] transition",
-        "hover:-translate-y-0.5 hover:border-foreground/20 active:translate-y-0 active:scale-[0.98]",
-        "dark:shadow-[0_1px_0_rgb(255_255_255/0.06)_inset,0_10px_24px_-18px_rgb(0_0_0/0.6)]",
-      )}
+      className="flex min-h-[60px] w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-frenz-fill active:bg-frenz-fill"
     >
-      <span
-        aria-hidden
-        className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white shadow-sm sm:h-10 sm:w-10"
-        style={{ background: `linear-gradient(135deg, ${meta.tint[0]}, ${meta.tint[1]})` }}
-      >
-        <span aria-hidden className="pointer-events-none absolute inset-0 rounded-xl bg-gradient-to-b from-white/30 to-transparent" />
-        <Icon className="relative h-[18px] w-[18px]" strokeWidth={2.25} />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-[15px] font-bold text-frenz-ink">{meta.label}</span>
+        <span className={cn("truncate text-[13px]", entry.empty ? "text-frenz-muted/80" : "text-frenz-muted")}>{entry.sub ?? meta.blurb}</span>
       </span>
-      <span className="min-w-0 flex-1">
-        {/* 13px on a phone so "Certifications" and "Hours & location" fit beside the tile; the chevron is desktop-only for the same reason */}
-        <span className="block truncate text-[13px] font-bold leading-tight sm:text-[13.5px]">{meta.label}</span>
-        <span className="mt-0.5 block truncate text-[11.5px] leading-tight text-muted-foreground">{entry.sub ?? meta.blurb}</span>
-      </span>
-      <ChevronRight className="hidden h-4 w-4 shrink-0 text-muted-foreground/60 transition group-hover:translate-x-0.5 group-hover:text-foreground sm:block" aria-hidden />
+      {entry.empty ? (
+        <span className="shrink-0 rounded-full bg-frenz-violet/10 px-3 py-1.5 text-[13px] font-bold text-frenz-violet">Add</span>
+      ) : (
+        <ChevronRight className="h-4 w-4 shrink-0 text-frenz-muted" aria-hidden />
+      )}
     </button>
   );
 }

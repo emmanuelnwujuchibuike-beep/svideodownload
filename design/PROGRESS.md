@@ -15,7 +15,7 @@ review before the next one starts.
 - [ ] 8. Wallpapers → design/Wallpapers.dc.html
 - [ ] 9. Profile menu → design/Menu.dc.html
 - [ ] 10. Settings → design/Settings.dc.html
-- [ ] 11. Profile Exclusive tab (owner view) → design/ProfileExclusive.dc.html (moved forward, done right after step 6 — owner asked for it, 2026-10-18)
+- [x] 11. Profile Exclusive tab (owner view) → design/ProfileExclusive.dc.html (moved forward at the owner's request) — one dashboard card with real figures, Share link / Dashboard, rows for announcements and notifications, Subs-tagged grid with Manage, hub as three iOS lists with Add.
 - [ ] 12. Exclusive page (subscriber view) → design/Exclusive.dc.html
 - [ ] 13. Exclusive feed tab → design/ExclusiveFeed.dc.html
 

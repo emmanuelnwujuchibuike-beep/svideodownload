@@ -159,7 +159,8 @@ export function ProfileSections({
   };
   const entries: HubEntry[] = layout.modules
     .filter((m) => !MEDIA_MODULE_KEYS.has(m.key) && isHubKey(m.key))
-    .map((m) => ({ key: m.key as HubEntry["key"], sub: m.hasContent ? (counts[m.key] ?? null) : isOwner ? "Nothing here yet" : null }));
+    // an owner's empty section shows "Add" rather than "Nothing here yet" (ProfileExclusive.dc.html, 2026-10-18)
+    .map((m) => ({ key: m.key as HubEntry["key"], sub: m.hasContent ? (counts[m.key] ?? null) : null, empty: isOwner && !m.hasContent }));
   if (isOwner && !previewRole) {
     for (const key of HUB_OWNER_KEYS) entries.push({ key, sub: null });
   }
@@ -192,7 +193,7 @@ export function ProfileSections({
           sub={sub}
         />
       ) : null}
-      <ProfileHub handle={handle} entries={entries} />
+      <ProfileHub handle={handle} entries={entries} owner={isOwner && !previewRole} />
     </>
   );
 }

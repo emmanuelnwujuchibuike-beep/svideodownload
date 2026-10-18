@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Eye, EyeOff, Film, Flag, Heart, Images, Loader2, Lock, MessageCircle, Pencil, Plus, Send, Trash2, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -188,10 +189,22 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
         </button>
       ) : null}
 
+      {/* the creator's header over their grid (ProfileExclusive.dc.html): the count and Manage (paid subscribers, in Members) */}
+      {state.isCreator && state.ready ? (
+        <div className="frenz-ui mb-2.5 mt-1 flex items-baseline justify-between px-1">
+          <h2 className="m-0 flex items-center gap-2 font-heading text-lg font-bold text-frenz-ink">
+            Exclusive posts <span className="font-body text-sm font-semibold text-frenz-muted">{state.posts.length}{state.next ? "+" : ""}</span>
+          </h2>
+          <Link href="/members" prefetch={false} className="min-h-11 content-center text-sm font-bold text-frenz-blue">
+            Manage
+          </Link>
+        </div>
+      ) : null}
+
       {!state.ready ? (
         <p className="py-8 text-center text-[13px] text-muted-foreground">Subscriber posts arrive with the next update.</p>
       ) : state.posts.length ? (
-        <ul className="grid grid-cols-3 gap-1.5">
+        <ul className="-mx-4 grid grid-cols-3 gap-0.5 sm:mx-0 sm:gap-1">
           {state.posts.map((p, idx) => (
             <li key={p.id}>
               <button
@@ -199,7 +212,7 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
                 onClick={() => (state.access && !p.removed ? setOpen(p.id) : void 0)}
                 disabled={!!p.removed}
                 aria-label={p.removed ? "Removed by Frenzsave. Under review." : state.access ? `Open subscriber post${p.caption ? `: ${p.caption.slice(0, 60)}` : ""}` : "Subscriber only. Subscribe to unlock."}
-                className="relative block aspect-[4/5] w-full overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-500/25 via-violet-500/20 to-blue-500/25 transition active:scale-[0.98] motion-reduce:active:scale-100"
+                className="relative block aspect-[3/4] w-full overflow-hidden bg-frenz-fill transition active:scale-[0.98] sm:rounded-lg motion-reduce:active:scale-100"
               >
                 {p.coverUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- the creator's PUBLIC cover, never the private file
@@ -216,7 +229,8 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
                 {state.access && (state.isCreator || p.audience === "hidden") && !p.removed ? (
                   <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-black/55 px-1.5 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm" title={p.audience === "hidden" ? "Visitors don't know this post exists" : "Visitors see a locked tile"}>
                     {p.audience === "hidden" ? <EyeOff className="h-3 w-3" aria-hidden /> : <Lock className="h-3 w-3" aria-hidden />}
-                    {p.audience === "hidden" ? "Hidden" : "Locked"}
+                    {/* "Subs" — the design's tag for a subscribers-only post; Hidden stays Hidden */}
+                    {p.audience === "hidden" ? "Hidden" : "Subs"}
                   </span>
                 ) : null}
                 {p.removed ? (

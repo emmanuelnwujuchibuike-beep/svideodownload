@@ -1,11 +1,12 @@
 "use client";
 
-import { ArrowRight, BadgeCheck, Bell, Megaphone, BadgeDollarSign, Check, ChevronDown, Copy, Landmark, Loader2, Lock, Pause, Pencil, Percent, Play, Plus, Receipt, Rocket, Share2, Undo2, Users, Wallet, type LucideIcon } from "lucide-react";
+import { ArrowRight, BadgeCheck, BarChart3, Bell, BadgeDollarSign, Check, ChevronDown, Landmark, Loader2, Lock, Pause, Pencil, Percent, Play, Plus, Receipt, Rocket, Undo2, Users, Wallet, type LucideIcon } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import { BellIcon, ChevronRightIcon, LinkIcon, MegaphoneIcon } from "@/features/frenz-ui/icons";
 import { SubGallery, type SubQuoteView } from "@/features/sub/sub-gallery";
 import { forgetSubPosts } from "@/features/sub/sub-posts-cache";
 import { useSubEarnings } from "@/features/sub/sub-withdraw";
@@ -103,38 +104,30 @@ export function SubTab({
     <div>
       {isOwner && s ? (
         <>
-          <ShareCard handle={handle} />
-          <CreatorOverview settings={s} bounds={bounds} onChange={setS} onCompose={() => setComposing(true)} onWithdraw={() => setWithdrawing(true)} />
-          {/* Owner 2026-10-17: the announcement composer AND the creator's own notification settings each live
-              behind a button. Both stay mounted (hidden) so they're already loaded: a tap only shows them. */}
-          <div className="mb-3 flex flex-wrap justify-end gap-2">
-            <button
-              type="button"
-              aria-expanded={notifyOpen}
-              aria-controls="sub-notify-panel"
-              onClick={() => {
-                haptic("selection");
-                setNotifyOpen((o) => !o);
-              }}
-              className={cn("ex-btn ex-btn--glass ex-btn--sm touch-manipulation", notifyOpen && "text-primary")}
-            >
-              <Bell className="h-4 w-4" aria-hidden /> Notifications
-              <ChevronDown className={cn("h-4 w-4 transition-transform duration-150 motion-reduce:transition-none", notifyOpen && "rotate-180")} aria-hidden />
-            </button>
-            <button
-              type="button"
-              aria-expanded={announceOpen}
-              aria-controls="sub-announce-panel"
-              onClick={() => {
-                haptic("selection");
-                setAnnounceOpen((o) => !o);
-              }}
-              className={cn("ex-btn ex-btn--glass ex-btn--sm touch-manipulation", announceOpen && "text-primary")}
-            >
-              <Megaphone className="h-4 w-4" aria-hidden /> Announcements
-              <ChevronDown className={cn("h-4 w-4 transition-transform duration-150 motion-reduce:transition-none", announceOpen && "rotate-180")} aria-hidden />
-            </button>
-          </div>
+          {/*
+            ONE dashboard card (ProfileExclusive.dc.html, 2026-10-18): price and LIVE status, the real
+            subscribers / last-30-days / posts figures, New exclusive post, Share link (the banner's old job)
+            and Dashboard, then Announcements and Subscriber notifications as rows — each opening the same
+            panel the two dropdowns opened.
+          */}
+          <CreatorOverview
+            handle={handle}
+            settings={s}
+            bounds={bounds}
+            onChange={setS}
+            onCompose={() => setComposing(true)}
+            onWithdraw={() => setWithdrawing(true)}
+            announceOpen={announceOpen}
+            notifyOpen={notifyOpen}
+            onAnnounce={() => {
+              haptic("selection");
+              setAnnounceOpen((o) => !o);
+            }}
+            onNotify={() => {
+              haptic("selection");
+              setNotifyOpen((o) => !o);
+            }}
+          />
           <div id="sub-notify-panel" hidden={!notifyOpen}>
             <CreatorNotifySettings initial={s.notifySubscribed ?? "both"} />
           </div>
@@ -424,9 +417,42 @@ function Nav({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
 }
 
 /** "Your Content. Your Earnings." — sends people straight to this tab. */
-function ShareCard({ handle }: { handle: string }) {
+/**
+ * The creator's SUB dashboard (owner 2026-10-12: "collapse on default when the SUB POSTS tab is
+ * clicked, and the user clicks See dashboard and it opens"). Collapsed it is one calm row —
+ * live or paused, the price, New SUB post and See dashboard — and the earnings are not even
+ * fetched until it opens. Open: the available balance first, with Withdraw beside it, then
+ * the rest of the numbers, the price and pause controls, and the payout account.
+ */
+function CreatorOverview({
+  handle,
+  settings,
+  bounds,
+  onChange,
+  onCompose,
+  onWithdraw,
+  announceOpen,
+  notifyOpen,
+  onAnnounce,
+  onNotify,
+}: {
+  handle: string;
+  settings: SubOwnerSettings;
+  bounds: SubBounds;
+  onChange: (s: SubOwnerSettings) => void;
+  onCompose: () => void;
+  onWithdraw: () => void;
+  announceOpen: boolean;
+  notifyOpen: boolean;
+  onAnnounce: () => void;
+  onNotify: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  // the card's three figures — the creator's own, from the same overview the earnings page reads; "—" until in
+  const overview = useSubOverview();
   const [copied, setCopied] = useState(false);
-  const share = async () => {
+  // what the old "Your Content. Your Earnings." banner did: share the subscribe link
+  const shareLink = async () => {
     haptic("selection");
     const url = `${window.location.origin}${profilePath(handle)}?tab=sub`;
     try {
@@ -445,27 +471,6 @@ function ShareCard({ handle }: { handle: string }) {
       /* clipboard refused: nothing to do */
     }
   };
-  return (
-    <div className="mb-3 overflow-hidden rounded-[24px] bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 p-4 text-white shadow-[0_14px_32px_-22px_rgba(67,56,202,0.9)]">
-      <p className="text-[19px] font-bold leading-tight tracking-[-0.015em]">Your Content. Your Earnings.</p>
-      <p className="mt-1 text-[13px] text-white/85">Share your profile so people can subscribe to your private posts.</p>
-      <button type="button" onClick={() => void share()} className="ex-btn mt-3 bg-white text-indigo-700 shadow-sm">
-        {copied ? <Copy className="h-4 w-4" aria-hidden /> : <Share2 className="h-4 w-4" aria-hidden />}
-        {copied ? "Link copied" : "Share Profile & Get Paid"}
-      </button>
-    </div>
-  );
-}
-
-/**
- * The creator's SUB dashboard (owner 2026-10-12: "collapse on default when the SUB POSTS tab is
- * clicked, and the user clicks See dashboard and it opens"). Collapsed it is one calm row —
- * live or paused, the price, New SUB post and See dashboard — and the earnings are not even
- * fetched until it opens. Open: the available balance first, with Withdraw beside it, then
- * the rest of the numbers, the price and pause controls, and the payout account.
- */
-function CreatorOverview({ settings, bounds, onChange, onCompose, onWithdraw }: { settings: SubOwnerSettings; bounds: SubBounds; onChange: (s: SubOwnerSettings) => void; onCompose: () => void; onWithdraw: () => void }) {
-  const [open, setOpen] = useState(false);
   const { data, failed } = useSubEarnings(open);
   const [editing, setEditing] = useState(false);
   const [price, setPrice] = useState(settings.priceCents ? (settings.priceCents / 100).toFixed(2) : "");
@@ -518,30 +523,47 @@ function CreatorOverview({ settings, bounds, onChange, onCompose, onWithdraw }: 
   };
 
   return (
-    <div className={cn("mb-3 overflow-hidden rounded-[24px]", EX_CARD)}>
-      {/* the collapsed row — always there */}
-      <div className="p-4">
+    <section aria-label="Subscription dashboard" className="frenz-ui mb-4 overflow-hidden rounded-[24px] border border-frenz-line bg-frenz-card text-frenz-ink shadow-frenz-raised">
+      <div className="flex flex-col gap-3.5 p-4 pb-0">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[15.5px] font-bold tracking-[-0.01em]">Your subscription</p>
-            <p className="mt-0.5 text-[13px] text-muted-foreground">
-              <span className="font-semibold tabular-nums text-foreground">{settings.priceCents ? `${usd(settings.priceCents)}` : "No price"}</span>
-              {settings.priceCents ? " a month" : ""}
-            </p>
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="text-[13px] font-bold text-frenz-muted">Your subscription</span>
+            <span className="font-heading text-[30px] font-extrabold leading-none tracking-[-1px] tabular-nums">
+              {settings.priceCents ? usd(settings.priceCents) : "No price"}
+              {settings.priceCents ? <span className="font-body text-[15px] font-semibold tracking-normal text-frenz-muted"> / month</span> : null}
+            </span>
           </div>
-          <span className={cn("ex-status shrink-0", settings.active ? "ex-status--good" : "ex-status--warn")}>
-            {settings.active ? "Live" : "Paused"}
+          <span className={cn("inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-extrabold tracking-[0.4px]", settings.active ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700")}>
+            <span aria-hidden className={cn("h-[7px] w-[7px] rounded-full", settings.active ? "bg-emerald-500" : "bg-amber-500")} />
+            {settings.active ? "LIVE" : "PAUSED"}
           </span>
         </div>
-        <div className="mt-3 flex gap-2">
-          <button type="button" onClick={onCompose} className={cn(exPrimary, "flex-1 justify-center")}>
-            <Plus className="h-4 w-4" aria-hidden /> New private post
+
+        <div className="grid grid-cols-3 rounded-2xl bg-frenz-fill py-3">
+          <CardStat label="Subscribers" value={overview ? String(overview.activeSubscribers) : "—"} />
+          <CardStat label="Last 30 days" value={overview?.netCents !== undefined && overview.netCents !== null ? usd(overview.netCents) : "—"} divided />
+          <CardStat label="Posts" value={overview ? String(overview.posts) : "—"} divided />
+        </div>
+
+        {/* the one primary action here — the brand gradient is allowed on it */}
+        <button type="button" onClick={onCompose} className="flex h-[52px] items-center justify-center gap-2 rounded-2xl bg-frenz-gradient-x font-heading text-base font-bold text-white transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2">
+          <Plus className="h-[18px] w-[18px]" strokeWidth={2.6} aria-hidden /> New exclusive post
+        </button>
+        <div className="grid grid-cols-2 gap-2.5">
+          <button type="button" onClick={() => void shareLink()} className="flex h-[46px] items-center justify-center gap-2 rounded-[14px] border border-frenz-line bg-frenz-card text-sm font-bold transition active:scale-[0.98]">
+            {copied ? <Check className="h-4 w-4 text-emerald-600" aria-hidden /> : <LinkIcon size={16} />}
+            {copied ? "Link copied" : "Share link"}
           </button>
-          <button type="button" onClick={toggleOpen} aria-expanded={open} aria-controls="sub-dashboard" className={cn(exQuiet, "flex-1 justify-center")}>
-            {open ? "Hide dashboard" : "See dashboard"}
-            <ChevronDown className={cn("h-4 w-4 transition-transform duration-200 motion-reduce:transition-none", open && "rotate-180")} aria-hidden />
+          <button type="button" onClick={toggleOpen} aria-expanded={open} aria-controls="sub-dashboard" className={cn("flex h-[46px] items-center justify-center gap-2 rounded-[14px] border text-sm font-bold transition active:scale-[0.98]", open ? "border-frenz-ink bg-frenz-ink text-frenz-page" : "border-frenz-line bg-frenz-card")}>
+            <BarChart3 className="h-4 w-4" aria-hidden /> Dashboard
           </button>
         </div>
+      </div>
+
+      {/* the two dropdowns, now rows (owner, 2026-10-18) — each opens its panel under the card */}
+      <div className="mt-3.5 border-t border-frenz-line">
+        <CardRow icon={<MegaphoneIcon size={18} />} label="Announce to subscribers" expanded={announceOpen} controls="sub-announce-panel" onClick={onAnnounce} />
+        <CardRow icon={<BellIcon size={18} />} label="Subscriber notifications" expanded={notifyOpen} controls="sub-notify-panel" onClick={onNotify} divided />
       </div>
 
       {open ? (
@@ -604,8 +626,58 @@ function CreatorOverview({ settings, bounds, onChange, onCompose, onWithdraw }: 
           <Check className="h-4 w-4" aria-hidden /> {saved}
         </p>
       ) : null}
-    </div>
+    </section>
   );
+}
+
+/** One of the card's three figures. */
+function CardStat({ label, value, divided = false }: { label: string; value: string; divided?: boolean }) {
+  return (
+    <span className={cn("flex min-w-0 flex-col items-center gap-0.5 px-1", divided && "border-l border-frenz-line")}>
+      <span className="max-w-full truncate font-heading text-lg font-bold tabular-nums">{value}</span>
+      <span className="text-xs font-semibold text-frenz-muted">{label}</span>
+    </span>
+  );
+}
+
+/** A row under the card that opens a panel below it. */
+function CardRow({ icon, label, expanded, controls, onClick, divided = false }: { icon: React.ReactNode; label: string; expanded: boolean; controls: string; onClick: () => void; divided?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-expanded={expanded}
+      aria-controls={controls}
+      className={cn("flex min-h-[52px] w-full items-center gap-3 px-4 text-left text-[15px] font-semibold transition hover:bg-frenz-fill", divided && "border-t border-frenz-line")}
+    >
+      <span aria-hidden className="flex text-frenz-violet">{icon}</span>
+      <span className="flex-1">{label}</span>
+      <ChevronRightIcon size={15} strokeWidth={2.4} className={cn("shrink-0 text-frenz-muted transition-transform duration-150", expanded && "rotate-90")} />
+    </button>
+  );
+}
+
+/**
+ * The creator's own overview for the card's figures: active subscribers, what the last 30 days added
+ * (earned − clawed back) and the posts published — one read of the same endpoint the earnings page uses,
+ * when the owner opens the tab. Null until in, and on any failure: the card then shows "—", never a guess.
+ */
+function useSubOverview(): { activeSubscribers: number; netCents: number | null; posts: number } | null {
+  const [v, setV] = useState<{ activeSubscribers: number; netCents: number | null; posts: number } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void fetch("/api/sub/earnings/overview?days=30")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { activeSubscribers?: number; period?: { netCents?: number } | null; posts?: { published?: number } } | null) => {
+        if (!alive || !j) return;
+        setV({ activeSubscribers: Number(j.activeSubscribers ?? 0), netCents: j.period ? Number(j.period.netCents ?? 0) : null, posts: Number(j.posts?.published ?? 0) });
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return v;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

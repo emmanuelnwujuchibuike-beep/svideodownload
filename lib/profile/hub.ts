@@ -118,4 +118,25 @@ export interface HubEntry {
   key: HubKey;
   /** A short fact under the label ("12 earned", "3 roles"); null keeps the blurb. */
   sub: string | null;
+  /** The owner's view of a section with nothing in it yet — the list shows "Add" (ProfileExclusive.dc.html, 2026-10-18). */
+  empty?: boolean;
 }
+
+/**
+ * The hub as three lists (ProfileExclusive.dc.html, 2026-10-18). Every key belongs to exactly one;
+ * Appearance belongs to none — it lives in Settings now.
+ */
+export const HUB_GROUPS: { id: "showcase" | "insights" | "private"; title: string; ownerSub: string; mark: string; keys: readonly HubKey[] }[] = [
+  {
+    id: "showcase",
+    title: "Showcase",
+    ownerSub: "What visitors see about you",
+    mark: "S",
+    keys: ["about", "catalog", "services", "hours", "friends", "journey", "portfolio", "experience", "education", "certifications", "awards", "publications", "skills", "resume"],
+  },
+  { id: "insights", title: "Insights", ownerSub: "How your profile is growing", mark: "I", keys: ["analytics", "achievements", "streak", "reputation", "health", "activity"] },
+  { id: "private", title: "Only you", ownerSub: "Private — never shown to visitors", mark: "P", keys: ["tools", "journal", "capsules"] },
+];
+
+/** Keys that appear in no group (Appearance → Settings). */
+export const HUB_HIDDEN_KEYS: readonly HubKey[] = ["appearance"];

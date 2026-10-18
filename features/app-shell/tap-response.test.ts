@@ -42,9 +42,12 @@ describe("a nav tap answers at once", () => {
 });
 
 describe("Exclusive in the profile tray, alerts behind a button", () => {
-  it("the tray has a link to the Exclusive feed", () => {
+  it("the profile's Exclusive tab carries its lock, preloads on touch, and the feed lives on the Feed's own tab (design, 2026-10-18)", () => {
     const tabs = code("features/profile/profile-tabs.tsx");
-    expect(tabs).toMatch(/<Link\s+href="\/exclusive"[\s\S]{0,80}aria-label="Exclusive posts feed"/);
+    expect(code("features/profile/profile-sections.tsx")).toContain('sections.push({ key: SUB_TAB_KEY, label: "Exclusive", icon: "Lock" })');
+    expect(tabs).toContain("{s.key === SUB_TAB_KEY ? <Lock ");
+    expect(tabs).not.toContain('aria-label="Exclusive posts feed"');
+    expect(code("features/feed/feed-topbar-tabs.tsx")).toMatch(/<Link href="\/exclusive"[\s\S]{0,200}Exclusive/);
   });
 
   it("the Stay-close card is mounted behind a Notifications button that toggles it with no fetch on the tap", () => {

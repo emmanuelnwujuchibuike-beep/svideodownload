@@ -9,7 +9,7 @@ review before the next one starts.
 - [x] 2. Feed → design/Feed.dc.html — tab row (For You · Following · Reels · Exclusive) above the stories, 64 px story rings, the stacked post card, full-width media capped to one screen.
 - [x] 3. Messages → design/Messages.dc.html — Sora header with Add friends / More / gradient New message, stories above the fill search, pill filters with real counts, edge-to-edge rows.
 - [x] 4. Chat → design/Chat.dc.html — design header, one time per message group (tested rule), 20 px bubbles with the tail on a group's last, day pill, round attach + fill pill + gradient mic/send.
-- [ ] 5. Profile → design/Profile.dc.html (updated 2026-10-18: the "Private" tab is "Exclusive" and opens the Exclusive tab view)
+- [x] 5. Profile → design/Profile.dc.html (updated: Private → Exclusive) — one shared hero (cover, overlapping avatar, Sora name, stats card, ink Edit/Follow + Share), underlined tabs with Exclusive, edge-to-edge 3:4 grid.
 - [ ] 6. History → design/History.dc.html (owner's screenshot, 2026-10-18; the .dc.html is not in the folder yet)
 - [ ] 7. Landing page → the same system: white page, iOS glass chrome, no Recent section
 - [ ] 8. Wallpapers → design/Wallpapers.dc.html
@@ -179,6 +179,55 @@ they are applied while each page is built and there is no separate cleanup step.
   text or an attachment (that swap already existed and still works).
 - Not matched: the design's "Message" placeholder — kept the owner's literal "Send a chat"
   (2026-08-16); the design's "Read" — the app's word is "Seen".
+
+### Step 5 · Profile (/:handle) — the updated design (Private → Exclusive)
+- One shared hero for the owner and visitors (features/profile/profile-hero.tsx): the cover
+  under the status bar with a soft foot scrim, the avatar overlapping it on the left, the
+  name in Sora 30 px with the seal, "@handle · TYPE", bio, website, joined date, the white
+  stats card (Followers / Following open their lists), then the actions — on the white
+  page (the .frenz-lux page tint and the glass identity card are gone).
+- Owner: the design's white "N-day streak" pill beside the avatar (the amber gradient chip
+  is not allowed); Edit profile (solid ink) + Share profile (white) + the existing profile
+  card (QR); the camera button opens Identity. Search / Edit cover / Menu stay as glass
+  circles over the cover (glass over an image), 44 px, the menu with the design's ⋯.
+- Visitor: Follow (solid ink, white once following — the gradient Follow is gone) and
+  Message side by side, then share and the profile card; relationship chips, Book / Quote /
+  Call, Add friend, alerts and block/report keep their row; the private-account notice
+  is a white card.
+- Kept, not in the design: the avatar's identity frame (gold for a paid plan, else the
+  member's accent — owner, 2026-09-13) and its Photo / Video / Avatar media; the plan jewel,
+  headline, mood / status and the public reputation rank (a small badge).
+- Not kept: the Photo / Video / Avatar switcher pill under the avatar — the mode is changed
+  in Identity, one tap away on the camera button.
+- Tabs: the design's labelled row with the gradient underline and one grid / list button;
+  "PRIVATE POSTS" is now "Exclusive" with its lock (updated design) and still preloads its
+  posts on touch. The separate EXCLUSIVE feed link (2026-10-17) left the tray — the Feed's
+  own Exclusive tab is that door now. Which tabs appear is still the profile engine's choice.
+- Grid: edge to edge on phones, 3:4 tiles, 2 px apart, square corners.
+
+### Step 6 · History (/history) — built from the owner's screenshot (no .dc.html yet)
+- Header: "History" in Sora 38 px; under it "☁ N items · size ›" with the real count and
+  size, which opens the existing storage detail (breakdown, upgrade-or-clear) in place.
+  Right: ONE options button and the Select pill (Done while selecting).
+- The options button holds Sort (Recent / Alphabetical / Largest / Top platform), Grid /
+  List, the column count (3 by default, as drawn; a saved choice still wins), Favorites and
+  Failed & cancelled (their chips left the row), Frenz AI, and Clear all (now behind a real
+  confirm). A chosen Favorites / Failed filter shows as a pill that clears it in one tap.
+- The floating lightbulb button went (owner): it opened Frenz AI, which is now the "Frenz AI"
+  entry in the options menu. Nothing else it did was lost.
+- Search: the native field on the input fill. Then the All · Videos · Images · Audio
+  segmented control (radio semantics, arrow keys).
+- Grid: edge to edge, 3 columns, 2 px apart, grouped by day (Today, Yesterday, This week,
+  Last week, Earlier) with "N items" and the existing collapse. Each tile shows only the type
+  icon and the source name; Failed / Cancelled + Retry stay on the tile (a state you must
+  see). The caption, favourite, download again, copy link, publish as sound and remove are
+  on a long press, the caption at the top of that menu.
+- Infinite scroll: ungrouped views (another sort, list view) load the next page as the end
+  comes near instead of "Show more". The day-grouped view already renders everything, each
+  section skipped by the browser until near (content-visibility), as before.
+- Select mode, its Share / Download again / Delete bar, the ad slots between periods and
+  above the grid, the player queue with story ads, review deep links and the reward gate
+  for retries are unchanged.
 
 ### Outside the page steps (owner, 2026-10-18)
 - `a50b9cd`: full-screen ads lost the engagement tray (brand badge, Like, views,

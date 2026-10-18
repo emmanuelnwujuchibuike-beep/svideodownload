@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, LayoutGrid, Search } from "lucide-react";
+import { Camera, Search } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState } from "react";
@@ -8,6 +8,7 @@ import { useState } from "react";
 import type { MenuUser } from "./profile-menu-panel";
 
 import { Portal } from "@/components/ui/portal";
+import { DotsIcon } from "@/features/frenz-ui/icons";
 import { useBodyScrollLocked } from "@/lib/dom/use-body-scroll-locked";
 
 // Was a plain static import — ~32kB of profile-menu UI, its full nav icon
@@ -106,7 +107,7 @@ export function ProfileCoverControls({ user }: { user: MenuUser }) {
         <Link
           href="/search"
           aria-label="Search"
-          className={`pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full ${GLASS}`}
+          className={`pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full ${GLASS}`}
         >
           <Search className="h-[19px] w-[19px] drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]" strokeWidth={2.2} />
         </Link>
@@ -114,7 +115,7 @@ export function ProfileCoverControls({ user }: { user: MenuUser }) {
         <div className="pointer-events-auto flex items-center gap-2">
           <Link
             href="/account/identity"
-            className={`inline-flex h-10 items-center gap-1.5 rounded-full px-3.5 text-[13.5px] font-semibold tracking-[-0.01em] ${GLASS}`}
+            className={`inline-flex h-11 items-center gap-1.5 rounded-full px-3.5 text-[13.5px] font-semibold tracking-[-0.01em] ${GLASS}`}
           >
             <Camera className="h-4 w-4 drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]" strokeWidth={2.2} /> Edit Cover
           </Link>
@@ -126,9 +127,10 @@ export function ProfileCoverControls({ user }: { user: MenuUser }) {
             }}
             aria-label="Menu"
             aria-expanded={open}
-            className={`flex h-10 w-10 items-center justify-center rounded-full ${GLASS}`}
+            className={`flex h-11 w-11 items-center justify-center rounded-full ${GLASS}`}
           >
-            <LayoutGrid className="h-[19px] w-[19px] drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]" strokeWidth={2.2} />
+            {/* the design's ⋯ (design/Profile.dc.html) — it opens the same profile menu */}
+            <DotsIcon size={20} className="drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]" />
           </button>
         </div>
       </div>

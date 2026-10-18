@@ -5,7 +5,6 @@ import {
   Eye,
   Grid3x3,
   Heart,
-  Link as LinkIcon,
   Lock,
   Mail,
   MessageCircle,
@@ -16,7 +15,6 @@ import {
 } from "lucide-react";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -26,13 +24,13 @@ import { PageLoaderWithHeader } from "@/features/ui/page-loader";
 import { RankCrown } from "@/components/badges/rank-crown";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { ProfileSections } from "@/features/profile/profile-sections";
+import { PROFILE_PRIMARY_BUTTON, PROFILE_SECONDARY_BUTTON, ProfileActionRow, ProfileCover, ProfileIdentity, ProfileStats } from "@/features/profile/profile-hero";
 import { StreakHeaderChip } from "@/features/streaks/streak-header-chip";
 import { AddFriendButton } from "@/features/friends/add-friend-button";
 import { IdentityRing } from "@/features/profile/identity-ring";
 import { viewerCircleIds } from "@/lib/social/graph/store";
 import { ProfileCoverControls } from "@/features/profile/profile-cover-controls";
 import { Toaster } from "@/features/ui/toast";
-import { LivingGlow } from "@/features/profile/living-glow";
 import { ProfileCardLink } from "@/features/profile/profile-card-link";
 import { ShareProfileButton } from "@/features/profile/share-profile-button";
 import { CreatorNotificationsButton } from "@/features/social/creator-notifications-button";
@@ -48,7 +46,6 @@ import { existingDirectConversationId } from "@/lib/social/messages";
 import { listLikedPosts, listSavedPosts, listUserPosts, listUserReposts } from "@/lib/social/posts";
 import { accentHex, getPrivacySettings, getProfileExtras, getProfileMedia, getPublicProfile, getReputationBonus, tabVisible } from "@/lib/social/profile";
 import { IdentityMedia } from "@/features/profile/identity-media";
-import { IdentityModeGlyph } from "@/features/profile/identity-mode-glyphs";
 import { IdentityMediaViewer } from "@/features/profile/identity-media-viewer";
 import { computeReputation } from "@/lib/social/reputation";
 import { resolveProfileTheme } from "@/lib/profile/theme";
@@ -72,7 +69,6 @@ import {
 } from "@/lib/social/profile-platform";
 import { createClient } from "@/lib/supabase/server";
 import { subTabFor } from "@/lib/sub/profile";
-import { cn, formatCompactNumber } from "@/lib/utils";
 import { profilePath } from "@/lib/social/profile-url";
 import { SITE_URL } from "@/lib/site";
 
@@ -132,51 +128,7 @@ export async function generateMetadata({
  * is the one gradient, because it is the only stat with two owners (the person
  * and the people who gave it).
  */
-const STAT_ICONS: Record<string, { Icon: LucideIcon; className: string }> = {
-  Posts: { Icon: Grid3x3, className: "text-[#2563FF]" },
-  Followers: { Icon: Users, className: "text-[#6D5CFF]" },
-  Following: { Icon: UserPlus, className: "text-indigo-500" },
-  Likes: { Icon: Heart, className: "text-pink-500" },
-  Views: { Icon: Eye, className: "text-sky-500" },
-};
 
-/**
- * One cell of the hero's stat row.
- *
- * Owner (2026-08-03): the row "felt tightly packed and the texts are touching
- * the line". Three things caused that — `px-2` on a five-column grid left the
- * longest label ("FOLLOWERS") flush against its divider, the 0.08em letter-
- * spacing widened it further, and nothing allowed the label to shrink. So the
- * cell now has room that scales with the viewport, the label tightens its
- * tracking on the narrowest screens where the divider is closest, and long
- * labels never sit against a rule.
- */
-function StatCell({ label, value, href }: { label: string; value: number; href?: string }) {
-  const stat = STAT_ICONS[label];
-  const inner = (
-    <>
-      {stat ? (
-        <span aria-hidden className="lux-icon mx-auto mb-1.5 h-7 w-7 sm:h-8 sm:w-8">
-          <stat.Icon className={cn("h-[15px] w-[15px] sm:h-4 sm:w-4", stat.className)} />
-        </span>
-      ) : null}
-      <span className="block text-lg font-bold leading-tight tracking-tight tabular-nums sm:text-2xl">
-        {formatCompactNumber(value)}
-      </span>
-      <span className="mt-1 block truncate text-[9px] font-semibold uppercase leading-tight tracking-[0.02em] text-muted-foreground sm:text-[11px] sm:tracking-[0.08em]">
-        {label}
-      </span>
-    </>
-  );
-  const cls = "min-w-0 px-1 py-3.5 text-center sm:px-3 sm:py-5";
-  return href ? (
-    <Link href={href} className={cn(cls, "lux-press transition hover:bg-secondary/40")}>
-      {inner}
-    </Link>
-  ) : (
-    <div className={cls}>{inner}</div>
-  );
-}
 
 /** Does this profile follow the viewer back? Powers the "Follows you" relationship
  *  signal (Identity Presence™). A single count query; fails closed to false. */
@@ -346,9 +298,6 @@ async function ProfileData({
     how a card with no drop shadow reads as sitting on something rather than
     floating above it.
   */
-  const heroCardStyle = {
-    boxShadow: heroAccent ? `0 0 0 1.5px ${heroAccent}b3` : "none",
-  };
 
   // Reputation — computed from real signals (no fabrication; see reputation.ts),
   // in the shared scope so both the owner's rail and the PUBLIC reputation chip use
@@ -471,36 +420,21 @@ async function ProfileData({
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(ld) }} />
         {/* No fixed top bar on mobile any more (owner) — the cover runs edge to
             edge under the status bar and its controls float over it. */}
-        <main className="frenz-lux frenz-profile-scale pb-24 pt-0 lg:pt-4" style={theme.vars as React.CSSProperties}>
+        <main className="frenz-lux frenz-profile-scale bg-frenz-page pb-24 pt-0 lg:pt-4" style={theme.vars as React.CSSProperties}>
           {/* `frenz-profile-shell/cols/rail` (globals.css) put the rail beside
               the center only when the wrapper's OWN width — inside the app
               sidebar — passes 62rem, so it never clips on a laptop. */}
           <div className="frenz-profile-shell mx-auto w-full max-w-7xl px-0 sm:px-4">
             <div className="frenz-profile-cols flex flex-col gap-6">
               <div className="min-w-0 flex-1">
-              {/* Hero — cover + glass Identity Card (Profile · Part 1). The
-                  approved creator spine is kept; the craft is raised: the identity
-                  now lives on a `.glass-strong` prestige card straddled by the
-                  avatar, with an honest Photo/Video/Avatar mode control. */}
+              {/*
+                The design's hero (design/Profile.dc.html, 2026-10-18) — shared with the visitor view
+                (features/profile/profile-hero.tsx). The avatar keeps its identity frame (gold for a
+                paid plan, the member's accent) and its Photo / Video / Avatar media; the mode is
+                changed from the camera button, which opens Identity.
+              */}
               <div className="relative">
-                {/* Cover — Living Profile light or the creator's own banner, the
-                    same full-bleed treatment as the visitor hero (owner). With
-                    the fixed top bar gone there is nothing left to cover its
-                    controls, so the artwork can run under the status bar; its
-                    height absorbs the safe area so the card below stays put. */}
-                <div className="frenz-profile-wash relative h-[calc(11rem+var(--frenz-safe-top))] w-full overflow-hidden sm:h-60 sm:rounded-3xl">
-                  {profile.bannerUrl ? (
-                    <Image src={profile.bannerUrl} alt="" fill priority sizes="(max-width: 1024px) 100vw, 900px" className="object-cover" />
-                  ) : null}
-                  {/* Living Profile lighting always overlays (even over a banner), so
-                      the time-of-day / seasonal / anniversary glow is visible to the
-                      owner too — not just when they have no banner. */}
-                  <LivingGlow joinedAt={profile.createdAt} />
-                  {/* Top gloss + bottom scrim so the overlapping card reads cleanly over any cover */}
-                  <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-black/25" />
-                  {/* Search · Edit Cover · Menu, floating over the artwork and
-                      inset past the notch (they must not enter the safe area
-                      even though the picture does). Replaces the whole top bar. */}
+                <ProfileCover bannerUrl={profile.bannerUrl} joinedAt={profile.createdAt}>
                   <ProfileCoverControls
                     user={{
                       handle: profile.handle,
@@ -510,248 +444,84 @@ async function ProfileData({
                       verified: profile.isVerified,
                     }}
                   />
-                  {/* Desktop keeps the plain Edit Cover affordance — the floating
-                      controls above are the mobile chrome replacement. */}
+                  {/* Desktop keeps a plain Edit Cover — the floating controls are the mobile chrome. */}
                   <Link
                     href="/account/identity"
-                    className="absolute right-3 top-3 hidden items-center gap-1.5 rounded-xl bg-black/40 px-3 py-2 text-sm font-semibold text-white backdrop-blur-md transition hover:bg-black/55 lg:inline-flex"
+                    className="absolute bottom-3.5 right-4 hidden h-9 items-center gap-1.5 rounded-full border border-white/30 bg-black/45 px-3 text-[13px] font-bold text-white backdrop-blur-md transition hover:bg-black/55 lg:inline-flex"
                   >
-                    <Camera className="h-4 w-4" /> Edit Cover
+                    <Camera className="h-4 w-4" /> Edit cover
                   </Link>
-                </div>
+                </ProfileCover>
 
-                {/* Identity Card™ — the premium glass surface */}
-                <div className="relative z-10 px-3 sm:px-4">
-                  <div className={cn("relative lux-card lux-header lux-enter -mt-16 rounded-3xl px-4 pb-6 pt-0 sm:-mt-20 sm:px-7", heroAccent && "lux-halo")} style={heroCardStyle}>
-                    {/* Profile accent (Part · Appearance) — a subtle "your colour" tab. */}
-                    {heroAccent ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-1.5 w-24 -translate-x-1/2 rounded-b-full" style={{ background: heroAccent }} /> : null}
-                    {/*
-                      ── 🔴 THE HEADER ROW, AS ASKED THE SECOND TIME (owner, 2026-09-13)
-
-                      First pass put the avatar on the LEFT. Owner: "I said flex the
-                      profile ring and description card (photo, video and avatar) to
-                      go to the right edge, padding 2 or 3, and the name and username
-                      should be at the left end with the same padding 2 or 3."
-
-                      So: the name and handle sit at the card's LEFT edge, the avatar
-                      ring with the mode pill under it sits at the RIGHT edge, and the
-                      row pulls in with `-mx-1 sm:-mx-4` against the card's own
-                      `px-4 sm:px-7` so both land at padding-3 from the card edge.
-                      Everything long — bio, links, actions — stays BELOW the row at
-                      full width, so nothing ever squeezes in beside the avatar.
-
-                      The pill's glyphs are the filled, lit ones in
-                      identity-mode-glyphs.tsx ("3D, Snapchat-style"); the avatar
-                      mode is a person, never a sparkle.
-                    */}
-                    {/*
-                      ── 4th pass (owner, 2026-09-13, screenshot of the ring + pill) ─
-                      "Give more padding left and right to the name and username
-                      and also [the avatar section] — they sit too close to the
-                      edge; move [it] below and more to the left, there is too
-                      much space at the centre."
-
-                      So: the row no longer pulls to the card edges (the -mx that
-                      put both columns at padding-3 is gone; they sit inside the
-                      card's own px-4/px-7), the identity column keeps its natural
-                      width instead of stretching (so the avatar column follows the
-                      name at a fixed gap rather than parking at the far right),
-                      and the avatar column starts a little lower.
-                    */}
-                    {/* justify-between: the identity hugs the LEFT edge and the ring + its
-                        mode control hug the RIGHT edge (owner, 2026-09-13, orange marker:
-                        "this is where I want the profile ring and display icon card to be"). */}
-                    <div className="flex items-start justify-between gap-4 sm:gap-8">
-                      {/* Identity — the LEFT edge: name, handle, and the chips that
-                          describe the profile. */}
-                      {/*
-                        🔴 CENTRED AGAINST THE AVATAR COLUMN (owner, 2026-09-13:
-                        "There is too much space between the name, username and
-                        the bio… The name and username should come down a bit to
-                        occupy the space below"). The avatar column on the right
-                        is ~170 px tall (ring + mode pill) and the row stretches
-                        to it; the name and handle were pinned to its top, so the
-                        space showed up under them. `self-center` sits the
-                        identity in the middle of that height instead — the bio
-                        and the rest still follow below the row at full width.
-                      */}
-                      <div className="min-w-0 max-w-[60%] flex-none self-center py-3 sm:py-4">
-                        {/* The brand display face (Outfit, the wordmark's), bigger, heavier and
-                            darker (owner, 2026-09-14: "increase the text size… the premium font
-                            the brand text uses… more bolder and thicker and darker"). Outfit ships
-                            at 700 only, so the extra weight comes from a hairline text-stroke. */}
-                        <h1 className="font-brand flex flex-wrap items-center gap-x-2 gap-y-1 text-[2rem] font-bold leading-[1.05] tracking-[-0.03em] text-slate-950 [-webkit-text-stroke:0.35px_currentColor] dark:text-white sm:text-[2.5rem]">
-                          {profile.displayName}
-                          {/* Verified · plan (Pro/Business) · Creator, one cluster */}
-                          <IdentityBadges verified={profile.isVerified} plan={plan} creator accent={heroAccent} />
-                        </h1>
-                        <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
-                        {/* Your streak, on your own profile only (owner, 2026-10-09: moved here
-                            from the message page). This hero renders only for the owner. */}
-                        <StreakHeaderChip className="mt-2" />
-                        {/* What this profile IS (Part 14). A personal profile is
-                            the default and says nothing — only a declared purpose
-                            earns a chip. */}
-                        {identity.type !== "personal" || details.headline ? (
-                          <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                            {identity.type !== "personal" ? (
-                              <span className="rounded-full bg-secondary/70 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-muted-foreground ring-1 ring-inset ring-border/50">
-                                {typeSpec.label}
-                              </span>
-                            ) : null}
-                            {details.headline ? <span className="text-muted-foreground">{details.headline}</span> : null}
-                          </p>
-                        ) : null}
-                        {/* Status + Mood (Part 9) — read defensively; empty until migration 0095 applies. */}
-                        {profileExtras.status || profileExtras.mood ? (
-                          <div className="mt-2 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-full bg-secondary/60 px-3 py-1 text-sm">
-                            {profileExtras.mood ? <span className="font-semibold text-primary" style={heroAccent ? { color: heroAccent } : undefined}>{profileExtras.mood}</span> : null}
-                            {profileExtras.status ? <span className="text-muted-foreground">{profileExtras.status}</span> : null}
-                          </div>
-                        ) : null}
-
-                      </div>
-
-                      {/*
-                        ── 🔴 INSIDE THE CARD, NOT OVER IT (owner, 2026-09-13, 3rd pass)
-
-                        "Bring this section in profile down more, so it doesn't go
-                        over the profile hero card, so it sticks on top and remove
-                        the shadow and shadow colour, it should only use gold Frame
-                        ring or any color set by the user."
-
-                        The column used to pull itself up with `-mt-14 sm:-mt-[4.5rem]`
-                        so the ring straddled the card's top edge and the cover behind
-                        it. Now it starts where the name column starts (`pt-3
-                        sm:pt-4`), fully inside the card, at its top.
-
-                        The accent blur halo that sat behind the ring is gone, and the
-                        ring is asked for NO glow: no breathing box-shadow, no
-                        accent-tinted shadow. What is left is the frame itself — gold
-                        for a paid plan, otherwise the member's own accent colour when
-                        they have chosen one. The online-green ring is not shown here
-                        either: this is the member's OWN header, and the two frame
-                        colours the owner named are the only ones it may take.
-                      */}
-                      {/* pt-10 / mr-5: two nudges (owner, 2026-09-14: "2 padding down and left", then "about more padding 3 down and left"). */}
-                      <div className="mr-5 flex shrink-0 flex-col items-center pt-10 sm:mr-6 sm:pt-11">
-                        <div className="relative w-fit">
-                          <IdentityRing
-                            userId={profile.id}
-                            verified={profile.isVerified}
-                            premium={plan !== "free"}
-                            accent={heroAccent}
-                            glow={false}
-                            presence={false}
-                          >
-                            <IdentityMediaViewer
-                              mode={profileMedia.identityMode}
-                              photo={profile.avatarUrl}
-                              video={profileMedia.videoUrl}
-                              avatar={profileMedia.avatarUrl}
-                              name={profile.displayName}
-                            >
-                              <IdentityMedia
-                                mode={profileMedia.identityMode}
-                                photo={profile.avatarUrl}
-                                video={profileMedia.videoUrl}
-                                avatar={profileMedia.avatarUrl}
-                                name={profile.displayName}
-                                className="h-24 w-24 ring-4 ring-background sm:h-28 sm:w-28"
-                              />
-                            </IdentityMediaViewer>
-                          </IdentityRing>
-                          <Link href="/account/identity" aria-label="Change photo" className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-card text-foreground shadow-md ring-1 ring-border transition hover:bg-secondary">
-                            <Camera className="h-4 w-4" />
-                          </Link>
-                        </div>
-
-                        <div className="mt-2 inline-flex items-center gap-0.5 rounded-full border border-border/60 bg-card/80 p-0.5 shadow-sm backdrop-blur">
-                          {(
-                            [
-                              { mode: "photo", label: "Photo" },
-                              { mode: "video", label: "Video" },
-                              { mode: "avatar", label: "Avatar" },
-                            ] as const
-                          ).map(({ mode, label }) => {
-                            const active = profileMedia.identityMode === mode;
-                            return (
-                              <Link
-                                key={mode}
-                                href="/account/identity"
-                                aria-label={label}
-                                title={label}
-                                aria-current={active ? "true" : undefined}
-                                className={`flex h-8 w-8 items-center justify-center rounded-full transition ${
-                                  active ? "bg-white shadow-[0_2px_8px_-2px_rgba(91,61,245,0.55)] ring-1 ring-violet-500/30" : "hover:bg-secondary/70"
-                                }`}
-                              >
-                                <IdentityModeGlyph name={mode} active={active} className="h-5 w-5" />
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Below the row, full width — see the note above. */}
-                    {profile.bio ? <p className="mt-3 leading-relaxed">{profile.bio}</p> : null}
-
-                    <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
-                      {profile.website ? (
-                        <a href={profile.website} target="_blank" rel="nofollow noopener" className="inline-flex items-center gap-1.5 text-primary hover:underline">
-                          <LinkIcon className="h-4 w-4" />
-                          {profile.website.replace(/^https?:\/\//, "")}
-                        </a>
-                      ) : null}
-                      <span className="inline-flex items-center gap-1.5">
-                        <CalendarDays className="h-4 w-4" />
-                        {joined}
-                      </span>
-                    </div>
-
-                    <div className="mt-3 flex w-full items-center gap-2">
-                      <Link href="/account/identity" className="btn-lux btn-lux-secondary flex-1 justify-center">
-                        Edit Profile
+                <ProfileIdentity
+                  avatar={
+                    <div className="relative w-fit">
+                      <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"} accent={heroAccent} glow={false} presence={false}>
+                        <IdentityMediaViewer
+                          mode={profileMedia.identityMode}
+                          photo={profile.avatarUrl}
+                          video={profileMedia.videoUrl}
+                          avatar={profileMedia.avatarUrl}
+                          name={profile.displayName}
+                        >
+                          <IdentityMedia
+                            mode={profileMedia.identityMode}
+                            photo={profile.avatarUrl}
+                            video={profileMedia.videoUrl}
+                            avatar={profileMedia.avatarUrl}
+                            name={profile.displayName}
+                            className="h-[100px] w-[100px] ring-[3px] ring-frenz-page"
+                          />
+                        </IdentityMediaViewer>
+                      </IdentityRing>
+                      <Link
+                        href="/account/identity"
+                        aria-label="Change photo"
+                        className="absolute -right-0.5 bottom-0.5 flex h-[34px] w-[34px] items-center justify-center rounded-full border-[3px] border-frenz-page bg-frenz-ink text-white transition active:scale-90"
+                      >
+                        <Camera className="h-[15px] w-[15px]" strokeWidth={2.4} />
                       </Link>
-                      <ShareProfileButton handle={profile.handle} name={profile.displayName} />
-                      <ProfileCardLink handle={profile.handle} />
                     </div>
+                  }
+                  aside={<StreakHeaderChip variant="pill" />}
+                  name={profile.displayName}
+                  verified={profile.isVerified}
+                  badges={<IdentityBadges verified={false} plan={plan} creator accent={heroAccent} />}
+                  handle={profile.handle}
+                  typeLabel={identity.type !== "personal" ? typeSpec.label : null}
+                  extras={
+                    details.headline || profileExtras.status || profileExtras.mood ? (
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                        {details.headline ? <span className="text-frenz-muted">{details.headline}</span> : null}
+                        {profileExtras.mood ? <span className="font-semibold text-frenz-violet" style={heroAccent ? { color: heroAccent } : undefined}>{profileExtras.mood}</span> : null}
+                        {profileExtras.status ? <span className="text-frenz-muted">{profileExtras.status}</span> : null}
+                      </div>
+                    ) : null
+                  }
+                  bio={profile.bio}
+                  website={profile.website}
+                  joined={joined}
+                />
 
-                    {/* 5 live stats — one divided glass panel; Followers/Following
-                        link through. Same `StatCell` as the visitor hero, so the
-                        two rows breathe identically. */}
-                    {/*
-                      🔴 FOUR COLUMNS FOR FOUR STATS (owner, 2026-09-13: "shorten the
-                      engagement card width so there won't be an empty space beside").
-                      This was `grid-cols-5` over a four-item array, so the panel
-                      always drew an empty fifth cell. The column count now follows
-                      the array — the same rule the visitor panel already applies
-                      with `show_views`.
-                    */}
-                    <div
-                      className={cn(
-                        "mt-5 grid divide-x divide-border/50 overflow-hidden rounded-2xl border border-border/60 bg-card/50 ring-hairline",
-                        stats.length >= 5 ? "grid-cols-5" : "grid-cols-4",
-                      )}
-                    >
-                      {stats.map((s) => (
-                        <StatCell
-                          key={s.label}
-                          label={s.label}
-                          value={s.value}
-                          href={
-                            s.label === "Followers"
-                              ? `${profilePath(profile.handle)}/followers`
-                              : s.label === "Following"
-                                ? `${profilePath(profile.handle)}/following`
-                                : undefined
-                          }
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                <ProfileStats
+                  stats={stats.map((s) => ({
+                    ...s,
+                    href:
+                      s.label === "Followers"
+                        ? `${profilePath(profile.handle)}/followers`
+                        : s.label === "Following"
+                          ? `${profilePath(profile.handle)}/following`
+                          : undefined,
+                  }))}
+                />
+
+                <ProfileActionRow>
+                  <Link href="/account/identity" className={PROFILE_PRIMARY_BUTTON}>
+                    Edit profile
+                  </Link>
+                  <ShareProfileButton handle={profile.handle} name={profile.displayName} variant="button" />
+                  <ProfileCardLink handle={profile.handle} />
+                </ProfileActionRow>
 
                 {/* The daily streak card is a hub section now ("Daily streak"),
                     with the rest of the owner's cards — see ProfileHub. */}
@@ -807,124 +577,73 @@ async function ProfileData({
           rule sitting across the top of the cover; the +person button floated
           over the artwork beside the avatar. Both are gone, and the cover is
           genuinely edge to edge. Desktop chrome comes from the app shell. */}
-      <main className="frenz-lux frenz-profile-scale pb-24 pt-0 lg:pt-4" style={theme.vars as React.CSSProperties}>
+      <main className="frenz-lux frenz-profile-scale bg-frenz-page pb-24 pt-0 lg:pt-4" style={theme.vars as React.CSSProperties}>
         <div className="mx-auto flex w-full max-w-6xl gap-6">
           <div className="mx-auto min-w-0 max-w-4xl flex-1 sm:px-4">
           {/* Hero — cover + glass Identity Card + Identity Presence™ (Profile Header · Part 2).
               The same premium surface as the owner hero, now for visitors, with real
               relationship signals (friends / follows-you / following / mutuals) — never faked. */}
+          {/* The design's hero, the same one the owner sees (features/profile/profile-hero.tsx, 2026-10-18).
+              Only what a visitor may DO differs: Follow / Message instead of Edit profile. */}
           <div className="relative">
-            {/* Cover — Living Profile light or the member's own banner. On mobile it
-                bleeds to the very TOP (under the status bar) instead of stopping at the
-                header line (owner): pulled up by the main's top padding and grown by
-                the same, so the card below stays put. sm+ keeps the rounded card. */}
-            <div className="frenz-profile-wash relative h-[calc(11rem+var(--frenz-safe-top))] w-full overflow-hidden sm:h-60 sm:rounded-3xl md:h-64">
-              {profile.bannerUrl ? (
-                <Image src={profile.bannerUrl} alt="" fill priority sizes="(max-width: 896px) 100vw, 896px" className="object-cover" />
-              ) : null}
-              <LivingGlow joinedAt={profile.createdAt} />
-              <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-black/25" />
-            </div>
+            <ProfileCover bannerUrl={profile.bannerUrl} joinedAt={profile.createdAt} />
 
-            {/* Identity Card™ — owner 2026-10-16: "arrange visitors profile hero card to be exactly
-                like the one users use on their profile". The SAME structure and classes as the owner
-                hero above: name + handle on the LEFT, the identity ring on the RIGHT, then bio, links,
-                actions and the same four stats at full width. Only what a visitor may DO differs
-                (Follow / Message instead of Edit Profile). */}
-            <div className="relative z-10 px-3 sm:px-4">
-              <div className={cn("relative lux-card lux-header lux-enter -mt-16 rounded-3xl px-4 pb-6 pt-0 sm:-mt-20 sm:px-7", heroAccent && "lux-halo")} style={heroCardStyle}>
-                {heroAccent ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-1.5 w-24 -translate-x-1/2 rounded-b-full" style={{ background: heroAccent }} /> : null}
-                <div className="flex items-start justify-between gap-4 sm:gap-8">
-                  <div className="min-w-0 max-w-[60%] flex-none self-center py-3 sm:py-4">
-                    <h1 className="font-brand flex flex-wrap items-center gap-x-2 gap-y-1 text-[2rem] font-bold leading-[1.05] tracking-[-0.03em] text-slate-950 [-webkit-text-stroke:0.35px_currentColor] dark:text-white sm:text-[2.5rem]">
-                      {profile.displayName}
-                      {/* the plan badge stays behind the member's privacy switch, the tick never does */}
-                      <IdentityBadges verified={profile.isVerified} plan={plan} showPlan={privacy.show_plan_badge} accent={heroAccent} />
-                    </h1>
-                    <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
-                    {identity.type !== "personal" || details.headline ? (
-                      <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                        {identity.type !== "personal" ? (
-                          <span className="rounded-full bg-secondary/70 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-muted-foreground ring-1 ring-inset ring-border/50">
-                            {typeSpec.label}
-                          </span>
-                        ) : null}
-                        {details.headline ? <span className="text-muted-foreground">{details.headline}</span> : null}
-                      </p>
-                    ) : null}
-                    {/* Public reputation rank (0102) — the member can hide it from Privacy */}
+            <ProfileIdentity
+              avatar={
+                <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"} accent={heroAccent} glow={false}>
+                  <IdentityMediaViewer mode={profileMedia.identityMode} photo={profile.avatarUrl} video={profileMedia.videoUrl} avatar={profileMedia.avatarUrl} name={profile.displayName}>
+                    <IdentityMedia
+                      mode={profileMedia.identityMode}
+                      photo={profile.avatarUrl}
+                      video={profileMedia.videoUrl}
+                      avatar={profileMedia.avatarUrl}
+                      name={profile.displayName}
+                      className="h-[100px] w-[100px] ring-[3px] ring-frenz-page"
+                    />
+                  </IdentityMediaViewer>
+                </IdentityRing>
+              }
+              name={profile.displayName}
+              verified={profile.isVerified}
+              /* the plan badge stays behind the member's privacy switch, the seal never does */
+              badges={<IdentityBadges verified={false} plan={plan} showPlan={privacy.show_plan_badge} accent={heroAccent} />}
+              handle={profile.handle}
+              typeLabel={identity.type !== "personal" ? typeSpec.label : null}
+              extras={
+                details.headline || privacy.show_reputation || profileExtras.status || profileExtras.mood ? (
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm">
+                    {details.headline ? <span className="text-frenz-muted">{details.headline}</span> : null}
+                    {/* Public reputation rank (0102) — a small badge; the member can hide it from Privacy */}
                     {privacy.show_reputation ? (
                       <span
-                        className="mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold text-white shadow-sm ring-1 ring-inset ring-white/20"
+                        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold text-white ring-1 ring-inset ring-white/20"
                         style={{ backgroundImage: `linear-gradient(135deg, ${reputation.rank.from}, ${reputation.rank.to})` }}
                         title={`Reputation score ${reputation.score.toLocaleString()}`}
                       >
                         <RankCrown className="h-4 w-4" /> {reputation.rank.name}
                       </span>
                     ) : null}
-                    {profileExtras.status || profileExtras.mood ? (
-                      <div className="mt-2 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-full bg-secondary/60 px-3 py-1 text-sm">
-                        {profileExtras.mood ? <span className="font-semibold text-primary" style={heroAccent ? { color: heroAccent } : undefined}>{profileExtras.mood}</span> : null}
-                        {profileExtras.status ? <span className="text-muted-foreground">{profileExtras.status}</span> : null}
-                      </div>
-                    ) : null}
+                    {profileExtras.mood ? <span className="font-semibold text-frenz-violet" style={heroAccent ? { color: heroAccent } : undefined}>{profileExtras.mood}</span> : null}
+                    {profileExtras.status ? <span className="text-frenz-muted">{profileExtras.status}</span> : null}
                   </div>
+                ) : null
+              }
+              bio={profile.restricted ? null : profile.bio}
+              website={profile.restricted ? null : profile.website}
+              joined={joined}
+            />
 
-                  {/* the ring, inside the card at its top right — exactly where the owner sees theirs */}
-                  <div className="mr-5 flex shrink-0 flex-col items-center pt-10 sm:mr-6 sm:pt-11">
-                    <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"} accent={heroAccent} glow={false}>
-                      <IdentityMediaViewer mode={profileMedia.identityMode} photo={profile.avatarUrl} video={profileMedia.videoUrl} avatar={profileMedia.avatarUrl} name={profile.displayName}>
-                        <IdentityMedia
-                          mode={profileMedia.identityMode}
-                          photo={profile.avatarUrl}
-                          video={profileMedia.videoUrl}
-                          avatar={profileMedia.avatarUrl}
-                          name={profile.displayName}
-                          className="h-24 w-24 ring-4 ring-background sm:h-28 sm:w-28"
-                        />
-                      </IdentityMediaViewer>
-                    </IdentityRing>
-                    {/* the same mode pill, read-only for a visitor (it says what the member shows) */}
-                    <div className="mt-2 inline-flex items-center gap-0.5 rounded-full border border-border/60 bg-card/80 p-0.5 shadow-sm backdrop-blur" role="img" aria-label={`Showing their ${profileMedia.identityMode}`}>
-                      {(["photo", "video", "avatar"] as const).map((mode) => {
-                        const active = profileMedia.identityMode === mode;
-                        return (
-                          <span key={mode} aria-hidden className={`flex h-8 w-8 items-center justify-center rounded-full ${active ? "bg-white shadow-[0_2px_8px_-2px_rgba(91,61,245,0.55)] ring-1 ring-violet-500/30" : ""}`}>
-                            <IdentityModeGlyph name={mode} active={active} className="h-5 w-5" />
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                {profile.restricted ? (
-                  <div className="mt-6 rounded-2xl border border-border/60 bg-card/50 p-8 text-center ring-hairline">
-                    <Lock className="mx-auto h-8 w-8 text-muted-foreground" />
-                    <p className="mt-3 font-semibold">This account is private</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{me ? "Follow to request access to their activity." : "Sign in and follow to see more."}</p>
-                  </div>
-                ) : (
-                  <>
-                    {profile.bio ? <p className="mt-3 leading-relaxed">{profile.bio}</p> : null}
-                    <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
-                      {profile.website ? (
-                        <a href={profile.website} target="_blank" rel="nofollow noopener" className="inline-flex items-center gap-1.5 text-primary hover:underline">
-                          <LinkIcon className="h-4 w-4" />
-                          {profile.website.replace(/^https?:\/\//, "")}
-                        </a>
-                      ) : null}
-                      <span className="inline-flex items-center gap-1.5">
-                        <CalendarDays className="h-4 w-4" />
-                        {joined}
-                      </span>
-                    </div>
-                  </>
-                )}
+            {profile.restricted ? (
+              <div className="frenz-ui mx-5 mt-4 rounded-[20px] border border-frenz-line bg-frenz-card p-8 text-center">
+                <Lock className="mx-auto h-8 w-8 text-frenz-muted" />
+                <p className="mt-3 font-semibold text-frenz-ink">This account is private</p>
+                <p className="mt-1 text-sm text-frenz-muted">{me ? "Follow to request access to their activity." : "Sign in and follow to see more."}</p>
+              </div>
+            ) : null}
 
                 {/* Identity Presence™ — real relationship signals only, signed-in visitors */}
                 {isViewer && (friendState === "friends" || friendState === "incoming" || friendState === "outgoing" || followsYou || profile.isFollowing || mutuals > 0) ? (
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <div className="frenz-ui mx-5 mt-3 flex flex-wrap items-center gap-2">
                     {friendState === "friends" ? (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-300">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Friends
@@ -956,21 +675,34 @@ async function ProfileData({
                   </div>
                 ) : null}
 
-                {/* Actions — the owner's row (Edit Profile · Share · QR), with what a visitor can do */}
-                <div className="mt-3 flex w-full items-center gap-2">
-                  <FollowButton targetId={profile.id} targetHandle={profile.handle} initialFollowing={profile.isFollowing} canFollow={!!me} followsYou={followsYou} className="min-w-0 flex-1 justify-center" />
-                  {me ? (
-                    /* An existing chat opens directly; a first chat goes through /messages/new/ (owner, 2026-10-08) */
-                    <Link href={directChatId ? `/messages/${directChatId}` : `/messages/new/${profile.id}`} className={`btn-lux min-w-0 flex-1 justify-center ${friendState === "friends" ? "btn-lux-primary" : "btn-lux-secondary"}`}>
-                      <MessageCircle className="h-4 w-4" /> Message
-                    </Link>
-                  ) : null}
-                  <ShareProfileButton handle={profile.handle} name={profile.displayName} />
-                  <ProfileCardLink handle={profile.handle} />
-                </div>
+
+            {/* The same four stats, in the same order, as the owner sees (owner 2026-10-16: no views in the visitor hero) */}
+            {!profile.restricted ? (
+              <ProfileStats
+                stats={[
+                  { label: "Posts", value: postsTotal },
+                  { label: "Followers", value: profile.followersCount, href: `${profilePath(profile.handle)}/followers` },
+                  { label: "Following", value: profile.followingCount, href: `${profilePath(profile.handle)}/following` },
+                  { label: "Likes", value: totals.likes },
+                ]}
+              />
+            ) : null}
+
+            {/* What a visitor can do: Follow and Message side by side, then share and the profile card */}
+            <ProfileActionRow>
+              <FollowButton targetId={profile.id} targetHandle={profile.handle} initialFollowing={profile.isFollowing} canFollow={!!me} followsYou={followsYou} variant="frenz" className="h-12 min-w-0 flex-1 justify-center rounded-[14px]" />
+              {me ? (
+                /* An existing chat opens directly; a first chat goes through /messages/new/ (owner, 2026-10-08) */
+                <Link href={directChatId ? `/messages/${directChatId}` : `/messages/new/${profile.id}`} className={PROFILE_SECONDARY_BUTTON}>
+                  <MessageCircle className="h-4 w-4" /> Message
+                </Link>
+              ) : null}
+              <ShareProfileButton handle={profile.handle} name={profile.displayName} />
+              <ProfileCardLink handle={profile.handle} />
+            </ProfileActionRow>
                 {/* the rest on its own row, so nothing in the first row is squeezed (owner, 2026-08-16) */}
                 {(me && friendState !== "self") || isViewer || (isCommercialType(identity.type) && !profile.restricted && (details.bookingUrl || details.quoteUrl || details.contactPhone || details.contactEmail)) ? (
-                  <div className="mt-2 flex w-full flex-wrap items-center gap-2">
+                  <div className="frenz-ui mx-5 mt-2.5 flex flex-wrap items-center gap-2">
                     {isCommercialType(identity.type) && !profile.restricted ? (
                       <>
                         {details.bookingUrl ? (
@@ -1002,17 +734,6 @@ async function ProfileData({
                   </div>
                 ) : null}
 
-                {/* The same four stats, in the same order, as the owner sees (owner 2026-10-16: no views in the visitor hero) */}
-                {!profile.restricted ? (
-                  <div className="mt-5 grid grid-cols-4 divide-x divide-border/50 overflow-hidden rounded-2xl border border-border/60 bg-card/50 ring-hairline">
-                    <StatCell label="Posts" value={postsTotal} />
-                    <StatCell label="Followers" value={profile.followersCount} href={`${profilePath(profile.handle)}/followers`} />
-                    <StatCell label="Following" value={profile.followingCount} href={`${profilePath(profile.handle)}/following`} />
-                    <StatCell label="Likes" value={totals.likes} />
-                  </div>
-                ) : null}
-              </div>
-            </div>
 
             {/* No streak card here: this is the VISITOR branch, and a streak is
                 personal — `useStreak()` reads the viewer's own, which would show

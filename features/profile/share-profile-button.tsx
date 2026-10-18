@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Share2 } from "lucide-react";
+import { ShareUpIcon } from "@/features/frenz-ui/icons";
 import { useState } from "react";
 
 import { toast } from "@/features/ui/toast";
@@ -10,7 +11,16 @@ import { profilePath } from "@/lib/social/profile-url";
  * Share a profile: native share sheet where available (mobile), clipboard
  * copy with a ✓ confirmation elsewhere.
  */
-export function ShareProfileButton({ handle, name }: { handle: string; name: string }) {
+export function ShareProfileButton({
+  handle,
+  name,
+  variant = "icon",
+}: {
+  handle: string;
+  name: string;
+  /** "button": the design's labelled "Share profile" button (design/Profile.dc.html, 2026-10-18). */
+  variant?: "icon" | "button";
+}) {
   const [copied, setCopied] = useState(false);
 
   const share = async () => {
@@ -37,6 +47,19 @@ export function ShareProfileButton({ handle, name }: { handle: string; name: str
       toast("Couldn't copy the link.", "error");
     }
   };
+
+  if (variant === "button") {
+    return (
+      <button
+        type="button"
+        onClick={share}
+        className="flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-[14px] border border-frenz-line bg-frenz-card text-[15px] font-bold text-frenz-ink transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet"
+      >
+        {copied ? <Check className="h-4 w-4 text-emerald-600" aria-hidden /> : <ShareUpIcon size={17} />}
+        Share profile
+      </button>
+    );
+  }
 
   return (
     <button

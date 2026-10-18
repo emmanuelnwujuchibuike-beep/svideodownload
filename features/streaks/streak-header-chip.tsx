@@ -7,6 +7,7 @@ import { StreakFlameMark } from "@/features/streaks/streak-flame-mark";
 import { readDisplayCache, useStreak } from "@/features/streaks/use-streak";
 import { tierFor } from "@/lib/streaks/tiers";
 import { cn } from "@/lib/utils";
+import { FlameIcon } from "@/features/frenz-ui/icons";
 
 /*
   Code-split, and fetched on the FIRST TAP. The panel carries six live tier
@@ -68,11 +69,11 @@ const StreakTiersSheet = dynamic(
  * /api/streak is fetched app-wide by `StreakTracker` regardless (deferred
  * shell), and `useQuery` de-dupes by key, so mounting the chip costs no request.
  */
-export function StreakHeaderChip({ className }: { className?: string }) {
-  return <StreakChip className={className} />;
+export function StreakHeaderChip({ className, variant = "gradient" }: { className?: string; variant?: "gradient" | "pill" }) {
+  return <StreakChip className={className} variant={variant} />;
 }
 
-function StreakChip({ className }: { className?: string }) {
+function StreakChip({ className, variant = "gradient" }: { className?: string; variant?: "gradient" | "pill" }) {
   // `useState(initialiser)` runs during the first render, so the cached number
   // is on screen in the same commit as the rest of the header.
   const [cached] = useState<number | null>(() => readDisplayCache());
@@ -95,6 +96,22 @@ function StreakChip({ className }: { className?: string }) {
 
   return (
     <>
+      {variant === "pill" ? (
+        /* The design's streak (design/Profile.dc.html, 2026-10-18): a white pill with the hairline and a
+           magenta flame — no gradient fill, no glow. Same tap, same details panel. */
+        <button
+          type="button"
+          onClick={() => setView("panel")}
+          aria-label={`${streak} day streak. View details`}
+          className={cn(
+            "inline-flex min-h-9 items-center gap-1.5 rounded-full border border-frenz-line bg-frenz-card py-1.5 pl-2.5 pr-3 text-[13px] font-bold text-frenz-ink/80 transition active:scale-95",
+            className,
+          )}
+        >
+          <FlameIcon size={16} className="text-frenz-magenta" />
+          {streak}-day streak
+        </button>
+      ) : (
       <button
         type="button"
         onClick={() => setView("panel")}
@@ -111,6 +128,7 @@ function StreakChip({ className }: { className?: string }) {
         <StreakFlameMark tier={tierFor(streak)} className="h-5 w-5" effects={false} />
         <span className="text-[13px] font-extrabold tabular-nums leading-none">{streak}</span>
       </button>
+      )}
 
       {view === "panel" ? (
         <StreakDetailsPanel

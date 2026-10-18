@@ -1,34 +1,10 @@
 "use client";
 
-import {
-  Award,
-  BadgeCheck,
-  Bookmark,
-  BookOpen,
-  Briefcase,
-  Clapperboard,
-  Clock,
-  Download,
-  FileText,
-  FolderHeart,
-  GraduationCap,
-  Grid3x3,
-  IdCard,
-  LayoutGrid,
-  Lock,
-  Package,
-  Repeat2,
-  Rows3,
-  Trophy,
-  Wrench,
-  Lightbulb,
-} from "lucide-react";
+import { LayoutGrid, Lock } from "lucide-react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
-import { type ComponentType, type ReactNode, useMemo, useRef, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 
-import { WowOutline } from "@/components/brand/wow-icon";
-
+import { ListViewIcon } from "@/features/frenz-ui/icons";
 import { ProfileMediaGrid } from "@/features/social/profile-media-grid";
 import { loadSubPosts } from "@/features/sub/sub-posts-cache";
 import { useStickyState } from "@/features/ui/use-sticky-state";
@@ -62,32 +38,8 @@ const POST_TABS = new Set<string>(["posts", "reels", "downloads", "reposted", "l
 type MediaView = "grid" | "list";
 const VIEW_COOKIE = "svd_profile_view";
 
-type IconType = ComponentType<{ className?: string }>;
 
 /** Module icon names (`lib/profile/modules.ts`) → real components. */
-const ICONS: Record<string, IconType> = {
-  Grid3x3,
-  Clapperboard,
-  Download,
-  FolderHeart,
-  Repeat2,
-  Heart: WowOutline,
-  Bookmark,
-  IdCard,
-  Trophy,
-  LayoutGrid,
-  Briefcase,
-  GraduationCap,
-  BadgeCheck,
-  Award,
-  BookOpen,
-  Lightbulb,
-  FileText,
-  Package,
-  Wrench,
-  Clock,
-  Lock,
-};
 
 /** One entry in the dock — resolved by the Universal Profile Engine. */
 export interface ProfileSection {
@@ -214,7 +166,7 @@ export function ProfileTabs({
   };
 
   return (
-    <div className="mt-8">
+    <div className="mt-6">
       {isOwner && sub?.settings && !promoClosed ? (
         <SubPromoCard
           handle={handle}
@@ -230,14 +182,16 @@ export function ProfileTabs({
           }}
         />
       ) : null}
-      <div ref={tray} className="mb-6 flex scroll-mt-24 items-center gap-2">
-        {/* Owner 2026-10-16: "like the bottom NAV". The SAME glass as the floating nav
-            (`.frenz-nav-glass`, with its fallback tiers), the same soft capsule under the
-            active section and the same primary glyph — labelled on wider screens, icon-only on
-            mobile so every section fits. No new blur surface is invented here. */}
-        <div className="frenz-nav-glass flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto rounded-full p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/*
+        The design's section row (design/Profile.dc.html, 2026-10-18): labelled tabs on the white
+        page with the gradient underline under the chosen one (an active indicator — allowed), a
+        hairline under the row, and ONE grid / list button at its end. It replaces the glass tray
+        (2026-10-16). Every section still swaps in place, and Exclusive still starts loading its
+        posts the moment a finger lands. The Exclusive FEED is the Feed's own Exclusive tab now.
+      */}
+      <nav ref={tray} aria-label="Profile sections" className="frenz-ui relative -mx-4 mb-0.5 flex scroll-mt-24 items-center border-b border-frenz-line px-2 sm:-mx-6">
+        <div className="flex min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {sections.map((s) => {
-            const Icon = ICONS[s.icon] ?? Grid3x3;
             const isActive = active === s.key;
             return (
               <button
@@ -246,59 +200,32 @@ export function ProfileTabs({
                 onClick={() => select(s.key)}
                 // SUB POSTS: start loading the moment a finger lands, so the gallery opens already filled
                 onPointerDown={s.key === SUB_TAB_KEY ? () => void loadSubPosts(ownerId).catch(() => {}) : undefined}
-                aria-pressed={isActive}
-                title={s.label}
+                aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "group relative flex min-h-10 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                  isActive ? "bg-foreground/[0.08] text-primary" : "text-foreground/70 hover:text-foreground",
+                  "relative flex min-h-12 shrink-0 items-center gap-1 px-3 text-[15px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-frenz-violet",
+                  isActive ? "font-bold text-frenz-ink" : "font-semibold text-frenz-muted hover:text-frenz-ink",
                 )}
               >
-                <Icon className="h-[18px] w-[18px] shrink-0 transition-transform group-active:scale-90" />
-                <span className={isActive ? "inline" : "hidden sm:inline"}>{s.label}</span>
+                {s.key === SUB_TAB_KEY ? <Lock className="h-[13px] w-[13px] shrink-0" strokeWidth={2.4} aria-hidden /> : null}
+                {s.label}
+                {isActive ? <span aria-hidden className="absolute inset-x-3 -bottom-px h-[3px] rounded-full bg-frenz-gradient-x" /> : null}
               </button>
             );
           })}
-          {/* Owner 2026-10-17: the Exclusive feed (every creator this viewer subscribes to) one tap from the tray.
-              A link, not a section: it opens /exclusive, whose loading.tsx answers the tap at once. */}
-          {sub?.signedIn ? (
-            <Link
-              href="/exclusive"
-              aria-label="Exclusive posts feed"
-              title="Exclusive posts feed"
-              className="group relative flex min-h-10 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-semibold text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <Lightbulb className="h-[18px] w-[18px] shrink-0 transition-transform group-active:scale-90" />
-              <span className="hidden sm:inline">EXCLUSIVE</span>
-            </Link>
-          ) : null}
         </div>
 
-        {/* Grid ⇄ list view toggle — always separated from the dock */}
+        {/* Grid ⇄ list — one button that says what it will switch to */}
         {showViewToggle ? (
-          <div className="frenz-nav-glass flex shrink-0 items-center gap-0.5 rounded-full p-1">
-            {(
-              [
-                { v: "grid" as const, Icon: LayoutGrid, label: "Grid view" },
-                { v: "list" as const, Icon: Rows3, label: "List view" },
-              ]
-            ).map(({ v, Icon, label }) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => chooseView(v)}
-                aria-label={label}
-                aria-pressed={view === v}
-                className={cn(
-                  "flex h-10 w-10 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                  view === v ? "bg-foreground/[0.08] text-primary" : "text-foreground/70 hover:text-foreground",
-                )}
-              >
-                <Icon className="h-[17px] w-[17px]" />
-              </button>
-            ))}
-          </div>
+          <button
+            type="button"
+            onClick={() => chooseView(view === "grid" ? "list" : "grid")}
+            aria-label={view === "grid" ? "Switch to list view" : "Switch to grid view"}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-frenz-ink/80 transition-colors hover:bg-frenz-fill focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet"
+          >
+            {view === "grid" ? <ListViewIcon size={20} /> : <LayoutGrid className="h-5 w-5" aria-hidden />}
+          </button>
         ) : null}
-      </div>
+      </nav>
 
       {/* A single mounted content region that swaps instantly */}
       {renderActive()}

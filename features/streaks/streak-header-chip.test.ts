@@ -17,17 +17,16 @@ const SRC = code("features/streaks/streak-header-chip.tsx");
 const PROFILE = code("app/u/[handle]/page.tsx");
 
 describe("the chip lives on your own profile, nowhere else", () => {
-  it("is mounted once, inside the owner branch, under your handle", () => {
+  it("is mounted once, inside the owner branch — beside the avatar, as the design draws it (2026-10-18)", () => {
     const owner = PROFILE.indexOf("if (profile.isOwner) {");
-    const chip = PROFILE.indexOf('<StreakHeaderChip className="mt-2" />');
+    const chip = PROFILE.indexOf('aside={<StreakHeaderChip variant="pill" />}');
     expect(owner).toBeGreaterThan(-1);
     expect(chip).toBeGreaterThan(owner);
     expect(PROFILE.match(/<StreakHeaderChip/g)).toHaveLength(1);
-    // inside the owner hero: after the owner's @handle, before the visitor layout's
-    const handle = PROFILE.indexOf('<p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>');
-    expect(handle).toBeGreaterThan(owner);
-    expect(chip).toBeGreaterThan(handle);
-    expect(chip).toBeLessThan(PROFILE.indexOf('<p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>', handle + 1));
+    // never in the visitor layout, which starts at the owner branch's end
+    const visitor = PROFILE.indexOf("Only what a visitor may DO differs");
+    expect(visitor).toBeGreaterThan(owner);
+    expect(chip).toBeLessThan(visitor);
   });
 
   it("is gone from the message page and the shell headers", () => {
@@ -41,7 +40,7 @@ describe("the chip lives on your own profile, nowhere else", () => {
 
   it("keeps the hooks in their own component", () => {
     expect(SRC).toMatch(/function StreakChip\(/);
-    expect(SRC).toMatch(/return <StreakChip className=\{className\} \/>;/);
+    expect(SRC).toMatch(/return <StreakChip className=\{className\} variant=\{variant\} \/>;/);
     expect(SRC).not.toContain("usePathname");
   });
 });

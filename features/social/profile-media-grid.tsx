@@ -126,7 +126,8 @@ export function ProfileMediaGrid({
     );
   }
 
-  const aspect = layout === "reel" ? "aspect-[9/16]" : "aspect-square";
+  // the design's profile grid (design/Profile.dc.html, 2026-10-18): portrait 3:4 tiles, square corners, 2 px apart
+  const aspect = layout === "reel" ? "aspect-[9/16]" : "aspect-[3/4]";
   const cols =
     layout === "reel"
       ? "grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
@@ -134,14 +135,15 @@ export function ProfileMediaGrid({
 
   return (
     <>
-      <div className={cn("grid gap-1 sm:gap-1.5", cols)}>
+      {/* edge to edge on a phone — out past the page gutter, like the design */}
+      <div className={cn("-mx-4 grid gap-0.5 sm:mx-0 sm:gap-1", cols)}>
         {posts.map((p) =>
           isPlayable(p) ? (
             <button
               key={p.id}
               type="button"
               onClick={() => void viewer.open(p)}
-              className={cn("group relative block overflow-hidden rounded-xl bg-neutral-950 text-left", aspect)}
+              className={cn("group relative block overflow-hidden bg-neutral-950 sm:rounded-lg text-left", aspect)}
             >
               <Tile post={p} />
             </button>
@@ -157,7 +159,7 @@ export function ProfileMediaGrid({
                 void viewer.open(p);
               }}
               aria-busy={viewer.loadingId === p.id}
-              className={cn("group relative block overflow-hidden rounded-xl bg-neutral-950", aspect)}
+              className={cn("group relative block overflow-hidden bg-neutral-950 sm:rounded-lg", aspect)}
             >
               <Tile post={p} />
             </Link>

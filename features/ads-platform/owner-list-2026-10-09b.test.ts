@@ -87,7 +87,7 @@ describe("the My ads button (was Promote) has fixed homes — no dragging, no fl
 
 describe("streak placement", () => {
   it("the chip on your own profile (moved from messages, owner 2026-10-09); the ceremony plays on downloads and messages", () => {
-    expect(code("app/u/[handle]/page.tsx")).toContain('<StreakHeaderChip className="mt-2" />');
+    expect(code("app/u/[handle]/page.tsx")).toContain('aside={<StreakHeaderChip variant="pill" />}');
     expect(code("features/social/inbox-mobile-chrome.tsx")).not.toContain("<StreakHeaderChip");
     const c = code("features/streaks/streak-unlock-celebration.tsx");
     expect(c).toContain('const here = replay || pathname === "/downloads" || pathname.startsWith("/messages");');

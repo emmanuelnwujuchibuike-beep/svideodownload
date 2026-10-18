@@ -27,7 +27,10 @@ export function FollowButton({
   className,
   targetHandle,
   source = "profile",
+  variant = "lux",
 }: {
+  /** "frenz": the redesigned profile hero's look (solid ink / white, no gradient). */
+  variant?: "lux" | "frenz";
   targetId: string;
   initialFollowing: boolean;
   canFollow: boolean;
@@ -53,7 +56,10 @@ export function FollowButton({
 
   if (!canFollow) {
     return (
-      <Link href="/login?next=/account" className={cn("btn-lux btn-lux-primary", className)}>
+      <Link
+        href="/login?next=/account"
+        className={cn(variant === "frenz" ? "inline-flex items-center gap-2 bg-frenz-ink text-[15px] font-bold text-frenz-page" : "btn-lux btn-lux-primary", className)}
+      >
         <UserPlus className="h-4 w-4" /> Follow
       </Link>
     );
@@ -88,7 +94,16 @@ export function FollowButton({
       onClick={toggle}
       disabled={busy}
       aria-pressed={following || requested}
-      className={cn("btn-lux", following || requested ? "btn-lux-secondary" : "btn-lux-primary", className)}
+      className={cn(
+        variant === "frenz"
+          ? // the profile hero (design/Profile.dc.html, 2026-10-18): solid ink to follow, white with the hairline once following — no gradient
+            cn(
+              "inline-flex items-center gap-2 text-[15px] font-bold transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet disabled:opacity-60",
+              following || requested ? "border border-frenz-line bg-frenz-card text-frenz-ink" : "bg-frenz-ink text-frenz-page",
+            )
+          : cn("btn-lux", following || requested ? "btn-lux-secondary" : "btn-lux-primary"),
+        className,
+      )}
     >
       {busy ? (
         <Loader2 className="h-4 w-4 animate-spin" />

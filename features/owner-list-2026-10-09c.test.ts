@@ -88,18 +88,20 @@ describe("small fixes", () => {
     expect(code("features/app-shell/app-topbar.tsx")).toContain("<PromoteButton />");
     const core = code("features/downloads/download-page-core.tsx");
     expect(core).not.toContain("<PromoteButton");
-    // the strip itself still exists for a caller that asks for it — /downloads no longer does (owner 2026-10-12)
-    expect(core).toContain('<AiCreditStrip base="/ai" className="mb-3" />');
+    // no credits strip above the landing's hero either (2026-10-18: one layout, the redesign)
+    expect(core).not.toContain("<AiCreditStrip");
     // the redesigned /downloads (2026-10-18) renders no credits strip at all
     expect(code("features/downloads/downloads-page.tsx")).not.toMatch(/AiCreditStrip|topCredits="strip"/);
   });
 
-  it("Save. Discover. Create. sits under the credits card on /downloads, without the paragraph", () => {
+  it("Save. Discover. Create and earn. is the landing's H1, with its description (owner 2026-10-18)", () => {
     const core = code("features/downloads/download-page-core.tsx");
-    expect(core).toContain("subtitle={topCredits !== \"strip\" && topCredits !== \"none\"}");
-    expect(core).not.toContain("headline={topCredits !== \"strip\"}");
-    expect(core.indexOf("<AiCreditStrip")).toBeLessThan(core.indexOf("<DownloadsHero"));
-    expect(code("features/downloads/downloads-sections.tsx")).toContain("{subtitle ? (");
+    const hero = code("features/downloads/home-screen.tsx");
+    // the hero comes first, before the paste card
+    expect(core.indexOf("<HomeHero />")).toBeGreaterThan(-1);
+    expect(core.indexOf("<HomeHero />")).toBeLessThan(core.indexOf("<DownloadBox"));
+    expect(hero).toMatch(/<h1 className="font-display[^"]*">[\s\S]*?Save\. <span[^>]*>Discover\.<\/span>[\s\S]*?Create and earn\./);
+    expect(hero).toContain("one super app.");
   });
 });
 

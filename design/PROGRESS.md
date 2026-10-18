@@ -11,7 +11,7 @@ review before the next one starts.
 - [x] 4. Chat → design/Chat.dc.html — design header, one time per message group (tested rule), 20 px bubbles with the tail on a group's last, day pill, round attach + fill pill + gradient mic/send.
 - [x] 5. Profile → design/Profile.dc.html (updated: Private → Exclusive) — one shared hero (cover, overlapping avatar, Sora name, stats card, ink Edit/Follow + Share), underlined tabs with Exclusive, edge-to-edge 3:4 grid.
 - [x] 6. History → design/History.dc.html (owner's screenshot) — large title with real count · size (opens storage), one options button, Select, fill search, segmented filter, edge-to-edge day groups, icon + source tiles with long-press sheet, infinite scroll, lightbulb → options menu.
-- [ ] 7. Landing page → the same system: white page, iOS glass chrome, no Recent section
+- [x] 7. Landing page → the same system: white page, iOS glass chrome, no Recent section
 - [ ] 8. Wallpapers → design/Wallpapers.dc.html
 - [ ] 9. Profile menu → design/Menu.dc.html
 - [ ] 10. Settings → design/Settings.dc.html
@@ -225,7 +225,14 @@ they are applied while each page is built and there is no separate cleanup step.
 - Infinite scroll: ungrouped views (another sort, list view) load the next page as the end
   comes near instead of "Show more". The day-grouped view already renders everything, each
   section skipped by the browser until near (content-visibility), as before.
-- Found, not caused here: /history logs a React hydration mismatch and a 500 from one request in dev, on the committed code before this step too (checked with these changes set aside). Worth a look on its own.
+- Found, not caused here: /history logged a React hydration mismatch and a 500 in dev. FIXED 2026-10-18:
+  · the mismatch: useUser seeded its first render from module state, so a header inside a page's
+    loading boundary hydrated as "signed out" while the server HTML said "loading" — React threw the
+    page's HTML away. useUser now renders the server's answer for the hydration pass (the same fix
+    useEntitlements got on 2026-10-14). Guarded in features/history/history-entry.test.ts.
+  · the 500: /icon.png existed as both public/icon.png and app/icon.png. Production already served
+    app/icon.png (163 kB, checked on frenzsave.com), so public/icon.png was never reachable; it is
+    renamed public/icon-legacy-shadowed.png (deleting it was blocked — the owner can delete it).
 - Select mode, its Share / Download again / Delete bar, the ad slots between periods and
   above the grid, the player queue with story ads, review deep links and the reward gate
   for retries are unchanged.
@@ -252,6 +259,25 @@ they are applied while each page is built and there is no separate cleanup step.
   Visitors see the same lists without the owner-only subtitles.
 - Not built here: the design's compact sticky header (small avatar, name, share) — the
   profile hero above the tabs already carries these; the visitor's subscribe view is step 12.
+
+### Step 7 · Landing (/) — the same system, nothing removed
+- The landing's hero is the Home design (DownloadPageCore `frenz` mode, turned on by
+  components/landing/hero.tsx): the H1 in Bricolage, the paste card on the real download
+  flow, Batch download, live transfers, Tools (Frenz AI with its promo media, Wallpapers,
+  Earn, Exclusive, Explore), Cloud storage.
+- Kept exactly as before (owner, 2026-10-18: "don't remove …"): Install and My ads in the
+  top bar; the landing's install-banner choice (still off, as decided 2026-08-25); no trust
+  pills (removed 2026-10-08, the owner chose to keep it that way); the rotating multi-format
+  ad slot; the under-download zone; the stat tiles once there are downloads; the disclaimer.
+- One layout: the landing is DownloadPageCore's only caller, so its old layout (DownloadsHero, the
+  Frenz AI / Wallpaper tiles, the credits strip, More to Explore, the Cloud storage card) was removed
+  rather than shipped unused. That took the landing from 221 kB back under its 218 kB ceiling with no
+  feature lost. Three tests that pinned the old layout now pin the same rules on the new one.
+- Changed: the admin's single "wallpaper CTA image" (landing settings) is no longer drawn — the
+  Wallpapers card shows the last 10 uploads rotating, as on /downloads; with fewer than two uploads it
+  shows its gradient. The setting still exists in admin.
+- No Recent section on the landing (owner). The landing's sections below the hero (Frenz AI,
+  Discover, Promote, Features, How it works, CTA, downloader links, FAQ) are not restyled yet.
 
 ### Outside the page steps (owner, 2026-10-18)
 - `a50b9cd`: full-screen ads lost the engagement tray (brand badge, Like, views,

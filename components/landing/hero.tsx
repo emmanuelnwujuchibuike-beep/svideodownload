@@ -1,7 +1,6 @@
 import { DownloadPageCore } from "@/features/downloads/download-page-core";
 import { getMultiLinkSettings, publicMultiLinkConfig } from "@/lib/downloads/multi-link";
 import { getAiPromo } from "@/lib/ai/promo/server";
-import { getLandingSettings } from "@/lib/landing/settings";
 import { getPlatformStatus } from "@/lib/platform-status-store";
 import { listWallpapers } from "@/lib/wallpapers-server";
 
@@ -49,8 +48,7 @@ export async function Hero() {
     the tile falls back to the admin's own static pick, exactly like before
     this existed.
   */
-  const [landing, platformStatus, recentWallpaperUrls, multiLink, aiPromo] = await Promise.all([
-    getLandingSettings(),
+  const [platformStatus, recentWallpaperUrls, multiLink, aiPromo] = await Promise.all([
     getPlatformStatus(),
     listWallpapers(null, 10)
       .then((ws) => ws.map((w) => w.url).filter(Boolean))
@@ -66,7 +64,6 @@ export async function Hero() {
     <section className="container px-3 pb-5 pt-[calc(var(--frenz-safe-top)+4.5rem)] text-foreground dark:text-white sm:pb-7 sm:pt-[calc(var(--frenz-safe-top)+5.5rem)]">
       <DownloadPageCore
         platformStatus={platformStatus}
-        ctaWallpaperUrl={landing.wallpaperCtaImageUrl || null}
         rotateUrls={recentWallpaperUrls}
         showDisclaimer
         multiLink={publicMultiLinkConfig(multiLink)}
@@ -98,9 +95,7 @@ export async function Hero() {
         showFrenzAi
         aiPromo={aiPromo}
         hideEmptyStats
-        /* owner 2026-10-09: no Earn at the top of the landing - the bottom nav's Earn tab is enough;
-           only /downloads keeps it at the top (inside its credits strip) */
-        topCredits={null}
+        /* owner 2026-10-09: no Earn at the top of the landing — the bottom nav's Earn tab is enough */
       />
     </section>
   );

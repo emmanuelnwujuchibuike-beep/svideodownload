@@ -88,14 +88,11 @@ describe("the landing page structure", () => {
     // 2026-10-16 (owner): neither Earn nor Add friend in the /downloads top bar
     expect(src("features/app-shell/app-topbar.tsx")).not.toContain('aria-label="Earn credits"');
     expect(src("features/app-shell/app-topbar.tsx")).not.toContain('aria-label="Add friend"');
-    expect(src("components/landing/hero.tsx")).toContain("topCredits={null}");
-    expect(src("components/landing/hero.tsx")).not.toContain('topCredits="earn"');
+    // the landing (2026-10-18, one redesigned layout): no Earn and no credits strip above the hero
     const core = src("features/downloads/download-page-core.tsx");
-    // 2026-10-08 (owner): smaller, on the headline's row — it no longer pushes the headline down
-    // 2026-10-15 (owner): "My ads" moved from this row up into the top bar
-    expect(core).toContain('<DownloadsHero trailing={topCredits === "earn" ? <EarnButton size="md" /> : undefined}');
-    // /downloads drops the paragraph but shows the line under the credits card (owner, 2026-10-08 / 2026-10-09)
-    expect(core).toContain('subtitle={topCredits !== "strip" && topCredits !== "none"}');
+    expect(core).not.toMatch(/EarnButton|AiCreditStrip|topCredits/);
+    expect(src("components/landing/hero.tsx")).not.toContain("topCredits");
+    expect(core).toContain("<HomeHero />");
     expect(src("features/downloads/downloads-sections.tsx")).toContain('<h1 className="sr-only">Download</h1>');
     // one Earn definition, shared by the strip and the landing
     expect(src("features/ai/design/ai-credit-strip.tsx")).toContain("<EarnButton />");

@@ -1,21 +1,16 @@
 "use client";
 
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
-import { AiCreditStrip, EarnButton } from "@/features/ai/design/ai-credit-strip";
-import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
-import { ExploreFeaturesBar, FrenzAICta } from "@/features/downloads/frenz-ai-cta";
-import { MoreToExplore } from "@/features/downloads/more-to-explore";
 import type { AiPromo } from "@/lib/ai/promo/config";
 import { HilltopSlot } from "@/features/monetization/hilltop-slot";
 import { LazyAdSurface } from "@/features/monetization/lazy-ad-surface";
 import { LazyExoClickSlot } from "@/features/monetization/lazy-exoclick-slot";
 import { DownloadBox } from "@/features/downloads/download-box";
+import { HomeHero, HomeTools, LiveDownloads, StorageRow } from "@/features/downloads/home-screen";
+import { MultiLinkButton } from "@/features/downloader/multi-link/multi-link-button";
+import { Card } from "@/features/frenz-ui/primitives";
 import type { MultiLinkPublicConfig } from "@/lib/downloads/multi-link-config";
-import {
-  CloudStorageCard,
-  DownloadsHero,
-  DownloadStats,
-} from "@/features/downloads/downloads-sections";
+import { DownloadStats } from "@/features/downloads/downloads-sections";
 import { useHistory } from "@/features/history/use-history";
 import { AdSurface } from "@/features/monetization/ad-surface";
 import { InstallHeroBanner } from "@/features/pwa/install-button";
@@ -60,18 +55,19 @@ import { RotatingAdStack } from "@/features/monetization/rotating-ad-stack";
  * its own hand-built CTA stack — the thing that used to carry it — is gone,
  * so this component renders it too, immediately after Recent downloads,
  * keyed by `showDisclaimer` so `/downloads` doesn't end up with two copies.
+ *
+ * ── 2026-10-18: one layout, the redesign (design/Main.dc.html) ─────────────
+ * /downloads renders its own Home screen now (downloads-page.tsx), so the landing is the only
+ * caller, and it draws the same sections from features/downloads/home-screen.tsx. The old layout
+ * (DownloadsHero, the Frenz AI / Wallpaper tiles, the credits strip, More to Explore, the Cloud
+ * storage card) is gone from this file: nothing rendered it, and it was ~3 kB on the landing's
+ * first load — the route the 2-second budget exists for. Every landing-only piece stays: the
+ * install-banner choice, the rotating multi-format slot, the under-download zone, the stat tiles
+ * once there are downloads, and the disclaimer. No Recent section (owner, 2026-10-18).
  */
 export function DownloadPageCore({
   platformStatus,
-  ctaWallpaperUrl = null,
-  frenzAiTileImageUrl = null,
-  /** Rotates the Wallpaper tile through up to 10 recent uploads every 2s
-   *  (see wallpaper-cta-rotator.tsx). Both callers pass this now — landing's
-   *  `Hero` fetches its own `listWallpapers(null, 10)`; `/downloads` reuses
-   *  the first 10 of the gallery's own already-fetched list (2026-08-17 fix:
-   *  it used to render this same tile with nothing here, so it fell back to
-   *  a single static image and never rotated — the owner's "wallpaper
-   *  button isnt changing wallpaper... like the landing page" report). */
+  /** The last 10 wallpapers — the Wallpapers showcase card rotates through them (owner, 2026-08-16). */
   rotateUrls,
   showDisclaimer = false,
   /** Admin "Feature visibility" for the Multi-Link batch downloader — read on
@@ -81,23 +77,15 @@ export function DownloadPageCore({
   installBanner = true,
   multiFormatSlot = false,
   hideEmptyStats = false,
-  topCredits = null,
   /**
-   * 🔴 Whether the FRENZ AI tile appears at all.
-   *
-   * False on the landing page — where Explore Features takes that slot, as it
-   * did before Frenz AI existed — and true on the signed-in download page.
-   * Default FALSE, deliberately: the standing rule is that AI is not publicly
-   * exposed, so a caller that forgets to pass this gets the private-safe
-   * layout rather than accidentally advertising the feature.
+   * 🔴 Whether the Tools section (Frenz AI, Wallpapers, Earn, Exclusive, Explore) appears.
+   * Default FALSE, deliberately: a caller that forgets to pass this gets no AI door rather than
+   * accidentally advertising the feature. The landing passes it (owner, 2026-10-05).
    */
   showFrenzAi = false,
   aiPromo = null,
 }: {
   platformStatus?: PlatformStatusMap;
-  ctaWallpaperUrl?: string | null;
-  /** Background photo for the Frenz AI tile. Empty ⇒ it draws its own. */
-  frenzAiTileImageUrl?: string | null;
   rotateUrls?: string[];
   showDisclaimer?: boolean;
   multiLink?: MultiLinkPublicConfig;
@@ -105,161 +93,42 @@ export function DownloadPageCore({
    * Whether to render the Install banner under the paste box.
    *
    * Off on the LANDING (owner, 2026-08-25: the hero's install CTA "is causing
-   * visual noise") — that page carries `InstallHeaderCta` in its top bar
-   * instead, having given up its wordmark text and search trigger to fit it.
-   * On by default so `/downloads`, whose header has no room for the group,
-   * keeps the banner it has always had.
+   * visual noise") — that page carries `InstallHeaderCta` in its top bar instead.
    */
   installBanner?: boolean;
   showFrenzAi?: boolean;
-  /** The landing promotion played over the Frenz AI tile (Brief C). Landing only. */
+  /** The landing promotion played over the Frenz AI card (Brief C). Landing only. */
   aiPromo?: AiPromo | null;
   /**
-   * Whether to render the ExoClick multi-format slot above the Cloud storage
-   * card. LANDING ONLY.
-   *
-   * Off by default because this component is shared with `/downloads`, and an
-   * ExoClick `<ins>` that appears on a second page is a second placement — one
-   * zone id cannot serve two of them, so a slot that quietly follows the
-   * component onto another route is how the duplicate-zone bug comes back.
+   * Whether to render the multi-format slot. LANDING ONLY: one zone id cannot serve two
+   * placements, so a slot that quietly follows the component onto another route is how the
+   * duplicate-zone bug comes back.
    */
   multiFormatSlot?: boolean;
   /**
-   * Hide the stat tiles while the visitor has no downloads (Landing brief §2,
-   * 2026-10-08). On the landing — anonymous by construction: members are
-   * redirected to /home at the edge — four tiles reading "0" and "—" were a
-   * screen of nothing between the hero and the ecosystem sections. The
-   * Cloud storage card stays: for a guest it is the 5 GB offer.
+   * Hide the stat tiles while the visitor has no downloads (Landing brief §2, 2026-10-08): four
+   * tiles reading "0" and "—" were a screen of nothing.
    */
   hideEmptyStats?: boolean;
-  /**
-   * What sits ABOVE the headline (owner, 2026-10-08): the full Frenz AI credits
-   * strip on /downloads ("put this card in the Download page top"), only the
-   * Earn button on the landing ("only the earn button at the top of the
-   * landing page where it will be fully noticeable").
-   */
-  /** "none" (owner 2026-10-12: the AI credits card lives on the AI pages only): no strip, and the hero keeps the /downloads layout without the paragraph */
-  topCredits?: "strip" | "earn" | "none" | null;
 }) {
   const { items } = useHistory();
 
   return (
-    <>
-      {topCredits === "strip" ? (
-        // Promote moved to the top bar on /downloads (owner, 2026-10-09) — see app-topbar.tsx.
-        <AiCreditStrip base="/ai" className="mb-3" />
-      ) : null}
-      {/* /downloads: the "Save. Discover. Create." line sits under the credits card, without the paragraph (owner, 2026-10-09) */}
-      {/* /downloads: "My ads" moved up into the top bar (owner 2026-10-15) — see promote-button.tsx */}
-      <DownloadsHero trailing={topCredits === "earn" ? <EarnButton size="md" /> : undefined} subtitle={topCredits !== "strip" && topCredits !== "none"} />
-
+    <div className="frenz-ui mx-auto max-w-2xl px-1 text-frenz-ink">
+      <HomeHero />
+      <Card as="section" raised id="download" aria-label="Download a link" className="mt-5 scroll-mt-20 rounded-[26px] p-3.5">
+        <DownloadBox surface="frenz" platformStatus={platformStatus} multiLink={multiLink} afterForm={installBanner ? <InstallHeroBanner /> : null} />
+      </Card>
+      <MultiLinkButton config={multiLink} surface="frenz" className="mt-3" />
+      <LiveDownloads />
       {/*
-        🔴 Install moved BELOW the paste box (owner, 2026-08-25, with a
-        reference screenshot): the download field is what the page exists for,
-        so it now comes first and the install prompt sits under it, above the
-        Multi-Link block. It is passed into DownloadBox's `afterForm` slot so
-        the three land in the reference's order inside one card. The banner
-        itself is unchanged — it still renders in the first paint and removes
-        itself via CSS once installed, so it never shifts the headline.
-      */}
-      <section id="download" className="mt-5 scroll-mt-20">
-        <div className="rounded-[1.5rem] bg-white p-4 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-900/[0.06] dark:bg-[#0b1020] dark:ring-white/10 sm:p-5">
-          <DownloadBox
-            surface="card"
-            platformStatus={platformStatus}
-            multiLink={multiLink}
-            afterForm={installBanner ? <InstallHeroBanner /> : null}
-          />
-        </div>
-      </section>
-
-      {/* The Fast · Secure · Private pill is gone (owner, 2026-10-08: "remove this fast, secure and private card entirely") */}
-
-      {/*
-        ═══════════════════════════════════════════════════════════════════════
-         🔴 THE SAME TWO SLOTS, FILLED DIFFERENTLY EITHER SIDE OF SIGN-IN
-        ═══════════════════════════════════════════════════════════════════════
-
-        Owner, 2026-09-09: "the landing page should show the features button in
-        place of the ai button as it was before the ai button was implemented,
-        only the signed in download page should have the frenz ai button and the
-        features button below them."
-
-        So the layout depends on WHO IS LOOKING:
-
-          landing (anonymous)  [ Explore Features | Wallpapers ]
-          /downloads (member)  [ Frenz AI        | Wallpapers ]
-                               [ Explore Features — full width ]
-
-        ── Why this is a prop and not an auth check ──────────────────────────
-
-        `DownloadPageCore` is rendered by the LANDING page, which is
-        `force-static`. Reading a session in here would opt the whole route out
-        of static generation and cost the front door its edge cache — the
-        project's most expensive regression, and one it has already had once.
-        The caller knows which page it is; it says so.
-
-        ── 🔴 AND IT IS THE STANDING AI RULE, NOT A LAYOUT PREFERENCE ────────
-
-        "AI must NOT be publicly exposed as a major landing-page feature." The
-        landing page must not render `FrenzAICta` at all — not hidden, not
-        greyed, not present. An anonymous visitor's HTML contains no Frenz AI
-        button, which is what "not publicly exposed" has to mean when the page
-        is also what a crawler reads.
-
-        The 2026-09-08 instruction this replaces — "Replace the features button
-        with the frenz Ai button" — was written when Frenz AI was a public
-        feature. It still holds, on the page where a member is signed in.
-      */}
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        {showFrenzAi ? <FrenzAICta promo={aiPromo} /> : <ExploreFeaturesBar variant="tile" />}
-        <WallpaperCta variant="card" backgroundUrl={ctaWallpaperUrl} rotateUrls={rotateUrls} />
-      </div>
-
-
-      {/* The full-width Features bar exists only where Frenz AI took its slot
-          above. On the landing page Features IS that slot, and repeating it
-          would put the same door on the screen twice. */}
-      {/* The "More to Explore" row in place of the full-width Features bar, on both pages (owner mockup, 2026-10-16). */}
-      {showFrenzAi ? <MoreToExplore /> : null}
-
-
-      {/*
-        🔴 THE MULTI-FORMAT SLOT, WHERE IT WAS ACTUALLY ASKED FOR (owner,
-        2026-09-01: "put a multi format slot in the landing page ABOVE THE
-        STORAGE CARD and below the explore feature and wallpaper button").
-
-        It shipped in app/(marketing)/page.tsx instead, after `ProductGrid`,
-        on the reading that the grid "ends with the feature cards and then the
-        Explore-wallpapers CTA". Those are different cards with similar names.
-        Measured on the live page: that put the unit at **y=7698 of an 11,315px
-        document**, and the events table proves the consequence — every other
-        ExoClick slot reported fills and no-fills for two and a half hours while
-        `landing` reported NOTHING AT ALL, because no reader ever scrolled to
-        it. The cards the owner named are these two, at y≈700.
-
-        ⚠️ This DOES sit above Cloud storage, which reverses the 2026-08-30 rule
-        below ("the sections starts from below the cloud storage section") for
-        this one unit. The 09-01 instruction names the position explicitly and is
-        newer, so it wins; the `under_download` zone below keeps the old rule.
-
-        Lazy and code-split exactly as before — the unit is not in the landing's
-        first-load bundle and does not mount until it is near the viewport.
+        The multi-format slot (owner, 2026-09-01: right under the hero's buttons, where a reader
+        actually sees it — at y=7698 it reported nothing). `landing_under_wallpaper` is an ordinary ad
+        zone, so it takes AdSense, an Adsterra iframe, a social link or a native unit; lazy and
+        code-split, never requested until the reader is near it.
       */}
       {multiFormatSlot ? (
-        <div className="mt-3">
-          {/*
-            🔴 ANY NETWORK HERE TOO (owner, 2026-09-01: "... and below the
-            wallpaper button to be able to use adsense and adsterra banner
-            iframe and social link and native ad").
-
-            `landing_under_wallpaper` is an ordinary AD ZONE — a row in the ads
-            table — so this position takes AdSense, an Adsterra banner iframe, a
-            social-link or a native unit without needing an ExoClick snippet.
-            `LazyAdSurface`, not `AdSurface`: this is the 1.6s route, and the
-            zone must not be requested until the reader is near it. Both units
-            collapse to nothing when unconfigured, which is their default.
-          */}
+        <div className="mt-6">
           {/* 2026-10-09 (owner): one slot that rotates between the networks, never stacked */}
           <RotatingAdStack>
             <LazyAdSurface zone="landing_under_wallpaper" />
@@ -268,46 +137,20 @@ export function DownloadPageCore({
           </RotatingAdStack>
         </div>
       ) : null}
-
-      <div className="mt-3">
-        <CloudStorageCard items={items} />
-      </div>
-
-      {/*
-        🔴 MOVED BELOW CLOUD STORAGE, and given room (owner, 2026-08-30: "the
-        sections starts from below the cloud storage section" … "give a small
-        padding space between the first slot and the hero section").
-
-        It used to sit between the Explore/Wallpaper cards and this card, which
-        measured live at y=823 — inside the hero block, wedged against the Cloud
-        storage card with no separation. `mt-6` is double the `mt-3` rhythm the
-        rest of this stack uses, so the first ad reads as the start of a new
-        band rather than another card in the hero.
-
-        `fullBleed` for the same reason every other video zone has it: the card
-        border was the white frame around the unit.
-      */}
+      {showFrenzAi ? <HomeTools aiPromo={aiPromo} rotateUrls={rotateUrls ?? []} /> : null}
+      <StorageRow items={items} />
+      {/* below Cloud storage, given room (owner, 2026-08-30); fullBleed — no white frame round the unit */}
       <AdSurface zone="under_download" fullBleed className="mt-6" />
-
       {hideEmptyStats && items.length === 0 ? null : (
         <div className="mt-3">
           <DownloadStats items={items} />
         </div>
       )}
-
-      {/* No Recent section (owner, 2026-10-18: "dont put the recent section in the landing or download page, they should be in history"). */}
-
       {showDisclaimer ? (
         <div className="mt-3">
           <DownloadDisclaimer variant="card" />
         </div>
       ) : null}
-
-      {/*
-        The AI Clean vignette that used to follow here — a once-only promotion
-        two seconds in — went with AI Clean (owner, 2026-09-13). The tile above
-        is the one door to Frenz AI on this page.
-      */}
-    </>
+    </div>
   );
 }

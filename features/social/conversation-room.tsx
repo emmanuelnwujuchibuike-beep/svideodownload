@@ -90,6 +90,8 @@ import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { useVisualViewport } from "@/lib/pwa/use-visual-viewport";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { sameMessageGroup } from "@/lib/social/message-groups";
+import { CameraIcon, MicIcon, SendIcon as SendGlyph } from "@/features/frenz-ui/icons";
 import { toast } from "@/features/ui/toast";
 import { profilePath } from "@/lib/social/profile-url";
 
@@ -205,6 +207,7 @@ function sameDay(a: string, b: string): boolean {
   const y = new Date(b);
   return x.getFullYear() === y.getFullYear() && x.getMonth() === y.getMonth() && x.getDate() === y.getDate();
 }
+
 
 /**
  * Realtime chat (direct + group): seeded server-side (instant), then live. New
@@ -1793,7 +1796,7 @@ export function ConversationRoom({
         // media lock (globals.css): no iOS lift on a held photo or video — the ⋯ button opens its menu
         data-media-lock
         className={cn(
-          "frenz-thread-scroll flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto overscroll-y-none p-4",
+          "frenz-thread-scroll flex-1 space-y-1 overflow-x-hidden overflow-y-auto overscroll-y-none px-3 py-3",
           // Owner ask, 2026-07-14: "i want it to save and full screen, top 0
           // bottom 0 just like chat theme" — the wallpaper image itself now
           // paints on ThreadAppearanceProvider's shared outer container (see
@@ -1857,7 +1860,10 @@ export function ConversationRoom({
         ) : (
           messages.map((m, i) => {
             const prevMsg = i > 0 ? messages[i - 1]! : null;
+            const nextMsg = i < messages.length - 1 ? messages[i + 1]! : null;
             const showDayDivider = !prevMsg || !sameDay(prevMsg.createdAt, m.createdAt);
+            const firstInGroup = !prevMsg || !sameMessageGroup(prevMsg, m);
+            const lastInGroup = !nextMsg || !sameMessageGroup(m, nextMsg);
             const showReceipt = m.mine && m.id === lastMineId && !m.id.startsWith("optimistic-");
             const r = showReceipt ? receiptLabel(m) : null;
             const clientIdOfBubble = m.id.startsWith("optimistic-") ? m.id.slice("optimistic-".length) : null;
@@ -1902,38 +1908,34 @@ export function ConversationRoom({
               !m.body &&
               !shared &&
               m.attachments.every((a) => a.kind === "image" || a.kind === "video");
-            const bubbleMeta = deleted ? null : (
+            /*
+              ONE TIME PER GROUP (owner brief, 2026-10-18: "group consecutive messages, one timestamp per
+              group"). This replaces the per-bubble time (2026-09-13): the time — and on your newest
+              message the receipt — sits under the LAST bubble of a group, as the design draws it. "edited"
+              stays on the bubble it belongs to.
+            */
+            const groupMeta = deleted || !lastInGroup ? null : (
               <span
-                className={cn(
-                  "inline-flex items-center gap-1 whitespace-nowrap text-[10px] font-medium leading-none",
-                  frameless ? "text-white" : m.mine ? "text-white/75" : "text-neutral-500",
-                )}
+                className="inline-flex items-center gap-1 whitespace-nowrap px-1 text-[11px] font-semibold leading-none text-frenz-muted"
                 suppressHydrationWarning
               >
-                {m.editedAt ? <span>edited ·</span> : null}
                 <span>{timeLabel(m.createdAt)}</span>
+                {m.mine && r ? <span>· {r.label}</span> : null}
                 {m.mine && r ? (
                   // Owner receipt spec (2026-07-16): one grey tick = sent, two
                   // blue = delivered, two green = seen. Only the colour changes.
                   <span
-                    className={cn(
-                      "inline-flex",
-                      r.read
-                        ? "text-emerald-300"
-                        : r.delivered
-                          ? frameless
-                            ? "text-sky-300"
-                            : "text-sky-200"
-                          : frameless
-                            ? "text-white/80"
-                            : "text-white/70",
-                    )}
+                    className={cn("inline-flex", r.read ? "text-emerald-600" : r.delivered ? "text-frenz-blue" : "text-frenz-muted")}
                   >
                     {r.delivered ? <CheckCheck className="h-3 w-3" /> : <Check className="h-3 w-3" />}
                   </span>
                 ) : null}
               </span>
             );
+            // Inside a bubble only "edited" remains (the group's time is under it).
+            const bubbleMeta = !deleted && m.editedAt ? (
+              <span className={cn("text-[10px] font-medium leading-none", frameless ? "text-white" : m.mine ? "text-white/75" : "text-neutral-500")}>edited</span>
+            ) : null;
             /* Floated to the end of the last line — the WhatsApp trick. */
             const inlineMeta = bubbleMeta ? <span className="float-right ml-2 mt-1.5 -mb-0.5 pl-1">{bubbleMeta}</span> : null;
             /* A right-aligned foot row, for bubbles whose content is not text. */
@@ -1968,7 +1970,7 @@ export function ConversationRoom({
                   {showDayDivider ? (
                     <div
                       className={cn(
-                        "w-full self-stretch py-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/60",
+                        "mx-auto my-3 w-fit rounded-full bg-frenz-fill px-3 py-1 text-center text-xs font-bold text-frenz-ink/80",
                         (useLightDefault || liveWallpaperUrl) && "!text-neutral-500",
                       )}
                     >
@@ -2002,6 +2004,7 @@ export function ConversationRoom({
                   // silently dependent on a container this file doesn't own.
                   "group flex w-full flex-col",
                   m.mine ? "items-end" : "items-start",
+                  firstInGroup && !showDayDivider && "pt-2",
                   // Scales out of its OWN corner — yours from the send button's
                   // side, theirs from the opposite one (see the keyframes in
                   // globals.css). Was a plain `animate-fade-up` for received
@@ -2013,7 +2016,7 @@ export function ConversationRoom({
                   // The mockup's centered "TODAY" divider between day groups.
                   <div
                     className={cn(
-                      "w-full self-stretch py-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/60",
+                      "mx-auto my-3 w-fit rounded-full bg-frenz-fill px-3 py-1 text-center text-xs font-bold text-frenz-ink/80",
                       (useLightDefault || liveWallpaperUrl) && "!text-neutral-500",
                     )}
                   >
@@ -2078,8 +2081,8 @@ export function ConversationRoom({
                       // not a corner-radius pinch — needs `relative` to anchor
                       // the pseudo-element, and never on a deleted placeholder
                       // (dashed/transparent — a solid pointer would look wrong).
-                      bubbleShape.protrudingTail && !deleted && "relative overflow-visible",
-                      bubbleShape.protrudingTail && !deleted && (m.mine ? "chat-bubble-tail-mine" : "chat-bubble-tail-theirs"),
+                      bubbleShape.protrudingTail && !deleted && lastInGroup && "relative overflow-visible",
+                      bubbleShape.protrudingTail && !deleted && lastInGroup && (m.mine ? "chat-bubble-tail-mine" : "chat-bubble-tail-theirs"),
                       // `p-1` (4px), not the old `p-1.5` (6px): a hairline frame
                       // around media/voice/documents rather than a fat band.
                       deleted ? "px-4 py-2.5 italic text-muted-foreground" : frameless ? "p-0" : shared || hasAttachmentFrame ? "p-1" : "px-4 py-2.5",
@@ -2099,9 +2102,10 @@ export function ConversationRoom({
                               // CSS class (so nothing regresses when no personal
                               // color is set), but an inline `background-color`
                               // always wins over a class in CSS specificity.
-                              liveTheme ? THEME_BUBBLE_CLASS[liveTheme] : "bg-brand",
-                              bubbleShape.tailMine,
-                              "text-white shadow-md shadow-violet-500/20",
+                              // the default is the flat brand blue — a gradient is not allowed on content (owner, 2026-10-18)
+                              liveTheme ? THEME_BUBBLE_CLASS[liveTheme] : "bg-frenz-blue",
+                              lastInGroup && bubbleShape.tailMine,
+                              "text-white",
                             )
                           : // `.dark .glass` is a near-invisible white-on-white
                             // tint meant for a DARK backdrop — against the
@@ -2111,9 +2115,9 @@ export function ConversationRoom({
                             // instead, matching WhatsApp's own received-bubble
                             // look, regardless of the app's own dark mode.
                             cn(
-                              bubbleShape.tailTheirs,
+                              lastInGroup && bubbleShape.tailTheirs,
                               useLightDefault || liveWallpaperUrl
-                                ? "bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-900/5"
+                                ? "bg-white text-neutral-900 shadow-frenz-card ring-1 ring-frenz-line"
                                 : "glass text-foreground shadow-sm",
                             ),
                       m.mine && m.id.startsWith("optimistic-") && "animate-scale-in",
@@ -2459,6 +2463,7 @@ export function ConversationRoom({
                   miss, and it keeps the owner's 2026-07-15 rule: the same
                   flex-row layout in every state, never a layout change.
                 */}
+                {groupMeta && !isFailed && !isQueued ? <span className="mt-1 flex">{groupMeta}</span> : null}
                 {isFailed || isQueued ? (
                   <span className="mt-0.5 flex flex-row items-center gap-1 px-1 text-[10px] text-muted-foreground" suppressHydrationWarning>
                     {isFailed ? (
@@ -2615,7 +2620,7 @@ export function ConversationRoom({
         <form
           onSubmit={submit}
           className={cn(
-            "frenz-message-composer flex items-end gap-2 border-t border-border/60 p-3 backdrop-blur-xl lg:pb-3",
+            "frenz-message-composer flex items-end gap-2 border-t border-frenz-line px-3 pt-2.5 backdrop-blur-xl lg:pb-3",
             composerBottomPad,
             // Translucent (not solid) over a wallpaper — same "top 0 bottom 0"
             // full-bleed ask as the message list above: the shared image
@@ -2630,17 +2635,14 @@ export function ConversationRoom({
             aria-label="Attach"
             whileTap={{ scale: 0.85 }}
             transition={springs.press}
-            className={cn(
-              "flex h-11 w-9 shrink-0 items-center justify-center transition",
-              useLightDefault || liveWallpaperUrl ? "text-neutral-500 hover:text-neutral-900" : "text-muted-foreground hover:text-foreground",
-            )}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-frenz-fill text-frenz-ink transition hover:bg-frenz-line"
           >
-            <Plus className="h-6 w-6" />
+            <Plus className="h-5 w-5" strokeWidth={2.4} />
           </motion.button>
           <div
             className={cn(
-              "flex min-w-0 flex-1 items-end rounded-[24px] pl-4 pr-1.5 transition focus-within:ring-2 focus-within:ring-violet-500/25",
-              useLightDefault || liveWallpaperUrl ? "bg-neutral-100" : "glass",
+              "flex min-h-[46px] min-w-0 flex-1 items-end rounded-[23px] pl-4 pr-1.5 transition focus-within:ring-2 focus-within:ring-frenz-violet/30",
+              useLightDefault || liveWallpaperUrl ? "border border-frenz-line bg-frenz-fill" : "glass",
             )}>
             <textarea
               ref={textareaRef}
@@ -2663,7 +2665,7 @@ export function ConversationRoom({
               rows={1}
               style={{ maxHeight: COMPOSER_MAX_HEIGHT }}
               className={cn(
-                "max-h-32 min-h-11 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2.5 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/60",
+                "max-h-32 min-h-11 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2.5 text-base leading-snug outline-none placeholder:text-frenz-muted",
                 (useLightDefault || liveWallpaperUrl) && "text-neutral-900",
               )}
             />
@@ -2686,9 +2688,9 @@ export function ConversationRoom({
               aria-label="Add a photo or video"
               whileTap={{ scale: 0.85 }}
               transition={springs.press}
-              className="flex h-11 w-9 shrink-0 items-center justify-center text-muted-foreground transition hover:text-foreground"
+              className="flex h-11 w-9 shrink-0 items-center justify-center text-frenz-ink/80 transition hover:text-frenz-ink"
             >
-              <ImageIcon className="h-5 w-5" />
+              <CameraIcon size={20} strokeWidth={2} />
             </motion.button>
           </div>
           {body.trim() || pendingAttachments.length > 0 ? (
@@ -2698,9 +2700,9 @@ export function ConversationRoom({
               aria-label="Send"
               whileTap={{ scale: 0.88 }}
               transition={springs.press}
-              className={cn(liveTheme ? THEME_BUBBLE_CLASS[liveTheme] : "bg-brand", "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-md shadow-violet-500/30 transition hover:opacity-95 disabled:opacity-40")}
+              className={cn(liveTheme ? THEME_BUBBLE_CLASS[liveTheme] : "bg-frenz-gradient-x", "flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-full text-white shadow-frenz-card transition hover:opacity-95 disabled:opacity-40")}
             >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 -translate-x-px" />}
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendGlyph size={19} />}
             </motion.button>
           ) : (
             <motion.button
@@ -2716,9 +2718,9 @@ export function ConversationRoom({
               aria-label="Record voice message — tap to open, hold to record"
               whileTap={{ scale: 0.88 }}
               transition={springs.press}
-              className={cn(liveTheme ? THEME_BUBBLE_CLASS[liveTheme] : "bg-brand", "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-md shadow-violet-500/30 transition hover:opacity-95")}
+              className={cn(liveTheme ? THEME_BUBBLE_CLASS[liveTheme] : "bg-frenz-gradient-x", "flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-full text-white shadow-frenz-card transition hover:opacity-95")}
             >
-              <Mic className="h-[18px] w-[18px]" />
+              <MicIcon size={20} />
             </motion.button>
           )}
         </form>

@@ -22,6 +22,8 @@ import { THEME_HEADER_CLASS } from "@/lib/social/message-meta";
 import type { ConversationMember, ConversationType, MemberRole, OtherUser } from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { ChevronLeftIcon, DotsIcon } from "@/features/frenz-ui/icons";
+import { VerifiedBadge } from "@/features/frenz-ui/primitives";
 import { profilePath } from "@/lib/social/profile-url";
 
 /**
@@ -144,7 +146,8 @@ export function ThreadHeader({
         // section must stay fixed "even when the placeholder and keyboard is
         // opened"). The container's re-anchoring to the visual viewport is
         // handled in ThreadAppearanceProvider — see useKeyboardViewportPin.
-        "frenz-thread-header relative z-10 flex shrink-0 items-center gap-3 px-4 py-3 pt-[calc(0.75rem+var(--frenz-safe-top))] lg:pt-3",
+        // the design's header (design/Chat.dc.html, 2026-10-18): back, avatar, name + seal, presence, then the options circle
+        "frenz-ui frenz-thread-header relative z-10 flex shrink-0 items-center gap-1.5 border-b border-frenz-line py-2 pl-1 pr-2 pt-[calc(0.5rem+var(--frenz-safe-top))] lg:pt-2",
         /*
           🔴 BLUR IS NOW THE DEFAULT, NOT JUST THE WALLPAPER CASE (owner,
           2026-08-16, with a reference screenshot: "make the top nav be like
@@ -164,37 +167,34 @@ export function ThreadHeader({
         wallpaperActive
           ? "bg-white/55 backdrop-blur-xl"
           : forceLight
-            ? "bg-white/70 backdrop-blur-xl"
+            ? "bg-white/90 backdrop-blur-xl"
             : cn("bg-background/70 backdrop-blur-xl", themeHeaderClass),
       )}
     >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -right-10 -top-10 h-24 w-24 rounded-full bg-gradient-to-br from-blue-500/15 to-violet-500/15 blur-2xl"
-      />
+      {/* (the decorative corner glow that sat here is gone — owner, 2026-10-18: no washes or glows) */}
       {/* Owner mockup: a plain icon, no glass/circle chrome around it — was a
           bordered translucent chip, reported "old low class chat top menu". */}
       <Link
         href="/messages"
         aria-label="Back to messages"
         className={cn(
-          "relative flex h-9 w-9 shrink-0 items-center justify-center transition lg:hidden",
-          forceDarkText ? "text-neutral-900 hover:text-neutral-600" : "text-foreground hover:text-foreground/70",
+          "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition lg:hidden",
+          forceDarkText ? "text-neutral-900 hover:bg-neutral-100" : "text-foreground hover:bg-frenz-fill",
         )}
       >
-        <ArrowLeft className="h-5 w-5" />
+        <ChevronLeftIcon size={22} strokeWidth={2.4} />
       </Link>
       {type === "group" ? (
         <div className="relative flex min-w-0 flex-1 items-center gap-2.5">
           {avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={avatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-violet-500/25" />
+            <img src={avatarUrl} alt="" className="h-[42px] w-[42px] shrink-0 rounded-full object-cover" />
           ) : (
             <GroupAvatarStack avatars={members.map((m) => ({ avatarUrl: m.avatarUrl, displayName: m.displayName }))} size="lg" />
           )}
           <span className="min-w-0">
-            <span className={cn("block truncate text-sm font-bold", forceDarkText && "text-neutral-900")}>{title ?? "Group chat"}</span>
-            <span className={cn("block text-xs text-muted-foreground", forceDarkText && "!text-neutral-500")}>{memberCount} members</span>
+            <span className={cn("block truncate font-heading text-base font-bold", forceDarkText && "text-neutral-900")}>{title ?? "Group chat"}</span>
+            <span className={cn("block text-xs font-semibold text-frenz-muted", forceDarkText && "!text-neutral-500")}>{memberCount} members</span>
           </span>
         </div>
       ) : other ? (
@@ -202,19 +202,19 @@ export function ThreadHeader({
           <span className="relative shrink-0">
             {other.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={other.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
+              <img src={other.avatarUrl} alt="" className="h-[42px] w-[42px] rounded-full object-cover" />
             ) : (
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-sm font-bold text-white">
+              <span className="flex h-[42px] w-[42px] items-center justify-center rounded-full bg-frenz-gradient font-heading text-lg font-extrabold text-white">
                 {other.displayName.charAt(0).toUpperCase()}
               </span>
             )}
             {/* The mockup's presence dot rides the avatar's corner */}
-            {otherOnline ? <span aria-hidden className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-card" /> : null}
+            {otherOnline ? <span role="img" aria-label="Online" className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white" /> : null}
           </span>
           <span className="min-w-0">
-            <span className={cn("flex items-center gap-1 text-[15px] font-bold", forceDarkText && "text-neutral-900")}>
+            <span className={cn("flex items-center gap-[5px] font-heading text-base font-bold", forceDarkText && "text-neutral-900")}>
               <span className="truncate">{other.displayName}</span>
-              {other.isVerified ? <VerifiedTick className="h-3.5 w-3.5" /> : null}
+              {other.isVerified ? <VerifiedBadge size={15} /> : null}
               {/* the two of you, 2+ days in a row (0200) — both people see it beside the other's name */}
               <ChatStreakBadge days={streakDays} />
             </span>
@@ -255,9 +255,9 @@ export function ThreadHeader({
               haptic("light");
               setOptionsOpen(true);
             }}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-neutral-900 shadow-[0_2px_6px_rgba(15,23,42,0.18)] ring-1 ring-inset ring-black/5 transition active:scale-90"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-neutral-900 transition hover:bg-neutral-100 active:scale-90"
           >
-            <MoreVertical className="h-[18px] w-[18px]" />
+            <DotsIcon size={20} />
           </button>
           <ThreadOptionsSheet
             conversationId={conversationId}

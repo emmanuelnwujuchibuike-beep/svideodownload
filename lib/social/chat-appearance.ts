@@ -121,7 +121,8 @@ export const BUBBLE_STYLE_SHAPE: Record<
   ChatBubbleStyle,
   { base: string; tailMine: string | null; tailTheirs: string | null; protrudingTail?: boolean }
 > = {
-  classic: { base: "rounded-3xl", tailMine: "rounded-br-xl", tailTheirs: "rounded-bl-xl" },
+  // the design's bubble (design/Chat.dc.html, 2026-10-18): 20 px corners, a 6 px tail on the last bubble of a group
+  classic: { base: "rounded-[20px]", tailMine: "rounded-br-md", tailTheirs: "rounded-bl-md" },
   modern: { base: "rounded-3xl", tailMine: null, tailTheirs: null },
   sharp: { base: "rounded-md", tailMine: null, tailTheirs: null },
   pill: { base: "rounded-full", tailMine: null, tailTheirs: null },

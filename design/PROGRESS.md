@@ -8,7 +8,7 @@ review before the next one starts.
 - [x] 1. Home / Download → design/Main.dc.html — existing H1 in Bricolage, the paste card on the real download flow, Batch download, live transfers, Tools (Frenz AI, Wallpapers, Earn, Exclusive, Explore) where Recent was, Cloud storage; lighter page.
 - [x] 2. Feed → design/Feed.dc.html — tab row (For You · Following · Reels · Exclusive) above the stories, 64 px story rings, the stacked post card, full-width media capped to one screen.
 - [x] 3. Messages → design/Messages.dc.html — Sora header with Add friends / More / gradient New message, stories above the fill search, pill filters with real counts, edge-to-edge rows.
-- [ ] 4. Chat → design/Chat.dc.html
+- [x] 4. Chat → design/Chat.dc.html — design header, one time per message group (tested rule), 20 px bubbles with the tail on a group's last, day pill, round attach + fill pill + gradient mic/send.
 - [ ] 5. Profile → design/Profile.dc.html (updated 2026-10-18: the "Private" tab is "Exclusive" and opens the Exclusive tab view)
 - [ ] 6. History → design/History.dc.html (owner's screenshot, 2026-10-18; the .dc.html is not in the folder yet)
 - [ ] 7. Landing page → the same system: white page, iOS glass chrome, no Recent section
@@ -158,6 +158,27 @@ they are applied while each page is built and there is no separate cleanup step.
   invented.
 - The uncommitted typing fix (0259/0260) also edits conversation-list.tsx: only the
   redesign hunks were committed; the typing fix stays unstaged for the owner's review.
+
+### Step 4 · Chat (/messages/[id])
+- Header: back chevron (44 px), 42 px avatar with the online dot, the name in Sora with the
+  design seal, the existing presence line, the options circle. No voice / video call
+  buttons: calls are not built, and the owner removed them on 2026-10-07 ("I don't want a
+  coming soon"). The decorative corner glow is gone; the blurred white header stays.
+- Grouping (owner brief): consecutive messages from one sender, the same day, each within
+  5 minutes, are one group (lib/social/message-groups.ts, tested). One time per group —
+  with "· Seen / Delivered / Sent" and the ticks on your newest message — sits under the
+  group's last bubble; only that bubble has the tail; 4 px inside a group, 8 px between.
+  This replaces the per-bubble time from 2026-09-13; "edited" stays on its own bubble.
+- Bubbles: the default "classic" style is now the design's 20 px corners with a 6 px tail.
+  Yours default to the flat brand blue (the design's gradient bubble is not allowed on
+  content); theirs white with the hairline. Chat themes, wallpapers, bubble colours and
+  the other bubble styles people choose are unchanged.
+- Day divider: the design's soft pill.
+- Composer: round attach (+), the pill on the input fill with emoji and camera, 16 px text
+  (no iOS zoom), and one gradient circle that is the mic when empty and Send once there is
+  text or an attachment (that swap already existed and still works).
+- Not matched: the design's "Message" placeholder — kept the owner's literal "Send a chat"
+  (2026-08-16); the design's "Read" — the app's word is "Seen".
 
 ### Outside the page steps (owner, 2026-10-18)
 - `a50b9cd`: full-screen ads lost the engagement tray (brand badge, Like, views,

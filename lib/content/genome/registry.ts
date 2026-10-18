@@ -387,7 +387,7 @@ const ai: ProductGenome = {
     { id: "text-to-audio", name: "Text to Audio", description: "Natural voiceovers from text, kept in your Audio Library.", stage: "live", provingRoute: "/ai/text-to-audio" },
     { id: "voice-cloning", name: "Voice Cloning", description: "A voice of your own, made from a short recording you have the rights to.", stage: "live", provingRoute: "/ai/voice-cloning" },
     { id: "ai-reels", name: "AI Reels", description: "Publish your AI videos to their own Reels feed, marked AI Generated.", stage: "live", provingRoute: "/reels" },
-    { id: "credits", name: "AI credits", description: "One balance for every AI tool: top up with Paystack or Bachs, or get a daily allowance with AI Pro or AI Max.", stage: "live", provingRoute: "/ai/usage" },
+    { id: "credits", name: "AI credits", description: "One balance for every AI tool: top up with Paystack, or get a daily allowance with AI Pro or AI Max.", stage: "live", provingRoute: "/ai/usage" },
     { id: "rewards", name: "Earn credits", description: "Earn credits for paid AI videos, for sharing 30-second-plus AI videos to AI Reels, and when people you invite download, create or subscribe.", stage: "live", provingRoute: "/rewards" },
     { id: "withdraw", name: "Withdraw reward credits", description: "Once your account meets the requirements and your application is approved, rewards you earn become withdrawable to your bank account.", stage: "live", provingRoute: "/rewards" },
   ],
@@ -411,7 +411,6 @@ const ai: ProductGenome = {
     { name: "Kling AI", kind: "media", active: true, notes: "Video generation." },
     { name: "ElevenLabs", kind: "media", active: true, notes: "Text to audio and voice cloning." },
     { name: "Paystack", kind: "payments", active: true, notes: "Credit top-ups and AI plans." },
-    { name: "Bachs", kind: "payments", active: true, notes: "Credit top-ups and AI plans, where the admin routes them." },
   ],
 
   surfaces: [

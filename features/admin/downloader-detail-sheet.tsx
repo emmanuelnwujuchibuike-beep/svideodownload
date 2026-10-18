@@ -7,9 +7,9 @@ import {
   Flame,
   Loader2,
   ShieldAlert,
-  Sparkles,
   UserRound,
   X,
+  Lightbulb,
 } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
@@ -273,7 +273,7 @@ function Breakdown({ title, rows }: { title: string; rows: { label: string; coun
   return (
     <div>
       <h4 className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-muted-foreground">
-        <Sparkles className="h-3 w-3" /> {title}
+        <Lightbulb className="h-3 w-3" /> {title}
       </h4>
       <ul className="space-y-1">
         {rows.map((r) => (

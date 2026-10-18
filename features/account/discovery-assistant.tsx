@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Send, Sparkles } from "lucide-react";
+import { Loader2, Send, Lightbulb } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { useAssistant } from "@/features/assistant/use-assistant";
@@ -47,7 +47,7 @@ export function DiscoveryAssistant({ context }: { context: string }) {
   return (
     <div className="rounded-3xl border border-border/70 bg-card p-5 shadow-sm sm:p-6">
       <div className="mb-1 flex items-center gap-2">
-        <Sparkles className="h-5 w-5 text-primary" />
+        <Lightbulb className="h-5 w-5 text-primary" />
         <h2 className="text-base font-semibold">Discovery Assistant</h2>
       </div>
       <p className="mb-4 text-xs text-muted-foreground">
@@ -64,7 +64,7 @@ export function DiscoveryAssistant({ context }: { context: string }) {
               onClick={() => ask(q)}
               className="flex w-full items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-left text-sm transition hover:border-primary/40 hover:bg-secondary/60"
             >
-              <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
+              <Lightbulb className="h-3.5 w-3.5 shrink-0 text-primary" />
               <span className="truncate">{q}</span>
             </button>
           ))}

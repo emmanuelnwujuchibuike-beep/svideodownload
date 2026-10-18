@@ -5,6 +5,7 @@ import { Ban, Clock, Check, Link2, Loader2, MoreHorizontal, ShieldOff } from "lu
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Overflow menu on a profile: copy link + block/unblock. On mobile it opens as a
@@ -40,7 +41,7 @@ export function ProfileActions({
 
   const copy = () => {
     navigator.clipboard
-      ?.writeText(`${window.location.origin}/u/${handle}`)
+      ?.writeText(`${window.location.origin}${profilePath(handle)}`)
       .then(() => {
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);

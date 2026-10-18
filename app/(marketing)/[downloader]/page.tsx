@@ -4,8 +4,8 @@ import {
   Monitor,
   ShieldCheck,
   Smartphone,
-  Sparkles,
   Zap,
+  Lightbulb,
 } from "lucide-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -475,7 +475,7 @@ export default async function DownloaderPage({
           <div className="container max-w-3xl">
             <div className="mb-10 text-center">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/50 px-3 py-1 text-xs font-medium text-muted-foreground">
-                <Sparkles className="h-3 w-3" /> FAQ
+                <Lightbulb className="h-3 w-3" /> FAQ
               </span>
               <h2 className="mt-4 text-2xl font-semibold tracking-[-0.02em] sm:text-3xl">
                 {page.brand} downloader — questions

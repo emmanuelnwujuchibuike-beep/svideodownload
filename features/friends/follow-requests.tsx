@@ -10,6 +10,7 @@ import { timeAgo } from "@/features/notifications/meta";
 import { FOLLOW_SOURCE_LABELS, isFollowSource } from "@/lib/social/follow-policy";
 import type { FollowRequestItem } from "@/lib/social/follows";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Follow requests (Feature 19 · Part 3) — for an account whose follow policy is
@@ -71,7 +72,7 @@ export function FollowRequestsSection() {
                 <PersonAvatar user={req.user} size={52} />
                 <div className="min-w-0 flex-1">
                   <p className="flex min-w-0 flex-wrap items-center gap-x-1.5">
-                    <Link href={`/u/${req.user.handle}`} className="font-semibold hover:underline">
+                    <Link href={`${profilePath(req.user.handle)}`} className="font-semibold hover:underline">
                       {req.user.displayName}
                     </Link>
                     {req.user.isVerified ? <BadgeCheck className="h-4 w-4 text-blue-500" aria-label="Verified" /> : null}

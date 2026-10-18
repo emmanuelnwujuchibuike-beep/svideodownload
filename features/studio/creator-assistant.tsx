@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Send, Sparkles } from "lucide-react";
+import { Loader2, Send, Lightbulb } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { useAssistant } from "@/features/assistant/use-assistant";
@@ -47,7 +47,7 @@ export function CreatorAssistant({ context }: { context: string }) {
   return (
     <section className="rounded-3xl border border-border bg-card p-5 shadow-card sm:p-6">
       <div className="mb-1 flex items-center gap-2">
-        <Sparkles className="h-5 w-5 text-primary" aria-hidden />
+        <Lightbulb className="h-5 w-5 text-primary" aria-hidden />
         <h2 className="text-sm font-semibold">Creator Assistant</h2>
       </div>
       <p className="mb-4 text-xs leading-relaxed text-muted-foreground">

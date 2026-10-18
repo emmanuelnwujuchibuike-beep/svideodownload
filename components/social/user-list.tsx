@@ -6,6 +6,7 @@ import { FollowButton } from "@/features/social/follow-button";
 import { UnblockButton } from "@/features/social/unblock-button";
 import { UnmuteButton } from "@/features/social/unmute-button";
 import type { ListUser } from "@/lib/social/profile";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Reusable list of user cards (followers / following / blocked / muted). The
@@ -31,7 +32,7 @@ export function UserList({
     <ul className="divide-y divide-border/60">
       {users.map((u) => (
         <li key={u.id} className="flex items-center gap-3 py-3">
-          <Link href={`/u/${u.handle}`} className="shrink-0">
+          <Link href={`${profilePath(u.handle)}`} className="shrink-0">
             {u.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={u.avatarUrl} alt="" className="h-11 w-11 rounded-full object-cover" />
@@ -41,7 +42,7 @@ export function UserList({
               </span>
             )}
           </Link>
-          <Link href={`/u/${u.handle}`} className="min-w-0 flex-1">
+          <Link href={`${profilePath(u.handle)}`} className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5">
               <span className="truncate text-sm font-semibold">{u.displayName}</span>
               {u.isVerified ? <VerifiedTick className="h-3.5 w-3.5 shrink-0" /> : null}

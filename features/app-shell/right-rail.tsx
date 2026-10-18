@@ -6,6 +6,7 @@ import type { HomeProfile } from "@/lib/social/home";
 import type { SuggestedCreator } from "@/lib/social/suggest";
 import { upgradeCta } from "@/lib/monetization/upgrade-cta";
 import { formatCompactNumber } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 // Representative trending tags — a hashtag system isn't modelled yet, so these
 // are illustrative until tags ship.
@@ -48,7 +49,7 @@ export function RightRail({
         </dl>
 
         <Link
-          href={profile?.handle ? `/u/${profile.handle}` : "/account#profile"}
+          href={profile?.handle ? `${profilePath(profile.handle)}` : "/account#profile"}
           className="mt-4 block rounded-xl bg-secondary py-2 text-sm font-semibold transition hover:bg-secondary/70"
         >
           {profile?.handle ? "View Profile" : "Set up Profile"}
@@ -120,7 +121,7 @@ export function RightRail({
           <ul className="space-y-3">
             {suggestions.slice(0, 5).map((s) => (
               <li key={s.id}>
-                <Link href={`/u/${s.handle}`} className="flex items-center gap-2.5">
+                <Link href={`${profilePath(s.handle)}`} className="flex items-center gap-2.5">
                   <span className="relative shrink-0">
                     {s.avatarUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element

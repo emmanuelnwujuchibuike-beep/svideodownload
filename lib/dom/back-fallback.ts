@@ -1,3 +1,5 @@
+import { profileHandleFromPath, profilePath } from "@/lib/social/profile-url";
+
 /**
  * Where "back" lands when there is NOTHING BEHIND THIS PAGE IN THIS DOCUMENT.
  *
@@ -34,7 +36,9 @@ export function fallbackBackHref(pathname: string): string {
   const [head] = parts;
 
   if (head === "messages") return "/messages";
-  if (head === "u") return parts.length >= 3 ? `/u/${parts[1]}` : "/home";
+  // a profile's sub-page (followers, card …) → the profile; /u/… (old links) and /:handle (since 2026-10-17)
+  const profileHandle = profileHandleFromPath(path);
+  if (profileHandle) return parts.length >= (head === "u" ? 3 : 2) ? profilePath(profileHandle) : "/home";
   if (head === "account") return parts.length >= 2 ? "/account" : "/home";
   if (head === "ai") return parts.length >= 2 ? "/ai" : "/home";
   if (head === "studio") {

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { trackEvent } from "@/lib/analytics/events";
 import { createClient } from "@/lib/supabase/server";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * /earn/start — the one door from the public /earn page into the EXISTING SUB
@@ -54,5 +55,5 @@ export async function GET(request: NextRequest) {
   if (viaLogin) trackEvent("earn_funnel", { userId, metadata: { stage: "returned", signedIn: true } });
   trackEvent("earn_funnel", { userId, metadata: { stage: "setup", signedIn: true } });
   // a handle is [a-z0-9._] in practice; encode it anyway so it can only ever be one path segment
-  return go(request, handle ? `/u/${encodeURIComponent(handle)}?tab=sub` : "/members");
+  return go(request, handle ? `${profilePath(handle)}?tab=sub` : "/members");
 }

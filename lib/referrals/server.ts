@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 
 import { pushRewards, type GrantedReward } from "@/lib/rewards/engine";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -85,7 +86,7 @@ export async function destinationFor(type: string, contentId: string): Promise<s
   if (type === "profile") {
     const { data } = await createAdminClient().from("profiles").select("handle").eq("id", contentId).maybeSingle();
     const handle = (data as { handle?: string | null } | null)?.handle;
-    return handle ? `/u/${encodeURIComponent(handle)}` : "/";
+    return handle ? `${profilePath(handle)}` : "/";
   }
   if (type === "ai_audio") return "/ai";
   return "/";

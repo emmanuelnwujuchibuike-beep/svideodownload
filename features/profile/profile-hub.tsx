@@ -20,13 +20,13 @@ import {
   NotebookPen,
   Package,
   ShieldCheck,
-  Sparkles,
   SunMoon,
   Trophy,
   Users,
   Wand2,
   Wrench,
   type LucideIcon,
+  Lightbulb,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -53,7 +53,7 @@ const ICONS: Record<string, LucideIcon> = {
   BadgeCheck,
   Award,
   BookOpen,
-  Sparkles,
+  Lightbulb,
   FileText,
   Package,
   Wrench,
@@ -119,7 +119,7 @@ export function ProfileHub({ handle, entries, className }: { handle: string; ent
 
 function HubButton({ handle, entry, onOpen }: { handle: string; entry: HubEntry; onOpen: (key: HubKey) => void }) {
   const meta = HUB_META[entry.key];
-  const Icon = ICONS[meta.icon] ?? Sparkles;
+  const Icon = ICONS[meta.icon] ?? Lightbulb;
   const ref = useRef<HTMLButtonElement | null>(null);
 
   /*

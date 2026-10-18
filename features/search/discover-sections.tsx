@@ -10,6 +10,7 @@ import { TRENDING_CARD_COUNT, type DiscoverVideo, type SearchDiscover } from "@/
 import type { TrendingTag } from "@/lib/social/hashtags";
 import type { SuggestedCreator } from "@/lib/social/suggest";
 import { formatCompactNumber } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * The /search empty state: discovery row, Trending Now, Suggested for you,
@@ -68,14 +69,14 @@ export function DiscoveryRow({
       {/* The brand's own circle used to lead this row; removed at the owner's
           request (2026-08-24) — a logo tile among faces is the one thing here
           that is not a person to discover. */}
-      <Circle href={viewerHandle ? `/u/${viewerHandle}` : "/login?next=/search"} label="Your story" badge>
+      <Circle href={viewerHandle ? `${profilePath(viewerHandle)}` : "/login?next=/search"} label="Your story" badge>
         <span className="flex h-full w-full items-center justify-center rounded-full bg-secondary text-muted-foreground">
           <UserRound className="h-7 w-7" aria-hidden />
         </span>
       </Circle>
 
       {creators.map((c) => (
-        <Circle key={c.id} href={`/u/${c.handle}`} label={c.handle} verified={c.isVerified}>
+        <Circle key={c.id} href={`${profilePath(c.handle)}`} label={c.handle} verified={c.isVerified}>
           {/* 62px = the 70px ring minus its 2.5px gradient edge and 2px gap. */}
           <Avatar src={c.avatarUrl} size={62} />
         </Circle>
@@ -208,7 +209,7 @@ function SuggestedForYou({ creators, canFollow }: { creators: SuggestedCreator[]
             key={c.id}
             className="w-[144px] rounded-2xl border border-border/60 bg-secondary/50 p-2.5"
           >
-            <Link href={`/u/${c.handle}`} prefetch className="srch-press block">
+            <Link href={`${profilePath(c.handle)}`} prefetch className="srch-press block">
               <CreatorPortrait src={c.avatarUrl} className="mb-2.5 h-[150px] w-full rounded-xl" />
               <NameLine name={c.displayName} verified={c.isVerified} className="text-[13.5px] font-semibold" />
               <span className="mt-0.5 block truncate text-[11.5px] text-muted-foreground">@{c.handle}</span>
@@ -281,7 +282,7 @@ function VideoCard({ video: v }: { video: DiscoverVideo }) {
       </Link>
       <div className="mt-1.5 flex items-center gap-1.5">
         <Link
-          href={`/u/${v.publisher.handle}`}
+          href={`${profilePath(v.publisher.handle)}`}
           prefetch
           className="srch-press flex min-w-0 flex-1 items-center gap-1.5"
         >

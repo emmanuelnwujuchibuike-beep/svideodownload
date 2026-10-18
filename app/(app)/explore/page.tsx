@@ -1,4 +1,4 @@
-import { Sparkles } from "lucide-react";
+import { Lightbulb } from "lucide-react";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
@@ -106,7 +106,7 @@ async function ExploreData({
         <header className="mb-3 motion-safe:animate-fade-up">
           <h1 className="flex items-center gap-1.5 text-[clamp(1.9rem,8.5vw,2.5rem)] font-extrabold leading-none tracking-[-0.04em]">
             Explore
-            <Sparkles className="h-5 w-5 shrink-0 text-primary" aria-hidden />
+            <Lightbulb className="h-5 w-5 shrink-0 text-primary" aria-hidden />
           </h1>
           <p className="mt-1.5 text-[13.5px] text-muted-foreground">
             Trending &amp; fresh downloads from the community.

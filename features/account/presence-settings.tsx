@@ -13,11 +13,11 @@ import {
   Plane,
   Plus,
   Smartphone,
-  Sparkles,
   Tablet,
   Trash2,
   Users,
   type LucideIcon,
+  Lightbulb,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -313,7 +313,7 @@ export function PresenceSettings({ initial, userId }: { initial: OwnPresence; us
             {suggestions.map((s) => (
               <li key={s.id} className={cn(CARD, "flex items-start gap-3 px-3.5 py-3")}>
                 <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <Sparkles className="h-4 w-4" />
+                  <Lightbulb className="h-4 w-4" />
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-[14.5px] font-semibold leading-snug">{s.title}</p>

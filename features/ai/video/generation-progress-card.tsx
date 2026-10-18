@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, ChevronUp, Sparkles, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, X, Lightbulb } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
@@ -117,7 +117,7 @@ export function AiGenerationProgressCard() {
               done ? "bg-emerald-500/15 text-emerald-600" : gen.phase === "failed" ? "bg-rose-500/15 text-rose-600" : "bg-violet-500/15 text-violet-600",
             )}
           >
-            {done ? <Check className="h-4 w-4" aria-hidden /> : <Sparkles className="h-4 w-4" aria-hidden />}
+            {done ? <Check className="h-4 w-4" aria-hidden /> : <Lightbulb className="h-4 w-4" aria-hidden />}
             {running ? (
               // The only motion in the pill, and it is the thing being reported.
               <span aria-hidden className="absolute inset-0 animate-ping rounded-full bg-violet-500/25 motion-reduce:animate-none" />
@@ -150,7 +150,7 @@ export function AiGenerationProgressCard() {
               done ? "bg-emerald-500/15 text-emerald-600" : gen.phase === "failed" ? "bg-rose-500/15 text-rose-600" : "bg-violet-500/15 text-violet-600",
             )}
           >
-            {done ? <Check className="h-5 w-5" aria-hidden /> : <Sparkles className="h-5 w-5" aria-hidden />}
+            {done ? <Check className="h-5 w-5" aria-hidden /> : <Lightbulb className="h-5 w-5" aria-hidden />}
           </span>
 
           <div className="min-w-0 flex-1">

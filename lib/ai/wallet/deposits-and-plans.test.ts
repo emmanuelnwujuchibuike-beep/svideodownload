@@ -23,7 +23,6 @@ describe("🔴 a top-up return is a top-up return, not a plan return", () => {
   });
   it("every plan checkout puts ai_plan on its return (so the stricter reader still sees them)", () => {
     expect(code("app/api/ai/subscriptions/checkout/route.ts")).toMatch(/ai_plan=\$\{parsed\.data\.plan\}/);
-    expect(code("lib/ai/credits/bachs-plans.ts")).toMatch(/&ai_plan=\$\{opts\.plan\}/);
   });
 });
 
@@ -71,7 +70,6 @@ describe("🔴 a deposit is settled even when the member never comes back", () =
 
 describe("🔴 a new AI plan is celebrated once", () => {
   it("every activation path welcomes, and the welcome is a conditional claim (never twice, never on a renewal)", () => {
-    expect(code("lib/ai/credits/bachs-plans.ts")).toContain("after(() => welcomeAiPlan(attempt.user_id, plan, config));");
     const ps = code("lib/ai/credits/paystack.ts");
     expect(ps).toContain("after(() => welcomeAiPlan(userId, plan, config));");
     expect(ps).toContain("after(() => welcomeAiPlan(userId, welcomed, config));");

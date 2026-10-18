@@ -6,6 +6,7 @@ import { isGuardedAiPath } from "@/lib/auth/ai-public-paths";
 import { guestMustLogin } from "@/lib/auth/guest-login-paths";
 import { CORS_HEADERS } from "@/lib/api/cors";
 import { SUPABASE_COOKIE_OPTIONS } from "@/lib/supabase/cookie-options";
+import { profileRoute } from "@/lib/social/profile-url";
 import { sessionIsComfortablyFresh } from "@/lib/supabase/session-cookie";
 
 /**
@@ -14,10 +15,23 @@ import { sessionIsComfortablyFresh } from "@/lib/supabase/session-cookie";
  * If Supabase env vars are absent (e.g. the worker), it is a no-op pass-through.
  */
 export async function middleware(request: NextRequest) {
-  const path = request.nextUrl.pathname;
-
   // The container's 30 s health check: no session, no guards, no work (owner 2026-10-12 — no idle usage)
-  if (path === "/api/health") return NextResponse.next();
+  if (request.nextUrl.pathname === "/api/health") return NextResponse.next();
+
+  /*
+    ── PROFILES AT /:handle (owner, 2026-10-17) ─────────────────────────────
+    `/chris` is served by app/u/[handle] through a REWRITE (the address bar keeps
+    /chris); old `/u/chris` links get a permanent redirect with the query kept.
+    Pure string work — no database query, no session. Everything below sees the
+    INTERNAL path (/u/chris…), so guards and auth behave exactly as before; every
+    pass-through goes through `proceed`, which carries the rewrite.
+    See lib/social/profile-url.ts.
+  */
+  const profile = profileRoute(request.nextUrl.pathname, request.nextUrl.search);
+  if (profile?.kind === "redirect") return NextResponse.redirect(new URL(profile.to, request.url), 308);
+  const rewriteTo = profile?.kind === "rewrite" ? new URL(profile.to, request.url) : null;
+  const proceed = (init?: Parameters<typeof NextResponse.next>[0]) => (rewriteTo ? NextResponse.rewrite(rewriteTo, init) : NextResponse.next(init));
+  const path = rewriteTo ? rewriteTo.pathname : request.nextUrl.pathname;
 
   // Public API + extension endpoints: enable CORS and skip session work.
   if (path.startsWith("/api/v1") || path === "/api/me") {
@@ -37,7 +51,7 @@ export async function middleware(request: NextRequest) {
     request.headers.get("next-router-prefetch") === "1" ||
     request.headers.get("purpose") === "prefetch"
   ) {
-    return NextResponse.next({ request });
+    return proceed({ request });
   }
 
   /*
@@ -138,7 +152,7 @@ export async function middleware(request: NextRequest) {
       redirectUrl.searchParams.set("next", path);
       return NextResponse.redirect(redirectUrl);
     }
-    return NextResponse.next({ request });
+    return proceed({ request });
   }
 
   // Fast path: the access token is still comfortably valid, so there is nothing
@@ -169,10 +183,10 @@ export async function middleware(request: NextRequest) {
   if (isLandingRedirect && sessionIsComfortablyFresh(cookies)) return toHome();
 
   if (!needsGuard && sessionIsComfortablyFresh(cookies)) {
-    return NextResponse.next({ request });
+    return proceed({ request });
   }
 
-  let response = NextResponse.next({ request });
+  let response = proceed({ request });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -194,7 +208,7 @@ export async function middleware(request: NextRequest) {
         cookiesToSet.forEach(({ name, value }) =>
           request.cookies.set(name, value),
         );
-        response = NextResponse.next({ request });
+        response = proceed({ request });
         cookiesToSet.forEach(({ name, value, options }) =>
           response.cookies.set(name, value, options),
         );

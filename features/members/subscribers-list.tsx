@@ -10,6 +10,7 @@ import { haptic } from "@/lib/motion/haptics";
 import type { SubState } from "@/lib/sub/lifecycle";
 import type { SubscriberRow } from "@/lib/sub/subscriptions";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * The creator's PAID subscribers (Frenz Exclusive Part 5), 30 at a time from
@@ -114,7 +115,7 @@ export function SubscribersList() {
                       {r.state === "ending" ? " · won't renew" : ""}
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      <Link href={`/u/${r.person.handle}`} prefetch={false} className={"ex-btn ex-btn--quiet ex-btn--sm"}>
+                      <Link href={`${profilePath(r.person.handle)}`} prefetch={false} className={"ex-btn ex-btn--quiet ex-btn--sm"}>
                         Profile
                       </Link>
                       <Link href={`/messages/new/${r.person.id}`} prefetch={false} className={"ex-btn ex-btn--quiet ex-btn--sm"}>

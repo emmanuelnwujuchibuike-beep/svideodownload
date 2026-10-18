@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { isAdmin } from "@/lib/admin";
 import { PostPageView, postPageMetadata } from "@/features/social/post-page-view";
 import { getPost } from "@/lib/social/posts";
-import { postHref } from "@/lib/social/post-url";
+import { postHref, reelsViewHref } from "@/lib/social/post-url";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -52,6 +52,9 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const { id: me, admin: viewerIsAdmin } = await viewer();
   const post = await getPost(id, me, viewerIsAdmin);
   if (!post) notFound();
+
+  // owner, 2026-10-17: a video is never shown on this page — it opens in the Reels viewer (lib/social/post-url.ts)
+  if (post.media_kind === "video") redirect(reelsViewHref(post.id));
 
   if (post.slug && post.category) {
     const canonical = postHref(post);

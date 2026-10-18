@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Clock, EyeOff, Film, ImageOff, Images, Loader2, Lock, RefreshCw, Sparkles } from "lucide-react";
+import { Check, Clock, EyeOff, Film, ImageOff, Images, Loader2, Lock, RefreshCw, Lightbulb } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -11,6 +11,7 @@ import { firstPageIsReplay, type LinkBirth, mayAutoRefresh, refreshPreview } fro
 import { cancelOpening, startOpening } from "@/features/sub/opened-cache";
 import { exPrimary, exQuiet } from "@/features/sub/ui";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 // the existing private viewer (access re-checked by /api/sub/posts/[id] on open), loaded on the first tap
 const PrivateViewer = dynamic(() => import("./sub-gallery").then((m) => m.PrivateViewer), { ssr: false });
@@ -228,7 +229,7 @@ function Avatar({ c, size = 40 }: { c: Creator | undefined; size?: number }) {
 function CreatorName({ c, link, className }: { c: Creator; link: boolean; className?: string }) {
   const name = link ? (
     // a 40px-tall hit area around a 22px line (negative margin: the row doesn't grow)
-    <Link href={`/u/${c.handle}?tab=sub`} prefetch={false} className="-my-[9px] truncate py-[9px] hover:underline">
+    <Link href={`${profilePath(c.handle)}?tab=sub`} prefetch={false} className="-my-[9px] truncate py-[9px] hover:underline">
       {c.name}
     </Link>
   ) : (
@@ -385,7 +386,7 @@ function EmptyFeed({ subscribed }: { subscribed: boolean }) {
   return (
     <div className="flex flex-col items-center gap-3 ex-card px-6 py-12 text-center">
       <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 to-accent/15 ring-1 ring-inset ring-primary/20">
-        <Sparkles className="h-6 w-6 text-primary" aria-hidden />
+        <Lightbulb className="h-6 w-6 text-primary" aria-hidden />
       </span>
       <div>
         <p className="text-[16px] font-semibold">{subscribed ? "No exclusive posts yet" : "Your exclusive feed is empty"}</p>
@@ -449,7 +450,7 @@ export function LockedPreviewCard({ card, creator }: { card: Card; creator: Disc
   const what = itemsLabel(card.items, card.hasVideo);
   return (
     <article className="ex-card overflow-hidden">
-      <Link href={`/u/${creator.handle}?tab=sub`} prefetch={false} className="relative block aspect-[16/10] overflow-hidden bg-gradient-to-br from-primary/[0.07] via-transparent to-accent/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary" aria-label={`${creator.name}'s exclusive posts — ${what}, for subscribers`}>
+      <Link href={`${profilePath(creator.handle)}?tab=sub`} prefetch={false} className="relative block aspect-[16/10] overflow-hidden bg-gradient-to-br from-primary/[0.07] via-transparent to-accent/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary" aria-label={`${creator.name}'s exclusive posts — ${what}, for subscribers`}>
         {card.coverUrl ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element -- the creator's PUBLIC teaser, on the CDN */}

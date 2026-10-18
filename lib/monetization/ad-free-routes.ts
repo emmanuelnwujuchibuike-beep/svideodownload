@@ -1,3 +1,5 @@
+import { isProfilePath } from "@/lib/social/profile-url";
+
 /**
  * Pages that carry NO ads of any kind — not Google, not Hilltop, Monetag or VAST, not a paid
  * Frenzsave campaign, not a full-screen moment (owner, 2026-10-14: "ad shouldn't show in the
@@ -17,5 +19,6 @@
 const AD_FREE = /^\/(?:(?:login|signup|register|auth|welcome|logout|profile)(?:[/?#]|$)|u\/)/i;
 
 export function isAdFreeRoute(pathname: string | null | undefined): boolean {
-  return AD_FREE.test(pathname || "/");
+  // profiles moved to /:handle on 2026-10-17 (lib/social/profile-url.ts); /u/… above still matches old links
+  return AD_FREE.test(pathname || "/") || isProfilePath(pathname);
 }

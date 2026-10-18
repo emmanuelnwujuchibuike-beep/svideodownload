@@ -23,7 +23,6 @@ import {
   Package,
   Pin,
   Repeat2,
-  Sparkles,
   Star,
   Trophy,
   Users,
@@ -33,6 +32,7 @@ import {
   Check,
   Lock,
   type LucideIcon,
+  Lightbulb,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -60,7 +60,7 @@ const ICONS: Record<string, LucideIcon> = {
   BadgeCheck,
   Award,
   BookOpen,
-  Sparkles,
+  Lightbulb,
   FileText,
   Package,
   Wrench,

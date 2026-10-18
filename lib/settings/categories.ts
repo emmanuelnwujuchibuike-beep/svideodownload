@@ -91,9 +91,9 @@ export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
     always been `planned`). The blurb says "tools" rather than "monetisation"
     because a category label should not promise a screen that cannot exist yet.
   */
-  { id: "creator", label: "Creator platform", blurb: "Your Studio: content, audience, calendar and analytics.", icon: "Sparkles", tint: "amber", status: "live" },
+  { id: "creator", label: "Creator platform", blurb: "Your Studio: content, audience, calendar and analytics.", icon: "Lightbulb", tint: "amber", status: "live" },
   { id: "business", label: "Business platform", blurb: "Business profile, hours and catalogue.", icon: "Briefcase", tint: "emerald", status: "live" },
-  { id: "ai", label: "AI Studio", blurb: "Assistants, generation and AI privacy.", icon: "Sparkles", tint: "purple", status: "planned", note: "No AI Studio product yet. The settings assistant itself is designed but unbuilt — see docs/FEATURE_18_PART_21_SETTINGS_CENTER.md." },
+  { id: "ai", label: "AI Studio", blurb: "Assistants, generation and AI privacy.", icon: "Lightbulb", tint: "purple", status: "planned", note: "No AI Studio product yet. The settings assistant itself is designed but unbuilt — see docs/FEATURE_18_PART_21_SETTINGS_CENTER.md." },
   { id: "automation", label: "Automation", blurb: "Rules that change settings for you.", icon: "Workflow", tint: "cyan", status: "planned", note: "Needs a scheduler: a PWA is not running at 10pm, so time-based rules require server-side evaluation. Designed in the Part 21 doc." },
   { id: "developer", label: "Developer", blurb: "API keys, usage and webhooks.", icon: "Code2", tint: "slate", status: "live" },
 ] as const;

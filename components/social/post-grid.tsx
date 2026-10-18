@@ -8,7 +8,7 @@ import { useCallback, useState } from "react";
 
 import type { FeedItem } from "@/lib/social/home-feed";
 import type { PostCard } from "@/lib/social/posts";
-import { postHref } from "@/lib/social/post-url";
+import { postViewHref } from "@/lib/social/post-url";
 import { cn, formatCompactNumber } from "@/lib/utils";
 import type { PostMediaKind } from "@/types";
 
@@ -148,10 +148,10 @@ export function PostGrid({
         const json = await res.json();
         setOpenItem(json.item as FeedItem);
       } else {
-        window.location.href = postHref(post); // fall back to the real page rather than silently doing nothing
+        window.location.href = postViewHref(post); // fall back to the real page rather than silently doing nothing
       }
     } catch {
-      window.location.href = postHref(post);
+      window.location.href = postViewHref(post);
     } finally {
       setLoadingId(null);
     }
@@ -238,7 +238,7 @@ function MediaTile({
 }) {
   return (
     <Link
-      href={postHref(post)}
+      href={postViewHref(post)}
       onClick={(e) => onOpen(e, post)}
       aria-busy={loading}
       className={cn(
@@ -270,7 +270,7 @@ function PostCardItem({
 }) {
   return (
     <Link
-      href={postHref(post)}
+      href={postViewHref(post)}
       onClick={(e) => onOpen(e, post)}
       aria-busy={loading}
       className="group overflow-hidden rounded-2xl border border-border/70 bg-card shadow-soft transition hover:-translate-y-0.5 hover:shadow-card"

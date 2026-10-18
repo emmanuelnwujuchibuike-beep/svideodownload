@@ -282,7 +282,7 @@ export async function activateCampaign(db: Db, campaignId: string, actor: { id: 
 }
 
 /*
-  Payment lives in ./payment-server.ts (Part 3): the existing Paystack + Bachs
+  Payment lives in ./payment-server.ts (Part 3): the existing Paystack
   rails, a quote, a verified webhook, then activateCampaign above. Part 1's
   wallet payment and single-campaign card settle were removed with their SQL
   (0197) - ads are not paid from AI credits (owner, Part 3).

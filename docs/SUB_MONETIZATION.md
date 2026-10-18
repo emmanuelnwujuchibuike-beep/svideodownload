@@ -54,8 +54,8 @@ audit), the design decisions taken from it, and the build ledger.
    exists, subscriber-only uploads are refused rather than stored publicly.
 5. **One subscription per creator**, 30 days of access per payment. Renewal is a new
    payment (Paystack one-off charge); automatic renewal by a saved card is planned.
-6. **Paystack is recommended** for AI top-ups and every deposit; Bachs stays
-   available behind "More payment methods".
+6. **Paystack is the only payment provider** for AI top-ups and every deposit (Bachs
+   was removed on 2026-10-17).
 
 ## Deployment steps the owner must do
 
@@ -152,7 +152,7 @@ impossible.
 | "Get paid for your content" card on the owner's profile, between the hero and the posts tray: opens the setup, then shows the subscribe link (/u/<handle>?tab=sub) with share and copy | `features/sub/sub-promo-card.tsx` | built |
 | SUB withdraw sheet (bank check, live fee, replay key, history) | `features/sub/sub-withdraw.tsx` | built |
 | Withdraw button on the AI credit dashboard (replaces "Explore AI tools") | `features/ai/wallet/withdraw-chooser.tsx` | built |
-| Paystack "Recommended", Bachs behind "More payment methods" | `features/ai/wallet/payment-provider-picker.tsx` | built |
+| Paystack "Recommended", Bachs behind "More payment methods" | `features/ai/wallet/payment-provider-picker.tsx` | superseded 2026-10-17: Bachs removed, Paystack is the only provider |
 | Members dashboard and membership page on SUB | `features/members/*` | built |
 | Admin: SUB rules, purchases + reversal, balances, audit log; queue shows source and net | `features/admin/sub-admin.tsx`, `lib/rewards/admin.ts` | built |
 | Saved payout account, auto-withdrawal, cron sweep | `lib/sub/payout-account.ts`, `/api/sub/payout-account`, `features/sub/payout-settings.tsx` | built |

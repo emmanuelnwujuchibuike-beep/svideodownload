@@ -29,10 +29,10 @@ There are **two separate balances**, and nothing moves between them:
 
 | Flow | How | Where |
 |---|---|---|
-| Top-up (buy credits) | Checkout routed per market **(admin)**; credited only after the provider confirms. **Paystack is shown first and "Recommended"**; Bachs sits behind "More payment methods" (owner 2026-10-11) | `lib/ai/wallet/*`, `features/ai/wallet/payment-provider-picker.tsx` |
+| Top-up (buy credits) | Checkout routed per market **(admin)**; credited only after the provider confirms. Paystack (Bachs removed 2026-10-17) | `lib/ai/wallet/*`, `features/ai/wallet/payment-provider-picker.tsx` |
 | Credit packs | 50 / 100 / 250 / 500 / 1,000 credits, optional bonus credits (Tokens) **(admin)** | `wallet-config.ts` |
 | AI plans (Free / AI Pro / AI Max) | Subscription, monthly plan credits; same Paystack-recommended picker | `lib/ai/credits/*` |
-| Ad campaigns | Paystack or Bachs checkout in local currency at the live rate plus a markup **(admin)** | `lib/ads-platform/payment-server.ts` |
+| Ad campaigns | Paystack checkout in local currency at the live rate plus a markup **(admin)** | `lib/ads-platform/payment-server.ts` |
 
 ### Money spent inside Frenz
 

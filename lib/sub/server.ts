@@ -18,6 +18,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import { classifyVerification, isSubReference, isUuid, subReturnPath } from "./guards";
 import { checkoutBlockedByActive, RENEW_WINDOW_DAYS } from "./lifecycle";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * SUB — paid subscriptions and SUB withdrawals (owner brief 2026-10-11, 0227).
@@ -217,7 +218,7 @@ export async function startSubCheckout(input: { subscriberId: string; email: str
     .select("id")
     .single();
   if (error) return MISSING(error.message) ? fail("Subscriptions arrive with the next update.", 503) : fail("Couldn't start the payment.", 500);
-  const safeReturn = subReturnPath(input.returnPath, `/u/${creator.handle as string}`);
+  const safeReturn = subReturnPath(input.returnPath, `${profilePath(creator.handle as string)}`);
   try {
     const url = await initializeSubCheckout({
       email: input.email,

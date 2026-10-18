@@ -91,6 +91,7 @@ import { useVisualViewport } from "@/lib/pwa/use-visual-viewport";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { toast } from "@/features/ui/toast";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Layout effect on the client, plain effect during SSR (where layout effects
@@ -2154,7 +2155,7 @@ export function ConversationRoom({
                           </a>
                         ) : contactMeta ? (
                           <Link
-                            href={`/u/${contactMeta.handle}`}
+                            href={`${profilePath(contactMeta.handle)}`}
                             className={cn(
                               "flex items-center gap-2.5 rounded-2xl border px-3 py-2.5",
                               m.mine ? "border-white/20 bg-white/10" : "border-border/50 bg-secondary/30",

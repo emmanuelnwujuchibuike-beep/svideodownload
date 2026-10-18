@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, Lock, Loader2, Plus, Sparkles, X } from "lucide-react";
+import { Clock, Lock, Loader2, Plus, X, Lightbulb } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -144,7 +144,7 @@ export function TimeCapsuleCard({ initialCapsules }: { initialCapsules: TimeCaps
             <li key={c.id} className={cn("rounded-2xl border p-3.5", c.locked ? "border-border/50 bg-secondary/20" : "border-border/60 bg-card")}>
               <div className="flex items-start gap-3">
                 <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl", c.locked ? "bg-secondary text-muted-foreground" : "bg-brand-tile text-white")}>
-                  {c.locked ? <Lock className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+                  {c.locked ? <Lock className="h-4 w-4" /> : <Lightbulb className="h-4 w-4" />}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{c.title}</p>

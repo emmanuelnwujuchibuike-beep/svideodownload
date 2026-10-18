@@ -1,4 +1,4 @@
-import { ChevronRight, ShieldCheck, Sparkles, Zap } from "lucide-react";
+import { ChevronRight, ShieldCheck, Zap, Lightbulb } from "lucide-react";
 import { FrenzAIPlanBadge } from "@/features/ai/frenz-ai-plan-badge";
 import Link from "next/link";
 
@@ -199,7 +199,7 @@ function Mark() {
 const TRUST = [
   { icon: Zap, label: "Fast" },
   { icon: ShieldCheck, label: "Secure" },
-  { icon: Sparkles, label: "Natural Results" },
+  { icon: Lightbulb, label: "Natural Results" },
 ] as const;
 
 export function FrenzAITrustRow({ className }: { className?: string }) {

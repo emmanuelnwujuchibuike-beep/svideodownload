@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, Loader2, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Loader2, Lightbulb } from "lucide-react";
 import { useState } from "react";
 
 import { ImageUpload } from "@/components/social/image-upload";
@@ -80,7 +80,7 @@ export function WelcomeSetup({
       <aside className="relative hidden overflow-hidden bg-gradient-to-br from-blue-600 via-violet-600 to-purple-700 p-12 text-white lg:flex lg:flex-col lg:justify-center">
         <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-72 w-72 rounded-full bg-white/15 blur-3xl motion-safe:animate-drift" />
         <span className="relative inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-bold uppercase tracking-wide ring-1 ring-inset ring-white/25">
-          <Sparkles className="h-3.5 w-3.5" /> Welcome to Frenz
+          <Lightbulb className="h-3.5 w-3.5" /> Welcome to Frenz
         </span>
         <h1 className="relative mt-5 max-w-md text-4xl font-extrabold leading-[1.05] tracking-[-0.03em]">
           Let&apos;s set up your account

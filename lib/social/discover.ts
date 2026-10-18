@@ -1,6 +1,6 @@
 import { getTrendingTags, type TrendingTag } from "./hashtags";
 import { getHomeFeed } from "./home-feed";
-import { postHref } from "./post-url";
+import { postViewHref } from "./post-url";
 import { getSuggestedCreators, type SuggestedCreator } from "./suggest";
 
 /**
@@ -74,7 +74,7 @@ export async function getSearchDiscover(viewerId: string | null): Promise<Search
     tags,
     videos: feed.items.map((item) => ({
       id: item.id,
-      href: postHref(item),
+      href: postViewHref(item),
       title: item.title,
       thumbnailUrl: item.thumbnailUrl,
       mediaUrl: item.mediaUrl,

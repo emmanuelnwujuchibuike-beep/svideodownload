@@ -8,7 +8,6 @@ import { resolveCheckoutRate } from "@/lib/ai/character-replace/fx-rate-server";
 import { quoteCheckout } from "@/lib/ai/character-replace/topup-fx";
 import type { PaymentMarket, TopupProviderId } from "@/lib/ai/credits/wallet-config";
 import { getLandingSettings } from "@/lib/landing/settings";
-import { bachsCheckoutRequest, bachsConfigured, bachsFailureIsDefinite, bachsStatusIsPaid, decimalToMinor, getBachsCheckout, postBachsCheckout } from "@/lib/payments/bachs";
 import { routePayment } from "@/lib/payments/router";
 import { initializeAdCheckout, paystackEnabled, paystackFailureIsDefinite, verifyTransaction } from "@/lib/paystack/paystack";
 import { SITE_URL } from "@/lib/site";
@@ -36,24 +35,28 @@ import { activateCampaign, checkDestination } from "./server";
  * a provider (beyond a preference the router may honour), a duration or a
  * status - and its return from checkout proves nothing.
  *
- * ── The fallback rule (owner: "never automatically fallback after an
- *    ambiguous Bachs transaction") ─────────────────────────────────────────
- * A provider is followed by the next ONLY when it REFUSED (a 4xx / Paystack's
- * own message: nothing was created). A timeout, a network drop, a 5xx or
- * IDEMPOTENCY_IN_PROGRESS is UNKNOWN: the attempt becomes
- * verification_required and the application stays in payment_processing.
- * It is resolved, never replaced: Bachs by replaying the STORED request with
- * the SAME Idempotency-Key within 24 h (docs.bachs.io/guides/idempotency),
- * Paystack by verifying our own reference.
+ * ── The fallback rule ───────────────────────────────────────────────────────
+ * A provider is followed by the next ONLY when it REFUSED (Paystack's own
+ * message: nothing was created). A timeout, a network drop or a 5xx is
+ * UNKNOWN: the attempt becomes verification_required and the application
+ * stays in payment_processing. It is resolved, never replaced, by verifying
+ * our own reference with Paystack.
+ *
+ * ── Bachs was removed (owner, 2026-10-17) ───────────────────────────────────
+ * Paystack is the only rail. Rows a former provider wrote (`provider =
+ * 'bachs'`) stay exactly as they are: never redirected to, never re-asked,
+ * never released or settled here — a person reconciles them. See
+ * docs/PAYMENTS.md "Bachs removed".
  */
 
 type Db = SupabaseClient;
 type Rpc = { ok: boolean; reason?: string; [k: string]: unknown };
 
-export const AD_BACHS_PREFIX = "frenz_bachs_ad_"; // readBachsAttempt() recognises "frenz_bachs_"
 export const AD_PAYSTACK_PREFIX = "frenz_ad_";
-const BACHS_IDEMPOTENCY_WINDOW_MS = 23 * 3600_000; // inside Bachs's 24 h replay cache, with margin
 const PROVIDER_CHECK_MIN_AGE_MS = 5_000;
+
+/** A row written by a removed provider: held as it is, for manual reconciliation. */
+const legacyProvider = (a: { provider: string }) => a.provider !== "paystack";
 
 const log = (event: string, fields: Record<string, unknown>) => console.info(`[ads-pay] ${event}`, fields);
 
@@ -80,7 +83,8 @@ export async function createQuote(db: Db, input: { applicationId: string; userId
 interface Attempt {
   reference: string;
   user_id: string;
-  provider: TopupProviderId;
+  /** "paystack" — or a removed provider's name on a historical row ("bachs") */
+  provider: string;
   status: string;
   item_id: string;
   amount_cents: number;
@@ -132,7 +136,9 @@ export async function createAdCampaignPayment(
   // an open checkout? hand it back (double tap, two tabs, a retry)
   const open = await openAttempt(db, applicationId);
   if (open) {
-    if (open.status === "pending" && open.checkout_url) return { kind: "redirect", url: open.checkout_url, reference: open.reference, provider: open.provider };
+    // a removed provider's open checkout is never handed back (it would send the member there): held
+    if (legacyProvider(open)) return { kind: "verifying", reference: open.reference };
+    if (open.status === "pending" && open.checkout_url) return { kind: "redirect", url: open.checkout_url, reference: open.reference, provider: "paystack" };
     const resolved = await resolveUncertainAttempt(db, open);
     if (resolved.kind !== "refused" || resolved.code !== "released") return resolved;
   }
@@ -156,8 +162,6 @@ export async function createAdCampaignPayment(
     purpose: "ad_campaign",
     market: input.market,
     routing: landing.frenzAiPlans.wallet.routing,
-    // owner, 2026-10-09: "Let ad payment go through paystack alone and not bachs" — Bachs stays wired only so
-    // payments already started on it still settle (webhook, verify, reconcile)
     usable: (p) => p === "paystack" && paystackOk,
     preferred: landing.frenzAiPlans.wallet.memberChoice ? input.preferredProvider : undefined,
   });
@@ -165,7 +169,7 @@ export async function createAdCampaignPayment(
 
   return firstCheckout(candidates, (provider, i) => {
     log("payment_provider_selected", { applicationId, provider, attempt: i + 1, market: input.market });
-    return provider === "bachs" ? beginBachs(db, input, applicationId, input.quoteId, totalUsd) : beginPaystack(db, input, applicationId, input.quoteId, totalUsd, landing);
+    return beginPaystack(db, input, applicationId, input.quoteId, totalUsd, landing);
   });
 }
 
@@ -194,7 +198,7 @@ async function begin(db: Db, input: { userId: string }, applicationId: string, q
     // the unique index lost a race to a parallel tap - hand back that one
     if (error.code === "23505") {
       const open = await openAttempt(db, applicationId);
-      if (open?.checkout_url) return { kind: "redirect", url: open.checkout_url, reference: open.reference, provider: open.provider };
+      if (open?.checkout_url && !legacyProvider(open)) return { kind: "redirect", url: open.checkout_url, reference: open.reference, provider: "paystack" };
       return { kind: "verifying", reference: open?.reference ?? reference };
     }
     throw new Error(`ad_payment_begin: ${error.message}`);
@@ -210,38 +214,6 @@ async function begin(db: Db, input: { userId: string }, applicationId: string, q
 async function release(db: Db, reference: string, status: "failed" | "abandoned" | "expired" | "verification_required" | "mismatch", reason: string): Promise<void> {
   const { error } = await db.rpc("ad_payment_release", { p_reference: reference, p_status: status, p_reason: reason });
   if (error) console.error("[ads-pay] release failed", { reference, status, error: error.message });
-}
-
-async function beginBachs(db: Db, input: { userId: string; email: string }, applicationId: string, quoteId: string, totalUsd: number): Promise<PaymentStart> {
-  const reference = `${AD_BACHS_PREFIX}${randomUUID()}`;
-  const body = bachsCheckoutRequest({
-    amountUsdCents: totalUsd,
-    email: input.email,
-    reference,
-    metadata: { purpose: "frenz_ad_campaign", application_id: applicationId, quote_id: quoteId, user_id: input.userId },
-    successUrl: returnUrl(reference),
-    cancelUrl: returnUrl(reference),
-  });
-  const stop = await begin(db, input, applicationId, quoteId, reference, "bachs", totalUsd, "USD", totalUsd, null, { quoted_usd_cents: totalUsd });
-  if (stop) return stop;
-  // the exact request is stored BEFORE it is sent: it is the recovery for an uncertain write
-  await db.from("ai_topup_attempts").update({ provider_request: body }).eq("reference", reference);
-  try {
-    const checkout = await postBachsCheckout(body, reference);
-    await db.from("ai_topup_attempts").update({ external_id: checkout.checkoutId, checkout_url: checkout.url, updated_at: new Date().toISOString() }).eq("reference", reference);
-    log("payment_session_created", { provider: "bachs", reference, applicationId });
-    return { kind: "redirect", url: checkout.url, reference, provider: "bachs" };
-  } catch (e) {
-    if (bachsFailureIsDefinite(e)) {
-      await release(db, reference, "failed", "checkout refused by provider");
-      console.warn("[ads-pay] provider refused checkout", { provider: "bachs", reference, error: String(e).slice(0, 200) });
-      return { kind: "refused", code: "provider_refused", status: 502 };
-    }
-    // 🔴 UNKNOWN: Bachs may have created it. No fallback - resolve this one.
-    await release(db, reference, "verification_required", "checkout outcome unknown");
-    console.warn("[ads-pay] checkout outcome unknown — held for verification", { provider: "bachs", reference, error: String(e).slice(0, 200) });
-    return { kind: "verifying", reference };
-  }
 }
 
 async function beginPaystack(db: Db, input: { userId: string; email: string }, applicationId: string, quoteId: string, totalUsd: number, landing: Awaited<ReturnType<typeof getLandingSettings>>): Promise<PaymentStart> {
@@ -287,30 +259,14 @@ async function beginPaystack(db: Db, input: { userId: string; email: string }, a
 
 /**
  * An attempt whose checkout creation had an unknown outcome. Resolved,
- * never replaced:
- *   Bachs     replay the STORED body with the SAME key while Bachs still
- *             holds the reply (24 h). Past that, a person decides.
- *   Paystack  verify our reference. Paid → settle. Exists unpaid → nobody
- *             ever saw its page, so it is released (a new attempt is safe).
- *             Unknown to Paystack → never created, released.
+ * never replaced: verify our reference with Paystack. Paid → settle. Exists
+ * unpaid → nobody ever saw its page, so it is released (a new attempt is
+ * safe). Unknown to Paystack → never created, released. A removed provider's
+ * row is held as it is — nothing here can ask Bachs anything any more.
  */
 export async function resolveUncertainAttempt(db: Db, a: Attempt): Promise<PaymentStart> {
-  if (a.status === "pending" && a.checkout_url) return { kind: "redirect", url: a.checkout_url, reference: a.reference, provider: a.provider };
-  if (a.provider === "bachs") {
-    if (!a.provider_request || Date.now() - Date.parse(a.created_at) > BACHS_IDEMPOTENCY_WINDOW_MS) return { kind: "verifying", reference: a.reference };
-    try {
-      const checkout = await postBachsCheckout(a.provider_request, a.reference);
-      await db.from("ai_topup_attempts").update({ status: "pending", status_reason: null, external_id: checkout.checkoutId, checkout_url: checkout.url, updated_at: new Date().toISOString() }).eq("reference", a.reference).eq("status", "verification_required");
-      log("payment_session_recovered", { provider: "bachs", reference: a.reference });
-      return { kind: "redirect", url: checkout.url, reference: a.reference, provider: "bachs" };
-    } catch (e) {
-      if (bachsFailureIsDefinite(e)) {
-        await release(db, a.reference, "failed", "checkout refused on recovery");
-        return { kind: "refused", code: "released", status: 409 };
-      }
-      return { kind: "verifying", reference: a.reference };
-    }
-  }
+  if (legacyProvider(a)) return { kind: "verifying", reference: a.reference };
+  if (a.status === "pending" && a.checkout_url) return { kind: "redirect", url: a.checkout_url, reference: a.reference, provider: "paystack" };
   try {
     const charge = await verifyTransaction(a.reference);
     if (charge.status === "success") {
@@ -338,7 +294,7 @@ export interface SettleInput {
   paidCurrency: string | null;
   chargeId: string | null;
   externalId: string | null;
-  /** Bachs only: its SUCCEEDED collection on OUR checkout session = paid in full (an underpayment is collection.underpaid). */
+  /** a provider's own "paid in full" assertion (the SQL's p_full_payment_asserted); Paystack always sends false — the amount is checked */
   fullPaymentAsserted: boolean;
   via: string;
 }
@@ -411,7 +367,8 @@ export async function activatePaidCampaigns(db: Db, campaignIds: readonly string
 
 export interface PaymentView {
   reference: string;
-  provider: TopupProviderId;
+  /** "paystack", or a removed provider's name on a historical payment */
+  provider: string;
   /** what the advertiser should see */
   state: "verifying" | "paid" | "activating" | "live" | "failed" | "cancelled" | "expired" | "review" | "refunded" | "chargeback";
   paymentStatus: string;
@@ -503,6 +460,8 @@ function view(a: Attempt, campaigns: PaymentView["campaigns"]): PaymentView {
 
 /** Ask the provider what happened to a pending attempt (verify-on-return, reconciliation). */
 async function askProvider(db: Db, a: Attempt): Promise<void> {
+  // a removed provider's row: never re-asked, never released — held for manual reconciliation
+  if (legacyProvider(a)) return;
   if (a.status === "verification_required" && !a.checkout_url) {
     await resolveUncertainAttempt(db, a);
     return;
@@ -518,62 +477,9 @@ async function askProvider(db: Db, a: Attempt): Promise<void> {
     }
     return;
   }
-  if (!a.external_id) return;
-  const session = await getBachsCheckout(a.external_id);
-  if (session.reference && session.reference !== a.reference) return;
-  if (bachsStatusIsPaid(session.status)) {
-    await settleVerified(db, { reference: a.reference, provider: "bachs", paidAmount: null, paidCurrency: null, chargeId: null, externalId: a.external_id, fullPaymentAsserted: true, via: "bachs verify" });
-  } else if (/^(expired|canceled|cancelled)$/i.test(session.status)) {
-    await release(db, a.reference, "expired", `checkout ${session.status.toLowerCase()}`);
-  }
 }
 
 /* ─────────────────────────────────── webhooks ─────────────────────────────────── */
-
-/** Bachs collection.* for an ad attempt. The signature was verified by the route. */
-export async function handleBachsAdCollection(db: Db, type: string, data: Record<string, unknown>, attempt: { reference: string; external_id: string | null }): Promise<string> {
-  const checkoutId = typeof data.checkout_id === "string" ? data.checkout_id : null;
-  const chargeId = typeof data.charge_id === "string" ? data.charge_id : null;
-  if (type === "collection.failed") {
-    await release(db, attempt.reference, "failed", typeof data.failure_reason === "string" ? data.failure_reason.slice(0, 200) : "payment failed");
-    return "ad payment failed";
-  }
-  const currency = typeof data.currency === "string" ? data.currency.toUpperCase() : null;
-  if (type === "collection.underpaid") {
-    const r = await settleVerified(db, { reference: attempt.reference, provider: "bachs", paidAmount: decimalToMinor(data.amount_paid), paidCurrency: currency, chargeId, externalId: checkoutId, fullPaymentAsserted: false, via: "bachs underpaid" });
-    return `ad underpaid: ${r.reason ?? "?"}`;
-  }
-  const succeeded = String(data.status ?? "").toUpperCase() === "SUCCEEDED";
-  const r = await settleVerified(db, {
-    reference: attempt.reference,
-    provider: "bachs",
-    paidAmount: decimalToMinor(data.amount),
-    paidCurrency: currency,
-    chargeId,
-    externalId: checkoutId,
-    fullPaymentAsserted: succeeded && !!checkoutId && checkoutId === attempt.external_id,
-    via: "bachs webhook",
-  });
-  return r.ok ? `ad paid${r.already ? " (again)" : ""}` : `ad not settled: ${r.reason}`;
-}
-
-/** Bachs refund.paid / dispute.* — matched by the provider charge id we stored at settlement. */
-export async function handleBachsAdReversal(db: Db, type: string, data: Record<string, unknown>): Promise<string | null> {
-  const chargeId = typeof data.charge_id === "string" ? data.charge_id : null;
-  if (!chargeId) return null;
-  const { data: a } = await db.from("ai_topup_attempts").select("reference").eq("provider", "bachs").eq("charge_id", chargeId).eq("purpose", "ad_campaign").maybeSingle();
-  if (!a) return null;
-  let kind: "refund" | "chargeback" | "chargeback_won" | null = null;
-  if (type === "refund.paid") kind = "refund";
-  else if (type === "dispute.created") kind = "chargeback";
-  else if (type === "dispute.updated") {
-    const s = String(data.status ?? "").toLowerCase();
-    kind = s === "won" || s === "closed" ? "chargeback_won" : s === "lost" ? "chargeback" : null;
-  }
-  if (!kind) return "ad reversal: no change";
-  const amount = kind === "refund" ? decimalToMinor(data.refunded_amount ?? data.requested_amount) : null;
-  return reverse(db, a.reference as string, kind, amount, typeof data.reason === "string" ? data.reason : type);
-}
 
 /** Paystack charge.success for an ad (purpose frenz_ad_campaign). */
 export async function handlePaystackAdCharge(db: Db, data: { reference?: string; amount?: number; currency?: string; id?: number }): Promise<string> {
@@ -613,10 +519,11 @@ async function reverse(db: Db, reference: string, kind: "refund" | "chargeback" 
 
 /**
  * Confirm pending ad payments with the PROVIDER, with nobody watching
- * (2026-10-09: an advertiser's Bachs payment succeeded, the webhook never
- * arrived, and the attempt stayed "pending" because the only fallback check
- * ran while the return page was open — and the page stops asking after a
- * minute). Run by the 10-minute reconcile cron and the hourly housekeeping.
+ * (2026-10-09: a payment succeeded, the webhook never arrived, and the
+ * attempt stayed "pending" because the only fallback check ran while the
+ * return page was open — and the page stops asking after a minute). Run by
+ * the 10-minute reconcile cron and the hourly housekeeping. Paystack rows
+ * only: a removed provider's rows are held for a person.
  *
  * Bounded: attempts between 2 minutes (give the webhook its chance) and 48
  * hours old, at most 25 per run, oldest first. Each goes through the same
@@ -628,6 +535,7 @@ export async function reconcilePendingAdPayments(db: Db, now: number = Date.now(
     .from("ai_topup_attempts")
     .select(ATTEMPT_COLUMNS)
     .eq("purpose", "ad_campaign")
+    .eq("provider", "paystack")
     .in("status", ["pending", "verification_required"])
     .lt("created_at", new Date(now - 2 * 60_000).toISOString())
     .gt("created_at", new Date(now - 48 * 3_600_000).toISOString())

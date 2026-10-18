@@ -250,7 +250,7 @@ describe("Monetag page scope — resolveMonetagSurface", () => {
 
 describe("Monetag page scope — monetagAllowedOnPath", () => {
   it("shows everywhere when allPages is true", () => {
-    for (const p of ["/", "/tiktok", "/admin", "/home"]) {
+    for (const p of ["/", "/tiktok-downloader", "/admin", "/home"]) {
       expect(monetagAllowedOnPath(p, { monetagAllPages: true, monetagSurfaces: [] })).toBe(true);
     }
   });
@@ -258,7 +258,7 @@ describe("Monetag page scope — monetagAllowedOnPath", () => {
   it("shows only on the selected surfaces when allPages is false", () => {
     const scope = { monetagAllPages: false, monetagSurfaces: ["downloader", "home"] };
     expect(monetagAllowedOnPath("/", scope)).toBe(true); // home
-    expect(monetagAllowedOnPath("/tiktok", scope)).toBe(true); // downloader
+    expect(monetagAllowedOnPath("/tiktok-downloader", scope)).toBe(true); // downloader (a bare /tiktok is a member profile since 2026-10-17)
     expect(monetagAllowedOnPath("/blog", scope)).toBe(false); // content not selected
     expect(monetagAllowedOnPath("/home", scope)).toBe(false); // app not selected
   });

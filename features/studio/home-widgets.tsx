@@ -1,11 +1,11 @@
 import {
+  Activity,
   Bookmark,
   Eye,
   Heart,
   Lightbulb,
   MessageCircle,
   Share2,
-  Sparkles,
   Target,
   Trophy,
   Users,
@@ -18,6 +18,7 @@ import type { ContentSuggestion, CreatorHome } from "@/lib/creator/studio";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 import { EmptyNote, MeterRow, Pill, ProgressRing, StudioCard } from "./studio-ui";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Creator Home widgets (Feature 15 · Part 9).
@@ -173,7 +174,7 @@ export function RecentFollowersWidget({ followers }: { followers: CreatorHome["r
         {followers.map((f) => (
           <li key={f.id}>
             <Link
-              href={`/u/${f.handle}`}
+              href={`${profilePath(f.handle)}`}
               prefetch={false}
               className="group flex items-center gap-3 rounded-2xl p-1.5 transition hover:bg-secondary/50"
             >
@@ -321,7 +322,7 @@ export function HealthWidget({ health }: { health: CreatorHealth }) {
   return (
     <StudioCard
       title="Creator Health"
-      icon={Sparkles}
+      icon={Activity}
       action={
         <Link href="/studio/journey#health" prefetch className="text-xs font-semibold text-primary hover:opacity-80">
           Details

@@ -12,6 +12,7 @@ import type { Permission } from "@/lib/social/graph/permissions";
 import type { TrustResult, TrustSignals } from "@/lib/social/graph/trust";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Your network (Feature 19 · Part 15) — the invisible graph, made legible to the
@@ -244,7 +245,7 @@ function PersonSheet({ person, onClose }: { person: NetworkPerson; onClose: () =
             <p className="truncate text-[16px] font-bold">{person.name}</p>
             <p className="truncate text-[13px] text-muted-foreground">@{person.handle}</p>
           </div>
-          <Link href={`/u/${person.handle}`} prefetch={false} className={primaryPill}>
+          <Link href={`${profilePath(person.handle)}`} prefetch={false} className={primaryPill}>
             Profile
           </Link>
         </div>

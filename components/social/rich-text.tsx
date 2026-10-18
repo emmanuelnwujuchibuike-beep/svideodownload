@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { LINK_WARNING_TEXT, linkWarning } from "@/lib/security/link-warning";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Renders caption/description text with #hashtags, @mentions, and bare URLs
@@ -49,7 +50,7 @@ export function RichText({
     } else if (token.startsWith("@")) {
       const handle = token.slice(1).replace(/\.$/, ""); // trailing dot isn't part of a handle
       nodes.push(
-        <Link key={`m${key++}`} href={`/u/${handle}`} className={linkClassName}>
+        <Link key={`m${key++}`} href={`${profilePath(handle)}`} className={linkClassName}>
           {token}
         </Link>,
       );

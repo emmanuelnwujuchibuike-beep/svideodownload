@@ -19,6 +19,7 @@ import { createPortal } from "react-dom";
 import { toggleFollow, useFollowState } from "@/lib/social/follow-store";
 import { springs } from "@/lib/motion/springs";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 interface Reposter {
   id: string;
@@ -150,7 +151,7 @@ function ReposterRowItem({ r, onNavigate }: { r: Reposter; onNavigate: () => voi
   return (
     <div className="rounded-2xl px-3 py-2.5 transition hover:bg-secondary/60">
       <div className="flex items-center gap-3">
-        <Link href={`/u/${r.handle}`} onClick={onNavigate} className="shrink-0">
+        <Link href={`${profilePath(r.handle)}`} onClick={onNavigate} className="shrink-0">
           {r.avatarUrl ? (
             <Image src={r.avatarUrl} alt="" width={40} height={40} className="h-10 w-10 rounded-full object-cover ring-1 ring-border" />
           ) : (
@@ -159,7 +160,7 @@ function ReposterRowItem({ r, onNavigate }: { r: Reposter; onNavigate: () => voi
             </span>
           )}
         </Link>
-        <Link href={`/u/${r.handle}`} onClick={onNavigate} className="min-w-0 flex-1">
+        <Link href={`${profilePath(r.handle)}`} onClick={onNavigate} className="min-w-0 flex-1">
           <span className="flex items-center gap-1 text-sm font-semibold leading-tight">
             <span className="truncate">{r.displayName}</span>
             {r.isVerified ? <VerifiedTick className="h-3.5 w-3.5 shrink-0" /> : null}

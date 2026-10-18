@@ -15,8 +15,8 @@ import {
   MoreVertical,
   Shield,
   ShieldCheck,
-  Sparkles,
   Zap,
+  Lightbulb,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
@@ -182,7 +182,7 @@ export function DownloadsHero({ trailing, headline = true, subtitle = true }: { 
             <ImageIcon className="h-4 w-4 text-fuchsia-500" />
           </span>
           <span className="absolute -right-1 bottom-3 flex h-9 w-9 items-center justify-center rounded-xl bg-card shadow-md ring-1 ring-border/60">
-            <Sparkles className="h-4 w-4 text-blue-500" />
+            <Lightbulb className="h-4 w-4 text-blue-500" />
           </span>
         </div>
       </div>

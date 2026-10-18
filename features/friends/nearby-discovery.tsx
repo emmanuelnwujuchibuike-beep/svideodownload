@@ -7,6 +7,7 @@ import { useState } from "react";
 import { SmartThumb } from "@/components/ui/smart-thumb";
 import { DiscoveryDeck } from "@/features/friends/discovery-deck";
 import type { DiscoveryItem } from "@/lib/social/discovery";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Discovery grid for the bottom of /friends — fresh videos & photos from people
@@ -73,7 +74,7 @@ export function NearbyDiscovery({ items, nextOffset }: { items: DiscoveryItem[];
 
             {/* Creator chip */}
             <Link
-              href={`/u/${it.handle}`}
+              href={`${profilePath(it.handle)}`}
               className="absolute inset-x-0 bottom-0 flex items-center gap-2 p-2.5"
             >
               {it.avatarUrl ? (

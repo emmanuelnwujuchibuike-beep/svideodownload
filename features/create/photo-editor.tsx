@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Check, FlipHorizontal2, Loader2, RotateCcw, RotateCw, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import { Check, FlipHorizontal2, Loader2, RotateCcw, RotateCw, SlidersHorizontal, X, Lightbulb } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {
@@ -131,7 +131,7 @@ export function PhotoEditor({
       <div className="flex items-center justify-center gap-1 rounded-2xl bg-secondary/40 p-1">
         {(
           [
-            { id: "filters" as const, label: "Filters", icon: Sparkles },
+            { id: "filters" as const, label: "Filters", icon: Lightbulb },
             { id: "adjust" as const, label: "Adjust", icon: SlidersHorizontal },
           ]
         ).map((t) => (

@@ -4,9 +4,8 @@ import { getLandingSettings } from "@/lib/landing/settings";
 import { announceCharacterReplaceRecharge, creditVerifiedCharacterReplaceRecharge } from "@/lib/ai/character-replace/recharge-server";
 import { getCharacterReplaceBalanceCents } from "@/lib/ai/character-replace/wallet";
 import { WALLET_UNIT } from "@/lib/ai/credits/units";
-import { creditBachsTopup, readBachsAttempt } from "@/lib/ai/wallet/bachs-topup";
 import { settleCharacterReplaceCharge, settleUnpaidTopup } from "@/lib/ai/wallet/paystack-settle";
-import { BACHS_TOPUP_PREFIX, bachsConfigured, bachsStatusIsPaid, getBachsCheckout } from "@/lib/payments/bachs";
+import { isRemovedProviderReference } from "@/lib/payments/removed-providers";
 import { AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, paystackEnabled, verifyTransaction } from "@/lib/paystack/paystack";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
@@ -93,33 +92,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  /*
-    ── BACHS (2026-10-07) ─────────────────────────────────────────────────
-    A Bachs reference is ours (`frenz_bachs_topup_…`) and its attempt row says
-    whose it is, what it was priced at and which checkout it opened. The
-    session is asked as Bachs holds it now; only SUCCEEDED credits, through
-    the same once-only function as the webhook. Anything else answers
-    "pending" — the signed webhook is the source of truth and will credit
-    when it lands. The browser's return is never proof by itself.
-  */
-  if (reference.startsWith(BACHS_TOPUP_PREFIX)) {
-    try {
-      const attempt = await readBachsAttempt(reference);
-      if (!attempt || attempt.user_id !== user.id) return NextResponse.json({ credited: false });
-      if (!attempt.external_id || !bachsConfigured()) return NextResponse.json({ credited: false, pending: true });
-      const session = await getBachsCheckout(attempt.external_id);
-      if (!bachsStatusIsPaid(session.status) || (session.reference && session.reference !== reference)) {
-        return NextResponse.json({ credited: false, pending: true });
-      }
-      const { credited, announce } = await creditBachsTopup(attempt, { via: "return" });
-      after(announce);
-      return NextResponse.json({ credited: true, balanceCents: credited.balanceAfterCents, balanceCredits: credited.balanceAfterCents, creditsAdded: credited.credits + credited.bonusCredits, product: "character_replace" });
-    } catch (e) {
-      // ambiguous ≠ failed: the payment may well have gone through — the webhook will credit it
-      console.error("[ai/topup-verify] bachs check failed", { reference, error: String(e).slice(0, 200) });
-      return NextResponse.json({ credited: false, pending: true });
-    }
-  }
+  // a removed provider's reference (Bachs, 2026-10-17): answered "pending" with no network call and no write —
+  // it must never reach the Paystack path below, which could mark a historical attempt failed
+  if (isRemovedProviderReference(reference)) return NextResponse.json({ credited: false, pending: true });
 
   if (!(await paystackEnabled())) {
     return NextResponse.json({ error: "Payments aren't available right now." }, { status: 503 });

@@ -9,7 +9,7 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
 | Area | State |
 |---|---|
 | **Self-serve ad platform** | Parts 1–7 shipped (engine, application, payments, serving through the shared slots, advertiser dashboard, and the admin side). Part 7 (0204) adds two tabs to Admin → Ads: **Campaigns** (review queue, live/paused, refunds owed, advertisers) and **Self-serve rules** (kill switch, advertiser controls, blocked links, prices, promotions). Slots and campaign lengths stay in Ad placements. Full write-up and Gap Ledgers: `docs/AD_PLATFORM.md`. |
-| Payments | Paystack + Bachs as two rails under one router (`lib/payments/router.ts`, purposes `wallet_topup`, `ai_subscription`, `ad_campaign`). See `docs/PAYMENTS.md`. |
+| Payments | Paystack, under one router (`lib/payments/router.ts`, purposes `wallet_topup`, `ai_subscription`, `ad_campaign`). Bachs was removed on 2026-10-17. See `docs/PAYMENTS.md`. |
 | Frenz AI credits | One wallet in CREDIT units (`ai_product_balances` / `ai_product_ledger`). Ads are **not** paid from credits. The balance has a withdrawable part (`withdrawable_cents`, 0187), and the rest is non-withdrawable. |
 | Credit transfers | 0193 + **0199**: the sender chooses non-withdrawable or withdrawable. The amount and the fee come only from that kind, and the recipient receives the same kind. Cashing out still needs the recipient's own approval (0191). The credits page (`/ai/usage`) shows the two kinds apart. The AI and download credit strip keeps the total. Only the 7-argument function exists (`p_class`). 0202 re-applies its revoke/grant. |
 
@@ -164,11 +164,10 @@ See "To go live" in `docs/AD_PLATFORM.md`:
 
 - Set prices in `ad_pricing_plans`. None are seeded, so nothing is for sale.
 - Set `applications_open = true` in `ad_platform_settings`.
-- Give the Bachs API key these permissions: `payments:read/write`,
-  `products:read`, `refunds:read`, `disputes:read`. The admin's "Check with
-  Bachs" fails with 403 until `products:read` is granted.
-- Subscribe the Bachs webhook to the `collection.*`, `refund.paid` and
-  `dispute.*` events.
+- ~~Bachs key permissions / webhook events~~ — obsolete: Bachs was removed on
+  2026-10-17. Instead: revoke the Bachs key and delete its webhook in the Bachs
+  dashboard, and reconcile the 5 pending Bachs attempts (docs/PAYMENTS.md →
+  "Bachs removed").
 
 ## 2 · How to verify ad-platform SQL without a database
 

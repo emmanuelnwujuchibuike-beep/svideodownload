@@ -50,8 +50,11 @@ export interface AiSubscription {
   cancelAtPeriodEnd: boolean;
   subscriptionRef: string | null;
   emailToken: string | null;
-  /** Which rail bills it — Paystack (a manage link), Bachs (cancel through us), or credits (one period, never renews — 0192). */
-  provider: "paystack" | "bachs" | "credits";
+  /**
+   * Which rail bills it — Paystack (a manage link) or credits (one period, never renews — 0192).
+   * Bachs was removed on 2026-10-17; production held no Bachs-billed subscription rows then.
+   */
+  provider: "paystack" | "credits";
 }
 
 /** A period end more than this far in the past means the renewal is not coming (Paystack retries for a few days). */
@@ -70,7 +73,7 @@ export function subscriptionIsActive(row: Pick<AiSubscriptionRow, "status" | "cu
 
 export function toAiSubscription(row: AiSubscriptionRow | null, now: number = Date.now()): AiSubscription | null {
   if (!row) return null;
-  return { plan: row.plan, status: row.status, active: subscriptionIsActive(row as AiSubscriptionRow & { provider?: string | null }, now), currentPeriodEnd: row.current_period_end, cancelAtPeriodEnd: row.cancel_at_period_end, subscriptionRef: row.subscription_ref, emailToken: row.email_token, provider: (row as { provider?: string }).provider === "bachs" ? "bachs" : (row as { provider?: string }).provider === "credits" ? "credits" : "paystack" };
+  return { plan: row.plan, status: row.status, active: subscriptionIsActive(row as AiSubscriptionRow & { provider?: string | null }, now), currentPeriodEnd: row.current_period_end, cancelAtPeriodEnd: row.cancel_at_period_end, subscriptionRef: row.subscription_ref, emailToken: row.email_token, provider: (row as { provider?: string }).provider === "credits" ? "credits" : "paystack" };
 }
 
 export async function getAiSubscription(userId: string): Promise<AiSubscription | null> {
@@ -114,8 +117,8 @@ export async function upsertAiSubscription(input: {
   currentPeriodStart?: string | null;
   currentPeriodEnd?: string | null;
   cancelAtPeriodEnd?: boolean;
-  /** Which rail billed it (0186). Absent = Paystack, as every write before Bachs. */
-  provider?: "paystack" | "bachs";
+  /** Which rail billed it (0186). Absent = Paystack. */
+  provider?: "paystack";
 }): Promise<{ written: boolean; plan: AiPlanId | null }> {
   const admin = createAdminClient();
   const { data: existing } = await admin.from("ai_subscriptions").select("*").eq("user_id", input.userId).maybeSingle();

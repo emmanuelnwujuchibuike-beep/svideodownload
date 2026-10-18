@@ -43,6 +43,10 @@ const WallpaperLimitSheet = dynamic(
   () => import("@/features/wallpapers/wallpaper-reward-ad").then((m) => m.WallpaperLimitSheet),
   { ssr: false },
 );
+const WallpaperProSheet = dynamic(
+  () => import("@/features/wallpapers/wallpaper-reward-ad").then((m) => m.WallpaperProSheet),
+  { ssr: false },
+);
 
 const PREVIEW_COUNT = 6;
 
@@ -53,7 +57,8 @@ export function WallpaperGallery({ items, canEngage }: { items: Wallpaper[]; can
     ad, notifications — because it is the same product rule and these two
     surfaces have drifted apart once already. One hook, one behaviour.
   */
-  const { allowance, download, adOpen, closeAd, limitHit, closeLimit, adSeconds } = useWallpaperDownload();
+  const { allowance, download, adOpen, closeAd, limitHit, closeLimit, proRequired, closeProRequired, adSeconds } =
+    useWallpaperDownload();
   const [adFor, setAdFor] = useState("");
 
   if (items.length === 0) return null;
@@ -126,6 +131,7 @@ export function WallpaperGallery({ items, canEngage }: { items: Wallpaper[]; can
         />
       ) : null}
       {limitHit ? <WallpaperLimitSheet limit={allowance?.limit ?? 5} onClose={closeLimit} /> : null}
+      {proRequired ? <WallpaperProSheet onClose={closeProRequired} /> : null}
     </section>
   );
 }

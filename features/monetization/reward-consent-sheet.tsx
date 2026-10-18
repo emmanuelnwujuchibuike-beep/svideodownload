@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Lightbulb } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -101,7 +101,7 @@ export function RewardConsentSheet({
 
         <div className="px-6 pb-2 pt-5 text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <Sparkles aria-hidden className="h-6 w-6" />
+            <Lightbulb aria-hidden className="h-6 w-6" />
           </div>
           <h2 className="mt-3 text-lg font-bold tracking-tight">{title}</h2>
           <p className={`mt-1.5 text-sm leading-relaxed ${errorText ? "text-rose-500" : "text-muted-foreground"}`}>

@@ -4,6 +4,7 @@ import { ArrowRight, Check, Copy, Lock, Share2, X } from "lucide-react";
 import { useState } from "react";
 
 import { haptic } from "@/lib/motion/haptics";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * "Get paid for your content" — on the owner's own profile, between the hero and
@@ -19,7 +20,7 @@ import { haptic } from "@/lib/motion/haptics";
  */
 export function SubPromoCard({ handle, live, onOpen, onClose }: { handle: string; live: boolean; onOpen: () => void; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
-  const url = () => `${window.location.origin}/u/${handle}?tab=sub`;
+  const url = () => `${window.location.origin}${profilePath(handle)}?tab=sub`;
   const copy = async () => {
     haptic("selection");
     try {
@@ -78,7 +79,7 @@ export function SubPromoCard({ handle, live, onOpen, onClose }: { handle: string
             <Share2 className="h-[18px] w-[18px]" aria-hidden /> Share Profile &amp; Get Paid
           </button>
           <div className="relative mt-2.5 flex items-center gap-2 rounded-2xl bg-white/12 py-1.5 pl-3.5 pr-1.5 ring-1 ring-inset ring-white/20">
-            <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-white/90">frenzsave.com/u/{handle}?tab=sub</span>
+            <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-white/90">frenzsave.com{profilePath(handle)}?tab=sub</span>
             <button type="button" onClick={() => void copy()} className="inline-flex min-h-[2.25rem] shrink-0 items-center gap-1.5 rounded-full bg-white/15 px-3 text-[12.5px] font-semibold transition active:scale-95">
               {copied ? <Check className="h-3.5 w-3.5" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />} {copied ? "Copied" : "Copy"}
             </button>

@@ -6,7 +6,6 @@ import {
   Eye,
 } from "lucide-react";
 import { VerifiedTick } from "@/components/badges/identity-badges";
-import type { Metadata } from "next";
 // Aliased — callers export the reserved route-segment config
 // `export const dynamic = "force-dynamic"`, which would otherwise collide
 // with next/dynamic's default export name.
@@ -28,7 +27,6 @@ import { PostDownloadButton } from "@/features/social/post-download-button";
 import { PostEngagement } from "@/features/social/post-engagement";
 import { ReportButton } from "@/features/social/report-button";
 import { getUserPlan } from "@/lib/monetization/plan";
-import { titleFromCaption } from "@/lib/social/caption";
 import { canComment, getViewerReactions, listComments } from "@/lib/social/engagement";
 import { getPoll } from "@/lib/social/polls";
 import { PostMedia } from "@/features/social/post-media";
@@ -44,6 +42,7 @@ const PollCreator = nextDynamic(() => import("@/features/social/post-poll").then
 import type { FeedItem } from "@/lib/social/home-feed";
 import { getPostMediaItems, recordPostView, relatedPosts, type PublicPost } from "@/lib/social/posts";
 import { formatCompactNumber } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 const COMMENT_GATE_MSG: Record<string, string> = {
   off: "Comments are turned off for this post.",
@@ -52,38 +51,8 @@ const COMMENT_GATE_MSG: Record<string, string> = {
   unavailable: "Comments are unavailable.",
 };
 
-/**
- * Metadata for a resolved post, keyed to wherever it's actually mounted.
- * `canonicalPath` is the caller's decision, not this file's — app/p/[id]
- * passes `/p/${id}` (or redirects before ever calling this, once a slug
- * exists), the SEO slug route passes its own `postHref(post)` path — so
- * this single builder never has to know which route it's being called from.
- */
-export function postPageMetadata(post: PublicPost, canonicalPath: string): Metadata {
-  /*
-    🔴 THE CAPTION IS NOT THE TITLE TAG (2026-08-23). `posts.title` holds the
-    caption verbatim, and the caption limit moved from 300 characters to 250
-    words — so passing it through raw would emit `<title>` elements over a
-    thousand characters long. `titleFromCaption` takes the first sentence or a
-    word-boundary trim; the full caption is still rendered on the page itself
-    and still carried in the description/OG description below, so nothing is
-    hidden from a reader or a crawler, it is just no longer crammed into the
-    one element that must stay short.
-  */
-  const title = titleFromCaption(post.title) || post.title;
-  return {
-    title,
-    description: post.description ?? `Watch & save from ${post.platform} on FrenzSave.`,
-    alternates: { canonical: canonicalPath },
-    robots: { index: post.indexable, follow: post.indexable },
-    openGraph: {
-      type: "video.other",
-      title,
-      description: post.description ?? undefined,
-      images: post.thumbnail_url ? [{ url: post.thumbnail_url }] : undefined,
-    },
-  };
-}
+// moved to lib/social/post-metadata.ts (2026-10-17) — re-exported so every caller keeps working
+export { postPageMetadata } from "@/lib/social/post-metadata";
 
 /**
  * The full post page — media, engagement, creator card, poll, comments,
@@ -300,7 +269,7 @@ export async function PostPageView({
                   initialCategory={post.category}
                   initialVisibility={post.visibility}
                 />
-                <PostDeleteButton postId={post.id} redirectTo={`/u/${post.publisher.handle}`} />
+                <PostDeleteButton postId={post.id} redirectTo={`${profilePath(post.publisher.handle)}`} />
               </>
             ) : (
               <ReportButton targetType="post" targetId={post.id} />
@@ -340,7 +309,7 @@ export async function PostPageView({
 
         {/* Creator */}
         <div className="mt-6 flex items-center gap-3 rounded-3xl border border-border/60 bg-gradient-to-br from-card to-card/50 p-4 shadow-soft ring-1 ring-inset ring-white/5 transition-shadow hover:shadow-md">
-          <Link href={`/u/${post.publisher.handle}`} className="shrink-0" prefetch>
+          <Link href={`${profilePath(post.publisher.handle)}`} className="shrink-0" prefetch>
             {post.publisher.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={post.publisher.avatarUrl} alt="" className="h-12 w-12 rounded-full object-cover ring-2 ring-violet-500/30 ring-offset-2 ring-offset-card" />
@@ -350,7 +319,7 @@ export async function PostPageView({
               </span>
             )}
           </Link>
-          <Link href={`/u/${post.publisher.handle}`} className="min-w-0 flex-1">
+          <Link href={`${profilePath(post.publisher.handle)}`} className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5">
               <span className="truncate font-semibold">{post.publisher.displayName}</span>
               {post.publisher.isVerified ? <VerifiedTick className="h-4 w-4 shrink-0" /> : null}

@@ -10,6 +10,7 @@ import { timeAgo } from "@/features/notifications/meta";
 import { ReportButton } from "@/features/social/report-button";
 import type { FriendRequestItem } from "@/lib/social/friends";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * One incoming friend request (Feature 19 · Part 2 — the Friend Request Card).
@@ -49,12 +50,12 @@ export function RequestCard({
   return (
     <li className="px-3.5 py-3">
       <div className="flex items-start gap-3">
-        <Link href={`/u/${req.user.handle}`} prefetch={false} aria-label={`${req.user.displayName}'s profile`}>
+        <Link href={`${profilePath(req.user.handle)}`} prefetch={false} aria-label={`${req.user.displayName}'s profile`}>
           <PersonAvatar user={req.user} size={52} />
         </Link>
         <div className="min-w-0 flex-1">
           <p className="flex min-w-0 items-center gap-1.5">
-            <Link href={`/u/${req.user.handle}`} prefetch={false} className="truncate text-[15px] font-semibold hover:underline">
+            <Link href={`${profilePath(req.user.handle)}`} prefetch={false} className="truncate text-[15px] font-semibold hover:underline">
               {req.user.displayName}
             </Link>
             {req.user.isVerified ? <BadgeCheck className="h-4 w-4 shrink-0 text-blue-500" aria-label="Verified" /> : null}

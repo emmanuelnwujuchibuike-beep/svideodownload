@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, History, Sparkles } from "lucide-react";
+import { ArrowRight, History, Lightbulb } from "lucide-react";
 import Link from "next/link";
 
 import { TapOnceLink } from "@/features/ui/tap-once-link";
@@ -138,7 +138,7 @@ export function FrenzAIWelcomeLive({
               data-ai-members=""
               className={aiButtonClass({ size: "lg", className: "relative min-w-0 flex-1 overflow-hidden" })}
             >
-              <Sparkles className="h-[18px] w-[18px] shrink-0 opacity-90" aria-hidden />
+              <Lightbulb className="h-[18px] w-[18px] shrink-0 opacity-90" aria-hidden />
               <span className="truncate">Create with AI</span>
               <span className="ai-btn__icon-end flex shrink-0" aria-hidden>
                 <ArrowRight className="h-[18px] w-[18px]" />

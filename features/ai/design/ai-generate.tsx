@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, ChevronDown, ChevronRight, Loader2, Sparkles, type LucideIcon } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, Loader2, type LucideIcon, Lightbulb } from "lucide-react";
 import { useId, useState, type ReactNode, type Ref } from "react";
 
 import { aiButtonClass } from "@/features/ai/design/ai-button";
@@ -130,7 +130,7 @@ export function AiGenerateButton({
       */
       className={cn(aiButtonClass({ size: "lg", className: "min-h-[3.5rem] shrink-0 px-6" }), className)}
     >
-      {busy ? <Loader2 className="h-[18px] w-[18px] animate-spin motion-reduce:animate-none" aria-hidden /> : <Sparkles className="h-[18px] w-[18px]" aria-hidden />}
+      {busy ? <Loader2 className="h-[18px] w-[18px] animate-spin motion-reduce:animate-none" aria-hidden /> : <Lightbulb className="h-[18px] w-[18px]" aria-hidden />}
       <span className="truncate">{busy ? busyLabel : children}</span>
       {busy ? null : (
         <span className="ai-btn__icon-end flex" aria-hidden>

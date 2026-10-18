@@ -3,6 +3,7 @@ import "server-only";
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import { pushPerson } from "@/lib/push/identity";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * FRIENDSHIP ANNIVERSARIES (Feature 20 Part 8, Relationship Celebrations) — "You and Ada became
@@ -48,7 +49,7 @@ export async function sendFriendAnniversaries(now = new Date()): Promise<{ sent:
         const who = await pushPerson(them);
         await sendSmartPush(
           me,
-          { title: who.name, body: anniversaryLine(years), url: who.handle ? `/u/${who.handle}` : "/friends", icon: who.icon, tag: `anniversary:${them}`, actorId: them },
+          { title: who.name, body: anniversaryLine(years), url: who.handle ? `${profilePath(who.handle)}` : "/friends", icon: who.icon, tag: `anniversary:${them}`, actorId: them },
           "low",
           "social",
           { type: "milestone", actorId: them },

@@ -1,6 +1,6 @@
 "use client";
 
-import { AudioLines, Mic, Pencil, Plus, ShieldCheck, Sparkles, Trash2, Type } from "lucide-react";
+import { AudioLines, Mic, Pencil, Plus, ShieldCheck, Trash2, Type } from "lucide-react";
 import Link from "next/link";
 import { aiButtonClass } from "@/features/ai/design/ai-button";
 import { AiCreditStrip } from "@/features/ai/design/ai-credit-strip";

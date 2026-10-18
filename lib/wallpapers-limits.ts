@@ -38,6 +38,23 @@ export function wallpaperDailyLimit(plan: BillingPlan): number {
   return WALLPAPER_DAILY_LIMITS[plan] ?? WALLPAPER_DAILY_LIMITS.free;
 }
 
+/**
+ * Admin-uploaded wallpapers are a Pro perk (owner, 2026-10-18: "wallpapers
+ * uploaded from admin dashboard to be only downloaded by pro users upward").
+ * A null `source` is the column default, 'admin'.
+ */
+export function wallpaperIsProOnly(source: string | null | undefined): boolean {
+  return (source ?? "admin") === "admin";
+}
+
+/** May this plan download a Pro-only wallpaper? Pro and Business — not Free. */
+export function planCanDownloadProWallpaper(plan: BillingPlan): boolean {
+  return plan !== "free";
+}
+
+export const WALLPAPER_PRO_ONLY_MESSAGE =
+  "This wallpaper is part of the Pro collection. Go Pro to download it in full quality, with no ads and no daily limit.";
+
 /** Does this plan watch an ad to download a wallpaper? */
 export function wallpaperNeedsReward(plan: BillingPlan): boolean {
   return wallpaperDailyLimit(plan) > 0;

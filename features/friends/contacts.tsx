@@ -22,6 +22,7 @@ import {
 } from "@/lib/social/contacts/normalize";
 import type { ContactPerson, FindableByEmail } from "@/lib/social/contacts/server";
 import { cn, formatCompactNumber } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Find friends from your contacts (Feature 19 · Part 5).
@@ -308,10 +309,10 @@ export function ContactsFinder({ viewerName }: { viewerName: string | null }) {
 function FoundRowView({ contact, person }: FoundRow) {
   return (
     <li className="flex items-center gap-3 px-3.5 py-2.5">
-      <Link href={`/u/${person.handle}`} prefetch={false} className="shrink-0" aria-label={person.displayName}>
+      <Link href={`${profilePath(person.handle)}`} prefetch={false} className="shrink-0" aria-label={person.displayName}>
         <PersonAvatar user={person} size={52} />
       </Link>
-      <Link href={`/u/${person.handle}`} prefetch={false} className="min-w-0 flex-1">
+      <Link href={`${profilePath(person.handle)}`} prefetch={false} className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-1">
           <span className="truncate text-[15px] font-semibold">{person.displayName}</span>
           {person.isVerified ? <VerifiedTick size="sm" className="h-[15px] w-[15px] shrink-0" /> : null}
@@ -424,7 +425,7 @@ function SavedMatches() {
         {people.map((p) => (
           <li key={p.id} className="flex items-center gap-3 px-3.5 py-2.5">
             <PersonAvatar user={p} size={44} />
-            <Link href={`/u/${p.handle}`} prefetch={false} className="min-w-0 flex-1 truncate text-[14.5px] font-semibold">
+            <Link href={`${profilePath(p.handle)}`} prefetch={false} className="min-w-0 flex-1 truncate text-[14.5px] font-semibold">
               {p.displayName}
             </Link>
             <FollowChip id={p.id} name={p.displayName} initial={p.isFollowing} source="contacts" />

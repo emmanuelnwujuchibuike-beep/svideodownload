@@ -8,6 +8,7 @@ import { useState } from "react";
 import { IdentityBadges } from "@/components/badges/identity-badges";
 import { ImageUpload } from "@/components/social/image-upload";
 import type { BillingPlan } from "@/lib/monetization/types";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * The Identity page's hero (owner reference: public/profile settings.jpg) —
@@ -93,7 +94,7 @@ export function IdentityHero({
           <p className="text-sm text-muted-foreground">@{handle || "username"}</p>
         </div>
         {handle ? (
-          <Link href={`/u/${handle}`} prefetch className="btn-lux btn-lux-secondary shrink-0">
+          <Link href={`${profilePath(handle)}`} prefetch className="btn-lux btn-lux-secondary shrink-0">
             View profile <ExternalLink className="h-3.5 w-3.5" />
           </Link>
         ) : null}

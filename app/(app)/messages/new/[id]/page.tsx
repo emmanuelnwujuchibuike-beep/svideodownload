@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getOrCreateConversation } from "@/lib/social/messages";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { profilePath } from "@/lib/social/profile-url";
 
 export const dynamic = "force-dynamic";
 
@@ -51,5 +52,5 @@ export default async function NewConversationPage({ params }: { params: Promise<
   } catch {
     /* ignore */
   }
-  redirect(handle ? `/u/${handle}` : "/messages");
+  redirect(handle ? `${profilePath(handle)}` : "/messages");
 }

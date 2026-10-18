@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeft, ArrowUpRight, Banknote, Bookmark, CalendarDays, Check, ChevronRight, Clapperboard, Crown, Download, Gem, Heart, Music4, Send, Sparkles, Sun, UserPlus, Video } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Banknote, Bookmark, CalendarDays, Check, ChevronRight, Clapperboard, Crown, Download, Gem, Heart, Music4, Send, Sun, UserPlus, Video, Lightbulb } from "lucide-react";
 import Link from "next/link";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
@@ -81,7 +81,7 @@ const QUEST_META: Record<QuestEvent, { icon: LucideIcon; hint: string; href: str
  * wallet number, and only credits earned after approval can be cashed out.
  */
 const CREDIT_USES: { icon: LucideIcon; title: string; body: string; href: string }[] = [
-  { icon: Sparkles, title: "Create with Frenz AI", body: "Videos, audio and more.", href: "/ai" },
+  { icon: Lightbulb, title: "Create with Frenz AI", body: "Videos, audio and more.", href: "/ai" },
   { icon: Crown, title: "Explore AI plans", body: "Unlock more each month.", href: "/ai/usage" },
   { icon: Send, title: "Send credits", body: "To a friend's wallet number.", href: "/ai/usage" },
   { icon: Banknote, title: "Withdraw earnings", body: "After approval, earned credits only.", href: "/rewards#withdraw" },
@@ -380,7 +380,7 @@ function QuestSection({ icon: Icon, title, endsAt, weekly, quests, capReached, j
 }
 
 const QuestCard = memo(function QuestCard({ q, capReached, fresh }: { q: QuestView; capReached: boolean; fresh: boolean }) {
-  const meta = QUEST_META[q.event] ?? { icon: Sparkles, hint: "", href: "/", go: "Open" };
+  const meta = QUEST_META[q.event] ?? { icon: Lightbulb, hint: "", href: "/", go: "Open" };
   const Icon = meta.icon;
   const pct = q.target > 0 ? Math.min(100, Math.round((q.progress / q.target) * 100)) : 0;
   const blocked = !q.completed && capReached;

@@ -119,7 +119,7 @@ describe("buildCreatorUniverse", () => {
 
   it("links a collaborator and a sound to their real pages", () => {
     const g = buildCreatorUniverse(FULL);
-    expect(g.nodes.find((n) => n.id === "collaborator:u2")!.href).toBe("/u/grace");
+    expect(g.nodes.find((n) => n.id === "collaborator:u2")!.href).toBe("/grace"); // profiles at /:handle (2026-10-17)
     expect(g.nodes.find((n) => n.id === "sound:s1")!.href).toBe("/sound/s1");
   });
 });

@@ -9,8 +9,8 @@ import {
   Image as ImageIcon,
   Music,
   Server,
-  Sparkles,
   Video,
+  Lightbulb,
 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -406,7 +406,7 @@ export default async function AdminPage() {
                 { id: "placements", label: "Ad placements", content: <AdManager ads={adRecords} /> },
                 /* Ad Platform Part 7: review, pause, remove and refund self-serve campaigns; advertisers. Loads when shown. */
                 { id: "campaigns", label: "Campaigns", content: <AdCampaignsDeskLazy /> },
-                /* Self-serve campaigns paid through Paystack/Bachs (Part 3) - loads when shown. */
+                /* Self-serve campaigns paid through Paystack (Part 3) - loads when shown. */
                 /* Part 3 (0242): guaranteed-views obligations, capacity, audited delivery actions. Loads when shown. */
                 { id: "delivery-monitor", label: "Delivery monitor", content: <AdDeliveryMonitorLazy /> },
                 { id: "campaign-payments", label: "Campaign payments", content: <AdCampaignPaymentsLazy /> },
@@ -1237,7 +1237,7 @@ async function TrafficSection({ analytics }: { analytics: MonetizationAnalytics 
           accent
         />
         <StatCard
-          icon={Sparkles}
+          icon={Lightbulb}
           label="Today"
           value={downloads ? formatCompactNumber(downloads.today) : "—"}
         />

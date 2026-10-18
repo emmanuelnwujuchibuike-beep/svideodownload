@@ -1,10 +1,11 @@
 "use client";
 
-import { Gift, Megaphone, Rocket, Sparkles, X } from "lucide-react";
+import { Gift, Megaphone, Rocket, X, Lightbulb } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { type ComponentType, useEffect, useRef, useState } from "react";
 
 import type { PublicAnnouncement } from "@/lib/announcement";
+import { formatAnnouncement } from "@/lib/announcement-format";
 import { haptic } from "@/lib/motion/haptics";
 import { cdnBucket } from "@/lib/net/cdn-bucket";
 import { playSound } from "@/lib/notifications/sound-fx";
@@ -25,31 +26,27 @@ const DISMISS_KEY = "frenz-ann-dismissed";
 
 const VARIANTS: Record<
   PublicAnnouncement["variant"],
-  { icon: ComponentType<{ className?: string }>; label: string; bar: string; glow: string }
+  { icon: ComponentType<{ className?: string }>; label: string; bar: string }
 > = {
   feature: {
-    icon: Sparkles,
+    icon: Lightbulb,
     label: "New",
     bar: "from-violet-600 via-indigo-600 to-blue-600",
-    glow: "shadow-indigo-600/40",
   },
   update: {
     icon: Rocket,
     label: "Update",
     bar: "from-emerald-500 via-teal-600 to-cyan-600",
-    glow: "shadow-teal-600/40",
   },
   announcement: {
     icon: Megaphone,
     label: "News",
     bar: "from-blue-600 via-sky-600 to-indigo-600",
-    glow: "shadow-blue-600/40",
   },
   promo: {
     icon: Gift,
     label: "Offer",
     bar: "from-amber-500 via-orange-500 to-rose-500",
-    glow: "shadow-orange-500/40",
   },
 };
 
@@ -149,6 +146,20 @@ export function AnnouncementBanner({ showOn }: { showOn?: string[] }) {
   const Icon = v.icon;
   // Slow, readable scroll speed scaled to the message length.
   const marqueeSeconds = Math.max(12, Math.round(ann.message.length * 0.22));
+  // The built-in house style (lib/announcement-format.ts): tidy punctuation and
+  // spacing, and a short first sentence promoted to a headline.
+  const copy = formatAnnouncement(ann.message);
+  const message = (
+    <>
+      {copy.headline ? (
+        <>
+          <span className="font-brand text-[14px] font-bold tracking-[-0.01em] text-white sm:text-[15px]">{copy.headline}</span>
+          <span aria-hidden className="mx-2 inline-block h-1 w-1 translate-y-[-2px] rounded-full bg-white/50" />
+        </>
+      ) : null}
+      <span className={cn(copy.headline ? "font-medium text-white/85" : "font-semibold text-white")}>{copy.body}</span>
+    </>
+  );
 
   const dismiss = () => {
     haptic("light");
@@ -165,36 +176,41 @@ export function AnnouncementBanner({ showOn }: { showOn?: string[] }) {
     <div
       ref={barRef}
       style={{ top: "var(--frenz-header-bottom, calc(var(--frenz-safe-top, 0px) + 4rem))" }}
-      className="fixed inset-x-0 z-40 px-3 pt-2 animate-[slideDownIn_420ms_cubic-bezier(0.16,1,0.3,1)]"
+      className={cn(
+        "fixed inset-x-0 z-40 overflow-hidden bg-gradient-to-r text-white animate-[slideDownIn_420ms_cubic-bezier(0.16,1,0.3,1)]",
+        v.bar,
+      )}
       role="status"
     >
-      {/* Floating, rounded, glassy card — a native-iOS notification feel. */}
-      <div
-        className={cn(
-          "relative mx-auto flex max-w-2xl items-center gap-3 overflow-hidden rounded-[1.25rem] bg-gradient-to-r px-3 py-2.5 text-white shadow-xl ring-1 ring-white/15 sm:px-4",
-          v.bar,
-          v.glow,
-        )}
-      >
-        {/* top sheen for depth */}
-        <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/20 to-transparent" />
-        {/* soft corner highlight */}
-        <span aria-hidden className="pointer-events-none absolute -left-8 -top-10 h-24 w-24 rounded-full bg-white/20 blur-2xl" />
+      {/* Embedded strip, edge to edge on top of the body (owner 2026-10-18) — no
+          floating card, no rounded corners, no side gutter. The content stays
+          centred in a readable column on wide screens. */}
+      {/* top sheen for depth */}
+      <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/15 to-transparent" />
+      <div className="relative mx-auto flex max-w-2xl items-center gap-3 px-4 py-2.5">
 
-        {/* icon in a frosted disc */}
-        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 ring-1 ring-inset ring-white/25 backdrop-blur-md">
-          <Icon className="h-[18px] w-[18px]" />
+        {/* icon on a frosted tile */}
+        <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-inset ring-white/25 shadow-sm shadow-black/10">
+          <Icon className="h-4 w-4" />
         </span>
 
         <div className="relative min-w-0 flex-1">
-          <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-[0.14em] text-white/75">{v.label}</span>
+          <span className="mb-1 inline-flex items-center rounded-full bg-white/15 px-2 py-px font-brand text-[9.5px] font-bold uppercase leading-4 tracking-[0.18em] text-white/90 ring-1 ring-inset ring-white/20">
+            {v.label}
+          </span>
           <div ref={msgWrapRef} className="overflow-hidden">
             <div
               className={cn("flex w-max whitespace-nowrap", overflowing && "gap-16")}
               style={overflowing ? { animation: `announcement-marquee ${marqueeSeconds}s linear infinite` } : undefined}
             >
-              <span ref={msgTextRef} className="text-[13px] font-semibold leading-snug tracking-tight sm:text-sm">{ann.message}</span>
-              {overflowing ? <span aria-hidden className="text-[13px] font-semibold leading-snug tracking-tight sm:text-sm">{ann.message}</span> : null}
+              <span ref={msgTextRef} className="text-[13px] leading-snug tracking-[-0.005em] antialiased sm:text-sm">
+                {message}
+              </span>
+              {overflowing ? (
+                <span aria-hidden className="text-[13px] leading-snug tracking-[-0.005em] antialiased sm:text-sm">
+                  {message}
+                </span>
+              ) : null}
             </div>
           </div>
         </div>

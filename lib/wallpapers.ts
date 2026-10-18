@@ -46,6 +46,13 @@ export interface Wallpaper {
   /** True for the built-in placeholders — they have no database row, so they
    *  can't be liked, saved or commented on. */
   builtIn: boolean;
+  /**
+   * Pro-only download (owner, 2026-10-18): wallpapers an ADMIN uploaded from the
+   * dashboard download on Pro and above only. Member shares and the built-in
+   * placeholders stay free. Everyone may still VIEW it. Enforced in
+   * `/api/wallpaper?dl=1`; this flag only lets the UI say so before a tap.
+   */
+  proOnly?: boolean;
   viewerLiked?: boolean;
   viewerSaved?: boolean;
   /**

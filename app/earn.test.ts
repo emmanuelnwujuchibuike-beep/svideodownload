@@ -73,7 +73,8 @@ describe("/earn/start sends people only to fixed paths", () => {
 
   it("a signed-in creator goes to their OWN SUB tab, by the session's user id", () => {
     expect(START).toMatch(/\.eq\("id", user\.id\)/);
-    expect(START).toMatch(/`\/u\/\$\{encodeURIComponent\(handle\)\}\?tab=sub`/);
+    // 2026-10-17: profiles live at /:handle — profilePath builds it (and encodes)
+    expect(START).toMatch(/`\$\{profilePath\(handle\)\}\?tab=sub`/);
   });
 
   it("safeNext still refuses the open-redirect shapes the hop could be bent into (teeth)", () => {

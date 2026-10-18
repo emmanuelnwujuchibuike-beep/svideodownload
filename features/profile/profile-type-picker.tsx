@@ -10,11 +10,11 @@ import {
   Loader2,
   Lock,
   School,
-  Sparkles,
   Store,
   UserRound,
   Users,
   type LucideIcon,
+  Lightbulb,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils";
 
 const ICONS: Record<string, LucideIcon> = {
   UserRound,
-  Sparkles,
+  Lightbulb,
   Store,
   Briefcase,
   GraduationCap,

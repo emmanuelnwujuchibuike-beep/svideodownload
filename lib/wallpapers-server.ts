@@ -3,6 +3,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { getBuiltInWallpaper, type Wallpaper, type WallpaperComment } from "./wallpapers";
+import { wallpaperIsProOnly } from "./wallpapers-limits";
 
 /**
  * Server reads/writes for the wallpaper library (migration 0105).
@@ -88,6 +89,7 @@ function toWallpaper(row: Row): Wallpaper {
     */
     createdAt: row.created_at ?? null,
     builtIn: false,
+    proOnly: wallpaperIsProOnly(row.source),
   };
 }
 
@@ -225,21 +227,27 @@ export async function listWallpapers(viewerId?: string | null, limit = 600): Pro
 }
 
 /** One wallpaper's source URL, for the /api/wallpaper proxy. */
-export async function wallpaperImageUrl(id: string): Promise<{ url: string; name: string } | null> {
+export async function wallpaperImageUrl(
+  id: string,
+): Promise<{ url: string; name: string; proOnly: boolean } | null> {
   const builtIn = getBuiltInWallpaper(id);
   if (builtIn) {
     const { sourceFor } = await import("./wallpapers");
-    return { url: sourceFor(id, "full"), name: builtIn.name };
+    return { url: sourceFor(id, "full"), name: builtIn.name, proOnly: false };
   }
   try {
     const { data } = await createAdminClient()
       .from("wallpapers")
-      .select("title, image_url")
+      .select("title, image_url, source")
       .eq("id", id)
       .eq("status", "published")
       .maybeSingle();
     if (!data) return null;
-    return { url: data.image_url as string, name: data.title as string };
+    return {
+      url: data.image_url as string,
+      name: data.title as string,
+      proOnly: wallpaperIsProOnly(data.source as string | null),
+    };
   } catch {
     return null;
   }

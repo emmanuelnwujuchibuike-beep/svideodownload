@@ -1,6 +1,6 @@
 "use client";
 
-import { Crown, Download, History, Home, Images, LifeBuoy, Search, Settings, Sparkles } from "lucide-react";
+import { Crown, Download, History, Home, Images, LifeBuoy, Search, Settings, Lightbulb } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -42,7 +42,7 @@ interface NavItem {
  */
 const MAIN: NavItem[] = [
   { href: "/", label: "Home", icon: Home },
-  { href: "/ai", label: "AI Studio", icon: Sparkles, deep: true },
+  { href: "/ai", label: "AI Studio", icon: Lightbulb, deep: true },
   { href: "/downloads", label: "Downloads", icon: Download },
   { href: "/wallpapers", label: "Wallpapers", icon: Images },
   { href: "/ai/history", label: "Library", icon: History },

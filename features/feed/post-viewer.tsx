@@ -36,6 +36,7 @@ import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social
 import type { FeedItem } from "@/lib/social/home-feed";
 import { cn, formatCompactNumber } from "@/lib/utils";
 import { useCloseOnNavigate } from "@/features/app-shell/use-close-on-navigate";
+import { profilePath } from "@/lib/social/profile-url";
 
 // Code-split, each gated behind its own "ready" flag (never mounted until
 // the corresponding action is actually tapped) — this viewer is used from
@@ -306,7 +307,7 @@ function ViewerInner({
       >
         {/* Publisher */}
         <div className="flex items-center gap-3">
-          <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="shrink-0">
+          <Link href={`${profilePath(item.publisher.handle)}`} onClick={onClose} className="shrink-0">
             {item.publisher.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={item.publisher.avatarUrl} alt="" className="h-11 w-11 rounded-full object-cover ring-1 ring-border" />
@@ -316,7 +317,7 @@ function ViewerInner({
               </span>
             )}
           </Link>
-          <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="min-w-0 flex-1">
+          <Link href={`${profilePath(item.publisher.handle)}`} onClick={onClose} className="min-w-0 flex-1">
             <span className="flex items-center gap-1 font-semibold leading-tight">
               <span className="truncate">{item.publisher.displayName}</span>
               {item.publisher.isVerified ? <VerifiedTick className="h-4 w-4 shrink-0" /> : null}

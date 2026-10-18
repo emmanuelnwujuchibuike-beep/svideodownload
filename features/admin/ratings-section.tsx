@@ -4,6 +4,7 @@ import Link from "next/link";
 import { alertsEnabled } from "@/lib/notify";
 import { getRatings } from "@/lib/social/ratings";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * App ratings — the admin panel (migration 0111).
@@ -92,7 +93,7 @@ export async function RatingsSection() {
                 </span>
                 <span className="text-sm font-semibold">
                   {r.handle ? (
-                    <Link href={`/u/${r.handle}`} className="hover:underline">
+                    <Link href={`${profilePath(r.handle)}`} className="hover:underline">
                       {r.displayName || `@${r.handle}`}
                     </Link>
                   ) : (

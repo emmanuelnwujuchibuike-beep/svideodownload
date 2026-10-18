@@ -17,6 +17,7 @@ import { TimeCapsuleCard } from "@/features/profile/time-capsule-card";
 import { StreakProfileCard } from "@/features/streaks/streak-profile-card";
 import type { HubPayload } from "@/lib/profile/hub-data";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * The content of each hub section, from the payload the API answered with.
@@ -166,7 +167,7 @@ function FriendsPanel({ friends }: { friends: { name: string; handle: string; av
         <ul className="space-y-1">
           {friends.map((f) => (
             <li key={f.handle}>
-              <Link href={`/u/${f.handle}`} className="flex items-center gap-3 rounded-xl px-1 py-1.5 transition hover:bg-secondary/60">
+              <Link href={`${profilePath(f.handle)}`} className="flex items-center gap-3 rounded-xl px-1 py-1.5 transition hover:bg-secondary/60">
                 <Avatar name={f.name} url={f.avatarUrl} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{f.name}</span>

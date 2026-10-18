@@ -16,12 +16,12 @@ import {
   MoreHorizontal,
   Search,
   ShieldCheck,
-  Sparkles,
   Send,
   Star,
   UserMinus,
   UserPlus,
   Users,
+  Lightbulb,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -36,6 +36,7 @@ import { usePresence } from "@/features/friends/use-presence";
 import { timeAgo } from "@/features/notifications/meta";
 import type { FriendItem, FriendProfile, FriendRequestItem, FriendsOverview } from "@/lib/social/friends";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * /friends — Smart Friends Hub v2 (Friends Hub spec): Friend Orbit signature
@@ -245,7 +246,7 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
       <ul className={cn("mb-5 divide-y divide-black/[0.06] overflow-hidden rounded-[20px] dark:divide-white/[0.07]", GLASS)}>
         <li>
           <Link href="/friends/insights" prefetch={false} className="flex items-center gap-3 px-3.5 py-2.5">
-            <Sparkles className="h-[18px] w-[18px] shrink-0 text-primary" aria-hidden />
+            <Lightbulb className="h-[18px] w-[18px] shrink-0 text-primary" aria-hidden />
             <span className="min-w-0 flex-1">
               <span className="block text-[14px] font-semibold">Your connections</span>
               <span className="block truncate text-[12.5px] text-muted-foreground">How each friendship is going. Only you see it.</span>
@@ -381,7 +382,7 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
           <SectionHeader
             id="friends-catchup"
             title="Catch up"
-            action={<Sparkles className="h-4 w-4 text-primary" aria-hidden />}
+            action={<Lightbulb className="h-4 w-4 text-primary" aria-hidden />}
           />
           <GlassGroup label="Friends to catch up with">
             {catchUp.map((f) => (
@@ -489,7 +490,7 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
           <GlassGroup label="Sent friend requests">
             {outgoing.map((req) => (
               <li key={req.id} className="flex items-center gap-3 px-3.5 py-2.5">
-                <Link href={`/u/${req.user.handle}`} prefetch className="flex min-w-0 flex-1 items-center gap-3">
+                <Link href={`${profilePath(req.user.handle)}`} prefetch className="flex min-w-0 flex-1 items-center gap-3">
                   <PersonAvatar user={req.user} />
                   <span className="min-w-0">
                     <span className="block truncate text-[15px] font-semibold">{req.user.displayName}</span>
@@ -581,7 +582,7 @@ function FriendRow({
   return (
     <li className="px-3.5 py-2.5">
       <div className="flex items-center gap-3">
-        <Link href={`/u/${item.user.handle}`} prefetch={false} className="flex min-w-0 flex-1 items-center gap-3">
+        <Link href={`${profilePath(item.user.handle)}`} prefetch={false} className="flex min-w-0 flex-1 items-center gap-3">
           <span className="relative shrink-0">
             <PersonAvatar user={item.user} online={online} />
             {/* on the avatar, not its own column — the name keeps the room (320 px) */}
@@ -614,7 +615,7 @@ function FriendRow({
         <div className="mt-2 flex flex-wrap gap-2 pl-14">
           {/* Feature 19 Part 7: the friendship's own page (timeline, bucket list, capsules) */}
           <Link href={`/friends/with/${item.user.handle}`} prefetch={false} className={quietPill}>
-            <Sparkles className="h-4 w-4 text-primary" aria-hidden /> Our story
+            <Lightbulb className="h-4 w-4 text-primary" aria-hidden /> Our story
           </Link>
           {/* Part 8: archive keeps the history and leaves the list; restore from /friends/insights */}
           <button type="button" onClick={() => void archive()} disabled={busy} className={quietPill}>

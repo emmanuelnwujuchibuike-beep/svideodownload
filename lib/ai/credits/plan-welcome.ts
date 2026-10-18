@@ -14,7 +14,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * subscription celebration and an optional survey around the plans features."
  *
  * Every activation path calls this (the Paystack webhook, the Paystack
- * verify-on-return, the Bachs webhook and return). The claim is a conditional
+ * verify-on-return). The claim is a conditional
  * update on the subscription row (0190 `welcomed_plan`), so whichever path
  * lands first sends it and the rest do nothing — and a renewal of the same
  * plan is never welcomed twice. The notification opens the credits page with

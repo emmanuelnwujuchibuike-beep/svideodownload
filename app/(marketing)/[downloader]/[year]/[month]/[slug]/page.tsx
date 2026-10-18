@@ -5,7 +5,7 @@ import { isAdmin } from "@/lib/admin";
 import { PostPageView, postPageMetadata } from "@/features/social/post-page-view";
 import { isCategory } from "@/lib/social/categories";
 import { getPostBySlug } from "@/lib/social/posts";
-import { postHref } from "@/lib/social/post-url";
+import { postHref, reelsViewHref } from "@/lib/social/post-url";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -67,6 +67,8 @@ export default async function CategoryPostPage({ params }: { params: Promise<Par
   const { id: me, admin: viewerIsAdmin } = await viewer();
   const post = await getPostBySlug(slug, me, viewerIsAdmin);
   if (!post) notFound();
+  // owner, 2026-10-17: a video is never shown on this page — it opens in the Reels viewer
+  if (post.media_kind === "video") redirect(reelsViewHref(post.id));
 
   const canonical = postHref(post);
   if (canonical !== `/${category}/${year}/${month}/${slug}`) redirect(canonical);

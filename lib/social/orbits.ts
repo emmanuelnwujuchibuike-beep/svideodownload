@@ -6,6 +6,7 @@ import type { OrbitCard, OrbitId, OrbitResult } from "./orbits-catalogue";
 import { postHref } from "./post-url";
 import { listTrendingSounds } from "./sounds";
 import { getNewCreators, getSuggestedCreators } from "./suggest";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Discovery Orbit™ (Feature 15 Part 8) — instead of one "For You" algorithm,
@@ -52,7 +53,7 @@ export async function getOrbitFeed(orbit: OrbitId, viewerId: string | null, limi
         cards.push({
           id: c.id,
           kind: "creator",
-          href: `/u/${c.handle}`,
+          href: `${profilePath(c.handle)}`,
           title: c.displayName,
           subtitle: c.mutualFriendsCount > 0 ? `Followed by ${c.mutualFriendsCount} you follow` : `@${c.handle}`,
           imageUrl: c.avatarUrl,

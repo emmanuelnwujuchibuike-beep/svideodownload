@@ -21,7 +21,7 @@ export interface AiCreditEntitlementView {
   dayResetsAt: string;
   weekResetsAt: string;
   timezone: string;
-  subscription: { plan: "ai_pro" | "ai_max"; status: string; active: boolean; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; manageable: boolean; provider?: "paystack" | "bachs" | "credits" } | null;
+  subscription: { plan: "ai_pro" | "ai_max"; status: string; active: boolean; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; manageable: boolean; provider?: "paystack" | "credits" } | null;
 }
 
 export interface AiCreditLedgerView {
@@ -73,7 +73,7 @@ export function getAiCredits(opts?: { ledger?: number }): Promise<Result<AiCredi
 }
 
 /** Begin an AI plan checkout: the server answers Paystack's hosted page; the browser navigates there. */
-export function beginAiPlanCheckout(plan: "ai_pro" | "ai_max", returnTo: string, provider?: "paystack" | "bachs" | null): Promise<Result<{ url: string }>> {
+export function beginAiPlanCheckout(plan: "ai_pro" | "ai_max", returnTo: string, provider?: "paystack" | null): Promise<Result<{ url: string }>> {
   return request<{ url: string }>("/api/ai/subscriptions/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ plan, returnTo, ...(provider ? { provider } : {}) }) });
 }
 
@@ -87,11 +87,6 @@ export function verifyAiPlanReturn(reference: string): Promise<Result<{ activate
   return request(`/api/ai/subscriptions/verify?reference=${encodeURIComponent(reference)}`);
 }
 
-/** A Bachs-billed plan: stop it at the end of the paid period (Bachs has no hosted manage page). */
-export function cancelAiPlan(): Promise<Result<{ endsAt?: string | null; alreadyCanceled?: boolean }>> {
-  return request("/api/ai/subscriptions/cancel", { method: "POST" });
-}
-
 /** Paystack's hosted page for the member's AI plan (card, cancellation). */
 export function openAiPlanManage(): Promise<Result<{ url: string }>> {
   return request<{ url: string }>("/api/ai/subscriptions/manage", { method: "POST" });
@@ -101,7 +96,7 @@ export function openAiPlanManage(): Promise<Result<{ url: string }>> {
  * The return from an AI PLAN checkout, taken once (and removed from the URL).
  *
  * 🔴 2026-10-07: only when `ai_plan` is in the address — every plan checkout
- * puts it there (the Paystack callback and both Bachs URLs). This used to claim
+ * puts it there (the Paystack callback). This used to claim
  * ANY `?reference=`, so on the credits page — the return target of every
  * wallet top-up — a deposit's reference was taken as a plan return, checked by
  * the plan route (which refuses a top-up), and the top-up verify never ran: a

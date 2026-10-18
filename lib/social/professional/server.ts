@@ -37,6 +37,7 @@ import {
   type RecKind,
   type TrustFactor,
 } from "./engine";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Professional Network™ — reads and writes (Feature 19 · Part 12).
@@ -706,7 +707,7 @@ export async function exportNetwork(userId: string): Promise<Record<string, unkn
   const creds = await listCredentials(userId);
   return {
     exportedAt: new Date().toISOString(),
-    profile: { handle: d.me.handle, headline: d.me.headline, industry: d.me.industry, skills: d.me.skills, openTo: d.me.openTo, businessCard: `/u/${d.me.handle}/card` },
+    profile: { handle: d.me.handle, headline: d.me.headline, industry: d.me.industry, skills: d.me.skills, openTo: d.me.openTo, businessCard: `${profilePath(d.me.handle)}/card` },
     credentials: creds.map((c) => ({ kind: c.kind, title: c.title, organization: c.organization, started: c.startedOn, ended: c.isCurrent ? "present" : c.endedOn, url: c.url })),
     connections: d.connections.map((c) => ({ handle: c.person.handle, name: c.person.displayName, theyAre: c.theirRole === "custom" ? c.customLabel : c.theirRole, youAre: c.myRole, context: c.context, since: c.respondedAt })),
     recommendationsReceived: d.recommendationsReceived.map((r) => ({ from: r.person.handle, kind: r.kind, status: r.status, text: r.body, at: r.createdAt })),

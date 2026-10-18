@@ -11,10 +11,10 @@ import {
   Moon,
   PawPrint,
   Rocket,
-  Sparkles,
   Triangle,
   Waves,
   type LucideIcon,
+  Lightbulb,
 } from "lucide-react";
 
 /**
@@ -37,7 +37,7 @@ const ICONS: Record<string, LucideIcon> = {
   nature: Leaf,
   abstract: Triangle,
   dark: Moon,
-  anime: Sparkles,
+  anime: Lightbulb,
   space: Rocket,
   gradient: Waves,
   texture: Layers,

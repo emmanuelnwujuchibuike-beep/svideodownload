@@ -1,4 +1,4 @@
-import { ArrowRight, Check, ChevronRight, Sparkles } from "lucide-react";
+import { ArrowRight, Check, ChevronRight, Lightbulb } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -163,7 +163,7 @@ export default async function ProfileHealthPage() {
               key={p.title}
               className="flex items-start gap-3 rounded-2xl border border-dashed border-border/70 px-3.5 py-3 opacity-75"
             >
-              <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-semibold">{p.title}</span>
                 <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">Waiting on {p.needs}.</span>

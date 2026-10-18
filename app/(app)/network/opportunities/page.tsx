@@ -9,6 +9,7 @@ import { OPPORTUNITY_KINDS, type OpportunityKind } from "@/lib/social/profession
 import { listOpportunities } from "@/lib/social/professional/server";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Opportunities", robots: { index: false, follow: false } };
@@ -82,7 +83,7 @@ export default async function OpportunitiesRoute({ searchParams }: { searchParam
                   {o.description ? <p className="mt-1.5 line-clamp-3 whitespace-pre-line text-[13.5px]">{o.description}</p> : null}
                   {o.owner ? (
                     <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                      <Link href={`/u/${o.owner.handle}/network`} prefetch={false} className="flex min-w-0 items-center gap-2 rounded-xl transition active:opacity-70">
+                      <Link href={`${profilePath(o.owner.handle)}/network`} prefetch={false} className="flex min-w-0 items-center gap-2 rounded-xl transition active:opacity-70">
                         <PersonAvatar user={o.owner} size={36} />
                         <span className="truncate text-[13px] font-medium">{o.owner.displayName}</span>
                       </Link>

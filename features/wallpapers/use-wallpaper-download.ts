@@ -6,8 +6,9 @@ import { startDownload } from "@/features/downloads/manager";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
+import type { BillingPlan } from "@/lib/monetization/types";
 import { resolutionBadge, type Wallpaper } from "@/lib/wallpapers";
-import { WALLPAPER_REWARD_SECONDS } from "@/lib/wallpapers-limits";
+import { planCanDownloadProWallpaper, WALLPAPER_REWARD_SECONDS } from "@/lib/wallpapers-limits";
 
 export interface WallpaperAllowance {
   /** 0 = uncapped (Pro / Business). */
@@ -17,6 +18,8 @@ export interface WallpaperAllowance {
   remaining: number | null;
   needsAd: boolean;
   adSeconds: number;
+  /** The visitor's plan — decides Pro-only wallpapers before a tap reaches the server. */
+  plan?: BillingPlan;
 }
 
 /**
@@ -53,6 +56,7 @@ export function useWallpaperDownload() {
   const [allowance, setAllowance] = useState<WallpaperAllowance | null>(null);
   const [adOpen, setAdOpen] = useState(false);
   const [limitHit, setLimitHit] = useState(false);
+  const [proRequired, setProRequired] = useState(false);
   // The allowance is read once per mount and adjusted locally after that, so a
   // grid of forty wallpapers costs one request rather than one per tap.
   const fetched = useRef(false);
@@ -77,6 +81,18 @@ export function useWallpaperDownload() {
 
   const download = useCallback(
     (wallpaper: Wallpaper) => {
+      // An admin-uploaded wallpaper is a Pro download (owner, 2026-10-18). Say so
+      // before the ad and the transfer; the server refuses it regardless. Plan
+      // not known yet ⇒ let the server decide rather than turn a member away.
+      if (
+        wallpaper.proOnly &&
+        allowance &&
+        !planCanDownloadProWallpaper(allowance.plan ?? (allowance.limit === 0 ? "pro" : "free"))
+      ) {
+        haptic("medium");
+        setProRequired(true);
+        return;
+      }
       const capped = allowance && allowance.limit > 0;
       if (capped && (allowance?.remaining ?? 1) <= 0) {
         haptic("medium");
@@ -129,6 +145,8 @@ export function useWallpaperDownload() {
     closeAd: useCallback(() => setAdOpen(false), []),
     limitHit,
     closeLimit: useCallback(() => setLimitHit(false), []),
+    proRequired,
+    closeProRequired: useCallback(() => setProRequired(false), []),
     adSeconds: allowance?.adSeconds ?? WALLPAPER_REWARD_SECONDS,
   };
 }

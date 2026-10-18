@@ -1,3 +1,5 @@
+import { isProfilePath } from "@/lib/social/profile-url";
+
 /**
  * The page registry — every surface the admin dashboard reports on.
  *
@@ -155,6 +157,8 @@ export function matchPage(rawPath: string | null | undefined): string | null {
   for (const p of PAGES) {
     if (p.pattern?.test(path)) return p.id;
   }
+  // 2026-10-17: profiles live at /:handle (the /u/ form above still matches old links)
+  if (isProfilePath(path)) return "profile-public";
   return null;
 }
 

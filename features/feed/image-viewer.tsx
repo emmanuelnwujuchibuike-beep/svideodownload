@@ -66,6 +66,7 @@ import type { FeedItem } from "@/lib/social/home-feed";
 import { cn, formatCompactNumber, formatPostedOn } from "@/lib/utils";
 import { allowWindowOpen } from "@/lib/monetization/popunder-guard";
 import { useCloseOnNavigate } from "@/features/app-shell/use-close-on-navigate";
+import { profilePath } from "@/lib/social/profile-url";
 
 interface CommentsData {
   comments: CommentNode[];
@@ -560,7 +561,7 @@ function ImageStage({
         {/* Caption + author (auto-hides) — the sidebar repeats this statically on
             lg, so it's redundant there but harmless (mask lets it fade the same). */}
         <div className={cn("pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/80 to-transparent px-4 pb-[calc(env(safe-area-inset-bottom,0px)+4.25rem)] pt-16 transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")}>
-          <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="pointer-events-auto inline-flex items-center gap-1.5 font-bold text-white">
+          <Link href={`${profilePath(item.publisher.handle)}`} onClick={onClose} className="pointer-events-auto inline-flex items-center gap-1.5 font-bold text-white">
             @{item.publisher.handle}
           </Link>
           {title ? (
@@ -649,7 +650,7 @@ function ImageStage({
           context), then the comments list — always visible, no tap required. */}
       <aside className="hidden w-[400px] shrink-0 flex-col overflow-y-auto border-l border-white/10 bg-card p-5 lg:flex">
         <div className="flex items-center gap-3">
-          <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="shrink-0">
+          <Link href={`${profilePath(item.publisher.handle)}`} onClick={onClose} className="shrink-0">
             {item.publisher.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={item.publisher.avatarUrl} alt="" className="h-11 w-11 rounded-full object-cover ring-1 ring-border" />
@@ -659,7 +660,7 @@ function ImageStage({
               </span>
             )}
           </Link>
-          <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="min-w-0 flex-1">
+          <Link href={`${profilePath(item.publisher.handle)}`} onClick={onClose} className="min-w-0 flex-1">
             <span className="flex items-center gap-1 font-semibold leading-tight">
               <span className="truncate">{item.publisher.displayName}</span>
               {item.publisher.isVerified ? <VerifiedTick className="h-4 w-4 shrink-0" /> : null}

@@ -7,6 +7,7 @@ import type { RequestPolicy } from "@/lib/social/friend-requests/trust";
 import type { FollowPolicy } from "@/lib/social/follow-policy";
 import { friendIdSet } from "@/lib/social/friend-ids";
 import { PROFILE_ACCENTS } from "@/lib/social/profile-moods";
+import { HANDLE_RE, RESERVED_HANDLES } from "@/lib/social/profile-url";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -45,18 +46,14 @@ export interface PublicProfile {
 
 /* ------------------------------- handles -------------------------------- */
 
-export const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
-
-const RESERVED = new Set([
-  "admin", "api", "account", "login", "logout", "settings", "pricing", "blog",
-  "developers", "contact", "about", "terms", "privacy", "dmca", "u", "go",
-  "auth", "frenzsave", "support", "help", "home", "explore", "trending",
-]);
+// one format and one reserved list, shared with the /:handle routing (lib/social/profile-url.ts, 2026-10-17):
+// a handle may never take a path the app uses (/feed, /reels, /ai, a category hub …)
+export { HANDLE_RE } from "@/lib/social/profile-url";
 
 /** Normalises a raw handle and validates it. Returns null if invalid/reserved. */
 export function normalizeHandle(raw: string): string | null {
   const h = raw.trim().toLowerCase().replace(/^@/, "");
-  if (!HANDLE_RE.test(h) || RESERVED.has(h)) return null;
+  if (!HANDLE_RE.test(h) || RESERVED_HANDLES.has(h)) return null;
   return h;
 }
 

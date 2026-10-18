@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { cn, formatCompactNumber } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 export interface SuggestItem {
   id: string;
@@ -53,7 +54,7 @@ function SuggestRow({ item }: { item: SuggestItem }) {
 
   return (
     <li className="flex items-center gap-2.5">
-      <Link href={`/u/${item.handle}`} className="shrink-0">
+      <Link href={`${profilePath(item.handle)}`} className="shrink-0">
         {item.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={item.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover ring-1 ring-border" />
@@ -63,7 +64,7 @@ function SuggestRow({ item }: { item: SuggestItem }) {
           </span>
         )}
       </Link>
-      <Link href={`/u/${item.handle}`} className="min-w-0 flex-1">
+      <Link href={`${profilePath(item.handle)}`} className="min-w-0 flex-1">
         <span className="flex items-center gap-1 text-sm font-semibold leading-tight">
           <span className="truncate">{item.displayName}</span>
           {item.isVerified ? <VerifiedTick className="h-3.5 w-3.5 shrink-0" /> : null}

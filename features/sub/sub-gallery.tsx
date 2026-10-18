@@ -14,6 +14,7 @@ import { cn, formatCompactNumber } from "@/lib/utils";
 import { claimOpening, fresh, type Opened, openedCache } from "./opened-cache";
 import { forgetSubPosts, loadSubPosts } from "./sub-posts-cache";
 import { CreatorSubscribeCard } from "./subscribe-card";
+import { profilePath } from "@/lib/social/profile-url";
 
 // reporting exclusive content (Frenz Exclusive Part 2): the shared sheet, loaded only when opened
 const ReportSheet = dynamic(() => import("@/features/social/report-sheet").then((m) => m.ReportSheet), { ssr: false });
@@ -451,7 +452,7 @@ export function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted, 
             })}
           </div>
         )}
-        {data && (data.watermark || data.creatorHandle) ? <RovingWatermark viewer={data.watermark} creatorHandle={data.creatorHandle ?? null} /> : null}
+        {data?.creatorHandle ? <RovingWatermark creatorHandle={data.creatorHandle} /> : null}
 
         {/* the top bar floats over the media, inside the safe area like the History player */}
         <div className="absolute inset-x-0 top-0 z-[3] flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent px-3 pb-6 pt-2">
@@ -783,31 +784,28 @@ function shortAgo(iso: string): string {
  *
  * It is the ONLY mark (owner, 2026-10-14: "the one moving alone is enough, and
  * add /the user's name that opens the profile page in the moving watermark"):
- * the creator's fixed bottom-edge address is gone and its link rides here —
- * "@viewer · frenzsave.com/u/<creator>", a tap opening the creator's PUBLIC
- * profile, never this private post.
+ * the creator's fixed bottom-edge address is gone and its link rides here,
+ * a tap opening the creator's PUBLIC profile, never this private post.
+ *
+ * Owner, 2026-10-17: "In all watermarks, no Frenz and Frenzsave, only domain and username" —
+ * the mark is exactly "frenzsave.com/<creator>". The viewer's @handle is no longer drawn.
  */
-function RovingWatermark({ viewer, creatorHandle }: { viewer: string | null; creatorHandle: string | null }) {
+function RovingWatermark({ creatorHandle }: { creatorHandle: string }) {
   const [k, setK] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => setK((v) => (v + 1) % WATERMARK_CORNERS.length), WATERMARK_CORNER_SECONDS * 1000);
     return () => window.clearInterval(id);
   }, []);
   const corner = WATERMARK_CORNERS[k]!;
-  const where = creatorHandle ? `frenzsave.com/u/${creatorHandle}` : "frenzsave.com";
-  const text = viewer ? `${viewer} · ${where}` : where;
+  const text = `frenzsave.com${profilePath(creatorHandle)}`;
   const cls = cn(
     "absolute z-[2] select-none whitespace-nowrap rounded-full bg-black/30 px-2.5 py-1 text-[12px] font-semibold text-white/75 [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]",
     corner.startsWith("top") ? "top-16" : "bottom-28",
     corner.endsWith("left") ? "left-3" : "right-3",
   );
-  return creatorHandle ? (
-    <a href={`/u/${encodeURIComponent(creatorHandle)}`} aria-label={`Open @${creatorHandle}'s profile`} className={cls}>
+  return (
+    <a href={profilePath(creatorHandle)} aria-label={`Open @${creatorHandle}'s profile`} className={cls}>
       {text}
     </a>
-  ) : (
-    <span aria-hidden className={cn("pointer-events-none", cls)}>
-      {text}
-    </span>
   );
 }

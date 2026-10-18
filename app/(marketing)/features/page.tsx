@@ -7,8 +7,8 @@ import {
   MonitorPlay,
   Music4,
   ShieldCheck,
-  Sparkles,
   Users,
+  Lightbulb,
 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -76,7 +76,7 @@ const ROW_TINTS = [
   { icon: ShieldCheck, bg: "bg-amber-50 dark:bg-amber-500/15", fg: "text-amber-600 dark:text-amber-300" },
   { icon: Music4, bg: "bg-rose-50 dark:bg-rose-500/15", fg: "text-rose-600 dark:text-rose-300" },
   { icon: Users, bg: "bg-indigo-50 dark:bg-indigo-500/15", fg: "text-indigo-600 dark:text-indigo-300" },
-  { icon: Sparkles, bg: "bg-teal-50 dark:bg-teal-500/15", fg: "text-teal-600 dark:text-teal-300" },
+  { icon: Lightbulb, bg: "bg-teal-50 dark:bg-teal-500/15", fg: "text-teal-600 dark:text-teal-300" },
 ] as const;
 
 export default function FeaturesPage() {

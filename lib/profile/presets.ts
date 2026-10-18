@@ -60,7 +60,7 @@ export const LAYOUT_PRESETS: LayoutPreset[] = [
     key: "creator",
     label: "Creator",
     blurb: "Lead with your work — reels, collections and what you've earned.",
-    icon: "Sparkles",
+    icon: "Lightbulb",
     type: "creator",
     modules: ["posts", "reels", "collections", "achievements", "about"],
     theme: "aurora",

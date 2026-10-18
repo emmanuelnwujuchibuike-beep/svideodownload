@@ -4,6 +4,7 @@ import { Check, Share2 } from "lucide-react";
 import { useState } from "react";
 
 import { toast } from "@/features/ui/toast";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Share a profile: native share sheet where available (mobile), clipboard
@@ -13,7 +14,7 @@ export function ShareProfileButton({ handle, name }: { handle: string; name: str
   const [copied, setCopied] = useState(false);
 
   const share = async () => {
-    const url = `${window.location.origin}/u/${handle}`;
+    const url = `${window.location.origin}${profilePath(handle)}`;
     try {
       if (navigator.share) {
         await navigator.share({ title: `${name} on Frenz`, url });

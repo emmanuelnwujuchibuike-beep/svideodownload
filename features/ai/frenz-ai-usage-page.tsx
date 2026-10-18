@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownLeft, ArrowLeft, ArrowUpRight, ChevronRight, Eye, EyeOff, Plus, RotateCcw, ShieldCheck, Sparkles, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowLeft, ArrowUpRight, ChevronRight, Eye, EyeOff, Plus, RotateCcw, ShieldCheck, Wallet, Lightbulb } from "lucide-react";
 import dynamic from "next/dynamic";
 
 import { refreshWallet, useWallet } from "@/features/ai/wallet/use-wallet";
@@ -57,11 +57,11 @@ type LedgerKind = "recharge" | "processing_charge" | "refund" | "adjustment" | "
 
 type LedgerRow = CharacterReplaceTransaction;
 
-const LEDGER_COPY: Record<LedgerKind, { label: string; Icon: typeof Sparkles; tone: "in" | "out" | "neutral" }> = {
+const LEDGER_COPY: Record<LedgerKind, { label: string; Icon: typeof Lightbulb; tone: "in" | "out" | "neutral" }> = {
   recharge: { label: "Credits added", Icon: ArrowDownLeft, tone: "in" },
   // 0184: a pack's bonus credits, and credits the product gives
-  bonus: { label: "Bonus credits", Icon: Sparkles, tone: "in" },
-  grant: { label: "Credits earned", Icon: Sparkles, tone: "in" },
+  bonus: { label: "Bonus credits", Icon: Lightbulb, tone: "in" },
+  grant: { label: "Credits earned", Icon: Lightbulb, tone: "in" },
   // 0187: cashing out withdrawable reward credits, and a withdrawal that was returned
   withdrawal: { label: "Withdrawal", Icon: ArrowDownLeft, tone: "out" },
   withdrawal_reversal: { label: "Withdrawal returned", Icon: RotateCcw, tone: "in" },
@@ -70,7 +70,7 @@ const LEDGER_COPY: Record<LedgerKind, { label: string; Icon: typeof Sparkles; to
   transfer_in: { label: "Credits received", Icon: ArrowDownLeft, tone: "in" },
   transfer_fee: { label: "Transfer fee", Icon: ArrowUpRight, tone: "out" },
   // 2026-10-06: the one AI wallet pays for every tool now — Character Replace is retired
-  processing_charge: { label: "Frenz AI creation", Icon: Sparkles, tone: "out" },
+  processing_charge: { label: "Frenz AI creation", Icon: Lightbulb, tone: "out" },
   refund: { label: "Refunded — the video didn't finish", Icon: RotateCcw, tone: "in" },
   adjustment: { label: "Adjustment by Frenz", Icon: ShieldCheck, tone: "neutral" },
   reversal: { label: "Reversed", Icon: RotateCcw, tone: "neutral" },
@@ -368,7 +368,7 @@ export function FrenzAIUsagePage({
               className="mt-4 flex items-center gap-3 rounded-2xl transition-[transform,opacity] active:scale-[0.98] data-[pending]:scale-[0.98] data-[pending]:opacity-80 bg-card/95 px-4 py-3.5 ring-1 ring-inset ring-black/[0.05] transition hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 dark:ring-white/10"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-violet-500 text-white">
-                <Sparkles className="h-4 w-4" aria-hidden />
+                <Lightbulb className="h-4 w-4" aria-hidden />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-[14px] font-semibold">Rewards &amp; referrals</span>

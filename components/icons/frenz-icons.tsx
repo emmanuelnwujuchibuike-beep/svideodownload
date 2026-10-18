@@ -143,8 +143,13 @@ export const FrenzPersonSolid = forwardRef<SVGSVGElement, IconProps>(function Fr
   );
 });
 
-/** Personalization glyph ("For You") — a 4-point sparkle/twinkle, straight-line polygon. */
-export const FrenzSparkleOutline = forwardRef<SVGSVGElement, IconProps>(function FrenzSparkleOutline(
+/*
+  Personalization glyph ("For You") — a heart: picked for you. It replaced a 4-point sparkle on
+  2026-10-17 (owner, since June 2026: NO sparkle / "AI star" icon anywhere in the app, ever).
+*/
+const HEART = "M12 20.2s-7.6-4.5-7.6-10.1A4.3 4.3 0 0 1 12 7.4a4.3 4.3 0 0 1 7.6 2.7c0 5.6-7.6 10.1-7.6 10.1Z";
+
+export const FrenzForYouOutline = forwardRef<SVGSVGElement, IconProps>(function FrenzForYouOutline(
   { className, strokeWidth = 1.75 },
   ref,
 ) {
@@ -160,18 +165,18 @@ export const FrenzSparkleOutline = forwardRef<SVGSVGElement, IconProps>(function
       aria-hidden
       className={cn(base, className)}
     >
-      <path d="M12 3 13.6 10.4 21 12 13.6 13.6 12 21 10.4 13.6 3 12 10.4 10.4 Z" />
+      <path d={HEART} />
     </svg>
   );
 });
 
-export const FrenzSparkleSolid = forwardRef<SVGSVGElement, IconProps>(function FrenzSparkleSolid(
+export const FrenzForYouSolid = forwardRef<SVGSVGElement, IconProps>(function FrenzForYouSolid(
   { className },
   ref,
 ) {
   return (
     <svg ref={ref} viewBox="0 0 24 24" fill="currentColor" aria-hidden className={cn(base, className)}>
-      <path d="M12 3 13.6 10.4 21 12 13.6 13.6 12 21 10.4 13.6 3 12 10.4 10.4 Z" />
+      <path d={HEART} />
     </svg>
   );
 });

@@ -22,6 +22,7 @@ import { THEME_HEADER_CLASS } from "@/lib/social/message-meta";
 import type { ConversationMember, ConversationType, MemberRole, OtherUser } from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * The thread header, lifted out of the server-rendered page so a group
@@ -197,7 +198,7 @@ export function ThreadHeader({
           </span>
         </div>
       ) : other ? (
-        <Link href={`/u/${other.handle}`} className="relative flex min-w-0 flex-1 items-center gap-2.5">
+        <Link href={`${profilePath(other.handle)}`} className="relative flex min-w-0 flex-1 items-center gap-2.5">
           <span className="relative shrink-0">
             {other.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element

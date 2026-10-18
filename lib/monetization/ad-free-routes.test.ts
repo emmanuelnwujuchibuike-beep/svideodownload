@@ -11,8 +11,9 @@ const code = (f: string) => readFileSync(path.resolve(process.cwd(), f), "utf8")
 
 describe("ad-free routes", () => {
   it("sign-in and every profile page are ad-free; ordinary pages are not", () => {
-    for (const p of ["/login", "/login/mfa-challenge", "/login?next=/home", "/signup", "/welcome", "/u/kpn", "/u/kpn/card", "/profile"]) expect(isAdFreeRoute(p), p).toBe(true);
-    for (const p of ["/", "/home", "/feed", "/reels", "/downloads", "/history", "/user-guide", "/loginhelp"]) expect(isAdFreeRoute(p), p).toBe(false);
+    for (const p of ["/login", "/login/mfa-challenge", "/login?next=/home", "/signup", "/welcome", "/u/kpn", "/u/kpn/card", "/profile", "/kpn", "/kpn/card", "/kpn/followers"]) expect(isAdFreeRoute(p), p).toBe(true);
+    // a prefix owns only its own subtree (/login-help is not /login); a downloader page is never a profile
+    for (const p of ["/", "/home", "/feed", "/reels", "/downloads", "/history", "/user-guide", "/login-help", "/tiktok-downloader"]) expect(isAdFreeRoute(p), p).toBe(false);
   });
 
   it("🔴 Monetag is refused there even when the admin turned it on for every page", () => {

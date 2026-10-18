@@ -235,7 +235,7 @@ export const PROFILE_MODULES: ModuleSpec[] = [
     key: "skills",
     label: "Skills",
     blurb: "What you actually do, in your words.",
-    icon: "Sparkles",
+    icon: "Lightbulb",
     tint: "violet",
     types: ["professional", "student", "developer", "creator", "business"],
     status: "live",

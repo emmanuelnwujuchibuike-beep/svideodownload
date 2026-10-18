@@ -289,8 +289,8 @@ describe("announcement fan-out", () => {
     await drain(await announce());
     const all = JSON.stringify([pushes, emails]);
     expect(all).not.toContain("Secret");
-    expect(pushes[0]!.payload).toMatchObject({ title: "Amaka", body: "Posted an announcement for subscribers", url: "/u/amaka?tab=sub#announcements" });
-    expect(emails[0]!.opts).toMatchObject({ ctaPath: "/u/amaka?tab=sub#announcements" });
+    expect(pushes[0]!.payload).toMatchObject({ title: "Amaka", body: "Posted an announcement for subscribers", url: "/amaka?tab=sub#announcements" });
+    expect(emails[0]!.opts).toMatchObject({ ctaPath: "/amaka?tab=sub#announcements" });
   });
 
   it("each member's channel choice is respected: off skips, email only emails, default is push", async () => {
@@ -383,7 +383,7 @@ describe("private-post fan-out (hidden-post privacy, Part 3 rules)", () => {
     db.tables.sub_posts = [post()];
     await drain((await fan.enqueueFanout("private_post", U(500), C))!);
     expect(sentTo()).toEqual([U(70), U(71), U(72), U(73)].sort());
-    for (const p of pushes) expect(p.payload).toMatchObject({ title: "Amaka", body: "Posted a new private post", url: "/u/amaka?tab=sub" });
+    for (const p of pushes) expect(p.payload).toMatchObject({ title: "Amaka", body: "Posted a new private post", url: "/amaka?tab=sub" });
     const all = JSON.stringify([pushes, emails]);
     for (const leak of ["SECRET CAPTION", "sub/", "r2", "X-Amz", "object_key", U(500)]) expect(all).not.toContain(leak);
   });

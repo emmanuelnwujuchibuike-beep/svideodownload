@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { TopupProviderId } from "@/lib/ai/credits/wallet-config";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -15,7 +16,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  */
 export type ProviderEventClaim = "new" | "retry" | "done";
 
-export async function claimProviderEvent(provider: "paystack" | "bachs", eventId: string | null | undefined, eventType: string, reference: string | null): Promise<ProviderEventClaim> {
+export async function claimProviderEvent(provider: TopupProviderId, eventId: string | null | undefined, eventType: string, reference: string | null): Promise<ProviderEventClaim> {
   if (!eventId) return "new";
   const db = createAdminClient();
   const { error } = await db.from("payment_provider_events").insert({ provider, event_id: eventId.slice(0, 200), event_type: eventType.slice(0, 80), reference: reference?.slice(0, 200) ?? null });
@@ -28,7 +29,7 @@ export async function claimProviderEvent(provider: "paystack" | "bachs", eventId
   return (data as { processed_at?: string | null } | null)?.processed_at ? "done" : "retry";
 }
 
-export async function markProviderEvent(provider: "paystack" | "bachs", eventId: string | null | undefined, outcome: string): Promise<void> {
+export async function markProviderEvent(provider: TopupProviderId, eventId: string | null | undefined, outcome: string): Promise<void> {
   if (!eventId) return;
   const { error } = await createAdminClient().from("payment_provider_events").update({ processed_at: new Date().toISOString(), outcome: outcome.slice(0, 120) }).eq("provider", provider).eq("event_id", eventId.slice(0, 200));
   if (error) console.error("[payments] event log update failed", { provider, eventId, message: error.message });

@@ -26,6 +26,7 @@ import { useTranslator } from "@/lib/i18n/use-translator";
 import type { MessageKey } from "@/lib/i18n/messages/en";
 import { PRIMARY_LINKS } from "@/lib/seo/primary-links";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Marketing nav, per `public/main landing page.jpg`.
@@ -751,7 +752,7 @@ export function SiteHeader({
               {enabled && user ? (
                 <div className="mt-3 space-y-0.5">
                   <Link
-                    href={handle ? `/u/${handle}` : "/account#profile"}
+                    href={handle ? `${profilePath(handle)}` : "/account#profile"}
                     onClick={closeMenu}
                     className="flex min-h-[44px] items-center gap-3 rounded-xl px-2 py-2 text-[15px] font-medium transition-colors hover:bg-secondary"
                   >

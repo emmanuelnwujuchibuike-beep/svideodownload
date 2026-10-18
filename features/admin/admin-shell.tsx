@@ -29,7 +29,6 @@ import {
   Rss,
   ShieldAlert,
   ShoppingBag,
-  Sparkles,
   SlidersHorizontal,
   Star,
   Telescope,
@@ -37,6 +36,7 @@ import {
   Users,
   Wrench,
   type LucideIcon,
+  Lightbulb,
 } from "lucide-react";
 import { createContext, useContext, useEffect, useState } from "react";
 
@@ -88,7 +88,7 @@ const ICONS: Record<string, LucideIcon> = {
   // section icon to be registered here, which is what caught this the moment
   // the AI section was added — a nav entry with an unresolvable icon silently
   // falls back to Activity and looks like a mistake nobody made on purpose.
-  Sparkles,
+  Lightbulb,
   Activity,
   BadgeCheck,
   Bell,

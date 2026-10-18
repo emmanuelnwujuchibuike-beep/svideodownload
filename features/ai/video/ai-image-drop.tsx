@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, RefreshCw, Sparkles, X } from "lucide-react";
+import { Loader2, RefreshCw, X, Lightbulb } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -197,7 +197,7 @@ export function AiImageDrop({ value, onChange, upload, label, hint, accept = ["i
             className="flex min-h-[10rem] w-full flex-col items-center justify-center gap-1.5 px-4 py-6 text-center transition active:scale-[0.99] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             <span className="mb-1 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-indigo-600 ring-1 ring-inset ring-indigo-200/80">
-              <Sparkles className="h-[18px] w-[18px]" aria-hidden />
+              <Lightbulb className="h-[18px] w-[18px]" aria-hidden />
             </span>
             <span className="text-[14.5px] font-semibold">Choose a photo</span>
             <span className="text-[12.5px] text-muted-foreground">or drag one here</span>

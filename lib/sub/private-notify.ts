@@ -6,6 +6,7 @@ import { pushPerson } from "@/lib/push/identity";
 import { excludedFor } from "@/lib/social/creator-notify-emit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { paginatedSelect } from "@/lib/supabase/paginate";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * "Tell me when they post a private post" (owner 2026-10-12) — on the creator's PRIVATE POSTS tab,
@@ -92,7 +93,7 @@ export async function notifyNewPrivatePost(creatorId: string, opts: { audience?:
     }
     const excluded = await excludedFor(db, creatorId, read.rows.map((r) => r.viewer_id));
     const who = await pushPerson(creatorId);
-    const path = who.handle ? `/u/${who.handle}?tab=sub` : "/";
+    const path = who.handle ? `${profilePath(who.handle)}?tab=sub` : "/";
     for (const r of read.rows) {
       if (r.viewer_id === creatorId || excluded.has(r.viewer_id)) continue;
       const tasks: Promise<unknown>[] = [];

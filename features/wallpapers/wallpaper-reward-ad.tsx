@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { AdSlot } from "@/features/monetization/ad-slot";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { cn } from "@/lib/utils";
-import { wallpaperLimitMessage } from "@/lib/wallpapers-limits";
+import { WALLPAPER_PRO_ONLY_MESSAGE, wallpaperLimitMessage } from "@/lib/wallpapers-limits";
 
 /**
  * The 30-second ad shown to a free member while their wallpaper downloads.
@@ -121,6 +121,15 @@ export function WallpaperRewardAd({
 
 /** Shown instead of an ad when the day's allowance is already spent. */
 export function WallpaperLimitSheet({ limit, onClose }: { limit: number; onClose: () => void }) {
+  return <WallpaperUpgradeSheet title="You've used today's free wallpapers" body={wallpaperLimitMessage(limit)} onClose={onClose} />;
+}
+
+/** Shown when a Free visitor taps Download on an admin-uploaded (Pro-only) wallpaper. */
+export function WallpaperProSheet({ onClose }: { onClose: () => void }) {
+  return <WallpaperUpgradeSheet title="A Pro wallpaper" body={WALLPAPER_PRO_ONLY_MESSAGE} onClose={onClose} />;
+}
+
+function WallpaperUpgradeSheet({ title, body, onClose }: { title: string; body: string; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[130] flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
       <div
@@ -132,8 +141,8 @@ export function WallpaperLimitSheet({ limit, onClose }: { limit: number; onClose
             <Crown className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <p className="font-bold">You&apos;ve used today&apos;s free wallpapers</p>
-            <p className="mt-0.5 text-sm text-muted-foreground">{wallpaperLimitMessage(limit)}</p>
+            <p className="font-bold">{title}</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">{body}</p>
           </div>
         </div>
         <div className="mt-4 flex gap-2">

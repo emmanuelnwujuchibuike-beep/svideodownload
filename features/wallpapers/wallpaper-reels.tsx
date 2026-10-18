@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { ReelsAdSlide } from "@/features/monetization/reels-ad-slide";
 import { WallpaperRewardGate } from "@/features/monetization/wallpaper-reward-gate";
 import { useDirectLink } from "@/features/monetization/use-direct-link";
-import { Bookmark, Crown, Download, Heart, Loader2, MessageCircle, Send, Sparkles, X } from "lucide-react";
+import { Bookmark, Crown, Download, Heart, Loader2, MessageCircle, Send, X, Lightbulb } from "lucide-react";
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
@@ -738,22 +738,49 @@ export function WallpaperReels({
           ) : null}
         </div>
 
-        {/* One full-width primary action, as in the reference. */}
-        <button
-          type="button"
-          onClick={() => setPendingDownload(current)}
-          className="pointer-events-auto mt-3 flex w-full items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-[#2563FF] to-[#6D5CFF] px-5 py-3.5 text-base font-bold text-white shadow-[0_10px_30px_-10px_rgba(37,99,255,0.9)] ring-1 ring-inset ring-white/20 transition active:scale-[0.98]"
-        >
-          <Download className="h-5 w-5" />
-          Download
-          {/* Honest label: downloads are free, and every second one is followed
-              by a skippable interstitial — so a member who pays sees the word
-              without the ad marker beside it. */}
-          <span className="ml-1 inline-flex items-center gap-1 rounded-lg bg-white/15 px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide">
-            {planReady && !isPremium ? <Sparkles className="h-3 w-3" /> : null}
-            Free
-          </span>
-        </button>
+        {/* One full-width primary action, as in the reference. An admin-uploaded
+            wallpaper is a Pro download (owner, 2026-10-18): its button is the
+            prestige one — black and gold with a crown — and its chip says
+            "Pro" where a free wallpaper's says "Free". A Free member's tap opens
+            the Pro sheet (useWallpaperDownload); the server refuses it anyway. */}
+        {current.proOnly ? (
+          <button
+            type="button"
+            // A Free member goes straight to the offer — never through a reward
+            // ad for a download the server would then refuse.
+            onClick={() => (planReady && !isPremium ? setUpgradeOpen(true) : setPendingDownload(current))}
+            className="group pointer-events-auto relative mt-3 flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-2xl bg-gradient-to-b from-neutral-900 to-black px-5 py-3.5 text-base font-bold text-amber-100 shadow-[0_10px_34px_-10px_rgba(245,158,11,0.85)] ring-1 ring-inset ring-amber-300/60 transition active:scale-[0.98]"
+          >
+            {/* a slow gold sheen across the face */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-amber-200/20 to-transparent motion-safe:animate-[shimmer_3.2s_ease-in-out_infinite]"
+            />
+            <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-200/70 to-transparent" />
+            <Crown className="relative h-5 w-5 text-amber-300" />
+            <span className="relative">Download</span>
+            <span className="relative ml-1 inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-amber-300 to-amber-500 px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-neutral-950 shadow-sm shadow-amber-500/40">
+              <Crown className="h-3 w-3" />
+              Pro
+            </span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setPendingDownload(current)}
+            className="pointer-events-auto mt-3 flex w-full items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-[#2563FF] to-[#6D5CFF] px-5 py-3.5 text-base font-bold text-white shadow-[0_10px_30px_-10px_rgba(37,99,255,0.9)] ring-1 ring-inset ring-white/20 transition active:scale-[0.98]"
+          >
+            <Download className="h-5 w-5" />
+            Download
+            {/* Honest label: downloads are free, and every second one is followed
+                by a skippable interstitial — so a member who pays sees the word
+                without the ad marker beside it. */}
+            <span className="ml-1 inline-flex items-center gap-1 rounded-lg bg-white/15 px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide">
+              {planReady && !isPremium ? <Lightbulb className="h-3 w-3" /> : null}
+              Free
+            </span>
+          </button>
+        )}
       </div>
 
       {/* The offer itself — only ever on screen because someone tapped for it. */}

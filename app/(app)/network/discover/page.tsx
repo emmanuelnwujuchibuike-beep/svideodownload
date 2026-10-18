@@ -8,6 +8,7 @@ import { PRO_OPEN_TO, PRO_OPEN_TO_KEYS, type ProOpenTo } from "@/lib/social/prof
 import { discoverProfessionals } from "@/lib/social/professional/server";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Find people", robots: { index: false, follow: false } };
@@ -97,7 +98,7 @@ export default async function DiscoverRoute({ searchParams }: { searchParams: Pr
               <GlassGroup label="People">
                 {people.map((p) => (
                   <li key={p.id}>
-                    <Link href={`/u/${p.handle}/network`} prefetch={false} className="flex items-center gap-3 px-3.5 py-3 transition active:bg-black/[0.04]">
+                    <Link href={`${profilePath(p.handle)}/network`} prefetch={false} className="flex items-center gap-3 px-3.5 py-3 transition active:bg-black/[0.04]">
                       <PersonAvatar user={p} size={44} />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-1">

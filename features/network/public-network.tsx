@@ -11,6 +11,7 @@ import { haptic } from "@/lib/motion/haptics";
 import { OPPORTUNITY_KINDS, PRO_OPEN_TO, PRO_ROLE_KEYS, PRO_ROLES, REC_KINDS, REC_MAX, REC_MIN, ROLE_INVERSES, type OpportunityKind, type ProRole, type RecKind } from "@/lib/social/professional/engine";
 import type { PublicNetwork } from "@/lib/social/professional/server";
 import { cn } from "@/lib/utils";
+import { profilePath } from "@/lib/social/profile-url";
 
 /**
  * Someone's professional page (Feature 19 · Part 12): what they're open to,
@@ -49,7 +50,7 @@ export function PublicNetworkPage({ data }: { data: PublicNetwork }) {
     <div className="relative isolate">
       <AmbientWash />
       <header className="mb-4 flex items-start gap-2 pt-1">
-        <Link href={`/u/${p.handle}`} aria-label="Back to profile" className="-ml-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition hover:bg-black/[0.04] active:bg-black/[0.08]">
+        <Link href={`${profilePath(p.handle)}`} aria-label="Back to profile" className="-ml-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition hover:bg-black/[0.04] active:bg-black/[0.08]">
           <ArrowLeft className="h-5 w-5" aria-hidden />
         </Link>
         <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -81,7 +82,7 @@ export function PublicNetworkPage({ data }: { data: PublicNetwork }) {
             Your network dashboard
           </Link>
         ) : !data.viewer.signedIn ? (
-          <Link href={`/login?next=/u/${p.handle}/network`} prefetch={false} className={primaryPill}>
+          <Link href={`/login?next=${profilePath(p.handle)}/network`} prefetch={false} className={primaryPill}>
             Sign in to connect
           </Link>
         ) : conn?.status === "accepted" ? (
@@ -105,7 +106,7 @@ export function PublicNetworkPage({ data }: { data: PublicNetwork }) {
             <Quote className="h-4 w-4" aria-hidden /> Recommend
           </button>
         ) : null}
-        <Link href={`/u/${p.handle}/card`} prefetch={false} className={quietPill}>
+        <Link href={`${profilePath(p.handle)}/card`} prefetch={false} className={quietPill}>
           <IdCard className="h-4 w-4" aria-hidden /> Card
         </Link>
       </div>
@@ -172,7 +173,7 @@ export function PublicNetworkPage({ data }: { data: PublicNetwork }) {
           <GlassGroup label="Recommendations">
             {data.recommendations.map((r) => (
               <li key={r.id} className="px-3.5 py-3">
-                <PersonLine p={r.person} href={`/u/${r.person.handle}/network`} sub={REC_KINDS[r.kind]} />
+                <PersonLine p={r.person} href={`${profilePath(r.person.handle)}/network`} sub={REC_KINDS[r.kind]} />
                 <p className="mt-2 whitespace-pre-line text-[14px] leading-relaxed">{r.body}</p>
               </li>
             ))}
@@ -211,7 +212,7 @@ export function PublicNetworkPage({ data }: { data: PublicNetwork }) {
           <GlassGroup label="Confirmed connections">
             {data.connections.slice(0, 30).map((c) => (
               <li key={c.id} className="flex items-center px-3.5 py-2.5">
-                <PersonLine p={c.person} href={`/u/${c.person.handle}/network`} sub={`${roleLabel(c.theirRole, c.customLabel)}${c.context ? `, ${c.context}` : ""}`} />
+                <PersonLine p={c.person} href={`${profilePath(c.person.handle)}/network`} sub={`${roleLabel(c.theirRole, c.customLabel)}${c.context ? `, ${c.context}` : ""}`} />
               </li>
             ))}
           </GlassGroup>

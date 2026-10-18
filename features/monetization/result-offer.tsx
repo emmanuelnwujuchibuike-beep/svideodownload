@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Code2, Sparkles, Zap } from "lucide-react";
+import { ArrowRight, Code2, Zap, Lightbulb } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -63,7 +63,7 @@ export function ResultOffer() {
           <img src={o.imageUrl} alt="" className="h-14 w-14 shrink-0 rounded-xl object-cover" />
         ) : (
           <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Sparkles className="h-6 w-6" />
+            <Lightbulb className="h-6 w-6" />
           </span>
         )}
         <div className="min-w-0 flex-1">

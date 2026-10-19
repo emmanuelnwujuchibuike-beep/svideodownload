@@ -12,7 +12,7 @@ review before the next one starts.
 - [x] 5. Profile → design/Profile.dc.html (updated: Private → Exclusive) — one shared hero (cover, overlapping avatar, Sora name, stats card, ink Edit/Follow + Share), underlined tabs with Exclusive, edge-to-edge 3:4 grid.
 - [x] 6. History → design/History.dc.html (owner's screenshot) — large title with real count · size (opens storage), one options button, Select, fill search, segmented filter, edge-to-edge day groups, icon + source tiles with long-press sheet, infinite scroll, lightbulb → options menu.
 - [x] 7. Landing page → the same system: white page, iOS glass chrome, no Recent section
-- [ ] 8. Wallpapers → design/Wallpapers.dc.html
+- [x] 8. Wallpapers → design/Wallpapers.dc.html
 - [ ] 9. Profile menu → design/Menu.dc.html
 - [ ] 10. Settings → design/Settings.dc.html
 - [x] 11. Profile Exclusive tab (owner view) → design/ProfileExclusive.dc.html (moved forward at the owner's request) — one dashboard card with real figures, Share link / Dashboard, rows for announcements and notifications, Subs-tagged grid with Manage, hub as three iOS lists with Add.
@@ -284,6 +284,26 @@ they are applied while each page is built and there is no separate cleanup step.
   shows its gradient. The setting still exists in admin.
 - No Recent section on the landing (owner). The landing's sections below the hero (Frenz AI,
   Discover, Promote, Features, How it works, CTA, downloader links, FAQ) are not restyled yet.
+
+### Step 8 · Wallpapers (/wallpapers) — Wallpapers.dc.html
+- The featured wallpaper is a full-bleed 470 px header: the first in the library's own order (the
+  operator's curation), shown from its thumbnail so the page stays light. Glass only over it: Back,
+  Search + Upload, the FEATURED badge (with the real resolution, only when measured), "Get this one"
+  (the real download, same reward-ad / limit / Pro flow) and "Preview" (the existing full-screen
+  viewer — the design says "Preview on lock screen"; we have no lock-screen mock, so it opens the viewer).
+- Glass category chips (the real categories, most-used first); Categories and Types moved behind the
+  one filter button, into a sheet with the native pickers, Clear and "Show N".
+- A white sheet slides over it: grab handle, "All wallpapers", the count and a sort button (a native
+  picker; engagement orderings appear only once anything has engagement, as before). 3-column tiles
+  with the frosted name plate (name, real resolution badge, credit) and a glass download button
+  (44 px target around the 34 px circle). Pro wallpapers keep the gold crown.
+- Copy: "505 designs. Free to download." — the design says "from the community", but the library also
+  holds curated wallpapers, so that phrase was left out.
+- Kept: 30 then "See N more · M left" (now a white secondary button, not the gradient), "See less" top
+  and bottom, the upload flow (moved from the floating pill into the header, as drawn), the upload
+  status toast, the SEO content, the visible breadcrumb (now a quiet line under the grid) and the footer.
+- Changed: the page no longer shows the site header — the design's header is the image. The design also
+  draws the bottom tab bar; /wallpapers sits outside the signed-in shell, so it has none (as before).
 
 ### Outside the page steps (owner, 2026-10-18)
 - `a50b9cd`: full-screen ads lost the engagement tray (brand badge, Like, views,

@@ -11,6 +11,8 @@ import {
   Loader2,
   Search,
   SlidersHorizontal,
+  Smartphone,
+  Upload,
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -18,9 +20,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { SiteHeader } from "@/components/layout/site-header";
+import { Portal } from "@/components/ui/portal";
 import { FloatingDownloadProgress } from "@/features/downloads/floating-progress";
-import { categoryIcon } from "@/features/wallpapers/wallpaper-categories";
 import {
   DEFAULT_WALLPAPER_SORT,
   sortWallpapers,
@@ -108,6 +109,10 @@ const WallpaperProSheet = dynamic(
   { ssr: false },
 );
 
+/** Glass over an image: translucent fill, hairline, blur. Never on a white surface. */
+const GLASS = "border border-white/30 bg-white/[0.16] shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_8px_24px_rgba(10,6,30,0.25)] backdrop-blur-xl backdrop-saturate-[1.8]";
+const GLASS_SOFT = "border border-white/30 bg-white/[0.16] backdrop-blur-xl";
+
 /** How many the Popular section shows before "View all" opens the rest. */
 const POPULAR_PREVIEW = 12;
 /**
@@ -173,7 +178,6 @@ export function WallpaperExplore({
   const [sort, setSort] = useState<WallpaperSort>(DEFAULT_WALLPAPER_SORT);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [tuneOpen, setTuneOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
   /*
@@ -285,6 +289,11 @@ export function WallpaperExplore({
   }, [items, category, type, query, sort]);
 
   const filtering = category !== "all" || type !== "all" || query.trim().length > 0;
+  const clearFilters = useCallback(() => {
+    setCategory("all");
+    setType("all");
+    setQuery("");
+  }, []);
   /* The Popular section caps itself; a filtered or searched list never does —
      hiding results behind "View all" when someone has just narrowed the library
      to nine things would be actively unhelpful. */
@@ -364,8 +373,6 @@ export function WallpaperExplore({
 
 
   const empty = items.length === 0;
-  const deck = items.slice(0, 3);
-  const deckBadge = resolutionBadge(deck[0]?.width, deck[0]?.height);
 
   /* The heading names the ORDERING, so the grid always says what it is showing
      — "Most liked" over a like-ranked list, not a generic "All wallpapers". */
@@ -378,406 +385,189 @@ export function WallpaperExplore({
         ? "All wallpapers"
         : sortLabel;
 
+  /*
+    The redesign (design/Wallpapers.dc.html, owner 2026-10-18): the FEATURED wallpaper is a full-bleed
+    header — the first in the library's own order (the operator's curation), never a stock picture.
+    Glass is used only here, over that image; the white sheet below is solid. "Get this one" is the
+    real download, "Preview" opens the existing full-screen viewer on it.
+  */
+  const featured = items[0] ?? null;
+  const featuredBadge = resolutionBadge(featured?.width, featured?.height);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const openSearch = useCallback(() => {
+    setSearchOpen(true);
+    // the field lives at the top of the sheet: bring it up, then focus it
+    requestAnimationFrame(() => {
+      searchRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      searchRef.current?.focus({ preventScroll: true });
+    });
+  }, []);
+  const filterCount = (type !== "all" ? 1 : 0) + (category !== "all" ? 1 : 0);
+
   return (
     <>
-      {/*
-        🔴 THE SITE HEADER (owner, 2026-08-16: "the landing or download top
-        header should also be in the wallpaper page above the search and back
-        button, dont remove the search and back button, they should stick to
-        the top on scrolling").
+      <main className="frenz-ui min-h-dvh bg-frenz-page pb-24 text-frenz-ink">
+        {/* ── the featured header (glass only over the image) ─────────────────── */}
+        <section className="relative h-[470px] overflow-hidden bg-frenz-ink" aria-label="Featured wallpaper">
+          {featured ? (
+            // eslint-disable-next-line @next/next/no-img-element -- public storage CDN; next/image 403s on these
+            <img src={featured.thumbUrl} alt={wallpaperAlt(featured)} fetchPriority="high" className="absolute inset-0 h-full w-full object-cover" />
+          ) : null}
+          <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/45 to-transparent" />
+          <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[300px] bg-gradient-to-t from-[rgba(10,6,30,0.82)] to-transparent" />
 
-        Superseded the fixed white safe-area strip this replaced: that strip
-        was a stopgap for a page that had NO header at all, painting one blank
-        opaque region over the status bar. A real SiteHeader covers the exact
-        same region with real content instead, so the strip is gone. `canvas`
-        is deliberately NOT passed — the header stays plain white, matching
-        every other canvas-grounded page's header (features, landing).
-      */}
-      <SiteHeader />
-      {/* Top padding clears the FIXED SiteHeader (it isn't in normal flow), so
-          the sticky back/search row below starts already at its stuck offset
-          instead of rendering hidden behind the header for the first frame. */}
-      <main className="frenz-canvas-page min-h-dvh pb-24 pt-[calc(var(--frenz-safe-top,0px)+4rem)]">
-        {/*
-          🔴 Two loose buttons, not a bar (owner, 2026-08-16: "search and back
-          button shouldn't be on separate nav or section, they should be
-          alone… on top of the wallpaper page without obstructing any text,
-          they should blend in not to be positioned like a second header").
-
-          This used to be a full-width `sticky` strip painted in the canvas
-          color — a second opaque header sitting right under the real one,
-          and because it's sticky it slides up over whatever has scrolled
-          beneath it (the hero deck), cutting across the image. There is no
-          bar now: no shared background, no row spanning the width. Each
-          button keeps its own small `bg-card` chip (so it still reads against
-          any photo) and its own sticky position, floating independently over
-          the page content instead of announcing itself as a nav section.
-        */}
-        <div
-          /*
-            🔴 z-50, not z-40 (owner, 2026-08-16, twice — first "goes under
-            the somethings when scrolling", then "add more z index to the
-            search button").
-
-            z-40 fixed the tie against the grid tiles' own `z-30` download
-            buttons, but the fanned card-deck's "HD/FULL HD" badge just above
-            (line ~372 below) is ALSO `z-40` — and it renders LATER in the
-            document (it's part of the headline+deck block right after this
-            bar), so at that tie it painted on top instead. z-50 clears both
-            the tiles (z-30) and the deck badge (z-40) outright rather than
-            chasing each new element that happens to share this bar's value.
-          */
-          className="pointer-events-none sticky z-50 px-4 pt-3"
-          style={{ top: "calc(var(--frenz-safe-top, 0px) + 4rem)" }}
-        >
-          <div className="pointer-events-none mx-auto flex w-full max-w-3xl items-start justify-between">
-            {/*
-              The reference draws a hamburger here. This is a back control
-              instead, deliberately: a drawer here would be a menu glyph with
-              nothing real behind it, the exact dead affordance this codebase
-              has had to remove before. Same slot, same white rounded tile, an
-              honest icon.
-
-              🔴 Corrected 2026-08-09. This comment previously justified itself
-              with "the page already carries the app's bottom navigation" —
-              it does not. `MobileNav` is mounted in the (app) layout and
-              /wallpapers sits outside it, so for as long as that sentence
-              stood, this arrow was the page's ONLY link to anywhere. The site
-              footer now renders below the grid, which is the real fix; the
-              back control stays because it is still the right control.
-            */}
-            <Link
-              href="/"
-              aria-label="Back to home"
-              className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-card text-foreground shadow-soft ring-1 ring-inset ring-border/50 transition active:scale-95"
-            >
-              <ChevronLeft className="h-5 w-5" />
+          <div className="absolute inset-x-4 flex items-center justify-between" style={{ top: "calc(var(--frenz-safe-top, 0px) + 14px)" }}>
+            <Link href="/" aria-label="Back to home" className={cn(GLASS, "flex h-11 w-11 items-center justify-center rounded-full text-white transition active:scale-95")}>
+              <ChevronLeft className="h-5 w-5" aria-hidden />
             </Link>
-            <button
-              type="button"
-              onClick={() => setSearchOpen((s) => !s)}
-              aria-label={searchOpen ? "Close search" : "Search wallpapers"}
-              aria-expanded={searchOpen}
-              className={cn(
-                "pointer-events-auto flex h-11 w-11 items-center justify-center rounded-2xl shadow-soft ring-1 ring-inset transition active:scale-95",
-                searchOpen
-                  ? "bg-primary text-primary-foreground ring-primary/40"
-                  : "bg-card text-foreground ring-border/50",
-              )}
-            >
-              {searchOpen ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
-            </button>
-          </div>
-        </div>
-
-        {/*
-          Visible breadcrumb, matching the BreadcrumbList JSON-LD already
-          emitted by lib/seo/wallpapers.ts (owner, 2026-08-16 SEO audit) — the
-          page had structured data for a trail nothing on screen showed. Kept
-          to its own thin row rather than folded into the sticky back/search
-          bar above: that bar is deliberately two loose buttons, not a second
-          header (owner, 2026-08-16: "shouldn't be positioned like a second
-          header"), and this doesn't touch it.
-        */}
-        <nav aria-label="Breadcrumb" className="mx-auto mt-2 w-full max-w-3xl px-4">
-          <ol className="flex items-center gap-2 text-xs text-muted-foreground">
-            <li>
-              <Link href="/" className="transition hover:text-foreground">
-                Home
-              </Link>
-            </li>
-            <li aria-hidden>/</li>
-            <li aria-current="page" className="text-foreground">
-              Wallpapers
-            </li>
-          </ol>
-        </nav>
-
-        {/* The headline + card deck — NOT sticky, scrolls away normally. */}
-        <div className="mx-auto w-full max-w-3xl px-4">
-          <div className="relative mt-3 flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1 pb-2">
-              {/*
-                🔴 Small-screen collision (owner, 2026-08-09, with a
-                screenshot: the card deck painted straight over the word
-                "Wallpapers").
-
-                Not a z-index problem — an arithmetic one. The headline was a
-                flat 2.75rem (44px) and the deck a flat 150px wide. On a 430px
-                phone that leaves the text column 236px while "Wallpapers" at
-                44px extra-bold needs about 240, and a single unbreakable word
-                cannot wrap — so it overflowed its column and ran under the
-                deck, which paints later and therefore on top.
-
-                Both sides are now proportional instead of fixed, so the two
-                columns can never trade places at some untested width:
-                the type scales with the viewport up to its designed 44px, and
-                the deck takes a share of the row rather than a pixel count.
-              */}
-              <h1 className="text-[clamp(1.75rem,8.6vw,2.75rem)] font-extrabold leading-[0.95] tracking-[-0.045em] sm:text-6xl">
-                Wallpapers
-              </h1>
-              <p className="mt-3 text-[15px] leading-snug text-muted-foreground sm:text-base">
-                Stunning HD wallpapers
-                <br />
-                for your screen.
-                <br />
-                <span className="font-semibold text-primary">Free</span> to download.
-              </p>
-            </div>
-
-            {/* The deck — real covers, and a real entry into the viewer. */}
-            {deck.length > 0 ? (
-              <button
-                type="button"
-                onClick={() => open(deck[0]!)}
-                aria-label="Browse wallpapers full screen"
-                /* A SHARE of the row (38%), capped at the design's 190px, and
-                   holding its shape with an aspect ratio rather than a fixed
-                   height — see the headline note above. */
-                className="relative aspect-[150/168] w-[38%] max-w-[190px] shrink-0"
-              >
-                {deck.map((w, i) => (
-                  <span
-                    key={w.id}
-                    className={cn(
-                      "absolute inset-y-2 left-1/2 block w-[62%] -translate-x-1/2 overflow-hidden rounded-2xl shadow-xl ring-1 ring-black/10 transition-transform duration-300",
-                      i === 0 && "z-30 rotate-0",
-                      i === 1 && "z-20 -translate-x-[92%] -rotate-[11deg]",
-                      i === 2 && "z-10 -translate-x-[8%] rotate-[11deg]",
-                    )}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element -- public storage CDN; next/image 403s on these */}
-                    <img src={w.thumbUrl} alt="" aria-hidden className="h-full w-full object-cover" />
-                  </span>
-                ))}
-                {/* Only where the top cover genuinely is one. */}
-                {deckBadge ? (
-                  <span className="absolute bottom-1 right-0 z-40 rounded-xl bg-neutral-900/90 px-2.5 py-1 text-center text-white shadow-lg backdrop-blur">
-                    <span className="block text-base font-extrabold leading-none">{deckBadge.short}</span>
-                    <span className="mt-0.5 block text-[8px] font-bold uppercase tracking-[0.12em] text-white/70">
-                      {deckBadge.long}
-                    </span>
-                  </span>
-                ) : null}
+            <div className={cn(GLASS, "flex h-11 items-center rounded-full")}>
+              <button type="button" onClick={openSearch} aria-label="Search wallpapers" className="flex h-11 w-11 items-center justify-center rounded-full text-white transition active:scale-95">
+                <Search className="h-[18px] w-[18px]" aria-hidden />
               </button>
-            ) : null}
+              <button type="button" onClick={startUpload} disabled={uploading} aria-label="Upload your own wallpapers" className="flex h-11 w-11 items-center justify-center rounded-full text-white transition active:scale-95 disabled:opacity-60">
+                {uploading ? <Loader2 className="h-[18px] w-[18px] animate-spin" aria-hidden /> : <Upload className="h-[18px] w-[18px]" aria-hidden />}
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* Search — an inline field under the bar, opened from the icon. */}
-        {searchOpen ? (
-          <div className="mx-auto mt-2 w-full max-w-3xl px-4">
-            <div className="relative animate-in fade-in slide-in-from-top-2 duration-200 motion-reduce:animate-none">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                autoFocus
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search wallpapers…"
-                aria-label="Search wallpapers"
-                className="h-12 w-full rounded-2xl bg-card pl-11 pr-11 text-sm shadow-soft outline-none ring-1 ring-inset ring-border/60 focus:ring-2 focus:ring-primary"
-              />
-              {query ? (
+          <div className="absolute inset-x-5 top-[214px] flex flex-col gap-2.5">
+            <span className={cn(GLASS_SOFT, "self-start rounded-full px-2.5 py-1 text-xs font-bold tracking-[0.4px] text-white")}>
+              FEATURED{featuredBadge ? ` · ${featuredBadge.short} ${featuredBadge.long}`.toUpperCase() : ""}
+            </span>
+            <h1 className="m-0 font-heading text-[40px] font-extrabold leading-none tracking-[-1.5px] text-white">Wallpapers</h1>
+            <p className="m-0 text-[15px] leading-snug text-white/85">
+              {items.length.toLocaleString()} {items.length === 1 ? "design" : "designs"}. Free to download.
+            </p>
+            {featured ? (
+              <div className="mt-1 flex items-center gap-2.5">
                 <button
                   type="button"
-                  onClick={() => setQuery("")}
-                  aria-label="Clear search"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-muted-foreground transition hover:bg-secondary"
+                  onClick={() => {
+                    setAdFor(featured.name);
+                    download(featured);
+                  }}
+                  aria-label={`Download ${featured.name}`}
+                  className="flex h-11 items-center gap-2 rounded-full bg-frenz-gradient-x px-[18px] text-[15px] font-bold text-white shadow-[0_10px_24px_-8px_rgba(91,63,240,0.8)] transition active:scale-[0.98]"
                 >
-                  <X className="h-4 w-4" />
+                  {featured.proOnly ? <Crown className="h-[18px] w-[18px]" aria-hidden /> : <Download className="h-[18px] w-[18px]" aria-hidden />}
+                  Get this one
                 </button>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-
-        {/* ── 4: category pills ────────────────────────────────────────────── */}
-        {!empty ? (
-          <div className="mt-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="mx-auto flex w-max max-w-none gap-2.5 px-4 sm:w-full sm:max-w-3xl">
-              <CategoryPill
-                label="All"
-                Icon={LayoutGrid}
-                active={category === "all"}
-                onClick={() => setCategory("all")}
-              />
-              {categories.map(([name]) => (
-                <CategoryPill
-                  key={name}
-                  label={name}
-                  Icon={categoryIcon(name)}
-                  active={category === name}
-                  onClick={() => setCategory(category === name ? "all" : name)}
-                />
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {/* ── 5: the filter card ───────────────────────────────────────────── */}
-        {!empty ? (
-          <div className="mx-auto mt-3 w-full max-w-3xl px-4">
-            <div className="rounded-3xl bg-card p-2 shadow-soft ring-1 ring-inset ring-border/50">
-              <div className="flex items-center gap-2">
-                {/*
-                  A native <select> under a styled face. On a phone that opens the
-                  system picker — faster, familiar, and keyboard/screen-reader
-                  correct for free — where a hand-built popover would be a menu we
-                  own the accessibility of forever.
-                */}
-                <SelectPill
-                  Icon={LayoutGrid}
-                  label={category === "all" ? "Categories" : category}
-                  ariaLabel="Filter by category"
-                  value={category}
-                  onChange={setCategory}
-                  options={[
-                    { value: "all", label: "All categories" },
-                    ...categories.map(([name, count]) => ({ value: name, label: `${name} (${count})` })),
-                  ]}
-                />
-                <SelectPill
-                  Icon={ImageIcon}
-                  label={type === "all" ? "Types" : (WALLPAPER_TYPES.find((t) => t.id === type)?.label ?? "Types")}
-                  ariaLabel="Filter by screen shape"
-                  value={type}
-                  onChange={(v) => setType(v as WallpaperType | "all")}
-                  disabled={availableTypes.length === 0}
-                  options={[
-                    { value: "all", label: "All types" },
-                    ...availableTypes.map((t) => ({ value: t.id, label: t.label })),
-                  ]}
-                />
-                <span aria-hidden className="h-8 w-px shrink-0 bg-border/70" />
-                <button
-                  type="button"
-                  onClick={() => setTuneOpen((t) => !t)}
-                  aria-label="Sorting options"
-                  aria-expanded={tuneOpen}
-                  className={cn(
-                    "flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition active:scale-95",
-                    tuneOpen ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground",
-                  )}
-                >
-                  <SlidersHorizontal className="h-[18px] w-[18px]" />
+                <button type="button" onClick={() => open(featured)} aria-label={`Preview ${featured.name} full screen`} className={cn(GLASS, "flex h-11 items-center gap-2 rounded-full px-4 text-[15px] font-bold text-white transition active:scale-[0.98]")}>
+                  <Smartphone className="h-[18px] w-[18px]" aria-hidden />
+                  Preview
                 </button>
               </div>
-
-              {tuneOpen ? (
-                <div className="animate-in fade-in slide-in-from-top-1 border-t border-border/60 px-1 pb-1 pt-3 duration-200 motion-reduce:animate-none">
-                  <p className="px-1 text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-                    Sort by
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {/*
-                      The full set (owner, 2026-08-09: "most liked, most viewed,
-                      alphabetically and any other sort").
-
-                      The ENGAGEMENT orderings are hidden while the library has
-                      no engagement at all. Offering "Most liked" over a set
-                      where every wallpaper has zero likes is a control that
-                      visibly does nothing when tapped — the ordering is real,
-                      but every row ties, so the grid does not move and the
-                      picker looks broken. Chronological and alphabetical always
-                      work, so they are always offered.
-                    */}
-                    {WALLPAPER_SORTS.filter(
-                      (s) =>
-                        hasEngagement ||
-                        !["liked", "viewed", "downloaded", "saved"].includes(s.key),
-                    ).map((s) => (
-                      <button
-                        key={s.key}
-                        type="button"
-                        onClick={() => setSort(s.key)}
-                        aria-pressed={sort === s.key}
-                        title={s.hint}
-                        className={cn(
-                          "rounded-full px-3.5 py-2 text-xs font-bold transition active:scale-95",
-                          sort === s.key
-                            ? "bg-foreground text-background"
-                            : "bg-secondary text-muted-foreground hover:text-foreground",
-                        )}
-                      >
-                        {s.label}
-                      </button>
-                    ))}
-                    {filtering ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCategory("all");
-                          setType("all");
-                          setQuery("");
-                        }}
-                        className="rounded-full px-3.5 py-2 text-xs font-bold text-primary transition hover:bg-secondary active:scale-95"
-                      >
-                        Clear filters
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              ) : null}
-            </div>
+            ) : null}
           </div>
-        ) : null}
 
-        {/* ── 6 + 7: section heading and the grid ──────────────────────────── */}
-        <div className="mx-auto w-full max-w-3xl px-4 pt-5">
+          {/* glass category chips; Categories and Types live behind the one filter button */}
+          {!empty ? (
+            <div className="absolute inset-x-0 bottom-10 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex w-max gap-2 px-4">
+                <button
+                  type="button"
+                  onClick={() => setFiltersOpen(true)}
+                  aria-label={filterCount ? `Filters, ${filterCount} on` : "Filters"}
+                  aria-haspopup="dialog"
+                  className={cn(GLASS_SOFT, "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white transition active:scale-95")}
+                >
+                  <SlidersHorizontal className="h-[18px] w-[18px]" aria-hidden />
+                  {filterCount ? <span aria-hidden className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-frenz-gradient px-1 text-[10px] font-extrabold text-white">{filterCount}</span> : null}
+                </button>
+                <Chip label="All" active={category === "all"} onClick={() => setCategory("all")} />
+                {categories.map(([name]) => (
+                  <Chip key={name} label={name} active={category === name} onClick={() => setCategory(category === name ? "all" : name)} />
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </section>
+
+        {/* ── the white sheet over it ─────────────────────────────────────────── */}
+        <section className="relative -mt-[26px] rounded-t-[28px] bg-frenz-page px-4 pt-2" aria-labelledby="wallpapers-grid-heading">
+          <div aria-hidden className="mx-auto mb-3.5 h-[5px] w-9 rounded-full bg-[#E2DFEC] dark:bg-white/20" />
+
+          {searchOpen ? (
+            <div className="relative mb-3">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-frenz-muted" aria-hidden />
+              <input
+                ref={searchRef}
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search wallpapers"
+                aria-label="Search wallpapers"
+                className="h-11 w-full rounded-2xl border-0 bg-frenz-fill pl-11 pr-11 text-[16px] text-frenz-ink outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet/40 [&::-webkit-search-cancel-button]:appearance-none"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  setSearchOpen(false);
+                }}
+                aria-label="Close search"
+                className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-frenz-muted"
+              >
+                <X className="h-4 w-4" aria-hidden />
+              </button>
+            </div>
+          ) : null}
+
           {empty ? (
-            <p className="rounded-2xl border border-dashed border-border/70 px-4 py-10 text-center text-sm text-muted-foreground">
-              No wallpapers have been published yet. Check back soon.
-            </p>
+            <p className="rounded-2xl border border-dashed border-frenz-line px-4 py-10 text-center text-sm text-frenz-muted">No wallpapers have been published yet. Check back soon.</p>
           ) : (
             <>
-              {/* Scroll target for "See less" — see `collapse`. */}
-              <div ref={gridTopRef} className="mb-3 flex items-end justify-between gap-3">
-                <h2 className="truncate text-lg font-bold tracking-tight">{heading}</h2>
-                {capped && filtered.length > POPULAR_PREVIEW ? (
-                  <button
-                    type="button"
-                    onClick={() => setExpanded(true)}
-                    className="shrink-0 text-sm font-semibold text-primary transition active:scale-95"
-                  >
-                    View all
-                  </button>
-                ) : canCollapse ? (
-                  /* The TOP "See less" the owner asked for: once the whole
-                     library is on screen, the way back has to be reachable
-                     without scrolling to the very bottom of it. */
-                  <button
-                    type="button"
-                    onClick={collapse}
-                    className="shrink-0 text-sm font-semibold text-primary transition active:scale-95"
-                  >
-                    See less
-                  </button>
-                ) : (
-                  <span className="shrink-0 text-xs font-semibold text-muted-foreground">
-                    {filtered.length} design{filtered.length === 1 ? "" : "s"}
-                  </span>
-                )}
+              {/* Scroll target for "See less" and search — see `collapse`. */}
+              <div ref={gridTopRef} className="flex scroll-mt-4 items-center justify-between gap-3 px-1 pb-3.5">
+                <div className="flex min-w-0 items-baseline gap-2">
+                  <h2 id="wallpapers-grid-heading" className={cn("m-0 truncate font-heading text-[clamp(1.125rem,5.4vw,1.3125rem)] font-bold tracking-[-0.5px]", category !== "all" && !query.trim() && "capitalize")}>
+                    {heading}
+                  </h2>
+                  <span className="shrink-0 text-[13px] font-semibold text-frenz-muted">{filtered.length.toLocaleString()}</span>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {capped && filtered.length > POPULAR_PREVIEW ? (
+                    <button type="button" onClick={() => setExpanded(true)} className="min-h-11 text-sm font-bold text-frenz-blue">
+                      View all
+                    </button>
+                  ) : canCollapse ? (
+                    /* The TOP "See less" (owner, 2026-08-23): the way back without scrolling to the end. */
+                    <button type="button" onClick={collapse} className="min-h-11 text-sm font-bold text-frenz-blue">
+                      See less
+                    </button>
+                  ) : null}
+                  {/* the design's sort button — a real <select> under the face, so the phone's own picker opens */}
+                  <label className="relative flex h-9 items-center gap-1.5 rounded-full bg-frenz-fill px-3 text-sm font-bold">
+                    <span>{WALLPAPER_SORTS.find((s) => s.key === sort)?.label ?? "Sort"}</span>
+                    <ChevronDown className="h-4 w-4" aria-hidden />
+                    <select
+                      aria-label="Sort wallpapers"
+                      value={sort}
+                      onChange={(e) => setSort(e.target.value as WallpaperSort)}
+                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    >
+                      {/* engagement orderings only once anything has engagement — see the note in the filters */}
+                      {WALLPAPER_SORTS.filter((s) => hasEngagement || !["liked", "viewed", "downloaded", "saved"].includes(s.key)).map((s) => (
+                        <option key={s.key} value={s.key}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
               </div>
 
               {filtered.length === 0 ? (
-                <p className="rounded-2xl border border-dashed border-border/70 px-4 py-10 text-center text-sm text-muted-foreground">
+                <p className="rounded-2xl border border-dashed border-frenz-line px-4 py-10 text-center text-sm text-frenz-muted">
                   Nothing matches that yet.{" "}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCategory("all");
-                      setType("all");
-                      setQuery("");
-                    }}
-                    className="font-semibold text-primary underline-offset-2 hover:underline"
-                  >
+                  <button type="button" onClick={clearFilters} className="font-semibold text-frenz-blue underline-offset-2 hover:underline">
                     Clear the filters
                   </button>
                   .
                 </p>
               ) : (
-                <div className="grid grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-3 gap-2">
                   {shown.map((wp, i) => (
                     <ExploreTile
                       key={wp.id}
@@ -793,41 +583,91 @@ export function WallpaperExplore({
                 </div>
               )}
 
-              {/*
-                The end-of-grid control. "See more" states how many are still
-                hidden rather than saying "See more" alone — the count is what
-                tells someone whether one more tap is worth it on a library this
-                size, and it costs nothing to say.
-              */}
+              {/* "See more" says what the tap does and what is left (owner, 2026-10-04) — a secondary action, so white, not the gradient */}
               {hasMore ? (
                 <button
                   type="button"
                   onClick={() => setLimit((n) => n + WALLPAPER_PAGE)}
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#6D5CFF] to-[#8B5CF6] px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-violet-500/25 transition active:scale-[0.99]"
+                  className="mt-4 flex min-h-12 w-full items-center justify-center rounded-2xl border border-frenz-line bg-frenz-card px-6 text-sm font-bold text-frenz-ink shadow-frenz-card transition active:scale-[0.99]"
                 >
-                  {/*
-                    It says what the TAP does, then what is left behind it. The
-                    old label promised the whole remainder because that is what
-                    it delivered; promising "570 more" and adding ten would be a
-                    worse lie than the stall it replaces.
-                  */}
                   See {Math.min(WALLPAPER_PAGE, remaining)} more · {remaining.toLocaleString()} left
                 </button>
               ) : canCollapse ? (
-                <button
-                  type="button"
-                  onClick={collapse}
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-card px-6 py-3.5 text-sm font-bold text-foreground shadow-soft ring-1 ring-inset ring-border/60 transition active:scale-[0.99]"
-                >
+                <button type="button" onClick={collapse} className="mt-4 flex min-h-12 w-full items-center justify-center rounded-2xl border border-frenz-line bg-frenz-card px-6 text-sm font-bold text-frenz-ink transition active:scale-[0.99]">
                   See less
                 </button>
               ) : null}
             </>
           )}
-        </div>
+
+          {/* The visible trail for the BreadcrumbList JSON-LD (2026-08-16 SEO audit) — now a quiet line under the grid */}
+          <nav aria-label="Breadcrumb" className="mt-6 px-1">
+            <ol className="flex items-center gap-2 text-xs text-frenz-muted">
+              <li>
+                <Link href="/" className="transition hover:text-frenz-ink">
+                  Home
+                </Link>
+              </li>
+              <li aria-hidden>/</li>
+              <li aria-current="page" className="text-frenz-ink">
+                Wallpapers
+              </li>
+            </ol>
+          </nav>
+        </section>
 
         {children}
       </main>
+
+      {filtersOpen ? (
+        <Portal>
+          <div className="frenz-ui fixed inset-0 z-[90] flex items-end justify-center bg-black/45 sm:items-center" onClick={() => setFiltersOpen(false)}>
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Filters"
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md rounded-t-[28px] border border-frenz-line bg-frenz-card px-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-3 text-frenz-ink shadow-frenz-float sm:rounded-[28px] sm:pb-5"
+            >
+              <div aria-hidden className="mx-auto mb-3 h-[5px] w-9 rounded-full bg-[#E2DFEC] dark:bg-white/20" />
+              <div className="flex items-center justify-between">
+                <h2 className="m-0 font-heading text-lg font-bold">Filters</h2>
+                <button type="button" onClick={() => setFiltersOpen(false)} aria-label="Close filters" className="-mr-2 flex h-11 w-11 items-center justify-center rounded-full text-frenz-muted">
+                  <X className="h-5 w-5" aria-hidden />
+                </button>
+              </div>
+              <div className="mt-3 flex flex-col gap-2.5">
+                {/* A native <select> under a styled face: the phone's own picker, accessible for free */}
+                <SelectPill
+                  Icon={LayoutGrid}
+                  label={category === "all" ? "All categories" : category}
+                  ariaLabel="Filter by category"
+                  value={category}
+                  onChange={setCategory}
+                  options={[{ value: "all", label: "All categories" }, ...categories.map(([name, count]) => ({ value: name, label: `${name} (${count})` }))]}
+                />
+                <SelectPill
+                  Icon={ImageIcon}
+                  label={type === "all" ? "All types" : (WALLPAPER_TYPES.find((t) => t.id === type)?.label ?? "Types")}
+                  ariaLabel="Filter by screen shape"
+                  value={type}
+                  onChange={(v) => setType(v as WallpaperType | "all")}
+                  disabled={availableTypes.length === 0}
+                  options={[{ value: "all", label: "All types" }, ...availableTypes.map((t) => ({ value: t.id, label: t.label }))]}
+                />
+              </div>
+              <div className="mt-4 flex gap-2.5">
+                <button type="button" onClick={clearFilters} disabled={!filtering} className="flex min-h-12 flex-1 items-center justify-center rounded-full border border-frenz-line bg-frenz-card text-[15px] font-bold disabled:opacity-45">
+                  Clear
+                </button>
+                <button type="button" onClick={() => setFiltersOpen(false)} className="flex min-h-12 flex-1 items-center justify-center rounded-full bg-frenz-gradient text-[15px] font-bold text-white">
+                  Show {filtered.length.toLocaleString()}
+                </button>
+              </div>
+            </div>
+          </div>
+        </Portal>
+      ) : null}
 
       {viewer !== null ? (
         <WallpaperReels
@@ -843,45 +683,21 @@ export function WallpaperExplore({
       ) : null}
 
       {/*
-        🔴 The download popup (owner, 2026-08-09): "let users be notified like a
-        pop up when they click on download wallpaper button, and they see it
-        started and completed."
-
-        The card that does exactly this already existed — it just was not on
-        this page. `FloatingDownloadProgress` is mounted from inside
-        `Downloader`, and /wallpapers renders no Downloader, so a wallpaper
-        download ran completely silently: no "started", no progress, no
-        "complete", and on iOS no "Save to device" tap, which is the step that
-        actually puts the file in Photos. Tapping Download appeared to do
-        nothing at all.
-
-        `z-[115]` because the reels viewer is a full-screen `z-[100]` overlay —
-        at the default 85 the card would render behind the wallpaper and be just
-        as invisible as having no card.
+        🔴 The download popup (owner, 2026-08-09): started / progress / complete, and on iOS the
+        "Save to device" tap that actually puts the file in Photos. /wallpapers renders no Downloader,
+        so the card is mounted here; z-[115] clears the full-screen viewer (z-[100]).
       */}
       <FloatingDownloadProgress layerClass="z-[115]" />
 
-      {/* The 30-second ad a free member sees while their wallpaper saves, and
-          the sheet shown once the day's five are gone. Both are per-download
-          and neither blocks the transfer. */}
-      {adOpen ? (
-        <WallpaperRewardAd
-          seconds={adSeconds}
-          wallpaperName={adFor}
-          remaining={allowance?.remaining ?? null}
-          onClose={closeAd}
-        />
-      ) : null}
+      {/* The 30-second ad a free member sees while their wallpaper saves, and the sheet shown once the
+          day's five are gone. Both are per-download and neither blocks the transfer. */}
+      {adOpen ? <WallpaperRewardAd seconds={adSeconds} wallpaperName={adFor} remaining={allowance?.remaining ?? null} onClose={closeAd} /> : null}
       {limitHit ? <WallpaperLimitSheet limit={allowance?.limit ?? 5} onClose={closeLimit} /> : null}
       {proRequired ? <WallpaperProSheet onClose={closeProRequired} /> : null}
 
       {/*
-        The upload button (owner, 2026-08-23) — a premium, hard-to-miss floating
-        pill rather than a plain icon, and bottom-LEFT specifically so it can
-        never collide with `FloatingDownloadProgress`, which docks bottom-right.
-        Same gradient the active category pill and the download page's "See
-        more wallpapers" CTA already use, so it reads as the site's one premium
-        accent rather than a new color introduced just for this.
+        Upload (owner, 2026-08-23: "a premium, noticeable upload button … mark more than one") now lives
+        in the header, as the design draws it. Same input, same multi-file /api/wallpapers/share flow.
       */}
       <input
         ref={uploadInput}
@@ -894,45 +710,19 @@ export function WallpaperExplore({
           if (list.length > 0) void uploadFiles(list);
         }}
       />
-      <div
-        className="fixed z-40 flex flex-col items-start gap-2"
-        style={{
-          left: "1rem",
-          bottom: "calc(1.25rem + env(safe-area-inset-bottom))",
-        }}
-      >
-        {uploadMsg ? (
+      {uploadMsg ? (
+        <div className="pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4" style={{ bottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}>
           <div
             role="status"
             className={cn(
-              "animate-in fade-in slide-in-from-bottom-2 max-w-[min(80vw,20rem)] rounded-2xl px-3.5 py-2.5 text-xs font-semibold shadow-elevated ring-1 ring-inset duration-200 motion-reduce:animate-none",
-              uploadMsg.ok
-                ? "bg-card text-foreground ring-border/60"
-                : "bg-rose-500 text-white ring-rose-400/40",
+              "max-w-[min(90vw,22rem)] rounded-2xl px-4 py-3 text-sm font-semibold shadow-frenz-float",
+              uploadMsg.ok ? "border border-frenz-line bg-frenz-card text-frenz-ink" : "bg-rose-500 text-white",
             )}
           >
             {uploadMsg.text}
           </div>
-        ) : null}
-        <button
-          type="button"
-          onClick={startUpload}
-          disabled={uploading}
-          aria-label="Upload your own wallpapers"
-          className="group relative flex items-center gap-2 overflow-hidden rounded-full bg-gradient-to-r from-[#6D5CFF] to-[#8B5CF6] py-3 pl-4 pr-5 text-sm font-bold text-white shadow-xl shadow-violet-500/30 ring-1 ring-inset ring-white/15 transition active:scale-95 disabled:opacity-70"
-        >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 [transition-timing-function:var(--ease-out)] group-hover:translate-x-full"
-          />
-          {uploading ? (
-            <Loader2 className="relative h-[18px] w-[18px] animate-spin" />
-          ) : (
-            <CloudUpload className="relative h-[18px] w-[18px]" />
-          )}
-          <span className="relative">{uploading ? "Uploading…" : "Upload"}</span>
-        </button>
-      </div>
+        </div>
+      ) : null}
 
       {uploadSignIn ? <UploadSignInPrompt onClose={() => setUploadSignIn(false)} /> : null}
     </>
@@ -970,31 +760,19 @@ function UploadSignInPrompt({ onClose }: { onClose: () => void }) {
   );
 }
 
-function CategoryPill({
-  label,
-  Icon,
-  active,
-  onClick,
-}: {
-  label: string;
-  Icon: React.ComponentType<{ className?: string }>;
-  active: boolean;
-  onClick: () => void;
-}) {
+/** A category chip over the featured image: glass, or solid white when it's the one chosen. */
+function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "flex shrink-0 items-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold transition active:scale-95",
-        active
-          ? "bg-gradient-to-r from-[#6D5CFF] to-[#8B5CF6] text-white shadow-lg shadow-violet-500/25"
-          : "bg-card text-foreground shadow-soft ring-1 ring-inset ring-border/50",
+        "flex h-11 shrink-0 items-center rounded-full px-4 text-sm capitalize transition active:scale-95",
+        active ? "bg-white font-bold text-frenz-ink" : cn(GLASS_SOFT, "font-semibold text-white"),
       )}
     >
-      <Icon className={cn("h-[18px] w-[18px]", !active && "text-primary")} />
-      <span className="capitalize">{label}</span>
+      {label}
     </button>
   );
 }
@@ -1020,11 +798,11 @@ function SelectPill({
   return (
     <div
       className={cn(
-        "relative flex min-w-0 flex-1 items-center gap-2 rounded-2xl bg-secondary/60 px-3.5 py-3",
+        "relative flex min-h-12 min-w-0 flex-1 items-center gap-2 rounded-2xl bg-frenz-fill px-3.5 py-3",
         disabled && "opacity-45",
       )}
     >
-      <Icon className="h-[18px] w-[18px] shrink-0 text-primary" />
+      <Icon className="h-[18px] w-[18px] shrink-0 text-frenz-violet" />
       <span className="min-w-0 flex-1 truncate text-sm font-semibold capitalize">{label}</span>
       <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
       <select
@@ -1071,69 +849,48 @@ function ExploreTile({
   const badge = resolutionBadge(wp.width, wp.height);
   return (
     <div
-      className="group relative aspect-[7/10] animate-in fade-in zoom-in-95 overflow-hidden rounded-2xl bg-neutral-800 ring-1 ring-border/50 duration-500 [animation-fill-mode:backwards] motion-reduce:animate-none"
+      className="group relative aspect-[1/2] overflow-hidden rounded-[22px] bg-frenz-fill shadow-[0_10px_24px_-14px_rgba(30,20,80,0.45)] animate-in fade-in duration-500 [animation-fill-mode:backwards] motion-reduce:animate-none"
       // Capped so a long library never staggers into a visible wait.
       style={{ animationDelay: `${Math.min(index, 11) * 35}ms` }}
     >
-      {/*
-        Real alt text, added 2026-08-09.
-
-        These shipped as `alt="" aria-hidden` — correct markup for decoration and
-        wrong for the content of an image gallery. It meant the one page on this
-        site whose whole purpose is publishing pictures published none of them:
-        Google Images had nothing to index, and a screen-reader user got a grid
-        of unnamed buttons. The name and category are the only things we
-        truthfully know about the picture, so that is exactly what it says — see
-        `wallpaperAlt` for why it is not stuffed with keywords.
-      */}
+      {/* Real alt text (2026-08-09): the name and category are what we truthfully know — see `wallpaperAlt`. */}
       {/* eslint-disable-next-line @next/next/no-img-element -- public storage CDN; next/image 403s on these */}
       <img
         src={wp.thumbUrl}
         alt={wallpaperAlt(wp)}
         loading={index < 6 ? "eager" : "lazy"}
+        decoding="async"
         className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]"
       />
 
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-label={`Open ${wp.name} full screen`}
-        className="absolute inset-0 z-10"
-      />
+      <button type="button" onClick={onOpen} aria-label={`Open ${wp.name} full screen`} className="absolute inset-0 z-10" />
 
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-2/5 bg-gradient-to-t from-black/80 via-black/35 to-transparent"
-      />
-      <span className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-end justify-between gap-1 p-2">
-        <span className="min-w-0">
-          <span className="block truncate text-[11px] font-bold leading-tight text-white">{wp.name}</span>
-          {/* The sharer's @handle on member uploads, the category on curated
-              ones — see `wallpaperCredit`. */}
-          <span className="block truncate text-[10px] leading-tight text-white/70">{wallpaperCredit(wp)}</span>
+      {/* the frosted name plate (glass over the image): name, resolution, and the credit */}
+      <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 z-20 flex flex-col gap-px rounded-[15px] border border-white/20 bg-[rgba(15,12,30,0.38)] px-2 py-[7px] backdrop-blur-lg backdrop-saturate-[1.6]">
+        <span className="flex items-center justify-between gap-1">
+          <span className="truncate text-xs font-bold text-white">{wp.name}</span>
+          {badge ? <span className="shrink-0 rounded-[5px] bg-white/[0.22] px-[5px] py-px text-[9px] font-extrabold text-white">{badge.short}</span> : null}
         </span>
-        {badge ? (
-          <span className="shrink-0 rounded-md bg-black/55 px-1.5 py-0.5 text-[9px] font-extrabold text-white backdrop-blur-sm">
-            {badge.short}
-          </span>
-        ) : null}
+        {/* The sharer's @handle on member uploads, the category on curated ones — see `wallpaperCredit`. */}
+        <span className="truncate text-[10px] font-semibold text-white/80">{wallpaperCredit(wp)}</span>
       </span>
 
-      {/* Always visible, as in the reference — on a phone there is no hover, so a
-          hover-only download button is a button that does not exist. */}
+      {/* Always visible — on a phone there is no hover. A 44 px target around the design's 34 px glass circle. */}
       <button
         type="button"
         onClick={onDownload}
         aria-label={wp.proOnly ? `Download ${wp.name} (Pro)` : `Download ${wp.name}`}
-        className={cn(
-          "absolute right-1.5 top-1.5 z-30 flex h-8 w-8 items-center justify-center rounded-full ring-1 ring-inset backdrop-blur-md transition active:scale-90",
-          // A Pro wallpaper (admin upload, owner 2026-10-18) wears the gold crown.
-          wp.proOnly
-            ? "bg-gradient-to-b from-neutral-900 to-black text-amber-300 shadow-md shadow-amber-500/30 ring-amber-300/60"
-            : "bg-black/45 text-white ring-white/20 hover:bg-black/65",
-        )}
+        className="absolute right-[3px] top-[3px] z-30 flex h-11 w-11 items-center justify-center transition active:scale-90"
       >
-        {wp.proOnly ? <Crown className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+        <span
+          className={cn(
+            "flex h-[34px] w-[34px] items-center justify-center rounded-full border backdrop-blur-md",
+            // A Pro wallpaper (admin upload, owner 2026-10-18) wears the gold crown.
+            wp.proOnly ? "border-amber-300/60 bg-black/80 text-amber-300" : "border-white/35 bg-[rgba(15,12,30,0.32)] text-white",
+          )}
+        >
+          {wp.proOnly ? <Crown className="h-4 w-4" aria-hidden /> : <Download className="h-4 w-4" aria-hidden />}
+        </span>
       </button>
     </div>
   );

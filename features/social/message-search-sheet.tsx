@@ -34,7 +34,8 @@ function timeAgo(iso: string): string {
  * links to `/messages/<id>?highlight=<messageId>`, which conversation-room.tsx
  * reads to scroll to + briefly highlight that exact message.
  */
-export function MessageSearchSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+/** `conversationId` narrows the search to that one chat ("Search in chat", design/ChatMenu.dc.html) — the API's own scope. */
+export function MessageSearchSheet({ open, onClose, conversationId }: { open: boolean; onClose: () => void; conversationId?: string }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const [query, setQuery] = useState("");
@@ -68,7 +69,7 @@ export function MessageSearchSheet({ open, onClose }: { open: boolean; onClose: 
     }
     setLoading(true);
     debounceRef.current = setTimeout(() => {
-      void fetch(`/api/messages/search?q=${encodeURIComponent(q)}`)
+      void fetch(`/api/messages/search?q=${encodeURIComponent(q)}${conversationId ? `&conversationId=${conversationId}` : ""}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => setResults(d?.results ?? []))
         .catch(() => setResults([]))
@@ -77,7 +78,7 @@ export function MessageSearchSheet({ open, onClose }: { open: boolean; onClose: 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query]);
+  }, [query, conversationId]);
 
   if (!mounted) return null;
 
@@ -87,7 +88,7 @@ export function MessageSearchSheet({ open, onClose }: { open: boolean; onClose: 
   return createPortal(
     <AnimatePresence>
       {open ? (
-        <div className="fixed inset-0 z-[110]" role="dialog" aria-modal="true" aria-label="Search messages">
+        <div className="fixed inset-0 z-[110]" role="dialog" aria-modal="true" aria-label={conversationId ? "Search in chat" : "Search messages"}>
           <motion.button
             type="button"
             aria-label="Close"
@@ -106,7 +107,7 @@ export function MessageSearchSheet({ open, onClose }: { open: boolean; onClose: 
             style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
           >
             <div className="flex items-center justify-between px-5 pb-2 pt-4">
-              <h2 className="text-base font-bold tracking-tight">Search messages</h2>
+              <h2 className="text-base font-bold tracking-tight">{conversationId ? "Search in chat" : "Search messages"}</h2>
               <button
                 type="button"
                 onClick={onClose}
@@ -124,7 +125,7 @@ export function MessageSearchSheet({ open, onClose }: { open: boolean; onClose: 
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search all your chats…"
+                placeholder={conversationId ? "Search this chat…" : "Search all your chats…"}
                 aria-label="Search messages"
                 className="w-full rounded-2xl border border-border/60 bg-background/60 py-2.5 pl-9 pr-3 text-sm outline-none placeholder:text-muted-foreground/60 focus:border-accent/50 focus:ring-2 focus:ring-accent/25"
               />

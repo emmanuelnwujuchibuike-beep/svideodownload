@@ -69,6 +69,9 @@ const orPredicate = (expr: string) => {
   return (r: Record<string, unknown>) => parts.some((p) => p(r));
 };
 
+const ilikeRe = (pattern: string) =>
+  new RegExp(`^${pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*").replace(/_/g, ".")}$`, "is");
+
 export function fakeDb(seed: Record<string, Row[]> = {}): FakeDb {
   const db: FakeDb = { tables: { ...seed }, unique: {}, defaults: {}, rpc: {}, writes: [], failOn: {}, client: () => client };
   const rows = (t: string) => (db.tables[t] ??= []);
@@ -114,6 +117,8 @@ export function fakeDb(seed: Record<string, Row[]> = {}): FakeDb {
       lt: (c: string, v: string) => add(`${c}<`, (r) => String(val(r, c) ?? "") < v),
       lte: (c: string, v: string) => add(`${c}<=`, (r) => String(val(r, c) ?? "") <= v),
       not: (c: string, _o: string, v: unknown) => add(`${c} not`, (r) => (val(r, c) ?? null) !== v),
+      // SQL ILIKE: % is any run, _ one character, case-insensitive
+      ilike: (c: string, p: string) => add(`${c} ilike ${p}`, (r) => ilikeRe(p).test(String(val(r, c) ?? ""))),
       contains: (c: string, v: Row) => add(`${c} @>`, (r) => Object.entries(v).every(([k, x]) => (r[c] as Row | undefined)?.[k] === x)),
       // PostgREST logic trees: "a.lt.x,and(b.eq.y,c.lt.z)" — evaluated for real, so keyset cursors and blocks are tested
       or: (expr: string) => add(`or(${expr})`, orPredicate(expr)),

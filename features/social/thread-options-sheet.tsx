@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronRight, Coins, Flag, Loader2, Mail, Palette, Plus, Search, ShieldBan, Timer, Trash2, Type, X } from "lucide-react";
+import { Check, ChevronRight, Coins, Flag, Images, Loader2, Mail, Palette, Plus, Search, ShieldBan, Timer, Trash2, Type, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -11,6 +11,8 @@ import dynamicImport from "next/dynamic";
 import { BlockOptionsSheet } from "@/features/social/block-options-sheet";
 import { ChatAppearanceSheet } from "@/features/social/chat-appearance-sheet";
 import { MessageSearchSheet } from "@/features/social/message-search-sheet";
+import { PresenceLastSeen } from "@/features/social/presence-badge";
+import { formatCredits } from "@/lib/ai/credits/units";
 import { ReportSheet } from "@/features/social/report-sheet";
 import { Avatar, VerifiedBadge } from "@/features/frenz-ui/primitives";
 import { setChatAppearance, useChatAppearance } from "@/features/social/use-chat-appearance";
@@ -23,19 +25,26 @@ import {
   WALLPAPER_SCOPE_LABEL,
   type WallpaperScope,
 } from "@/lib/social/chat-appearance";
-import { CONVERSATION_THEMES, type ConversationTheme } from "@/lib/social/message-meta";
+import type { ConversationTheme } from "@/lib/social/message-meta";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { cn } from "@/lib/utils";
 import { profilePath } from "@/lib/social/profile-url";
 import { announceTypingRevoked } from "@/features/social/typing-privacy";
 
+/* The swatch IS the sent-bubble colour (conversation-room THEME_BUBBLE_CLASS), so what you pick is what you get. */
 const THEME_SWATCH: Record<ConversationTheme, string> = {
-  blue: "bg-blue-500",
-  pink: "bg-pink-500",
+  blue: "bg-frenz-blue",
+  pink: "bg-frenz-magenta",
   green: "bg-emerald-500",
   orange: "bg-orange-500",
-  purple: "bg-violet-500",
+  purple: "bg-frenz-violet",
+  midnight: "bg-[linear-gradient(135deg,hsl(250_60%_29%),hsl(250_48%_8%))]",
+  mono: "bg-[hsl(247_21%_8%)] dark:bg-white/25",
 };
+
+/* design/ChatMenu.dc.html: brand colours only, in its order. null is the app's default — the Frenz gradient. */
+const PICKABLE_THEMES: (ConversationTheme | null)[] = [null, "blue", "purple", "pink", "midnight", "mono"];
+const THEME_NAME: Record<ConversationTheme, string> = { blue: "Blue", pink: "Magenta", green: "Green", orange: "Orange", purple: "Violet", midnight: "Midnight", mono: "Mono" };
 
 const DISAPPEAR_OPTIONS: { label: string; seconds: number | null }[] = [
   { label: "Off", seconds: null },
@@ -80,6 +89,9 @@ const ChatSendCredits = dynamicImport(() => loadSendCredits().then((m) => m.Chat
 // 2026-10-14 (owner: "respond instantly like the promote button"): the sheet's code and the wallet read are
 // warmed while this menu is idle, and kept for the tab, so the tap paints the sheet at once
 const warmSendCredits = () => void loadSendCredits().then((m) => m.prefetchSendCredits()).catch(() => {});
+/* "Media, links & files" (0264 day, 2026-10-19) — its own chunk, loaded when the row is tapped */
+const ChatMediaSheet = dynamicImport(() => import("@/features/social/chat-media-sheet").then((m) => m.ChatMediaSheet), { ssr: false });
+
 
 export function ThreadOptionsSheet({
   conversationId,
@@ -162,6 +174,20 @@ export function ThreadOptionsSheet({
     const t = window.setTimeout(warmSendCredits, 300);
     return () => window.clearTimeout(t);
   }, [open, otherUserId]);
+  // the real balance on the Send AI credits button — the same kept read the send sheet uses, so no second request
+  const [balance, setBalance] = useState<number | null>(null);
+  useEffect(() => {
+    if (!open || !otherUserId) return;
+    let live = true;
+    void loadSendCredits()
+      .then((m) => m.sendCreditsBalance())
+      .then((b) => live && setBalance(b))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [open, otherUserId, sendCreditsOpen]);
+  const [mediaOpen, setMediaOpen] = useState(false);
   const [appearanceSheetOpen, setAppearanceSheetOpen] = useState(false);
   // ChatMenu.dc.html: the disappearing choice opens from its row; Report and Search are rows of their own
   const [disappearOpen, setDisappearOpen] = useState(false);
@@ -263,11 +289,13 @@ export function ThreadOptionsSheet({
 
   if (!mounted) return null;
   /*
-    design/ChatMenu.dc.html (owner, 2026-10-18): a white sheet — the person (avatar with the identity
-    ring, name, "View profile"), Send AI credits, Theme, Wallpaper, then one list (Disappearing messages,
-    Font & bubble style, Search messages, Email me new messages) and Block / Report at the foot. Every
-    save path is the one this sheet already had; only the presentation changed. The design's "Media,
-    links & files" row is left out: there is no such screen yet (PROGRESS).
+    design/ChatMenu.dc.html (owner, 2026-10-18; step 15, 2026-10-19): a GLASS sheet over the chat (there is
+    a picture behind it — the thread and its wallpaper), the person (avatar with the identity ring, name,
+    @handle · last seen, "View profile"), the gradient Send AI credits button with the real balance, brand
+    swatches, wallpaper (scope and upload — no preset pictures: backgrounds stay plain white unless the owner
+    says "emergency change", 2026-10-19), one list (Disappearing messages, Font & bubble style,
+    Media, links & files, Search in chat, Email me new messages) and Block / Report as red rows. Every save
+    path is the one this sheet already had; Media, links & files and the Midnight / Mono themes are new (0264).
   */
   const card = "rounded-[20px] border border-frenz-line bg-frenz-card";
   const row = "flex min-h-[56px] w-full items-center gap-3 px-3.5 text-left transition active:bg-frenz-fill disabled:opacity-50";
@@ -291,14 +319,14 @@ export function ThreadOptionsSheet({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-black/45"
+            className="absolute inset-0 bg-black/25"
           />
           <motion.div
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={springs.sheet}
-            className="absolute inset-x-0 bottom-0 mx-auto max-h-[90vh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-[28px] bg-frenz-page shadow-frenz-float sm:bottom-6 sm:rounded-[28px]"
+            className="frenz-nav-glass frenz-nav-glass--sheet absolute inset-x-0 bottom-0 mx-auto max-h-[90vh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-[28px] !border-x-0 !border-b-0 sm:bottom-6 sm:rounded-[28px] sm:!border"
             style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
           >
             <div className="flex justify-center pb-1 pt-2">
@@ -314,7 +342,10 @@ export function ThreadOptionsSheet({
                     <span className="truncate font-heading text-[19px] font-bold">{name}</span>
                     {otherIsVerified ? <VerifiedBadge size={17} /> : null}
                   </p>
-                  <p className="m-0 truncate text-sm text-frenz-muted">@{otherHandle}</p>
+                  <p className="m-0 truncate text-sm text-frenz-muted">
+                    @{otherHandle}
+                    {otherUserId ? <PresenceLastSeen userId={otherUserId} /> : null}
+                  </p>
                   <Link
                     href={`${profilePath(otherHandle)}`}
                     onClick={onClose}
@@ -339,26 +370,31 @@ export function ThreadOptionsSheet({
                     haptic("light");
                     setSendCreditsOpen(true);
                   }}
-                  className={cn(card, "mt-4 flex w-full items-center gap-3 p-3.5 text-left transition active:scale-[0.99]")}
+                  // the design's one full-width gradient action (a primary action — the gradient earns its place)
+                  className="mt-4 flex w-full items-center gap-3 rounded-[20px] bg-frenz-gradient-x p-3.5 text-left text-white shadow-frenz-card transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2"
                 >
-                  <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-frenz-violet text-white">
+                  <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/20">
                     <Coins className="h-5 w-5" />
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="text-[15px] font-bold">Send AI credits</span>
-                    <span className="truncate text-[13px] text-frenz-muted">Gift credits to {name}</span>
+                    <span className="font-heading text-[15px] font-bold">Send AI credits</span>
+                    <span className="truncate text-[13px] text-white/85">Gift credits to {name}</span>
                   </span>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-frenz-muted" aria-hidden />
+                  <span className="shrink-0 text-right text-[12px] leading-tight text-white/85">
+                    Your balance
+                    <span className="block text-[14px] font-bold tabular-nums text-white">{balance === null ? "—" : formatCredits(balance)}</span>
+                  </span>
                 </button>
               ) : null}
 
               {/* ── theme ── */}
               <div className="mt-5 flex items-baseline justify-between px-1">
                 <h3 className="m-0 text-[13px] font-bold text-frenz-muted">Theme</h3>
-                <span className="text-[13px] font-semibold capitalize text-frenz-muted">{theme ?? "Default"}</span>
+                <span className="text-[13px] font-semibold text-frenz-muted">{theme ? THEME_NAME[theme] : "Frenz"}</span>
               </div>
               <div role="radiogroup" aria-label="Chat theme" className="mt-2 flex flex-wrap gap-2.5 px-1">
-                {[null, ...CONVERSATION_THEMES].map((t) => {
+                {/* a theme no longer offered (green / orange) still shows while it is this chat's, so the state stays honest */}
+                {(theme && !PICKABLE_THEMES.includes(theme) ? [...PICKABLE_THEMES, theme] : PICKABLE_THEMES).map((t) => {
                   const on = theme === t;
                   return (
                     <button
@@ -366,7 +402,7 @@ export function ThreadOptionsSheet({
                       type="button"
                       role="radio"
                       aria-checked={on}
-                      aria-label={`${t ?? "Default"} theme`}
+                      aria-label={`${t ? THEME_NAME[t] : "Frenz"} theme`}
                       disabled={busy}
                       onClick={() => applyTheme(t)}
                       className="flex h-11 w-11 items-center justify-center rounded-full disabled:opacity-50"
@@ -499,7 +535,21 @@ export function ThreadOptionsSheet({
                   </button>
                 </li>
                 <li className="border-t border-frenz-line">
-                  {/* the existing message search (every chat you're in, and your starred messages) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      haptic("light");
+                      setMediaOpen(true);
+                    }}
+                    className={row}
+                  >
+                    <RowIcon icon={Images} className="bg-frenz-magenta" />
+                    <span className="flex-1 text-base font-semibold">Media, links &amp; files</span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-frenz-muted" aria-hidden />
+                  </button>
+                </li>
+                <li className="border-t border-frenz-line">
+                  {/* the existing message search, narrowed to this chat (the API's own scope) */}
                   <button
                     type="button"
                     onClick={() => {
@@ -509,7 +559,7 @@ export function ThreadOptionsSheet({
                     className={row}
                   >
                     <RowIcon icon={Search} className="bg-frenz-ink dark:bg-white/20" />
-                    <span className="flex-1 text-base font-semibold">Search messages</span>
+                    <span className="flex-1 text-base font-semibold">Search in chat</span>
                     <ChevronRight className="h-4 w-4 shrink-0 text-frenz-muted" aria-hidden />
                   </button>
                 </li>
@@ -520,30 +570,35 @@ export function ThreadOptionsSheet({
 
               {/* ── block / report ── */}
               {otherUserId ? (
-                <div className="mt-5 grid grid-cols-2 gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      haptic("light");
-                      setBlockSheetOpen(true);
-                    }}
-                    className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-frenz-fill text-[15px] font-bold transition active:scale-[0.98]"
-                  >
-                    <ShieldBan className="h-[18px] w-[18px]" aria-hidden />
-                    Block or restrict
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      haptic("light");
-                      setReportOpen(true);
-                    }}
-                    className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-rose-50 text-[15px] font-bold text-rose-700 transition active:scale-[0.98] dark:bg-rose-500/15 dark:text-rose-300"
-                  >
-                    <Flag className="h-[18px] w-[18px]" aria-hidden />
-                    Report
-                  </button>
-                </div>
+                // the design's red rows at the foot
+                <ul className={cn(card, "mt-5 overflow-hidden")}>
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        haptic("light");
+                        setBlockSheetOpen(true);
+                      }}
+                      className={cn(row, "text-rose-600 dark:text-rose-400")}
+                    >
+                      <ShieldBan className="h-5 w-5 shrink-0" aria-hidden />
+                      <span className="flex-1 text-base font-semibold">Block or restrict</span>
+                    </button>
+                  </li>
+                  <li className="border-t border-frenz-line">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        haptic("light");
+                        setReportOpen(true);
+                      }}
+                      className={cn(row, "text-rose-600 dark:text-rose-400")}
+                    >
+                      <Flag className="h-5 w-5 shrink-0" aria-hidden />
+                      <span className="flex-1 text-base font-semibold">Report</span>
+                    </button>
+                  </li>
+                </ul>
               ) : null}
               <button type="button" disabled={busy} onClick={() => void deleteConversation()} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 text-[14px] font-bold text-rose-700 disabled:opacity-50 dark:text-rose-400">
                 <Trash2 className="h-4 w-4" aria-hidden />
@@ -565,7 +620,8 @@ export function ThreadOptionsSheet({
         />
       ) : null}
       {otherUserId ? <ReportSheet key="report" targetType="user" targetId={otherUserId} open={reportOpen} onClose={() => setReportOpen(false)} /> : null}
-      <MessageSearchSheet key="search" open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <MessageSearchSheet key="search" open={searchOpen} onClose={() => setSearchOpen(false)} conversationId={conversationId} />
+      {mediaOpen ? <ChatMediaSheet key="media" conversationId={conversationId} onClose={() => setMediaOpen(false)} /> : null}
       <ChatAppearanceSheet key="appearance" conversationId={conversationId} open={appearanceSheetOpen} onClose={() => setAppearanceSheetOpen(false)} />
       {sendCreditsOpen && otherUserId ? (
         <ChatSendCredits

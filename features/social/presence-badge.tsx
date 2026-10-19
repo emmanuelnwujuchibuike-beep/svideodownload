@@ -43,6 +43,40 @@ export function PresenceBadge({
   handle: string;
   forceLight?: boolean;
 }) {
+  const { online, lastSeen, details } = usePresenceDetails(userId);
+
+  const extra = [details?.line, details?.autoReply].filter(Boolean).join(" · ");
+  if (online) {
+    // "Active now" — the owner's chat mockup's exact label (was "online").
+    return (
+      <span className="block truncate text-xs" title={extra || undefined}>
+        <span className="font-medium text-emerald-500">Active now</span>
+        {extra ? <span className={cn("text-muted-foreground", forceLight && "!text-neutral-500")}> · {extra}</span> : null}
+      </span>
+    );
+  }
+  const base = lastSeen ? lastSeenLabel(lastSeen) : extra ? null : `@${handle}`;
+  return (
+    <span className={cn("block truncate text-xs text-muted-foreground", forceLight && "!text-neutral-500")} title={extra || undefined}>
+      {[extra, base].filter(Boolean).join(" · ")}
+    </span>
+  );
+}
+
+/**
+ * "Active now" / "Last seen 7m ago" alone — the chat options sheet's "@handle · last seen" line
+ * (design/ChatMenu.dc.html). Nothing when the person doesn't share it.
+ */
+export function PresenceLastSeen({ userId }: { userId: string }) {
+  const { online, lastSeen } = usePresenceDetails(userId);
+  if (online) return <span className="font-semibold text-emerald-600 dark:text-emerald-400"> · Active now</span>;
+  if (!lastSeen) return null;
+  const label = lastSeenLabel(lastSeen);
+  return <span> · {label.charAt(0).toUpperCase() + label.slice(1)}</span>;
+}
+
+/** Online now, the last-seen time and the shared details — read at most once a minute per person. */
+function usePresenceDetails(userId: string) {
   const online = usePresence().has(userId);
   const hit = cache.get(userId);
   const [lastSeen, setLastSeen] = useState<string | null>(hit?.lastSeen ?? null);
@@ -73,21 +107,5 @@ export function PresenceBadge({
       cancelled = true;
     };
   }, [userId]);
-
-  const extra = [details?.line, details?.autoReply].filter(Boolean).join(" · ");
-  if (online) {
-    // "Active now" — the owner's chat mockup's exact label (was "online").
-    return (
-      <span className="block truncate text-xs" title={extra || undefined}>
-        <span className="font-medium text-emerald-500">Active now</span>
-        {extra ? <span className={cn("text-muted-foreground", forceLight && "!text-neutral-500")}> · {extra}</span> : null}
-      </span>
-    );
-  }
-  const base = lastSeen ? lastSeenLabel(lastSeen) : extra ? null : `@${handle}`;
-  return (
-    <span className={cn("block truncate text-xs text-muted-foreground", forceLight && "!text-neutral-500")} title={extra || undefined}>
-      {[extra, base].filter(Boolean).join(" · ")}
-    </span>
-  );
+  return { online, lastSeen, details };
 }

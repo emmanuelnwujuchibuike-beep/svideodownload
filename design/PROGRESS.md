@@ -474,3 +474,102 @@ the app allowed in the App Store and Play (the Android app is a TWA), and Paysta
   ones still wrap at 80 %.
 - [x] **Lighter History** — the publish-sound sheet and the reward gate load only when first opened;
   `app/icon.png` recompressed 163 KB → 24 KB; the Exclusive feed loads the post card as its own chunk.
+
+## Pages with no design file (owner, 2026-10-19: "restyle the landing lower sections and pages with no design files")
+- [x] **Landing lower sections** — Frenz AI (gradient showcase card + white tool tiles), Features (2-column
+  white cards, one icon per feature — No Watermark no longer shares the shield), How it works (numbered steps
+  card + notes; the decorative phone mockup with its made-up "85% · Video.mp4" transfer is gone; step 2 now
+  says "Tap Download", the button's real name), the platform links and the FAQ (one grouped card of native
+  <details>). No gradient text anywhere; Sora headings, Hanken body, the hero's column.
+  - Owner, same day: "Make sure the landing is very light … remove duplicate in relevant things that consume
+    weight, below section shouldn't load on landing." So:
+    - **Nothing below the hero loads on a page view that never scrolls.** These five sections are static
+      HTML in one CDN-cached response (`/landing-sections`, built once, skipped by middleware), fetched after
+      the visitor's first scroll brings a placeholder within a screen. Placeholders keep each section's anchor
+      id (#products, #features, #how-it-works, #platforms, #faq) and its measured height, so header/footer
+      links land and nothing jumps. Links inside navigate in-app (checked: no reload).
+    - **Removed as duplicates:** Discover (Reels · Feed · Wallpapers — in the hero's Tools, the bottom nav and
+      the footer), the "Ready to get started?" banner (its one button scrolled back up to the paste box), and
+      the second `homepage_top` ad slot (the same zone appeared twice).
+    - Kept in the document: the Promote card (live ad catalogue facts), the section-break ad slots, the FAQ's
+      structured data.
+    - SEO note: the platform-page links are no longer in the first HTML (Google renders the page and the
+      sitemap lists every platform page). Say if they should come back inline.
+- [x] **Login** (no design file) — the Frenz system: white page, Sora title with one flat violet word (no
+  gradient text), the brand washes and blurred glows removed, the platform ring as white tiles with ink logos, the
+  gradient only on Continue with Email / Continue; fields on the #F1F0F6 fill. Sign-in logic untouched.
+- [x] **Notifications** (no design file) — Settings-style large Sora title with a small gradient
+  "N new" badge, white controls (no glass), the Messages page's search pill and pill filters, white cards (unread =
+  violet hairline + left accent + dot, never a wash), plain white menus and bulk bar.
+
+## Steps 15–19 (owner, 2026-10-19)
+
+Owner rules for these: work through them one after another — screenshot, verify, commit locally on `ui-redesign`,
+move on without waiting (owner, same day: "Don't stop after each page"). **Never push or open a PR until the owner
+says "push".** White backgrounds, the brand gradient only where it earns its place, Sora headings, Hanken body, no
+new colours.
+
+- [x] 15. Chat options sheet → design/ChatMenu.dc.html
+- [ ] 16. Frenz AI welcome → design/AIStudio.dc.html
+- [ ] 17. Frenz AI — AI Studio → design/AIExplore.dc.html
+- [ ] 18. Frenz AI — Text to Video → design/TextToVideo.dc.html
+- [ ] 19. Frenz AI — Image to Video → design/ImageToVideo.dc.html
+
+### Shared rules (owner, verbatim)
+- Glass (backdrop blur + translucent fill) is ONLY used over images, video or the chat wallpaper. On white surfaces use solid white cards with a 1px #ECE9F7 border.
+- Keep every existing feature and wire every control to our existing logic, APIs and routes. Only the UI changes.
+- Show real data everywhere a design file shows a placeholder in [brackets].
+- If something in a design doesn't match how the app works, keep the app's behavior and note it in PROGRESS.md.
+
+### Page notes (owner, verbatim)
+
+Chat options sheet (opens from "⋯" in a chat)
+- Glass bottom sheet over the chat (blur + translucent white), with grab handle and close button.
+- Header: avatar with gradient ring, name + verified badge, @handle · last seen, and a "View profile" button.
+- KEEP the existing Send AI credits feature: the full-width gradient "Send AI credits" button must open our current send-credits flow and show the user's real credit balance.
+- Theme swatches (brand colors only), Wallpaper picker with "Both of you / Only you" switch, upload + presets.
+- List rows: Disappearing messages (shows current value, opens a picker with Off/24h/7d/30d/Custom), Font & bubble style, Media links & files, Search in chat.
+- Red rows at the bottom: Block or restrict, Report.
+
+Frenz AI welcome (the screen before the main AI page)
+- Full-bleed featured video carousel as the hero, with glass "Frenz AI" pill and glass credits pill on top, title + description + "Try it" button, and glass page dots. Autoplay muted.
+- Credits card: real balance with Earn and View (existing flows).
+- Short intro ("Create. Transform. Perfect." + one line) and Fast / Secure / Natural results chips.
+- Big gradient "Create with AI →" button above the tab bar, with a round History button next to it. "Create with AI" opens the AI Studio page.
+
+Frenz AI — AI Studio
+- Header: "‹ Frenz AI" back link, large "AI Studio" title, credits pill. Keep the privacy line about media staying on device until Create.
+- Filter chips: All · Video · Audio · Yours · Models (scroll to section).
+- Create video: Text to Video and Image to Video as gradient cards (whole card tappable).
+- Transform video: Lip Sync Pro row. Create audio: Text to Audio, Voice Cloning, plus our real third audio tool (the design has a placeholder; use our actual tool name and description).
+- AI models row: Kling 4.0, Kling 3.0 Omni, Kling 2.6, Kling O3, Kling O1. Use the exact model names and identifiers from our codebase/config; if they differ from the design, use ours and note it in PROGRESS.md.
+- Yours: Your AI videos, Your voices.
+- One credits card at the bottom: balance, Business tag (only if the user is a Business member), Earn credits, Usage & history, and the complimentary-creations note only when it applies.
+- Remove the old "How it works" section, the separate Business member banner and the "← Frenz AI" back button at the bottom.
+
+Frenz AI — Text to Video (main creation page)
+- Header: "‹ Studio" back, centered title, credits pill. Hide the bottom tab bar on this screen.
+- Prompt box first: up to 2,500 characters with a live counter, "Explore prompts" (existing flow) and a dictation mic button inside the box.
+- Style picker: Realistic, Anime, Cartoon, 3D using our real sample images, with a selected ring and checkmark.
+- Settings list: Model (our real model list and real default), Duration, Aspect ratio, each opening a native-style picker.
+- References: up to 7 images, or 4 images with one MP4/MOV reference video; show the count (0/7). Enforce these limits exactly as the app does today.
+- Advanced settings as a collapsible row containing our existing advanced options.
+- Glass bar pinned to the bottom: Estimated cost from our real cost calculation (show "—" until it can be calculated) and the gradient "Generate video" button, disabled until a prompt is entered and while credits are insufficient.
+
+Frenz AI — Image to Video
+- Same layout and components as Text to Video. Build shared components for both pages; don't duplicate code.
+- Differences: a large "Choose a photo" tile first (Photos, Files, camera) with the on-device privacy note; once a photo is picked, show it with a replace button. The prompt describes the motion. No References section unless our current Image to Video page already supports references or extra frames; if it does, keep them and note it in PROGRESS.md.
+
+### Notes — where these designs and the app differ
+
+**Step 15 · Chat options sheet**
+- Glass sheet (the existing `frenz-nav-glass` tiers, a lighter `--sheet` variant): solid on reduced transparency / low-power phones.
+- @handle · last seen comes from the same presence read as the chat header (`PresenceLastSeen`), so it respects the person's last-seen privacy.
+- Send AI credits is the full-width gradient button; the balance is the send sheet's own cached read (no second request), "—" until known.
+- Theme swatches, brand colours only, in the design's order: Frenz (the default gradient), Blue, Violet, Magenta, **Midnight, Mono (new — migration 0264, NOT live until applied)**. Picking Blue/Violet/Magenta now paints the brand colour in the chat itself. Green and orange are no longer offered; a chat already using one keeps it and still shows it.
+- Wallpaper: scope switch + upload. **No presets** — owner, same day: backgrounds stay plain iOS white, never an SVG or colour ground, unless the owner says "emergency change". The design's preset tiles are not built.
+- Disappearing messages keeps its in-place picker (Off / 24h / 7d / 30d / Custom).
+- **Media, links & files — new backend** (owner: "build any backend attached that needs it"): `GET /api/conversations/[id]/media?tab=media|links|files&before=` (lib/social/conversation-media.ts) — active members only, newest first, deleted messages excluded, never a Secret Chat's links; a full-screen sheet with three tabs; each item opens its message in the chat. Tests: lib/social/conversation-media.server.test.ts (8, teeth checked).
+- Search in chat searches this chat only (the search API's own `conversationId` scope).
+- Block or restrict and Report are red rows; Delete conversation stays under them.
+- Email me new messages (0262) stays in the list.

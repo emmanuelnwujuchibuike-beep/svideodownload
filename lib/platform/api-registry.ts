@@ -82,6 +82,7 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
 
   /* ── Messaging ── */
   { method: "POST", path: "/api/messages/[id]/typing", auth: "session", category: "messaging", description: "\"… is typing\" push for a direct chat whose other member's app is closed: at most once per 5 minutes per sender, blocks/mute/Ghost Mode re-checked." },
+  { method: "GET", path: "/api/conversations/[id]/media", auth: "session", category: "messaging", description: "A chat's Media, links & files (?tab=media|links|files&before=): active members only, newest first, deleted messages excluded, never a Secret Chat's links." },
 
   /* ── Frenz Exclusive / SUB (session; money and access are decided on the server) ── */
   { method: "GET", path: "/api/sub/feed", auth: "session", category: "subscriptions", description: "The Exclusive feed: posts from creators the viewer subscribes to (keyset-paged) and locked previews to discover." },

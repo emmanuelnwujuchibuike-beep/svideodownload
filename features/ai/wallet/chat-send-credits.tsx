@@ -55,6 +55,14 @@ export function prefetchSendCredits(): void {
   void readWallet().catch(() => {});
 }
 
+/** The balance the send sheet will show — the same kept read (no second request while it is fresh). Null when unknown. */
+export function sendCreditsBalance(): Promise<number | null> {
+  if (kept && Date.now() - kept.at < FRESH_MS) return Promise.resolve(kept.data.balance);
+  return readWallet()
+    .then((d) => d?.balance ?? null)
+    .catch(() => null);
+}
+
 export function ChatSendCredits({ recipient, onClose, aboveZ }: { recipient: PresetRecipient; onClose: () => void; aboveZ?: number }) {
   const [state, setState] = useState<WalletRead | null>(() => kept?.data ?? null);
 

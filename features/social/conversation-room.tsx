@@ -115,23 +115,30 @@ const MIC_LOCK_PX = 80;
 /** Chat Themes (inbox mockup completion) — each drives BOTH an accent color
  *  (sent bubbles, send button) AND a matching background wash, per owner's
  *  explicit choice (the mockup itself only shows the color swatches). */
+// 2026-10-19 (design/ChatMenu.dc.html, "brand colors only"): Blue, Violet and Magenta are the brand's own
+// colours; Midnight and Mono are new (0264) and stay dark in both themes (the ink token turns light in dark
+// mode). green and orange can no longer be picked but still render for a chat that already uses one.
 const THEME_BUBBLE_CLASS: Record<ConversationTheme, string> = {
-  blue: "bg-gradient-to-br from-blue-500 to-blue-600",
-  pink: "bg-gradient-to-br from-pink-500 to-rose-600",
+  blue: "bg-frenz-blue",
+  pink: "bg-frenz-magenta",
   green: "bg-gradient-to-br from-emerald-500 to-green-600",
   orange: "bg-gradient-to-br from-orange-500 to-amber-600",
-  purple: "bg-gradient-to-br from-violet-500 to-purple-600",
+  purple: "bg-frenz-violet",
+  midnight: "bg-[linear-gradient(135deg,hsl(250_60%_29%),hsl(250_48%_8%))]",
+  mono: "bg-[hsl(247_21%_8%)] dark:bg-white/15",
 };
 // Owner ask (2026-07-14): "users can also set the whole message page theme"
 // — a 5-6% tint read as barely-there, not like the theme actually applied to
 // the page. Bumped to a genuinely visible wash while staying well clear of
 // text-contrast issues (still a wash behind normal bubbles, not a solid fill).
 const THEME_WASH_CLASS: Record<ConversationTheme, string> = {
-  blue: "bg-blue-500/[0.12] dark:bg-blue-400/[0.14]",
-  pink: "bg-pink-500/[0.12] dark:bg-pink-400/[0.14]",
+  blue: "bg-frenz-blue/[0.12] dark:bg-frenz-blue/[0.14]",
+  pink: "bg-frenz-magenta/[0.12] dark:bg-frenz-magenta/[0.14]",
   green: "bg-emerald-500/[0.12] dark:bg-emerald-400/[0.14]",
   orange: "bg-orange-500/[0.12] dark:bg-orange-400/[0.14]",
-  purple: "bg-violet-500/[0.12] dark:bg-violet-400/[0.14]",
+  purple: "bg-frenz-violet/[0.12] dark:bg-frenz-violet/[0.14]",
+  midnight: "bg-frenz-violet/[0.08] dark:bg-frenz-violet/[0.12]",
+  mono: "bg-black/[0.05] dark:bg-white/[0.05]",
 };
 
 function draftKey(conversationId: string): string {

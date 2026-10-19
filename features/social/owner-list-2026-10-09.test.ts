@@ -45,9 +45,10 @@ describe("chat options sheet: the Frenz AI credits design, light", () => {
   const s = code("features/social/thread-options-sheet.tsx");
   // 2026-10-18 (ChatMenu.dc.html): a white sheet, white hairline cards — the gradient hero is gone (the
   // gradient is for primary actions and identity rings only); the person keeps the avatar's ring
-  it("a white sheet with hairline cards, and no gradient behind the person", () => {
+  // 2026-10-19 (step 15, owner): a GLASS sheet over the chat — there is a picture behind it, the thread and its wallpaper
+  it("a glass sheet with white hairline cards, and no gradient behind the person", () => {
     expect(s).toContain('const card = "rounded-[20px] border border-frenz-line bg-frenz-card";');
-    expect(s).toContain("rounded-t-[28px] bg-frenz-page");
+    expect(s).toContain("frenz-nav-glass frenz-nav-glass--sheet absolute inset-x-0 bottom-0");
     expect(s).toContain("<Avatar src={otherAvatarUrl ?? null} name={name} size={60} ring />");
     expect(s).not.toContain("bg-[linear-gradient(135deg,#1d4ed8_0%,#4f46e5_55%,#a21caf_100%)]");
   });

@@ -213,6 +213,7 @@ export default async function ConversationPage({
         viewerRole={convo.viewerRole}
         onlyAdminsCanSend={convo.onlyAdminsCanSend}
         otherName={convo.other?.displayName ?? null}
+        otherId={convo.other?.id ?? null}
         viewerTypingIndicatorsEnabled={convo.viewerTypingIndicatorsEnabled}
         otherStoryGroup={otherStoryGroup}
         initialAppearance={convo.appearance}

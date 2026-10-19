@@ -129,6 +129,16 @@ function ensureStarted(): void {
   });
 }
 
+/**
+ * Is this user on the app right now? A one-off read of the same live set, for a decision made
+ * at the moment of an action (the typing push asks once per typing burst) — no subscription,
+ * so the caller does not re-render on every presence change. False until the channel syncs,
+ * and always false for a member who doesn't announce themselves (invisible / restricted last seen).
+ */
+export function isOnlineNow(uid: string): boolean {
+  return current.has(uid);
+}
+
 /** Live set of online user ids (empty until the channel syncs). */
 export function usePresence(): Set<string> {
   const [online, setOnline] = useState<Set<string>>(current);

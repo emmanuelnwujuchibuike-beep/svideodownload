@@ -24,6 +24,7 @@ import { CONVERSATION_THEMES, type ConversationTheme } from "@/lib/social/messag
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { cn } from "@/lib/utils";
 import { profilePath } from "@/lib/social/profile-url";
+import { announceTypingRevoked } from "@/features/social/typing-privacy";
 
 const THEME_SWATCH: Record<ConversationTheme, string> = {
   blue: "bg-blue-500",
@@ -562,6 +563,7 @@ export function ThreadOptionsSheet({
           otherUserId={otherUserId}
           otherHandle={otherHandle}
           otherName={otherName}
+          onTypingRevoked={() => announceTypingRevoked(conversationId)}
         />
       ) : null}
       <ChatAppearanceSheet key="appearance" conversationId={conversationId} open={appearanceSheetOpen} onClose={() => setAppearanceSheetOpen(false)} />

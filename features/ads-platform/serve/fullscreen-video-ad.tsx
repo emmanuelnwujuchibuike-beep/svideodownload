@@ -246,7 +246,8 @@ export function FullscreenVideoAd({
 
       {/* TikTok's caption block, bottom left, overlaid — the video runs under it */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-3.5 pb-[calc(env(safe-area-inset-bottom)+var(--ad-nav,0px)+0.875rem)] pt-24">
-        <div className="pointer-events-auto pr-16">
+        {/* margin, not padding: the box must end where the rail starts, or it covers the sound button and eats its taps (2026-10-18) */}
+        <div className="pointer-events-auto mr-16">
           {note ? <p className="mb-2 text-[12.5px] leading-snug text-white/85">{note}</p> : null}
           <button type="button" onClick={open} className="flex items-center gap-1.5 text-left text-[16px] font-bold [text-shadow:0_1px_3px_rgba(0,0,0,0.5)]">
             {ad.sponsor}

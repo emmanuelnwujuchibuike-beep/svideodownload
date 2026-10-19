@@ -105,5 +105,13 @@ function MemberInbox({ variant }: { variant: "page" | "pane" }) {
     }
     return <InboxListSkeleton />;
   }
-  return <ConversationList initial={inbox.data.conversations} initialRequests={requests.data ?? []} viewerId={viewerId} variant={variant} />;
+  return (
+    <ConversationList
+      initial={inbox.data.conversations}
+      initialRequests={requests.data ?? []}
+      viewerId={viewerId}
+      typingEnabled={inbox.data.typingIndicatorsEnabled}
+      variant={variant}
+    />
+  );
 }

@@ -1,4 +1,4 @@
-import { ArrowRight, Compass, Wand2 } from "lucide-react";
+import { ArrowRight, Compass, BrainCircuit } from "lucide-react";
 import Link from "next/link";
 
 import { AiPromoLoader } from "@/features/downloads/ai-promo-loader";
@@ -184,7 +184,7 @@ export function FrenzAICta({
         aria-hidden
         className="relative z-[1] flex h-[3.1rem] w-[3.1rem] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 shadow-[0_8px_18px_-8px_rgba(79,70,229,0.75)] ring-4 ring-white/80 dark:ring-white/10"
       >
-        <Wand2 className="h-[1.35rem] w-[1.35rem] text-white" />
+        <BrainCircuit className="h-[1.35rem] w-[1.35rem] text-white" />
       </span>
 
       {/*

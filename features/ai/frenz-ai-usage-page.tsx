@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownLeft, ArrowLeft, ArrowUpRight, ChevronRight, Eye, EyeOff, Plus, RotateCcw, ShieldCheck, Wallet, Gift, Wand2, Trophy, type LucideIcon } from "lucide-react";
+import { ArrowDownLeft, ArrowLeft, ArrowUpRight, ChevronRight, Eye, EyeOff, Plus, RotateCcw, ShieldCheck, Wallet, Gift, Trophy, type LucideIcon, Clapperboard } from "lucide-react";
 import dynamic from "next/dynamic";
 
 import { refreshWallet, useWallet } from "@/features/ai/wallet/use-wallet";
@@ -70,7 +70,7 @@ const LEDGER_COPY: Record<LedgerKind, { label: string; Icon: LucideIcon; tone: "
   transfer_in: { label: "Credits received", Icon: ArrowDownLeft, tone: "in" },
   transfer_fee: { label: "Transfer fee", Icon: ArrowUpRight, tone: "out" },
   // 2026-10-06: the one AI wallet pays for every tool now — Character Replace is retired
-  processing_charge: { label: "Frenz AI creation", Icon: Wand2, tone: "out" },
+  processing_charge: { label: "Frenz AI creation", Icon: Clapperboard, tone: "out" },
   refund: { label: "Refunded — the video didn't finish", Icon: RotateCcw, tone: "in" },
   adjustment: { label: "Adjustment by Frenz", Icon: ShieldCheck, tone: "neutral" },
   reversal: { label: "Reversed", Icon: RotateCcw, tone: "neutral" },

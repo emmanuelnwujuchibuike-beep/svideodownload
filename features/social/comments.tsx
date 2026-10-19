@@ -26,7 +26,6 @@ import {
   Trash2,
   Users,
   VolumeX,
-  Wand2,
   X,
   PenLine,
   ArrowDownWideNarrow,
@@ -966,7 +965,7 @@ function Composer({
         </button>
         {body.trim() ? (
           <button type="button" onClick={() => setShowAssist((s) => !s)} aria-label="AI writing assist" className={cn("shrink-0 rounded-full p-2 transition hover:bg-secondary", showAssist ? "text-primary" : "text-muted-foreground")}>
-            <Wand2 className="h-5 w-5" />
+            <PenLine className="h-5 w-5" />
           </button>
         ) : null}
         {!location ? (

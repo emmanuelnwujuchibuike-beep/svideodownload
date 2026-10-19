@@ -1,4 +1,4 @@
-import { Download, FolderClock, Wand2, Zap, ListOrdered } from "lucide-react";
+import { Download, FolderClock, Zap, ListOrdered, MousePointerClick } from "lucide-react";
 
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { PlatformId } from "@/types";
@@ -17,7 +17,7 @@ const STEPS = [
 ];
 
 const NOTES = [
-  { icon: Wand2, title: "Clean & Easy Interface", desc: "Designed for everyone." },
+  { icon: MousePointerClick, title: "Clean & Easy Interface", desc: "Designed for everyone." },
   { icon: Zap, title: "Real-time Progress", desc: "Track your downloads." },
   { icon: FolderClock, title: "Save History", desc: "Access anytime, anywhere." },
 ];

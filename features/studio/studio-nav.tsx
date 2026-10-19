@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, CalendarDays, Compass, LayoutGrid, Users, Wand2 } from "lucide-react";
+import { BarChart3, CalendarDays, Compass, LayoutGrid, Users, BrainCircuit } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -72,7 +72,7 @@ const TABS = [
   // Frenz AI (2026-09-07). Second, not last: it is the section the owner is
   // building out, and the tab row scrolls on a phone — anything past the fourth
   // tab is off-screen on arrival and is discovered by accident or never.
-  { href: "/studio/ai", label: "Frenz AI", icon: Wand2 },
+  { href: "/studio/ai", label: "Frenz AI", icon: BrainCircuit },
   { href: "/studio/content", label: "Content", icon: BarChart3 },
   { href: "/studio/audience", label: "Audience", icon: Users },
   { href: "/studio/calendar", label: "Calendar", icon: CalendarDays },

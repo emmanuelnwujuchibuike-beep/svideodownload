@@ -12,8 +12,9 @@ import {
   Send,
   ShoppingBag,
   Subtitles,
-  Wand2,
   CircleDashed,
+  Scissors,
+  ScanLine,
 } from "lucide-react";
 
 import type { DownloadContext, GatewayAction } from "./types";
@@ -147,7 +148,7 @@ export const GATEWAY_ACTIONS: GatewayAction[] = [
     label: "Trim and edit",
     plannedLabel: "Trim and edit — coming soon",
     description: "Cut, crop and remix what you saved.",
-    icon: Wand2,
+    icon: Scissors,
     group: "enhance",
     productId: "studio",
     target: { type: "waitlist", product: "studio" },
@@ -160,7 +161,7 @@ export const GATEWAY_ACTIONS: GatewayAction[] = [
     label: "Enhance quality",
     plannedLabel: "Quality enhancement — coming soon",
     description: "Sharpen and upscale lower-resolution media.",
-    icon: Wand2,
+    icon: ScanLine,
     group: "enhance",
     productId: "studio",
     target: { type: "waitlist", product: "studio" },

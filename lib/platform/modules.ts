@@ -8,7 +8,7 @@
  *
  * See `docs/ARCHITECTURE.md` → "Adding a new product".
  */
-import { Cloud, Compass, Download, Home, Image as ImageIcon, Shield, Users, Wand2, Brain } from "lucide-react";
+import { Cloud, Compass, Download, Home, Image as ImageIcon, Shield, Users, Brain, BrainCircuit, Scissors } from "lucide-react";
 
 import {
   adminOnly,
@@ -106,7 +106,7 @@ export const MODULES: PlatformModule[] = [
     shortName: "AI",
     tagline: "AI video, audio, voice and lip sync — paid in credits you can also earn.",
     basePath: "/ai",
-    icon: Wand2,
+    icon: BrainCircuit,
     accent: "from-blue-600 to-violet-600",
     status: "live",
     veracity: {
@@ -124,7 +124,7 @@ export const MODULES: PlatformModule[] = [
     shortName: "Studio",
     tagline: "Edit, trim and remix what you capture.",
     basePath: "/studio",
-    icon: Wand2,
+    icon: Scissors,
     accent: "from-amber-500 to-orange-600",
     status: "soon",
     veracity: {

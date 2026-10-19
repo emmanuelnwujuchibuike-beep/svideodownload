@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Wand2 } from "lucide-react";
+import { Loader2, PenLine, SpellCheck } from "lucide-react";
 import { useState } from "react";
 
 /**
@@ -68,7 +68,7 @@ export function CommentAiAssist({ text, onApply, onClose }: { text: string; onAp
         <>
           <div className="flex items-center justify-between">
             <span className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground">
-              <Wand2 className="h-3.5 w-3.5" /> AI writing assist
+              <PenLine className="h-3.5 w-3.5" /> AI writing assist
             </span>
             <button type="button" onClick={onClose} className="text-xs text-muted-foreground hover:text-foreground">
               Close
@@ -80,7 +80,7 @@ export function CommentAiAssist({ text, onApply, onClose }: { text: string; onAp
             disabled={!!busy}
             className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-secondary/50 px-3 py-1.5 text-xs font-semibold text-foreground transition hover:bg-secondary disabled:opacity-60"
           >
-            {busy === "polish" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />} Polish
+            {busy === "polish" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <SpellCheck className="h-3.5 w-3.5" />} Polish
           </button>
           <p className="mb-1 mt-2.5 text-[11px] font-semibold text-muted-foreground">Translate to…</p>
           <div className="flex flex-wrap gap-1">

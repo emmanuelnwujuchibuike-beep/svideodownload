@@ -27,7 +27,7 @@ import {
   Video,
   Wallet,
   type LucideIcon,
-  Wand2,
+  BrainCircuit,
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -108,7 +108,7 @@ export function AnonymousProfile({ earn, cashOut, sub, wallpapers }: AnonymousPr
           <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_85%_10%,rgba(167,139,250,0.35),transparent_70%)]" />
           <div className="relative flex items-center gap-2.5">
             <span aria-hidden className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/12 ring-1 ring-inset ring-white/20">
-              <Wand2 className="h-5 w-5" />
+              <BrainCircuit className="h-5 w-5" />
             </span>
             <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/70">Frenz AI</p>
           </div>
@@ -280,7 +280,7 @@ export function AnonymousProfile({ earn, cashOut, sub, wallpapers }: AnonymousPr
       <section aria-labelledby="ap-dir" className={cn(SECTION, "mt-10")}>
         <h2 id="ap-dir" className="text-[1.1rem] font-bold tracking-[-0.02em]">Everything on Frenzsave</h2>
         <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <Entry icon={Wand2} title="AI Studio" href="/ai" />
+          <Entry icon={BrainCircuit} title="AI Studio" href="/ai" />
           <Entry icon={Download} title="Video downloader" href="/" />
           <Entry icon={Images} title="Wallpapers" href="/wallpapers" />
           <Entry icon={Crown} title="Creator subscriptions" href="/members" />

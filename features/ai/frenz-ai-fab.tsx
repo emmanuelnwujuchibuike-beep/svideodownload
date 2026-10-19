@@ -1,6 +1,6 @@
 "use client";
 
-import { Wand2 } from "lucide-react";
+import { BrainCircuit } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -116,7 +116,7 @@ export function FrenzAiFab() {
       )}
       style={{ bottom: "max(1.5rem, calc(var(--frenz-bottomnav-h, 0px) + 1rem))" }}
     >
-      <Wand2 className="h-6 w-6" strokeWidth={2} />
+      <BrainCircuit className="h-6 w-6" strokeWidth={2} />
       <span className="sr-only">Frenz AI</span>
     </Link>
   );

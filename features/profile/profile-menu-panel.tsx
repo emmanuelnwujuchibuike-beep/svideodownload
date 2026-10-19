@@ -1,6 +1,6 @@
 "use client";
 
-import { Crown, Film, Headset, ImageIcon, LogOut, Music, Settings, UsersRound, X, Wand2 } from "lucide-react";
+import { Crown, Film, Headset, ImageIcon, LogOut, Music, Settings, UsersRound, X, BrainCircuit } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type ComponentType, useEffect } from "react";
@@ -52,7 +52,7 @@ const SHORTCUTS: { label: string; href: string; icon: Icon; showcase?: true }[] 
     The design labels this "AI Studio". The product is named Frenz AI (owner, 2026-09-07), so it
     keeps its name. The one gradient tile in the grid — the AI showcase the gradient rule allows.
   */
-  { label: "Frenz AI", href: "/studio/ai", icon: Wand2, showcase: true },
+  { label: "Frenz AI", href: "/studio/ai", icon: BrainCircuit, showcase: true },
 ];
 
 /** "More": My ads, Settings, Help & support (owner 2026-10-18 — Support moved here from the footer). */

@@ -15,8 +15,8 @@ import {
   Tag,
   Undo2,
   Upload,
-  Wand2,
   X,
+  ListChecks,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -432,7 +432,7 @@ export function RelationshipManager({ initial }: { initial: RelationshipDirector
             {suggestions.map((s) => (
               <li key={s.id} className="flex items-start gap-3 px-3.5 py-3">
                 <span aria-hidden className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <Wand2 className="h-4 w-4" />
+                  <ListChecks className="h-4 w-4" />
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-[14px] font-semibold leading-snug">{s.title}</p>

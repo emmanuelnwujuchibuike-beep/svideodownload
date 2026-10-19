@@ -12,8 +12,8 @@ import {
   Loader2,
   Plus,
   Share2,
-  Wand2,
   X,
+  LayoutTemplate,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -452,7 +452,7 @@ export function PostComposer({
             <TrayButton icon={Images} label="Photo/video" onClick={() => galleryRef.current?.click()} />
             <TrayButton icon={Camera} label="Camera" onClick={() => cameraRef.current?.click()} />
             <TrayButton
-              icon={Wand2}
+              icon={LayoutTemplate}
               label="Blocks"
               onClick={() => {
                 openStudio();

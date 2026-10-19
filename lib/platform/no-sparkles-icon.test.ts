@@ -34,11 +34,11 @@ function sources(dir: string, out: string[] = []): string[] {
 export function sparkleUses(src: string): string[] {
   const hits: string[] = [];
   for (const m of src.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*["']lucide-react["']/g)) {
-    for (const spec of m[1]!.split(",").map((s) => s.trim().split(/\s+as\s+/)[0]!)) if (/^(Sparkles?|WandSparkles|Sparkles?Icon|LucideSparkles?)$/.test(spec)) hits.push(`import ${spec}`);
+    for (const spec of m[1]!.split(",").map((s) => s.trim().split(/\s+as\s+/)[0]!)) if (/^(Sparkles?|WandSparkles|Wand2|Sparkles?Icon|LucideSparkles?)$/.test(spec)) hits.push(`import ${spec}`);
   }
-  if (/\b(Icons|Lucide|lucide)\.(Sparkles?|WandSparkles)\b/.test(src)) hits.push("namespace member");
-  if (/\bicon\??\s*:\s*["'](Sparkles?|WandSparkles)["']/.test(src)) hits.push("icon name string");
-  if (/lucide-react\/dist\/esm\/icons\/(sparkles?|wand-sparkles)/.test(src)) hits.push("deep import");
+  if (/\b(Icons|Lucide|lucide)\.(Sparkles?|WandSparkles|Wand2)\b/.test(src)) hits.push("namespace member");
+  if (/\bicon\??\s*:\s*["'](Sparkles?|WandSparkles|Wand2)["']/.test(src)) hits.push("icon name string");
+  if (/lucide-react\/dist\/esm\/icons\/(sparkles?|wand-sparkles|wand-2)/.test(src)) hits.push("deep import");
   if (/\bFrenzSparkle(Outline|Solid)?\b/.test(src)) hits.push("custom sparkle glyph");
   return hits;
 }
@@ -62,6 +62,9 @@ describe("🔴 the sparkle ('AI star') icon is used nowhere (owner rule)", () =>
     expect(sparkleUses(`const I = Icons.Sparkles;`)).toEqual(["namespace member"]);
     expect(sparkleUses(`{ id: "ai", icon: "Sparkles" }`)).toEqual(["icon name string"]);
     expect(sparkleUses(`<FrenzSparkleSolid />`)).toEqual(["custom sparkle glyph"]);
+    // 2026-10-18 (owner): Wand2 draws little stars round the wand — the sparkle by another name
+    expect(sparkleUses(`import { Wand2 } from "lucide-react";`)).toEqual(["import Wand2"]);
+    expect(sparkleUses(`{ id: "ai", icon: "Wand2" }`)).toEqual(["icon name string"]);
     // … and what is NOT the icon passes: prose, the emoji sticker, its label
     expect(sparkleUses(`description: "Sparkle and shine", { glyph: "✨", label: "Sparkles" }`)).toEqual([]);
   });

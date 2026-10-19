@@ -8,7 +8,7 @@ import {
   MousePointerClick,
   Wallet,
   Info,
-  Wand2,
+  BrainCircuit,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -111,7 +111,7 @@ const HOW = [
     detail: "Upload your video, image, audio or text.",
   },
   {
-    icon: Wand2,
+    icon: BrainCircuit,
     title: "Create & preview",
     detail: "Generate your result and review it.",
   },

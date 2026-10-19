@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, Images, Loader2, Send, Wand2, X } from "lucide-react";
+import { Camera, Images, Loader2, Send, X, LayoutTemplate } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
@@ -195,7 +195,7 @@ export function StoryComposer({ avatarUrl }: { avatarUrl: string | null }) {
               }}
               className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/15 py-3 text-sm font-semibold text-white/70 transition hover:bg-white/10 hover:text-white"
             >
-              <Wand2 className="h-4 w-4" /> Write a story — blocks, text &amp; media
+              <LayoutTemplate className="h-4 w-4" /> Write a story — blocks, text &amp; media
             </button>
 
             {err ? <p className="mt-4 text-center text-sm text-rose-400">{err}</p> : null}

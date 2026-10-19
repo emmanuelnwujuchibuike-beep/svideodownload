@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { ArrowRight, AudioLines, Clapperboard, Film, Image as ImageIcon, ImagePlay, MessageSquareText, Mic, Users, Wand2 } from "lucide-react";
+import { ArrowRight, AudioLines, Clapperboard, Film, Image as ImageIcon, ImagePlay, MessageSquareText, Mic, Users } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -105,7 +105,7 @@ export function FrenzAiSection() {
               Explore Frenz AI
             </AiButtonLink>
             {/* §8 AI Reels: where the made-with-AI work is watched — the secondary action, not another section */}
-            <AiButtonLink href="/reels?tab=ai" prefetch={false} data-track="ai_reels_clicked" variant="secondary" size="lg" icon={<Wand2 className="h-4 w-4" />}>
+            <AiButtonLink href="/reels?tab=ai" prefetch={false} data-track="ai_reels_clicked" variant="secondary" size="lg" icon={<Clapperboard className="h-4 w-4" />}>
               Watch AI Reels
             </AiButtonLink>
           </div>

@@ -109,7 +109,7 @@ export const HUB_META: Record<HubKey, HubMeta> = {
   journal: { label: "Private journal", blurb: "Only you can read it", icon: "NotebookPen", tint: ["#A78BFA", "#EC4899"] },
   friends: { label: "Top friends", blurb: "Your closest circle", icon: "Users", tint: ["#EC4899", "#F97316"] },
   activity: { label: "Recent activity", blurb: "What's been happening", icon: "Activity", tint: ["#0EA5E9", "#22C55E"] },
-  tools: { label: "Creator tools", blurb: "Studio, analytics & more", icon: "Wand2", tint: ["#2563FF", "#8B5CF6"] },
+  tools: { label: "Creator tools", blurb: "Studio, analytics & more", icon: "LayoutDashboard", tint: ["#2563FF", "#8B5CF6"] },
   appearance: { label: "Appearance", blurb: "Light or dark", icon: "SunMoon", tint: ["#334155", "#0F172A"] },
 };
 

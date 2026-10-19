@@ -32,9 +32,10 @@ import {
   Settings,
   Shield,
   Users,
-  Wand2,
   CircleDashed,
   Brain,
+  SlidersHorizontal,
+  BrainCircuit,
 } from "lucide-react";
 
 import { adminOnly, everyone, proOnly } from "@/lib/platform/module-registry";
@@ -88,7 +89,7 @@ export const WORKSPACES: Workspace[] = [
   { id: "ai", name: "Smart", tagline: "Summaries, captions, smarter search.", icon: Brain, accent: "from-violet-500 to-purple-600", home: "/smart", productId: "smart", canAccess: everyone },
   { id: "business", name: "Business", tagline: "Team plans and analytics.", icon: CreditCard, accent: "from-emerald-500 to-teal-600", home: "/business", productId: "business", canAccess: proOnly },
   { id: "marketplace", name: "Marketplace", tagline: "Buy and sell resources.", icon: LayoutGrid, accent: "from-amber-500 to-orange-600", home: "/marketplace", productId: "marketplace", canAccess: everyone },
-  { id: "professional", name: "Professional", tagline: "Advanced production tools.", icon: Wand2, accent: "from-rose-500 to-pink-600", home: "/professional", productId: "studio", canAccess: proOnly },
+  { id: "professional", name: "Professional", tagline: "Advanced production tools.", icon: SlidersHorizontal, accent: "from-rose-500 to-pink-600", home: "/professional", productId: "studio", canAccess: proOnly },
   { id: "community", name: "Communities", tagline: "Groups and shared spaces.", icon: Compass, accent: "from-indigo-500 to-blue-600", home: "/communities", productId: "community-groups", canAccess: everyone },
   { id: "learning", name: "Learning", tagline: "Academy, guides and tutorials.", icon: Newspaper, accent: "from-sky-500 to-cyan-600", home: "/learn", productId: "learning", canAccess: everyone },
   { id: "enterprise", name: "Enterprise", tagline: "Org controls and compliance.", icon: Shield, accent: "from-zinc-600 to-zinc-800", home: "/enterprise", productId: "enterprise", canAccess: adminOnly },
@@ -119,7 +120,7 @@ export const DESTINATIONS: Destination[] = [
 
   { id: "account", label: "Account settings", href: "/account", kind: "account", icon: Settings, keywords: ["profile", "preferences", "settings", "privacy", "password", "security"], canAccess: everyone, requiresAuth: true },
   // Landing + Download brief §18/§19 (2026-10-08): the two ecosystem gateways the menu and search can reach
-  { id: "frenz-ai", label: "Frenz AI", href: "/ai", kind: "page", icon: Wand2, keywords: ["ai", "create", "text to video", "image to video", "voice", "lip sync", "audio"], canAccess: everyone },
+  { id: "frenz-ai", label: "Frenz AI", href: "/ai", kind: "page", icon: BrainCircuit, keywords: ["ai", "create", "text to video", "image to video", "voice", "lip sync", "audio"], canAccess: everyone },
   { id: "advertise", label: "Advertise", href: "/advertise", kind: "page", icon: Megaphone, keywords: ["ads", "promote", "business", "campaign", "advertising"], canAccess: everyone },
   { id: "pricing", label: "Pricing", href: "/pricing", kind: "page", icon: CreditCard, keywords: ["upgrade", "pro", "plans", "billing", "subscription"], canAccess: everyone },
   { id: "developers", label: "Developer API", href: "/developers", kind: "docs", icon: KeyRound, workspace: "developer", keywords: ["api", "docs", "keys", "integration", "rest"], canAccess: everyone },

@@ -18,7 +18,7 @@ import {
   Video,
   type LucideIcon,
   Compass,
-  Wand2,
+  BrainCircuit,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -598,7 +598,7 @@ function HistoryTile({ job, now, onOpen }: { job: AiJobView; now: number; onOpen
   const title = meaningfulSourceName(job.source.name) ?? historyTitleFor(job.feature);
 
   const kind = historyKind(job.feature);
-  const ToolIcon = HISTORY_TOOL_ICON[job.feature] ?? Wand2;
+  const ToolIcon = HISTORY_TOOL_ICON[job.feature] ?? BrainCircuit;
   const seconds = job.result.durationSeconds ?? (job.textToAudio?.durationMs ? job.textToAudio.durationMs / 1000 : null) ?? job.source.durationSeconds;
 
   return (
@@ -838,7 +838,7 @@ function EmptyState({ filter }: { filter: keyof typeof AI_HISTORY_EMPTY_COPY }) 
   return (
     <div className="rounded-[1.375rem] border-[1.5px] border-dashed border-indigo-300/70 bg-indigo-50/30 px-6 py-10 text-center">
       <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
-        <Wand2 className="h-5 w-5" aria-hidden />
+        <BrainCircuit className="h-5 w-5" aria-hidden />
       </span>
       <p className="mt-3 text-sm font-semibold">{copy.title}</p>
       <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">{copy.body}</p>

@@ -14,10 +14,10 @@ import {
   Trash2,
   Type,
   Video as VideoIcon,
-  Wand2,
   X,
   Send,
   FileClock,
+  LayoutTemplate,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -267,7 +267,7 @@ function StudioInner() {
           <X className="h-5 w-5" />
         </button>
         <h2 className="relative flex items-center gap-2 text-sm font-bold tracking-tight">
-          <Wand2 className="h-4 w-4 text-foreground" /> <span className="text-gradient">Story Studio</span>
+          <LayoutTemplate className="h-4 w-4 text-foreground" /> <span className="text-gradient">Story Studio</span>
         </h2>
         <PublishButtonMorph phase={publishing} disabled={busy} accent={accent} onClick={publish} />
       </header>

@@ -35,7 +35,11 @@ import { cn } from "@/lib/utils";
  * you. That is the convention everywhere, but discovering it afterwards reads
  * as a bug, so it is on screen before anything is tapped.
  */
-export function GhostModePanel({ initial }: { initial: GhostState }) {
+/**
+ * The Ghost Mode state and its ONE write path, shared by this panel and the Settings quick tile
+ * (design/Settings.dc.html, 2026-10-18) so a switch on either screen saves exactly the same way.
+ */
+export function useGhostMode(initial: GhostState) {
   const [state, setState] = useState(initial);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -106,6 +110,11 @@ export function GhostModePanel({ initial }: { initial: GhostState }) {
     },
     [state],
   );
+  return { state, busy, error, apply };
+}
+
+export function GhostModePanel({ initial }: { initial: GhostState }) {
+  const { state, busy, error, apply } = useGhostMode(initial);
 
   const all = isFullyGhosted(state);
   const count = ghostedCount(state);

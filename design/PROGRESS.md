@@ -14,7 +14,7 @@ review before the next one starts.
 - [x] 7. Landing page → the same system: white page, iOS glass chrome, no Recent section
 - [x] 8. Wallpapers → design/Wallpapers.dc.html
 - [x] 9. Profile menu → design/Menu.dc.html
-- [ ] 10. Settings → design/Settings.dc.html
+- [x] 10. Settings → design/Settings.dc.html
 - [x] 11. Profile Exclusive tab (owner view) → design/ProfileExclusive.dc.html (moved forward at the owner's request) — one dashboard card with real figures, Share link / Dashboard, rows for announcements and notifications, Subs-tagged grid with Manage, hub as three iOS lists with Add.
 - [ ] 12. Exclusive page (subscriber view) → design/Exclusive.dc.html
 - [ ] 13. Exclusive feed tab → design/ExclusiveFeed.dc.html
@@ -319,6 +319,29 @@ they are applied while each page is built and there is no separate cleanup step.
   Chats row, the build number (Settings shows the version).
 - Help & support moved from the footer into More (the 2026-10-09 test now pins the new place).
 - Page weight is measured with the step 10 build.
+
+### Step 10 · Settings (/account) — Settings.dc.html
+- "‹ Menu" (back to the page the menu was opened over; a fresh tab goes to the profile), the large
+  title, the search field, a compact profile row ("@handle · Business account" from the real profile
+  type, plan crown, verified tick, Admin tag) and Quick settings.
+- Quick settings are the member's existing pins (defaults unchanged: Dark mode, Ghost mode, Pause
+  alerts, Language) as tiles with WORKING switches:
+  · Dark mode — the same theme store as the menu's Light / Dark / Auto ("Auto · on now" when Auto).
+  · Ghost mode — every activity signal at once, through the Ghost Mode screen's own write path
+    (useGhostMode, extracted so both screens save the same way, with its honest partial revert).
+  · Pause alerts — notifications' master switch (masterEnabled), the field the Notifications screen
+    saves; it answers on the tap and goes back if the server refuses.
+  · Language — opens the same picker.
+  One "Edit" link replaces the per-chip unpin buttons: in edit mode a tile can be removed; search
+  results still pin new ones. Any other pinned setting is a tile that opens its screen.
+- The two lists: Profile (Identity, Verification — "Verified" on the right, Appearance, plus
+  Accessibility, which was in Profile before and is kept) and Account (Notifications — On / Paused,
+  Privacy & security — the real security score, Storage & downloads — the plan, Language — the current
+  language). Everything else that was on Settings stays, below, in the same list style: Profile
+  platform, Privacy, Content & insights, Plan & developer, Admin. Sign out and the version at the end.
+- The search suggestion chips stay, shown only while the empty field has focus (the design has none).
+- Kept: the app top bar (every signed-in page has it; hiding it would need the page-transition work
+  the Messages inbox needed). The cover-photo hero is replaced by the design's compact row.
 
 ### Outside the page steps (owner, 2026-10-18)
 - `a50b9cd`: full-screen ads lost the engagement tray (brand badge, Like, views,

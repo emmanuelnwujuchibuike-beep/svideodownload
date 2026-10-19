@@ -7,7 +7,6 @@ import {
   Bell,
   Bookmark,
   Briefcase,
-  ChevronRight,
   Code2,
   Compass,
   CreditCard,
@@ -19,7 +18,6 @@ import {
   Layers,
   LayoutGrid,
   Lock,
-  LogOut,
   Megaphone,
   Palette,
   Search,
@@ -28,7 +26,6 @@ import {
   Store,
   UserCog,
   Users,
-  type LucideIcon,
   Lightbulb,
 } from "lucide-react";
 import type { Metadata } from "next";
@@ -36,11 +33,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
-import { IdentityBadges } from "@/components/badges/identity-badges";
+import { LanguageSettingRow } from "@/components/i18n/language-setting-row";
+import { SettingsBack } from "@/features/account/settings-back";
+import { SettingsLink, SettingsList, type SettingsRowSpec } from "@/features/account/settings-list";
 import { SettingsSearch } from "@/features/account/settings-search";
 import { SitePlanWelcome } from "@/features/account/site-plan-welcome";
-import { SETTINGS_TINTS } from "@/features/account/settings-ui";
 import { AppContent } from "@/features/app-shell/app-content";
+import { Avatar, VerifiedBadge } from "@/features/frenz-ui/primitives";
 import { isAdmin } from "@/lib/admin";
 import { BUSINESS_FEATURES, PRO_FEATURES } from "@/lib/monetization/plan-features";
 import type { BillingPlan } from "@/lib/monetization/types";
@@ -58,8 +57,8 @@ import { getSecurityInputs } from "@/lib/security/score-inputs";
 import { getOwnPresenceStatus } from "@/lib/social/presence-status";
 import { getPrivacySettings } from "@/lib/social/profile";
 import { getVerificationState, verificationSummary } from "@/lib/social/verification";
+import { getNotificationSettings } from "@/lib/social/notification-settings";
 import { createClient } from "@/lib/supabase/server";
-import { cn } from "@/lib/utils";
 import { profilePath } from "@/lib/social/profile-url";
 
 export const dynamic = "force-dynamic";
@@ -72,7 +71,7 @@ export const metadata: Metadata = {
 const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-type Row = { href: string; Icon: LucideIcon; title: string; sub: string; tint: string };
+type Row = SettingsRowSpec;
 
 /**
  * Settings — a premium, professional LIST menu (Snapchat/TikTok-style): every
@@ -140,7 +139,12 @@ export default async function AccountPage() {
       ? "Hide your online status, typing and more"
       : `${hiddenSignals} of ${GHOST_SIGNALS.length} signals hidden`;
 
-  const score = securityScore(await getSecurityInputs(user));
+  const [score, notificationSettings] = await Promise.all([
+    getSecurityInputs(user).then(securityScore),
+    getNotificationSettings(user.id).catch(() => null),
+  ]);
+  // fails open to "on": a read error must never show alerts as paused when they are not
+  const notificationsOn = notificationSettings?.masterEnabled ?? true;
   const securitySub =
     score.gaps.length === 0
       ? `${score.score}/100 · ${SECURITY_BAND_LABEL[score.band]}`
@@ -149,31 +153,35 @@ export default async function AccountPage() {
   const planActive = sub?.status === "active" || sub?.status === "trialing";
   const plan = (planActive ? sub?.plan : "free") ?? "free";
   const planLabel = plan === "business" ? "Business" : plan === "pro" ? "Pro" : "Free";
-  const isPremium = plan !== "free";
   const verified = Boolean(profile?.is_verified);
   const email = user.email ?? "—";
   const avatar = (user.user_metadata?.avatar_url as string | undefined) || profile?.avatar_url || null;
   const admin = isAdmin(profile?.role, user.email);
-  const initial = email.charAt(0).toUpperCase();
 
-  // Coloured icon tiles per row, matching the owner's reference
-  // (public/profile settings.jpg) — a tint carries the category, which a wall of
-  // identical grey tiles could not.
+  /*
+    The redesign (design/Settings.dc.html, owner 2026-10-18): two iOS lists first — Profile (Identity,
+    Verification, Appearance) and Account (Notifications, Privacy & security, Storage & downloads,
+    Language) — each showing its current value on the right. Every other settings page stays, in the
+    lists below them: nothing that was reachable from here stops being reachable. Solid tinted icon
+    squares with a white glyph, as drawn.
+  */
+  const typeAccount = `${typeSpec.label} account`;
+  const profileRows: Row[] = [
+    { href: "/account/identity", Icon: UserCog, title: "Identity", sub: "Name, photo, video, avatar, status", tint: "violet" },
+    { href: "/account/verification", Icon: BadgeCheck, title: "Verification", sub: verificationSub, tint: "blue", value: verified ? "Verified" : undefined },
+    { href: "/account/appearance", Icon: Palette, title: "Appearance", sub: "Theme, language, home & feed", tint: "purple" },
+    // kept here (it was in Profile before the redesign) — not in the design's list, see PROGRESS
+    { href: "/account/accessibility", Icon: Accessibility, title: "Accessibility", sub: "Text, contrast, motion & touch", tint: "cyan" },
+  ];
+  const accountRows: Row[] = [
+    { href: "/account/notifications", Icon: Bell, title: "Notifications", sub: "Alerts & activity", tint: "rose", value: notificationsOn ? "On" : "Paused" },
+    { href: "/account/security", Icon: ShieldCheck, title: "Privacy & security", sub: securitySub, tint: "emerald" },
+    { href: "/downloads", Icon: Download, title: "Storage & downloads", sub: "Your saved library and space used", tint: "blue", value: planLabel },
+  ];
+
   const groups: { heading: string; items: Row[] }[] = [
     {
-      heading: "Profile",
-      items: [
-        { href: "/account/identity", Icon: UserCog, title: "Identity", sub: "Name, photo, video, avatar, status", tint: "violet" },
-        { href: "/account/verification", Icon: BadgeCheck, title: "Verification", sub: verificationSub, tint: "blue" },
-        { href: "/account/appearance", Icon: Palette, title: "Appearance", sub: "Theme, language, home & feed", tint: "purple" },
-        { href: "/account/notifications", Icon: Bell, title: "Notifications", sub: "Alerts & activity", tint: "rose" },
-        { href: "/account/accessibility", Icon: Accessibility, title: "Accessibility", sub: "Text, contrast, motion & touch", tint: "cyan" },
-      ],
-    },
-    {
-      // Universal Profile Engine™ (Feature 18 · Part 14) — one identity that
-      // adapts. The type row carries its CURRENT value so the member can read
-      // what their profile is without opening anything.
+      // Universal Profile Engine™ (Feature 18 · Part 14) — the type row carries its CURRENT value.
       heading: "Profile platform",
       items: [
         { href: "/account/health", Icon: ShieldCheck, title: "Profile health", sub: healthSub, tint: "emerald" },
@@ -196,55 +204,26 @@ export default async function AccountPage() {
       ],
     },
     {
-      heading: "Privacy & security",
+      heading: "Privacy",
       items: [
         { href: "/account/privacy", Icon: Lock, title: "Privacy", sub: "Who can see & contact you", tint: "emerald" },
-        {
-          href: "/account/relationships",
-          Icon: Users,
-          title: "Relationships",
-          sub: "Friend list visibility, circles & trusted contacts",
-          tint: "violet",
-        },
-        {
-          href: "/account/discovery",
-          Icon: Search,
-          title: "Discovery",
-          sub: "Who can find you, and by what",
-          tint: "blue",
-        },
+        { href: "/account/relationships", Icon: Users, title: "Relationships", sub: "Friend list visibility, circles & trusted contacts", tint: "violet" },
+        { href: "/account/discovery", Icon: Search, title: "Discovery", sub: "Who can find you, and by what", tint: "blue" },
         // Feature 19 Part 9: status, focus modes, automations, auto reply and who sees them
         { href: "/account/presence", Icon: Activity, title: "Presence", sub: "Status, focus modes and who sees them", tint: "emerald" },
-        {
-          href: "/account/ghost",
-          Icon: Ghost,
-          title: "Ghost Mode",
-          sub: ghostSub,
-          tint: "purple",
-        },
-        { href: "/account/security", Icon: ShieldCheck, title: "Security", sub: securitySub, tint: "cyan" },
+        { href: "/account/ghost", Icon: Ghost, title: "Ghost Mode", sub: ghostSub, tint: "purple" },
         { href: "/account/password", Icon: KeyRound, title: "Password", sub: "Change your password", tint: "amber" },
       ],
     },
     {
       heading: "Content & insights",
       items: [
-        { href: "/downloads", Icon: Download, title: "Downloads", sub: "Your saved library", tint: "blue" },
         { href: "/saved", Icon: Bookmark, title: "Saved", sub: "Posts you bookmarked", tint: "violet" },
-        /* Creator Studio (Feature 15 Part 9) sits ABOVE Analytics deliberately:
-           it is the front door, and the analytics screen is one of the things
-           it links to. Analytics keeps its own row — it is Business-gated and
-           people already know where it is. */
+        /* Creator Studio (Feature 15 Part 9) sits ABOVE Analytics deliberately: it is the front door. */
         { href: "/studio", Icon: Lightbulb, title: "Creator Studio", sub: "Content, audience, calendar & goals", tint: "amber" },
         { href: "/advertise", Icon: Megaphone, title: "Advertise", sub: "Promote your business on Frenzsave", tint: "rose" },
         { href: "/account/analytics", Icon: BarChart3, title: "Analytics", sub: "Your performance", tint: "emerald" },
-        {
-          href: "/account/personalization",
-          Icon: Compass,
-          title: "Discovery & personalization",
-          sub: "Your Frenz DNA, topics & feed controls",
-          tint: "cyan",
-        },
+        { href: "/account/personalization", Icon: Compass, title: "Discovery & personalization", sub: "Your Frenz DNA, topics & feed controls", tint: "cyan" },
       ],
     },
     {
@@ -258,6 +237,29 @@ export default async function AccountPage() {
     },
   ];
 
+  // the compact profile row — passed into the search island so it hides while a search is showing results
+  const profileRow = (
+    <Link
+      href={ownProfile?.handle ? profilePath(ownProfile.handle) : "/account/identity"}
+      prefetch
+      className="mt-4 flex items-center gap-3.5 rounded-[22px] border border-frenz-line bg-frenz-card p-3.5 shadow-[0_10px_24px_-20px_rgba(30,20,80,0.4)] transition active:scale-[0.99]"
+    >
+      <span className="relative shrink-0">
+        <Avatar src={avatar} name={ownProfile?.displayName || email} size={62} ring />
+        <DiamondCrownBadge plan={plan as BillingPlan} size="sm" className="absolute -bottom-0.5 -right-0.5" />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex items-center gap-1.5">
+          <span className="truncate font-heading text-[19px] font-bold">{ownProfile?.displayName || email}</span>
+          {verified ? <VerifiedBadge size={17} /> : null}
+          {admin ? <span className="shrink-0 rounded-full bg-frenz-violet/10 px-2 py-0.5 text-[11px] font-bold text-frenz-violet">Admin</span> : null}
+        </span>
+        <span className="truncate text-sm text-frenz-muted">{ownProfile?.handle ? `@${ownProfile.handle} · ${typeAccount}` : email}</span>
+      </span>
+      <span className="flex h-[34px] shrink-0 items-center rounded-full bg-frenz-fill px-3 text-[13px] font-bold text-frenz-violet">{ownProfile?.handle ? "View" : "Set up"}</span>
+    </Link>
+  );
+
   return (
     <AppContent>
       {/* 2026-10-07: the plan welcome + optional survey, for the Frenzsave plans too */}
@@ -265,136 +267,50 @@ export default async function AccountPage() {
         plan={plan as "free" | "pro" | "business"}
         benefits={(plan === "business" ? BUSINESS_FEATURES : PRO_FEATURES).filter((l) => !l.startsWith("Everything in"))}
       />
-      {/* No extra safe-area padding — AppTopbar (the sticky app header) already
-          reserves it; adding it again doubled the top gap on notch devices. */}
-      <div className="mx-auto max-w-2xl">
-        <header className="mb-4">
-          <h1 className="text-2xl font-bold tracking-[-0.02em] sm:text-3xl">Settings</h1>
+      <div className="frenz-ui mx-auto max-w-2xl text-frenz-ink">
+        <header className="px-1">
+          <SettingsBack fallback={ownProfile?.handle ? profilePath(ownProfile.handle) : "/home"} />
+          <h1 className="m-0 mt-0.5 font-heading text-[32px] font-extrabold tracking-[-1.1px]">Settings</h1>
         </header>
 
-        {/* Profile hero */}
-        <div className="mb-5 overflow-hidden rounded-3xl border border-border/70 bg-card shadow-card">
-          <div className="h-24 w-full bg-gradient-to-br from-blue-600/30 via-sky-500/15 to-cyan-400/20 sm:h-28">
-            {ownProfile?.bannerUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={ownProfile.bannerUrl} alt="" className="h-full w-full object-cover" />
-            ) : null}
-          </div>
-          <div className="px-5 pb-5 sm:px-6">
-            <div className="-mt-9 flex items-end justify-between gap-3">
-              <div className="relative">
-                {avatar ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={avatar} alt="" className="h-[72px] w-[72px] rounded-full object-cover ring-4 ring-card" />
-                ) : (
-                  <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-blue-500 to-cyan-400 text-2xl font-bold text-white ring-4 ring-card">
-                    {initial}
-                  </div>
-                )}
-                <DiamondCrownBadge plan={plan as BillingPlan} size="md" className="absolute -bottom-1 -right-1" />
-              </div>
-              {ownProfile?.handle ? (
-                <Link href={`${profilePath(ownProfile.handle)}`} prefetch className="mb-1 inline-flex items-center rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary">
-                  View profile
-                </Link>
-              ) : (
-                <Link href="/account/identity" prefetch className="mb-1 inline-flex items-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90">
-                  Set up profile
-                </Link>
-              )}
-            </div>
-            <div className="mt-3">
-              <h2 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xl font-bold tracking-[-0.02em]">
-                <span className="truncate">{ownProfile?.displayName || email}</span>
-                {/* The same cluster the profile hero uses — one badge language app-wide. */}
-                <IdentityBadges verified={verified} plan={plan as BillingPlan} size="sm" />
-              </h2>
-              <p className="text-sm text-muted-foreground">{ownProfile?.handle ? `@${ownProfile.handle}` : email}</p>
-              <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                {admin ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-                    <ShieldCheck className="h-3 w-3" /> Admin
-                  </span>
-                ) : null}
-                {!isPremium ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                    <Lightbulb className="h-3 w-3" /> {planLabel}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/*
-          ── Settings Center™ (Feature 18 · Part 21) ──────────────────────────
-          Smart Settings Search + Quick Settings, above the category list.
-
-          The ONLY client island on this page. Everything below stays
-          server-rendered from the member's real plan, health and security
-          state, so the page paints its content first and the search box
-          hydrates after — which is the right order on a screen people open
-          when something is already annoying them.
-
-          Search runs entirely on the device against `lib/settings/registry`:
-          no request per keystroke, no loading state, and it works offline.
+          Smart Settings Search + Quick Settings (Feature 18 · Part 21) — the only client island. Search
+          runs on the device; the quick tiles carry the real Ghost Mode and notification state read above.
         */}
-        <SettingsSearch />
-
-        {/* Category list — each row is its own page, all prefetched on open */}
-        <div className="space-y-5">
-          {groups.map((g) => (
-            <div key={g.heading}>
-              <p className="mb-1.5 px-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{g.heading}</p>
-              <div className="overflow-hidden rounded-3xl border border-border/70 bg-card shadow-sm">
-                <div className="divide-y divide-border/60">
-                  {g.items.map((it) => (
-                    <Link key={it.href} href={it.href} prefetch className="flex items-center gap-3 px-4 py-3.5 transition hover:bg-secondary/40">
-                      <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset", SETTINGS_TINTS[it.tint] ?? SETTINGS_TINTS.slate)}>
-                        <it.Icon className="h-[19px] w-[19px]" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-semibold">{it.title}</span>
-                        <span className="block truncate text-xs text-muted-foreground">{it.sub}</span>
-                      </span>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ))}
-
-          {/* Admin + sign out */}
-          <div className="overflow-hidden rounded-3xl border border-border/70 bg-card shadow-sm">
-            <div className="divide-y divide-border/60">
-              {admin ? (
-                <Link href="/admin" className="flex items-center gap-3 px-4 py-3.5 transition hover:bg-secondary/40">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-foreground ring-1 ring-inset ring-border/60">
-                    <ShieldCheck className="h-[18px] w-[18px]" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold">Admin dashboard</span>
-                    <span className="block truncate text-xs text-muted-foreground">Platform controls</span>
-                  </span>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                </Link>
-              ) : null}
-              <form action="/auth/signout" method="post">
-                <button type="submit" className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition hover:bg-secondary/40">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground ring-1 ring-inset ring-border/60">
-                    <LogOut className="h-[18px] w-[18px]" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold text-red-500">Sign out</span>
-                    <span className="block truncate text-xs text-muted-foreground">{email}</span>
-                  </span>
-                </button>
-              </form>
-            </div>
-          </div>
+        <div className="mt-3">
+          <SettingsSearch profile={profileRow} ghost={ghostState} notificationsOn={notificationsOn} />
         </div>
+
+        <SettingsList heading="Profile" rows={profileRows} />
+        <SettingsList heading="Account" rows={accountRows}>
+          <li className="border-t border-frenz-line">
+            <LanguageSettingRow variant="list" />
+          </li>
+        </SettingsList>
+
+        {groups.map((g) => (
+          <SettingsList key={g.heading} heading={g.heading} rows={g.items} />
+        ))}
+
+        {admin ? (
+          <ul className="mt-6 overflow-hidden rounded-[20px] border border-frenz-line bg-frenz-card">
+            <li>
+              <SettingsLink row={{ href: "/admin", Icon: ShieldCheck, title: "Admin dashboard", sub: "Platform controls", tint: "slate" }} />
+            </li>
+          </ul>
+        ) : null}
+
+        <form action="/auth/signout" method="post" className="mt-6 overflow-hidden rounded-[20px] border border-frenz-line bg-frenz-card">
+          <button type="submit" className="flex h-[54px] w-full items-center justify-center text-base font-bold text-rose-700 dark:text-rose-400">
+            Sign out
+          </button>
+        </form>
+        <p className="mt-3.5 text-center text-xs text-frenz-muted">
+          Frenzsave{APP_BUILD ? ` · v${APP_BUILD.slice(0, 7)}` : ""} · {email}
+        </p>
       </div>
     </AppContent>
   );
 }
+
+const APP_BUILD = process.env.NEXT_PUBLIC_APP_BUILD ?? "";

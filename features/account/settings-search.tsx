@@ -1,10 +1,14 @@
 "use client";
 
-import { CornerDownLeft, Pin, PinOff, Search, X } from "lucide-react";
+import { BellOff, CornerDownLeft, Ghost, Moon, Pin, Search, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useTheme } from "next-themes";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
-import { SETTINGS_TINTS } from "@/features/account/settings-ui";
+import { LanguageSettingRow } from "@/components/i18n/language-setting-row";
+import { useGhostMode } from "@/features/account/ghost-mode";
+import { allSignals, ghostedCount, GHOST_SIGNALS, isFullyGhosted, type GhostState } from "@/lib/privacy/ghost";
+import { getCachedThemeMode, setThemeModeLocal, subscribeThemeMode, type ThemeMode } from "@/lib/theme/theme-mode-client";
 import { getCategory } from "@/lib/settings/categories";
 import { getSetting, type SettingEntry } from "@/lib/settings/registry";
 import { searchSettings } from "@/lib/settings/search";
@@ -58,8 +62,20 @@ function readPins(): string[] {
   }
 }
 
-export function SettingsSearch() {
+export function SettingsSearch({
+  profile,
+  ghost,
+  notificationsOn,
+}: {
+  /** The server-rendered profile row (design/Settings.dc.html) — shown between the field and the tiles, hidden while searching. */
+  profile?: ReactNode;
+  /** The member's real Ghost Mode state, read on the server. */
+  ghost: GhostState;
+  /** Notifications' master switch (`masterEnabled`), read on the server. */
+  notificationsOn: boolean;
+}) {
   const [query, setQuery] = useState("");
+  const [focused, setFocused] = useState(false);
   /*
     Null until read from storage, so the first paint does not flash the defaults
     at somebody who has pinned their own. Server and client agree on `null`.
@@ -92,49 +108,20 @@ export function SettingsSearch() {
   const searching = query.trim().length > 0;
 
   return (
-    <div className="mb-5">
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground" />
+    <div className="frenz-ui text-frenz-ink">
+      <div className="relative px-1">
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-frenz-muted" aria-hidden />
         <input
           ref={inputRef}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           type="search"
-          /*
-            🔴 SHORT, because the long one was never fully readable.
-
-            It was: Search settings — try “dark mode” or “2fa”. At 393px, behind
-            a 3rem icon inset and a 2.75rem clear-button inset, that is ~24
-            characters of room for a 44-character string, so every visitor saw it
-            cut mid-word — "…or “2". A placeholder that truncates is worse than a
-            short one: it reads as a layout bug, and the examples it was trying
-            to teach are the part that gets eaten.
-
-            The examples did not deserve to be in the placeholder at all. A
-            placeholder disappears the moment someone types, so it is the worst
-            place to put anything they might want to act on. They are tappable
-            chips below the field now — same information, always legible, and
-            they actually run the search.
-          */
+          /* Short on purpose: the long placeholder never fit at 393 px (2026-09). */
           placeholder="Search settings"
           aria-label="Search settings"
-          /*
-            🔴 `h-13` EMITTED NO CSS. Tailwind's height scale has no 13
-            (…12, 14, 16), so the class compiled to nothing and the field has
-            never had the 52px its author intended — it was sized only by its
-            padding and line-height. Verified against the built stylesheet, the
-            same silent-class family as `z-60` and `via-black/88`.
-
-            `h-[3.25rem]` is that intended 52px, expressed as an arbitrary value
-            so it cannot silently vanish again. The vertical padding goes with
-            it: on a fixed-height input it does nothing, and leaving both invites
-            the next person to "fix" the height by changing the padding.
-          */
-          /* The placeholder is softened one step so it reads as a hint rather
-             than as a value someone has typed. Verified in the built stylesheet:
-             this token IS declared with `<alpha-value>`, so the opacity modifier
-             compiles to `color: hsl(var(--muted-foreground)/.7)`. */
-          className="h-[3.25rem] w-full rounded-2xl bg-secondary/60 pl-12 pr-11 text-[15px] font-medium shadow-sm outline-none ring-1 ring-inset ring-border/40 transition placeholder:text-muted-foreground/70 focus:bg-background focus:ring-2 focus:ring-primary"
+          className="h-10 w-full rounded-xl border-0 bg-frenz-fill pl-10 pr-11 text-[16px] outline-none placeholder:text-frenz-muted focus-visible:ring-2 focus-visible:ring-frenz-violet/40 [&::-webkit-search-cancel-button]:appearance-none"
         />
         {searching ? (
           <button
@@ -144,41 +131,31 @@ export function SettingsSearch() {
               inputRef.current?.focus();
             }}
             aria-label="Clear search"
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-muted-foreground transition hover:text-foreground"
+            className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center text-frenz-muted"
           >
-            <X className="h-4 w-4" />
+            <X className="h-4 w-4" aria-hidden />
           </button>
         ) : null}
       </div>
 
       {/*
-        ── The examples, moved out of the placeholder ─────────────────────────
-        This is where "try dark mode or 2fa" belonged all along. A placeholder
-        vanishes the instant someone types, so it is the worst possible home for
-        something you want them to act on — and at this width it could not even
-        be read in full.
-
-        🔴 Every chip is VERIFIED to return results. A suggestion that finds
-        nothing is worse than no suggestion, so these were each run through
-        `searchSettings` before being listed: dark mode (1), 2fa (1),
-        notifications (4), privacy (8), language (2). If a settings entry is ever
-        renamed, re-run them — a dead chip is a promise the page cannot keep.
-
-        Shown only on the empty state: once there is a query the results below
-        are the answer and these would be competing noise.
+        The examples (each verified to return results — re-check if an entry is renamed). The design
+        has no chips, so they appear only while the empty field has focus, where they help.
       */}
-      {!searching ? (
-        <div className="mt-2.5 flex flex-wrap gap-1.5">
+      {!searching && focused ? (
+        <div className="mt-2.5 flex flex-wrap gap-1.5 px-1">
           {SUGGESTIONS.map((s) => (
             <button
               key={s}
               type="button"
+              // mousedown, so the field keeps focus and the chips don't vanish before the tap lands
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
                 haptic("selection");
                 setQuery(s);
                 inputRef.current?.focus();
               }}
-              className="rounded-full bg-secondary/50 px-3 py-1.5 text-[13px] font-medium text-muted-foreground ring-1 ring-inset ring-border/30 transition hover:bg-secondary hover:text-foreground active:scale-[0.97]"
+              className="min-h-9 rounded-full bg-frenz-fill px-3 text-[13px] font-semibold text-frenz-muted active:scale-[0.97]"
             >
               {s}
             </button>
@@ -189,7 +166,10 @@ export function SettingsSearch() {
       {searching ? (
         <Results hits={hits} query={query} pins={pins ?? DEFAULT_PINS} onTogglePin={togglePin} />
       ) : (
-        <Pinned ids={pins} onTogglePin={togglePin} />
+        <>
+          {profile}
+          <QuickSettings ids={pins} onTogglePin={togglePin} ghost={ghost} notificationsOn={notificationsOn} />
+        </>
       )}
     </div>
   );
@@ -215,16 +195,16 @@ function Results({
         anticipated — saying so, and pointing at the categories below, is better
         than an empty box that reads as "this setting does not exist".
       */
-      <p className="mt-3 rounded-2xl border border-border/60 bg-card px-4 py-5 text-center text-sm text-muted-foreground">
+      <p className="mx-1 mt-3 rounded-[20px] border border-frenz-line bg-frenz-card px-4 py-5 text-center text-sm text-frenz-muted">
         Nothing matches “{query.trim()}”. Try a simpler word, or browse the categories below.
       </p>
     );
   }
 
   return (
-    <ul className="mt-3 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
+    <ul className="mx-1 mt-3 overflow-hidden rounded-[20px] border border-frenz-line bg-frenz-card">
       {hits.map(({ entry }) => (
-        <li key={entry.id} className="border-b border-border/60 last:border-b-0">
+        <li key={entry.id} className="border-b border-frenz-line last:border-b-0">
           <ResultRow entry={entry} pinned={pins.includes(entry.id)} onTogglePin={onTogglePin} />
         </li>
       ))}
@@ -293,8 +273,8 @@ function ResultRow({
         aria-label={pinned ? `Unpin ${entry.label}` : `Pin ${entry.label}`}
         aria-pressed={pinned}
         className={cn(
-          "shrink-0 rounded-lg p-1.5 transition",
-          pinned ? "text-primary" : "text-muted-foreground/50 hover:text-foreground",
+          "-my-1.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition",
+          pinned ? "text-frenz-violet" : "text-frenz-muted/60 hover:text-frenz-ink",
         )}
       >
         {pinned ? <Pin className="h-4 w-4 fill-current" /> : <Pin className="h-4 w-4" />}
@@ -303,58 +283,207 @@ function ResultRow({
   );
 }
 
-/* ─────────────────────────────────── pinned ───────────────────────────────── */
+/* ──────────────────────────────── quick settings ──────────────────────────── */
 
-function Pinned({ ids, onTogglePin }: { ids: string[] | null; onTogglePin: (id: string) => void }) {
-  // `null` = not read yet. Render nothing rather than flashing the defaults at
-  // somebody who has their own pins — the row appears once, correct.
+/**
+ * Quick settings (design/Settings.dc.html, owner 2026-10-18): tiles with WORKING switches for Dark mode,
+ * Ghost mode and Pause alerts, plus Language. The tiles are the member's pins (the existing pinning,
+ * defaults unchanged); "Edit" replaces the old per-chip unpin buttons — in edit mode each tile can be
+ * removed, and search results pin new ones. Any other pinned setting is a tile that opens its screen.
+ */
+function QuickSettings({
+  ids,
+  onTogglePin,
+  ghost,
+  notificationsOn,
+}: {
+  ids: string[] | null;
+  onTogglePin: (id: string) => void;
+  ghost: GhostState;
+  notificationsOn: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  // `null` = not read yet: render nothing rather than flash the defaults at someone with their own pins.
   if (ids === null) return null;
   const entries = ids.map(getSetting).filter((e): e is SettingEntry => !!e);
-  if (entries.length === 0) return null;
 
   return (
-    <div className="mt-3">
-      <p className="mb-2 px-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Quick settings</p>
-      <div className="flex flex-wrap gap-2">
-        {entries.map((entry) => {
-          const category = getCategory(entry.category);
-          const tint = SETTINGS_TINTS[category?.tint ?? "slate"];
-          const reachable = entry.status === "live" && !!entry.href;
-          const Inner = (
-            <>
-              <span className={cn("flex h-6 w-6 items-center justify-center rounded-md ring-1 ring-inset", tint)}>
-                <Pin className="h-3 w-3" />
-              </span>
-              <span className="truncate">{entry.label}</span>
-            </>
-          );
-          return (
-            <span key={entry.id} className="group inline-flex items-center">
-              {reachable ? (
-                <Link
-                  href={entry.href!}
-                  prefetch
-                  className="inline-flex items-center gap-2 rounded-xl border border-border/70 bg-card py-2 pl-2 pr-3 text-xs font-bold shadow-sm transition hover:border-primary/40 active:scale-95"
-                >
-                  {Inner}
-                </Link>
-              ) : (
-                <span className="inline-flex items-center gap-2 rounded-xl border border-border/70 bg-card py-2 pl-2 pr-3 text-xs font-bold opacity-60">
-                  {Inner}
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={() => onTogglePin(entry.id)}
-                aria-label={`Unpin ${entry.label}`}
-                className="-ml-1 rounded-lg p-1 text-muted-foreground/40 transition hover:text-rose-500"
-              >
-                <PinOff className="h-3.5 w-3.5" />
-              </button>
-            </span>
-          );
-        })}
+    <section aria-labelledby="quick-settings" className="mt-6">
+      <div className="flex items-center justify-between px-1 pb-2">
+        <h2 id="quick-settings" className="m-0 text-[13px] font-bold text-frenz-muted">
+          Quick settings
+        </h2>
+        <button type="button" onClick={() => setEditing((e) => !e)} aria-pressed={editing} className="min-h-11 px-1 text-[13px] font-bold text-frenz-blue">
+          {editing ? "Done" : "Edit"}
+        </button>
       </div>
+      {editing ? <p className="-mt-1 mb-2 px-1 text-xs text-frenz-muted">Remove a tile here; pin more from search.</p> : null}
+      {entries.length === 0 ? (
+        <p className="rounded-[20px] border border-dashed border-frenz-line px-4 py-5 text-center text-sm text-frenz-muted">Nothing pinned. Search for a setting and pin it here.</p>
+      ) : (
+        <ul className="grid grid-cols-2 gap-2.5">
+          {entries.map((entry) => (
+            <li key={entry.id} className="relative">
+              <QuickTile entry={entry} ghost={ghost} notificationsOn={notificationsOn} />
+              {editing ? (
+                <button
+                  type="button"
+                  onClick={() => onTogglePin(entry.id)}
+                  aria-label={`Unpin ${entry.label}`}
+                  className="absolute -right-1.5 -top-1.5 flex h-11 w-11 items-center justify-center"
+                >
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-frenz-ink text-frenz-page shadow">
+                    <X className="h-3.5 w-3.5" aria-hidden />
+                  </span>
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+const TILE = "flex h-full w-full flex-col gap-3.5 rounded-[20px] border border-frenz-line bg-frenz-card p-3.5 text-left";
+
+function QuickTile({ entry, ghost, notificationsOn }: { entry: SettingEntry; ghost: GhostState; notificationsOn: boolean }) {
+  if (entry.id === "appearance.theme") return <DarkModeTile />;
+  if (entry.id === "privacy.ghost") return <GhostTile initial={ghost} />;
+  if (entry.id === "notifications.pause") return <PauseTile initiallyOn={notificationsOn} />;
+  if (entry.id === "language.language") return <LanguageSettingRow variant="tile" />;
+  // any other pin opens its own screen (or says why it can't)
+  const category = getCategory(entry.category);
+  const reachable = entry.status === "live" && !!entry.href;
+  const body = (
+    <>
+      <span aria-hidden className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-frenz-fill text-frenz-violet">
+        <Pin className="h-4 w-4" />
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate text-[15px] font-bold">{entry.label}</span>
+        <span className="truncate text-xs text-frenz-muted">{category?.label ?? entry.description}</span>
+      </span>
+    </>
+  );
+  return reachable ? (
+    <Link href={entry.href!} prefetch className={cn(TILE, "transition active:scale-[0.98]")}>
+      {body}
+    </Link>
+  ) : (
+    <div className={cn(TILE, "opacity-60")}>{body}</div>
+  );
+}
+
+/** The design's switch: 50 × 30, the knob slides. A real role="switch" with its own name. */
+function Switch({ on, label, busy, onToggle }: { on: boolean; label: string; busy?: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      aria-busy={busy || undefined}
+      onClick={onToggle}
+      className="-m-[7px] flex h-11 w-16 shrink-0 items-center justify-center"
+    >
+      <span className={cn("flex h-[30px] w-[50px] rounded-full p-0.5 transition-colors", on ? "justify-end bg-frenz-violet" : "justify-start bg-[#E2DFEC] dark:bg-white/20")}>
+        <span className="h-[26px] w-[26px] rounded-full bg-white shadow-[0_2px_4px_rgba(0,0,0,0.2)]" />
+      </span>
+    </button>
+  );
+}
+
+function SwitchTile({ icon, iconClass, title, sub, on, label, busy, onToggle, error }: { icon: ReactNode; iconClass: string; title: string; sub: string; on: boolean; label: string; busy?: boolean; onToggle: () => void; error?: string | null }) {
+  return (
+    <div className={TILE}>
+      <span className="flex items-center justify-between">
+        <span aria-hidden className={cn("flex h-9 w-9 items-center justify-center rounded-[11px] text-white", iconClass)}>
+          {icon}
+        </span>
+        <Switch on={on} label={label} busy={busy} onToggle={onToggle} />
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span className="text-[15px] font-bold">{title}</span>
+        <span className={cn("truncate text-xs", error ? "text-rose-600 dark:text-rose-400" : "text-frenz-muted")} role={error ? "alert" : undefined}>
+          {error ?? sub}
+        </span>
+      </span>
     </div>
+  );
+}
+
+/** Dark mode: the same theme store the menu's Light / Dark / Auto uses (theme-mode-client). */
+function DarkModeTile() {
+  const { setTheme, resolvedTheme } = useTheme();
+  const [mode, setMode] = useState<ThemeMode>(getCachedThemeMode());
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  useEffect(() => subscribeThemeMode(setMode), []);
+  const dark = mounted && resolvedTheme === "dark";
+  const choose = (value: ThemeMode) => {
+    haptic("selection");
+    setThemeModeLocal(value);
+    setTheme(value === "system" ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : value);
+  };
+  const sub = !mounted ? "" : mode === "system" ? `Auto · ${dark ? "on" : "off"} now` : dark ? "On" : "Off";
+  return <SwitchTile icon={<Moon className="h-[18px] w-[18px]" />} iconClass="bg-frenz-ink dark:bg-white/15" title="Dark mode" sub={sub} on={dark} label="Dark mode" onToggle={() => choose(dark ? "light" : "dark")} />;
+}
+
+/** Ghost mode: every activity signal at once, through the Ghost Mode screen's own write path. */
+function GhostTile({ initial }: { initial: GhostState }) {
+  const { state, busy, error, apply } = useGhostMode(initial);
+  const all = isFullyGhosted(state);
+  const hidden = ghostedCount(state);
+  const sub = all ? "All signals hidden" : hidden ? `${hidden} of ${GHOST_SIGNALS.length} signals hidden` : "Off";
+  return (
+    <SwitchTile
+      icon={<Ghost className="h-[18px] w-[18px]" />}
+      iconClass="bg-frenz-violet"
+      title="Ghost mode"
+      sub={sub}
+      on={all}
+      label="Ghost mode"
+      busy={busy === "all"}
+      error={error ? "Couldn't save. Try again." : null}
+      onToggle={() => {
+        haptic("selection");
+        void apply(allSignals(!all), "all");
+      }}
+    />
+  );
+}
+
+/** Pause alerts: notifications' master switch, the same field the Notifications screen saves. */
+function PauseTile({ initiallyOn }: { initiallyOn: boolean }) {
+  const [on, setOn] = useState(initiallyOn);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const toggle = async () => {
+    haptic("selection");
+    const next = !on;
+    // the switch answers on the tap; the server confirms or it goes back
+    setOn(next);
+    setBusy(true);
+    setError(null);
+    const res = await fetch("/api/notification-settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ masterEnabled: next }) }).catch(() => null);
+    setBusy(false);
+    if (!res?.ok) {
+      setOn(!next);
+      setError("Couldn't save. Try again.");
+    }
+  };
+  return (
+    <SwitchTile
+      icon={<BellOff className="h-[18px] w-[18px]" />}
+      iconClass="bg-frenz-magenta"
+      title="Pause alerts"
+      sub={on ? "Off" : "All notifications paused"}
+      on={!on}
+      label="Pause notifications"
+      busy={busy}
+      error={error}
+      onToggle={() => void toggle()}
+    />
   );
 }

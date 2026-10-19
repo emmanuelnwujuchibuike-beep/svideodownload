@@ -34,6 +34,7 @@ import { checkUpload } from "./upload-check";
  * explicit, which stays banned. Its media, preview, caption and public cover reach only a viewer
  * whose age check says adult (lib/age/server.ts); the creator always sees their own post. Anyone
  * else gets the tile marked `mature` and `ageLocked`, and opening it answers 403 `age_required`.
+ * The posting side is checked too: a creator marks a post Mature only after confirming 18+.
  * Before 0261 runs there is no such column, and no post is Mature.
  */
 
@@ -49,6 +50,8 @@ const VIDEO_EXT = new Set(["mp4", "webm", "mov"]);
 export type Fail = { ok: false; error: string; status: number; code?: "age_required" };
 const fail = (error: string, status = 400): Fail => ({ ok: false, error, status });
 const AGE_REQUIRED: Fail = { ok: false, error: "Confirm your age to see this post.", status: 403, code: "age_required" };
+/** 0261 (owner 2026-10-18: "should cover both users making post and viewers") — a creator marks a post Mature only after confirming 18+ */
+const AGE_REQUIRED_TO_POST: Fail = { ok: false, error: "Confirm you're 18 or older to post Mature content.", status: 403, code: "age_required" };
 
 /**
  * The post columns a gallery or gate reads, newest schema first: with Mature (0261) and audience
@@ -115,6 +118,7 @@ export async function createSubPost(creatorId: string, input: { caption?: string
   const audience: SubAudience = input.audience === "hidden" ? "hidden" : "locked";
   if (input.mature !== undefined && typeof input.mature !== "boolean") return fail("Invalid request.");
   const mature = input.mature === true;
+  if (mature && !(await isAdult(creatorId).catch(() => false))) return AGE_REQUIRED_TO_POST;
   let ins = await db.from("sub_posts").insert({ creator_id: creatorId, caption, cover_url: cover, audience, ...(mature ? { mature } : {}) }).select("id").single();
   // 0261 not applied: a Mature post is NEVER published as an ordinary one
   if (ins.error && /mature/.test(ins.error.message)) return fail("Mature posts arrive with the next update. Nothing was posted.", 503);
@@ -390,6 +394,8 @@ export async function readSubPostGate(postId: string, withCaption = false): Prom
 /** The creator marks one of their own published posts Mature (18+) or not (0261). */
 export async function setSubPostMature(creatorId: string, postId: string, mature: unknown): Promise<{ ok: true; mature: boolean } | Fail> {
   if (!isUuid(creatorId) || !isUuid(postId) || typeof mature !== "boolean") return fail("Invalid request.");
+  // marking Mature needs a confirmed adult; taking the mark off never does
+  if (mature && !(await isAdult(creatorId).catch(() => false))) return AGE_REQUIRED_TO_POST;
   const { data, error } = await createAdminClient().from("sub_posts").update({ mature, updated_at: new Date().toISOString() }).eq("id", postId).eq("creator_id", creatorId).eq("status", "published").select("id");
   if (error) return MISSING(error.message) ? fail("Mature posts arrive with the next update.", 503) : fail("Couldn't save that.", 500);
   return (data ?? []).length ? { ok: true, mature } : fail("Not found.", 404);

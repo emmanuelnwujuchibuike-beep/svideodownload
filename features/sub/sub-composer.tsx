@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { ArrowLeft, Camera, EyeOff, ImagePlus, Images, Loader2, Lock, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -33,6 +34,9 @@ async function dims(file: File): Promise<{ width: number | null; height: number 
 
 const extOf = (f: File) => (f.name.split(".").pop() || (f.type.split("/")[1] ?? "")).toLowerCase().slice(0, 8);
 
+// 0261: the age check, loaded only when Mature is switched on
+const AgeGateSheet = dynamic(() => import("@/features/age/age-gate-sheet").then((x) => x.AgeGateSheet), { ssr: false });
+
 export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPosted: () => void }) {
   const [items, setItems] = useState<Picked[]>([]);
   const [cover, setCover] = useState<File | null>(null);
@@ -41,6 +45,22 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
   const [audience, setAudience] = useState<"locked" | "hidden">("locked");
   // 0261: Mature (18+) — opened only by subscribers who confirmed they're 18+. Never explicit.
   const [mature, setMature] = useState(false);
+  // the creator's own age check: asked when Mature is switched on, never before (no fetch on open)
+  const [ageGate, setAgeGate] = useState(false);
+  const adultKnown = useRef(false);
+  const toggleMature = () => {
+    if (mature) return setMature(false);
+    // the switch answers on the tap; the server's answer decides whether it stays on
+    setMature(true);
+    if (adultKnown.current) return;
+    void fetch("/api/age", { cache: "no-store" })
+      .then((r) => r.json() as Promise<{ status?: string }>)
+      .then((a) => {
+        if (a.status === "adult") adultKnown.current = true;
+        else setAgeGate(true);
+      })
+      .catch(() => setAgeGate(true));
+  };
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Part 4: compose → preview → publish. Nothing is uploaded or published before Publish.
@@ -109,7 +129,12 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
       }
       setBusy("Publishing…");
       const res = await fetch("/api/sub/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caption: caption.trim() || null, coverUrl, media, audience, mature }) });
-      const j = (await res.json().catch(() => null)) as { error?: string } | null;
+      const j = (await res.json().catch(() => null)) as { error?: string; code?: string } | null;
+      // the server checks the creator's age too: show the check rather than a dead end
+      if (res.status === 403 && j?.code === "age_required") {
+        adultKnown.current = false;
+        setAgeGate(true);
+      }
       if (!res.ok) throw new Error(j?.error ?? "Couldn't publish.");
       items.forEach((it) => URL.revokeObjectURL(it.preview));
       onPosted();
@@ -221,7 +246,7 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
               type="button"
               role="switch"
               aria-checked={mature}
-              onClick={() => setMature((m) => !m)}
+              onClick={toggleMature}
               className={cn("mt-3 flex w-full items-start gap-3 rounded-2xl border px-3 py-2.5 text-left transition", mature ? "border-primary bg-primary/[0.07] ring-1 ring-primary/40" : "border-black/[0.08] dark:border-white/10")}
             >
               <span aria-hidden className="mt-0.5 flex h-6 min-w-[2.25rem] shrink-0 items-center justify-center rounded-md bg-black/[0.06] px-1 text-[11px] font-extrabold dark:bg-white/10">
@@ -307,6 +332,21 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
           </>
         )}
       </div>
+      {ageGate ? (
+        <AgeGateSheet
+          purpose="post"
+          onClose={() => {
+            setAgeGate(false);
+            // closed without confirming 18+: the post can't be Mature
+            if (!adultKnown.current) setMature(false);
+          }}
+          onVerified={() => {
+            adultKnown.current = true;
+            setAgeGate(false);
+            setError(null);
+          }}
+        />
+      ) : null}
     </div>,
     document.body,
   );

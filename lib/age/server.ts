@@ -62,3 +62,33 @@ export async function recordAgeCheck(userId: string, birthDate: unknown, confirm
   if (error) return /schema cache|does not exist/i.test(error.message) ? { ok: false, error: "Age checks arrive with the next update.", status: 503 } : { ok: false, error: "Couldn't save that. Try again.", status: 500 };
   return { ok: true, status: outcome.result, eligibleOn: outcome.result === "minor" ? outcome.eligibleOn : null };
 }
+
+/** Every listed member's answer in one read (the admin accounts list). Missing = no answer; a failed read = an empty map. */
+export async function readAgeStates(userIds: string[]): Promise<Map<string, AgeState>> {
+  const out = new Map<string, AgeState>();
+  if (!userIds.length) return out;
+  const { data, error } = await createAdminClient().from("age_checks").select("user_id, result, eligible_on").in("user_id", userIds);
+  if (error) return out;
+  const today = todayUtc();
+  for (const r of (data ?? []) as Row[]) {
+    if (r.result === "adult") out.set(r.user_id as string, { status: "adult", eligibleOn: null });
+    else if (r.result === "minor") {
+      const eligibleOn = typeof r.eligible_on === "string" ? r.eligible_on : null;
+      const until = parseIsoDate(eligibleOn);
+      if (!until || until > today) out.set(r.user_id as string, { status: "minor", eligibleOn });
+    }
+  }
+  return out;
+}
+
+/**
+ * An admin clears a member's answer (owner, 2026-10-18) — e.g. a real adult who typed the wrong
+ * year. The member answers again the next time a Mature post asks. Returns what was cleared, for
+ * the audit trail; null when there was nothing to clear.
+ */
+export async function resetAgeCheck(userId: string): Promise<{ ok: true; cleared: AgeState | null } | RecordFail> {
+  const before = await readAgeState(userId);
+  const { error } = await createAdminClient().from("age_checks").delete().eq("user_id", userId);
+  if (error) return /schema cache|does not exist/i.test(error.message) ? { ok: false, error: "Age checks arrive with the next update.", status: 503 } : { ok: false, error: "Couldn't reset that.", status: 500 };
+  return { ok: true, cleared: before.status === "none" ? null : before };
+}

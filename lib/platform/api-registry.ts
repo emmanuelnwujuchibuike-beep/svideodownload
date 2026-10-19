@@ -106,6 +106,7 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   { method: "POST", path: "/api/sub/announcements", auth: "session", category: "subscriptions", description: "Publish to YOUR subscribers (idempotency key). Fan-out is queued in bounded pages." },
   { method: "DELETE", path: "/api/sub/announcements", auth: "session", category: "subscriptions", description: "Delete one of your announcements (kept for audit, fan-out stopped)." },
   // Part 11 (0253): optional-email unsubscribe. No session — the unguessable token in the link is the authority, and it can only switch optional email OFF.
+  { method: "DELETE", path: "/api/admin/users/age", auth: "admin", category: "account", description: "Clear a member's age answer so they answer again (audited). An admin can never set one." },
   { method: "GET", path: "/api/age", auth: "session-optional", category: "account", description: "The member age check: adult, minor (with the day they may answer again) or none. Never the date of birth." },
   { method: "POST", path: "/api/age", auth: "session", category: "account", description: "Answer the age check (date of birth + 18+ confirmation). The server decides and keeps only the outcome." },
   { method: "GET", path: "/api/email/unsubscribe", auth: "session-optional", category: "account", description: "Opens the unsubscribe confirmation. Changes nothing (link scanners open links)." },

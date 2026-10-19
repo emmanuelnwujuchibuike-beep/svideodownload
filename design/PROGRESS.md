@@ -58,6 +58,10 @@ they are applied while each page is built and there is no separate cleanup step.
     marked Mature (18+); sexually explicit content stays banned. Built — see "Age checks" below.
 - Glass (blur + translucent fill) only over images; solid white cards on white.
 
+## Owner page notes for steps 8–13 (verbatim, 2026-10-18)
+
+\n\nWallpapers\n- Featured wallpaper as a full-bleed header with glass buttons (Back, Search + Upload) and glass category chips over it; a white sheet slides up over it with "All wallpapers", count and sort.\n- 3-column tiles with a frosted name plate (name, @creator, 2K) and a glass download button.\n- The Categories and Types dropdowns move into the single filter button. Upload lives in the header.\n- Glass (blur + translucent fill) is ONLY allowed over images. On white surfaces use solid white cards.\n\nProfile menu\n- Bottom sheet over the current screen, with grab handle and close button.\n- Profile card → profile. Shortcuts grid: Explore, Reels, Sounds, Friends, Downloads, Saved, Wallpapers, AI Studio. "More" group: My ads, Settings, Help & support. Footer: Light/Dark/Auto switch and sign out.\n- Remove Home and Chats from this menu (they're in the tab bar). Wire every item to our existing routes.\n\nSettings\n- "‹ Menu" back link, large "Settings" title, search field, compact profile row.\n- Quick settings tiles with working switches for Dark mode, Ghost mode, Pause alerts, plus Language. Replace pin/unpin with one "Edit" link that uses our existing pinning logic.\n- Grouped lists: Profile (Identity, Verification, Appearance) and Account (Notifications, Privacy & security, Storage & downloads, Language), showing current values on the right. Sign out and version at the bottom.\n\nProfile Exclusive tab (owner view)\n- One dashboard card: price per month with LIVE status, stats (Subscribers, This month, Posts) from our real data, "New exclusive post" primary button, "Share link" and "Dashboard" buttons, and rows for Announcements and Subscriber notifications (replacing the two dropdowns).\n- Remove the "Your Content. Your Earnings." banner; its share action is now the "Share link" button.\n- Exclusive posts grid with a "Subs" lock tag and Manage link.\n- Group the profile buttons into 3 iOS lists:\n  - Showcase: About, Products, Services, Hours & location, Top friends, Life journey\n  - Insights: Analytics, Achievements, Daily streak, Reputation, Profile health, Recent activity\n  - Only you: Creator tools, Private journal, Time capsules\n  Empty items show an "Add" button instead of "Nothing here yet". Remove Appearance here (it's in Settings).\n\nExclusive page (subscriber view)\n- Cover, avatar, name, then a subscribe card with what's included and a "Subscribe · [price]" button using our existing payment flow. Use each creator's real price and billing period.\n- Replace "[Renewal & cancellation terms]" with our real billing terms; if we don't have them written, flag it in PROGRESS.md instead of inventing them.\n- Locked posts show as heavily blurred tiles with a lock icon, plus a "See everything" tile that opens subscribe.\n\nExclusive feed tab\n- Add "Exclusive" (with a lock icon) as a 4th tab in the Feed, next to For You, Following and Reels. Remove the current "From creators you follow" section and replace it with this tab.\n- Top row: "Your subscriptions" avatars with gradient rings and a small new-post count, a "Manage" link, and a "Discover" button.\n- Posts from creators the viewer IS subscribed to render exactly like normal feed posts (same component), with a "Subscribed" tag on the creator and an "Exclusive" tag on the media. They play normally.\n- Posts from creators the viewer is NOT subscribed to render as a locked card: creator header with "View profile", a blurred preview with a lock, "Subscribers only · [type] · [n] of [total] posts", and a bottom bar with the creator's real price and period (e.g. "$5.50 for 30 days of access") and a Subscribe button using our existing payment flow.\n- Reuse the existing feed post component; don't build a separate one.\n\n
+
 ## Notes — where the design and the app differ
 
 ### Step 0 · Foundation
@@ -312,12 +316,16 @@ the app allowed in the App Store and Play (the Android app is a TWA), and Paysta
   routes: nothing of a Mature post reaches an unconfirmed viewer, nothing is even signed for it —
   4 cases fail with the gate removed); supabase/tests/0261_age_checks.pglite.mjs (RLS and the
   constraints; three mutants, each caught).
-- **For the owner to decide** (not built):
-  · Should a creator also confirm 18+ before marking a post Mature? Today only viewers are checked.
-  · An admin way to reset someone's answer (e.g. a typo on a real adult's date). Today an answer
-    can only be cleared in the database.
-  · A self-declared date is the weakest kind of check. Where a country requires real age assurance
-    for adult content (UK Online Safety Act, some US states), a provider check would be needed —
-    not needed while explicit content is banned.
+- **Owner, 2026-10-18 (after the first build):** "The age verification should cover both users making
+  post and viewers" — a creator now confirms 18+ before publishing a Mature post or switching one to
+  Mature (the server refuses otherwise; switching the mark OFF never needs it). The composer asks for
+  the age when Mature is switched on; closing the check without confirming switches it back off.
+  "I want admin to be able to reset someone's age answers" — Admin › Accounts shows each account's
+  answer (confirmed 18+ / under 18 until a date / not confirmed — never a date of birth) with a
+  Reset age button. A reset is audited (moderation_action, age_check_reset, who and what); the member
+  answers again next time. An admin can never set an answer.
+- Still worth knowing: a self-declared date is the weakest kind of check. Where a country requires real
+  age assurance for adult content (UK Online Safety Act, some US states), a provider check would be
+  needed — not needed while explicit content is banned.
 - The locked-content blurred preview (the owner's required fix above) is a separate, still-open job.
 

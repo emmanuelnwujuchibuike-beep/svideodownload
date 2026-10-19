@@ -78,5 +78,6 @@ export async function POST(req: Request) {
       return notifyNewPrivatePost(user.id, { audience });
     });
   }
-  return out.ok ? NextResponse.json(out) : NextResponse.json({ ok: false, error: out.error }, { status: out.status });
+  // 0261: "age_required" tells the composer to show the age check
+  return out.ok ? NextResponse.json(out) : NextResponse.json({ ok: false, error: out.error, ...("code" in out && out.code ? { code: out.code } : {}) }, { status: out.status });
 }

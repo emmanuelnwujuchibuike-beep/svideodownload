@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, EyeOff, Eye, Loader2, Search, ShieldCheck } from "lucide-react";
+import { Ban, EyeOff, Eye, Loader2, RotateCcw, Search, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -16,7 +16,12 @@ interface AdminUser {
   is_suspended: boolean;
   is_hidden: boolean;
   created_at: string;
+  /** 0261: the member's age answer — never a date of birth */
+  age?: { status: "adult" | "minor" | "none"; eligibleOn: string | null };
 }
+
+const ageText = (a: AdminUser["age"]) =>
+  !a || a.status === "none" ? "age not confirmed" : a.status === "adult" ? "confirmed 18+" : `under 18${a.eligibleOn ? ` until ${a.eligibleOn}` : ""}`;
 
 /**
  * Hide any account from people it isn't friends with (owner, 2026-07-16: "make
@@ -160,6 +165,25 @@ export function UserModeration() {
     }
   };
 
+  /*
+    0261 (owner, 2026-10-18: "I want admin to be able to reset someone's age answers"). Clears the
+    answer only — the member answers again the next time a Mature post asks. Audited on the server.
+  */
+  const resetAge = async (u: AdminUser) => {
+    if (!window.confirm(`Reset @${u.handle}'s age answer (${ageText(u.age)})?\n\nThey'll be asked for their date of birth again the next time they open or post Mature (18+) content. Until then they can't see or post it.`)) return;
+    setBusyId(u.id);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/users/age", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: u.id }) });
+      if (!res.ok) throw new Error();
+      setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, age: { status: "none", eligibleOn: null } } : x)));
+    } catch {
+      setError("That reset didn't save.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <section className="rounded-2xl border border-border/60 bg-card p-5 shadow-soft">
       <h2 className="flex items-center gap-2 text-base font-bold">
@@ -169,7 +193,8 @@ export function UserModeration() {
       <p className="mt-1 text-sm text-muted-foreground">
         <strong>Hide</strong> keeps an account posting and chatting with its existing friends but removes it from
         strangers — not a punishment. <strong>Ban</strong> locks the account out of the app entirely for violating
-        community guidelines. Both work without a report, and both are reversible.
+        community guidelines. Both work without a report, and both are reversible. <strong>Reset age</strong> clears
+        an account&apos;s 18+ answer so they answer again.
       </p>
 
       <div className="relative mt-4">
@@ -194,7 +219,7 @@ export function UserModeration() {
           <li className="py-6 text-center text-sm text-muted-foreground">No accounts match that search.</li>
         ) : (
           users.map((u) => (
-            <li key={u.id} className="flex items-center gap-3 py-3">
+            <li key={u.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary text-xs font-bold">
                 {u.avatar_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -203,7 +228,7 @@ export function UserModeration() {
                   (u.display_name ?? u.handle ?? "?").charAt(0).toUpperCase()
                 )}
               </span>
-              <span className="min-w-0 flex-1">
+              <span className="min-w-0 flex-1 basis-[calc(100%-3rem)] sm:basis-40">
                 <Link
                   href={`${profilePath(u.handle)}`}
                   className="block truncate text-sm font-semibold hover:underline"
@@ -220,8 +245,21 @@ export function UserModeration() {
                     : u.is_hidden
                       ? " · hidden · friends only"
                       : ""}
+                  {` · ${ageText(u.age)}`}
                 </span>
               </span>
+              {u.age && u.age.status !== "none" ? (
+                <button
+                  type="button"
+                  onClick={() => void resetAge(u)}
+                  disabled={busyId === u.id}
+                  aria-label={`Reset @${u.handle}'s age answer`}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-secondary px-3 py-1.5 text-xs font-semibold transition hover:bg-secondary/80 disabled:opacity-50"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                  Reset age
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => void toggleHidden(u)}

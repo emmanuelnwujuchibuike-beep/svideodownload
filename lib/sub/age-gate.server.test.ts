@@ -12,13 +12,18 @@ import { fakeDb, type FakeDb } from "@/lib/testing/fake-supabase";
 
 let db: FakeDb;
 let sessionUser: { id: string } | null = null;
+let adminUser: { id: string } | null = null;
+const audit = vi.fn(async (_e: Record<string, unknown>) => {});
 const presignGet = vi.fn(async (key: string) => `https://private.example/${key}?sig=1`);
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/server")>()), after: () => {} }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => db.client() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: async () => ({ data: { user: sessionUser } }) } }) }));
-vi.mock("@/lib/storage/r2", () => ({ hasPrivateR2: true, presignPrivateGet: (k: string) => presignGet(k), presignPrivatePut: vi.fn(async (k: string) => `https://put.example/${k}`), deletePrivate: vi.fn(), readPrivatePrefix: vi.fn() }));
+// a real JPEG header, so the upload check passes for the creator's own private file
+vi.mock("@/lib/storage/r2", () => ({ hasPrivateR2: true, presignPrivateGet: (k: string) => presignGet(k), presignPrivatePut: vi.fn(async (k: string) => `https://put.example/${k}`), deletePrivate: vi.fn(), readPrivatePrefix: vi.fn(async () => ({ prefix: new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0]), size: 1000, contentType: "image/jpeg" })) }));
+vi.mock("@/lib/admin/guard", () => ({ getAdminUser: async () => adminUser }));
+vi.mock("@/lib/security/audit-log", () => ({ writeAuditLog: (e: Record<string, unknown>) => audit(e) }));
 vi.mock("@/lib/rate-limit", () => ({ trackLimiter: { limit: async () => ({ success: true }) }, clientId: () => "ip" }));
 vi.mock("@/lib/landing/settings", async () => {
   const { SUB_DEFAULTS } = await import("@/lib/rewards/config");
@@ -45,6 +50,8 @@ const yearsAgo = (n: number, days = 0) => {
 
 beforeEach(() => {
   sessionUser = null;
+  adminUser = null;
+  audit.mockClear();
   presignGet.mockClear();
   db = fakeDb({
     profiles: [CREATOR, SUBSCRIBER, FOLLOWER].map((id) => ({ id, handle: `h${id.slice(-1)}`, display_name: `P${id.slice(-1)}`, avatar_url: null, is_verified: false, is_suspended: false, is_hidden: false })),
@@ -184,12 +191,13 @@ describe("the creator and discover", () => {
     expect(res.status).toBe(200);
   });
 
-  it("the creator can mark a post Mature and back; nobody else can", async () => {
+  it("the creator can mark a post Mature and back once confirmed 18+; nobody else can", async () => {
     const r = await route(import("@/app/api/sub/posts/[id]/route"));
     sessionUser = { id: SUBSCRIBER };
     expect((await r.PATCH!(req("PATCH", { mature: true }), paramsOf(PLAIN))).status).toBeGreaterThanOrEqual(400);
     expect(db.tables.sub_posts!.find((p) => p.id === PLAIN)!.mature).toBe(false);
     sessionUser = { id: CREATOR };
+    db.tables.age_checks!.push({ user_id: CREATOR, result: "adult", method: "self_declared_dob", eligible_on: null });
     expect((await r.PATCH!(req("PATCH", { mature: true }), paramsOf(PLAIN))).status).toBe(200);
     expect(db.tables.sub_posts!.find((p) => p.id === PLAIN)!.mature).toBe(true);
     expect((await r.PATCH!(req("PATCH", { mature: "yes" }), paramsOf(PLAIN))).status).toBe(400);
@@ -202,5 +210,89 @@ describe("the creator and discover", () => {
     const card = out.discover?.cards.find((c) => c.id === MATURE);
     expect(card).toMatchObject({ mature: true, coverUrl: null });
     expect(JSON.stringify(out)).not.toMatch(NOTHING_OF_THE_MATURE_POST);
+  });
+});
+
+describe("the posting side (owner 2026-10-18: \"both users making post and viewers\")", () => {
+  const publish = async (mature: boolean) => {
+    const r = await route(import("@/app/api/sub/posts/route"));
+    return r.POST!(req("POST", { caption: "new", media: [{ key: `sub/${CREATOR}/new.jpg`, kind: "image" }], mature }));
+  };
+
+  it("a creator who hasn't confirmed 18+ can't publish a Mature post — and nothing is written", async () => {
+    sessionUser = { id: CREATOR };
+    const before = db.tables.sub_posts!.length;
+    const res = await publish(true);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ code: "age_required" });
+    expect(db.tables.sub_posts!.length).toBe(before);
+    // teeth: the same post, not Mature, publishes
+    expect((await publish(false)).status).toBe(200);
+  });
+
+  it("a confirmed creator publishes it Mature", async () => {
+    sessionUser = { id: CREATOR };
+    db.tables.age_checks!.push({ user_id: CREATOR, result: "adult", method: "self_declared_dob", eligible_on: null });
+    const res = await publish(true);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ mature: true });
+    expect(db.tables.sub_posts!.find((p) => p.caption === "new")!.mature).toBe(true);
+  });
+
+  it("an unconfirmed creator can't switch a post to Mature, but can always switch it off", async () => {
+    sessionUser = { id: CREATOR };
+    const r = await route(import("@/app/api/sub/posts/[id]/route"));
+    const on = await r.PATCH!(req("PATCH", { mature: true }), paramsOf(PLAIN));
+    expect(on.status).toBe(403);
+    expect(await on.json()).toMatchObject({ code: "age_required" });
+    expect(db.tables.sub_posts!.find((p) => p.id === PLAIN)!.mature).toBe(false);
+    expect((await r.PATCH!(req("PATCH", { mature: false }), paramsOf(MATURE))).status).toBe(200);
+    expect(db.tables.sub_posts!.find((p) => p.id === MATURE)!.mature).toBe(false);
+  });
+});
+
+describe("an admin resets an age answer (owner 2026-10-18)", () => {
+  const reset = async (userId: string) => {
+    const r = await route(import("@/app/api/admin/users/age/route"));
+    return r.DELETE!(req("DELETE", { userId }));
+  };
+
+  it("only an admin can — a member's own session can't clear anyone's answer", async () => {
+    db.tables.age_checks!.push({ user_id: SUBSCRIBER, result: "minor", method: "self_declared_dob", eligible_on: yearsAgo(-2) });
+    sessionUser = { id: SUBSCRIBER };
+    expect((await reset(SUBSCRIBER)).status).toBe(403);
+    expect(db.tables.age_checks).toHaveLength(1);
+    expect(audit).not.toHaveBeenCalled();
+  });
+
+  it("clears the answer, audits who reset what, and the member is asked again", async () => {
+    db.tables.age_checks!.push({ user_id: SUBSCRIBER, result: "adult", method: "self_declared_dob", eligible_on: null });
+    adminUser = { id: FOLLOWER };
+    const res = await reset(SUBSCRIBER);
+    expect(await res.json()).toMatchObject({ ok: true, cleared: true });
+    expect(db.tables.age_checks).toHaveLength(0);
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ userId: SUBSCRIBER, actorUserId: FOLLOWER, eventType: "moderation_action", metadata: { action: "age_check_reset", previous: "adult" } }));
+    // the Mature post is withheld again until they answer
+    sessionUser = { id: SUBSCRIBER };
+    const r = await route(import("@/app/api/sub/posts/[id]/route"));
+    expect((await r.GET!(req("GET"), paramsOf(MATURE))).status).toBe(403);
+  });
+
+  it("a minor reset by an admin may answer again at once", async () => {
+    db.tables.age_checks!.push({ user_id: SUBSCRIBER, result: "minor", method: "self_declared_dob", eligible_on: yearsAgo(-2) });
+    adminUser = { id: FOLLOWER };
+    await reset(SUBSCRIBER);
+    sessionUser = { id: SUBSCRIBER };
+    const age = await route(import("@/app/api/age/route"));
+    expect(await (await age.POST!(req("POST", { birthDate: yearsAgo(30), confirm: true }))).json()).toMatchObject({ status: "adult" });
+  });
+
+  it("the admin accounts list shows each answer and never a date of birth", async () => {
+    db.tables.age_checks!.push({ user_id: SUBSCRIBER, result: "adult", method: "self_declared_dob", eligible_on: null });
+    adminUser = { id: FOLLOWER };
+    const r = await route(import("@/app/api/admin/users/route"));
+    const out = (await (await r.GET!(req("GET", undefined, "https://frenzsave.com/api/admin/users"))).json()) as { users: { id: string; age: { status: string } }[] };
+    expect(out.users.find((u) => u.id === SUBSCRIBER)!.age.status).toBe("adult");
+    expect(out.users.find((u) => u.id === CREATOR)!.age.status).toBe("none");
   });
 });

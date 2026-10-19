@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
  * Loaded only when a Mature post is tapped (the callers import it with next/dynamic), so it is in
  * no route's first load.
  */
-export function AgeGateSheet({ onClose, onVerified }: { onClose: () => void; onVerified: () => void }) {
+export function AgeGateSheet({ onClose, onVerified, purpose = "view" }: { onClose: () => void; onVerified: () => void; purpose?: "view" | "post" }) {
   const [birthDate, setBirthDate] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -86,7 +86,7 @@ export function AgeGateSheet({ onClose, onVerified }: { onClose: () => void; onV
           {minorUntil ? (
             <>
               <p className="mt-3 text-[15px] leading-relaxed text-frenz-muted">
-                Mature posts are for people 18 and older.{until ? ` You can open them from ${until}.` : ""} Everything else on Frenz is open to you.
+                Mature posts are for people 18 and older.{until ? ` You can ${purpose === "post" ? "post" : "open"} them from ${until}.` : ""} Everything else on Frenz is open to you.
               </p>
               <button type="button" onClick={onClose} className="mt-5 flex min-h-12 w-full items-center justify-center rounded-full border border-frenz-line bg-frenz-card text-[15px] font-bold">
                 OK
@@ -94,7 +94,9 @@ export function AgeGateSheet({ onClose, onVerified }: { onClose: () => void; onV
             </>
           ) : (
             <form onSubmit={(e) => void submit(e)} noValidate>
-              <p className="mt-3 text-[15px] leading-relaxed text-frenz-muted">This post is marked Mature (18+). Enter your date of birth once. We keep only whether you&apos;re 18 or older, never the date.</p>
+              <p className="mt-3 text-[15px] leading-relaxed text-frenz-muted">
+                {purpose === "post" ? "Only people 18 or older can post Mature (18+) content." : "This post is marked Mature (18+)."} Enter your date of birth once. We keep only whether you&apos;re 18 or older, never the date.
+              </p>
               <label htmlFor={dateId} className="mt-4 block text-[13px] font-semibold">
                 Date of birth
               </label>

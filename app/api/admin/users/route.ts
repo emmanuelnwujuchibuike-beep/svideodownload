@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getAdminUser } from "@/lib/admin/guard";
+import { readAgeStates } from "@/lib/age/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -57,5 +58,8 @@ export async function GET(request: Request) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: "Search failed." }, { status: 500 });
-  return NextResponse.json({ users: data ?? [] });
+  // 0261: each account's age answer, so an admin can see and reset it — one read for the page; never a date of birth
+  const rows = (data ?? []) as { id: string }[];
+  const ages = await readAgeStates(rows.map((u) => u.id)).catch(() => new Map());
+  return NextResponse.json({ users: rows.map((u) => ({ ...u, age: ages.get(u.id) ?? { status: "none", eligibleOn: null } })) });
 }

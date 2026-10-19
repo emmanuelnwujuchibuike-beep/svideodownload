@@ -60,7 +60,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (body && "mature" in body) {
     const { setSubPostMature } = await import("@/lib/sub/posts");
     const out = await setSubPostMature(user.id, id, body.mature);
-    return out.ok ? NextResponse.json(out) : NextResponse.json({ error: out.error }, { status: out.status });
+    return out.ok ? NextResponse.json(out) : NextResponse.json({ error: out.error, ...("code" in out && out.code ? { code: out.code } : {}) }, { status: out.status });
   }
   // Part 4: the creator edits the caption of their own published post
   if (body && "caption" in body) {

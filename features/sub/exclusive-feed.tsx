@@ -1,17 +1,22 @@
 "use client";
 
-import { Check, Clock, EyeOff, Film, ImageOff, Images, Loader2, Lock, RefreshCw } from "lucide-react";
+import { Check, Clock, Compass, EyeOff, Film, ImageOff, Images, Loader2, Lock, RefreshCw } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { VerifiedTick } from "@/components/badges/identity-badges";
 import { itemsLabel, membershipChip, priceLine } from "@/features/sub/exclusive-labels";
 import { firstPageIsReplay, type LinkBirth, mayAutoRefresh, refreshPreview } from "@/features/sub/feed-previews";
 import { cancelOpening, startOpening } from "@/features/sub/opened-cache";
-import { exPrimary, exQuiet } from "@/features/sub/ui";
+import { exQuiet } from "@/features/sub/ui";
 import { cn } from "@/lib/utils";
 import { profilePath } from "@/lib/social/profile-url";
+
+// step 13: subscribed posts are the Feed's own post card, in its exclusive mode (features/feed/feed-post-card.tsx)
+import { FeedPostCard } from "@/features/feed/feed-post-card";
+import { useEntitlements } from "@/features/auth/use-entitlements";
+import type { FeedItem } from "@/lib/social/home-feed";
 
 // the existing private viewer (access re-checked by /api/sub/posts/[id] on open), loaded on the first tap
 const PrivateViewer = dynamic(() => import("./sub-gallery").then((m) => m.PrivateViewer), { ssr: false });
@@ -58,6 +63,12 @@ interface Post {
   mature?: true;
   /** 0261: Mature and not confirmed 18+ — the server sent no preview or caption */
   ageLocked?: true;
+  /** step 13: the first item, for the in-feed player (a subscriber's card only) */
+  mediaKind?: "image" | "video";
+  mediaUrl?: string | null;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
+  viewerLiked?: boolean;
 }
 interface Card {
   id: string;
@@ -71,7 +82,7 @@ interface Card {
   /** 0263: the post's tiny blurred preview (a data URL made on the server) — never the file */
   blurUrl?: string;
 }
-type DiscoverCreator = Creator & { priceCents: number; feeCents: number; feePercent: number; totalCents: number; periodDays: number };
+type DiscoverCreator = Creator & { priceCents: number; feeCents: number; feePercent: number; totalCents: number; periodDays: number; totalPosts?: number | null };
 export interface ExclusiveFeedPageView {
   posts: Post[];
   creators: Record<string, Creator>;
@@ -192,19 +203,44 @@ export function ExclusiveFeed({ initial = null }: { initial?: ExclusiveFeedPageV
       </div>
     );
 
+  /*
+    design/ExclusiveFeed.dc.html (owner, 2026-10-18): one stream. Posts from creators the viewer subscribes
+    to are the Feed's own post card (exclusive mode); a locked card from a creator they follow but don't
+    subscribe to sits after every third post (the rest after the last) — the old "From creators you follow"
+    section is gone. A Mature post the viewer hasn't confirmed 18+ for keeps its age card.
+  */
+  const lockedCards = discover?.cards ?? [];
+  const stream: ({ kind: "post"; post: Shown; index: number } | { kind: "locked"; card: Card })[] = [];
+  let li = 0;
+  posts.forEach((post, index) => {
+    stream.push({ kind: "post", post, index });
+    if ((index + 1) % 3 === 0 && li < lockedCards.length) stream.push({ kind: "locked", card: lockedCards[li++]! });
+  });
+  while (li < lockedCards.length) stream.push({ kind: "locked", card: lockedCards[li++]! });
+
   return (
-    <div className="space-y-6">
-      {posts.length ? (
-        <ul className="-mx-3 space-y-2.5 sm:-mx-4">
-          {posts.map((p, i) => (
-            <li key={p.id}>
-              <FeedCard post={p} creator={creators[p.creatorId]} eager={i < 2} onOpen={() => (p.ageLocked ? setAgeGate(true) : setOpen(p.id))} />
-            </li>
-          ))}
+    <div className="space-y-3">
+      <SubscriptionsRow creators={creators} posts={posts} hasDiscover={lockedCards.length > 0} />
+      {stream.length ? (
+        <ul className="-mx-3 sm:-mx-4">
+          {stream.map((entry) =>
+            entry.kind === "post" ? (
+              <li key={entry.post.id}>
+                {entry.post.ageLocked || !entry.post.mediaKind ? (
+                  <FeedCard post={entry.post} creator={creators[entry.post.creatorId]} eager={entry.index < 2} onOpen={() => (entry.post.ageLocked ? setAgeGate(true) : setOpen(entry.post.id))} />
+                ) : (
+                  <ExclusivePost post={entry.post} creator={creators[entry.post.creatorId]} priority={entry.index < 2} onOpen={setOpen} />
+                )}
+              </li>
+            ) : (
+              <li key={`locked-${entry.card.id}`} id={entry.card.id === lockedCards[0]?.id ? "exclusive-discover-first" : undefined} className="scroll-mt-20 border-t border-frenz-line px-3 py-3 sm:px-4">
+                <LockedPreviewCard card={entry.card} creator={discover?.creators[entry.card.creatorId]} />
+              </li>
+            ),
+          )}
         </ul>
-      ) : (
-        <EmptyFeed subscribed={(subscriptions ?? 0) > 0} />
-      )}
+      ) : null}
+      {!posts.length ? <EmptyFeed subscribed={(subscriptions ?? 0) > 0} /> : null}
 
       {next ? (
         <div ref={sentinel} className="flex justify-center py-2">
@@ -218,7 +254,6 @@ export function ExclusiveFeed({ initial = null }: { initial?: ExclusiveFeedPageV
         </div>
       ) : null}
 
-      {discover?.cards.length ? <Discover cards={discover.cards} creators={discover.creators} /> : null}
 
       {open ? <PrivateViewer postId={open} initial={null} isCreator={false} onClose={() => setOpen(null)} onDeleted={() => setOpen(null)} /> : null}
       {ageGate ? (
@@ -437,26 +472,6 @@ function EmptyFeed({ subscribed }: { subscribed: boolean }) {
   );
 }
 
-function Discover({ cards, creators }: { cards: Card[]; creators: Record<string, DiscoverCreator> }) {
-  return (
-    <section aria-labelledby="exclusive-discover" className="space-y-3">
-      <div>
-        <h2 id="exclusive-discover" className="text-[16px] font-bold tracking-[-0.01em]">
-          From creators you follow
-        </h2>
-        <p className="text-[13px] text-muted-foreground">Exclusive posts you can unlock with a subscription.</p>
-      </div>
-      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {cards.map((c) => (
-          <li key={c.id}>
-            <LockedPreviewCard card={c} creator={creators[c.creatorId]} />
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 /**
  * A locked exclusive post: what the creator chose to make public (their cover, if any), who it
  * is from, what a subscription costs, and the existing checkout. Never the caption or a private
@@ -484,39 +499,42 @@ export function LockedPreviewCard({ card, creator }: { card: Card; creator: Disc
   };
   const price = priceLine(creator);
   const what = itemsLabel(card.items, card.hasVideo);
+  const total = creator.totalPosts ?? null;
   return (
-    <article className="ex-card overflow-hidden">
-      <Link href={`${profilePath(creator.handle)}?tab=sub`} prefetch={false} className="relative block aspect-[16/10] overflow-hidden bg-gradient-to-br from-primary/[0.07] via-transparent to-accent/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary" aria-label={`${creator.name}'s exclusive posts — ${what}, for subscribers`}>
+    <article className="frenz-ui overflow-hidden rounded-[22px] border border-frenz-line bg-frenz-card text-frenz-ink">
+      {/* the creator, and their profile */}
+      <div className="flex items-center gap-3 px-3.5 py-3">
+        <Avatar c={creator} size={40} />
+        <CreatorName c={creator} link={false} className="min-w-0 flex-1 text-[15px] font-bold" />
+        <Link href={`${profilePath(creator.handle)}?tab=sub`} prefetch={false} className="flex min-h-9 shrink-0 items-center rounded-full bg-frenz-fill px-3 text-[13px] font-bold text-frenz-violet">
+          View profile
+        </Link>
+      </div>
+      {/* the server's blurred preview (0263) or the creator's public cover — never the file */}
+      <div className="relative aspect-[4/5] overflow-hidden bg-[#1A1430]">
         {card.coverUrl || card.blurUrl ? (
-          <>
-            {/* the creator's PUBLIC teaser on the CDN, else the server's blurred 20 px preview (0263) — never the file */}
-            {/* eslint-disable-next-line @next/next/no-img-element -- public cover or an inline data URL */}
-            <img src={card.coverUrl ?? card.blurUrl} alt="" loading="lazy" decoding="async" className={card.coverUrl ? "h-full w-full scale-110 object-cover blur-md" : "h-full w-full scale-125 object-cover blur-xl"} />
-            <span className="absolute inset-0 bg-white/30 dark:bg-black/40" aria-hidden />
-          </>
+          // eslint-disable-next-line @next/next/no-img-element -- public cover or an inline data URL
+          <img src={card.coverUrl ?? card.blurUrl} alt="" aria-hidden loading="lazy" decoding="async" className="absolute -inset-5 h-[calc(100%+2.5rem)] w-[calc(100%+2.5rem)] object-cover blur-xl" />
         ) : null}
-        <span className="absolute inset-0 flex flex-col items-center justify-center gap-2" aria-hidden>
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-primary shadow-sm ring-1 ring-black/[0.06] dark:bg-neutral-900 dark:text-sky-300 dark:ring-white/10">
+        <span aria-hidden className="absolute inset-0 bg-black/25" />
+        <span className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 px-6 text-center text-white">
+          <span aria-hidden className="flex h-12 w-12 items-center justify-center rounded-full border border-white/30 bg-black/30">
             <Lock className="h-5 w-5" />
           </span>
-          <span className="rounded-full bg-white/90 px-2.5 py-1 text-[12px] font-semibold text-neutral-800 ring-1 ring-black/[0.05] dark:bg-neutral-900/90 dark:text-neutral-100 dark:ring-white/10">
-            {what} · subscribers only{card.mature ? " · 18+" : ""}
+          <span className="text-[14px] font-bold">
+            Subscribers only · {what}
+            {total ? ` · 1 of ${total.toLocaleString()} posts` : ""}
+            {card.mature ? " · 18+" : ""}
           </span>
         </span>
-      </Link>
-      <div className="space-y-3 p-3.5">
-        <div className="flex items-center gap-3">
-          <Avatar c={creator} size={36} />
-          <CreatorName c={creator} link={false} className="min-w-0 flex-1 text-[14px] font-semibold" />
-        </div>
-        {/* owner: the card shows only what is paid; the fee breakdown belongs to checkout. It wraps, never truncates */}
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <p className="min-w-0 grow basis-[10.5rem] text-[14px] font-semibold tabular-nums">{price}</p>
-          <button type="button" onClick={() => void subscribe()} disabled={state === "busy"} className={exPrimary}>
-            {state === "busy" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Lock className="h-4 w-4" aria-hidden />}
-            Subscribe
-          </button>
-        </div>
+      </div>
+      {/* the creator's real price and period, and the existing checkout */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3.5 py-3">
+        <p className="m-0 min-w-0 grow basis-[10rem] text-[15px] font-bold tabular-nums">{price} of access</p>
+        <button type="button" onClick={() => void subscribe()} disabled={state === "busy"} className="flex min-h-11 items-center gap-2 rounded-full bg-frenz-gradient px-5 text-[15px] font-bold text-white transition active:scale-[0.98] disabled:opacity-60">
+          {state === "busy" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+          Subscribe
+        </button>
       </div>
       {typeof state === "object" ? (
         <p role="alert" className="px-3.5 pb-3 text-[12.5px] font-medium text-rose-600 dark:text-rose-400">
@@ -524,6 +542,128 @@ export function LockedPreviewCard({ card, creator }: { card: Card; creator: Disc
         </p>
       ) : null}
     </article>
+  );
+}
+
+/**
+ * A subscribed post as the Feed's own post card (step 13). The card gets a FeedItem built from what the
+ * server sent for this viewer — the caption, the first item's signed link, the creator — and the
+ * exclusive mode keeps every private rule (no share, save, repost or public counting; the watermark).
+ */
+function ExclusivePost({ post, creator, priority, onOpen }: { post: Shown; creator: Creator | undefined; priority: boolean; onOpen: (id: string) => void }) {
+  const { handle } = useEntitlements();
+  const item = useMemo<FeedItem | null>(
+    () =>
+      creator && post.mediaKind
+        ? ({
+            id: post.id,
+            title: post.caption ?? "",
+            description: null,
+            platform: "frenz",
+            mediaKind: post.mediaKind,
+            thumbnailUrl: post.previewUrl,
+            sourceUrl: "",
+            mediaUrl: post.mediaUrl ?? null,
+            streamUid: null,
+            category: null,
+            durationSec: null,
+            viewsCount: 0,
+            likesCount: 0,
+            commentsCount: 0,
+            sharesCount: 0,
+            savesCount: 0,
+            downloadsCount: 0,
+            createdAt: post.createdAt,
+            publisher: { id: creator.id, handle: creator.handle, displayName: creator.name, avatarUrl: creator.avatarUrl, isVerified: creator.verified, plan: "free" },
+            viewerLiked: !!post.viewerLiked,
+            viewerSaved: false,
+            isFollowing: true,
+            isOwner: false,
+            hasPoll: false,
+            mediaWidth: post.mediaWidth ?? undefined,
+            mediaHeight: post.mediaHeight ?? undefined,
+          } as FeedItem)
+        : null,
+    [post, creator],
+  );
+  const exclusive = useMemo(() => ({ viewerHandle: handle ?? null, onOpen: () => onOpen(post.id) }), [handle, onOpen, post.id]);
+  const noop = useCallback(() => {}, []);
+  const noopOpen = useCallback(() => onOpen(post.id), [onOpen, post.id]);
+  if (!item) return null;
+  return <FeedPostCard item={item} exclusive={exclusive} onRemove={noop} onOpen={noopOpen} priority={priority} />;
+}
+
+/**
+ * "Your subscriptions" (step 13): the creators the viewer subscribes to, in identity rings, with how many
+ * of their posts are new since this device last opened the feed (a real count, kept on the device), then
+ * Manage and Discover. Favourites stays one tap away.
+ */
+function SubscriptionsRow({ creators, posts, hasDiscover }: { creators: Record<string, Creator>; posts: Shown[]; hasDiscover: boolean }) {
+  const list = Object.values(creators);
+  const [since, setSince] = useState<number | null>(null);
+  useEffect(() => {
+    let last = 0;
+    try {
+      last = Number(localStorage.getItem("frenz:exclusive:seen") ?? 0) || 0;
+      localStorage.setItem("frenz:exclusive:seen", String(Date.now()));
+    } catch {
+      /* storage blocked — no counts, nothing else changes */
+    }
+    setSince(last);
+  }, []);
+  if (!list.length) return null;
+  const fresh = new Map<string, number>();
+  if (since) for (const p of posts) if (Date.parse(p.createdAt) > since) fresh.set(p.creatorId, (fresh.get(p.creatorId) ?? 0) + 1);
+  return (
+    <section aria-labelledby="your-subs" className="frenz-ui pt-3 text-frenz-ink">
+      <div className="flex items-center justify-between px-1">
+        <h2 id="your-subs" className="m-0 font-heading text-[17px] font-bold">
+          Your subscriptions
+        </h2>
+        <div className="flex items-center gap-1">
+          <Link href="/exclusive/favourites" prefetch={false} className="flex min-h-11 items-center px-2 text-[13px] font-bold text-frenz-muted">
+            Favourites
+          </Link>
+          <Link href="/account/subscriptions" prefetch={false} className="flex min-h-11 items-center px-2 text-[13px] font-bold text-frenz-blue">
+            Manage
+          </Link>
+        </div>
+      </div>
+      <ul className="-mx-3 flex gap-3.5 overflow-x-auto px-4 pb-1 pt-1 [scrollbar-width:none] sm:-mx-4 [&::-webkit-scrollbar]:hidden">
+        {hasDiscover ? (
+          <li className="shrink-0">
+            <a href="#exclusive-discover-first" className="flex w-[64px] flex-col items-center gap-1.5 text-center text-xs font-semibold text-frenz-ink">
+              <span className="flex h-[60px] w-[60px] items-center justify-center rounded-full border-2 border-dashed border-frenz-line bg-frenz-fill text-frenz-violet">
+                <Compass className="h-6 w-6" aria-hidden />
+              </span>
+              Discover
+            </a>
+          </li>
+        ) : null}
+        {list.map((c) => {
+          const n = fresh.get(c.id) ?? 0;
+          return (
+            <li key={c.id} className="shrink-0">
+              <Link href={`${profilePath(c.handle)}?tab=sub`} prefetch={false} className="flex w-[64px] flex-col items-center gap-1.5 text-center" aria-label={`${c.name}${n ? `, ${n} new` : ""}`}>
+                <span className="relative">
+                  <span className="flex h-[60px] w-[60px] items-center justify-center rounded-full bg-frenz-gradient p-[2.5px]">
+                    <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border-2 border-frenz-page bg-frenz-fill">
+                      <Avatar c={c} size={50} />
+                    </span>
+                  </span>
+                  {n ? (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-frenz-page bg-frenz-gradient px-1 text-[10px] font-extrabold text-white">
+                      {n > 9 ? "9+" : n}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="w-full truncate text-xs font-semibold text-frenz-ink">{c.name}</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 

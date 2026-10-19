@@ -66,6 +66,13 @@ export const FEED_MAX_CREATORS = 150;
 const DISCOVER_FOLLOWS = 200;
 const DISCOVER_CARDS = 8;
 export const SIGNED_TTL_SECONDS = 300;
+/**
+ * Step 13 (ExclusiveFeed.dc.html, owner 2026-10-18: subscribed posts "play normally" in the feed): the
+ * first item's own file is signed for a SUBSCRIBER's card so a video plays where it sits. Fifteen
+ * minutes, so a clip someone is watching doesn't stop mid-scroll; it is still per viewer, never cached,
+ * and minted only after the same access decision as everything else here.
+ */
+export const MEDIA_TTL_SECONDS = 900;
 /** at most this many tiles are re-signed in one refresh */
 export const PREVIEW_REFRESH_MAX = 24;
 
@@ -89,6 +96,13 @@ export interface FeedPost {
   /** a five-minute link to the first item's small preview; null for a video with no preview yet */
   previewUrl: string | null;
   hidden: boolean;
+  /** step 13: what the first item is, and a link to it for the in-feed player — only for a viewer with access */
+  mediaKind?: "image" | "video";
+  mediaUrl?: string | null;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
+  /** step 13: has this viewer liked it (the like row on the card) */
+  viewerLiked?: boolean;
   /** 0261: Mature (18+) */
   mature?: true;
   /** 0261: Mature and this viewer hasn't confirmed they're 18+ — no preview or caption was sent */
@@ -117,6 +131,8 @@ export interface DiscoverCreator extends FeedCreator {
   feePercent: number;
   totalCents: number;
   periodDays: number;
+  /** step 13: how many posts a non-subscriber may know exist (locked, published) — "1 of N posts" */
+  totalPosts?: number | null;
 }
 
 export interface ExclusiveFeedPage {
@@ -189,7 +205,7 @@ async function mediaOf(postIds: string[], withKeys: boolean): Promise<Map<string
   const out = new Map<string, { n: number; video: boolean; first: Row | null }>();
   if (!postIds.length) return out;
   const db = createAdminClient();
-  const cols = withKeys ? "post_id, idx, media_kind, object_key, thumb_key" : "post_id, idx, media_kind";
+  const cols = withKeys ? "post_id, idx, media_kind, object_key, thumb_key, width, height" : "post_id, idx, media_kind";
   let res = await db.from("sub_post_media").select(cols).in("post_id", postIds).order("idx");
   if (res.error && withKeys && MISSING(res.error.message)) res = (await db.from("sub_post_media").select("post_id, idx, media_kind, object_key").in("post_id", postIds).order("idx")) as typeof res;
   for (const m of (res.data ?? []) as unknown as Row[]) {
@@ -241,7 +257,13 @@ export async function exclusiveFeed(viewerId: string, cursor?: string | null): P
     const rows = (res.data ?? []) as unknown as Row[];
     const page = rows.slice(0, FEED_PAGE);
     const adult = page.some((r) => r.mature === true) ? await isAdult(viewerId).catch(() => false) : true;
-    const media = await mediaOf(page.map((r) => r.id as string), true);
+    const pageIds = page.map((r) => r.id as string);
+    const [media, mine] = await Promise.all([
+      mediaOf(pageIds, true),
+      // which of these the viewer liked — at most a page of rows; counts are on the post's own viewer
+      pageIds.length ? db.from("sub_post_likes").select("post_id").eq("user_id", viewerId).in("post_id", pageIds) : Promise.resolve({ data: [] as Row[], error: null }),
+    ]);
+    const liked = new Set(((mine.error ? [] : mine.data) ?? []).map((r) => (r as Row).post_id as string));
     // ONE preview link per post, for the tile only — the post's media are signed when it is opened
     posts = await Promise.all(
       page.map(async (r) => {
@@ -250,6 +272,12 @@ export async function exclusiveFeed(viewerId: string, cursor?: string | null): P
         const locked = mature && !adult;
         // a Mature post the viewer may not see yet: no link is even signed
         const key = locked ? null : previewKey(m?.first ?? null);
+        const first = locked ? null : (m?.first ?? null);
+        const kind = first?.media_kind === "video" ? "video" : first?.media_kind === "image" ? "image" : null;
+        const [previewUrl, mediaUrl] = await Promise.all([
+          key && hasPrivateR2 ? presignPrivateGet(key, SIGNED_TTL_SECONDS) : Promise.resolve(null),
+          kind && hasPrivateR2 && typeof first?.object_key === "string" ? presignPrivateGet(first.object_key, MEDIA_TTL_SECONDS) : Promise.resolve(null),
+        ]);
         return {
           id: r.id as string,
           creatorId: r.creator_id as string,
@@ -257,7 +285,9 @@ export async function exclusiveFeed(viewerId: string, cursor?: string | null): P
           caption: locked ? null : ((r.caption as string | null) ?? null),
           items: m?.n ?? 0,
           hasVideo: m?.video ?? false,
-          previewUrl: key && hasPrivateR2 ? await presignPrivateGet(key, SIGNED_TTL_SECONDS) : null,
+          previewUrl,
+          ...(kind ? { mediaKind: kind, mediaUrl, mediaWidth: (first?.width as number | null) ?? null, mediaHeight: (first?.height as number | null) ?? null } : {}),
+          viewerLiked: liked.has(r.id as string),
           hidden: audienceOf(r.audience) === "hidden",
           ...(mature ? { mature: true as const } : {}),
           ...(locked ? { ageLocked: true as const } : {}),
@@ -271,7 +301,9 @@ export async function exclusiveFeed(viewerId: string, cursor?: string | null): P
   const used = new Set(posts.map((p) => p.creatorId));
   const out: ExclusiveFeedPage = {
     posts,
-    creators: Object.fromEntries([...creators].filter(([id]) => used.has(id))),
+    // step 13: the first page carries every creator the viewer subscribes to (the "Your subscriptions" row);
+    // a later page only the ones its posts need
+    creators: Object.fromEntries([...creators].filter(([id]) => !c || used.has(id))),
     next,
     subscriptions: allowed.length,
     ready: subs.ready,
@@ -371,11 +403,19 @@ export async function discover(viewerId: string, subscribed: Set<string>, knownB
     latest.some((r) => r.mature === true) ? isAdult(viewerId).catch(() => false) : Promise.resolve(true),
     readBlurPreviews(latest.map((r) => r.id as string)).catch(() => new Map<string, string>()),
   ]);
+  const totals = new Map<string, number | null>(
+    await Promise.all(
+      [...new Set(latest.map((r) => r.creator_id as string))].map(async (id) => {
+        const c = await db.from("sub_posts").select("id", { count: "exact", head: true }).eq("creator_id", id).eq("status", "published").eq("audience", "locked");
+        return [id, c.error ? null : (c.count ?? null)] as const;
+      }),
+    ),
+  );
   const creators: Record<string, DiscoverCreator> = {};
   for (const r of latest) {
     const id = r.creator_id as string;
     const charge = subscriptionCharge(price.get(id)!, cfg.purchaseFeePercent);
-    creators[id] = { ...people.get(id)!, priceCents: charge.priceCents, feeCents: charge.feeCents, feePercent: cfg.purchaseFeePercent, totalCents: charge.totalCents, periodDays: cfg.periodDays };
+    creators[id] = { ...people.get(id)!, priceCents: charge.priceCents, feeCents: charge.feeCents, feePercent: cfg.purchaseFeePercent, totalCents: charge.totalCents, periodDays: cfg.periodDays, totalPosts: totals.get(id) ?? null };
   }
   return {
     // 0261: a Mature post's public cover only for a viewer who confirmed they're 18+

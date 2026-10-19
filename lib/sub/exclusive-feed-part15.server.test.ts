@@ -19,7 +19,7 @@ let db: FakeDb;
 let sessionUser: { id: string } | null = null;
 let delayMs = 0;
 let reads: { table: string; start: number; end: number }[] = [];
-const presign = vi.fn(async (key: string) => `https://private.example/${key}?sig=${Math.random().toString(36).slice(2, 8)}`);
+const presign = vi.fn(async (key: string, _ttl?: number) => `https://private.example/${key}?sig=${Math.random().toString(36).slice(2, 8)}`);
 
 /** Wraps a fake query builder: records the read and delays its answer. */
 function recorded(builder: Record<string, unknown>, table: string): unknown {
@@ -50,7 +50,7 @@ const client = () => {
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => client() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: async () => ({ data: { user: sessionUser } }) } }) }));
-vi.mock("@/lib/storage/r2", () => ({ hasPrivateR2: true, presignPrivateGet: (k: string) => presign(k) }));
+vi.mock("@/lib/storage/r2", () => ({ hasPrivateR2: true, presignPrivateGet: (k: string, ttl?: number) => presign(k, ttl) }));
 vi.mock("@/lib/rate-limit", () => ({ trackLimiter: { limit: async () => ({ success: true }) } }));
 vi.mock("@/lib/landing/settings", async () => {
   const { SUB_DEFAULTS } = await import("@/lib/rewards/config");
@@ -211,12 +211,25 @@ describe("what the new indicators carry — from the same reads", () => {
     expect(out.previewTtl).toBe(300);
   });
 
-  it("tiles use the approved thumb, never a video original; a video with no thumb gets no link", async () => {
+  it("tiles use the approved thumb, never a video original; a video with no thumb gets no tile link", async () => {
     const out = await feed.exclusiveFeed(VIEWER);
     if (!out.ok) throw new Error("feed failed");
-    const keys = presign.mock.calls.map((c) => c[0]);
-    expect(keys.sort()).toEqual(["sub/a/photo-thumb.jpg", "sub/a/v-thumb.jpg"]);
+    const calls = presign.mock.calls as unknown as [string, number][];
+    // the 5-minute tile links: thumbs only
+    expect(calls.filter((c) => c[1] === feed.SIGNED_TTL_SECONDS).map((c) => c[0]).sort()).toEqual(["sub/a/photo-thumb.jpg", "sub/a/v-thumb.jpg"]);
     expect(out.posts.find((p) => p.id === P.videoBare)!.previewUrl).toBeNull();
+  });
+
+  it("step 13 (owner 2026-10-18: subscribed posts 'play normally'): the in-feed player gets the FIRST item's own file — never a later one", async () => {
+    const out = await feed.exclusiveFeed(VIEWER);
+    if (!out.ok) throw new Error("feed failed");
+    const calls = presign.mock.calls as unknown as [string, number][];
+    const media = calls.filter((c) => c[1] === feed.MEDIA_TTL_SECONDS).map((c) => c[0]).sort();
+    expect(media).toEqual(["sub/a/bare-orig.mp4", "sub/a/photo-orig.jpg", "sub/a/v-orig.mp4"]);
+    // teeth: the second photo of a two-photo post is never signed for the feed
+    expect(calls.map((c) => c[0])).not.toContain("sub/a/photo2-orig.jpg");
+    expect(out.posts.find((p) => p.id === P.videoBare)).toMatchObject({ mediaKind: "video" });
+    expect(JSON.stringify(out)).not.toMatch(/object_key|thumb_key/);
   });
 });
 

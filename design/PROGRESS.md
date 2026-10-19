@@ -17,7 +17,7 @@ review before the next one starts.
 - [x] 10. Settings → design/Settings.dc.html
 - [x] 11. Profile Exclusive tab (owner view) → design/ProfileExclusive.dc.html (moved forward at the owner's request) — one dashboard card with real figures, Share link / Dashboard, rows for announcements and notifications, Subs-tagged grid with Manage, hub as three iOS lists with Add.
 - [x] 12. Exclusive page (subscriber view) → design/Exclusive.dc.html
-- [ ] 13. Exclusive feed tab → design/ExclusiveFeed.dc.html
+- [x] 13. Exclusive feed tab → design/ExclusiveFeed.dc.html
 - [x] 14. Chat options → design/ChatMenu.dc.html (added by the owner 2026-10-18) — with new-message email and its switch
 
 No page had been approved when the white-background rules arrived (2026-10-18), so
@@ -370,6 +370,28 @@ they are applied while each page is built and there is no separate cleanup step.
   and a "See everything" tile; both take the visitor to the subscribe card. No private file, link or
   caption reaches this grid.
 - The design's "@chris · Exclusive creator" label isn't added: the hero's own line stays.
+
+### Step 13 · Exclusive feed tab (ExclusiveFeed.dc.html)
+- /exclusive carries the Feed's tab row with Exclusive active (For You / Following link back with
+  ?tab=, read once by smart-feed; Reels to Reels). The old "Exclusive ★ / Favourites" header is gone;
+  Favourites sits beside Manage in the subscriptions row.
+- "Your subscriptions": every creator the viewer subscribes to, in identity rings, with how many of their
+  posts are new since this device last opened the feed (a real count kept on the device), Manage
+  (/account/subscriptions), and a Discover button that jumps to the first locked card.
+- Subscribed posts are the Feed's own FeedPostCard (owner: "same component"), in a new exclusive mode
+  that keeps every private rule: "Subscribed" on the creator, "Exclusive" on the media, the viewer's
+  @handle watermarked over it, likes through the access-checked private API, Comment opens the private
+  viewer; no share, copy link, download, save, repost, follow, poll or public view counting, and the
+  caption opens the private viewer, never a public URL. They play in place: the server now signs the
+  FIRST item's own file for a subscriber's card (15-minute link, per viewer, after the same access
+  decision); later items open in the viewer. Like / comment counts are not shown on the card (counting
+  per post on every page would be N queries; the viewer shows the real counts).
+- Locked cards (creators the viewer follows but doesn't subscribe to) sit after every third post: the
+  creator with View profile, the server's blurred preview with a lock, "Subscribers only · [type] · 1 of
+  [N] posts" (N = their published locked posts), and "[price] for [N] days of access" + Subscribe on the
+  existing checkout. The "From creators you follow" section is gone.
+- Tests: features/feed/feed-post-card-exclusive.test.ts (each private rule, with teeth); the feed's
+  server tests now pin "one tile link + one first-item link per post, never a later item".
 
 ### Step 14 · Chat options (ChatMenu.dc.html) and new-message email
 - A white sheet: the person (avatar with the identity ring, name, verified, @handle, "View profile"),

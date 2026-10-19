@@ -88,3 +88,30 @@ export function FeedTopbarTabs({
     </nav>
   );
 }
+
+/**
+ * The same tab row on the Exclusive page (design/ExclusiveFeed.dc.html, owner 2026-10-18: Exclusive is the
+ * Feed's fourth tab): For You and Following go back to the Feed on that tab (`/home?tab=…`, read once by
+ * smart-feed), Reels to Reels, and Exclusive is the active one.
+ */
+export function FeedTabLinks() {
+  const link = cn(TAB, "font-semibold text-frenz-muted hover:text-frenz-ink");
+  return (
+    <nav aria-label="Feed type" className="frenz-ui -mx-3 flex gap-[22px] overflow-x-auto border-b border-frenz-line px-5 [scrollbar-width:none] sm:-mx-4 [&::-webkit-scrollbar]:hidden">
+      <Link href="/home?tab=for_you" prefetch={false} onClick={tap} className={link}>
+        For You
+      </Link>
+      <Link href="/home?tab=following" prefetch={false} onClick={tap} className={link}>
+        Following
+      </Link>
+      <Link href="/reels" prefetch={false} onClick={tap} className={link}>
+        Reels
+      </Link>
+      <span aria-current="page" className={cn(TAB, "font-bold text-frenz-ink")}>
+        <LockIcon size={15} strokeWidth={2.4} />
+        Exclusive
+        <Underline />
+      </span>
+    </nav>
+  );
+}

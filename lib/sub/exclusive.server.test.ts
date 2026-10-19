@@ -188,15 +188,18 @@ describe("paging", () => {
 });
 
 describe("what a feed response carries", () => {
-  it("only the fields the UI needs — never a storage key — and ONE preview link per post", async () => {
+  it("only the fields the UI needs — never a storage key — ONE preview link and ONE first-item link per post", async () => {
     const out = await feed.exclusiveFeed(VIEWER);
     if (!out.ok) throw new Error("feed failed");
-    for (const p of out.posts) expect(Object.keys(p).sort()).toEqual(["caption", "createdAt", "creatorId", "hasVideo", "hidden", "id", "items", "previewUrl"]);
+    for (const p of out.posts)
+      expect(Object.keys(p).sort()).toEqual(["caption", "createdAt", "creatorId", "hasVideo", "hidden", "id", "items", "mediaHeight", "mediaKind", "mediaUrl", "mediaWidth", "previewUrl", "viewerLiked"]);
     const json = JSON.stringify(out);
-    expect(json).not.toMatch(/object_key|thumb_key|-orig\./);
-    expect(presign).toHaveBeenCalledTimes(out.posts.length);
-    for (const [key] of presign.mock.calls) expect(key).toMatch(/-thumb\.jpg$/);
-    expect(out.posts[0]).toMatchObject({ items: 2, hasVideo: true });
+    expect(json).not.toMatch(/object_key|thumb_key/);
+    // step 13: the first item (a photo here) is signed for the in-feed player; the second (a video) never is
+    expect(json).not.toMatch(/-orig\.mp4/);
+    expect(presign).toHaveBeenCalledTimes(out.posts.length * 2);
+    for (const [key] of presign.mock.calls) expect(key).toMatch(/-thumb\.jpg$|-orig\.jpg$/);
+    expect(out.posts[0]).toMatchObject({ items: 2, hasVideo: true, mediaKind: "image" });
   });
 });
 

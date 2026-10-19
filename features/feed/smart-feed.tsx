@@ -557,6 +557,21 @@ export function SmartFeed({
     return () => cic(id);
   }, [fetchPage]);
 
+  /*
+    Step 13: the Exclusive page's tab row links back here with ?tab=for_you|following. Read once, after
+    the continuity restore, then stripped from the address so a reload or a back-swipe isn't re-steered.
+  */
+  useEffect(() => {
+    const want = new URLSearchParams(window.location.search).get("tab");
+    if (want !== "for_you" && want !== "following") return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("tab");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    const id = window.setTimeout(() => changeSegmentRef.current?.(want), 0);
+    return () => window.clearTimeout(id);
+  }, []);
+  const changeSegmentRef = useRef<((s: HomeFeedSort) => void) | null>(null);
+
   const changeSegment = (s: HomeFeedSort) => {
     if (s === sort) return;
     // Remember exactly where we're leaving so returning here resumes at the
@@ -582,6 +597,7 @@ export function SmartFeed({
       void fetchPage(s, 0, true);
     }
   };
+  changeSegmentRef.current = changeSegment;
 
   // Opens the full reels experience IN PLACE — instant, no route change or
   // loader — seeded on the first already-loaded video (its JS chunk + the

@@ -23,7 +23,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { FrenzLogo } from "@/components/brand/frenz-logo";
-import { BookmarkIcon, ChatIcon, DotsIcon, PlayIcon, RepostIcon, SendIcon as FrenzSendIcon } from "@/features/frenz-ui/icons";
+import { BookmarkIcon, ChatIcon, DotsIcon, PlayIcon, RepostIcon, SendIcon as FrenzSendIcon, LockIcon } from "@/features/frenz-ui/icons";
 import { VerifiedBadge } from "@/features/frenz-ui/primitives";
 import Link from "next/link";
 import { memo, useEffect, useRef, useState } from "react";
@@ -120,7 +120,17 @@ function FeedPostCardImpl({
   priority = false,
   enter = true,
   nextVideoSrc,
+  exclusive,
 }: {
+  /**
+   * Step 13 (design/ExclusiveFeed.dc.html, owner 2026-10-18: "Posts from creators the viewer IS subscribed to
+   * render exactly like normal feed posts (same component) … They play normally"). The SAME card, with the
+   * private post's own rules: a "Subscribed" tag on the creator and "Exclusive" on the media, the viewer's
+   * @handle watermarked over it, likes and comments through the private, access-checked API (counts live on
+   * the post's own viewer), and nothing a private post may not do — no share, copy link, download, repost,
+   * save, follow or public view counting. The caption and media open the private viewer, never a public URL.
+   */
+  exclusive?: { viewerHandle: string | null; onOpen: (startComments?: boolean) => void };
   item: FeedItem;
   reason?: SmartReason | null;
   onRemove: (id: string) => void;
@@ -207,7 +217,9 @@ function FeedPostCardImpl({
     cost on a long feed for a distinction nobody would notice in the numbers.
   */
   useEffect(() => {
+    if (exclusive) return;
     attributeRepost(item.viaRepostId, item.id, "impression");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- exclusive is fixed for a card's life
   }, [item.viaRepostId, item.id]);
 
   /*
@@ -225,7 +237,8 @@ function FeedPostCardImpl({
   */
   useEffect(() => {
     const el = articleRef.current;
-    if (!el) return;
+    // a private post's comments are on its own viewer — never the public comments API
+    if (!el || exclusive) return;
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (entry?.isIntersecting) {
@@ -239,7 +252,7 @@ function FeedPostCardImpl({
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, [item.id]);
+  }, [item.id, exclusive]);
 
   /*
     Opening it is the signal that actually matters — an impression is free, a
@@ -248,6 +261,7 @@ function FeedPostCardImpl({
     stop being counted.
   */
   const open = (target: FeedItem, startComments?: boolean, startIndex?: number) => {
+    if (exclusive) return exclusive.onOpen(startComments);
     attributeRepost(item.viaRepostId, item.id, "open");
     onOpen(target, startComments, startIndex);
   };
@@ -279,6 +293,15 @@ function FeedPostCardImpl({
 
   const react = async (type: "like" | "save") => {
     if (!requireAuth()) return;
+    if (exclusive) {
+      if (type !== "like") return;
+      const next = !liked;
+      setLiked(next);
+      // the server checks the subscription (and the Mature rule) on every like; it goes back if refused
+      const res = await fetch(`/api/sub/posts/${item.id}/like`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ like: next }) }).catch(() => null);
+      if (!res?.ok) setLiked(!next);
+      return;
+    }
     const isLike = type === "like";
     const cur = isLike ? liked : saved;
     const next = !cur;
@@ -496,10 +519,10 @@ function FeedPostCardImpl({
               void react("like");
             }}
             icon={myEmotion ? makeEmotionIcon(reactionGlyph(myEmotion)!) : liked ? WowSolid : WowOutline}
-            count={likes}
+            count={exclusive ? undefined : likes}
             activeClass="text-frenz-magenta"
             label="Wow"
-            press={wowPress}
+            press={exclusive ? undefined : wowPress}
             light={light}
           />
           <ReactionPicker
@@ -513,22 +536,23 @@ function FeedPostCardImpl({
         </span>
         <ActionButton
           icon={ChatIcon as typeof Heart}
-          count={item.commentsCount}
+          count={exclusive ? undefined : item.commentsCount}
           onClick={() => {
             if (!requireAuth()) return;
+            if (exclusive) return exclusive.onOpen(true);
             setCommentsReady(true);
             setCommentsOpen(true);
           }}
           label="Comment"
           light={light}
         />
-        {!item.isOwner ? (
+        {exclusive ? null : !item.isOwner ? (
           <span className="relative inline-flex">
             <RepostBurst triggerKey={repostBurst} />
             <ActionButton icon={RepostIcon as typeof Heart} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-600" onClick={repost} label="Repost" press={repostPress} light={light} />
           </span>
         ) : null}
-        <ActionButton
+        {exclusive ? null : <ActionButton
           icon={FrenzSendIcon as typeof Heart}
           onClick={() => {
             if (!requireAuth()) return;
@@ -537,9 +561,9 @@ function FeedPostCardImpl({
           }}
           label="Send"
           light={light}
-        />
+        />}
       </div>
-      <ActionButton active={saved} onClick={() => react("save")} icon={BookmarkIcon as typeof Heart} fill={saved} activeClass="text-frenz-violet" label="Save" light={light} />
+      {exclusive ? null : <ActionButton active={saved} onClick={() => react("save")} icon={BookmarkIcon as typeof Heart} fill={saved} activeClass="text-frenz-violet" label="Save" light={light} />}
     </div>
   );
 
@@ -565,7 +589,7 @@ function FeedPostCardImpl({
         if (articleRef.current) articleRef.current.style.transform = "";
       }}
       // Warm this post's comments on hover so opening the sheet is instant.
-      onPointerEnter={() => prefetchPostComments(item.id)}
+      onPointerEnter={exclusive ? undefined : () => prefetchPostComments(item.id)}
       /*
         🔴 CONTINUOUS TIMELINE, NOT A FLOATING CARD (owner, 2026-08-17 redesign
         spec, superseding the Facebook-style card from the previous pass):
@@ -666,7 +690,9 @@ function FeedPostCardImpl({
             {item.publisher.isVerified ? <VerifiedBadge size={15} /> : null}
             <span className="shrink-0 text-[13px] text-frenz-muted">· {timeAgo(item.createdAt)}</span>
           </div>
-          {item.isOwner ? (
+          {exclusive ? (
+            <span className="self-start rounded-full bg-frenz-violet/10 px-2 py-px text-[11px] font-bold text-frenz-violet">Subscribed</span>
+          ) : item.isOwner ? (
             <span className="truncate text-xs text-frenz-muted">@{item.publisher.handle}</span>
           ) : following ? (
             /* a status, not a button — unfollowing stays in the ⋯ menu, never one stray tap away */
@@ -700,6 +726,9 @@ function FeedPostCardImpl({
                       exit={{ opacity: 0, scale: 0.95 }}
                       className="absolute right-0 z-50 mt-1 w-48 overflow-hidden rounded-xl border border-border/70 bg-card py-1 shadow-elevated"
                     >
+                      {exclusive ? (
+                        <MenuItem icon={EyeOff} label="Hide this post" onClick={() => { setMenuOpen(false); onRemove(item.id); }} />
+                      ) : (<>
                       <MenuItem icon={Share2} label="Share" onClick={() => { setMenuOpen(false); setShareReady(true); setShareOpen(true); }} />
                       <MenuItem icon={LinkIcon} label="Copy link" onClick={copyLink} />
                       <MenuItem
@@ -739,6 +768,7 @@ function FeedPostCardImpl({
                       <MenuItem icon={EyeOff} label="Hide this post" onClick={() => onRemove(item.id)} />
                       <MenuItem icon={Ban} label="Not interested" onClick={() => onRemove(item.id)} />
                       <MenuItem icon={Flag} label="Report" danger onClick={openReport} />
+                      </>)}
                     </motion.div>
                   </>
                 ) : null}
@@ -775,6 +805,11 @@ function FeedPostCardImpl({
                 viewer.
               */}
               <FeedCaption text={title}>
+                {exclusive ? (
+                  <button type="button" onClick={() => open(item)} className="block w-full text-left">
+                    <RichText text={title} />
+                  </button>
+                ) : (
                 <Link
                   href={postViewHref(item)}
                   onClick={(e) => {
@@ -786,8 +821,9 @@ function FeedPostCardImpl({
                 >
                   <RichText text={title} />
                 </Link>
+                )}
               </FeedCaption>
-              {item.category ? (
+              {item.category && !exclusive ? (
                 // Was /explore?q=%23category (a search results page); now the
                 // real indexable hub — see category-hub-view.tsx's note on
                 // the owner's "search for news/sports should land on the
@@ -849,7 +885,7 @@ function FeedPostCardImpl({
                 streamReady={item.streamReady}
                 streamFailed={item.streamFailed}
                 poster={item.thumbnailUrl}
-                postId={item.id}
+                postId={exclusive ? undefined : item.id}
                 onExpand={() => open(item)}
                 onDoubleTapLike={() => {
                   if (!liked) void react("like");
@@ -880,8 +916,9 @@ function FeedPostCardImpl({
                     {formatDuration(item.durationSec)}
                   </span>
                 ) : null}
+                {exclusive ? <ExclusiveMarks handle={exclusive.viewerHandle} items={item.mediaItems?.length ?? 0} /> : null}
                 {/* the design's views chip: glass over the picture (glass is allowed over images) */}
-                {item.viewsCount > 0 ? (
+                {!exclusive && item.viewsCount > 0 ? (
                   <span className="pointer-events-none absolute bottom-3 left-3 z-10 inline-flex items-center gap-[5px] rounded-full bg-black/55 px-2.5 py-1 text-xs font-bold text-white backdrop-blur-md">
                     <PlayIcon size={11} />
                     {formatCompactNumber(item.viewsCount)} views
@@ -904,7 +941,9 @@ function FeedPostCardImpl({
                   if (!liked) void react("like");
                 }}
                 onExpand={() => open(item)}
-              />
+              >
+                {exclusive ? <ExclusiveMarks handle={exclusive.viewerHandle} items={item.mediaItems?.length ?? 0} /> : null}
+              </FeedImage>
             </div>
           ) : item.mediaKind === "text" ? (
             /*
@@ -975,7 +1014,7 @@ function FeedPostCardImpl({
             the frame. The design's row: like, comment, repost, send … save.
           */}
           {engagementRow(false)}
-          {mediaBox && item.mediaKind !== "video" ? <ViewsRow count={item.viewsCount} /> : null}
+          {mediaBox && item.mediaKind !== "video" && !exclusive ? <ViewsRow count={item.viewsCount} /> : <div className="mb-2" />}
 
       {shareReady ? (
         <ShareSheet
@@ -1100,8 +1139,30 @@ export const FeedPostCard = memo(
     // when the following page arrives its `nextVideoSrc` goes undefined → URL.
     // Omitted from this list, that update never reaches the card, so the one
     // clip most likely to be watched next is the one that never gets warmed.
-    a.nextVideoSrc === b.nextVideoSrc,
+    a.nextVideoSrc === b.nextVideoSrc &&
+    a.exclusive === b.exclusive,
 );
+
+/**
+ * Over an exclusive post's media (step 13): the "Exclusive" tag, how many items it holds, and the
+ * viewer's own @handle as a quiet watermark — the same deterrent the private viewer carries, so a
+ * screen recording names who made it.
+ */
+function ExclusiveMarks({ handle, items }: { handle: string | null; items: number }) {
+  return (
+    <>
+      <span className="pointer-events-none absolute left-3 top-3 z-10 inline-flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-bold text-white">
+        <LockIcon size={12} strokeWidth={2.6} />
+        Exclusive{items > 1 ? ` · ${items}` : ""}
+      </span>
+      {handle ? (
+        <span aria-hidden className="pointer-events-none absolute bottom-3 right-3 z-10 select-none text-[12px] font-bold text-white/45 [text-shadow:0_1px_2px_rgba(0,0,0,0.5)]">
+          @{handle}
+        </span>
+      ) : null}
+    </>
+  );
+}
 
 /**
  * The post's view count, under the media box and aligned to its right edge.

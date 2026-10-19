@@ -28,7 +28,7 @@ const TAB =
   "relative inline-flex min-h-11 shrink-0 items-center gap-1.5 pb-3 pt-2.5 font-heading text-base no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2";
 
 function Underline() {
-  return <span aria-hidden className="absolute inset-x-0 -bottom-px h-[3px] rounded-full bg-frenz-gradient-x" />;
+  return <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-frenz-gradient-x" />;
 }
 
 function tap() {
@@ -46,7 +46,7 @@ export function FeedTopbarTabs({
   showReelsLink?: boolean;
 }) {
   return (
-    <nav aria-label="Feed type" className="frenz-ui flex gap-[22px] overflow-x-auto border-b border-frenz-line px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <nav aria-label="Feed type" className="frenz-ui flex gap-[22px] touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain border-b border-frenz-line px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {TABS.map((t) => {
         const active = sort === t.key;
         return (
@@ -97,7 +97,7 @@ export function FeedTopbarTabs({
 export function FeedTabLinks() {
   const link = cn(TAB, "font-semibold text-frenz-muted hover:text-frenz-ink");
   return (
-    <nav aria-label="Feed type" className="frenz-ui -mx-3 flex gap-[22px] overflow-x-auto border-b border-frenz-line px-5 [scrollbar-width:none] sm:-mx-4 [&::-webkit-scrollbar]:hidden">
+    <nav aria-label="Feed type" className="frenz-ui -mx-3 flex gap-[22px] touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain border-b border-frenz-line px-5 [scrollbar-width:none] sm:-mx-4 [&::-webkit-scrollbar]:hidden">
       <Link href="/home?tab=for_you" prefetch={false} onClick={tap} className={link}>
         For You
       </Link>

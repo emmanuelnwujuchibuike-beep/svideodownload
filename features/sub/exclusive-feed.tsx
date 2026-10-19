@@ -14,7 +14,8 @@ import { cn } from "@/lib/utils";
 import { profilePath } from "@/lib/social/profile-url";
 
 // step 13: subscribed posts are the Feed's own post card, in its exclusive mode (features/feed/feed-post-card.tsx)
-import { FeedPostCard } from "@/features/feed/feed-post-card";
+// its own chunk (2026-10-19): the tab row and subscriptions row paint before the post card's code arrives
+const FeedPostCard = dynamic(() => import("@/features/feed/feed-post-card").then((m) => m.FeedPostCard));
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import type { FeedItem } from "@/lib/social/home-feed";
 

@@ -33,7 +33,12 @@ export function useHistoryGridAds(): SlotState {
  * per gallery, so every section shares one resolve). `section` keeps keys
  * unique and offsets the rotation so neighbouring ad tiles differ.
  */
-export function withGridAds(tiles: readonly ReactNode[], ads: SlotState, section = 0): ReactNode[] {
+/**
+ * `frenz`: the redesigned History grid (2026-10-18) — the ad tile takes exactly the download tiles' shape
+ * (3:4, square corners, rounded only from sm), so it sits in the grid like one of them (owner 2026-10-19:
+ * "the video ad doesn't fit in the new history grid").
+ */
+export function withGridAds(tiles: readonly ReactNode[], ads: SlotState, section = 0, frenz = false): ReactNode[] {
   if (ads.status !== "ready" || ads.provider !== "frenzsave" || ads.ads.length === 0) return [...tiles];
   const out: ReactNode[] = [];
   let n = 0;
@@ -42,7 +47,7 @@ export function withGridAds(tiles: readonly ReactNode[], ads: SlotState, section
     if ((i + 1) % (HISTORY_GRID_AD_EVERY - 1) === 0) {
       out.push(
         <div key={`history-grid-ad-${section}-${n}`} data-ad-slot="history_grid" data-ad-provider="frenzsave">
-          <SelfAdBanner ads={ads.ads} rules={ads.rules} placement="history_grid" page="history" variant="tile" startAt={section + n} />
+          <SelfAdBanner ads={ads.ads} rules={ads.rules} placement="history_grid" page="history" variant="tile" startAt={section + n} className={frenz ? "aspect-[3/4] rounded-none sm:rounded-lg" : undefined} />
         </div>,
       );
       n++;

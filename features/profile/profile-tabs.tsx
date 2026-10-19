@@ -189,8 +189,9 @@ export function ProfileTabs({
         (2026-10-16). Every section still swaps in place, and Exclusive still starts loading its
         posts the moment a finger lands. The Exclusive FEED is the Feed's own Exclusive tab now.
       */}
-      <nav ref={tray} aria-label="Profile sections" className="frenz-ui relative -mx-4 mb-0.5 flex scroll-mt-24 items-center border-b border-frenz-line px-2 sm:-mx-6">
-        <div className="flex min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <nav ref={tray} aria-label="Profile sections" className="frenz-ui relative -mx-4 mb-3 flex scroll-mt-24 items-center border-b border-frenz-line px-2 sm:-mx-6">
+        {/* sideways only (owner, 2026-10-19: the row moved up and down) — nothing overflows vertically, and touch pans x only */}
+        <div className="flex min-w-0 flex-1 touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {sections.map((s) => {
             const isActive = active === s.key;
             return (
@@ -208,7 +209,7 @@ export function ProfileTabs({
               >
                 {s.key === SUB_TAB_KEY ? <Lock className="h-[13px] w-[13px] shrink-0" strokeWidth={2.4} aria-hidden /> : null}
                 {s.label}
-                {isActive ? <span aria-hidden className="absolute inset-x-3 -bottom-px h-[3px] rounded-full bg-frenz-gradient-x" /> : null}
+                {isActive ? <span aria-hidden className="absolute inset-x-3 bottom-0 h-[3px] rounded-full bg-frenz-gradient-x" /> : null}
               </button>
             );
           })}

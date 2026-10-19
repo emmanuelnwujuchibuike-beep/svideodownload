@@ -77,10 +77,10 @@ export function DownloadsPage({
 
       <LiveDownloads />
 
-      {/* Ads start below the hero block, at a section break (owner, 2026-08-30). */}
-      <AdSurface zone="under_download" fullBleed className="mt-6" />
-
       <HomeTools aiPromo={aiPromo} rotateUrls={rotateUrls} />
+
+      {/* the ad sits UNDER the Frenz AI and Wallpapers cards, as on the landing (owner, 2026-10-19) */}
+      <AdSurface zone="under_download" fullBleed className="mt-6" />
 
       <StorageRow items={items} />
 

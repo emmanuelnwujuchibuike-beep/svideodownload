@@ -25,6 +25,15 @@ import { ExoClickSticky, type ExoClickInsSlot } from "@/features/monetization/ex
 import { HilltopSlot } from "@/features/monetization/hilltop-slot";
 import { isHilltopPlacementOn, type HilltopConfig } from "@/lib/monetization/hilltop-config";
 import { HistoryGridAd } from "./history-grid-ad";
+import dynamic from "next/dynamic";
+
+/*
+  2026-10-19 (owner: History must be lighter than before the redesign): the two sheets a tap opens —
+  publish-as-sound and the retry reward gate — are not in History's first load. Each loads on demand
+  and is mounted from its first opening on (so its closing animation still plays).
+*/
+const PublishSoundSheet = dynamic(() => import("@/features/history/publish-sound-sheet").then((m) => m.PublishSoundSheet), { ssr: false });
+const RewardedAdGate = dynamic(() => import("@/features/monetization/rewarded-ad").then((m) => m.RewardedAdGate), { ssr: false });
 import { useHistoryGridAds, withGridAds } from "./history-grid-self-ads";
 import { Fragment, type ComponentType, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
@@ -32,9 +41,7 @@ import { SmartThumb } from "@/components/ui/smart-thumb";
 import { startDownload } from "@/features/downloads/manager";
 import { openPlayerQueue, openPlayerQueueWithAds } from "@/features/downloads/player-store";
 import { estimateBytes } from "@/features/history/usage";
-import { PublishSoundSheet } from "@/features/history/publish-sound-sheet";
 import { useGatedRetry } from "@/features/history/use-gated-retry";
-import { RewardedAdGate } from "@/features/monetization/rewarded-ad";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { BRAND_ICONS } from "@/lib/platform-icons";
@@ -328,6 +335,15 @@ export function MediaGallery({
   /* Retries go through the same reward-ad policy a first attempt does — see
      use-gated-retry.ts. One instance for the whole gallery. */
   const retry = useGatedRetry();
+  // mounted from their first opening on (see the dynamic imports above)
+  const [publishOpened, setPublishOpened] = useState(false);
+  const [gateOpened, setGateOpened] = useState(false);
+  useEffect(() => {
+    if (publishTarget) setPublishOpened(true);
+  }, [publishTarget]);
+  useEffect(() => {
+    if (retry.gated) setGateOpened(true);
+  }, [retry.gated]);
 
 
   const persist = (key: string, value: string) => {
@@ -624,6 +640,7 @@ export function MediaGallery({
                     )),
                     gridAds,
                     grouped.indexOf(g),
+                    !!frenz,
                   )}
                 </div>
               )}
@@ -691,6 +708,8 @@ export function MediaGallery({
               <GalleryTile frenz={!!frenz} key={item.id} item={item} eager={i < effCols * 5} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} onRemove={() => onRemove(item.id)} onPublishSound={() => setPublishTarget(item)} onRetry={() => retry.begin(item)} selection={selection} />
             )),
             gridAds,
+            0,
+            !!frenz,
           )}
         </div>
       ) : (
@@ -719,7 +738,7 @@ export function MediaGallery({
         </div>
       ) : null}
 
-      <PublishSoundSheet open={!!publishTarget} onClose={() => setPublishTarget(null)} item={publishTarget} />
+      {publishOpened ? <PublishSoundSheet open={!!publishTarget} onClose={() => setPublishTarget(null)} item={publishTarget} /> : null}
 
       {/*
         Reward gate for RETRIES (owner, 2026-08-24: "every retry downloads should
@@ -729,7 +748,7 @@ export function MediaGallery({
         Mounted once here rather than per tile: one gate for the whole gallery,
         and a tile that scrolls out of view mid-ad cannot take the ad with it.
       */}
-      <RewardedAdGate
+      {gateOpened ? <RewardedAdGate
         open={retry.gated}
         durationSec={retry.ads[0]?.durationSec ?? 30}
         skipAfterSec={retry.ads[0]?.skipAfterSec ?? null}
@@ -737,7 +756,7 @@ export function MediaGallery({
         totalSteps={retry.ads.length > 1 ? retry.ads.length : undefined}
         onReward={retry.grantOne}
         onCancel={retry.cancel}
-      />
+      /> : null}
     </div>
   );
 }

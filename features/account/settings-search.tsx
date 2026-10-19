@@ -6,7 +6,7 @@ import { useTheme } from "next-themes";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { LanguageSettingRow } from "@/components/i18n/language-setting-row";
-import { useGhostMode } from "@/features/account/ghost-mode";
+import { useGhostMode } from "@/features/account/use-ghost-mode";
 import { allSignals, ghostedCount, GHOST_SIGNALS, isFullyGhosted, type GhostState } from "@/lib/privacy/ghost";
 import { getCachedThemeMode, setThemeModeLocal, subscribeThemeMode, type ThemeMode } from "@/lib/theme/theme-mode-client";
 import { getCategory } from "@/lib/settings/categories";

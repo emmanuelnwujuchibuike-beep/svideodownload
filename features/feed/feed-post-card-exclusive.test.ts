@@ -43,7 +43,8 @@ describe("the exclusive mode of the Feed's post card", () => {
   });
 
   it("the Exclusive feed uses that card for subscribed posts — no separate post component", () => {
-    expect(feed).toContain('import { FeedPostCard } from "@/features/feed/feed-post-card";');
+    // its own chunk (2026-10-19), but the same component
+    expect(feed).toContain('const FeedPostCard = dynamic(() => import("@/features/feed/feed-post-card").then((m) => m.FeedPostCard));');
     expect(feed).toContain("<FeedPostCard item={item} exclusive={exclusive}");
     // the old discover section is gone; locked cards sit in the stream
     expect(feed).not.toMatch(/>\s*From creators you follow\s*</);

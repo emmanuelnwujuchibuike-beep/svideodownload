@@ -143,7 +143,9 @@ describe("signed out: no Exclusive route writes, signs private media, or returns
     expect(db.writes, "a signed-out request wrote to the database").toEqual([]);
     expect(presignGet).not.toHaveBeenCalled();
     expect(presignPut).not.toHaveBeenCalled();
-  });
+    // it imports and calls every Exclusive route handler (30+) — ~1 s alone, past 5 s under a full parallel
+    // run (2026-10-19, twice): a timeout, never this assertion. The checks are unchanged.
+  }, 60_000);
 });
 
 describe("cross-account: creator A against creator B's records", () => {

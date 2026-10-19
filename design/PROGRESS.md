@@ -460,3 +460,17 @@ the app allowed in the App Store and Play (the Android app is a TWA), and Paysta
   needed — not needed while explicit content is banned.
 - The locked-content blurred preview (the owner's required fix above) is a separate, still-open job.
 
+
+## Owner fixes, 2026-10-19 (after the 6d16680 push)
+- [x] **History grid video ad fits** — in the Frenz grid the self-ad tile takes the grid's 3:4 tile shape,
+  square on the phone, like the tiles around it (`withGridAds(…, frenz)`).
+- [x] **Download page ad order** — the ad slot now sits under the Wallpapers / Frenz AI buttons, as on the landing
+  (the landing's rotating ad stack also comes after the tools).
+- [x] **Profile and Feed tab rows** — scroll sideways only (`touch-pan-x`, `overflow-y-hidden`, the underline
+  inside the row, so nothing overflows down); a 12 px gap above the cards.
+- [x] **Chat bubbles in Safari** — "Afa na" was breaking one word per line on iPhone. The bubble's
+  `white-space: pre-wrap` made WebKit size it slightly narrower than its own text; removed (RichText keeps
+  typed line breaks). Reproduced and checked in Playwright WebKit: short messages are one line (46 px), long
+  ones still wrap at 80 %.
+- [x] **Lighter History** — the publish-sound sheet and the reward gate load only when first opened;
+  `app/icon.png` recompressed 163 KB → 24 KB; the Exclusive feed loads the post card as its own chunk.

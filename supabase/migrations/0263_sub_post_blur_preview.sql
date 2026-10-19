@@ -20,8 +20,9 @@ comment on column public.sub_posts.blur_preview is '0263: a 20 px heavily blurre
 do $$
 begin
   begin
-    -- a data URL of a tiny WebP, nothing else (never a link to the private file)
-    alter table public.sub_posts add constraint sub_posts_blur_preview_chk check (blur_preview is null or (blur_preview like 'data:image/webp;base64,%' and length(blur_preview) <= 4000));
+    -- a data URL of a tiny WebP, nothing else (never a link to the private file). chr(59) is the
+    -- semicolon of "webp" + ";base64," — spelled out because the runner splits on a literal one.
+    alter table public.sub_posts add constraint sub_posts_blur_preview_chk check (blur_preview is null or (blur_preview like 'data:image/webp' || chr(59) || 'base64,%' and length(blur_preview) <= 4000));
   exception when duplicate_object then null;
   end;
 end;

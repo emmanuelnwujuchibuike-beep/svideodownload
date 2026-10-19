@@ -121,9 +121,10 @@ export function DownloadPageCore({
       </Card>
       <MultiLinkButton config={multiLink} surface="frenz" className="mt-3" />
       <LiveDownloads />
+      {showFrenzAi ? <HomeTools aiPromo={aiPromo} rotateUrls={rotateUrls ?? []} /> : null}
       {/*
-        The multi-format slot (owner, 2026-09-01: right under the hero's buttons, where a reader
-        actually sees it — at y=7698 it reported nothing). `landing_under_wallpaper` is an ordinary ad
+        The multi-format slot (owner, 2026-09-01: "below the explore feature and wallpaper button", above
+        the storage card — and again 2026-10-19: under the Wallpaper and AI cards). `landing_under_wallpaper` is an ordinary ad
         zone, so it takes AdSense, an Adsterra iframe, a social link or a native unit; lazy and
         code-split, never requested until the reader is near it.
       */}
@@ -137,7 +138,6 @@ export function DownloadPageCore({
           </RotatingAdStack>
         </div>
       ) : null}
-      {showFrenzAi ? <HomeTools aiPromo={aiPromo} rotateUrls={rotateUrls ?? []} /> : null}
       <StorageRow items={items} />
       {/* below Cloud storage, given room (owner, 2026-08-30); fullBleed — no white frame round the unit */}
       <AdSurface zone="under_download" fullBleed className="mt-6" />

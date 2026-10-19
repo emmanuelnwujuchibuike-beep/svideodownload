@@ -2102,7 +2102,9 @@ export function ConversationRoom({
                     {...(canAct && !hasMediaAttachment ? holdBubble : {})}
                     style={m.mine && !deleted && chatAppearance.bubbleColor ? { backgroundImage: "none", backgroundColor: chatAppearance.bubbleColor } : undefined}
                     className={cn(
-                      "frenz-message-bubble min-w-0 max-w-full overflow-hidden whitespace-pre-wrap break-words leading-relaxed",
+                      // No pre-wrap here (owner 2026-10-19): in Safari it sized the bubble a hair narrower
+                      // than its text, so "Afa na" broke one word per line. RichText keeps typed line breaks.
+                      "frenz-message-bubble min-w-0 max-w-full overflow-hidden break-words leading-relaxed",
                       // A hold must open OUR menu, not iOS's text-selection
                       // callout — the two race otherwise and the system one
                       // wins. Copy stays available from the menu itself.

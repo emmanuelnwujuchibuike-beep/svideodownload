@@ -274,9 +274,8 @@ export function AuthPanel({ next: nextRaw = "/home" }: { next?: string }) {
               setError(null);
               setView("email");
             }}
-            className="group relative inline-flex h-14 w-full items-center justify-center gap-2.5 overflow-hidden rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-[15px] font-bold text-white shadow-lg shadow-violet-600/30 transition hover:shadow-xl hover:shadow-violet-600/45 active:scale-[0.99]"
+            className="h-14 relative inline-flex w-full items-center justify-center gap-2.5 rounded-2xl bg-frenz-gradient-x font-heading text-[15px] font-bold text-white shadow-frenz-card transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2 disabled:opacity-60"
           >
-            <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
             <Mail className="h-[18px] w-[18px]" /> Continue with Email
           </button>
 
@@ -290,7 +289,7 @@ export function AuthPanel({ next: nextRaw = "/home" }: { next?: string }) {
             type="button"
             onClick={google}
             disabled={busy}
-            className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-full border border-border/70 bg-background text-[15px] font-semibold text-foreground shadow-sm transition hover:bg-secondary/60 active:scale-[0.99] disabled:opacity-60"
+            className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-2xl border border-frenz-line bg-frenz-card font-heading text-[15px] font-bold text-frenz-ink shadow-frenz-card transition active:scale-[0.99] disabled:opacity-60"
           >
             <GoogleG /> Continue with Google
           </button>
@@ -302,18 +301,18 @@ export function AuthPanel({ next: nextRaw = "/home" }: { next?: string }) {
               setError(null);
               setView("email");
             }}
-            className="inline-flex h-14 w-full items-center justify-center rounded-full bg-secondary/70 text-[15px] font-semibold text-foreground transition hover:bg-secondary active:scale-[0.99]"
+            className="inline-flex h-14 w-full items-center justify-center rounded-2xl bg-frenz-fill font-heading text-[15px] font-bold text-frenz-ink transition active:scale-[0.99]"
           >
             I already have an account
           </button>
 
-          {error ? <p className="pt-1 text-center text-sm text-red-400">{error}</p> : null}
+          {error ? <p className="pt-1 text-center text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}
 
-          <p className="px-2 pt-1 text-center text-[13px] leading-relaxed text-muted-foreground">
+          <p className="px-2 pt-1 text-center text-[13px] leading-relaxed text-frenz-muted">
             By continuing, you agree to Frenzsave&apos;s{" "}
-            <Link href="/terms" className="font-medium text-violet-500 underline underline-offset-2">Terms of Service</Link>{" "}
+            <Link href="/terms" className="font-medium text-frenz-blue underline underline-offset-2">Terms of Service</Link>{" "}
             and acknowledge that you&apos;ve read our{" "}
-            <Link href="/privacy" className="font-medium text-violet-500 underline underline-offset-2">Privacy Policy</Link>.
+            <Link href="/privacy" className="font-medium text-frenz-blue underline underline-offset-2">Privacy Policy</Link>.
           </p>
         </motion.div>
       ) : view === "email" ? (
@@ -331,13 +330,13 @@ export function AuthPanel({ next: nextRaw = "/home" }: { next?: string }) {
               setError(null);
               setSuggestion(null);
             }}
-            className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground"
+            className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-frenz-muted transition hover:text-frenz-ink"
           >
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
 
-          <h2 className="text-lg font-extrabold tracking-tight">{usePw ? "Welcome back" : "What's your email?"}</h2>
-          <p className="mb-4 mt-0.5 text-sm text-muted-foreground">
+          <h2 className="font-heading text-xl font-bold tracking-[-0.4px] text-frenz-ink">{usePw ? "Welcome back" : "What's your email?"}</h2>
+          <p className="mb-4 mt-0.5 text-sm text-frenz-muted">
             {usePw
               ? "Sign in with the password you saved."
               : "We'll email you a secure sign-in code — no password to remember. New here? The same code creates your account."}
@@ -368,9 +367,9 @@ export function AuthPanel({ next: nextRaw = "/home" }: { next?: string }) {
                   setEmail(suggestion);
                   setSuggestion(null);
                 }}
-                className="w-full rounded-xl bg-secondary/60 px-3 py-2 text-left text-sm text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                className="w-full rounded-xl bg-frenz-fill px-3 py-2 text-left text-sm text-frenz-muted transition hover:text-frenz-ink"
               >
-                Did you mean <span className="font-semibold text-foreground">{suggestion}</span>?
+                Did you mean <span className="font-semibold text-frenz-ink">{suggestion}</span>?
               </button>
             ) : null}
 
@@ -392,9 +391,8 @@ export function AuthPanel({ next: nextRaw = "/home" }: { next?: string }) {
             <button
               type="submit"
               disabled={busy || !email.trim() || (usePw && !pw)}
-              className="group relative inline-flex h-[52px] w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-[15px] font-bold text-white shadow-lg shadow-violet-600/25 transition hover:shadow-xl active:scale-[0.99] disabled:opacity-60"
+              className="h-[52px] relative inline-flex w-full items-center justify-center gap-2.5 rounded-2xl bg-frenz-gradient-x font-heading text-[15px] font-bold text-white shadow-frenz-card transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2 disabled:opacity-60"
             >
-              <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {usePw ? "Sign in" : "Continue"}
             </button>
@@ -407,18 +405,18 @@ export function AuthPanel({ next: nextRaw = "/home" }: { next?: string }) {
                 setUsePw((v) => !v);
                 setError(null);
               }}
-              className="text-muted-foreground transition hover:text-foreground"
+              className="text-frenz-muted transition hover:text-frenz-ink"
             >
               {usePw ? "Use a sign-in code instead" : "Sign in with a password"}
             </button>
             {usePw ? (
-              <button type="button" onClick={forgotPassword} disabled={busy} className="text-violet-500 hover:underline disabled:opacity-60">
+              <button type="button" onClick={forgotPassword} disabled={busy} className="text-frenz-blue hover:underline disabled:opacity-60">
                 Forgot password?
               </button>
             ) : null}
           </div>
 
-          {error ? <p className="mt-3 text-center text-sm text-red-400">{error}</p> : null}
+          {error ? <p className="mt-3 text-center text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}
         </motion.div>
       ) : (
         <motion.div
@@ -435,14 +433,14 @@ export function AuthPanel({ next: nextRaw = "/home" }: { next?: string }) {
               setResetting(false);
               setError(null);
             }}
-            className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground"
+            className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-frenz-muted transition hover:text-frenz-ink"
           >
             <ArrowLeft className="h-4 w-4" /> Change email
           </button>
 
-          <h2 className="text-lg font-extrabold tracking-tight">{resetting ? "Reset your password" : "Verification code"}</h2>
-          <p className="mb-5 mt-0.5 text-sm text-muted-foreground">
-            We&apos;ve sent a secure verification code to <span className="font-semibold text-foreground">{email}</span>.
+          <h2 className="font-heading text-xl font-bold tracking-[-0.4px] text-frenz-ink">{resetting ? "Reset your password" : "Verification code"}</h2>
+          <p className="mb-5 mt-0.5 text-sm text-frenz-muted">
+            We&apos;ve sent a secure verification code to <span className="font-semibold text-frenz-ink">{email}</span>.
             {resetting ? " Verify it and you'll choose a new password right after." : ""}
           </p>
 
@@ -450,17 +448,17 @@ export function AuthPanel({ next: nextRaw = "/home" }: { next?: string }) {
 
           <div className="mt-4 flex min-h-6 items-center justify-center gap-1.5 text-sm" aria-live="polite">
             {verified ? (
-              <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-500">
+              <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
                 <Check className="h-4 w-4" /> You&apos;re in — taking you home
               </span>
             ) : verifying ? (
-              <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5 text-frenz-muted">
                 <Loader2 className="h-4 w-4 animate-spin" /> Verifying
               </span>
             ) : error ? (
-              <span className="text-red-400">{error}</span>
+              <span className="text-rose-600 dark:text-rose-400">{error}</span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5 text-frenz-muted">
                 <ShieldCheck className="h-4 w-4" /> The code verifies automatically
               </span>
             )}
@@ -472,7 +470,7 @@ export function AuthPanel({ next: nextRaw = "/home" }: { next?: string }) {
             disabled={countdown > 0 || busy}
             className={cn(
               "mt-3 w-full text-center text-sm font-medium transition",
-              countdown > 0 ? "text-muted-foreground/60" : "text-violet-500 hover:underline",
+              countdown > 0 ? "text-frenz-muted" : "text-frenz-blue hover:underline",
             )}
           >
             {countdown > 0 ? `Resend code in ${countdown}s` : busy ? "Sending…" : "Resend code"}
@@ -484,12 +482,12 @@ export function AuthPanel({ next: nextRaw = "/home" }: { next?: string }) {
   );
 }
 
-const INPUT = "h-[52px] w-full rounded-2xl bg-transparent pl-11 pr-4 text-[15px] outline-none placeholder:text-muted-foreground/60";
+const INPUT = "h-[52px] w-full rounded-2xl bg-transparent pl-11 pr-4 text-base text-frenz-ink outline-none placeholder:text-frenz-muted";
 
 function Field({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="group relative rounded-2xl bg-secondary/40 ring-1 ring-inset ring-border/60 transition focus-within:bg-background focus-within:shadow-[0_0_0_4px_rgba(139,92,246,0.12)] focus-within:ring-2 focus-within:ring-violet-500/55">
-      <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground transition group-focus-within:text-violet-500">{icon}</span>
+    <div className="group relative rounded-2xl bg-frenz-fill ring-1 ring-inset ring-transparent transition focus-within:bg-frenz-card focus-within:ring-2 focus-within:ring-frenz-violet/60">
+      <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-frenz-muted transition group-focus-within:text-frenz-violet">{icon}</span>
       {children}
     </div>
   );

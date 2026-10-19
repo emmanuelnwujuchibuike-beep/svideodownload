@@ -1,6 +1,5 @@
 import { FrenzMark } from "@/components/brand/frenz-logo";
 import { BRAND_ICONS } from "@/lib/platform-icons";
-import { PLATFORMS } from "@/lib/platforms";
 import type { PlatformId } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -54,17 +53,13 @@ export function LoginCollage() {
       */
       className="relative mx-auto aspect-square h-full max-h-[300px] w-auto max-w-[300px]"
     >
-      {/* Ambient aura — soft brand glow that anchors the composition. */}
-      <div className="pointer-events-none absolute inset-[8%] rounded-full bg-gradient-to-br from-blue-500/25 via-violet-500/20 to-fuchsia-500/25 blur-3xl motion-safe:animate-login-pulse" />
-
       {/* Faint orbit guide, so the ring reads as intentional structure. */}
-      <div className="pointer-events-none absolute inset-[12%] rounded-full border border-foreground/[0.07]" />
+      <div className="pointer-events-none absolute inset-[12%] rounded-full border border-frenz-line" />
 
       {/* A still ring of platform tiles; each bobs gently on its own phase. */}
       <div className="absolute inset-0">
         {RING.map((id, i) => {
           const Icon = BRAND_ICONS[id];
-          const platform = PLATFORMS[id];
           const pos = ringPosition(i, RING.length);
           return (
             <div
@@ -74,8 +69,7 @@ export function LoginCollage() {
             >
               <div
                 className={cn(
-                  "flex h-full w-full items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-lg ring-1 ring-inset ring-white/15 motion-safe:animate-login-float",
-                  platform.accent,
+                  "flex h-full w-full items-center justify-center rounded-2xl border border-frenz-line bg-frenz-card text-frenz-ink shadow-frenz-card motion-safe:animate-login-float",
                 )}
                 style={{ animationDelay: `${i * -0.9}s` }}
               >
@@ -88,7 +82,7 @@ export function LoginCollage() {
 
       {/* The mark, centred and still. */}
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-        <div className="rounded-[26px] bg-background/60 p-3 shadow-xl ring-1 ring-inset ring-border/60 backdrop-blur-sm">
+        <div className="rounded-[26px] border border-frenz-line bg-frenz-card p-3 shadow-frenz-raised">
           <FrenzMark size={56} priority />
         </div>
       </div>

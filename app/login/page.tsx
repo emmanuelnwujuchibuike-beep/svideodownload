@@ -36,16 +36,13 @@ export default async function LoginPage({
   }
 
   return (
-    <main className="relative flex h-[100dvh] flex-col overflow-hidden bg-background">
-      {/* Ambient brand wash */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-violet-500/[0.07] via-transparent to-transparent" />
-      <div aria-hidden className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-violet-500/15 blur-3xl" />
-      <div aria-hidden className="pointer-events-none absolute -right-24 top-24 h-72 w-72 rounded-full bg-fuchsia-500/15 blur-3xl" />
+    <main className="frenz-ui relative flex h-[100dvh] flex-col overflow-hidden bg-frenz-page">
+      {/* The Frenz system (2026-10-19, no design file): white page, Sora title, the gradient only on the primary button — the brand washes and blurred glows are gone. */}
 
       <Link
         href="/"
         aria-label="Back to Frenz"
-        className="fixed left-4 top-[max(1rem,var(--frenz-safe-top))] z-20 flex h-10 w-10 items-center justify-center rounded-full border border-border/70 bg-card/80 text-foreground shadow-md backdrop-blur-md transition hover:bg-secondary active:scale-95"
+        className="fixed left-4 top-[max(1rem,var(--frenz-safe-top))] z-20 flex h-11 w-11 items-center justify-center rounded-full border border-frenz-line bg-frenz-card text-frenz-ink shadow-frenz-card transition active:scale-95"
       >
         <ArrowLeft className="h-5 w-5" />
       </Link>
@@ -79,12 +76,11 @@ export default async function LoginPage({
       */}
       <div className="relative shrink-0 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4 sm:px-8">
         <div className="mx-auto w-full max-w-sm">
-          <h1 className="text-balance text-center text-[32px] font-extrabold leading-[1.05] tracking-[-0.035em] sm:text-[40px]">
-            <span className="bg-gradient-to-r from-blue-500 to-blue-600 bg-clip-text text-transparent">Download.</span>{" "}
-            <span className="bg-gradient-to-r from-blue-500 to-violet-500 bg-clip-text text-transparent">Discover.</span>{" "}
-            <span className="bg-gradient-to-r from-violet-500 to-fuchsia-500 bg-clip-text text-transparent">Meet.</span>
+          <h1 className="m-0 text-balance text-center font-heading text-[32px] font-bold leading-[1.05] tracking-[-0.8px] text-frenz-ink sm:text-[40px]">
+            {/* no gradient text: one flat violet word, as on the Home hero */}
+            Download. <span className="text-frenz-violet">Discover.</span> Meet.
           </h1>
-          <p className="mt-2.5 text-center text-[15px] font-medium text-muted-foreground">
+          <p className="m-0 mt-2.5 text-center text-[15px] font-medium text-frenz-muted">
             One place for every platform you already use.
           </p>
 
@@ -104,7 +100,7 @@ export default async function LoginPage({
           {/* Our official accounts (owner, 2026-10-08) — above the footnote, quiet. */}
           <FollowLinks variant="compact" className="mt-5" />
 
-          <p className="mt-4 text-pretty text-center text-[10px] leading-[1.5] text-muted-foreground/60">
+          <p className="mt-4 text-pretty text-center text-[10px] leading-[1.5] text-frenz-muted/80">
             Frenzsave is an independent service and is not affiliated with, endorsed by, or
             sponsored by TikTok, Instagram, LinkedIn, Snapchat, Facebook, or X. All
             trademarks and logos are the property of their respective owners.

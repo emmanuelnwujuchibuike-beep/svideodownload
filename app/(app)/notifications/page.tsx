@@ -31,7 +31,7 @@ export default async function NotificationsPage() {
 
   return (
     <AppContent>
-      <div className="mx-auto max-w-2xl">
+      <div className="frenz-ui mx-auto max-w-2xl">
         <NotificationCenter initial={initial} />
       </div>
     </AppContent>

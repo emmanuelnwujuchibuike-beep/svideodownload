@@ -225,7 +225,7 @@ function NotificationCardImpl({
           actor?.avatarUrl ? (
             <Image src={actor.avatarUrl} alt="" width={48} height={48} className="h-12 w-12 rounded-full object-cover ring-1 ring-border/60" />
           ) : (
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-base font-bold text-white">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-frenz-gradient text-base font-bold text-white">
               {actor?.displayName?.charAt(0).toUpperCase() ?? <UserRound className="h-5 w-5" />}
             </span>
           )
@@ -251,7 +251,7 @@ function NotificationCardImpl({
               </span>
               <span className="min-w-0 flex-1 truncate font-semibold">{group.broadcast.title}</span>
             </p>
-            {group.broadcast.body ? <p className="mt-0.5 text-sm leading-snug text-muted-foreground">{group.broadcast.body}</p> : null}
+            {group.broadcast.body ? <p className="mt-0.5 text-sm leading-snug text-frenz-muted">{group.broadcast.body}</p> : null}
           </>
         ) : !actorLed && group.content ? (
           /*
@@ -265,7 +265,7 @@ function NotificationCardImpl({
           <>
             <p className="truncate text-sm font-semibold leading-snug text-foreground">{group.content.title}</p>
             {group.content.body ? (
-              <p className="mt-0.5 text-sm leading-snug text-muted-foreground">{group.content.body}</p>
+              <p className="mt-0.5 text-sm leading-snug text-frenz-muted">{group.content.body}</p>
             ) : null}
           </>
         ) : (
@@ -273,14 +273,14 @@ function NotificationCardImpl({
             <p className="text-sm leading-snug text-foreground">
               {actorLed ? <span className="font-semibold">{summary}</span> : null}{" "}
               {/* a new post / story from someone you follow says what it was ("shared a new reel"), from the push's own words */}
-              <span className={cn(actorLed ? "text-muted-foreground" : "font-semibold")}>{group.type === "news_following" && group.content?.body ? lowerFirst(group.content.body.split(" · ")[0] ?? "") : verbFor(group.type)}</span>
-              {group.commentText ? <span className="text-foreground/80">: “{group.commentText}”</span> : group.postTitle ? <span className="text-muted-foreground"> · {group.postTitle}</span> : null}
+              <span className={cn(actorLed ? "text-frenz-muted" : "font-semibold")}>{group.type === "news_following" && group.content?.body ? lowerFirst(group.content.body.split(" · ")[0] ?? "") : verbFor(group.type)}</span>
+              {group.commentText ? <span className="text-foreground/80">: “{group.commentText}”</span> : group.postTitle ? <span className="text-frenz-muted"> · {group.postTitle}</span> : null}
             </p>
-            {group.postGone ? <p className="mt-0.5 text-[12px] italic text-muted-foreground">This post is no longer available.</p> : null}
+            {group.postGone ? <p className="mt-0.5 text-[12px] italic text-frenz-muted">This post is no longer available.</p> : null}
           </>
         )}
         {/* Relative time differs by a second between server render + hydration. */}
-        <p className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground" suppressHydrationWarning>
+        <p className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-frenz-muted" suppressHydrationWarning>
           {group.pinned ? (
             <span className="inline-flex items-center gap-0.5 font-semibold text-indigo-600 dark:text-indigo-300">
               <Pin className="h-3 w-3" aria-hidden /> Pinned ·
@@ -300,7 +300,7 @@ function NotificationCardImpl({
         ) : null}
         {why ? (
           /* Part 3 history + Part 2 explanation: private to this member, from the row itself */
-          <div className="mt-2 rounded-xl bg-secondary/70 px-2.5 py-2 text-[12px] leading-snug text-muted-foreground" role="note" onClick={(e) => e.preventDefault()}>
+          <div className="mt-2 rounded-xl bg-secondary/70 px-2.5 py-2 text-[12px] leading-snug text-frenz-muted" role="note" onClick={(e) => e.preventDefault()}>
             <p className="flex items-start gap-1.5">
               <Info className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
               <span>
@@ -308,7 +308,7 @@ function NotificationCardImpl({
                 {group.notificationIds.length > 1 ? ` Grouped with ${group.notificationIds.length - 1} similar ${group.notificationIds.length === 2 ? "notification" : "notifications"}.` : ""}
               </span>
             </p>
-            <ul className="mt-1.5 space-y-0.5 border-t border-border/60 pt-1.5" aria-label="History">
+            <ul className="mt-1.5 space-y-0.5 border-t border-frenz-line pt-1.5" aria-label="History">
               <li>Received · {when(group.createdAt)}</li>
               {group.delivery ? <li>{group.delivery === "push" ? "Pushed to your devices" : group.delivery === "held" ? "Held from your lock screen" : "Kept in the app"}</li> : null}
               {group.readAt ? <li>Read · {when(group.readAt)}</li> : null}
@@ -337,7 +337,7 @@ function NotificationCardImpl({
               <button type="button" onClick={addLabel} disabled={!labelDraft.trim() || group.labels.length >= 5} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white disabled:opacity-40">
                 Add
               </button>
-              <button type="button" onClick={() => setLabeling(false)} aria-label="Close labels" className="rounded-lg p-1.5 text-muted-foreground hover:text-foreground">
+              <button type="button" onClick={() => setLabeling(false)} aria-label="Close labels" className="rounded-lg p-1.5 text-frenz-muted hover:text-frenz-ink">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -350,7 +350,7 @@ function NotificationCardImpl({
                 ))}
               </div>
             ) : (
-              <p className="mt-1 text-[11.5px] text-muted-foreground">Private to you. Up to five per notification.</p>
+              <p className="mt-1 text-[11.5px] text-frenz-muted">Private to you. Up to five per notification.</p>
             )}
           </div>
         ) : null}
@@ -381,7 +381,7 @@ function NotificationCardImpl({
                 </button>
               </div>
             ) : (
-              <button type="button" onClick={(e) => { e.stopPropagation(); setReplying(true); }} className="flex items-center gap-1.5 rounded-full border border-border/70 px-4 py-1.5 text-xs font-semibold text-foreground transition hover:bg-secondary">
+              <button type="button" onClick={(e) => { e.stopPropagation(); setReplying(true); }} className="flex items-center gap-1.5 rounded-full border border-frenz-line px-4 py-1.5 text-xs font-semibold text-foreground transition hover:bg-frenz-fill">
                 <Send className="h-3.5 w-3.5" /> Reply
               </button>
             )}
@@ -396,7 +396,7 @@ function NotificationCardImpl({
                 <Check className="h-3.5 w-3.5" /> Friends
               </span>
             ) : actionState === "declined" ? (
-              <span className="text-xs font-medium text-muted-foreground">Request declined</span>
+              <span className="text-xs font-medium text-frenz-muted">Request declined</span>
             ) : (
               <>
                 <button
@@ -412,7 +412,7 @@ function NotificationCardImpl({
                   type="button"
                   disabled={actionState === "busy"}
                   onClick={(e) => respondToRequest(e, "decline")}
-                  className="flex items-center gap-1.5 rounded-full border border-border/70 px-4 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-50"
+                  className="flex items-center gap-1.5 rounded-full border border-frenz-line px-4 py-1.5 text-xs font-semibold text-frenz-muted transition hover:bg-frenz-fill hover:text-frenz-ink disabled:opacity-50"
                 >
                   <X className="h-3.5 w-3.5" /> Decline
                 </button>
@@ -432,7 +432,7 @@ function NotificationCardImpl({
                 <button type="button" onClick={blockActor} className="flex items-center gap-1.5 rounded-full bg-rose-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:opacity-95 active:scale-[0.97]">
                   <UserX className="h-3.5 w-3.5" /> Block
                 </button>
-                <button type="button" onClick={ignore} className="flex items-center gap-1.5 rounded-full border border-border/70 px-4 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-secondary hover:text-foreground active:scale-[0.97]">
+                <button type="button" onClick={ignore} className="flex items-center gap-1.5 rounded-full border border-frenz-line px-4 py-1.5 text-xs font-semibold text-frenz-muted transition hover:bg-frenz-fill hover:text-frenz-ink active:scale-[0.97]">
                   <X className="h-3.5 w-3.5" /> Ignore
                 </button>
               </>
@@ -468,7 +468,7 @@ function NotificationCardImpl({
       ) : null}
       {/* Unread dot */}
       {!group.read ? (
-        <span className="mt-11 h-2.5 w-2.5 shrink-0 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 shadow-[0_0_10px_theme(colors.violet.500)] [@media(hover:hover)]:mt-1.5" aria-label="Unread" />
+        <span className="mt-11 h-2.5 w-2.5 shrink-0 rounded-full bg-frenz-gradient [@media(hover:hover)]:mt-1.5" aria-label="Unread" />
       ) : null}
     </div>
   );
@@ -481,16 +481,15 @@ function NotificationCardImpl({
       exit={{ opacity: 0, x: -24, transition: { duration: 0.18 } }}
       transition={{ type: "spring", stiffness: 380, damping: 30 }}
       className={cn(
-        "group relative overflow-hidden rounded-3xl border transition-colors",
+        // the Frenz white card (2026-10-19): unread shows by its violet hairline, the left accent and the dot — never a wash
+        "group relative overflow-hidden rounded-[22px] border bg-frenz-card text-frenz-ink shadow-frenz-card transition-colors",
         compact ? "p-2.5" : "p-3.5",
-        selected && "ring-2 ring-indigo-500",
-        group.read
-          ? "border-border/60 bg-card/60"
-          : "border-violet-500/25 bg-gradient-to-br from-blue-500/[0.06] to-violet-500/[0.06] shadow-[0_0_0_1px_rgba(124,58,237,0.06)]",
+        selected && "ring-2 ring-frenz-violet",
+        group.read ? "border-frenz-line" : "border-frenz-violet/30",
       )}
     >
       {/* Unread left accent */}
-      {!group.read ? <span className="absolute inset-y-3 left-0 w-1 rounded-full bg-gradient-to-b from-blue-500 to-violet-500" /> : null}
+      {!group.read ? <span className="absolute inset-y-3 left-0 w-1 rounded-full bg-frenz-gradient" /> : null}
 
       {/* Always a link now — `hrefFor` no longer returns null, so the
           non-tappable `<div>` branch this used to fall into is gone. That
@@ -513,7 +512,7 @@ function NotificationCardImpl({
           aria-label={selected ? "Selected" : "Select"}
           className="block w-full cursor-pointer text-left [&_button]:pointer-events-none"
         >
-          <span aria-hidden className={cn("absolute left-2 top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full ring-2", selected ? "bg-indigo-600 text-white ring-indigo-600" : "bg-background ring-border")}>
+          <span aria-hidden className={cn("absolute left-2 top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full ring-2", selected ? "bg-frenz-violet text-white ring-frenz-violet" : "bg-frenz-card ring-frenz-line")}>
             {selected ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
           </span>
           {body}
@@ -535,7 +534,7 @@ function NotificationCardImpl({
           aria-haspopup="menu"
           aria-expanded={menu}
           onClick={toggleMenu}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-background/80 text-muted-foreground backdrop-blur transition hover:text-foreground"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-frenz-fill text-frenz-muted transition hover:text-frenz-ink"
         >
           <MoreHorizontal className="h-4 w-4" />
         </button>
@@ -554,7 +553,7 @@ function NotificationCardImpl({
               <div
                 style={{ top: menuPos.top, left: menuPos.left, width: MENU_WIDTH }}
                 role="menu"
-                className="fixed z-50 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-elevated"
+                className="fixed z-50 overflow-hidden rounded-2xl border border-frenz-line bg-frenz-card text-frenz-ink shadow-frenz-float"
               >
                 {onOrganize ? (
                   <>
@@ -566,7 +565,7 @@ function NotificationCardImpl({
                         onOrganize(group, group.pinned ? "unpin" : "pin");
                         setMenu(false);
                       }}
-                      className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm transition hover:bg-secondary"
+                      className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm transition hover:bg-frenz-fill"
                     >
                       {group.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />} {group.pinned ? "Unpin" : "Pin"}
                     </button>
@@ -578,7 +577,7 @@ function NotificationCardImpl({
                         onOrganize(group, group.archived ? "unarchive" : "archive");
                         setMenu(false);
                       }}
-                      className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm transition hover:bg-secondary"
+                      className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm transition hover:bg-frenz-fill"
                     >
                       {group.archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />} {group.archived ? "Move to inbox" : "Archive"}
                     </button>
@@ -591,7 +590,7 @@ function NotificationCardImpl({
                     setWhy((v) => !v);
                     setMenu(false);
                   }}
-                  className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm transition hover:bg-secondary"
+                  className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm transition hover:bg-frenz-fill"
                 >
                   <Info className="h-4 w-4" /> {why ? "Hide details" : "Details & why"}
                 </button>
@@ -603,7 +602,7 @@ function NotificationCardImpl({
                       setLabeling(true);
                       setMenu(false);
                     }}
-                    className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm transition hover:bg-secondary"
+                    className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm transition hover:bg-frenz-fill"
                   >
                     <Tag className="h-4 w-4" /> Label
                   </button>
@@ -616,7 +615,7 @@ function NotificationCardImpl({
                       onOrganize(group, "unread");
                       setMenu(false);
                     }}
-                    className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm transition hover:bg-secondary"
+                    className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm transition hover:bg-frenz-fill"
                   >
                     <CircleDot className="h-4 w-4" /> Mark unread
                   </button>
@@ -629,7 +628,7 @@ function NotificationCardImpl({
                       onMarkRead(group);
                       setMenu(false);
                     }}
-                    className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm transition hover:bg-secondary"
+                    className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm transition hover:bg-frenz-fill"
                   >
                     <Check className="h-4 w-4" /> Mark read
                   </button>

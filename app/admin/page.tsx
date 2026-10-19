@@ -10,7 +10,6 @@ import {
   Music,
   Server,
   Video,
-  Lightbulb,
 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -1237,7 +1236,7 @@ async function TrafficSection({ analytics }: { analytics: MonetizationAnalytics 
           accent
         />
         <StatCard
-          icon={Lightbulb}
+          icon={CalendarDays}
           label="Today"
           value={downloads ? formatCompactNumber(downloads.today) : "—"}
         />

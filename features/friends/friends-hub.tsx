@@ -21,7 +21,6 @@ import {
   UserMinus,
   UserPlus,
   Users,
-  Lightbulb,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -246,7 +245,7 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
       <ul className={cn("mb-5 divide-y divide-black/[0.06] overflow-hidden rounded-[20px] dark:divide-white/[0.07]", GLASS)}>
         <li>
           <Link href="/friends/insights" prefetch={false} className="flex items-center gap-3 px-3.5 py-2.5">
-            <Lightbulb className="h-[18px] w-[18px] shrink-0 text-primary" aria-hidden />
+            <Users className="h-[18px] w-[18px] shrink-0 text-primary" aria-hidden />
             <span className="min-w-0 flex-1">
               <span className="block text-[14px] font-semibold">Your connections</span>
               <span className="block truncate text-[12.5px] text-muted-foreground">How each friendship is going. Only you see it.</span>
@@ -382,7 +381,7 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
           <SectionHeader
             id="friends-catchup"
             title="Catch up"
-            action={<Lightbulb className="h-4 w-4 text-primary" aria-hidden />}
+            action={<MessageCircle className="h-4 w-4 text-primary" aria-hidden />}
           />
           <GlassGroup label="Friends to catch up with">
             {catchUp.map((f) => (
@@ -615,7 +614,7 @@ function FriendRow({
         <div className="mt-2 flex flex-wrap gap-2 pl-14">
           {/* Feature 19 Part 7: the friendship's own page (timeline, bucket list, capsules) */}
           <Link href={`/friends/with/${item.user.handle}`} prefetch={false} className={quietPill}>
-            <Lightbulb className="h-4 w-4 text-primary" aria-hidden /> Our story
+            <BookHeart className="h-4 w-4 text-primary" aria-hidden /> Our story
           </Link>
           {/* Part 8: archive keeps the history and leaves the list; restore from /friends/insights */}
           <button type="button" onClick={() => void archive()} disabled={busy} className={quietPill}>

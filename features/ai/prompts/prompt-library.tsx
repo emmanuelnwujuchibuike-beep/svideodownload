@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, Clapperboard, Clock, ImageIcon, Search, Star, Type, X, Lightbulb } from "lucide-react";
+import { Check, ChevronDown, Clapperboard, Clock, ImageIcon, Search, Star, Type, X, PenLine } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -202,7 +202,7 @@ export function PromptLibrary({ mode, currentPrompt, max, assets, onChoose, onCl
           <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-border sm:hidden" aria-hidden />
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white shadow-[0_6px_16px_-8px_rgba(79,70,229,0.8)]" aria-hidden>
-              <Lightbulb className="h-[18px] w-[18px]" />
+              <PenLine className="h-[18px] w-[18px]" />
             </span>
             <div className="min-w-0 flex-1">
               <h2 id={titleId} className="text-[16px] font-bold tracking-[-0.015em]">
@@ -246,7 +246,7 @@ export function PromptLibrary({ mode, currentPrompt, max, assets, onChoose, onCl
                     : "bg-secondary/70 text-foreground/80 hover:bg-secondary",
                 )}
               >
-                {c.id === "featured" ? <Lightbulb className="h-3.5 w-3.5" aria-hidden /> : c.id === "recent" ? <Clock className="h-3.5 w-3.5" aria-hidden /> : c.id === "favorites" ? <Star className="h-3.5 w-3.5" aria-hidden /> : null}
+                {c.id === "featured" ? <Star className="h-3.5 w-3.5" aria-hidden /> : c.id === "recent" ? <Clock className="h-3.5 w-3.5" aria-hidden /> : c.id === "favorites" ? <Star className="h-3.5 w-3.5" aria-hidden /> : null}
                 {c.label}
               </button>
             ))}

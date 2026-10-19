@@ -1,4 +1,4 @@
-import { Lightbulb } from "lucide-react";
+import { ListChecks } from "lucide-react";
 import Link from "next/link";
 
 /**
@@ -35,7 +35,7 @@ export function ProfileCompletion({
     >
       <div className="flex items-center justify-between gap-3">
         <p className="flex items-center gap-1.5 text-sm font-semibold">
-          <Lightbulb className="h-4 w-4 text-foreground" />
+          <ListChecks className="h-4 w-4 text-foreground" />
           Profile {percent}% complete
         </p>
         <span className="text-xs font-medium text-primary">{next} →</span>

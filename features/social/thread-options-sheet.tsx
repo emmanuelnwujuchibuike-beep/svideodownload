@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { BadgeCheck, Check, ChevronRight, Clock, Coins, Image as ImageIcon, Loader2, Palette, ShieldBan, Trash2, User, X, Lightbulb } from "lucide-react";
+import { BadgeCheck, Check, ChevronRight, Clock, Coins, Image as ImageIcon, Loader2, Palette, ShieldBan, Trash2, User, X, Type } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -527,7 +527,7 @@ export function ThreadOptionsSheet({
                   }}
                   className={row}
                 >
-                  <IconTile icon={Lightbulb} />
+                  <IconTile icon={Type} />
                   Font style &amp; bubble style
                   <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
                 </button>

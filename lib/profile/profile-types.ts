@@ -81,7 +81,7 @@ export const PROFILE_TYPES: ProfileTypeSpec[] = [
     key: "creator",
     label: "Creator",
     tagline: "You publish to an audience. Lead with your work.",
-    icon: "Lightbulb",
+    icon: "Clapperboard",
     tint: "violet",
     defaultModules: ["posts", "reels", "collections", "achievements", "about"],
     defaultLanding: "posts",

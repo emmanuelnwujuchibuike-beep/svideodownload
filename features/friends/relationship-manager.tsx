@@ -17,7 +17,6 @@ import {
   Upload,
   Wand2,
   X,
-  Lightbulb,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -479,7 +478,7 @@ export function RelationshipManager({ initial }: { initial: RelationshipDirector
               }}
               className={cn(quietPill, "min-h-[2.25rem] shrink-0 px-3 text-[12.5px]", smart === s.key && "bg-primary/10 text-primary dark:bg-primary/20")}
             >
-              <Lightbulb className="h-3.5 w-3.5" aria-hidden /> {s.label}
+              <Tag className="h-3.5 w-3.5" aria-hidden /> {s.label}
             </button>
           ))}
         </div>

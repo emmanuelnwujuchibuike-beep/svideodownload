@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, BadgeCheck, Crown, ExternalLink, Loader2, Lock, Star, Lightbulb } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, Crown, ExternalLink, Loader2, Lock, Star, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 
@@ -131,7 +131,7 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
           </dl>
           {data.viewer.milestone ? (
             <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[12.5px] font-semibold">
-              <Lightbulb className="h-3.5 w-3.5 text-amber-300" aria-hidden /> {data.viewer.milestone.label}
+              <Trophy className="h-3.5 w-3.5 text-amber-300" aria-hidden /> {data.viewer.milestone.label}
             </p>
           ) : null}
           {data.viewer.recognitions.length ? (

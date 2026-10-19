@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Loader2, X, Lightbulb } from "lucide-react";
+import { AlertTriangle, Loader2, X, AlignLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 
 /**
@@ -39,7 +39,7 @@ export function CommentThreadSummary({ text, onClose }: { text: string; onClose:
     <div className="mb-3 rounded-2xl border border-border/60 bg-card/80 p-3.5 shadow-soft backdrop-blur-xl">
       <div className="mb-1.5 flex items-center justify-between">
         <span className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground">
-          <Lightbulb className="h-3.5 w-3.5" /> Thread summary
+          <AlignLeft className="h-3.5 w-3.5" /> Thread summary
         </span>
         <button type="button" onClick={onClose} aria-label="Close" className="text-muted-foreground hover:text-foreground">
           <X className="h-3.5 w-3.5" />

@@ -14,7 +14,7 @@ import {
   RotateCcw,
   Share,
   X,
-  Lightbulb,
+  Hourglass,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -790,7 +790,7 @@ export function FloatingDownloadProgress({
                       {/* The reference's small violet spark. It pulses rather
                           than spins — this panel is about waiting calmly, and a
                           spinner is already doing the "working" job above. */}
-                      <Lightbulb className="frenz-wait-spark h-4 w-4 text-violet-600 dark:text-violet-300" />
+                      <Hourglass className="frenz-wait-spark h-4 w-4 text-violet-600 dark:text-violet-300" />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-[15px] font-extrabold leading-tight tracking-[-0.01em] text-slate-900 dark:text-white">

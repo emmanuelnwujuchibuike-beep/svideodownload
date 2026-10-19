@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, Download, Lightbulb, Lock, Plus, Search, Trash2, Wallet, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Download, Lock, Plus, Search, Trash2, Wallet, X, PenLine } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
@@ -309,7 +309,7 @@ function Assistant({ d }: { d: Dashboard }) {
       <ExGroup label="Ideas">
         {items.map((s) => (
           <li key={s.id} className="flex items-start gap-3 px-3.5 py-3">
-            <Lightbulb className="mt-0.5 h-[18px] w-[18px] shrink-0 text-amber-500" aria-hidden />
+            <PenLine className="mt-0.5 h-[18px] w-[18px] shrink-0 text-amber-500" aria-hidden />
             <div className="min-w-0 flex-1">
               <p className="text-[14px] font-semibold leading-snug">{s.title}</p>
               <p className="text-[12.5px] text-muted-foreground">{s.line}</p>

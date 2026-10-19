@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, AudioLines, Clapperboard, History, ImagePlus, Mic, Pause, Play, Wand2, Lightbulb } from "lucide-react";
+import { ArrowLeft, ArrowRight, AudioLines, Clapperboard, History, ImagePlus, Mic, Pause, Play, Wand2, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -39,9 +39,9 @@ import { cn } from "@/lib/utils";
 const ADVANCE_MS = 3000;
 const RESUME_MS = 6000;
 
-const TARGET_ICON: Record<ShowcaseTarget, typeof Lightbulb> = {
+const TARGET_ICON: Record<ShowcaseTarget, LucideIcon> = {
   explore: Wand2,
-  "text-to-video": Lightbulb,
+  "text-to-video": Clapperboard,
   "image-to-video": ImagePlus,
   "lip-sync": Clapperboard,
   "text-to-audio": AudioLines,

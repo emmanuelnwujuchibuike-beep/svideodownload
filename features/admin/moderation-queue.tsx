@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, Loader2, ShieldAlert, Lightbulb } from "lucide-react";
+import { Eye, Loader2, ShieldAlert, Bot } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -105,7 +105,7 @@ export function ModerationQueue({ targets }: { targets: ReportedTarget[] }) {
                 </p>
                 {t.aiAssessment ? (
                   <p className="mt-1.5 flex items-start gap-1.5 text-xs">
-                    <Lightbulb className="mt-0.5 h-3 w-3 shrink-0 text-violet-500" />
+                    <Bot className="mt-0.5 h-3 w-3 shrink-0 text-violet-500" />
                     <span>
                       <span className={cn("mr-1.5 rounded-full px-1.5 py-0.5 font-semibold", severityTint(t.aiAssessment.severity))}>
                         {t.aiAssessment.category} · {t.aiAssessment.severity}/100

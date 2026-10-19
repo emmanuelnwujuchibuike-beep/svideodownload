@@ -19,7 +19,8 @@ import {
   Trash2,
   Users,
   X,
-  Lightbulb,
+  FolderHeart,
+  Star,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -359,7 +360,7 @@ function Journey({ memories, joinedAt, important, onOpen }: { memories: Memory[]
                       {fmt(m.occurredOn)} · {MEMORY_CATEGORIES[m.category]}
                       {m.people.length ? ` · with ${m.people.map((p) => p.name).slice(0, 2).join(", ")}${m.people.length > 2 ? ` +${m.people.length - 2}` : ""}` : ""}
                     </span>
-                    {star.get(m.id) ? <span className="mt-1 inline-flex items-center gap-1 text-[11.5px] font-semibold text-amber-600 dark:text-amber-300"><Lightbulb className="h-3 w-3" aria-hidden /> {star.get(m.id)![0]}</span> : null}
+                    {star.get(m.id) ? <span className="mt-1 inline-flex items-center gap-1 text-[11.5px] font-semibold text-amber-600 dark:text-amber-300"><Star className="h-3 w-3" aria-hidden /> {star.get(m.id)![0]}</span> : null}
                   </span>
                 </button>
               </li>
@@ -465,7 +466,7 @@ function Collections({ lib, byId, act, refresh, onOpen }: { lib: MemoryLibrary; 
           <GlassGroup label="Suggested collections">
             {lib.collectionSuggestions.map((s) => (
               <li key={s.key} className="flex items-center gap-3 px-3.5 py-3">
-                <Lightbulb className="h-[18px] w-[18px] shrink-0 text-violet-500" aria-hidden />
+                <FolderHeart className="h-[18px] w-[18px] shrink-0 text-violet-500" aria-hidden />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[14px] font-semibold">{s.title}</span>
                   <span className="block truncate text-[12.5px] text-muted-foreground">{s.memoryIds.length} memories · {s.why}</span>

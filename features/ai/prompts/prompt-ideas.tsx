@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Info, Lightbulb, Loader2, X } from "lucide-react";
+import { ArrowRight, Info, Loader2, X, PenLine } from "lucide-react";
 import Link from "next/link";
 import { type ComponentType, useCallback, useEffect, useRef, useState } from "react";
 
@@ -130,7 +130,7 @@ export function PromptIdeas({ mode, prompt, onPromptChange, max, assets, onShowR
       {/* on a phone the button takes its own full-width row, so the heading reads on one or two lines */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/70 text-indigo-600 ring-1 ring-inset ring-indigo-500/15 dark:bg-white/[0.06] dark:text-indigo-300" aria-hidden>
-          <Lightbulb className="h-[18px] w-[18px]" />
+          <PenLine className="h-[18px] w-[18px]" />
         </span>
         <div className="min-w-[11rem] flex-1">
           <h2 id="prompt-ideas-title" className="text-[14.5px] font-bold tracking-[-0.01em]">

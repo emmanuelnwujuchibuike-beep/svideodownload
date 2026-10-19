@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Download, Lightbulb, Loader2, Moon, Plus, RotateCcw, SlidersHorizontal, Upload, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Download, Loader2, Moon, Plus, RotateCcw, SlidersHorizontal, Upload, X, ListChecks } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 
@@ -201,7 +201,7 @@ export function NotificationControlCenter({ initialRules }: { initialRules: Deli
       <div className="mt-6 rounded-2xl border border-border/60 bg-secondary/15 p-3.5">
         <div className="flex items-center gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
-            <Lightbulb className="h-4 w-4" aria-hidden />
+            <ListChecks className="h-4 w-4" aria-hidden />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-medium">Suggested rules</span>

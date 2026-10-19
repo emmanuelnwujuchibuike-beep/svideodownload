@@ -1,4 +1,4 @@
-import { ArrowLeft, Award, Check, ChevronRight, Info, RotateCcw, Scale, ShieldCheck, Lightbulb } from "lucide-react";
+import { ArrowLeft, Award, Check, ChevronRight, Info, RotateCcw, Scale, ShieldCheck, ThumbsUp } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -79,7 +79,7 @@ export default async function ReputationRoute() {
           <section className="mt-5 grid gap-3 sm:grid-cols-2" aria-label="Strengths and suggestions">
             <div className={cn("rounded-[22px] px-4 py-3.5", GLASS)}>
               <p className="flex items-center gap-1.5 text-[13.5px] font-bold">
-                <Lightbulb className="h-4 w-4 text-emerald-600" aria-hidden /> Strengths
+                <ThumbsUp className="h-4 w-4 text-emerald-600" aria-hidden /> Strengths
               </p>
               {rep.strengths.length ? (
                 <ul className="mt-1.5 space-y-1 text-[13px]">

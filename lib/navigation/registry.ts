@@ -33,7 +33,8 @@ import {
   Shield,
   Users,
   Wand2,
-  Lightbulb,
+  CircleDashed,
+  Brain,
 } from "lucide-react";
 
 import { adminOnly, everyone, proOnly } from "@/lib/platform/module-registry";
@@ -84,7 +85,7 @@ export const WORKSPACES: Workspace[] = [
   },
   // Declared, not yet offered — no product backs these.
   { id: "cloud", name: "Cloud", tagline: "Your synced library.", icon: Cloud, accent: "from-cyan-500 to-blue-600", home: "/cloud", productId: "cloud", canAccess: everyone },
-  { id: "ai", name: "Smart", tagline: "Summaries, captions, smarter search.", icon: Lightbulb, accent: "from-violet-500 to-purple-600", home: "/smart", productId: "smart", canAccess: everyone },
+  { id: "ai", name: "Smart", tagline: "Summaries, captions, smarter search.", icon: Brain, accent: "from-violet-500 to-purple-600", home: "/smart", productId: "smart", canAccess: everyone },
   { id: "business", name: "Business", tagline: "Team plans and analytics.", icon: CreditCard, accent: "from-emerald-500 to-teal-600", home: "/business", productId: "business", canAccess: proOnly },
   { id: "marketplace", name: "Marketplace", tagline: "Buy and sell resources.", icon: LayoutGrid, accent: "from-amber-500 to-orange-600", home: "/marketplace", productId: "marketplace", canAccess: everyone },
   { id: "professional", name: "Professional", tagline: "Advanced production tools.", icon: Wand2, accent: "from-rose-500 to-pink-600", home: "/professional", productId: "studio", canAccess: proOnly },
@@ -114,11 +115,11 @@ export const DESTINATIONS: Destination[] = [
 
   { id: "create-post", label: "Create post", href: "/create/post", kind: "create", icon: ImageIcon, workspace: "social", keywords: ["new post", "publish", "share"], canAccess: everyone, requiresAuth: true },
   { id: "create-reel", label: "Create reel", href: "/create/reel", kind: "create", icon: Film, workspace: "social", keywords: ["new reel", "video", "upload"], canAccess: everyone, requiresAuth: true },
-  { id: "create-story", label: "Create story", href: "/create/story", kind: "create", icon: Lightbulb, workspace: "social", keywords: ["new story", "24 hours"], canAccess: everyone, requiresAuth: true },
+  { id: "create-story", label: "Create story", href: "/create/story", kind: "create", icon: CircleDashed, workspace: "social", keywords: ["new story", "24 hours"], canAccess: everyone, requiresAuth: true },
 
   { id: "account", label: "Account settings", href: "/account", kind: "account", icon: Settings, keywords: ["profile", "preferences", "settings", "privacy", "password", "security"], canAccess: everyone, requiresAuth: true },
   // Landing + Download brief §18/§19 (2026-10-08): the two ecosystem gateways the menu and search can reach
-  { id: "frenz-ai", label: "Frenz AI", href: "/ai", kind: "page", icon: Lightbulb, keywords: ["ai", "create", "text to video", "image to video", "voice", "lip sync", "audio"], canAccess: everyone },
+  { id: "frenz-ai", label: "Frenz AI", href: "/ai", kind: "page", icon: Wand2, keywords: ["ai", "create", "text to video", "image to video", "voice", "lip sync", "audio"], canAccess: everyone },
   { id: "advertise", label: "Advertise", href: "/advertise", kind: "page", icon: Megaphone, keywords: ["ads", "promote", "business", "campaign", "advertising"], canAccess: everyone },
   { id: "pricing", label: "Pricing", href: "/pricing", kind: "page", icon: CreditCard, keywords: ["upgrade", "pro", "plans", "billing", "subscription"], canAccess: everyone },
   { id: "developers", label: "Developer API", href: "/developers", kind: "docs", icon: KeyRound, workspace: "developer", keywords: ["api", "docs", "keys", "integration", "rest"], canAccess: everyone },
@@ -159,7 +160,7 @@ export const COMMANDS: Command[] = [
   { id: "cmd-download", label: "Download a video", href: "/#download", icon: Download, group: "create", keywords: ["paste", "link", "url", "save video", "grab"], hint: "Paste a link on the home page", canAccess: everyone },
   { id: "cmd-post", label: "New post", href: "/create/post", icon: ImageIcon, group: "create", keywords: ["publish", "share", "upload"], canAccess: everyone, requiresAuth: true },
   { id: "cmd-reel", label: "New reel", href: "/create/reel", icon: Film, group: "create", keywords: ["video", "short"], canAccess: everyone, requiresAuth: true },
-  { id: "cmd-story", label: "New story", href: "/create/story", icon: Lightbulb, group: "create", keywords: ["24 hours", "ephemeral"], canAccess: everyone, requiresAuth: true },
+  { id: "cmd-story", label: "New story", href: "/create/story", icon: CircleDashed, group: "create", keywords: ["24 hours", "ephemeral"], canAccess: everyone, requiresAuth: true },
 
   { id: "cmd-theme", label: "Toggle light / dark", action: "toggle-theme", icon: Moon, group: "appearance", keywords: ["dark mode", "light mode", "theme", "appearance", "night"], canAccess: everyone },
   { id: "cmd-install", label: "Install the app", action: "install-app", icon: LayoutGrid, group: "appearance", keywords: ["pwa", "add to home screen", "install"], hint: "Add Frenz to your home screen", canAccess: everyone },

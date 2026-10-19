@@ -1,6 +1,6 @@
 "use client";
 
-import { Award, Bookmark, Eye, Heart, MessageCircle, Share2, TrendingUp, Lightbulb } from "lucide-react";
+import { Award, Bookmark, Eye, Heart, MessageCircle, Share2, TrendingUp, BarChart3 } from "lucide-react";
 import Link from "next/link";
 
 import { AnimatedCount } from "@/features/ui/animated-count";
@@ -46,7 +46,7 @@ export function IdentityAnalytics({ data, topContent }: { data: IdentityAnalytic
     <section className="lux-card p-5">
       <div className="mb-3.5 flex items-center gap-2.5">
         <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-tile text-white shadow-sm">
-          <Lightbulb className="h-4 w-4" />
+          <BarChart3 className="h-4 w-4" />
         </span>
         <div className="min-w-0">
           <h2 className="text-base font-bold leading-tight">Identity Analytics</h2>

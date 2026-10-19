@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowRight, Download, PartyPopper, Users, UsersRound, Lightbulb } from "lucide-react";
+import { ArrowRight, Download, PartyPopper, Users, UsersRound, UserRound } from "lucide-react";
 import Link from "next/link";
 import { memo, type ComponentType } from "react";
 
@@ -10,7 +10,7 @@ import type { SparkCard as SparkCardData } from "@/lib/social/smart-feed";
 
 // Colorless line icons in place of emoji (see [[no-emoji-design]]).
 const ICON: Record<SparkCardData["kind"], ComponentType<{ className?: string }>> = {
-  creator: Lightbulb,
+  creator: UserRound,
   download: Download,
   friends: UsersRound,
   community: Users,

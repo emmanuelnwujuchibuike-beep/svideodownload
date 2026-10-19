@@ -7,7 +7,8 @@ import {
   ImagePlus,
   MousePointerClick,
   Wallet,
-  Lightbulb,
+  Info,
+  Wand2,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -110,7 +111,7 @@ const HOW = [
     detail: "Upload your video, image, audio or text.",
   },
   {
-    icon: Lightbulb,
+    icon: Wand2,
     title: "Create & preview",
     detail: "Generate your result and review it.",
   },
@@ -305,7 +306,7 @@ export function FrenzAIExplore({
             role="status"
             className="mt-5 flex items-start gap-2 rounded-2xl bg-primary/[0.07] px-3.5 py-2.5 text-[12.5px] font-semibold leading-snug text-foreground"
           >
-            <Lightbulb
+            <Info
               className="mt-0.5 h-4 w-4 shrink-0 text-primary"
               aria-hidden
             />

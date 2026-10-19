@@ -1,6 +1,6 @@
 "use client";
 
-import { Gift, Megaphone, Rocket, X, Lightbulb } from "lucide-react";
+import { Gift, Megaphone, Rocket, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { type ComponentType, useEffect, useRef, useState } from "react";
 
@@ -29,7 +29,7 @@ const VARIANTS: Record<
   { icon: ComponentType<{ className?: string }>; label: string; bar: string }
 > = {
   feature: {
-    icon: Lightbulb,
+    icon: Rocket,
     label: "New",
     bar: "from-violet-600 via-indigo-600 to-blue-600",
   },

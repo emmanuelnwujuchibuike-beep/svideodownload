@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Award, BookOpen, Briefcase, Check, CheckCircle2, ChevronDown, Circle, Compass, Download, FileText, GraduationCap, Handshake, IdCard, Lightbulb, Quote, Trash2, X } from "lucide-react";
+import { ArrowLeft, Award, BookOpen, Briefcase, Check, CheckCircle2, ChevronDown, Circle, Compass, Download, FileText, GraduationCap, Handshake, IdCard, Quote, Trash2, X, Info, FolderKanban } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 
@@ -23,7 +23,7 @@ import { profilePath } from "@/lib/social/profile-url";
  * answers on the tap and puts itself back if the server refuses.
  */
 
-const TIMELINE_ICON = { experience: Briefcase, education: GraduationCap, certification: Award, award: Award, publication: BookOpen, project: Lightbulb, connection: Handshake, recommendation: Quote } as const;
+const TIMELINE_ICON = { experience: Briefcase, education: GraduationCap, certification: Award, award: Award, publication: BookOpen, project: FolderKanban, connection: Handshake, recommendation: Quote } as const;
 const fmt = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
 export function NetworkDashboard({ initial }: { initial: NetworkDashboard }) {
@@ -240,7 +240,7 @@ export function NetworkDashboard({ initial }: { initial: NetworkDashboard }) {
                 <ul className="mt-1.5 flex flex-wrap gap-1.5 pl-14">
                   {s.reasons.map((r) => (
                     <li key={r} className="inline-flex items-center gap-1 rounded-full bg-primary/[0.08] px-2 py-0.5 text-[12px] font-medium text-primary">
-                      <Lightbulb className="h-3 w-3" aria-hidden /> {r}
+                      <Info className="h-3 w-3" aria-hidden /> {r}
                     </li>
                   ))}
                 </ul>

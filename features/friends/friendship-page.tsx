@@ -14,7 +14,8 @@ import {
   Star,
   Trash2,
   UserRound,
-  Lightbulb,
+  Gift,
+  Cake,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -319,7 +320,7 @@ function TimelineRow({ event, last, editing, onHide }: { event: StoryEvent; last
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-[14px] font-semibold leading-snug">
-          {special && event.kind === "anniversary" ? <Lightbulb className="mr-1 inline h-3.5 w-3.5 text-rose-500" aria-hidden /> : null}
+          {special && event.kind === "anniversary" ? <Cake className="mr-1 inline h-3.5 w-3.5 text-rose-500" aria-hidden /> : null}
           {event.title}
         </p>
         <p className="text-[12px] text-muted-foreground">
@@ -494,7 +495,7 @@ function Capsules({ friendId, first, initial, ready, anniversary }: { friendId: 
           {capsules.map((c) => (
             <li key={c.id} className="flex gap-3 px-3.5 py-3">
               <span aria-hidden className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl", c.locked ? "bg-black/[0.04] text-muted-foreground dark:bg-white/[0.07]" : "bg-primary/10 text-primary")}>
-                {c.locked ? <Hourglass className="h-[18px] w-[18px]" /> : <Lightbulb className="h-[18px] w-[18px]" />}
+                {c.locked ? <Hourglass className="h-[18px] w-[18px]" /> : <Gift className="h-[18px] w-[18px]" />}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-[14px] font-semibold">{c.title}</p>

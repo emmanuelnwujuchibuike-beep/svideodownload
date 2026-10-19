@@ -14,7 +14,7 @@ import {
   UserRound,
   Users,
   type LucideIcon,
-  Lightbulb,
+  Clapperboard,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils";
 
 const ICONS: Record<string, LucideIcon> = {
   UserRound,
-  Lightbulb,
+  Clapperboard,
   Store,
   Briefcase,
   GraduationCap,

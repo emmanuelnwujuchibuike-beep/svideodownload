@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { ReelsAdSlide } from "@/features/monetization/reels-ad-slide";
 import { WallpaperRewardGate } from "@/features/monetization/wallpaper-reward-gate";
 import { useDirectLink } from "@/features/monetization/use-direct-link";
-import { Bookmark, Crown, Download, Heart, Loader2, MessageCircle, Send, X, Lightbulb } from "lucide-react";
+import { Bookmark, Crown, Download, Heart, Loader2, MessageCircle, Send, X } from "lucide-react";
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
@@ -776,7 +776,7 @@ export function WallpaperReels({
                 by a skippable interstitial — so a member who pays sees the word
                 without the ad marker beside it. */}
             <span className="ml-1 inline-flex items-center gap-1 rounded-lg bg-white/15 px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide">
-              {planReady && !isPremium ? <Lightbulb className="h-3 w-3" /> : null}
+              {planReady && !isPremium ? <Crown className="h-3 w-3" /> : null}
               Free
             </span>
           </button>

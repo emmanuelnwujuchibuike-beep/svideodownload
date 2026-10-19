@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Clapperboard, Circle, Loader2, MessageCircle, X, Lightbulb } from "lucide-react";
+import { Clapperboard, Circle, Loader2, MessageCircle, X, Newspaper, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -25,8 +25,8 @@ import { cn } from "@/lib/utils";
  * product rule /create/reel and /api/stories already hold).
  */
 
-const ROW: Record<ReshareDestination, { label: string; hint: string; icon: typeof Lightbulb }> = {
-  post: { label: "Feed", hint: "Share as a post on your profile", icon: Lightbulb },
+const ROW: Record<ReshareDestination, { label: string; hint: string; icon: LucideIcon }> = {
+  post: { label: "Feed", hint: "Share as a post on your profile", icon: Newspaper },
   reel: { label: "Reel", hint: "Share as a full-screen reel", icon: Clapperboard },
   story: { label: "Your story", hint: "Disappears in 24 hours", icon: Circle },
   chat: { label: "Send in chat", hint: "Forward privately to a friend", icon: MessageCircle },

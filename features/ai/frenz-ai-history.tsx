@@ -17,7 +17,8 @@ import {
   Trash2,
   Video,
   type LucideIcon,
-  Lightbulb,
+  Compass,
+  Wand2,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -113,7 +114,7 @@ function historyKind(feature: AiJobView["feature"]): HistoryKind {
   return feature === "ai_text_to_audio" || feature === "ai_voice_clone" ? "audio" : "video";
 }
 const HISTORY_TOOL_ICON: Partial<Record<AiJobView["feature"], LucideIcon>> = {
-  ai_text_to_video: Lightbulb,
+  ai_text_to_video: Clapperboard,
   ai_image_to_video: ImagePlay,
   ai_lip_sync: Clapperboard,
   ai_text_to_audio: AudioLines,
@@ -597,7 +598,7 @@ function HistoryTile({ job, now, onOpen }: { job: AiJobView; now: number; onOpen
   const title = meaningfulSourceName(job.source.name) ?? historyTitleFor(job.feature);
 
   const kind = historyKind(job.feature);
-  const ToolIcon = HISTORY_TOOL_ICON[job.feature] ?? Lightbulb;
+  const ToolIcon = HISTORY_TOOL_ICON[job.feature] ?? Wand2;
   const seconds = job.result.durationSeconds ?? (job.textToAudio?.durationMs ? job.textToAudio.durationMs / 1000 : null) ?? job.source.durationSeconds;
 
   return (
@@ -837,14 +838,14 @@ function EmptyState({ filter }: { filter: keyof typeof AI_HISTORY_EMPTY_COPY }) 
   return (
     <div className="rounded-[1.375rem] border-[1.5px] border-dashed border-indigo-300/70 bg-indigo-50/30 px-6 py-10 text-center">
       <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
-        <Lightbulb className="h-5 w-5" aria-hidden />
+        <Wand2 className="h-5 w-5" aria-hidden />
       </span>
       <p className="mt-3 text-sm font-semibold">{copy.title}</p>
       <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">{copy.body}</p>
       {/* Part 9 §35: useful, not decorative — the door to the first video, from the empty list itself */}
       {filter === "all" ? (
         <Link href="/studio/ai/character-replace" className={aiButtonClass({ className: "mt-5" })}>
-          <Lightbulb className="h-4 w-4" aria-hidden />
+          <Compass className="h-4 w-4" aria-hidden />
           Explore AI tools
         </Link>
       ) : null}

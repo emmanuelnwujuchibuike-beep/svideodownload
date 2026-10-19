@@ -1,6 +1,6 @@
 "use client";
 
-import { Crown, Lightbulb } from "lucide-react";
+import { Crown, Coins, Gem } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { AiPlansSheet, relative } from "@/features/ai/credits/ai-plans-sheet";
@@ -125,7 +125,7 @@ export function AiCreditsCard({ className, refreshKey = 0, returnTo, compact = f
         <section className={cn("relative overflow-hidden rounded-[1.5rem] bg-card px-4 py-4 ring-1 ring-inset ring-black/[0.07] shadow-[0_8px_24px_-20px_rgba(30,40,90,0.45)]", className)}>
           <div className="relative flex items-center gap-3">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500 text-white">
-              <Lightbulb className="h-5 w-5" aria-hidden />
+              <Gem className="h-5 w-5" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-[14px] font-bold">AI plans</p>
@@ -160,7 +160,7 @@ export function AiCreditsCard({ className, refreshKey = 0, returnTo, compact = f
         <div className="relative flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-              {top ? <Crown className="h-3.5 w-3.5 text-primary" aria-hidden /> : <Lightbulb className="h-3.5 w-3.5 text-primary" aria-hidden />}
+              {top ? <Crown className="h-3.5 w-3.5 text-primary" aria-hidden /> : <Coins className="h-3.5 w-3.5 text-primary" aria-hidden />}
               {e.planLabel}
             </p>
             <p className="mt-1 text-[13px] text-muted-foreground">

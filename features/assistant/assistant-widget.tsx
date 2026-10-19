@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Bot, Loader2, MessageCircle, RotateCcw, Send, X, Lightbulb } from "lucide-react";
+import { Bot, Loader2, MessageCircle, RotateCcw, Send, X, MessageCircleQuestion } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import {
@@ -135,7 +135,7 @@ export function AssistantWidget() {
                       onClick={() => ask(q)}
                       className="flex w-full items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-left text-sm transition hover:border-primary/40 hover:bg-secondary/60"
                     >
-                      <Lightbulb className="h-3.5 w-3.5 shrink-0 text-primary" />
+                      <MessageCircleQuestion className="h-3.5 w-3.5 shrink-0 text-primary" />
                       <span className="truncate">{q}</span>
                     </button>
                   ))}

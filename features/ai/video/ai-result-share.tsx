@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Clapperboard, Share2, Lightbulb } from "lucide-react";
+import { Check, Clapperboard, Share2, Coins } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -106,7 +106,7 @@ export function AiResultShare({ jobId, reelsHref = "/reels" }: { jobId: string; 
     <div className="border-t border-black/[0.05] px-3.5 pb-3.5 pt-3 sm:px-4">
       {status.generation ? (
         <p className="mb-2.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[12px] font-semibold text-emerald-700 dark:text-emerald-300">
-          <Lightbulb className="h-3.5 w-3.5" aria-hidden />+{status.generation.credits} AI Credits
+          <Coins className="h-3.5 w-3.5" aria-hidden />+{status.generation.credits} AI Credits
           <span className="font-normal text-emerald-700/80 dark:text-emerald-300/80">for this video</span>
         </p>
       ) : null}

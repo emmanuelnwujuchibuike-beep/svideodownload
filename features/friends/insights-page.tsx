@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, ArchiveRestore, ArrowLeft, BellOff, CalendarHeart, Hourglass, MessageCircle, UserPlus, Lightbulb } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowLeft, BellOff, CalendarHeart, Hourglass, MessageCircle, UserPlus, Tag } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -150,7 +150,7 @@ export function InsightsPage({ intel }: { intel: RelationshipIntelligence }) {
                   </Link>
                 ) : (
                   <Link href="/friends/circles" prefetch={false} className={cn(quietPill, "min-h-[2.25rem] px-3 text-[12.5px] text-primary")}>
-                    <Lightbulb className="h-4 w-4" aria-hidden /> <span className="max-[359px]:sr-only">Label</span>
+                    <Tag className="h-4 w-4" aria-hidden /> <span className="max-[359px]:sr-only">Label</span>
                   </Link>
                 )}
               </li>

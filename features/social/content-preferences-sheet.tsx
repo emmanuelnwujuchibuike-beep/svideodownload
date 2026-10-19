@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { BellOff, Loader2, ThumbsDown, ThumbsUp, X, Lightbulb } from "lucide-react";
+import { BellOff, Loader2, ThumbsDown, ThumbsUp, X, CircleHelp, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -131,7 +131,7 @@ export function ContentPreferencesSheet({
             <div className="mx-auto mb-2 mt-2.5 h-1 w-9 rounded-full bg-border" />
             <div className="flex items-center justify-between px-5 pb-2">
               <h3 className="flex items-center gap-1.5 text-sm font-bold">
-                <Lightbulb className="h-4 w-4 text-violet-500" /> Why am I seeing this?
+                <CircleHelp className="h-4 w-4 text-violet-500" /> Why am I seeing this?
               </h3>
               <button type="button" onClick={onClose} aria-label="Close" className="rounded-full p-1.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground">
                 <X className="h-5 w-5" />
@@ -185,7 +185,7 @@ function OptionRow({
   disabled,
   onClick,
 }: {
-  icon: typeof Lightbulb;
+  icon: LucideIcon;
   label: string;
   active?: boolean;
   danger?: boolean;

@@ -9,9 +9,9 @@ import {
   RotateCcw,
   Search,
   Share2,
-  Lightbulb,
   Trash2,
   X,
+  Wand2,
 } from "lucide-react";
 import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
@@ -833,7 +833,7 @@ function HistoryOptions({
               </button>
             ) : null}
             <Link href="/ai" role="menuitem" onClick={() => { tap(); setOpen(false); }} className={row}>
-              <span className="inline-flex items-center gap-2"><Lightbulb className="h-4 w-4" aria-hidden /> Frenz AI</span>
+              <span className="inline-flex items-center gap-2"><Wand2 className="h-4 w-4" aria-hidden /> Frenz AI</span>
             </Link>
             <div className="my-1 h-px bg-frenz-line" />
             <button type="button" role="menuitem" onClick={() => { tap(); setOpen(false); onClearAll(); }} className={cn(row, "text-rose-600 hover:bg-rose-50")}>

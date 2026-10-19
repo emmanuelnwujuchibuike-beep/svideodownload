@@ -14,7 +14,7 @@ import {
   Triangle,
   Waves,
   type LucideIcon,
-  Lightbulb,
+  Tv,
 } from "lucide-react";
 
 /**
@@ -37,7 +37,7 @@ const ICONS: Record<string, LucideIcon> = {
   nature: Leaf,
   abstract: Triangle,
   dark: Moon,
-  anime: Lightbulb,
+  anime: Tv,
   space: Rocket,
   gradient: Waves,
   texture: Layers,

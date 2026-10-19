@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, Check, Eye, IdCard, Loader2, ScanFace, ShieldOff, X, Lightbulb } from "lucide-react";
+import { BadgeCheck, Check, Eye, IdCard, Loader2, ScanFace, ShieldOff, X } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -309,7 +309,7 @@ function IssueDirectly({ onDone }: { onDone: () => void }) {
   return (
     <div className="rounded-2xl border border-violet-500/25 bg-violet-500/5 p-4">
       <p className="flex items-center gap-2 text-sm font-bold">
-        <Lightbulb className="h-4 w-4 text-violet-500" /> Issue directly
+        <BadgeCheck className="h-4 w-4 text-violet-500" /> Issue directly
       </p>
       <p className="mt-0.5 text-xs text-muted-foreground">
         Grant the tick immediately, with no application and no documents. Recorded against your account in the audit

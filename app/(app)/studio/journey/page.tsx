@@ -1,4 +1,4 @@
-import { Activity, Award, Compass, Lock, Lightbulb } from "lucide-react";
+import { Activity, Award, Compass, Lock, Flag } from "lucide-react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
@@ -66,7 +66,7 @@ export default async function StudioJourneyPage() {
                     : "relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground"
                 }
               >
-                {step.reached ? <Lightbulb className="h-4 w-4" aria-hidden /> : <Lock className="h-3.5 w-3.5" aria-hidden />}
+                {step.reached ? <Flag className="h-4 w-4" aria-hidden /> : <Lock className="h-3.5 w-3.5" aria-hidden />}
               </span>
 
               <div className="min-w-0 flex-1 pt-1">

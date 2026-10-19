@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Gift, Loader2, Megaphone, Rocket, Lightbulb } from "lucide-react";
+import { Check, Gift, Loader2, Megaphone, Rocket } from "lucide-react";
 import { type ComponentType, useEffect, useState } from "react";
 
 import type { Announcement, AnnouncementVariant } from "@/lib/announcement";
@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
  * dismissed the previous one (the dismissal is keyed by a content hash).
  */
 const VARIANTS: { id: AnnouncementVariant; label: string; icon: ComponentType<{ className?: string }>; bar: string }[] = [
-  { id: "feature", label: "New feature", icon: Lightbulb, bar: "from-violet-600 via-indigo-600 to-blue-600" },
+  { id: "feature", label: "New feature", icon: Rocket, bar: "from-violet-600 via-indigo-600 to-blue-600" },
   { id: "update", label: "Version update", icon: Rocket, bar: "from-emerald-600 via-teal-600 to-cyan-600" },
   { id: "announcement", label: "Announcement", icon: Megaphone, bar: "from-blue-600 via-sky-600 to-indigo-600" },
   { id: "promo", label: "Promo / offer", icon: Gift, bar: "from-amber-500 via-orange-500 to-rose-500" },

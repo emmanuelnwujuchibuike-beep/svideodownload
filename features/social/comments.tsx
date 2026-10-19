@@ -28,7 +28,9 @@ import {
   VolumeX,
   Wand2,
   X,
-  Lightbulb,
+  PenLine,
+  ArrowDownWideNarrow,
+  AlignLeft,
 } from "lucide-react";
 import { VerifiedTick } from "@/components/badges/identity-badges";
 import dynamic from "next/dynamic";
@@ -394,7 +396,7 @@ export function Comments({
             aria-label="Summarize thread"
             className={cn("rounded-full p-1.5 transition", summaryOpen ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground")}
           >
-            <Lightbulb className="h-4 w-4" />
+            <AlignLeft className="h-4 w-4" />
           </button>
         ) : null}
         {nodes.length > 3 ? (
@@ -422,7 +424,7 @@ export function Comments({
                   <motion.span layoutId={`sortpill-${postId}-${variant}`} className="absolute inset-0 -z-0 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 shadow-sm shadow-violet-500/30" transition={{ type: "spring", stiffness: 500, damping: 40 }} />
                 ) : null}
                 <span className="relative z-10 inline-flex items-center gap-1">
-                  {s.id === "smart" ? <Lightbulb className="h-3 w-3" /> : null}
+                  {s.id === "smart" ? <ArrowDownWideNarrow className="h-3 w-3" /> : null}
                   {s.label}
                 </span>
               </button>
@@ -960,7 +962,7 @@ function Composer({
           {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
         </button>
         <button type="button" onClick={() => setShowMoods((s) => !s)} aria-label="Tag a mood" className={cn("shrink-0 rounded-full p-2 transition hover:bg-secondary", mood ? "text-primary" : "text-muted-foreground")}>
-          <Lightbulb className="h-5 w-5" />
+          <PenLine className="h-5 w-5" />
         </button>
         {body.trim() ? (
           <button type="button" onClick={() => setShowAssist((s) => !s)} aria-label="AI writing assist" className={cn("shrink-0 rounded-full p-2 transition hover:bg-secondary", showAssist ? "text-primary" : "text-muted-foreground")}>

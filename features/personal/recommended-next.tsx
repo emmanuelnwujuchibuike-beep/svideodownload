@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Clock, Lightbulb } from "lucide-react";
+import { ArrowRight, Clock, Compass } from "lucide-react";
 import Link from "next/link";
 
 import { usePersonalItems } from "@/features/personal/use-personal";
@@ -39,7 +39,7 @@ export function RecommendedNext({ className, limit = 3 }: { className?: string; 
   return (
     <section className={cn("rounded-2xl border border-border/70 bg-card p-6", className)}>
       <header className="mb-5 flex items-start gap-3">
-        <Lightbulb aria-hidden className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+        <Compass aria-hidden className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
         <div>
           <h2 className="text-lg font-semibold tracking-[-0.01em]">
             {returning ? "Continue learning" : "Where to start"}

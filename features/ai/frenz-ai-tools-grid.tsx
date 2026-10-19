@@ -10,7 +10,7 @@ import {
   MicVocal,
   Speech,
   UsersRound,
-  Lightbulb,
+  type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -80,7 +80,7 @@ export const AI_TOOL_GROUP_LABEL: Record<AiToolGroup, { title: string; hint: str
 
 export interface AiToolCard {
   id: AiToolId;
-  icon: typeof Lightbulb;
+  icon: LucideIcon;
   tint: string;
   name: string;
   blurb: string;

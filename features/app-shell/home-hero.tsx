@@ -1,4 +1,4 @@
-import { Lightbulb } from "lucide-react";
+import { Download } from "lucide-react";
 
 import { Downloader } from "@/features/downloader/downloader";
 
@@ -13,7 +13,7 @@ export function HomeHero() {
       <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="flex shrink-0 items-center gap-2 px-1 text-white">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/15 ring-1 ring-inset ring-white/25">
-            <Lightbulb className="h-4 w-4 text-cyan-200" />
+            <Download className="h-4 w-4 text-cyan-200" />
           </span>
           <div className="leading-tight">
             <p className="text-sm font-bold">Download Anything</p>

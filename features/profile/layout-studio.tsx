@@ -12,7 +12,8 @@ import {
   Store,
   Users,
   type LucideIcon,
-  Lightbulb,
+  LayoutTemplate,
+  Clapperboard,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -34,7 +35,7 @@ import { cn } from "@/lib/utils";
 
 const PRESET_ICONS: Record<string, LucideIcon> = {
   Minus,
-  Lightbulb,
+  Clapperboard,
   Camera,
   LayoutGrid,
   Code2,
@@ -262,7 +263,7 @@ export function LayoutStudio({
         </p>
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
           {LAYOUT_PRESETS.map((p) => {
-            const Icon = PRESET_ICONS[p.icon] ?? Lightbulb;
+            const Icon = PRESET_ICONS[p.icon] ?? LayoutTemplate;
             return (
               <button
                 key={p.key}

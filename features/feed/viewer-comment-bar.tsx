@@ -1,6 +1,6 @@
 "use client";
 
-import { Mic, Send, Smile, Lightbulb } from "lucide-react";
+import { Mic, Send, Smile, UserRound } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -89,7 +89,7 @@ export function ViewerCommentBar({
             aria-hidden
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-400/30 to-fuchsia-400/20 ring-1 ring-inset ring-white/25 backdrop-blur-md"
           >
-            <Lightbulb className="h-4 w-4 text-white/90" />
+            <UserRound className="h-4 w-4 text-white/90" />
           </span>
         )}
 

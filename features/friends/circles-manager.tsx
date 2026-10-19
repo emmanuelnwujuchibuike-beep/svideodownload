@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Loader2, Plus, Trash2, Users, Lightbulb } from "lucide-react";
+import { Check, Loader2, Plus, Trash2, Users, UserPlus } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
@@ -387,7 +387,7 @@ export function CirclesManager({ circles: initialCircles, connections, initialMe
         {suggestions.length ? (
           <div className="mt-3 space-y-2 rounded-2xl border border-border/70 bg-card p-3">
             <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-              <Lightbulb className="h-3.5 w-3.5" aria-hidden /> Suggestions
+              <UserPlus className="h-3.5 w-3.5" aria-hidden /> Suggestions
             </p>
             {suggestions.map((sg) => (
               <div key={sg.key} className="flex items-center justify-between gap-3">

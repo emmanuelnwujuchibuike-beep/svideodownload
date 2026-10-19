@@ -32,7 +32,6 @@ import {
   Check,
   Lock,
   type LucideIcon,
-  Lightbulb,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -60,7 +59,6 @@ const ICONS: Record<string, LucideIcon> = {
   BadgeCheck,
   Award,
   BookOpen,
-  Lightbulb,
   FileText,
   Package,
   Wrench,

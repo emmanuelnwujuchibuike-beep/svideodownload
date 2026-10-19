@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, Images, Loader2, Send, Wand2, X, Lightbulb } from "lucide-react";
+import { Camera, Images, Loader2, Send, Wand2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
@@ -163,7 +163,7 @@ export function StoryComposer({ avatarUrl }: { avatarUrl: string | null }) {
                 behind a glyph is exactly the treatment removed site-wide on
                 2026-07-16. */}
             <span className="flex h-20 w-20 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/15">
-              <Lightbulb className="h-9 w-9 text-white" />
+              <Camera className="h-9 w-9 text-white" />
             </span>
             <p className="mt-4 text-lg font-bold">Share a moment</p>
             <p className="mt-1 text-center text-sm text-white/60">One photo or video. Disappears in 24 hours.</p>

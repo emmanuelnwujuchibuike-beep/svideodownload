@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, X, Lightbulb } from "lucide-react";
+import { AlertTriangle, X, CircleCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -370,7 +370,7 @@ export function AiJobAlert() {
                     : "bg-amber-500/12 text-amber-600 dark:text-amber-400",
                 )}
               >
-                {ready ? <Lightbulb className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+                {ready ? <CircleCheck className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
               </span>
               <span className="min-w-0 flex-1">
                 {/*

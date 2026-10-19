@@ -1,6 +1,6 @@
 "use client";
 
-import { Music2, Radar, UserPlus, Users, Lightbulb } from "lucide-react";
+import { Music2, Radar, UserPlus, Users } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState } from "react";
@@ -13,7 +13,7 @@ const ORBIT_ICON: Partial<Record<OrbitId, typeof Users>> = {
   creator: UserPlus,
   music: Music2,
   nearby: Radar,
-  community: Lightbulb,
+  community: Users,
 };
 
 /**
@@ -130,7 +130,7 @@ export function OrbitCardTile({ card }: { card: OrbitCard }) {
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-            {card.kind === "sound" ? <Music2 className="h-6 w-6" /> : <Lightbulb className="h-6 w-6" />}
+            {card.kind === "sound" ? <Music2 className="h-6 w-6" /> : <Users className="h-6 w-6" />}
           </div>
         )}
       </div>

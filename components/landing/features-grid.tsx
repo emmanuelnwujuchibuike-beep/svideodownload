@@ -1,4 +1,4 @@
-import { Gauge, Layers, MonitorSmartphone, ShieldCheck, Zap, Lightbulb } from "lucide-react";
+import { Gauge, Layers, MonitorSmartphone, ShieldCheck, Zap, LayoutGrid } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { SHOWCASE_PLATFORMS } from "@/lib/platforms";
@@ -39,7 +39,7 @@ export function FeaturesGrid() {
     <section id="features" className="frenz-reveal container max-w-6xl scroll-mt-24 px-3 py-14 sm:py-20">
       <div className="mx-auto max-w-2xl text-center">
         <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/25 bg-violet-500/10 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-violet-700 dark:border-violet-400/30 dark:text-violet-200">
-          <Lightbulb className="h-3.5 w-3.5" /> Powerful Features
+          <LayoutGrid className="h-3.5 w-3.5" /> Powerful Features
         </span>
         <h2 className="mt-5 text-balance text-3xl font-extrabold tracking-[-0.03em] text-slate-900 dark:text-white sm:text-[2.75rem] sm:leading-[1.1]">
           Everything you need.{" "}

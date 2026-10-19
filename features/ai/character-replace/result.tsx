@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Bookmark, BookmarkCheck, Check, ChevronDown, Columns2, Download, History, Loader2, Maximize2, Share2, Smartphone, Trash2, Lightbulb } from "lucide-react";
+import { ArrowLeft, Bookmark, BookmarkCheck, Check, ChevronDown, Columns2, Download, History, Loader2, Maximize2, Share2, Smartphone, Trash2, Plus, ScanFace } from "lucide-react";
 import Link from "next/link";
 
 import { TapOnceLink } from "@/features/ui/tap-once-link";
@@ -245,7 +245,7 @@ export function CharacterReplaceResultScreen({
           <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Character Replace</p>
           <h2 id="video-ready-title" className="flex items-center gap-1.5 text-[20px] font-bold leading-tight tracking-[-0.02em]">
             Your video is ready
-            <Lightbulb className="h-4 w-4 text-primary" aria-hidden />
+            <ScanFace className="h-4 w-4 text-primary" aria-hidden />
           </h2>
         </div>
         <span role="status" aria-live="polite" className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-emerald-600">
@@ -400,7 +400,7 @@ export function CharacterReplaceResultScreen({
       {/* ── secondary actions (§14–§16) ───────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-center gap-2">
         <button type="button" onClick={() => onMakeAnother()} className="btn-lux bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] text-foreground hover:border-foreground/25">
-          <Lightbulb className="h-4 w-4" aria-hidden />
+          <Plus className="h-4 w-4" aria-hidden />
           Create Another
         </button>
         {canReusePhoto ? (

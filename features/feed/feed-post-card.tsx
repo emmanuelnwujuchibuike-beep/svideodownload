@@ -20,7 +20,7 @@ import {
   Repeat2,
   Share2,
   UserPlus,
-  Lightbulb,
+  SlidersHorizontal,
 } from "lucide-react";
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { BookmarkIcon, ChatIcon, DotsIcon, PlayIcon, RepostIcon, SendIcon as FrenzSendIcon } from "@/features/frenz-ui/icons";
@@ -734,7 +734,7 @@ function FeedPostCardImpl({
                       ) : null}
                       <MenuItem icon={FolderPlus} label="Save to collection" onClick={() => { setMenuOpen(false); setPickerReady(true); setPickerOpen(true); }} />
                       {item.category ? (
-                        <MenuItem icon={Lightbulb} label="Content preferences" onClick={() => { setMenuOpen(false); setPrefsReady(true); setPrefsOpen(true); }} />
+                        <MenuItem icon={SlidersHorizontal} label="Content preferences" onClick={() => { setMenuOpen(false); setPrefsReady(true); setPrefsOpen(true); }} />
                       ) : null}
                       <MenuItem icon={EyeOff} label="Hide this post" onClick={() => onRemove(item.id)} />
                       <MenuItem icon={Ban} label="Not interested" onClick={() => onRemove(item.id)} />

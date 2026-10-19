@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Clock, EyeOff, Film, ImageOff, Images, Loader2, Lock, RefreshCw, Lightbulb } from "lucide-react";
+import { Check, Clock, EyeOff, Film, ImageOff, Images, Loader2, Lock, RefreshCw } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -420,7 +420,7 @@ function EmptyFeed({ subscribed }: { subscribed: boolean }) {
   return (
     <div className="flex flex-col items-center gap-3 ex-card px-6 py-12 text-center">
       <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 to-accent/15 ring-1 ring-inset ring-primary/20">
-        <Lightbulb className="h-6 w-6 text-primary" aria-hidden />
+        <Lock className="h-6 w-6 text-primary" aria-hidden />
       </span>
       <div>
         <p className="text-[16px] font-semibold">{subscribed ? "No exclusive posts yet" : "Your exclusive feed is empty"}</p>

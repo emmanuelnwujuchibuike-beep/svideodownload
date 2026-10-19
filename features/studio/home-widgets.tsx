@@ -3,12 +3,12 @@ import {
   Bookmark,
   Eye,
   Heart,
-  Lightbulb,
   MessageCircle,
   Share2,
   Target,
   Trophy,
   Users,
+  ListChecks,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -270,7 +270,7 @@ export function CommunityWidget({ lounge }: { lounge: CreatorHome["lounge"] }) {
 export function SuggestionsWidget({ suggestions }: { suggestions: ContentSuggestion[] }) {
   if (suggestions.length === 0) {
     return (
-      <StudioCard title="Content suggestions" icon={Lightbulb}>
+      <StudioCard title="Content suggestions" icon={ListChecks}>
         <EmptyNote>
           Nothing to suggest yet. Suggestions here are derived from your own numbers, so they arrive once there
           are enough of them to say something true.
@@ -282,7 +282,7 @@ export function SuggestionsWidget({ suggestions }: { suggestions: ContentSuggest
   return (
     <StudioCard
       title="Content suggestions"
-      icon={Lightbulb}
+      icon={ListChecks}
       subtitle="Each one comes from something measured about your work"
     >
       <ul className="space-y-3">

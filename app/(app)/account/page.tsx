@@ -26,7 +26,7 @@ import {
   Store,
   UserCog,
   Users,
-  Lightbulb,
+  LayoutDashboard,
 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -220,7 +220,7 @@ export default async function AccountPage() {
       items: [
         { href: "/saved", Icon: Bookmark, title: "Saved", sub: "Posts you bookmarked", tint: "violet" },
         /* Creator Studio (Feature 15 Part 9) sits ABOVE Analytics deliberately: it is the front door. */
-        { href: "/studio", Icon: Lightbulb, title: "Creator Studio", sub: "Content, audience, calendar & goals", tint: "amber" },
+        { href: "/studio", Icon: LayoutDashboard, title: "Creator Studio", sub: "Content, audience, calendar & goals", tint: "amber" },
         { href: "/advertise", Icon: Megaphone, title: "Advertise", sub: "Promote your business on Frenzsave", tint: "rose" },
         { href: "/account/analytics", Icon: BarChart3, title: "Analytics", sub: "Your performance", tint: "emerald" },
         { href: "/account/personalization", Icon: Compass, title: "Discovery & personalization", sub: "Your Frenz DNA, topics & feed controls", tint: "cyan" },

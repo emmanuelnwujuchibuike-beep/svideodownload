@@ -1,6 +1,6 @@
 "use client";
 
-import { ImagePlus, MapPin, Send, Smile, Lightbulb } from "lucide-react";
+import { ImagePlus, MapPin, Send, Smile, PenLine } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Comments } from "@/features/social/comments";
@@ -119,7 +119,7 @@ function CommentsLoadingPlaceholder() {
         <div className="flex items-center gap-1">
           <span className="shrink-0 rounded-full p-2 text-muted-foreground"><Smile className="h-5 w-5" /></span>
           <span className="shrink-0 rounded-full p-2 text-muted-foreground"><ImagePlus className="h-5 w-5" /></span>
-          <span className="shrink-0 rounded-full p-2 text-muted-foreground"><Lightbulb className="h-5 w-5" /></span>
+          <span className="shrink-0 rounded-full p-2 text-muted-foreground"><PenLine className="h-5 w-5" /></span>
           <span className="shrink-0 rounded-full p-2 text-muted-foreground"><MapPin className="h-5 w-5" /></span>
         </div>
         <div className="flex items-end gap-1 border-t border-border/50 pt-1.5">

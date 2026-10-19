@@ -1,4 +1,4 @@
-import { Ban, Bell, CalendarDays, CheckCircle2, Clock, Download, Eye, Image as ImageIcon, Music, Video, Lightbulb } from "lucide-react";
+import { Ban, Bell, CalendarDays, CheckCircle2, Clock, Download, Eye, Image as ImageIcon, Music, Video } from "lucide-react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
@@ -135,7 +135,7 @@ export default async function DownloadHubOpsPage() {
         {/* Live download totals — the real `downloads` table, always populated. */}
         <section className="mt-8 grid gap-4 sm:grid-cols-3">
           <Stat icon={Download} label="Downloads · all time" value={stats?.total ?? 0} accent />
-          <Stat icon={Lightbulb} label="Today" value={stats?.today ?? 0} />
+          <Stat icon={CalendarDays} label="Today" value={stats?.today ?? 0} />
           <Stat icon={CalendarDays} label="Last 7 days" value={stats?.last7 ?? 0} />
         </section>
 

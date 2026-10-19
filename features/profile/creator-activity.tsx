@@ -8,7 +8,7 @@ import {
   Megaphone,
   Repeat2,
   UserPlus,
-  Lightbulb,
+  Activity,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -42,7 +42,7 @@ const ICON: Record<string, { icon: LucideIcon; tint: string }> = {
 };
 
 function meta(kind: string): { icon: LucideIcon; tint: string } {
-  return ICON[kind] ?? { icon: Lightbulb, tint: "text-violet-500" };
+  return ICON[kind] ?? { icon: Activity, tint: "text-violet-500" };
 }
 
 export function CreatorActivity({ initial }: { initial: ActivityRow[] }) {

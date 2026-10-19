@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowLeft, Check, Loader2, Upload, Lightbulb } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, Loader2, Upload, Play } from "lucide-react";
 
 import type { BatchLaunchItem, BatchLaunchState } from "@/features/ai/character-replace/use-character-replace-batch";
 import { formatCents } from "@/lib/ai/economy";
@@ -123,7 +123,7 @@ export function CharacterReplaceBatchLaunchPanel({
                   "transition motion-safe:hover:-translate-y-0.5 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none",
                 )}
               >
-                <Lightbulb className="h-4 w-4" aria-hidden />
+                <Play className="h-4 w-4" aria-hidden />
                 Process {items.length} videos{paidTotal !== null ? ` · ${formatCents(paidTotal, symbol)}` : ""}
               </button>
             ) : passing.length > 0 ? (
@@ -136,7 +136,7 @@ export function CharacterReplaceBatchLaunchPanel({
                   "bg-gradient-to-r from-blue-600 via-indigo-500 to-fuchsia-500 shadow-[0_14px_34px_-14px_rgb(99_102_241/0.9)] transition active:scale-[0.99] disabled:opacity-45",
                 )}
               >
-                <Lightbulb className="h-4 w-4" aria-hidden />
+                <Play className="h-4 w-4" aria-hidden />
                 Process the {passing.length} that passed
               </button>
             ) : null}

@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Clapperboard, Lightbulb } from "lucide-react";
+import { Clapperboard } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -518,7 +518,7 @@ export function ReelsFeed({
           /* AI Reels, nothing published yet (owner brief 2026-10-07 §13) — light, one CTA */
           <div className="flex min-h-[80vh] flex-col items-center justify-center px-6 text-center">
             <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-600 via-indigo-500 to-violet-500 text-white">
-              <Lightbulb className="h-6 w-6" aria-hidden />
+              <Clapperboard className="h-6 w-6" aria-hidden />
             </span>
             <p className="font-semibold">AI Reels are just getting started.</p>
             <p className="mt-1 max-w-xs text-sm text-muted-foreground">Create something with Frenz AI and be one of the first to share it.</p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { AudioLines, Check, Download, FileAudio, Loader2, Mic, RefreshCcw, Trash2, Type, Upload, Lightbulb } from "lucide-react";
+import { AudioLines, Check, Download, FileAudio, Loader2, Mic, RefreshCcw, Trash2, Type, Upload, Coins } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -481,7 +481,7 @@ export function LipSyncWorkspace({
               {ws.config && !ws.config.processingAvailable ? <Notice tone="muted">{ws.config.processingUnavailableReason ?? "Processing isn't available right now."}</Notice> : null}
               {creditsShort && quoted ? (
                 <button type="button" onClick={openPlans} className={aiButtonClass({ size: "lg", block: true, className: "min-h-[3.5rem]" })}>
-                  <Lightbulb className="h-4 w-4" aria-hidden />
+                  <Coins className="h-4 w-4" aria-hidden />
                   Get more AI credits
                 </button>
               ) : shortOfBalance && quoted ? (

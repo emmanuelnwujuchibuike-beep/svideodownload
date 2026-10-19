@@ -1,4 +1,4 @@
-import { Check, Crown, Gem, Minus, Zap, Lightbulb } from "lucide-react";
+import { Check, Crown, Gem, Minus, Zap, Rocket, type LucideIcon } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -31,7 +31,7 @@ interface Tier {
   price: string;
   period?: string;
   tagline: string;
-  icon: typeof Lightbulb;
+  icon: LucideIcon;
   features: string[];
   cta: string;
   href: string;
@@ -81,7 +81,7 @@ function buildTiers(pricing: {
       name: "Free",
       price: "$0",
       tagline: "Everything you need to get started.",
-      icon: Lightbulb,
+      icon: Rocket,
       features: [...FREE_FEATURES],
       cta: "Get started free",
       href: "/",

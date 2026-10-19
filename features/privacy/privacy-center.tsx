@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Check, ChevronRight, Clock, Lightbulb, Loader2, ShieldCheck, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Clock, Loader2, ShieldCheck, X, Info } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 
@@ -136,7 +136,7 @@ export function PrivacyCenterPage({ initial }: { initial: PrivacyCenter }) {
             {c.advice.map((a) => (
               <li key={a.id}>
                 <Link href={a.href} prefetch={false} className="flex items-start gap-3 px-3.5 py-3 transition active:bg-black/[0.04]">
-                  <Lightbulb className="mt-0.5 h-[18px] w-[18px] shrink-0 text-amber-500" aria-hidden />
+                  <Info className="mt-0.5 h-[18px] w-[18px] shrink-0 text-amber-500" aria-hidden />
                   <span className="min-w-0 flex-1">
                     <span className="block text-[14px] font-semibold">{a.title}</span>
                     <span className="block text-[12.5px] text-muted-foreground">{a.why}</span>
@@ -238,7 +238,7 @@ export function PrivacyCenterPage({ initial }: { initial: PrivacyCenter }) {
                 ))}
               </ul>
               <button type="button" disabled={busy === `preset-${k}`} onClick={() => void run(`preset-${k}`, { op: "preset", key: k }, `${p.label} applied. You can still change anything.`)} className={cn(quietPill, "mt-auto min-h-[2.25rem] justify-center pt-0 text-[12.5px]")}>
-                {busy === `preset-${k}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Lightbulb className="h-3.5 w-3.5" aria-hidden />} Apply
+                {busy === `preset-${k}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <ShieldCheck className="h-3.5 w-3.5" aria-hidden />} Apply
               </button>
             </div>
           ))}

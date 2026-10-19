@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Award, BadgeCheck, BookOpen, Briefcase, Check, ExternalLink, GraduationCap, Handshake, IdCard, Lightbulb, MapPin, MessageCircle, Plus, Quote } from "lucide-react";
+import { ArrowLeft, Award, BadgeCheck, BookOpen, Briefcase, Check, ExternalLink, GraduationCap, Handshake, IdCard, MapPin, MessageCircle, Plus, Quote, FolderKanban } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 
@@ -23,7 +23,7 @@ import { profilePath } from "@/lib/social/profile-url";
  * Endorse and Recommend are only offered to people who know them.
  */
 
-const TIMELINE_ICON = { experience: Briefcase, education: GraduationCap, certification: Award, award: Award, publication: BookOpen, project: Lightbulb, connection: Handshake, recommendation: Quote } as const;
+const TIMELINE_ICON = { experience: Briefcase, education: GraduationCap, certification: Award, award: Award, publication: BookOpen, project: FolderKanban, connection: Handshake, recommendation: Quote } as const;
 
 export function PublicNetworkPage({ data }: { data: PublicNetwork }) {
   // sticky per person: a back-swipe replays the cached payload, and endorsements must survive it

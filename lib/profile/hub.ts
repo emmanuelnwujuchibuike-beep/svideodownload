@@ -94,7 +94,7 @@ export const HUB_META: Record<HubKey, HubMeta> = {
   certifications: { label: "Certifications", blurb: "Verified skills", icon: "BadgeCheck", tint: ["#22C55E", "#14B8A6"] },
   awards: { label: "Awards", blurb: "Recognition", icon: "Award", tint: ["#F59E0B", "#EF4444"] },
   publications: { label: "Publications", blurb: "Writing & papers", icon: "BookOpen", tint: ["#8B5CF6", "#EC4899"] },
-  skills: { label: "Skills", blurb: "What they do", icon: "Lightbulb", tint: ["#6D5CFF", "#EC4899"] },
+  skills: { label: "Skills", blurb: "What they do", icon: "Wrench", tint: ["#6D5CFF", "#EC4899"] },
   resume: { label: "Résumé", blurb: "Download the CV", icon: "FileText", tint: ["#64748B", "#334155"] },
   catalog: { label: "Products", blurb: "Things for sale", icon: "Package", tint: ["#F97316", "#EF4444"] },
   services: { label: "Services", blurb: "What's on offer", icon: "Wrench", tint: ["#0EA5E9", "#6366F1"] },

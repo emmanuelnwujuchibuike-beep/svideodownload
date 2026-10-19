@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, KeyRound, Loader2, Mail, Lightbulb } from "lucide-react";
+import { CheckCircle2, KeyRound, Loader2, Mail } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
@@ -182,7 +182,7 @@ export function LoginForm({
       <div className="mb-4 grid grid-cols-2 gap-1 rounded-2xl bg-secondary/60 p-1 text-sm font-medium">
         {(
           [
-            { m: "magic" as const, Icon: Lightbulb, label: "Magic link" },
+            { m: "magic" as const, Icon: Mail, label: "Magic link" },
             { m: "password" as const, Icon: KeyRound, label: "Password" },
           ]
         ).map(({ m, Icon, label }) => (

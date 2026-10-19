@@ -1,7 +1,7 @@
 "use client";
 
 import { Reorder, useDragControls } from "framer-motion";
-import { ChevronDown, ChevronUp, Clock, Eye, EyeOff, Flame, GripVertical, Loader2, RotateCcw, ThumbsDown, ThumbsUp, Users, VolumeX, X, Lightbulb } from "lucide-react";
+import { ChevronDown, ChevronUp, Clock, Eye, EyeOff, Flame, GripVertical, Loader2, RotateCcw, ThumbsDown, ThumbsUp, Users, VolumeX, X, LayoutGrid, CircleDashed } from "lucide-react";
 import { useState } from "react";
 
 import { categoryLabel, type Category } from "@/lib/social/categories";
@@ -14,7 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const MODULE_ICON: Record<HomeModuleKey, typeof Clock> = {
-  stories: Lightbulb,
+  stories: CircleDashed,
   trending_reels: Flame,
   continue_watching: Clock,
 };
@@ -118,7 +118,7 @@ export function HomeModulesEditor({ preferences }: { preferences: HomePreference
   return (
     <div id="home-preferences" className="scroll-mt-24 border-b border-border/60 p-6 sm:p-8">
       <div className="mb-1 flex items-center gap-2">
-        <Lightbulb className="h-5 w-5 text-primary" />
+        <LayoutGrid className="h-5 w-5 text-primary" />
         <h2 className="text-base font-semibold">Home &amp; feed</h2>
       </div>
       <p className="mb-5 text-xs text-muted-foreground">

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getOptionalEmailSetting, setOptionalEmail } from "@/lib/email/consent";
+import { getMessageEmailSetting, setMessageEmail } from "@/lib/social/message-email";
 import { trackLimiter } from "@/lib/rate-limit";
 import { DEFAULT_NOTIFICATION_SETTINGS, getNotificationSettings, setNotificationSettings } from "@/lib/social/notification-settings";
 import { createClient } from "@/lib/supabase/server";
@@ -19,8 +20,9 @@ export async function GET() {
 
   // Part 11 (0253): the global optional-email switch rides beside the settings, read on its own so a
   // database without the column still answers everything else unchanged
-  const [settings, optionalEmail] = await Promise.all([getNotificationSettings(user.id), getOptionalEmailSetting(user.id)]);
-  return NextResponse.json({ settings, optionalEmail }, { headers: { "Cache-Control": "private, no-store" } });
+  // 0262: email me new messages — and whether push is on a device (turning email off needs it)
+  const [settings, optionalEmail, messageEmail] = await Promise.all([getNotificationSettings(user.id), getOptionalEmailSetting(user.id), getMessageEmailSetting(user.id)]);
+  return NextResponse.json({ settings, optionalEmail, messageEmail }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 const categoryPrefSchema = z.object({
@@ -49,6 +51,8 @@ const schema = z.object({
   lockScreen: z.enum(["full", "no_preview", "hidden"]).optional(),
   // Part 11 (0253): optional product email on / off — the SESSION user's own row only
   optionalEmail: z.boolean().optional(),
+  // 0262: new-message email on / off — off only while the member has push on a device
+  messageEmail: z.boolean().optional(),
 });
 
 /** PATCH /api/notification-settings — update one or more settings (merges into existing category_prefs). */
@@ -83,7 +87,11 @@ export async function PATCH(request: Request) {
     const out = await setNotificationSettings(user.id, { ...defaults, categoryPrefs });
     return out.ok || out.pending ? NextResponse.json({ ok: true }) : NextResponse.json({ error: "Couldn't reset." }, { status: 500 });
   }
-  const { optionalEmail, ...rest } = parsed.data;
+  const { optionalEmail, messageEmail, ...rest } = parsed.data;
+  if (messageEmail !== undefined) {
+    const m = await setMessageEmail(user.id, messageEmail);
+    if (!m.ok) return NextResponse.json({ error: m.error, ...(m.status === 409 ? { code: "push_required" } : {}) }, { status: m.status });
+  }
   if (optionalEmail !== undefined) {
     const e = await setOptionalEmail(user.id, optionalEmail);
     if (e.pending) return NextResponse.json({ error: "The email switch arrives with the next update." }, { status: 503 });

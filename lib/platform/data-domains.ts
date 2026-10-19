@@ -373,6 +373,8 @@ export const DATA_DOMAINS: DataDomain[] = [
       "creator_notification_prefs",
       "notification_broadcasts",
       "push_subscriptions",
+      // 0262: when a chat last emailed a member about new messages (the once-per-unread-batch throttle)
+      "message_email_sends",
       "push_delivery_log",
       "milestone_log",
       // 0253 (Part 11): the hash of each member's one-click unsubscribe token (the switch itself is notification_settings.optional_email)

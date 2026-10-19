@@ -24,6 +24,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *                              so they are treated as optional, the safer reading.
  *   ad_slot_waitlist           "an ad slot is open — create your campaign": the member asked for it,
  *                              but it is an invitation to buy, not a record of anything they did.
+ *   new_message                a chat message waiting for them (0262): at most one per unread batch,
+ *                              never while they are in the chat, and switchable off in the chat once
+ *                              they have push (lib/social/message-email.ts).
  *
  * TRANSACTIONAL — the record of something the member did or that happened to their money or
  * account; not silenced:
@@ -69,6 +72,7 @@ export const MEMBER_EMAIL_KINDS = {
   creator_new_member: "optional",
   subscription_renewal: "optional",
   ad_slot_waitlist: "optional",
+  new_message: "optional",
   credits_received: "transactional",
   withdrawal_decision: "transactional",
   withdrawal_update: "transactional",

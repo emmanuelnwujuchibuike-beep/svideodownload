@@ -43,9 +43,13 @@ describe("Lip Sync in AI History", () => {
 
 describe("chat options sheet: the Frenz AI credits design, light", () => {
   const s = code("features/social/thread-options-sheet.tsx");
-  it("the gradient identity hero and card language", () => {
-    expect(s).toContain("bg-[linear-gradient(135deg,#1d4ed8_0%,#4f46e5_55%,#a21caf_100%)]");
-    expect(s).toContain('const card = "rounded-2xl bg-card/95 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10";');
+  // 2026-10-18 (ChatMenu.dc.html): a white sheet, white hairline cards — the gradient hero is gone (the
+  // gradient is for primary actions and identity rings only); the person keeps the avatar's ring
+  it("a white sheet with hairline cards, and no gradient behind the person", () => {
+    expect(s).toContain('const card = "rounded-[20px] border border-frenz-line bg-frenz-card";');
+    expect(s).toContain("rounded-t-[28px] bg-frenz-page");
+    expect(s).toContain("<Avatar src={otherAvatarUrl ?? null} name={name} size={60} ring />");
+    expect(s).not.toContain("bg-[linear-gradient(135deg,#1d4ed8_0%,#4f46e5_55%,#a21caf_100%)]");
   });
   it("no per-row JS animation: only the sheet's own slide uses framer", () => {
     expect(s).not.toMatch(/whileTap|staggerChildren|SHEET_ITEM_VARIANTS|<motion\.div variants/);

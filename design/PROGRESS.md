@@ -18,6 +18,7 @@ review before the next one starts.
 - [x] 11. Profile Exclusive tab (owner view) → design/ProfileExclusive.dc.html (moved forward at the owner's request) — one dashboard card with real figures, Share link / Dashboard, rows for announcements and notifications, Subs-tagged grid with Manage, hub as three iOS lists with Add.
 - [ ] 12. Exclusive page (subscriber view) → design/Exclusive.dc.html
 - [ ] 13. Exclusive feed tab → design/ExclusiveFeed.dc.html
+- [x] 14. Chat options → design/ChatMenu.dc.html (added by the owner 2026-10-18) — with new-message email and its switch
 
 No page had been approved when the white-background rules arrived (2026-10-18), so
 they are applied while each page is built and there is no separate cleanup step.
@@ -342,6 +343,29 @@ they are applied while each page is built and there is no separate cleanup step.
 - The search suggestion chips stay, shown only while the empty field has focus (the design has none).
 - Kept: the app top bar (every signed-in page has it; hiding it would need the page-transition work
   the Messages inbox needed). The cover-photo hero is replaced by the design's compact row.
+
+### Step 14 · Chat options (ChatMenu.dc.html) and new-message email
+- A white sheet: the person (avatar with the identity ring, name, verified, @handle, "View profile"),
+  "Send AI credits" (the existing send sheet), Theme (the app's real themes, default first), Wallpaper
+  ("Both of you" / "Only you", upload, the current picture, Remove — the two scopes as before), then one
+  list — Disappearing messages (its value; the Off / 24h / 7d / 30d / Custom control opens from the row),
+  Font & bubble style, Search messages, Email me new messages — and Block or restrict / Report at the
+  foot, with Delete conversation under them. Every save path is the one the sheet already had.
+- Differences from the design: no "Media, links & files" row (no such screen exists); "Search in chat"
+  is "Search messages" (the existing search covers every chat you're in, plus starred messages); the
+  design's preset wallpapers (Aurora, Midnight, Plain) don't exist — upload stays; no balance on the Send
+  AI credits card (it isn't read until the send sheet opens); no "last seen" under the name.
+- New-message email (owner, 2026-10-18: "Users should receive messages through email and push but they
+  can turn off email notification in chat if they have installed the app to use push"), 0262 + lib/social/
+  message-email.ts:
+  · sent from the same after() step as the push, after it — no timer, no cron, nothing idle;
+  · direct and secret chats; in a group only when you're @mentioned; never while you're in the chat
+    (read in the last 10 minutes); one email per batch of unread messages, at most hourly per chat;
+  · a secret chat's text is never emailed, and "hide previews" hides it from the email too;
+  · it is OPTIONAL email: the global optional-email switch and one-click unsubscribe apply;
+  · "Email me new messages" in chat options: on by default; it can be turned OFF only while the member
+    has push on a device (the installed app with notifications on) — the server refuses otherwise and the
+    row says why. 0262 is NOT applied until the branch reaches main.
 
 ### Outside the page steps (owner, 2026-10-18)
 - `a50b9cd`: full-screen ads lost the engagement tray (brand badge, Like, views,

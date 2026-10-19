@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { BadgeCheck, Check, ChevronRight, Clock, Coins, Image as ImageIcon, Loader2, Palette, ShieldBan, Trash2, User, X, Type } from "lucide-react";
+import { Check, ChevronRight, Coins, Flag, Loader2, Mail, Palette, Plus, Search, ShieldBan, Timer, Trash2, Type, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -10,6 +10,9 @@ import dynamicImport from "next/dynamic";
 
 import { BlockOptionsSheet } from "@/features/social/block-options-sheet";
 import { ChatAppearanceSheet } from "@/features/social/chat-appearance-sheet";
+import { MessageSearchSheet } from "@/features/social/message-search-sheet";
+import { ReportSheet } from "@/features/social/report-sheet";
+import { Avatar, VerifiedBadge } from "@/features/frenz-ui/primitives";
 import { setChatAppearance, useChatAppearance } from "@/features/social/use-chat-appearance";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
@@ -84,7 +87,7 @@ export function ThreadOptionsSheet({
   otherHandle,
   otherName,
   otherAvatarUrl,
-  otherBannerUrl = null,
+  otherBannerUrl: _otherBannerUrl = null,
   otherIsVerified = false,
   initialTheme,
   initialWallpaperUrl,
@@ -160,6 +163,10 @@ export function ThreadOptionsSheet({
     return () => window.clearTimeout(t);
   }, [open, otherUserId]);
   const [appearanceSheetOpen, setAppearanceSheetOpen] = useState(false);
+  // ChatMenu.dc.html: the disappearing choice opens from its row; Report and Search are rows of their own
+  const [disappearOpen, setDisappearOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const patch = async (body: Record<string, unknown>) => {
     setBusy(true);
@@ -256,25 +263,27 @@ export function ThreadOptionsSheet({
 
   if (!mounted) return null;
   /*
-    2026-10-09 (owner: "upgrade this chat option … to take the current Frenz AI and
-    balance design … very professional, premium and light without excessive
-    JavaScript execution"). The credits page's language: a gradient identity hero,
-    bg-card/95 cards with small uppercase labels and gradient icon tiles,
-    segmented controls. Only the sheet's own slide is animated by JS. Every press
-    is CSS (active:scale), and the sheet is solid (no full-sheet backdrop blur).
+    design/ChatMenu.dc.html (owner, 2026-10-18): a white sheet — the person (avatar with the identity
+    ring, name, "View profile"), Send AI credits, Theme, Wallpaper, then one list (Disappearing messages,
+    Font & bubble style, Search messages, Email me new messages) and Block / Report at the foot. Every
+    save path is the one this sheet already had; only the presentation changed. The design's "Media,
+    links & files" row is left out: there is no such screen yet (PROGRESS).
   */
-  const card = "rounded-2xl bg-card/95 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10";
-  const row = "flex w-full items-center gap-3 px-4 py-3.5 text-left text-[14px] font-semibold transition active:scale-[0.99] active:bg-secondary/60 motion-reduce:active:scale-100";
+  const card = "rounded-[20px] border border-frenz-line bg-frenz-card";
+  const row = "flex min-h-[56px] w-full items-center gap-3 px-3.5 text-left transition active:bg-frenz-fill disabled:opacity-50";
   const seg = (on: boolean) =>
     cn(
-      "min-h-[2.5rem] rounded-xl px-0.5 text-[12px] font-semibold min-[360px]:px-2 min-[360px]:text-[12.5px] transition active:scale-95 disabled:opacity-50 motion-reduce:active:scale-100",
-      on ? "bg-card text-indigo-700 shadow-[0_4px_12px_-6px_rgb(79_70_229/0.5)] ring-1 ring-inset ring-indigo-500/30 dark:text-indigo-300" : "text-muted-foreground",
+      "min-h-[38px] rounded-[9px] px-1 text-[13px] transition-colors disabled:opacity-50",
+      on ? "bg-frenz-card font-bold text-frenz-ink shadow-[0_1px_3px_rgba(18,17,26,0.12)]" : "font-semibold text-frenz-muted",
     );
   const customActive = showCustom || (disappearAfter !== null && !DISAPPEAR_OPTIONS.some((o) => o.seconds === disappearAfter));
+  const disappearLabel =
+    disappearAfter === null ? "Off" : (DISAPPEAR_OPTIONS.find((o) => o.seconds === disappearAfter)?.label ?? `${Math.round(disappearAfter / 86_400)} days`);
+  const name = otherName || `@${otherHandle}`;
   return createPortal(
     <AnimatePresence>
       {open ? (
-        <div key="sheet" className="fixed inset-0 z-[110]" role="dialog" aria-modal="true" aria-label="Conversation options">
+        <div key="sheet" className="frenz-ui fixed inset-0 z-[110] text-frenz-ink" role="dialog" aria-modal="true" aria-label="Chat options">
           <motion.button
             type="button"
             aria-label="Close"
@@ -282,275 +291,264 @@ export function ThreadOptionsSheet({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-black/50"
+            className="absolute inset-0 bg-black/45"
           />
           <motion.div
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={springs.sheet}
-            className="absolute inset-x-0 bottom-0 mx-auto max-h-[88vh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-[1.75rem] bg-background shadow-[0_-24px_60px_-24px_rgba(0,0,0,0.35)] sm:bottom-6 sm:rounded-[1.75rem]"
+            className="absolute inset-x-0 bottom-0 mx-auto max-h-[90vh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-[28px] bg-frenz-page shadow-frenz-float sm:bottom-6 sm:rounded-[28px]"
             style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
           >
-            <div className="flex justify-center pb-1 pt-2.5">
-              <span aria-hidden className="h-1.5 w-10 rounded-full bg-foreground/15" />
+            <div className="flex justify-center pb-1 pt-2">
+              <span aria-hidden className="h-[5px] w-9 rounded-full bg-[#DCD9E6] dark:bg-white/20" />
             </div>
 
-            <div className="space-y-3 px-4 pb-6 pt-1.5">
-              {/* ── who this chat is with — the credits hero's gradient ── */}
-              <section className="relative isolate overflow-hidden rounded-[1.6rem] bg-[linear-gradient(135deg,#1d4ed8_0%,#4f46e5_55%,#a21caf_100%)] p-4 text-white shadow-[0_24px_48px_-28px_rgba(79,70,229,0.75)]">
-                {/* their cover photo, when they set one, under a shade that keeps the text readable */}
-                {otherBannerUrl ? (
-                  <>
-                    {/* eslint-disable-next-line @next/next/no-img-element -- the member's own cover URL, shown as-is like their profile does */}
-                    <img src={otherBannerUrl} alt="" aria-hidden draggable={false} className="pointer-events-none absolute inset-0 -z-10 h-full w-full select-none object-cover" />
-                    <span aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-t from-black/70 via-black/35 to-black/15" />
-                  </>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={onClose}
-                  aria-label="Close"
-                  className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/15 ring-1 ring-inset ring-white/25 transition active:scale-90 motion-reduce:active:scale-100"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-                <div className="flex items-center gap-3 pr-10">
-                  <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/15 ring-2 ring-white/60">
-                    {otherAvatarUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={otherAvatarUrl} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <span className="text-[22px] font-bold" aria-hidden>
-                        {(otherName || otherHandle || "?").trim().charAt(0).toUpperCase()}
-                      </span>
-                    )}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="flex items-center gap-1 text-[17px] font-bold tracking-[-0.02em]">
-                      <span className="truncate">{otherName || `@${otherHandle}`}</span>
-                      {otherIsVerified ? <BadgeCheck className="h-4 w-4 shrink-0 fill-white text-indigo-600" /> : null}
-                    </span>
-                    <span className="block truncate text-[12.5px] text-white/70">@{otherHandle}</span>
-                  </span>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
+            <div className="px-4 pb-6">
+              {/* ── who this chat is with ── */}
+              <div className="flex items-start gap-3.5 pt-1">
+                <Avatar src={otherAvatarUrl ?? null} name={name} size={60} ring />
+                <div className="min-w-0 flex-1 pt-1">
+                  <p className="m-0 flex items-center gap-1.5">
+                    <span className="truncate font-heading text-[19px] font-bold">{name}</span>
+                    {otherIsVerified ? <VerifiedBadge size={17} /> : null}
+                  </p>
+                  <p className="m-0 truncate text-sm text-frenz-muted">@{otherHandle}</p>
                   <Link
                     href={`${profilePath(otherHandle)}`}
                     onClick={onClose}
-                    className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-full bg-white px-4 text-[13.5px] font-bold text-indigo-700 shadow-sm transition active:scale-95 motion-reduce:active:scale-100"
+                    className="mt-2 inline-flex min-h-9 items-center rounded-full bg-frenz-fill px-3.5 text-[13px] font-bold text-frenz-violet transition active:scale-95"
                   >
-                    <User className="h-4 w-4" aria-hidden />
                     View profile
                   </Link>
-                  {otherUserId ? (
+                </div>
+                <button type="button" onClick={onClose} aria-label="Close" className="-mr-1.5 -mt-1 flex h-11 w-11 shrink-0 items-center justify-center">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-frenz-fill text-frenz-muted">
+                    <X className="h-[18px] w-[18px]" aria-hidden />
+                  </span>
+                </button>
+              </div>
+
+              {/* ── send AI credits ── */}
+              {otherUserId ? (
+                <button
+                  type="button"
+                  onPointerDown={warmSendCredits}
+                  onClick={() => {
+                    haptic("light");
+                    setSendCreditsOpen(true);
+                  }}
+                  className={cn(card, "mt-4 flex w-full items-center gap-3 p-3.5 text-left transition active:scale-[0.99]")}
+                >
+                  <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-frenz-violet text-white">
+                    <Coins className="h-5 w-5" />
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-[15px] font-bold">Send AI credits</span>
+                    <span className="truncate text-[13px] text-frenz-muted">Gift credits to {name}</span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-frenz-muted" aria-hidden />
+                </button>
+              ) : null}
+
+              {/* ── theme ── */}
+              <div className="mt-5 flex items-baseline justify-between px-1">
+                <h3 className="m-0 text-[13px] font-bold text-frenz-muted">Theme</h3>
+                <span className="text-[13px] font-semibold capitalize text-frenz-muted">{theme ?? "Default"}</span>
+              </div>
+              <div role="radiogroup" aria-label="Chat theme" className="mt-2 flex flex-wrap gap-2.5 px-1">
+                {[null, ...CONVERSATION_THEMES].map((t) => {
+                  const on = theme === t;
+                  return (
                     <button
+                      key={t ?? "default"}
                       type="button"
-                      onPointerDown={warmSendCredits}
-                      onClick={() => {
-                        haptic("light");
-                        setSendCreditsOpen(true);
-                      }}
-                      className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-full px-4 text-[13.5px] font-semibold text-white ring-1 ring-inset ring-white/35 transition active:scale-95 active:bg-white/10 motion-reduce:active:scale-100"
+                      role="radio"
+                      aria-checked={on}
+                      aria-label={`${t ?? "Default"} theme`}
+                      disabled={busy}
+                      onClick={() => applyTheme(t)}
+                      className="flex h-11 w-11 items-center justify-center rounded-full disabled:opacity-50"
                     >
-                      <Coins className="h-4 w-4" aria-hidden />
-                      Send credits
+                      <span
+                        className={cn(
+                          "flex h-10 w-10 items-center justify-center rounded-full ring-2 ring-offset-2 ring-offset-frenz-page transition",
+                          t ? THEME_SWATCH[t] : "bg-frenz-gradient",
+                          on ? "ring-frenz-violet" : "ring-transparent",
+                        )}
+                      >
+                        {on ? <Check className="h-4 w-4 text-white" aria-hidden /> : null}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* ── wallpaper: two independent pictures, chosen by scope (owner, 2026-07-16) ── */}
+              <h3 className="m-0 mt-5 px-1 text-[13px] font-bold text-frenz-muted">Wallpaper</h3>
+              <div role="radiogroup" aria-label="Who sees the wallpaper" className="mt-2 grid grid-cols-2 gap-0.5 rounded-xl bg-frenz-fill p-[3px]">
+                {WALLPAPER_SCOPES.map((sc) => (
+                  <button
+                    key={sc}
+                    type="button"
+                    role="radio"
+                    aria-checked={scope === sc}
+                    onClick={() => {
+                      haptic("selection");
+                      setScope(sc);
+                    }}
+                    className={seg(scope === sc)}
+                  >
+                    {WALLPAPER_SCOPE_LABEL[sc]}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2.5 flex items-center gap-2.5">
+                <button
+                  type="button"
+                  disabled={busy || uploadingWallpaper}
+                  onClick={pickWallpaper}
+                  aria-label={wallpaperUrl ? "Change wallpaper" : "Upload wallpaper"}
+                  className="relative flex h-[88px] w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-frenz-line bg-frenz-fill text-frenz-violet transition active:scale-95 disabled:opacity-50"
+                >
+                  {uploadingWallpaper ? <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden /> : <Plus className="h-5 w-5" aria-hidden />}
+                </button>
+                {wallpaperUrl ? (
+                  <span className="relative h-[88px] w-16 shrink-0 overflow-hidden rounded-2xl ring-2 ring-frenz-violet ring-offset-2 ring-offset-frenz-page">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- the chat's own wallpaper */}
+                    <img src={wallpaperUrl} alt="Current wallpaper" className="h-full w-full object-cover" />
+                  </span>
+                ) : null}
+                <div className="min-w-0 flex-1">
+                  <p className="m-0 text-[12.5px] leading-snug text-frenz-muted">
+                    {WALLPAPER_SCOPE_HINT[scope]}
+                    {scope === "both" && personalWallpaperUrl ? " Your own picture is showing instead." : ""}
+                  </p>
+                  {wallpaperUrl ? (
+                    <button type="button" disabled={busy || uploadingWallpaper} onClick={removeWallpaper} className="mt-1 min-h-9 text-[13px] font-bold text-rose-700 disabled:opacity-50 dark:text-rose-400">
+                      Remove
                     </button>
                   ) : null}
                 </div>
-              </section>
+              </div>
+              <input ref={wallpaperInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => void onWallpaperFile(e.target.files?.[0])} />
 
-              {/* ── chat theme ── */}
-              <section className={cn(card, "p-4")}>
-                <SectionLabel icon={Palette}>Chat theme</SectionLabel>
-                <div className="mt-3 grid grid-cols-6 justify-items-center gap-1">
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => applyTheme(null)}
-                    aria-label="Default theme"
-                    aria-pressed={theme === null}
-                    className={cn(
-                      "flex h-9 w-9 items-center justify-center rounded-full min-[360px]:h-10 min-[360px]:w-10 bg-secondary ring-2 ring-offset-2 ring-offset-card transition active:scale-90 motion-reduce:active:scale-100",
-                      theme === null ? "scale-105 ring-indigo-500" : "ring-transparent",
-                    )}
-                  >
-                    {theme === null ? <Check className="h-4 w-4" /> : null}
+              {/* ── the list ── */}
+              <ul className={cn(card, "mt-5 overflow-hidden")}>
+                <li>
+                  <button type="button" onClick={() => setDisappearOpen((o) => !o)} aria-expanded={disappearOpen} aria-controls="disappear-panel" className={row}>
+                    <RowIcon icon={Timer} className="bg-frenz-blue" />
+                    <span className="flex-1 text-base font-semibold">Disappearing messages</span>
+                    <span className="text-sm text-frenz-muted">{disappearLabel}</span>
+                    <ChevronRight className={cn("h-4 w-4 shrink-0 text-frenz-muted transition-transform", disappearOpen && "rotate-90")} aria-hidden />
                   </button>
-                  {CONVERSATION_THEMES.map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => applyTheme(t)}
-                      aria-label={`${t} theme`}
-                      aria-pressed={theme === t}
-                      className={cn(
-                        "flex h-9 w-9 items-center justify-center rounded-full min-[360px]:h-10 min-[360px]:w-10 ring-2 ring-offset-2 ring-offset-card transition active:scale-90 motion-reduce:active:scale-100",
-                        THEME_SWATCH[t],
-                        theme === t ? "scale-105 ring-indigo-500" : "ring-transparent",
-                      )}
-                    >
-                      {theme === t ? <Check className="h-4 w-4 text-white" /> : null}
-                    </button>
-                  ))}
-                </div>
-              </section>
-
-              {/* ── wallpaper: two independent pictures, chosen by scope (owner, 2026-07-16) ── */}
-              <section className={cn(card, "p-4")}>
-                <SectionLabel icon={ImageIcon}>Chat wallpaper</SectionLabel>
-                <div role="radiogroup" aria-label="Who sees the wallpaper" className="mt-3 grid grid-cols-2 gap-1 rounded-2xl bg-secondary/70 p-1">
-                  {WALLPAPER_SCOPES.map((sc) => (
-                    <button
-                      key={sc}
-                      type="button"
-                      role="radio"
-                      aria-checked={scope === sc}
-                      onClick={() => {
-                        haptic("selection");
-                        setScope(sc);
-                      }}
-                      className={seg(scope === sc)}
-                    >
-                      {WALLPAPER_SCOPE_LABEL[sc]}
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-2 text-[11.5px] text-muted-foreground">{WALLPAPER_SCOPE_HINT[scope]}</p>
-                <div className="mt-3 flex items-center gap-3.5">
-                  <button
-                    type="button"
-                    disabled={busy || uploadingWallpaper}
-                    onClick={pickWallpaper}
-                    aria-label={wallpaperUrl ? "Change wallpaper" : "Upload wallpaper"}
-                    className="relative flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-secondary/60 text-muted-foreground ring-1 ring-inset ring-border/60 transition active:scale-95 disabled:opacity-50 motion-reduce:active:scale-100"
-                  >
-                    {wallpaperUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={wallpaperUrl} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <ImageIcon className="h-6 w-6" />
-                    )}
-                    {uploadingWallpaper ? (
-                      <span className="absolute inset-0 flex items-center justify-center bg-black/50">
-                        <Loader2 className="h-5 w-5 animate-spin text-white motion-reduce:animate-none" />
-                      </span>
-                    ) : null}
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[12.5px] text-muted-foreground">
-                      {wallpaperUrl
-                        ? scope === "me"
-                          ? "Your own background for this chat."
-                          : "Shared background — you both see it."
-                        : scope === "me"
-                          ? "Set a background only you can see."
-                          : "Set a background you both see."}
-                      {scope === "both" && personalWallpaperUrl ? " Your own picture is showing instead." : ""}
-                    </p>
-                    <div className="mt-2 flex items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={busy || uploadingWallpaper}
-                        onClick={pickWallpaper}
-                        className="inline-flex min-h-[2.25rem] items-center rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500 px-3.5 text-[12.5px] font-semibold text-white transition active:scale-95 disabled:opacity-50 motion-reduce:active:scale-100"
-                      >
-                        {wallpaperUrl ? "Change" : "Upload"}
-                      </button>
-                      {wallpaperUrl ? (
+                  <div id="disappear-panel" hidden={!disappearOpen} className="px-3.5 pb-3.5">
+                    <div role="radiogroup" aria-label="Disappearing messages" className="grid grid-cols-5 gap-0.5 rounded-xl bg-frenz-fill p-[3px]">
+                      {DISAPPEAR_OPTIONS.map((o) => (
                         <button
+                          key={o.label}
                           type="button"
-                          disabled={busy || uploadingWallpaper}
-                          onClick={removeWallpaper}
-                          className="inline-flex min-h-[2.25rem] items-center rounded-full px-3 text-[12.5px] font-semibold text-rose-600 transition active:scale-95 disabled:opacity-50 motion-reduce:active:scale-100"
+                          role="radio"
+                          aria-checked={!customActive && disappearAfter === o.seconds}
+                          disabled={busy}
+                          onClick={() => applyDisappear(o.seconds)}
+                          className={seg(!customActive && disappearAfter === o.seconds)}
                         >
-                          Remove
+                          {o.label === "24 hours" ? "24h" : o.label === "7 days" ? "7d" : o.label === "30 days" ? "30d" : o.label}
                         </button>
-                      ) : null}
+                      ))}
+                      <button type="button" role="radio" aria-checked={customActive} disabled={busy} onClick={() => setShowCustom((v) => !v)} className={seg(customActive)}>
+                        Custom
+                      </button>
                     </div>
+                    {showCustom ? (
+                      <div className="mt-2 flex items-center gap-2">
+                        <label htmlFor="disappear-days" className="sr-only">
+                          Number of days
+                        </label>
+                        <input
+                          id="disappear-days"
+                          type="number"
+                          min={1}
+                          value={customDays}
+                          onChange={(e) => setCustomDays(e.target.value)}
+                          placeholder="Number of days"
+                          className="h-11 w-full rounded-xl border-0 bg-frenz-fill px-4 text-[16px] outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet/40"
+                        />
+                        <button type="button" onClick={applyCustomDays} disabled={busy || !customDays} className="h-11 shrink-0 rounded-full bg-frenz-ink px-5 text-[14px] font-bold text-frenz-page disabled:opacity-50">
+                          Set
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
-                </div>
-                <input ref={wallpaperInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => void onWallpaperFile(e.target.files?.[0])} />
-              </section>
-
-              {/* ── disappearing messages ── */}
-              <section className={cn(card, "p-4")}>
-                <SectionLabel icon={Clock}>Disappearing messages</SectionLabel>
-                <div role="radiogroup" aria-label="Disappearing messages" className="mt-3 grid grid-cols-5 gap-1 rounded-2xl bg-secondary/70 p-1">
-                  {DISAPPEAR_OPTIONS.map((o) => (
-                    <button
-                      key={o.label}
-                      type="button"
-                      role="radio"
-                      aria-checked={!customActive && disappearAfter === o.seconds}
-                      disabled={busy}
-                      onClick={() => applyDisappear(o.seconds)}
-                      className={seg(!customActive && disappearAfter === o.seconds)}
-                    >
-                      {o.label === "24 hours" ? "24h" : o.label === "7 days" ? "7d" : o.label === "30 days" ? "30d" : o.label}
-                    </button>
-                  ))}
-                  <button type="button" role="radio" aria-checked={customActive} disabled={busy} onClick={() => setShowCustom((v) => !v)} className={seg(customActive)}>
-                    Custom
+                </li>
+                <li className="border-t border-frenz-line">
+                  {/* per-VIEWER appearance across every chat (owner, 2026-07-14) — not the shared theme above */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      haptic("light");
+                      setAppearanceSheetOpen(true);
+                    }}
+                    className={row}
+                  >
+                    <RowIcon icon={Type} className="bg-frenz-violet" />
+                    <span className="flex-1 text-base font-semibold">Font &amp; bubble style</span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-frenz-muted" aria-hidden />
                   </button>
-                </div>
-                {showCustom ? (
-                  <div className="mt-2 flex items-center gap-2">
-                    <input
-                      type="number"
-                      min={1}
-                      value={customDays}
-                      onChange={(e) => setCustomDays(e.target.value)}
-                      placeholder="Number of days"
-                      className="h-11 w-full rounded-2xl border border-border/70 bg-background px-4 text-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
-                    />
-                    <button
-                      type="button"
-                      onClick={applyCustomDays}
-                      disabled={busy || !customDays}
-                      className="h-11 shrink-0 rounded-full bg-foreground px-5 text-[13.5px] font-semibold text-background transition active:scale-95 disabled:opacity-50"
-                    >
-                      Set
-                    </button>
-                  </div>
-                ) : null}
-              </section>
+                </li>
+                <li className="border-t border-frenz-line">
+                  {/* the existing message search (every chat you're in, and your starred messages) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      haptic("light");
+                      setSearchOpen(true);
+                    }}
+                    className={row}
+                  >
+                    <RowIcon icon={Search} className="bg-frenz-ink dark:bg-white/20" />
+                    <span className="flex-1 text-base font-semibold">Search messages</span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-frenz-muted" aria-hidden />
+                  </button>
+                </li>
+                <li className="border-t border-frenz-line">
+                  <MessageEmailRow />
+                </li>
+              </ul>
 
-              {/* ── the rest, as one list ── */}
-              <section className={cn(card, "divide-y divide-border/60 overflow-hidden")}>
-                {/* per-VIEWER appearance across every chat (owner, 2026-07-14) — not the shared theme above */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    haptic("light");
-                    setAppearanceSheetOpen(true);
-                  }}
-                  className={row}
-                >
-                  <IconTile icon={Type} />
-                  Font style &amp; bubble style
-                  <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
-                </button>
-                {otherUserId ? (
+              {/* ── block / report ── */}
+              {otherUserId ? (
+                <div className="mt-5 grid grid-cols-2 gap-2.5">
                   <button
                     type="button"
                     onClick={() => {
                       haptic("light");
                       setBlockSheetOpen(true);
                     }}
-                    className={row}
+                    className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-frenz-fill text-[15px] font-bold transition active:scale-[0.98]"
                   >
-                    <IconTile icon={ShieldBan} tone="slate" />
+                    <ShieldBan className="h-[18px] w-[18px]" aria-hidden />
                     Block or restrict
-                    <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
                   </button>
-                ) : null}
-                <button type="button" disabled={busy} onClick={() => void deleteConversation()} className={cn(row, "text-rose-600 disabled:opacity-50")}>
-                  <IconTile icon={Trash2} tone="rose" />
-                  Delete conversation
-                </button>
-              </section>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      haptic("light");
+                      setReportOpen(true);
+                    }}
+                    className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-rose-50 text-[15px] font-bold text-rose-700 transition active:scale-[0.98] dark:bg-rose-500/15 dark:text-rose-300"
+                  >
+                    <Flag className="h-[18px] w-[18px]" aria-hidden />
+                    Report
+                  </button>
+                </div>
+              ) : null}
+              <button type="button" disabled={busy} onClick={() => void deleteConversation()} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 text-[14px] font-bold text-rose-700 disabled:opacity-50 dark:text-rose-400">
+                <Trash2 className="h-4 w-4" aria-hidden />
+                Delete conversation
+              </button>
             </div>
           </motion.div>
         </div>
@@ -566,6 +564,8 @@ export function ThreadOptionsSheet({
           onTypingRevoked={() => announceTypingRevoked(conversationId)}
         />
       ) : null}
+      {otherUserId ? <ReportSheet key="report" targetType="user" targetId={otherUserId} open={reportOpen} onClose={() => setReportOpen(false)} /> : null}
+      <MessageSearchSheet key="search" open={searchOpen} onClose={() => setSearchOpen(false)} />
       <ChatAppearanceSheet key="appearance" conversationId={conversationId} open={appearanceSheetOpen} onClose={() => setAppearanceSheetOpen(false)} />
       {sendCreditsOpen && otherUserId ? (
         <ChatSendCredits
@@ -582,26 +582,75 @@ export function ThreadOptionsSheet({
 
 type LucideIcon = typeof Palette;
 
-/** A section's small uppercase label with its gradient tile — the credits page's card heading. */
-function SectionLabel({ icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
+/** A list row's solid icon square, white glyph (the design's rows). */
+function RowIcon({ icon: Icon, className }: { icon: LucideIcon; className: string }) {
   return (
-    <p className="flex items-center gap-2.5">
-      <IconTile icon={icon} small />
-      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{children}</span>
-    </p>
+    <span aria-hidden className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] text-white", className)}>
+      <Icon className="h-[17px] w-[17px]" />
+    </span>
   );
 }
 
-function IconTile({ icon: Icon, tone = "brand", small = false }: { icon: LucideIcon; tone?: "brand" | "slate" | "rose"; small?: boolean }) {
+/**
+ * "Email me new messages" (0262, owner 2026-10-18): on by default. It can be switched OFF only while the
+ * member has push on a device (the installed app with notifications on) — the server says so, and the
+ * row explains it rather than showing a switch that would only be refused. Read when the sheet opens,
+ * one request; the switch answers on the tap and goes back if the server refuses.
+ */
+function MessageEmailRow() {
+  const [state, setState] = useState<{ on: boolean; hasPush: boolean; ready: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void fetch("/api/notification-settings", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { messageEmail?: { on: boolean; hasPush: boolean; ready: boolean } } | null) => alive && setState(j?.messageEmail ?? { on: true, hasPush: false, ready: false }))
+      .catch(() => alive && setState({ on: true, hasPush: false, ready: false }));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const locked = !!state && state.on && !state.hasPush;
+  const toggle = async () => {
+    if (!state || locked) return;
+    haptic("selection");
+    const next = !state.on;
+    setState({ ...state, on: next });
+    setBusy(true);
+    setError(null);
+    const res = await fetch("/api/notification-settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messageEmail: next }) }).catch(() => null);
+    const j = (await res?.json().catch(() => null)) as { error?: string } | null;
+    setBusy(false);
+    if (!res?.ok) {
+      setState((s) => (s ? { ...s, on: !next } : s));
+      setError(j?.error ?? "Couldn't save. Try again.");
+    }
+  };
+  const sub = error ?? (!state ? "" : locked ? "Install the app and turn on notifications to switch this off." : state.on ? "When you're away, we email you new messages." : "Off — you get push notifications only.");
   return (
-    <span
-      className={cn(
-        "flex shrink-0 items-center justify-center rounded-xl text-white",
-        small ? "h-7 w-7 rounded-lg" : "h-9 w-9",
-        tone === "brand" ? "bg-gradient-to-br from-blue-600 to-violet-500" : tone === "rose" ? "bg-rose-500" : "bg-slate-700 dark:bg-slate-600",
-      )}
-    >
-      <Icon className={small ? "h-3.5 w-3.5" : "h-4 w-4"} aria-hidden />
-    </span>
+    <div className="flex min-h-[64px] items-center gap-3 px-3.5 py-2.5">
+      <RowIcon icon={Mail} className="bg-frenz-magenta" />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-base font-semibold">Email me new messages</span>
+        <span className={cn("text-[13px] leading-snug", error ? "text-rose-600 dark:text-rose-400" : "text-frenz-muted")} role={error ? "alert" : undefined}>
+          {sub}
+        </span>
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={state?.on ?? true}
+        aria-label="Email me new messages"
+        aria-disabled={!state || locked || !state.ready || undefined}
+        aria-busy={busy || undefined}
+        onClick={() => void toggle()}
+        className="-m-[7px] flex h-11 w-16 shrink-0 items-center justify-center"
+      >
+        <span className={cn("flex h-[30px] w-[50px] rounded-full p-0.5 transition-colors", (state?.on ?? true) ? "justify-end bg-frenz-violet" : "justify-start bg-[#E2DFEC] dark:bg-white/20", (locked || !state?.ready) && "opacity-50")}>
+          <span className="h-[26px] w-[26px] rounded-full bg-white shadow-[0_2px_4px_rgba(0,0,0,0.2)]" />
+        </span>
+      </button>
+    </div>
   );
 }

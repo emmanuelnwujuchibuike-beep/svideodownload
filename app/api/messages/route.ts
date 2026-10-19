@@ -308,6 +308,23 @@ async function notifyMembers(
         );
       }),
     );
+
+    /*
+      0262 (owner 2026-10-18): the same message by email — AFTER the pushes, so it never delays them.
+      One email per unread batch, never while they're in the chat, and off for anyone who turned it
+      off once they had push (lib/social/message-email.ts). A secret chat's body is never sent.
+    */
+    const { emailNewMessage } = await import("@/lib/social/message-email");
+    await emailNewMessage({
+      senderName: name,
+      senderHandle: (sender?.handle as string | null | undefined) ?? null,
+      senderAvatarUrl: (sender?.avatar_url as string | null | undefined) ?? null,
+      conversationId,
+      conversationType: conv?.type as string | undefined,
+      recipientIds,
+      mentionedIds: mentionedRecipientIds,
+      preview: isSecret ? "New encrypted message" : previewFor(body, attachments, metadata),
+    });
   } catch {
     /* push is best-effort */
   }

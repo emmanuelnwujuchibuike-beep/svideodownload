@@ -233,7 +233,7 @@ export function ExclusiveFeed({ initial = null }: { initial?: ExclusiveFeedPageV
                 )}
               </li>
             ) : (
-              <li key={`locked-${entry.card.id}`} id={entry.card.id === lockedCards[0]?.id ? "exclusive-discover-first" : undefined} className="scroll-mt-20 border-t border-frenz-line px-3 py-3 sm:px-4">
+              <li key={`locked-${entry.card.id}`} id={entry.card.id === lockedCards[0]?.id ? "exclusive-discover-first" : undefined} className="scroll-mt-20 border-t border-frenz-line">
                 <LockedPreviewCard card={entry.card} creator={discover?.creators[entry.card.creatorId]} />
               </li>
             ),
@@ -501,7 +501,7 @@ export function LockedPreviewCard({ card, creator }: { card: Card; creator: Disc
   const what = itemsLabel(card.items, card.hasVideo);
   const total = creator.totalPosts ?? null;
   return (
-    <article className="frenz-ui overflow-hidden rounded-[22px] border border-frenz-line bg-frenz-card text-frenz-ink">
+    <article className="frenz-ui overflow-hidden bg-frenz-card text-frenz-ink">
       {/* the creator, and their profile */}
       <div className="flex items-center gap-3 px-3.5 py-3">
         <Avatar c={creator} size={40} />

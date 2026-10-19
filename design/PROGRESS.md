@@ -52,6 +52,18 @@ they are applied while each page is built and there is no separate cleanup step.
   original is served only after an active-subscription check. Every place a locked
   post renders (profile Exclusive tab, Exclusive page, Exclusive feed, the top of
   the current exclusive feed, anywhere else) must use the preview.
+  → DONE 2026-10-18 (0263, lib/sub/blur-preview.ts). Audit of every locked-post surface: before this,
+    a non-subscriber already received NO private file anywhere (no key, no signed link, no caption —
+    asserted in lib/sub/security-boundaries and age-gate tests); what they saw was the creator's own
+    public cover, or a plain tile. Now each post carries a 20 px, heavily blurred WebP made on the server
+    from its first item (a video from its first-frame thumb) and stored as a data URL of a few hundred
+    bytes — the detail is gone before it is stored, so it is safe to send and costs no extra request.
+    It is what a non-subscriber's tile shows in the profile Exclusive tab / Exclusive page (sub-gallery)
+    and on the Exclusive feed's discover cards (the creator's public cover still wins where they set one).
+    A subscriber and the creator get the real signed thumbs instead. A Mature post's preview goes only to
+    a confirmed adult. New posts get theirs right after publishing (after()); older posts when their
+    creator next opens the gallery, a few at a time — nothing on a timer. 0263 is NOT applied until the
+    branch reaches main. Tests: lib/sub/blur-preview.server.test.ts (real sharp; the routes).
 - If explicit content can be posted as exclusive content: age verification and
   content gating are needed before launch, and sexually explicit content is not
   allowed in App Store apps. Age verification is NOT to be built without asking.

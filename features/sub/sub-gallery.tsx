@@ -59,6 +59,8 @@ interface Card {
   mature?: true;
   /** 0261: Mature, and this viewer hasn't confirmed they're 18+ — the server sent no media, preview, caption or cover */
   ageLocked?: true;
+  /** 0263: for a viewer without access, the post's tiny blurred preview (a data URL) — never the file */
+  blurUrl?: string;
 }
 
 // 0261: the age check loads only when a Mature post is tapped
@@ -230,6 +232,11 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
                 ) : p.thumbUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- a five-minute private link to the small preview
                   <img src={p.thumbUrl} alt="" loading={idx < 9 ? "eager" : "lazy"} decoding="async" draggable={false} onContextMenu={(e) => e.preventDefault()} className="pointer-events-none h-full w-full object-cover" />
+                ) : p.blurUrl ? (
+                  /* 0263 (owner, REQUIRED): a non-subscriber's tile is the server's 20 px blurred preview, scaled
+                     up and blurred again — the only picture of the post they ever receive */
+                  // eslint-disable-next-line @next/next/no-img-element -- an inline data URL, already blurred on the server
+                  <img src={p.blurUrl} alt="" aria-hidden draggable={false} className="pointer-events-none h-full w-full scale-125 object-cover blur-xl" />
                 ) : null}
                 {/* 🔴 COVER FIRST (owner 2026-10-12: "not supposed to load the media when loading the cover"):
                     a tile shows the public cover or the small private preview and NEVER the original photo or

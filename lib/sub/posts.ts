@@ -8,6 +8,7 @@ import { deletePrivate, hasPrivateR2, presignPrivateGet, presignPrivatePut, read
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { afterCursorFilter, audienceOf, decodeSubCursor, encodeSubCursor, isSubAudience, isUuid, type SubAudience, visibleTo } from "./guards";
+import { ensureBlurPreview, readBlurPreviews } from "./blur-preview";
 import { hasActiveSub, subConfig } from "./server";
 import { checkUpload } from "./upload-check";
 
@@ -137,6 +138,8 @@ export async function createSubPost(creatorId: string, input: { caption?: string
     await db.from("sub_posts").delete().eq("id", id);
     return fail("Couldn't post that.", 500);
   }
+  // 0263: the blurred preview non-subscribers see — made right after the response, never in its way
+  after(() => ensureBlurPreview(id));
   return { ok: true, id, audience, mature };
 }
 
@@ -195,6 +198,11 @@ export interface SubPostCard {
   mature?: true;
   /** 0261: Mature and this viewer hasn't confirmed they're 18+ — no media, preview, caption or cover was sent */
   ageLocked?: true;
+  /**
+   * 0263 (owner, REQUIRED): for a viewer WITHOUT access, the post's heavily blurred 20 px preview — a data
+   * URL made on the server. The only picture of the post they ever receive; never a link to the file.
+   */
+  blurUrl?: string;
   coverUrl: string | null;
   items: number;
   hasVideo: boolean;
@@ -296,6 +304,16 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
     counts.set(m.post_id as string, c);
   }
   // a subscriber's page arrives opened (access already checked above, once)
+  // 0263: the blurred previews — sent to a viewer without access (never the creator or a subscriber, who
+  // get the real thumbs); a Mature post's only to a confirmed adult. The creator's own visit fills in
+  // the ones older posts lack, a few at a time, after the response.
+  const blurs = (!access && !isCreator) || isCreator ? await readBlurPreviews(ids).catch(() => new Map<string, string>()) : new Map<string, string>();
+  if (isCreator) {
+    const missing = page.filter((r) => r.status === "published" && !blurs.has(r.id as string)).slice(0, 4);
+    if (missing.length) after(async () => {
+      for (const r of missing) await ensureBlurPreview(r.id as string);
+    });
+  }
   // older photos without a preview: the creator's own visit makes them, once each, after the response
   if (opening && isCreator) {
     const missing = ((media ?? []) as Row[]).filter((m) => m.media_kind === "image" && "thumb_key" in m && !m.thumb_key);
@@ -326,7 +344,7 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
     );
   }
   return {
-    posts: page.map((r) => ({ id: r.id as string, ...(access ? { audience: audienceOf(r.audience) } : {}), ...(r.mature === true ? { mature: true as const } : {}), ...(ageLocked(r) ? { ageLocked: true as const } : {}), caption: access && !ageLocked(r) ? ((r.caption as string | null) ?? null) : null, coverUrl: ageLocked(r) ? null : ((r.cover_url as string | null) ?? null), items: counts.get(r.id as string)?.n ?? 0, hasVideo: counts.get(r.id as string)?.video ?? false, createdAt: r.created_at as string, ...(r.status === "archived" ? { removed: true } : {}), ...(opened.has(r.id as string) ? { open: opened.get(r.id as string) } : {}), ...(thumbs.has(r.id as string) ? { thumbUrl: thumbs.get(r.id as string) } : {}) })),
+    posts: page.map((r) => ({ id: r.id as string, ...(access ? { audience: audienceOf(r.audience) } : {}), ...(r.mature === true ? { mature: true as const } : {}), ...(ageLocked(r) ? { ageLocked: true as const } : {}), ...(!access && !isCreator && !ageLocked(r) && blurs.has(r.id as string) ? { blurUrl: blurs.get(r.id as string)! } : {}), caption: access && !ageLocked(r) ? ((r.caption as string | null) ?? null) : null, coverUrl: ageLocked(r) ? null : ((r.cover_url as string | null) ?? null), items: counts.get(r.id as string)?.n ?? 0, hasVideo: counts.get(r.id as string)?.video ?? false, createdAt: r.created_at as string, ...(r.status === "archived" ? { removed: true } : {}), ...(opened.has(r.id as string) ? { open: opened.get(r.id as string) } : {}), ...(thumbs.has(r.id as string) ? { thumbUrl: thumbs.get(r.id as string) } : {}) })),
     access,
     isCreator,
     next: rows.length > PAGE ? encodeSubCursor(page[page.length - 1]!.created_at as string, page[page.length - 1]!.id as string) : null,

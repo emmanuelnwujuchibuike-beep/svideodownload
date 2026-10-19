@@ -68,6 +68,8 @@ interface Card {
   hasVideo: boolean;
   /** 0261: Mature (18+); its cover is only sent to a viewer who confirmed they're 18+ */
   mature?: true;
+  /** 0263: the post's tiny blurred preview (a data URL made on the server) — never the file */
+  blurUrl?: string;
 }
 type DiscoverCreator = Creator & { priceCents: number; feeCents: number; feePercent: number; totalCents: number; periodDays: number };
 export interface ExclusiveFeedPageView {
@@ -485,10 +487,11 @@ export function LockedPreviewCard({ card, creator }: { card: Card; creator: Disc
   return (
     <article className="ex-card overflow-hidden">
       <Link href={`${profilePath(creator.handle)}?tab=sub`} prefetch={false} className="relative block aspect-[16/10] overflow-hidden bg-gradient-to-br from-primary/[0.07] via-transparent to-accent/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary" aria-label={`${creator.name}'s exclusive posts — ${what}, for subscribers`}>
-        {card.coverUrl ? (
+        {card.coverUrl || card.blurUrl ? (
           <>
-            {/* eslint-disable-next-line @next/next/no-img-element -- the creator's PUBLIC teaser, on the CDN */}
-            <img src={card.coverUrl} alt="" loading="lazy" decoding="async" className="h-full w-full scale-110 object-cover blur-md" />
+            {/* the creator's PUBLIC teaser on the CDN, else the server's blurred 20 px preview (0263) — never the file */}
+            {/* eslint-disable-next-line @next/next/no-img-element -- public cover or an inline data URL */}
+            <img src={card.coverUrl ?? card.blurUrl} alt="" loading="lazy" decoding="async" className={card.coverUrl ? "h-full w-full scale-110 object-cover blur-md" : "h-full w-full scale-125 object-cover blur-xl"} />
             <span className="absolute inset-0 bg-white/30 dark:bg-black/40" aria-hidden />
           </>
         ) : null}

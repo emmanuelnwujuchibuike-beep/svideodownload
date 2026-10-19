@@ -6,6 +6,7 @@ import { flagsOf, isAccountVisibleTo } from "@/lib/social/account-visibility";
 import { hasPrivateR2, presignPrivateGet } from "@/lib/storage/r2";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { readBlurPreviews } from "./blur-preview";
 import { afterCursorFilter, audienceOf, decodeSubCursor, encodeSubCursor, isUuid } from "./guards";
 import { subConfig } from "./server";
 
@@ -104,6 +105,8 @@ export interface DiscoverCard {
   hasVideo: boolean;
   /** 0261: Mature (18+); the cover is withheld from a viewer who hasn't confirmed they're 18+ */
   mature?: true;
+  /** 0263: the post's heavily blurred 20 px preview (a data URL) — never the file; withheld like the cover */
+  blurUrl?: string;
 }
 
 export interface DiscoverCreator extends FeedCreator {
@@ -363,9 +366,10 @@ export async function discover(viewerId: string, subscribed: Set<string>, knownB
     seen.add(id);
     return true;
   }).slice(0, DISCOVER_CARDS);
-  const [media, adult] = await Promise.all([
+  const [media, adult, blurs] = await Promise.all([
     mediaOf(latest.map((r) => r.id as string), false),
     latest.some((r) => r.mature === true) ? isAdult(viewerId).catch(() => false) : Promise.resolve(true),
+    readBlurPreviews(latest.map((r) => r.id as string)).catch(() => new Map<string, string>()),
   ]);
   const creators: Record<string, DiscoverCreator> = {};
   for (const r of latest) {
@@ -375,7 +379,7 @@ export async function discover(viewerId: string, subscribed: Set<string>, knownB
   }
   return {
     // 0261: a Mature post's public cover only for a viewer who confirmed they're 18+
-    cards: latest.map((r) => ({ id: r.id as string, creatorId: r.creator_id as string, createdAt: r.created_at as string, coverUrl: r.mature === true && !adult ? null : ((r.cover_url as string | null) ?? null), items: media.get(r.id as string)?.n ?? 0, hasVideo: media.get(r.id as string)?.video ?? false, ...(r.mature === true ? { mature: true as const } : {}) })),
+    cards: latest.map((r) => ({ id: r.id as string, creatorId: r.creator_id as string, createdAt: r.created_at as string, coverUrl: r.mature === true && !adult ? null : ((r.cover_url as string | null) ?? null), items: media.get(r.id as string)?.n ?? 0, hasVideo: media.get(r.id as string)?.video ?? false, ...(r.mature === true ? { mature: true as const } : {}), ...(blurs.has(r.id as string) && !(r.mature === true && !adult) ? { blurUrl: blurs.get(r.id as string)! } : {}) })),
     creators,
   };
 }

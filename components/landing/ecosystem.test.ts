@@ -48,8 +48,8 @@ describe("public advertising summary (§13–§16, §36)", () => {
 describe("the landing page structure", () => {
   const page = src("app/(marketing)/page.tsx");
 
-  it("Download first, then shortcuts, Frenz AI, Discover, Promote — before the downloader story", () => {
-    const order = ["<Hero />", "<FrenzAiSection />", "<DiscoverSection />", "<PromoteSection", "<FeaturesGrid />", "<HowItWorks />", "<Faq />"].map((t) => page.indexOf(t));
+  it("Download first, then Frenz AI, Promote — before the downloader story (Discover removed as a duplicate, 2026-10-19)", () => {
+    const order = ["<Hero />", '<DeferredSection part="ai"', "<PromoteSection", '<DeferredSection part="features"', '<DeferredSection part="how"', '<DeferredSection part="platforms"', '<DeferredSection part="faq"'].map((t) => page.indexOf(t));
     expect(order.every((i) => i > 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
@@ -57,8 +57,8 @@ describe("the landing page structure", () => {
   it("the third listing of the platforms and the duplicate ecosystem grid are gone", () => {
     expect(page).not.toContain("<PlatformShowcase />");
     expect(page).not.toContain("<ProductGrid />");
-    // the header's "Products" link still has somewhere to land
-    expect(src("components/landing/ecosystem.tsx")).toContain('<section id="products"');
+    // the header's "Products" link still has somewhere to land — the Frenz AI placeholder carries the id
+    expect(page).toContain('<DeferredSection part="ai" id="products"');
   });
 
   it("no ad-serving engine for a CTA: the Promote section is links + a build-time summary (§27)", () => {

@@ -1,15 +1,12 @@
 import { Suspense } from "react";
 
-import { CtaBanner } from "@/components/landing/cta-banner";
-import { Faq } from "@/components/landing/faq";
-import { FeaturesGrid } from "@/components/landing/features-grid";
+import { DeferredSection } from "@/components/landing/deferred-section";
+import { FaqJsonLd } from "@/components/landing/faq";
 import { Hero } from "@/components/landing/hero";
-import { HowItWorks } from "@/components/landing/how-it-works";
-import { DiscoverSection, FrenzAiSection, PromoteSection } from "@/components/landing/ecosystem";
+import { PromoteSection } from "@/components/landing/ecosystem";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { RecommendedTools } from "@/components/monetization/recommended-tools";
-import { DownloaderLinks } from "@/components/seo/downloader-links";
 import { getPublicAdSummary } from "@/lib/ads-platform/public-summary";
 import { productJsonLd } from "@/lib/content/genome/queries";
 import { jsonLd } from "@/lib/seo/json-ld";
@@ -257,46 +254,37 @@ export default async function HomePage() {
              the same platforms on one page (the hero's chips and the SEO link
              list below both stay).
         */}
-        <FrenzAiSection />
+        {/*
+          ══ BELOW THE HERO, NOTHING LOADS UNTIL IT IS SCROLLED NEAR (owner, 2026-10-19) ══
+          "Make sure the landing is very light … remove duplicate in relevant things that consume
+          weight, below section shouldn't load on landing."
+
+          Each DeferredSection is an empty placeholder (its anchor id + its height measured at 390 px)
+          until the visitor's first scroll brings it within a screen; then all five parts arrive in ONE static, CDN-cached
+          response (app/landing-sections/route.ts, lib/landing/deferred-sections.ts). Server markup
+          ships twice (HTML + RSC payload), so these sections were ~28 KB of a 64 KB gzipped document.
+
+          REMOVED as duplicates the same day:
+           · DiscoverSection (Reels · Feed · Wallpapers) — Wallpapers is a hero Tools card, Reels and
+             Feed are in the bottom nav, and the footer's Products column lists all three.
+           · CtaBanner ("Ready to get started?") — its one button scrolled back up to the paste box.
+           · the second `homepage_top` slot — the same zone already sat above the platform links.
+          Kept in the document: the Promote card (its facts are the live ad catalogue), the
+          section-break ad slots, and the FAQ's structured data.
+        */}
+        <DeferredSection part="ai" id="products" minHeight={571} />
 
         <SectionAd />
-
-        <DiscoverSection />
 
         <PromoteSection ads={ads} />
 
         <SectionAd />
 
-        {/* Everything you need — the six-feature grid (the trust story: fast, private, every device). */}
-        <FeaturesGrid />
+        <DeferredSection part="features" id="features" minHeight={796} />
 
         <SectionAd />
 
-        {/* How it works — 3 simple steps. */}
-        <HowItWorks />
-
-        {/*
-          🔴 THE EXOCLICK MULTI-FORMAT SLOT IS NOT HERE ANY MORE (owner,
-          2026-09-01: "put a multi format slot in the landing page above the
-          storage card and below the explore feature and wallpaper button").
-
-          It was here, after `ProductGrid`, because that grid ends with feature
-          cards and an Explore-wallpapers CTA — cards with almost the same names
-          as the ones the owner meant. Measured live, this position is y=7698 of
-          an 11,315px document, and the events table showed the cost: every other
-          ExoClick slot reported fills and no-fills for two and a half hours
-          while this one reported nothing at all, because nobody scrolls that
-          far. It now sits between the Explore/Wallpaper cards and the Cloud
-          storage card in features/downloads/download-page-core.tsx, at y≈700.
-        */}
-
-        {/*
-          Ad slot — same zone, on the shared premium surface. Renders nothing until
-          the slot confirms an ad.
-        */}
-        <div className="container max-w-5xl px-3 py-2">
-          <AdSurface zone="homepage_top" maxWidth="max-w-3xl" />
-        </div>
+        <DeferredSection part="how" id="how-it-works" minHeight={619} />
 
         {/* Admin-managed recommended tools (renders nothing when empty) */}
         <Suspense fallback={null}>
@@ -309,21 +297,18 @@ export default async function HomePage() {
 
         <SectionAd />
 
-        <CtaBanner />
+        {/* An ad above the platform links — the section the hero's "All platforms" lands on. */}
+        <div className="container max-w-5xl px-3 py-2">
+          <AdSurface zone="homepage_top" maxWidth="max-w-3xl" />
+        </div>
+
+        {/* The internal links to each platform page (how those pages are discovered). */}
+        <DeferredSection part="platforms" id="platforms" minHeight={918} />
 
         <SectionAd />
 
-        {/* SEO link surface.
-            Heading reworded 2026-09-02 (owner: "minimis the word downloader in
-            the landing page, instead use save and reuse"). The links themselves
-            are unchanged — this is how the platform pages are discovered, and
-            removing them would cost real navigation. Only the framing moved
-            from the tool's category to what a visitor actually does with it. */}
-        <DownloaderLinks heading="Save and reuse from your favourite platforms" />
-
-        <SectionAd />
-
-          <Faq />
+        <FaqJsonLd />
+        <DeferredSection part="faq" id="faq" minHeight={768} />
         </div>
         </main>
         <SiteFooter />

@@ -358,6 +358,11 @@ export const config = {
       was an Edge invocation for nothing. Exact segment only: `/ai/**` (the tools)
       and everything private still run through the guard (lib/perf/middleware-matcher.test.ts).
     */
-    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|twitter-image|launch.html|sw\\.js|sw/|manifest\\.webmanifest|frenz-ai(?:/|$)|\\.well-known|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|apk|js|css|woff|woff2|mp4|webm|mp3)$).*)",
+    /*
+      `/landing-sections` (2026-10-19): the landing's lower sections as static JSON, built once and
+      served from the CDN (app/landing-sections/route.ts). It reads no session; a middleware run would
+      only make it uncacheable at the edge and bill an invocation per scrolling visitor. Exact path only.
+    */
+    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|twitter-image|launch.html|sw\\.js|sw/|manifest\\.webmanifest|frenz-ai(?:/|$)|landing-sections$|\\.well-known|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|apk|js|css|woff|woff2|mp4|webm|mp3)$).*)",
   ],
 };

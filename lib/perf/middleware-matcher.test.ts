@@ -33,4 +33,10 @@ describe("middleware matcher", () => {
   it("SEO: skips the static /frenz-ai guides — that segment only", () => {
     for (const p of ["/frenz-ai", "/frenz-ai/", "/frenz-ai/kling-ai", "/frenz-ai/text-to-video"]) expect(matches(p), p).toBe(false);
   });
+
+  it("the landing's deferred sections (static, CDN-cached) skip it — that exact path only", () => {
+    expect(matches("/landing-sections")).toBe(false);
+    // teeth: nothing else rides on the exclusion
+    for (const p of ["/landing-sections/x", "/landing-sectionsx", "/x/landing-sections"]) expect(matches(p), p).toBe(true);
+  });
 });

@@ -26,8 +26,12 @@ describe("discovery analytics", () => {
     expect(src("features/downloads/frenz-ai-cta.tsx")).toContain('data-track="ai_clicked"');
     expect(src("components/wallpapers/wallpaper-cta.tsx")).toContain('data-track="wallpapers_clicked"');
     expect(src("features/downloads/promote-button.tsx")).toContain('data-track="advertise_clicked"');
-    const eco = src("components/landing/ecosystem.tsx");
-    for (const t of ["ai_clicked", "ai_reels_clicked", "reels_clicked", "wallpapers_clicked", "advertise_clicked"]) expect(eco).toContain(t);
+    expect(src("components/landing/ecosystem.tsx")).toContain('data-track="advertise_clicked"');
+    // the landing's Frenz AI section is deferred markup now (2026-10-19); Discover's Reels/Wallpapers
+    // doors were removed as duplicates — the hero's Wallpapers tile carries wallpapers_clicked
+    const deferred = src("lib/landing/deferred-sections.ts");
+    for (const t of ["ai_clicked", "ai_reels_clicked"]) expect(deferred).toContain(`data-track="${t}"`);
+    expect(src("features/downloads/home-screen.tsx")).toContain('data-track="wallpapers_clicked"');
   });
 
   it("the application reports when it starts and when it is submitted", () => {

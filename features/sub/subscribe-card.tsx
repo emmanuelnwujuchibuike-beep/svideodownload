@@ -90,39 +90,49 @@ export function CreatorSubscribeCard({
     );
   }
 
+  /*
+    design/Exclusive.dc.html (owner, 2026-10-18): "Unlock exclusive posts", what's included, and
+    "Subscribe · [price]" on the existing checkout, with the creator's real price and period. The
+    design's "[Renewal & cancellation terms]" is our real terms: one payment for the period, nothing
+    renews automatically (lib/sub/offer.ts, Part 5), paid with Paystack.
+  */
+  const period = quote?.periodDays ?? null;
   return (
-    <section aria-label={`Subscribe to ${creatorName}`} className={cn("mb-3 overflow-hidden rounded-[24px]", EX_CARD)}>
-      <div className="flex items-start gap-3 px-4 pt-4">
-        <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-[0_8px_20px_-10px_hsl(var(--primary)/0.8)]">
+    <section id="sub-offer" aria-label={`Subscribe to ${creatorName}`} className="frenz-ui mb-4 rounded-[24px] border border-frenz-line bg-frenz-card p-4 text-frenz-ink shadow-frenz-card">
+      <div className="flex items-center gap-2.5">
+        <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-frenz-violet/10 text-frenz-violet">
           {v.tone === "expired" ? <RotateCcw className="h-5 w-5" /> : <Lock className="h-5 w-5" />}
         </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[15.5px] font-bold leading-tight tracking-[-0.01em]">{v.title}</p>
-          {v.priceLine ? <p className="mt-1 text-[20px] font-extrabold leading-none tracking-[-0.02em]">{v.priceLine}</p> : null}
-          {v.feeLine ? <p className="mt-1 text-[12px] text-muted-foreground">{v.feeLine}</p> : null}
-          {v.status ? <p className="mt-1.5 text-[12.5px] font-medium text-muted-foreground">{v.status}</p> : null}
+        <div className="flex min-w-0 flex-col">
+          <h2 className="m-0 font-heading text-lg font-bold">{v.tone === "expired" ? v.title : "Unlock exclusive posts"}</h2>
+          <p className="m-0 text-[13px] text-frenz-muted">{v.tone === "expired" && v.status ? v.status : `Subscriber-only content from ${creatorName}`}</p>
         </div>
       </div>
-      <ul className="space-y-1.5 px-4 pt-3 text-[13px]">
+      <ul className="mt-3.5 flex flex-col gap-2.5">
         {["Every post they share with subscribers", "Like and comment on subscriber posts", "One payment — nothing renews automatically"].map((b) => (
-          <li key={b} className="flex items-center gap-2">
-            <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-            <span>{b}</span>
+          <li key={b} className="flex items-center gap-2.5 text-[15px] font-semibold">
+            <span aria-hidden className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-frenz-violet/10 text-frenz-violet">
+              <Check className="h-3.5 w-3.5" />
+            </span>
+            {b}
           </li>
         ))}
       </ul>
-      <div className="px-4 pb-4 pt-3.5">
+      <div className="mt-4">
         {v.action === "sign_in" ? (
-          <Link href={`/login?next=${encodeURIComponent(returnPath)}`} prefetch={false} className={cn(exPrimary, "w-full justify-center")}>
+          <Link href={`/login?next=${encodeURIComponent(returnPath)}`} prefetch={false} className="flex min-h-[50px] w-full items-center justify-center rounded-full bg-frenz-gradient text-[15px] font-bold text-white">
             {v.actionLabel}
           </Link>
         ) : (
-          <button type="button" onClick={() => void checkout()} disabled={busy} className={cn(exPrimary, "w-full")}>
+          <button type="button" onClick={() => void checkout()} disabled={busy} className="flex min-h-[50px] w-full items-center justify-center gap-2 rounded-full bg-frenz-gradient text-[15px] font-bold text-white transition active:scale-[0.99] disabled:opacity-60">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-            {busy ? "Opening secure payment…" : v.actionLabel}
+            {busy ? "Opening secure payment…" : `${v.actionLabel}${v.priceLine ? ` · ${v.priceLine}` : ""}`}
           </button>
         )}
-        <p className="mt-2 text-center text-[11.5px] text-muted-foreground">Paid securely with Paystack. Unlocks once the payment is confirmed.</p>
+        {v.feeLine ? <p className="mt-2 text-center text-xs text-frenz-muted">{v.feeLine}</p> : null}
+        <p className="mt-1 text-center text-xs text-frenz-muted">
+          {period ? `One payment for ${period} days. Nothing renews automatically — you renew when you choose. ` : ""}Paid securely with Paystack; unlocks once the payment is confirmed.
+        </p>
         {note ? (
           <p role="alert" className="mt-1.5 text-center text-[12.5px] font-medium text-rose-600 dark:text-rose-400">
             {note}

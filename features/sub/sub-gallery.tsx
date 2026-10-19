@@ -213,7 +213,14 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
         </div>
       ) : null}
 
-      {!state.ready ? (
+      {/*
+        design/Exclusive.dc.html (owner, 2026-10-18): a visitor WITHOUT access sees "Exclusive posts N" and
+        two columns of heavily blurred tiles — the server's blurred preview (0263), never the file — each
+        with a lock and what it holds, then "See everything", which takes them to the subscribe card.
+      */}
+      {state.ready && !state.access && !state.isCreator && state.posts.length ? (
+        <LockedGrid posts={state.posts} more={!!state.next} />
+      ) : !state.ready ? (
         <p className="py-8 text-center text-[13px] text-muted-foreground">Subscriber posts arrive with the next update.</p>
       ) : state.posts.length ? (
         <ul className="-mx-4 grid grid-cols-3 gap-0.5 sm:mx-0 sm:gap-1">
@@ -855,5 +862,53 @@ function RovingWatermark({ creatorHandle }: { creatorHandle: string }) {
     <a href={profilePath(creatorHandle)} aria-label={`Open @${creatorHandle}'s profile`} className={cls}>
       {text}
     </a>
+  );
+}
+
+/** The visitor's locked grid (Exclusive.dc.html). No private file reaches it — only the blurred preview. */
+function LockedGrid({ posts, more }: { posts: Card[]; more: boolean }) {
+  const kind = (p: Card) => (p.items > 1 ? `${p.items} items` : p.hasVideo ? "Video" : "Photo");
+  return (
+    <section aria-labelledby="locked-posts" className="frenz-ui text-frenz-ink">
+      <h2 id="locked-posts" className="m-0 flex items-baseline gap-2 px-1 pb-2.5 font-heading text-[19px] font-bold tracking-[-0.4px]">
+        Exclusive posts
+        <span className="font-body text-sm font-semibold text-frenz-muted">
+          {posts.length}
+          {more ? "+" : ""}
+        </span>
+      </h2>
+      <ul className="grid grid-cols-2 gap-2">
+        {posts.map((p) => (
+          <li key={p.id}>
+            <a
+              href="#sub-offer"
+              aria-label={`Locked ${kind(p).toLowerCase()}${p.mature ? ", Mature (18+)" : ""} — subscribe to view`}
+              className="relative block h-[220px] overflow-hidden rounded-[20px] bg-[#1A1430]"
+            >
+              {p.coverUrl || p.blurUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- the creator's public cover or the server's blurred preview
+                <img src={p.coverUrl ?? p.blurUrl} alt="" aria-hidden draggable={false} className="pointer-events-none absolute -inset-5 h-[calc(100%+2.5rem)] w-[calc(100%+2.5rem)] object-cover blur-xl" />
+              ) : null}
+              <span aria-hidden className="absolute inset-0 bg-black/25" />
+              <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white">
+                <span aria-hidden className="flex h-11 w-11 items-center justify-center rounded-full border border-white/30 bg-black/30">
+                  <Lock className="h-5 w-5" />
+                </span>
+                <span className="rounded-full bg-black/35 px-2.5 py-0.5 text-xs font-bold">
+                  {kind(p)}
+                  {p.mature ? " · 18+" : ""}
+                </span>
+              </span>
+            </a>
+          </li>
+        ))}
+        <li>
+          <a href="#sub-offer" className="flex h-[220px] flex-col items-center justify-center gap-1 rounded-[20px] bg-frenz-gradient px-4 text-center">
+            <span className="font-heading text-[17px] font-bold text-white">See everything</span>
+            <span className="text-[13px] text-white/85">Subscribe to unlock all posts</span>
+          </a>
+        </li>
+      </ul>
+    </section>
   );
 }

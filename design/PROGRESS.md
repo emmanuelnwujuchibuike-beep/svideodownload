@@ -16,7 +16,7 @@ review before the next one starts.
 - [x] 9. Profile menu → design/Menu.dc.html
 - [x] 10. Settings → design/Settings.dc.html
 - [x] 11. Profile Exclusive tab (owner view) → design/ProfileExclusive.dc.html (moved forward at the owner's request) — one dashboard card with real figures, Share link / Dashboard, rows for announcements and notifications, Subs-tagged grid with Manage, hub as three iOS lists with Add.
-- [ ] 12. Exclusive page (subscriber view) → design/Exclusive.dc.html
+- [x] 12. Exclusive page (subscriber view) → design/Exclusive.dc.html
 - [ ] 13. Exclusive feed tab → design/ExclusiveFeed.dc.html
 - [x] 14. Chat options → design/ChatMenu.dc.html (added by the owner 2026-10-18) — with new-message email and its switch
 
@@ -355,6 +355,21 @@ they are applied while each page is built and there is no separate cleanup step.
 - The search suggestion chips stay, shown only while the empty field has focus (the design has none).
 - Kept: the app top bar (every signed-in page has it; hiding it would need the page-transition work
   the Messages inbox needed). The cover-photo hero is replaced by the design's compact row.
+
+### Step 12 · Exclusive page, visitor without access (Exclusive.dc.html)
+- The cover, avatar and name are the profile hero rebuilt in step 5 (the Exclusive tab sits under it).
+- The subscribe card: "Unlock exclusive posts" / "Subscriber-only content from [name]", what's included
+  (the app's real three), and "Subscribe · [price for the period]" on the existing checkout, with the
+  creator's real price, fee line and period. The design's "[Renewal & cancellation terms]" is our real
+  terms, already in the product: "One payment for [N] days. Nothing renews automatically — you renew when
+  you choose. Paid securely with Paystack; unlocks once the payment is confirmed." Nothing to flag.
+  Renew (an expired subscription), Sign in, "You're subscribed" and "not taking subscriptions" keep their
+  cards.
+- "Exclusive posts N", then two columns of heavily blurred tiles — the server's blurred preview (0263),
+  or the creator's public cover — each with a lock and what it holds (Photo / Video / N items, + 18+),
+  and a "See everything" tile; both take the visitor to the subscribe card. No private file, link or
+  caption reaches this grid.
+- The design's "@chris · Exclusive creator" label isn't added: the hero's own line stays.
 
 ### Step 14 · Chat options (ChatMenu.dc.html) and new-message email
 - A white sheet: the person (avatar with the identity ring, name, verified, @handle, "View profile"),

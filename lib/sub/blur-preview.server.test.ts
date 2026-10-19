@@ -144,7 +144,7 @@ describe("making it", () => {
   it("the creator's visit fills in an older post's preview after the response — once, from the private file", async () => {
     const bytes = await photo();
     const realFetch = globalThis.fetch;
-    globalThis.fetch = vi.fn(async () => new Response(bytes)) as unknown as typeof fetch;
+    globalThis.fetch = vi.fn(async () => new Response(new Blob([new Uint8Array(bytes)]))) as unknown as typeof fetch;
     try {
       sessionUser = { id: CREATOR };
       const r = await route(import("@/app/api/sub/posts/route"));

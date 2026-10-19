@@ -13,7 +13,7 @@ review before the next one starts.
 - [x] 6. History → design/History.dc.html (owner's screenshot) — large title with real count · size (opens storage), one options button, Select, fill search, segmented filter, edge-to-edge day groups, icon + source tiles with long-press sheet, infinite scroll, lightbulb → options menu.
 - [x] 7. Landing page → the same system: white page, iOS glass chrome, no Recent section
 - [x] 8. Wallpapers → design/Wallpapers.dc.html
-- [ ] 9. Profile menu → design/Menu.dc.html
+- [x] 9. Profile menu → design/Menu.dc.html
 - [ ] 10. Settings → design/Settings.dc.html
 - [x] 11. Profile Exclusive tab (owner view) → design/ProfileExclusive.dc.html (moved forward at the owner's request) — one dashboard card with real figures, Share link / Dashboard, rows for announcements and notifications, Subs-tagged grid with Manage, hub as three iOS lists with Add.
 - [ ] 12. Exclusive page (subscriber view) → design/Exclusive.dc.html
@@ -304,6 +304,21 @@ they are applied while each page is built and there is no separate cleanup step.
   status toast, the SEO content, the visible breadcrumb (now a quiet line under the grid) and the footer.
 - Changed: the page no longer shows the site header — the design's header is the image. The design also
   draws the bottom tab bar; /wallpapers sits outside the signed-in shell, so it has none (as before).
+
+### Step 9 · Profile menu (Menu.dc.html)
+- One panel for every place the menu opens (header avatar sheet, profile page sheet, desktop
+  panel): "Menu" + close, a white profile card (avatar with the identity ring, verified tick, plan
+  crown, "@handle · View profile"), Shortcuts — Explore, Reels, Sounds, Friends, Downloads, Saved,
+  Wallpapers, Frenz AI — then More — My ads, Settings, Help & support — and a footer with
+  Light / Dark / Auto and sign out. Home and Chats are gone from the menu (they are in the tab bar).
+- The design labels the AI tile "AI Studio"; the product is named Frenz AI (owner, 2026-09-07), so it
+  keeps its name. It is the one gradient tile (the AI showcase). The icon is the lightbulb, never a
+  sparkle (owner rule).
+- Kept beyond the design: Go Premium (free accounts — the menu was its door), and the Language row
+  (as before; Settings has it too). Gone: the brand logo row, "My Spaces", the unread count on the old
+  Chats row, the build number (Settings shows the version).
+- Help & support moved from the footer into More (the 2026-10-09 test now pins the new place).
+- Page weight is measured with the step 10 build.
 
 ### Outside the page steps (owner, 2026-10-18)
 - `a50b9cd`: full-screen ads lost the engagement tray (brand badge, Like, views,

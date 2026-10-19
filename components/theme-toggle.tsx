@@ -24,7 +24,7 @@ const OPTIONS = [
  * why), so `useTheme().theme` can no longer tell "System" apart from an
  * explicit pick that happens to match the current OS preference.
  */
-export function ThemeToggle({ size = "md" }: { size?: "sm" | "md" }) {
+export function ThemeToggle({ size = "md", variant = "icons", className }: { size?: "sm" | "md"; variant?: "icons" | "segmented"; className?: string }) {
   const { setTheme } = useTheme();
   const [mode, setMode] = useState<ThemeMode>(getCachedThemeMode());
   const [mounted, setMounted] = useState(false);
@@ -38,6 +38,35 @@ export function ThemeToggle({ size = "md" }: { size?: "sm" | "md" }) {
   };
 
   const dim = size === "sm" ? "h-8 w-8" : "h-9 w-9";
+
+  /*
+    The profile menu's footer (design/Menu.dc.html, 2026-10-18): Light / Dark / Auto as words in a
+    fill-coloured segmented control. "Auto" is the same System mode the icon version offers.
+  */
+  if (variant === "segmented") {
+    return (
+      <div role="radiogroup" aria-label="Appearance" className={cn("grid grid-cols-3 gap-0.5 rounded-xl bg-frenz-fill p-[3px]", className)}>
+        {OPTIONS.map(({ value, label }) => {
+          const active = mounted && mode === value;
+          return (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => choose(value)}
+              className={cn(
+                "min-h-[38px] rounded-[9px] text-[13px] transition-colors",
+                active ? "bg-frenz-card font-bold text-frenz-ink shadow-[0_1px_3px_rgba(18,17,26,0.12)]" : "font-semibold text-frenz-muted",
+              )}
+            >
+              {value === "system" ? "Auto" : label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
 
   // Avoid hydration mismatch: render a neutral placeholder until mounted.
   if (!mounted) {

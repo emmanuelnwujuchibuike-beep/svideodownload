@@ -88,17 +88,19 @@ describe("the floating glass bottom nav", () => {
 });
 
 describe("Support lives in the profile menu for members (owner, 2026-10-09)", () => {
-  /** Support sits in the menu's footer row, beside the Dark / Light / System toggle. */
-  function supportBesideTheme(src: string): boolean {
-    const footer = src.slice(src.indexOf("{/* Footer — theme"));
-    return /<ThemeToggle \/>[\s\S]{0,700}?href="\/support"[\s\S]{0,400}?Support\n/.test(footer);
+  /*
+    2026-10-18 (owner, Menu.dc.html): Support is "Help & support" in the menu's "More" list, and the
+    footer is the Light / Dark / Auto switch and sign out. Still in the profile menu for members.
+  */
+  function supportInMore(src: string): boolean {
+    return /const MORE[^=]*= \[[\s\S]*?\{ label: "Help & support", href: "\/support"/.test(src) && /\{\/\* Footer — Light \/ Dark \/ Auto and sign out \*\/\}[\s\S]{0,200}<ThemeToggle variant="segmented"/.test(src);
   }
   const menu = code("features/profile/profile-menu-panel.tsx");
-  it("the footer carries Support next to the theme toggle", () => {
-    expect(supportBesideTheme(menu)).toBe(true);
+  it("the menu carries Help & support in More, and the footer the theme switch", () => {
+    expect(supportInMore(menu)).toBe(true);
   });
-  it("teeth: Support missing from the footer fails", () => {
-    expect(supportBesideTheme(menu.replace('href="/support"', 'href="/help"'))).toBe(false);
+  it("teeth: Support missing from the menu fails", () => {
+    expect(supportInMore(menu.replace('href: "/support"', 'href: "/help"'))).toBe(false);
   });
   // 2026-10-16 (owner): Support → Chats on the landing too; a guest gets an empty inbox and a sign-in modal
   const chatsForAll = (src: string) =>

@@ -5,6 +5,7 @@ import {
   AudioLines,
   Ban,
   CheckCircle2,
+  ChevronLeft,
   Clapperboard,
   ImagePlay,
   LayoutGrid,
@@ -27,6 +28,9 @@ import { aiJobRecord } from "@/features/ai/ai-result-download";
 import { aiButtonClass } from "@/features/ai/design/ai-button";
 import { openPlayer } from "@/features/downloads/player-store";
 import { useAiHistory } from "@/features/ai/use-ai-history";
+import { PullToRefresh } from "@/features/ui/pull-to-refresh";
+import { TapOnceLink } from "@/features/ui/tap-once-link";
+import { removeFromAiHistory } from "@/lib/ai/history-store";
 import {
   AI_HISTORY_EMPTY_COPY,
   AI_HISTORY_FILTERS,
@@ -129,7 +133,13 @@ export function FrenzAIHistory({
   resultHref = (id) => `/studio/ai/character-replace/result/${encodeURIComponent(id)}`,
   batchHref = (id) => `/studio/ai/character-replace/create?batch=${encodeURIComponent(id)}`,
   aiBase = "/studio/ai",
+  page,
 }: {
+  /**
+   * Step 22 (design/AIHistory.dc.html, owner 2026-10-19): this list IS the page — draw the header (‹ Frenz AI ·
+   * Select · "AI History" · n creations · pull down to refresh), make the list pull-to-refresh, and offer Select.
+   */
+  page?: { backHref: string };
   /**
    * 🔴 WHICH AI DOOR THE TOOL LINKS STAY ON (owner, 2026-10-08: "when I click on
    * an AI history, it shows something went wrong" — a Lip Sync item). Lip Sync,
@@ -173,6 +183,41 @@ export function FrenzAIHistory({
 }) {
   const history = useAiHistory("all");
   const [openJob, setOpenJob] = useState<AiJobView | null>(null);
+  /*
+    Select (step 22): pick finished creations and delete them together — each through the same owner-only
+    DELETE /api/ai/jobs/[id] a single delete uses (files go, the row leaves history, no balance moves). A
+    running job can't be picked: it is cancelled, never deleted.
+  */
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
+  const [deleteNote, setDeleteNote] = useState<string | null>(null);
+  const toggleSelect = (id: string) =>
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const endSelect = () => {
+    setSelecting(false);
+    setSelected(new Set());
+  };
+  const deleteSelected = async () => {
+    if (!selected.size || deleting) return;
+    haptic("selection");
+    setDeleting(true);
+    setDeleteNote(null);
+    let failed = 0;
+    for (const id of selected) {
+      const res = await fetch(`/api/ai/jobs/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => null);
+      if (res?.ok) removeFromAiHistory(id);
+      else failed += 1;
+    }
+    setDeleting(false);
+    if (failed) setDeleteNote(`${failed} couldn't be deleted. Try again in a moment.`);
+    endSelect();
+  };
 
   /*
     One clock for the whole list, ticking a minute at a time.
@@ -248,8 +293,14 @@ export function FrenzAIHistory({
       { key: "week", label: "This week", items: [] },
       { key: "lastweek", label: "Last week", items: [] },
       { key: "earlier", label: "Earlier", items: [] },
+      // step 22: the files that are gone, last and quiet, whatever day they were made
+      { key: "expired", label: "Expired", items: [] },
     ];
     for (const job of visibleJobs) {
+      if (resultAvailability(job, now) === "expired") {
+        buckets[5]!.items.push(job);
+        continue;
+      }
       const t = Date.parse(job.createdAt);
       // An unparseable timestamp lands in Earlier rather than crashing a bucket
       // index — the row is still the member's and still worth showing.
@@ -258,7 +309,7 @@ export function FrenzAIHistory({
       buckets[i]!.items.push(job);
     }
     return buckets.filter((b) => b.items.length > 0);
-  }, [groupByDay, visibleJobs]);
+  }, [groupByDay, visibleJobs, now]);
 
   const close = useCallback(() => setOpenJob(null), []);
 
@@ -309,7 +360,7 @@ export function FrenzAIHistory({
     setOpenJob(job);
   };
 
-  return (
+  const body = (
     <section className={className} aria-labelledby="ai-history-heading">
       {/*
         ── 🔴 A SECTION, NOT A FOOTNOTE (owner, 2026-09-09) ──────────────────
@@ -322,6 +373,33 @@ export function FrenzAIHistory({
         one thing that tells somebody at a glance whether there is anything
         here worth scrolling to.
       */}
+      {page ? (
+        <header className="frenz-ui px-1 text-frenz-ink">
+          <div className="flex items-center justify-between">
+            <TapOnceLink href={page.backHref} spinner={false} className="-ml-1 inline-flex min-h-[44px] items-center gap-0.5 text-[16px] font-bold text-frenz-blue no-underline">
+              <ChevronLeft className="h-5 w-5" aria-hidden /> Frenz AI
+            </TapOnceLink>
+            {history.jobs.length ? (
+              <button
+                type="button"
+                onClick={() => {
+                  haptic("selection");
+                  if (selecting) endSelect();
+                  else setSelecting(true);
+                }}
+                aria-pressed={selecting}
+                className="min-h-[44px] px-1 text-[16px] font-bold text-frenz-blue"
+              >
+                {selecting ? "Done" : "Select"}
+              </button>
+            ) : null}
+          </div>
+          <h1 className="m-0 font-heading text-[34px] font-extrabold leading-tight tracking-[-1px]">AI History</h1>
+          <p className="m-0 mt-0.5 text-[14px] text-frenz-muted">
+            {history.loaded ? `${history.jobs.length}${history.hasMore ? "+" : ""} ${history.jobs.length === 1 ? "creation" : "creations"} · ` : ""}pull down to refresh
+          </p>
+        </header>
+      ) : null}
       {showHeading ? <div className="mb-4 h-px w-full bg-border/70" aria-hidden /> : null}
 
       {/*
@@ -330,7 +408,7 @@ export function FrenzAIHistory({
         Hiding the row would have taken it with it, which is the kind of thing a
         visual check catches and a diff does not.
       */}
-      <div className="flex items-center justify-between gap-3">
+      <div className={cn("flex items-center justify-between gap-3", page && "sr-only")}>
         <h2
           id="ai-history-heading"
           className={cn(
@@ -370,7 +448,7 @@ export function FrenzAIHistory({
       </div>
 
       {kinds.length > 1 ? (
-        <div role="tablist" aria-label="Filter by kind" className="mt-3 flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none]">
+        <div role="tablist" aria-label="Filter by kind" className="mt-3 flex gap-2 overflow-x-auto py-1 [scrollbar-width:none]">
           {(["all", ...HISTORY_KINDS] as const)
             .filter((id) => id === "all" || kinds.includes(id))
             .map((id) => {
@@ -387,10 +465,9 @@ export function FrenzAIHistory({
                     setKindFilter(id);
                   }}
                   className={cn(
-                    "inline-flex min-h-[2.75rem] shrink-0 items-center gap-2 rounded-full px-4 text-[14px] font-semibold transition active:scale-[0.97]",
-                    on
-                      ? "bg-gradient-to-r from-[#4f6cf0] via-[#5f4fee] to-[#8650ea] text-white shadow-[0_8px_18px_-10px_rgba(79,70,229,0.75)]"
-                      : "bg-card text-foreground/75 ring-1 ring-inset ring-black/[0.08] [@media(hover:hover)]:hover:ring-indigo-300/60",
+                    // the Messages page's pill chips: ink when on, white with a hairline otherwise (step 22)
+                    "relative flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4 text-sm transition-colors before:absolute before:-inset-y-1 before:inset-x-0 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet",
+                    on ? "bg-frenz-ink font-bold text-frenz-page" : "border border-frenz-line bg-frenz-card font-semibold text-frenz-ink/80",
                   )}
                 >
                   <Icon className="h-4 w-4" aria-hidden />
@@ -455,15 +532,13 @@ export function FrenzAIHistory({
             <div className="flex flex-col gap-5">
               {sections.map((section) => (
                 <section key={section.key} aria-label={section.label}>
-                  <h3 className="mb-2.5 flex items-center gap-2 px-1 text-[17px] font-bold tracking-[-0.015em]">
+                  <h3 className={cn("mb-2 flex items-baseline gap-2 px-1 font-heading text-[17px] font-bold", section.key === "expired" ? "text-frenz-muted" : "text-frenz-ink")}>
                     {section.label}
-                    <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[12px] font-semibold tabular-nums text-indigo-600 ring-1 ring-inset ring-indigo-100">
-                      {section.items.length}
-                    </span>
+                    <span className="font-body text-[13px] font-semibold tabular-nums text-frenz-muted">{section.items.length}</span>
                   </h3>
                   <div className={HISTORY_GRID}>
                     {section.items.map((job) => (
-                      <HistoryTile key={job.id} job={job} now={now} onOpen={() => open(job)} />
+                      <HistoryTile key={job.id} job={job} now={now} onOpen={() => open(job)} selecting={selecting} selected={selected.has(job.id)} onToggle={() => toggleSelect(job.id)} />
                     ))}
                   </div>
                 </section>
@@ -472,7 +547,7 @@ export function FrenzAIHistory({
           ) : (
             <div className={HISTORY_GRID}>
               {visibleJobs.map((job) => (
-                <HistoryTile key={job.id} job={job} now={now} onOpen={() => open(job)} />
+                <HistoryTile key={job.id} job={job} now={now} onOpen={() => open(job)} selecting={selecting} selected={selected.has(job.id)} onToggle={() => toggleSelect(job.id)} />
               ))}
             </div>
           )
@@ -493,10 +568,29 @@ export function FrenzAIHistory({
         </button>
       ) : null}
 
+      {deleteNote ? (
+        <p role="alert" className="m-0 mt-3 px-1 text-[13px] font-medium text-rose-600 dark:text-rose-400">
+          {deleteNote}
+        </p>
+      ) : null}
+      {selecting ? (
+        <div className="frenz-nav-glass fixed inset-x-3 z-40 mx-auto flex max-w-xl items-center gap-2 rounded-[22px] p-2" style={{ bottom: "calc(var(--frenz-bottom-nav, 4.5rem) + 0.75rem)" }} role="toolbar" aria-label="Selected creations">
+          <span className="flex-1 px-2 text-[14px] font-semibold tabular-nums text-frenz-ink">{selected.size} selected</span>
+          <button type="button" onClick={endSelect} className="min-h-[44px] rounded-full px-4 text-[14px] font-bold text-frenz-ink">
+            Cancel
+          </button>
+          <button type="button" onClick={() => void deleteSelected()} disabled={!selected.size || deleting} className="flex min-h-[44px] items-center gap-1.5 rounded-full bg-rose-600 px-4 text-[14px] font-bold text-white disabled:opacity-45">
+            {deleting ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <Trash2 className="h-4 w-4" aria-hidden />}
+            Delete
+          </button>
+        </div>
+      ) : null}
       {live ? <FrenzAIHistoryPlayer job={live} now={now} onClose={close} /> : null}
       <ReviewPlayerMount />
     </section>
   );
+  // step 22: on the page, the list pulls to refresh ("pull down to refresh") — the same refresh the button ran
+  return page ? <PullToRefresh onRefresh={() => history.refresh()}>{body}</PullToRefresh> : body;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -516,7 +610,8 @@ export function FrenzAIHistory({
  * feature did.
  */
 /* 2026-10-06: a LIST of media rows (the owner's AI History reference) — thumbnail left, the facts right. */
-const HISTORY_GRID = "flex flex-col gap-2.5";
+// step 22 (design/AIHistory.dc.html): one white card per group, a hairline between rows
+const HISTORY_GRID = "flex flex-col divide-y divide-frenz-line overflow-hidden rounded-[20px] border border-frenz-line bg-frenz-card shadow-frenz-card";
 
 const TONE_CLASS: Record<AiHistoryTone, string> = {
   active: "bg-primary/12 text-primary ring-primary/25",
@@ -573,7 +668,7 @@ const TONE_CLASS: Record<AiHistoryTone, string> = {
  * to show still falls back to the brand plate, which is now the exception
  * rather than every tile.
  */
-function HistoryTile({ job, now, onOpen }: { job: AiJobView; now: number; onOpen: () => void }) {
+function HistoryTile({ job, now, onOpen, selecting = false, selected = false, onToggle }: { job: AiJobView; now: number; onOpen: () => void; selecting?: boolean; selected?: boolean; onToggle?: () => void }) {
   const chip = historyChip(job, now);
   const availability = resultAvailability(job, now);
   const playable = availability === "ready";
@@ -613,26 +708,29 @@ function HistoryTile({ job, now, onOpen }: { job: AiJobView; now: number; onOpen
     */
     <article
       className={cn(
-        "group relative flex gap-3 rounded-[1.375rem] bg-card p-2.5 pr-10 ring-1 ring-inset ring-black/[0.07] shadow-[0_8px_24px_-20px_rgba(30,40,90,0.45)]",
-        opens && "transition active:scale-[0.99]",
+        "group relative flex items-center gap-3 px-3 py-2.5 pr-11 text-frenz-ink",
+        availability === "expired" && "opacity-60",
       )}
     >
+      {selecting && !active ? (
+        <button type="button" onClick={onToggle} aria-pressed={selected} aria-label={`Select ${title}`} className="absolute inset-0 z-10 flex items-center justify-end pr-3">
+          <span className={cn("flex h-6 w-6 items-center justify-center rounded-full border-2", selected ? "border-frenz-violet bg-frenz-violet text-white" : "border-frenz-line bg-frenz-card")}>
+            {selected ? <CheckCircle2 className="h-4 w-4" aria-hidden /> : null}
+          </span>
+        </button>
+      ) : null}
       <Tag
         {...(opens ? { type: "button" as const, onClick: onOpen } : {})}
         aria-label={opens ? (playable ? `Open ${title}` : active ? `${title} — processing` : `${title} — ${chip.label}`) : undefined}
         className={cn(
-          "relative block aspect-[16/10] w-[42%] max-w-[13rem] shrink-0 overflow-hidden rounded-[0.95rem] bg-black/40 text-left",
+          // the design's square thumbnail
+          "relative block h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-frenz-fill text-left",
           opens && "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400",
         )}
       >
         <HistoryPoster job={job} playable={playable} active={active} audio={kind === "audio"} />
-        {playable ? (
-          <span className="absolute bottom-1.5 left-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white">
-            <Play className="ml-0.5 h-3.5 w-3.5 fill-white" aria-hidden />
-          </span>
-        ) : null}
         {seconds ? (
-          <span className="absolute bottom-1.5 right-1.5 rounded-md bg-black/60 px-1.5 py-0.5 text-[10.5px] font-semibold tabular-nums text-white">
+          <span className="absolute bottom-1 right-1 rounded-md bg-black/60 px-1 py-px text-[10px] font-semibold tabular-nums text-white">
             {formatDuration(seconds)}
           </span>
         ) : null}
@@ -646,32 +744,33 @@ function HistoryTile({ job, now, onOpen }: { job: AiJobView; now: number; onOpen
       </Tag>
 
       <div className="min-w-0 flex-1 py-0.5">
-        <span className="flex items-center gap-1.5 text-[12px] font-medium text-indigo-600">
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-indigo-50 ring-1 ring-inset ring-indigo-100">
-            <ToolIcon className="h-3 w-3" aria-hidden />
-          </span>
+        <span className="flex items-center gap-1 text-[12px] font-semibold text-frenz-violet">
+          <ToolIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
           <span className="truncate">{historyTitleFor(job.feature)}</span>
         </span>
         {/*
           🔴 The member's own filename, as they typed it — no `uppercase`, no
           truncated extension. `line-clamp-1` ALONE, never with `block`.
         */}
-        <p className="mt-1 line-clamp-1 text-[14.5px] font-semibold tracking-[-0.01em]">{title}</p>
-        <p className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-muted-foreground">
-          <TileCaption job={job} availability={availability} now={now} />
+        <p className="m-0 mt-0.5 line-clamp-1 text-[15px] font-semibold">{title}</p>
+        <p className="m-0 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12.5px] leading-snug text-frenz-muted">
+          <span className="line-clamp-1">
+            <TileCaption job={job} availability={availability} now={now} noExpiry={availability === "ready" || availability === "expired"} />
+          </span>
+          {/* the design's status chip: days left in green, Expired in grey, anything else as before */}
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold",
+              availability === "ready" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300" : availability === "expired" ? "bg-frenz-fill text-frenz-muted" : TONE_CLASS[chip.tone],
+            )}
+          >
+            {active ? <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" aria-hidden /> : null}
+            {availability === "ready" ? daysLeftLabel(job, now) ?? chip.label : availability === "expired" ? "Expired" : chip.label}
+          </span>
         </p>
-        <span
-          className={cn(
-            "mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
-            chip.tone === "good" ? "bg-indigo-50 text-indigo-700 ring-indigo-200" : TONE_CLASS[chip.tone],
-          )}
-        >
-          {chip.tone === "good" ? <CheckCircle2 className="h-3 w-3" aria-hidden /> : active ? <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" aria-hidden /> : null}
-          {chip.label}
-        </span>
       </div>
 
-      {opens ? (
+      {opens && !selecting ? (
         <button
           type="button"
           onClick={onOpen}
@@ -786,11 +885,22 @@ function HistoryPoster({
 }
 
 /** One line per tile, and never the same one for two different situations. */
+/** "342 days left" / "5h left" for the status chip; null when the file has no expiry. */
+function daysLeftLabel(job: AiJobView, now: number): string | null {
+  const hours = hoursUntilExpiry(job, now);
+  if (hours === null) return null;
+  const days = Math.floor(hours / 24);
+  return days >= 1 ? `${days} ${days === 1 ? "day" : "days"} left` : hours >= 1 ? `${Math.floor(hours)}h left` : "Expiring";
+}
+
 function TileCaption({
+  noExpiry = false,
   job,
   availability,
   now,
 }: {
+  /** step 22: the status chip says the time left / Expired, so the caption doesn't repeat it */
+  noExpiry?: boolean;
   job: AiJobView;
   availability: ReturnType<typeof resultAvailability>;
   now: number;
@@ -799,13 +909,15 @@ function TileCaption({
 
   const cr = job.characterReplace;
   if (availability === "pending") return <>Processing… · keeps going if you leave</>;
-  if (availability === "expired") return <>Expired · {when}</>;
+  if (availability === "expired") return noExpiry ? <>{when}</> : <>Expired · {when}</>;
   if (job.status === "cancelled") return <>Canceled · {when}</>;
   /* Part 7 §18: "Refunded ✓" only when the ledger confirmed it (the list route reads the ledger for failed rows). */
   if (job.status === "failed") return <>Failed{cr?.refunded ? " · Refunded ✓" : cr?.refundPending ? " · Refund pending" : ""} · {when}</>;
   /* Part 9 §24: a Character Replace tile names its length and quality, then when and how long it stays. */
   const facts = cr ? [job.result.durationSeconds ? `${(Math.round(job.result.durationSeconds * 10) / 10).toFixed(1)} s` : null, qualityWord(cr.quality)].filter(Boolean).join(" · ") : "";
   if (availability === "ready" && cr?.savedAt) return <>Saved{facts ? ` · ${facts}` : ""} · {when}</>;
+  if (availability === "ready" && facts && noExpiry) return <>{facts} · {when}</>;
+  if (availability === "ready" && noExpiry) return <>{when}</>;
   if (availability === "ready" && facts) {
     const hours = hoursUntilExpiry(job, now);
     const days = hours === null ? null : Math.floor(hours / 24);
@@ -869,12 +981,13 @@ function HistorySkeleton() {
         is a visible jump on every load.
       */}
       {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="flex gap-3 rounded-[1.375rem] p-2.5 ring-1 ring-inset ring-black/[0.07]">
-          <div className="aspect-[16/10] w-[42%] max-w-[13rem] shrink-0 animate-pulse rounded-[0.95rem] bg-secondary motion-reduce:animate-none" />
+        <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+          {/* the row's own shape (step 22): a square thumbnail, the lines beside it */}
+          <div className="h-16 w-16 shrink-0 animate-pulse rounded-xl bg-frenz-fill motion-reduce:animate-none" />
           <div className="flex-1 space-y-2 py-1">
-            <div className="h-3 w-24 animate-pulse rounded-full bg-secondary motion-reduce:animate-none" />
-            <div className="h-4 w-36 animate-pulse rounded-full bg-secondary motion-reduce:animate-none" />
-            <div className="h-3 w-28 animate-pulse rounded-full bg-secondary motion-reduce:animate-none" />
+            <div className="h-3 w-24 animate-pulse rounded-full bg-frenz-fill motion-reduce:animate-none" />
+            <div className="h-4 w-36 animate-pulse rounded-full bg-frenz-fill motion-reduce:animate-none" />
+            <div className="h-3 w-28 animate-pulse rounded-full bg-frenz-fill motion-reduce:animate-none" />
           </div>
         </div>
       ))}

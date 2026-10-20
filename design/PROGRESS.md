@@ -516,7 +516,7 @@ new colours.
 - [x] 19. Frenz AI — Image to Video → design/ImageToVideo.dc.html
 - [x] 20. Subscriptions dashboard → design/SubsDashboard.dc.html (owner, 2026-10-19)
 - [x] 21. Subscriptions analysis / earnings → design/Earnings.dc.html (owner, 2026-10-19)
-- [ ] 22. Frenz AI — History → design/AIHistory.dc.html (owner, 2026-10-19)
+- [x] 22. Frenz AI — History → design/AIHistory.dc.html (owner, 2026-10-19)
 - [ ] 23. Frenz AI — Credits → design/Credits.dc.html (owner, 2026-10-19; the credit earnings and analysis may follow design/Earnings.dc.html)
 
 Owner, 2026-10-19: "make you do as they are, make sure all pages worked on must be lighter and faster by 20% or more" — each page is measured against its pre-redesign build (c:/tmp/fz-base, 3739e7c): first-load JS and a throttled cold load.
@@ -618,3 +618,9 @@ Frenz AI — Image to Video
 - The existing detail rows (renewals, access ended, refunds, withdrawals, posts, likes · comments, what subscribers paid) are kept under "More figures for this period"; the history list is "Recent activity" with its filters.
 - **0265 must be applied** (not live until it runs); until then visits and top posts show "—" / "couldn't be loaded", never a made-up number.
 - Owner, same day: the white fade behind the bottom nav is removed.
+
+**Step 22 · AI History**
+- ‹ Frenz AI · Select; "AI History"; "n creations · pull down to refresh" (pull to refresh is new on this page, the same refresh the old button ran); the Messages pill chips (All · Videos · Audio, only for kinds the list holds).
+- Groups Today · Yesterday · This week · Last week · Earlier, then **Expired** (new: the files that are gone, last and dimmed). One white card per group; each row a square thumbnail (the real poster, or the audio plate) with its length, the tool, the title, when, and a status chip — green "N days left" from the job's own expiry, grey "Expired", or the job's state.
+- **Select** (new): pick finished creations and Delete — each through the existing owner-only DELETE /api/ai/jobs/[id] (files go, no balance moves); a running job can't be picked.
+- The bottom "Back to Frenz AI" button is gone (the back link is at the top).

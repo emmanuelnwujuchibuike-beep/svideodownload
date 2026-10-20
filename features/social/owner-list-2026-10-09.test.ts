@@ -13,7 +13,9 @@ describe("instant tap: the AI history door and its siblings go once, at once", (
   it("each door is a TapOnceLink", () => {
     expect(code("features/ai/frenz-ai-welcome-live.tsx")).toMatch(/<TapOnceLink\s+href=\{historyHref\}/);
     expect(code("features/ai/frenz-ai-usage-page.tsx")).toMatch(/<TapOnceLink\s+href="\/rewards"/);
-    expect(code("features/ai/frenz-ai-history-page.tsx")).toContain("<TapOnceLink href={base}");
+    // step 22 (2026-10-19): the back door is "‹ Frenz AI" at the top of the list's own header
+    expect(code("features/ai/frenz-ai-history-page.tsx")).toContain("page={{ backHref: base }}");
+    expect(code("features/ai/frenz-ai-history.tsx")).toContain("<TapOnceLink href={page.backHref}");
     expect(code("features/ai/character-replace/result.tsx")).toContain("<TapOnceLink href={historyHref}");
     expect(code("features/rewards/rewards-page.tsx")).toContain('<TapOnceLink href="/studio/ai/usage"');
     expect(code("features/quests/quests-page.tsx")).toContain('<TapOnceLink href="/rewards"');

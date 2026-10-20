@@ -1,12 +1,8 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
 
-import { TapOnceLink } from "@/features/ui/tap-once-link";
 
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
-import { aiButtonClass } from "@/features/ai/design/ai-button";
 import { AiShowcase } from "@/features/ai/design/ai-showcase";
 import { FrenzAIHistory } from "@/features/ai/frenz-ai-history";
 import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
@@ -54,28 +50,16 @@ export function FrenzAIHistoryPage({ base = "/ai", slides = [] }: { base?: "/ai"
   */
   return (
     <FrenzAIEnvironment stage="idle" bare className="relative">
-      <div className="pb-10 pt-3">
+      <div className="pb-10 pt-1">
         <AiShowcase slides={slides} base={base} desktopOnly className="mb-5" />
-        <header className="px-1">
-          <h1 className="font-brand text-[2.1rem] font-bold leading-[1.08] tracking-[-0.035em] sm:text-[2.4rem]">
-            AI <span className="text-gradient">History</span>
-          </h1>
-          <p className="mt-1.5 text-[15.5px] text-muted-foreground">Your creations, all in one place.</p>
-        </header>
 
         {/*
           🔴 `showHeading={false}`: this page's own H1 already names it. The
           section renders its heading when it is a strip on another page and
           stays quiet when it IS the page — one component, two contexts.
         */}
-        <FrenzAIHistory className="mt-4" showHeading={false} groupByDay aiBase={base} />
+        <FrenzAIHistory className="mt-1" showHeading={false} groupByDay aiBase={base} page={{ backHref: base }} />
 
-        <div className="mt-8">
-          <TapOnceLink href={base} className={aiButtonClass({ variant: "secondary", size: "sm", className: "ai-btn--round" })}>
-            <ArrowLeft className="h-4 w-4" aria-hidden />
-            Back to Frenz AI
-          </TapOnceLink>
-        </div>
       </div>
     </FrenzAIEnvironment>
   );

@@ -1,20 +1,19 @@
 "use client";
 
-import { ArrowRight, BadgeCheck, BarChart3, Bell, BadgeDollarSign, Check, ChevronDown, Landmark, Loader2, Lock, Pause, Pencil, Percent, Play, Plus, Receipt, Rocket, Undo2, Users, Wallet, type LucideIcon } from "lucide-react";
+import { ArrowRight, BadgeCheck, BarChart3, Bell, BadgeDollarSign, Check, ChevronDown, Landmark, Loader2, Lock, Percent, Plus, Receipt, Rocket, Undo2, Users, Wallet, type LucideIcon } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { BellIcon, ChevronRightIcon, LinkIcon, MegaphoneIcon } from "@/features/frenz-ui/icons";
 import { SubGallery, type SubQuoteView } from "@/features/sub/sub-gallery";
 import { forgetSubPosts } from "@/features/sub/sub-posts-cache";
-import { useSubEarnings } from "@/features/sub/sub-withdraw";
-import { EX_CARD, EX_WELL, exField, exPrimary, exQuiet } from "@/features/sub/ui";
+import { EX_CARD, EX_WELL, exPrimary, exQuiet } from "@/features/sub/ui";
 import { subscriptionCharge, usd } from "@/lib/creator/membership/engine";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 import { profilePath } from "@/lib/social/profile-url";
+import { saveSubSettings as saveSettings } from "@/features/sub/sub-settings-client";
 
 const SubComposer = dynamic(() => import("@/features/sub/sub-composer").then((m) => m.SubComposer), { ssr: false });
 const SubPayoutSettings = dynamic(() => import("@/features/sub/payout-settings").then((m) => m.SubPayoutSettings), { ssr: false });
@@ -23,7 +22,6 @@ const CreatorAnnouncements = dynamic(() => import("@/features/sub/announcements"
 const SubscriberAnnouncements = dynamic(() => import("@/features/sub/announcements").then((m) => m.SubscriberAnnouncements), { ssr: false });
 const CreatorNotifySettings = dynamic(() => import("@/features/sub/creator-notify-settings").then((m) => m.CreatorNotifySettings), { ssr: false });
 const ExclusiveAlerts = dynamic(() => import("@/features/sub/exclusive-alerts").then((m) => m.ExclusiveAlerts), { ssr: false });
-const SubWithdrawSheet = dynamic(() => import("@/features/sub/sub-withdraw").then((m) => m.SubWithdrawSheet), { ssr: false });
 
 /**
  * The SUB POSTS tab on a profile (owner briefs 2026-10-11).
@@ -55,11 +53,6 @@ export interface SubBounds {
   withdrawalFeePercent: number;
 }
 
-async function saveSettings(patch: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
-  const res = await fetch("/api/members", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "settings", ...patch }) }).catch(() => null);
-  const j = (await res?.json().catch(() => null)) as { error?: string } | null;
-  return res?.ok ? { ok: true } : { ok: false, error: j?.error ?? "Couldn't save that. Try again." };
-}
 
 export function SubTab({
   creatorId,
@@ -89,7 +82,6 @@ export function SubTab({
     onLiveChange?.(next.setupCompleted);
   };
   const [composing, setComposing] = useState(false);
-  const [withdrawing, setWithdrawing] = useState(false);
   const [galleryKey, setGalleryKey] = useState(0);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [announceOpen, setAnnounceOpen] = useState(false);
@@ -116,7 +108,6 @@ export function SubTab({
             bounds={bounds}
             onChange={setS}
             onCompose={() => setComposing(true)}
-            onWithdraw={() => setWithdrawing(true)}
             announceOpen={announceOpen}
             notifyOpen={notifyOpen}
             onAnnounce={() => {
@@ -166,7 +157,6 @@ export function SubTab({
             forgetSubPosts(creatorId);
             setGalleryKey((k) => k + 1);
           }} /> : null}
-      {withdrawing ? <SubWithdrawSheet onClose={() => setWithdrawing(false)} /> : null}
     </div>
   );
 }
@@ -421,16 +411,13 @@ function Nav({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
  * The creator's SUB dashboard (owner 2026-10-12: "collapse on default when the SUB POSTS tab is
  * clicked, and the user clicks See dashboard and it opens"). Collapsed it is one calm row —
  * live or paused, the price, New SUB post and See dashboard — and the earnings are not even
- * fetched until it opens. Open: the available balance first, with Withdraw beside it, then
- * the rest of the numbers, the price and pause controls, and the payout account.
+ * fetched until it opens. Since step 20 (2026-10-19) the full dashboard — balance, Withdraw, price, pause and
+ * the payout account — is its own page, /exclusive/dashboard (features/sub/subs-dashboard.tsx).
  */
 function CreatorOverview({
   handle,
   settings,
-  bounds,
-  onChange,
   onCompose,
-  onWithdraw,
   announceOpen,
   notifyOpen,
   onAnnounce,
@@ -441,13 +428,11 @@ function CreatorOverview({
   bounds: SubBounds;
   onChange: (s: SubOwnerSettings) => void;
   onCompose: () => void;
-  onWithdraw: () => void;
   announceOpen: boolean;
   notifyOpen: boolean;
   onAnnounce: () => void;
   onNotify: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   // the card's three figures — the creator's own, from the same overview the earnings page reads; "—" until in
   const overview = useSubOverview();
   const [copied, setCopied] = useState(false);
@@ -471,57 +456,6 @@ function CreatorOverview({
       /* clipboard refused: nothing to do */
     }
   };
-  const { data, failed } = useSubEarnings(open);
-  const [editing, setEditing] = useState(false);
-  const [price, setPrice] = useState(settings.priceCents ? (settings.priceCents / 100).toFixed(2) : "");
-  const [note, setNote] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState<string | null>(null);
-  /*
-    The profile is a server render the app keeps cached for the session, and it is where
-    these settings come from — so after a save the cached copy is refreshed, or coming
-    back to the profile showed the OLD price as if nothing had saved (owner 2026-10-12).
-  */
-  const router = useRouter();
-  const e = data?.earnings;
-  const cents = Math.round(Number(price) * 100);
-  const priceOk = Number.isInteger(cents) && cents >= bounds.minPriceCents && cents <= bounds.maxPriceCents;
-
-  const toggle = () => {
-    haptic("selection");
-    const prev = settings;
-    onChange({ ...settings, active: !settings.active });
-    void saveSettings({ active: !prev.active }).then((r) => {
-      if (!r.ok) {
-        onChange(prev);
-        setNote(r.error ?? null);
-      } else router.refresh();
-    });
-  };
-  // the button answers on tap with "Saving…", and says "Saved" only once the server has it
-  const savePrice = async () => {
-    if (!priceOk || saving) return;
-    haptic("selection");
-    setNote(null);
-    setSaved(null);
-    setSaving(true);
-    const r = await saveSettings({ priceCents: cents });
-    setSaving(false);
-    if (!r.ok) {
-      setNote(r.error ?? "Couldn't save the price. Try again.");
-      return;
-    }
-    onChange({ ...settings, priceCents: cents });
-    setEditing(false);
-    setSaved(`Price saved: new subscribers pay ${usd(cents)} a month.`);
-    router.refresh();
-  };
-
-  const toggleOpen = () => {
-    haptic("selection");
-    setOpen((v) => !v);
-  };
-
   return (
     <section aria-label="Subscription dashboard" className="frenz-ui mb-4 overflow-hidden rounded-[24px] border border-frenz-line bg-frenz-card text-frenz-ink shadow-frenz-raised">
       <div className="flex flex-col gap-3.5 p-4 pb-0">
@@ -554,9 +488,10 @@ function CreatorOverview({
             {copied ? <Check className="h-4 w-4 text-emerald-600" aria-hidden /> : <LinkIcon size={16} />}
             {copied ? "Link copied" : "Share link"}
           </button>
-          <button type="button" onClick={toggleOpen} aria-expanded={open} aria-controls="sub-dashboard" className={cn("flex h-[46px] items-center justify-center gap-2 rounded-[14px] border text-sm font-bold transition active:scale-[0.98]", open ? "border-frenz-ink bg-frenz-ink text-frenz-page" : "border-frenz-line bg-frenz-card")}>
+          {/* step 20 (2026-10-19): the full Subscriptions dashboard is its own page (design/SubsDashboard.dc.html) */}
+          <Link href="/exclusive/dashboard" className="flex h-[46px] items-center justify-center gap-2 rounded-[14px] border border-frenz-line bg-frenz-card text-sm font-bold text-frenz-ink no-underline transition active:scale-[0.98]">
             <BarChart3 className="h-4 w-4" aria-hidden /> Dashboard
-          </button>
+          </Link>
         </div>
       </div>
 
@@ -566,64 +501,9 @@ function CreatorOverview({
         <CardRow icon={<BellIcon size={18} />} label="Subscriber notifications" expanded={notifyOpen} controls="sub-notify-panel" onClick={onNotify} divided />
       </div>
 
-      {open ? (
-        <div id="sub-dashboard" className="border-t border-black/[0.06] p-4 dark:border-white/[0.08]">
-          {/* the money first: what can leave today */}
-          <div className={cn(EX_WELL, "p-4")}>
-            <p className="text-[13px] font-medium text-muted-foreground">Available to withdraw</p>
-            <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
-              <p className="min-w-0 break-all text-[clamp(1.75rem,8vw,2.1rem)] font-bold leading-none tracking-[-0.035em] tabular-nums">{e ? usd(e.availableCents) : failed ? "—" : "…"}</p>
-              <button type="button" onClick={onWithdraw} className={exPrimary}>
-                <Wallet className="h-4 w-4" aria-hidden /> Withdraw
-              </button>
-            </div>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <Metric label="Subscribers" value={e ? String(e.activeSubscribers) : failed ? "—" : "…"} />
-            <Metric label="Earned all time" value={e ? usd(e.lifetimeCents) : failed ? "—" : "…"} />
-            <Metric label="Clearing" value={e ? usd(e.pendingCents) : failed ? "—" : "…"} />
-            <Metric label="Withdrawn" value={e ? usd(e.withdrawnCents) : failed ? "—" : "…"} />
-          </div>
-          {/* Part 7: the full earnings, analytics and history */}
-          <Link href="/exclusive/earnings" prefetch={false} className="mt-2 flex min-h-11 items-center justify-between rounded-2xl bg-black/[0.03] px-3.5 text-[13.5px] font-semibold transition hover:bg-black/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-white/[0.05]">
-            Earnings and analytics <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden />
-          </Link>
-          {editing ? (
-            <div className="mt-3">
-              <label htmlFor="sub-price-edit" className="text-[13px] font-semibold">
-                New monthly price (USD) — applies to new subscriptions
-              </label>
-              <div className="mt-1 flex gap-2">
-                <input id="sub-price-edit" inputMode="decimal" value={price} onChange={(ev) => setPrice(ev.target.value.replace(/[^0-9.]/g, "").slice(0, 8))} className={cn(exField, "tabular-nums")} />
-                <button type="button" onClick={() => void savePrice()} disabled={!priceOk || saving} aria-busy={saving} className={cn(exPrimary, "shrink-0")}>
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-                  {saving ? "Saving…" : "Save"}
-                </button>
-              </div>
-              {!priceOk && price ? <p className="mt-1 text-[12.5px] text-rose-600 dark:text-rose-400">Choose from {usd(bounds.minPriceCents)} to {usd(bounds.maxPriceCents)}.</p> : null}
-            </div>
-          ) : null}
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => setEditing((v) => !v)} aria-pressed={editing} className={cn(exQuiet, "justify-center")}>
-              <Pencil className="h-4 w-4" aria-hidden /> {editing ? "Cancel" : "Change price"}
-            </button>
-            <button type="button" onClick={toggle} className={cn(exQuiet, "justify-center")}>
-              {settings.active ? <Pause className="h-4 w-4" aria-hidden /> : <Play className="h-4 w-4" aria-hidden />}
-              {settings.active ? "Pause new subs" : "Resume"}
-            </button>
-          </div>
-          <SubPayoutSettings feePercent={bounds.withdrawalFeePercent} className="mt-3" />
-        </div>
-      ) : null}
       {!settings.active ? (
         <p className="flex items-center gap-1.5 px-4 pb-3 text-[12.5px] text-muted-foreground">
           <Lock className="h-3.5 w-3.5" aria-hidden /> Paused: nobody new can subscribe. Current subscribers keep access until their period ends.
-        </p>
-      ) : null}
-      {note ? <p className="px-4 pb-3 text-[13px] font-medium text-rose-600 dark:text-rose-400">{note}</p> : null}
-      {saved ? (
-        <p role="status" className="flex items-center gap-1.5 px-4 pb-3 text-[13px] font-medium text-emerald-600 dark:text-emerald-400">
-          <Check className="h-4 w-4" aria-hidden /> {saved}
         </p>
       ) : null}
     </section>
@@ -680,11 +560,3 @@ function useSubOverview(): { activeSubscribers: number; netCents: number | null;
   return v;
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0 rounded-2xl bg-black/[0.03] px-3 py-2.5 dark:bg-white/[0.05]">
-      <p className="truncate text-[11.5px] font-medium text-muted-foreground">{label}</p>
-      <p className="mt-0.5 truncate text-[16px] font-bold tabular-nums tracking-[-0.01em]">{value}</p>
-    </div>
-  );
-}

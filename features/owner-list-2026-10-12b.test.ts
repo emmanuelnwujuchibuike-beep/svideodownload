@@ -56,9 +56,10 @@ describe("Private posts (owner, 2026-10-12)", () => {
     expect(code("app/api/sub/posts/[id]/route.ts")).toMatch(/export async function PATCH[\s\S]*\.is\("thumb_key", null\)/);
   });
   it("saving a price shows Saving…, waits for the server, then refreshes the cached profile", () => {
-    const t = code("features/sub/sub-tab.tsx");
+    // the price moved to the Subscriptions dashboard page (step 20, 2026-10-19) — same save, same refresh
+    const t = code("features/sub/subs-dashboard.tsx");
     expect(t).toContain('{saving ? "Saving…" : "Save"}');
-    expect(t).toMatch(/const r = await saveSettings\(\{ priceCents: cents \}\);[\s\S]{0,400}router\.refresh\(\);/);
+    expect(t).toMatch(/const r = await saveSubSettings\(\{ priceCents: cents \}\);[\s\S]{0,400}router\.refresh\(\);/);
   });
   it("the gallery's first page is shared with the tab warm-up and cached under the link lifetime", () => {
     const cache = code("features/sub/sub-posts-cache.ts");

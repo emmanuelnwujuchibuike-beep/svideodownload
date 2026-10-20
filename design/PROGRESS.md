@@ -514,7 +514,7 @@ new colours.
 - [x] 17. Frenz AI — AI Studio → design/AIExplore.dc.html
 - [x] 18. Frenz AI — Text to Video → design/TextToVideo.dc.html
 - [x] 19. Frenz AI — Image to Video → design/ImageToVideo.dc.html
-- [ ] 20. Subscriptions dashboard → design/SubsDashboard.dc.html (owner, 2026-10-19)
+- [x] 20. Subscriptions dashboard → design/SubsDashboard.dc.html (owner, 2026-10-19)
 - [ ] 21. Subscriptions analysis / earnings → design/Earnings.dc.html (owner, 2026-10-19)
 - [ ] 22. Frenz AI — History → design/AIHistory.dc.html (owner, 2026-10-19)
 - [ ] 23. Frenz AI — Credits → design/Credits.dc.html (owner, 2026-10-19; the credit earnings and analysis may follow design/Earnings.dc.html)
@@ -603,3 +603,9 @@ Frenz AI — Image to Video
 - References (Text to Video): up to 7 images, or 4 with one MP4/MOV — the limits the server already enforces (`klingMaxReferenceImages`), count shown as 0 / 7.
 - **Image to Video keeps what it already supported**: reference images + a reference video, and the ending photo (in Advanced). Its third setting is Quality, not Aspect ratio — the photo sets the shape. The "Choose a photo" tile is one file input: a phone offers Photos, Files and the camera from it; once picked, the photo shows with Replace.
 - The photo stage is the light fill, not a dark one (backgrounds stay white).
+
+**Step 20 · Subscriptions dashboard**
+- Its own page now, `/exclusive/dashboard`, opened by the Dashboard button on the profile's Exclusive card (it used to open inline under the card; that inline copy is removed, so there is one dashboard). Only the creator, and only once set up — otherwise back to the setup on their profile.
+- ‹ Profile · LIVE / PAUSED · Subscriptions · n subscribers · price / month; Available to withdraw + Withdraw (the existing withdraw sheet); Earned all time · Clearing · Withdrawn; Earnings & analytics. All figures from `/api/sub/earnings`, "—" on a failed read.
+- Subscription: Price (opens the same price editor and save), Pause new subscribers as a switch (on = paused; current subscribers keep access), Announce to subscribers and Subscriber notifications (the same panels).
+- Payout: the saved bank with Change, Auto-withdrawal switch, Remove payout account (red) — `SubPayoutSettings variant="list"`, the same calls.

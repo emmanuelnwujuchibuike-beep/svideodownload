@@ -41,7 +41,7 @@ export function useSavedPayoutAccount() {
   return [state, setState] as const;
 }
 
-export function SubPayoutSettings({ feePercent: feeProp, className }: { feePercent?: number; className?: string }) {
+export function SubPayoutSettings({ feePercent: feeProp, className, variant = "card" }: { feePercent?: number; className?: string; /** "list": the Subscriptions dashboard's Payout group (step 20) — rows, a switch, a red Remove row. Same logic. */ variant?: "card" | "list" }) {
   const [state, setState] = useSavedPayoutAccount();
   const feePercent = feeProp ?? state?.feePercent ?? 10;
   const [editing, setEditing] = useState(false);
@@ -78,6 +78,63 @@ export function SubPayoutSettings({ feePercent: feeProp, className }: { feePerce
 
   if (!state) return <div className={cn("h-24 animate-pulse rounded-[22px] bg-black/[0.04] motion-reduce:animate-none dark:bg-white/[0.06]", className)} aria-busy="true" />;
   if (!state.ready) return null;
+
+  if (variant === "list") {
+    return (
+      <div className={className}>
+        {account && !editing ? (
+          <div className="divide-y divide-frenz-line overflow-hidden rounded-[20px] border border-frenz-line bg-frenz-card text-frenz-ink shadow-frenz-card">
+            <div className="flex min-h-[60px] items-center gap-3 px-3.5 py-2.5">
+              <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-frenz-violet/10 text-frenz-violet">
+                <Building2 className="h-[18px] w-[18px]" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[15px] font-semibold">
+                  {account.bankName} ••••{account.last4}
+                </span>
+                <span className="block truncate text-[13px] text-frenz-muted">{account.accountName}</span>
+              </span>
+              <button type="button" onClick={() => setEditing(true)} className="min-h-[44px] shrink-0 px-1 text-[14px] font-bold text-frenz-blue">
+                Change
+              </button>
+            </div>
+            <div className="flex min-h-[64px] items-center gap-3 px-3.5 py-2.5">
+              <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-frenz-violet/10 text-frenz-violet">
+                <Zap className="h-[18px] w-[18px]" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-semibold">Auto-withdrawal</span>
+                <span className="block text-[12.5px] leading-snug text-frenz-muted">New subscriptions go straight to this account, less the {feePercent}% withdrawal fee</span>
+              </span>
+              <button type="button" role="switch" aria-checked={account.autoWithdraw} aria-label="Auto-withdrawal" onClick={() => void toggle()} className="-m-[7px] flex h-11 w-16 shrink-0 items-center justify-center">
+                <span className={cn("flex h-[30px] w-[50px] rounded-full p-0.5 transition-colors", account.autoWithdraw ? "justify-end bg-frenz-violet" : "justify-start bg-[#E2DFEC] dark:bg-white/20")}>
+                  <span className="h-[26px] w-[26px] rounded-full bg-white shadow-[0_2px_4px_rgba(0,0,0,0.2)]" />
+                </span>
+              </button>
+            </div>
+            <button type="button" onClick={() => void remove()} className="flex min-h-[52px] w-full items-center px-3.5 text-left text-[15px] font-semibold text-rose-600 dark:text-rose-400">
+              Remove payout account
+            </button>
+          </div>
+        ) : (
+          <div className="rounded-[20px] border border-frenz-line bg-frenz-card p-3.5 shadow-frenz-card">
+            <p className="m-0 mb-2 text-[13px] text-frenz-muted">Save your bank once. Paystack confirms who it belongs to.</p>
+            <AccountForm
+              initialAuto={account?.autoWithdraw ?? true}
+              canCancel={!!account}
+              onCancel={() => setEditing(false)}
+              onSaved={(a) => {
+                setState({ account: a, ready: true });
+                setEditing(false);
+                setNote({ ok: true, text: a.autoWithdraw ? "Saved. Auto-withdrawal is on." : "Saved for your next withdrawal." });
+              }}
+            />
+          </div>
+        )}
+        {note ? <p className={cn("m-0 mt-2 px-1 text-[12.5px] font-medium", note.ok ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>{note.text}</p> : null}
+      </div>
+    );
+  }
 
   return (
     <div className={cn("rounded-[22px] bg-black/[0.03] p-3.5 dark:bg-white/[0.045]", className)}>

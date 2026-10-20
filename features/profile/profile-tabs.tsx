@@ -2,9 +2,10 @@
 
 import { LayoutGrid, Lock } from "lucide-react";
 import dynamic from "next/dynamic";
-import { type ReactNode, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { ListViewIcon } from "@/features/frenz-ui/icons";
+import { useTabSwipe } from "@/features/profile/use-tab-swipe";
 import { ProfileMediaGrid } from "@/features/social/profile-media-grid";
 import { loadSubPosts } from "@/features/sub/sub-posts-cache";
 import { useStickyState } from "@/features/ui/use-sticky-state";
@@ -138,7 +139,45 @@ export function ProfileTabs({
   // sections that ARE a media grid.
   const showViewToggle = POST_TABS.has(active) && active !== "downloads" && active !== "collections";
 
-  const renderActive = () => {
+  // Swipe between sections (owner, 2026-10-19). Every section once shown stays mounted (hidden), and the two
+  // beside the current one are mounted the moment a finger lands — so a swipe slides in real content, never a
+  // loader, and coming back is instant. Nothing extra is fetched until someone touches the sections.
+  const order = keys;
+  const at = order.indexOf(active);
+  const prevKey = at > 0 ? order[at - 1]! : null;
+  const nextKey = at >= 0 && at < order.length - 1 ? order[at + 1]! : null;
+  const [mounted, setMounted] = useState<string[]>(() => [active]);
+  const mount = (...ks: (string | null)[]) =>
+    setMounted((m) => {
+      const add = ks.filter((k): k is string => !!k && !m.includes(k));
+      return add.length ? [...m, ...add] : m;
+    });
+  useEffect(() => setMounted((m) => (m.includes(active) ? m : [...m, active])), [active]);
+  const region = useRef<HTMLDivElement>(null);
+  const trackEl = useRef<HTMLDivElement>(null);
+  const tabRow = useRef<HTMLDivElement>(null);
+  const peek = useTabSwipe({
+    region,
+    track: trackEl,
+    prev: prevKey,
+    next: nextKey,
+    active,
+    onIntent: () => {
+      mount(prevKey, nextKey);
+      if (prevKey === SUB_TAB_KEY || nextKey === SUB_TAB_KEY) void loadSubPosts(ownerId).catch(() => {});
+    },
+    onCommit: (k) => select(k),
+  });
+  // the chosen tab stays in view in the row when a swipe moves past the visible ones
+  useEffect(() => {
+    const row = tabRow.current;
+    const btn = row?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!row || !btn) return;
+    const l = btn.offsetLeft - row.offsetLeft;
+    if (l < row.scrollLeft || l + btn.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollTo({ left: l - 16, behavior: "smooth" });
+  }, [active]);
+
+  const renderPanel = (active: string) => {
     if (active === SUB_TAB_KEY && sub) return <SubTab onLiveChange={setSubLive} creatorId={ownerId} creatorName={sub.creatorName} handle={handle} isOwner={isOwner} signedIn={sub.signedIn} quote={sub.quote} settings={sub.settings} bounds={sub.bounds} />;
     if (!POST_TABS.has(active)) return panels?.[active] ?? null;
     if (active === "downloads" && isOwner) return <DownloadsTab emptyText={empty.downloads!} />;
@@ -191,7 +230,7 @@ export function ProfileTabs({
       */}
       <nav ref={tray} aria-label="Profile sections" className="frenz-ui relative -mx-4 mb-3 flex scroll-mt-24 items-center border-b border-frenz-line px-2 sm:-mx-6">
         {/* sideways only (owner, 2026-10-19: the row moved up and down) — nothing overflows vertically, and touch pans x only */}
-        <div className="flex min-w-0 flex-1 touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div ref={tabRow} className="flex min-w-0 flex-1 touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {sections.map((s) => {
             const isActive = active === s.key;
             return (
@@ -228,8 +267,25 @@ export function ProfileTabs({
         ) : null}
       </nav>
 
-      {/* A single mounted content region that swaps instantly */}
-      {renderActive()}
+      {/*
+        The content region: the current section in the page's flow, the others it has shown kept mounted
+        and hidden, and — while a finger drags — the next one drawn beside it on the same track.
+      */}
+      <div ref={region} className="relative overflow-x-clip">
+        {/* no will-change: a standing transform would trap the Exclusive tab's fixed sheets inside the track */}
+        <div ref={trackEl} className="relative">
+          {(peek && !mounted.includes(peek.key) ? [...mounted, peek.key] : mounted).map((k) => (
+            <div
+              key={k}
+              hidden={k !== active && peek?.key !== k}
+              aria-hidden={k !== active || undefined}
+              className={k !== active ? cn("absolute inset-x-0 top-0", peek?.side === "left" ? "-translate-x-full" : "translate-x-full") : undefined}
+            >
+              {renderPanel(k)}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

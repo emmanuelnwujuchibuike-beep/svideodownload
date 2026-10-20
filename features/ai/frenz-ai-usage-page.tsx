@@ -398,13 +398,15 @@ export function FrenzAIUsagePage({
             <WithdrawEligibilityNote uid={uid} />
 
             {/* ── 0167: the AI plan and its allowance — or the door to one ─────── */}
-            <AiCreditsCard className="mt-4" refreshKey={creditsKey} returnTo="/studio/ai/usage" />
+            {/* design/Credits.dc.html: AI plans and Rewards & referrals share ONE bordered card, a hairline between them */}
+            <div className="frenz-ui mt-4 divide-y divide-frenz-line overflow-hidden rounded-[22px] border border-frenz-line bg-frenz-card">
+            <AiCreditsCard className="!rounded-none !bg-transparent !shadow-none !ring-0" refreshKey={creditsKey} returnTo="/studio/ai/usage" />
 
             {/* 2026-10-07 (owner brief §7, §11): rewards and referrals — AI Credits vs Withdrawable live on /rewards */}
             <TapOnceLink
               href="/rewards"
               spinner={false}
-              className="frenz-ui mt-3 flex min-h-[60px] items-center gap-3 rounded-[20px] border border-frenz-line bg-frenz-card px-3.5 py-3 text-frenz-ink no-underline shadow-frenz-card transition active:scale-[0.99] data-[pending]:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet"
+              className="flex min-h-[60px] items-center gap-3 px-3.5 py-3 text-frenz-ink no-underline transition active:bg-frenz-fill data-[pending]:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-frenz-violet"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-frenz-violet/10 text-frenz-violet">
                 <Gift className="h-4 w-4" aria-hidden />
@@ -415,6 +417,7 @@ export function FrenzAIUsagePage({
               </span>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
             </TapOnceLink>
+            </div>
 
             {/* 0193 (owner 2026-10-07): send credits to a wallet number, and the transfer history */}
             <TransferPanel className="mt-4" rules={balance?.offer?.transfers ?? null} balance={balance?.balanceCents ?? null} withdrawable={balance?.withdrawableCents ?? null} deposited={balance?.depositedCents ?? null} onChanged={() => void load()} />

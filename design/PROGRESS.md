@@ -511,9 +511,15 @@ new colours.
 
 - [x] 15. Chat options sheet → design/ChatMenu.dc.html
 - [x] 16. Frenz AI welcome → design/AIStudio.dc.html
-- [ ] 17. Frenz AI — AI Studio → design/AIExplore.dc.html
+- [x] 17. Frenz AI — AI Studio → design/AIExplore.dc.html
 - [ ] 18. Frenz AI — Text to Video → design/TextToVideo.dc.html
 - [ ] 19. Frenz AI — Image to Video → design/ImageToVideo.dc.html
+- [ ] 20. Subscriptions dashboard → design/SubsDashboard.dc.html (owner, 2026-10-19)
+- [ ] 21. Subscriptions analysis / earnings → design/Earnings.dc.html (owner, 2026-10-19)
+- [ ] 22. Frenz AI — History → design/AIHistory.dc.html (owner, 2026-10-19)
+- [ ] 23. Frenz AI — Credits → design/Credits.dc.html (owner, 2026-10-19; the credit earnings and analysis may follow design/Earnings.dc.html)
+
+Owner, 2026-10-19: "make you do as they are, make sure all pages worked on must be lighter and faster by 20% or more" — each page is measured against its pre-redesign build (c:/tmp/fz-base, 3739e7c): first-load JS and a throttled cold load.
 
 ### Shared rules (owner, verbatim)
 - Glass (backdrop blur + translucent fill) is ONLY used over images, video or the chat wallpaper. On white surfaces use solid white cards with a 1px #ECE9F7 border.
@@ -581,3 +587,10 @@ Frenz AI — Image to Video
 - Credits: the glass pill and the credits card read the strip's one live balance snapshot (no extra request). Earn → the quests, View → Usage & history. A guest sees "Sign in to create" instead of a figure.
 - "Create. Transform. Perfect." — Perfect. is flat violet (no gradient text). Chips Fast / Secure / Natural results replace the old trust row.
 - Create with AI (gradient, docked above the tab bar) opens the AI Studio (`/character-replace`, the explore page step 17 redesigns); the round button opens History.
+
+**Step 17 · AI Studio**
+- "‹ Frenz AI" back link, large AI Studio title, the balance as a light pill (the strip's live snapshot), the privacy line. The chips jump to each section and stay pinned under the top bar.
+- Create video: Text to Video and Image to Video as gradient showcase cards (whole card a link). Transform video: Lip Sync Pro. Create audio: Text to Audio, Voice Cloning and **Audio Library** (our real third audio tool). Yours: Your AI Videos, Your Voices. Names, words and links all come from the one tool list (`aiToolCards`).
+- **AI models — ours, not the design's:** the app runs **Kling 3.0 Omni** (`kling-v3-omni`, Text to Video and Image to Video) and **Kling Lip Sync** (`kling-lip-sync`, Lip Sync Pro) — lib/ai/kling. The design's Kling 4.0, 2.6, O3 and O1 are not in our config, so they are not shown. The model cards are information, not buttons.
+- One credits card at the foot: balance, BUSINESS tag only for a Business member, Earn credits, Usage & history, and the complimentary note only when this account has one.
+- Removed (owner): How it works, the separate Business banner and the bottom "← Frenz AI" button. `AiHero` had no page left using it and was removed.

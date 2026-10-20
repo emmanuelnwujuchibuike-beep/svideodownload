@@ -47,8 +47,8 @@ describe("the Frenz AI design surface", () => {
       rather than unlikely.
     */
     const body = code(SURFACE);
-    expect(body).toMatch(/tool: string;/);
-    // no default value for it
+    // AiHero (the required `tool` prop this pinned) was removed 2026-10-19 with its last page; the surface
+    // still may not default a tool name, and may never name the retired product
     expect(body).not.toMatch(/tool = "/);
     // and the retired product is not named anywhere in the surface
     expect(body).not.toMatch(/AI Clean/i);
@@ -135,7 +135,7 @@ describe("every migrated tool opens with the breadcrumb pill", () => {
     ["features/ai/voice-clone/voice-cloning-workspace.tsx", "Voice Cloning"],
     ["features/ai/lip-sync/lip-sync-workspace.tsx", "Lip Sync Pro"],
     // the welcome page left this list 2026-10-19: design/AIStudio.dc.html names it with the glass Frenz AI pill over the hero (frenz-ai-welcome-step16.test.ts)
-    ["features/ai/frenz-ai-explore.tsx", "Explore"],
+    // AI Studio (frenz-ai-explore) left 2026-10-19: design/AIExplore.dc.html titles it "AI Studio" with a back link (frenz-ai-explore-step17.test.ts)
   ];
 
   for (const [file, tool] of tools) {
@@ -194,7 +194,8 @@ describe("the surface is APPLIED, not merely defined", () => {
     A component that is exported and never rendered is either unfinished work or
     dead weight. This test forces the choice.
   */
-  const RENDERED_SOMEWHERE = ["AiHero", "AiDisplayTitle"];
+  // AiHero left 2026-10-19: the welcome and AI Studio pages (steps 16–17) were its last users, and it was removed
+  const RENDERED_SOMEWHERE = ["AiDisplayTitle"];
 
   const files = () => {
     const out: string[] = [];

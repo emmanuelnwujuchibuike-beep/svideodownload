@@ -88,3 +88,19 @@ export function AiCreditsCard({ base, className }: { base: string; className?: s
     </div>
   );
 }
+
+/** The same balance as a light pill for a white page header (the AI Studio, step 17). Nothing for a guest. */
+export function AiCreditsChip({ className }: { className?: string }) {
+  const { who, balance } = useAiCreditBalance();
+  if (who !== "member") return null;
+  return (
+    <span
+      className={cn("flex h-10 items-center gap-1.5 rounded-full border border-frenz-line bg-frenz-card px-3.5 text-[15px] font-bold tabular-nums text-frenz-ink shadow-frenz-card", className)}
+      title={balance ? formatCredits(balance.balanceCents) : undefined}
+    >
+      <Coins className="h-4 w-4 text-frenz-violet" aria-hidden />
+      <span aria-hidden>{balance ? formatCompactCredits(balance.balanceCents) : "—"}</span>
+      <span className="sr-only">{balance ? `${formatCredits(balance.balanceCents)} — your AI balance` : "AI balance loading"}</span>
+    </span>
+  );
+}

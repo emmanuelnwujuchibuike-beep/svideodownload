@@ -185,63 +185,6 @@ export function AiDisplayTitle({
 }
 
 /**
- * The opening of every AI screen: crumb, display headline, subtitle, actions.
- *
- * 🔴 `tool` IS REQUIRED. The component this replaces defaulted its breadcrumb
- * to "AI Clean" — a product that was RETIRED and must never be re-added — so
- * every page that adopted it would have announced a tool that does not exist.
- * It was rendered nowhere, which is the only reason that never shipped. A
- * required prop makes the same mistake impossible rather than unlikely.
- *
- * `highlight` is the one word in brand gradient. One. The references put
- * exactly one coloured word in the headline and the restraint is the effect;
- * two would read as a rainbow rather than as emphasis.
- */
-export function AiHero({
-  tool,
-  title,
-  highlight,
-  tail,
-  subtitle,
-  actions,
-  aside,
-  stack,
-  className,
-}: {
-  /** The breadcrumb's trailing crumb, e.g. "Text to Audio". */
-  tool: string;
-  /** Fixed line breaks in the headline — see AiDisplayTitle. */
-  stack?: boolean;
-  /** The words before the gradient word. */
-  title: string;
-  /** The single word rendered in brand gradient. */
-  highlight?: string;
-  /** The words after it, usually on their own line. */
-  tail?: string;
-  subtitle?: string | null;
-  actions?: ReactNode;
-  /** The hero visual, on the right at width. */
-  aside?: ReactNode;
-  className?: string;
-}) {
-  return (
-    <header className={cn("px-1", className)}>
-      <FrenzAICrumb tool={tool} />
-
-      <div className={cn(aside && "sm:flex sm:items-center sm:gap-6")}>
-        <div className="min-w-0 flex-1">
-          <AiDisplayTitle title={title} highlight={highlight} tail={tail} subtitle={subtitle} stack={stack} className="mt-3.5" />
-
-          {actions ? <div className="mt-4 flex flex-wrap items-center gap-2.5">{actions}</div> : null}
-        </div>
-
-        {aside ? <div className="mt-5 shrink-0 sm:mt-0">{aside}</div> : null}
-      </div>
-    </header>
-  );
-}
-
-/**
  * A TOOL page's title, from the owner's reference (2026-10-05):
  *
  *   [▷] Text to Video                  — gradient-stroked icon tile + the

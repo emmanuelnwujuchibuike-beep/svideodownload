@@ -287,7 +287,8 @@ describe("the doors open instantly or say they are opening (owner, 2026-09-14)",
     // …and with no flow tool left, EVERY card is a Link carrying the shared card class.
     expect(grid).toMatch(/className=\{cn\(CARD/);
     expect(grid).toContain("<Link href={href}");
-    expect(src("features/ai/frenz-ai-explore.tsx")).toContain("<FrenzAIToolsGrid");
+    // step 17 (2026-10-19): the AI Studio draws its sections from the same card list as the grid, every door a Link with the stripe
+    expect(src("features/ai/frenz-ai-explore.tsx")).toContain("aiToolCards(characterReplaceHref, historyHref)");
     expect(src("features/ai/frenz-ai-chrome.tsx")).not.toContain("prefetch={false}");
     const stripe = src("features/navigation/link-pending-stripe.tsx");
     expect(stripe).toContain("useLinkStatus");

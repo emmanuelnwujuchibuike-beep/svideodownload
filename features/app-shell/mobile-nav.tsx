@@ -326,15 +326,8 @@ export function MobileNav({
   return (
     <>
     {pendingHref ? <NavPendingStripe /> : null}
-    {/* The fade behind the bar (owner, 2026-10-18: "goes from white to transparent") — the page ground, solid
-        for the lowest third, so a list never reads as cut under the bar. Not over Reels' video. */}
-    <div
-      aria-hidden
-      className={cn(
-        "fixed inset-x-0 bottom-0 z-30 pointer-events-none h-[calc(var(--frenz-nav-clearance)+3.5rem)] bg-[linear-gradient(0deg,hsl(var(--frenz-page))_35%,hsl(var(--frenz-page)/0))] transition-opacity duration-300 lg:hidden motion-reduce:transition-none",
-        (immersive || hideForScroll) && "opacity-0",
-      )}
-    />
+    {/* No fade behind the bar (owner, 2026-10-19, with a screenshot: "remove the white shadow background") — the
+        2026-10-18 white-to-transparent fade is gone; the floating pill sits straight on the page. */}
     {/*
       The floating wrapper: inset 14 px from both edges, centred, capped at
       560 px, `--frenz-nav-gap` above the bottom. `pointer-events-none` on the

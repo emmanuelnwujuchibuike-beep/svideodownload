@@ -439,3 +439,30 @@ export function clientId(headers: Headers): string {
   if (fwd) return fwd.split(",")[0]!.trim();
   return headers.get("x-real-ip") || "anonymous";
 }
+
+/*
+  ── ONCE IN A SHORT WINDOW (2026-10-19, owner: "see why login otp emails send twice") ──
+  `claimOnce(key, seconds)` is true for the FIRST caller of a key in the window and false for any repeat.
+  The sign-in code route uses it so a double submit (a double tap, the keyboard's Go plus a tap) sends ONE
+  email — and, more importantly, does not mint a second code that silently invalidates the first one the
+  member is about to type. Upstash SET NX EX in production (shared across instances), memory locally. Fails
+  OPEN: a Redis error must never stop a sign-in.
+*/
+const onceMemory = new Map<string, number>();
+const onceRedis = hasUpstash ? Redis.fromEnv() : null;
+
+export async function claimOnce(key: string, seconds: number): Promise<boolean> {
+  if (onceRedis) {
+    try {
+      const r = await onceRedis.set(`svd:once:${key}`, 1, { nx: true, ex: seconds });
+      return r === "OK";
+    } catch {
+      return true;
+    }
+  }
+  const now = Date.now();
+  const until = onceMemory.get(key);
+  if (until && until > now) return false;
+  onceMemory.set(key, now + seconds * 1000);
+  return true;
+}

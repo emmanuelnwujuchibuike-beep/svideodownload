@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { hasResend, sendOtpEmail } from "@/lib/email/resend";
-import { clientId, otpLimiter } from "@/lib/rate-limit";
+import { claimOnce, clientId, otpLimiter } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -42,6 +42,14 @@ export async function POST(request: Request) {
   }
 
   if (!hasResend) return NextResponse.json({ error: "Sign-in email isn't configured yet." }, { status: 503 });
+
+  /*
+    🔴 ONE CODE PER EMAIL PER 25 SECONDS (owner, 2026-10-19: "login otp emails send twice"). A repeat within
+    the window — a double submit — answers OK without sending: the first email is on its way, and minting a
+    second code here would invalidate the first one the member is about to type. "Resend code" is offered
+    only after its 30 s countdown, past the window.
+  */
+  if (!(await claimOnce(`otp:sent:${email}`, 25))) return NextResponse.json({ ok: true, deduped: true });
 
   const admin = createAdminClient();
   let link = await admin.auth.admin.generateLink({ type: "magiclink", email });

@@ -145,7 +145,11 @@ export function AuthPanel({ next: nextRaw = "/home" }: { next?: string }) {
   };
   */
 
+  // one send at a time: `busy` only disables the button after a render, so a double tap could send twice (2026-10-19)
+  const sending = useRef(false);
   const sendCode = async (target: string) => {
+    if (sending.current) return false;
+    sending.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -166,6 +170,7 @@ export function AuthPanel({ next: nextRaw = "/home" }: { next?: string }) {
       return false;
     } finally {
       setBusy(false);
+      sending.current = false;
     }
   };
 

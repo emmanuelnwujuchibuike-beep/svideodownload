@@ -205,8 +205,8 @@ export function FullscreenInterstitial({
       <div className="absolute right-4 z-20" style={{ top: "calc(0.75rem + var(--frenz-safe-top))" }}>
         {canSkip && directLinkSpot ? (
           /*
-            The ring and the dark circle are the direct link; the X glyph alone is the close button (and the
-            only part a keyboard or screen reader reaches). With no link set up, the ring closes too.
+            The ring, the dark circle and the X all open the direct link; the X (the only part a keyboard or screen
+            reader reaches) also closes the ad. With no link set up, the ring closes too.
           */
           <div
             onClick={() => {
@@ -222,6 +222,8 @@ export function FullscreenInterstitial({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
+                // owner, 2026-10-20: the X opens the Monetag link TOO, then closes — in the tap's own gesture
+                openDirectLink();
                 onClose();
               }}
               tabIndex={shown ? 0 : -1}

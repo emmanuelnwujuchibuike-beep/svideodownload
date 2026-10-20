@@ -7,7 +7,7 @@ import { DEFAULT_DIRECT_LINK, DIRECT_LINK_SPOTS, publicDirectLink } from "@/lib/
 
 /**
  * Owner, 2026-10-19: on the Download complete and reward ads, a tap on the close control's ring or dark
- * circle, or on the dark backdrop, opens the Monetag direct link; only the X itself closes the ad. The
+ * circle, or on the dark backdrop, opens the Monetag direct link; the X opens it too and closes the ad. The
  * admin turns it off under Monetization › Direct link › "Ad close button".
  */
 const src = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
@@ -15,8 +15,8 @@ const shell = src("features/monetization/fullscreen-interstitial.tsx");
 
 function rules(s: string) {
   return {
-    // the X glyph is its own button: it stops the tap reaching the ring and closes
-    xCloses: /onClick=\{\(e\) => \{\s*e\.stopPropagation\(\);\s*onClose\(\);\s*\}\}[\s\S]{0,200}aria-label="Close advertisement"/.test(s),
+    // the X is its own button: it stops the tap reaching the ring (no double open), opens the link, then closes
+    xCloses: /onClick=\{\(e\) => \{\s*e\.stopPropagation\(\);[\s\S]{0,160}?openDirectLink\(\);\s*onClose\(\);\s*\}\}[\s\S]{0,200}aria-label="Close advertisement"/.test(s),
     // the ring opens the link; with no link set up it closes, as before
     ringOpens: /onClick=\{\(\) => \{\s*if \(!openDirectLink\(\)\) onClose\(\);\s*\}\}/.test(s),
     // the backdrop opens the link first, and only closes (once skippable) without one
@@ -25,12 +25,12 @@ function rules(s: string) {
 }
 
 describe("the ad close control's direct link", () => {
-  it("only the X closes; the ring, circle and backdrop open the direct link", () => {
+  it("the X opens the direct link and closes; so do the ring, circle and backdrop", () => {
     expect(rules(shell)).toEqual({ xCloses: true, ringOpens: true, backdropOpens: true });
   });
 
   it("teeth: each rule fails when it's taken out", () => {
-    expect(rules(shell.replace("e.stopPropagation();", "")).xCloses).toBe(false);
+    expect(rules(shell.replace(/openDirectLink\(\);\s*onClose\(\);(\s*\}\}\s*tabIndex)/, "onClose();$1")).xCloses).toBe(false);
     expect(rules(shell.replace("if (!openDirectLink()) onClose();", "onClose();")).ringOpens).toBe(false);
     expect(rules(shell.replace("if (directLinkSpot && openDirectLink()) return;", "")).backdropOpens).toBe(false);
   });

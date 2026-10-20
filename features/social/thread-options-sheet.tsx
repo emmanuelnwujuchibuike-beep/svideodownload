@@ -289,8 +289,8 @@ export function ThreadOptionsSheet({
 
   if (!mounted) return null;
   /*
-    design/ChatMenu.dc.html (owner, 2026-10-18; step 15, 2026-10-19): a GLASS sheet over the chat (there is
-    a picture behind it — the thread and its wallpaper), the person (avatar with the identity ring, name,
+    design/ChatMenu.dc.html (owner, 2026-10-18; step 15, 2026-10-19): a SOLID WHITE sheet (owner, same day: the
+    glass let a chat's purple wallpaper through — backgrounds stay plain white), the person (avatar with the identity ring, name,
     @handle · last seen, "View profile"), the gradient Send AI credits button with the real balance, brand
     swatches, wallpaper (scope and upload — no preset pictures: backgrounds stay plain white unless the owner
     says "emergency change", 2026-10-19), one list (Disappearing messages, Font & bubble style,
@@ -326,7 +326,7 @@ export function ThreadOptionsSheet({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={springs.sheet}
-            className="frenz-nav-glass frenz-nav-glass--sheet absolute inset-x-0 bottom-0 mx-auto max-h-[90vh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-[28px] !border-x-0 !border-b-0 sm:bottom-6 sm:rounded-[28px] sm:!border"
+            className="absolute inset-x-0 bottom-0 mx-auto max-h-[90vh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-[28px] bg-frenz-page shadow-frenz-float sm:bottom-6 sm:rounded-[28px]"
             style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
           >
             <div className="flex justify-center pb-1 pt-2">

@@ -563,7 +563,7 @@ Frenz AI — Image to Video
 ### Notes — where these designs and the app differ
 
 **Step 15 · Chat options sheet**
-- Glass sheet (the existing `frenz-nav-glass` tiers, a lighter `--sheet` variant): solid on reduced transparency / low-power phones.
+- **Solid white sheet**, not the design's glass (owner, 2026-10-19: "the chat menu background is still purple" — a glass sheet lets a chat's wallpaper colour through; backgrounds stay plain white).
 - @handle · last seen comes from the same presence read as the chat header (`PresenceLastSeen`), so it respects the person's last-seen privacy.
 - Send AI credits is the full-width gradient button; the balance is the send sheet's own cached read (no second request), "—" until known.
 - Theme swatches, brand colours only, in the design's order: Frenz (the default gradient), Blue, Violet, Magenta, **Midnight, Mono (new — migration 0264, NOT live until applied)**. Picking Blue/Violet/Magenta now paints the brand colour in the chat itself. Green and orange are no longer offered; a chat already using one keeps it and still shows it.

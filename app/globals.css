@@ -965,9 +965,8 @@
      under the blur while it scrolls. */
   .frenz-nav-glass {
     --nav-glass-rgb: 255 255 255;
-    /* a variant sets the *-default values; the tiers below set the real ones and still win */
-    --nav-glass-fill: var(--nav-glass-fill-default, 0.82);
-    --nav-glass-blur: var(--nav-glass-blur-default, 12px);
+    --nav-glass-fill: 0.82;
+    --nav-glass-blur: 12px;
     background-color: rgb(var(--nav-glass-rgb) / var(--nav-glass-fill));
     -webkit-backdrop-filter: blur(var(--nav-glass-blur)) saturate(160%);
     backdrop-filter: blur(var(--nav-glass-blur)) saturate(160%);
@@ -990,13 +989,6 @@
   .frenz-ui {
     font-family: var(--font-body, -apple-system), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     color: hsl(var(--frenz-ink));
-  }
-
-  /* A bottom sheet over a chat (design/ChatMenu.dc.html, 2026-10-19): more see-through and softer, so the
-     conversation and its wallpaper read behind it. Glass only because there is a picture behind it. */
-  .frenz-nav-glass--sheet {
-    --nav-glass-fill-default: 0.72;
-    --nav-glass-blur-default: 24px;
   }
 
   /* Over full-bleed video (/reels): dark glass whatever the theme, so the white

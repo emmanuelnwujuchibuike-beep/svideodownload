@@ -27,6 +27,8 @@ function rules(s: string) {
     searchInChat: s.includes("Search in chat") && s.includes("conversationId={conversationId} />"),
     // ⛔ owner 2026-10-19: backgrounds stay plain white — no preset pictures, no SVG grounds (only "emergency change" lifts it)
     noPresetBackgrounds: !/WALLPAPER_PRESETS|chat-wallpapers|\.svg/.test(s),
+    // ⛔ owner 2026-10-19: the sheet is solid white, never glass that lets a wallpaper colour through
+    whiteSheet: s.includes("rounded-t-[28px] bg-frenz-page") && !s.includes("frenz-nav-glass"),
     // red rows at the foot
     redRows: /text-rose-600[\s\S]{0,300}Block or restrict[\s\S]{0,800}text-rose-600[\s\S]{0,300}>Report</.test(s),
   };
@@ -34,7 +36,7 @@ function rules(s: string) {
 
 describe("the chat options sheet (step 15)", () => {
   it("keeps every rule of the design and the owner's notes", () => {
-    expect(rules(sheet)).toEqual({ brandSwatches: true, balance: true, lastSeen: true, media: true, searchInChat: true, noPresetBackgrounds: true, redRows: true });
+    expect(rules(sheet)).toEqual({ brandSwatches: true, balance: true, lastSeen: true, media: true, searchInChat: true, noPresetBackgrounds: true, whiteSheet: true, redRows: true });
   });
 
   it("teeth: each rule fails when it's taken out", () => {
@@ -42,6 +44,7 @@ describe("the chat options sheet (step 15)", () => {
     expect(rules(sheet.replace("m.sendCreditsBalance()", "Promise.resolve(0)")).balance).toBe(false);
     expect(rules(sheet.replace("<PresenceLastSeen userId={otherUserId} />", "")).lastSeen).toBe(false);
     expect(rules(sheet.replace("conversationId={conversationId} />", "/>")).searchInChat).toBe(false);
+    expect(rules(sheet.replace("bg-frenz-page shadow-frenz-float", "frenz-nav-glass")).whiteSheet).toBe(false);
     expect(rules(sheet + '\nconst WALLPAPER_PRESETS = [{ path: "/chat-wallpapers/x.svg" }];').noPresetBackgrounds).toBe(false);
   });
 

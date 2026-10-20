@@ -2,28 +2,16 @@ import { MotionConfig } from "framer-motion";
 import type { ReactNode } from "react";
 
 import { AppOverlays } from "@/features/app-shell/app-overlays";
+import { AppShellDeferred } from "@/features/app-shell/app-shell-deferred";
 import { PageRefresh } from "@/features/app-shell/page-refresh";
-import { OfflineBanner } from "@/features/app-shell/offline-banner";
 import { StatusBarScrim } from "@/features/app-shell/status-bar-scrim";
-import { ScrollPerfMonitor } from "@/features/perf/scroll-perf-monitor";
 import { DeferredAnnouncement } from "@/features/announcements/deferred-announcement";
 import { AppSidebar } from "@/features/app-shell/app-sidebar";
 import { AppTopbar } from "@/features/app-shell/app-topbar";
-import { DeviceCheck } from "@/features/app-shell/device-check";
-import { FloatingMessages } from "@/features/app-shell/floating-messages";
-import { VastInterstitialTriggers } from "@/features/monetization/vast-interstitial/triggers";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
 import { DownloadTopAd } from "@/features/monetization/download-top-ad";
-import { OfflineQueueSync } from "@/features/app-shell/offline-queue-sync";
-import { ReferralClaim } from "@/features/app-shell/referral-claim";
 import { PinLockGate } from "@/features/account/pin-lock-gate";
 import { InboxMobileChrome } from "@/features/social/inbox-mobile-chrome";
-import { AutoAwayTracker, PresenceTracker } from "@/features/friends/use-presence";
-import { AiJobAlertMount } from "@/features/ai/ai-job-alert-mount";
-import { NotificationLiveToast } from "@/features/notifications/live-toast";
-import { InboxRealtimeTracker } from "@/features/social/inbox";
-import { ReactionFloatLayer } from "@/features/ui/reaction-float";
-import { CreatorNotifyNudgeHost } from "@/features/social/creator-notify-nudge";
 import { Toaster } from "@/features/ui/toast";
 
 /**
@@ -88,7 +76,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         The component ships two listeners and a timer; the ad itself stays behind
         a dynamic import, so this costs a cold page load nothing.
       */}
-      <VastInterstitialTriggers />
+      {/* the after-first-paint shell (triggers, trackers, banners, floating layers) — one lazy island, 2026-10-20 */}
+      <AppShellDeferred />
       <MobileNav />
       {/*
         App-shell chrome, moved here from the ROOT layout (2026-07-19).
@@ -121,43 +110,43 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         The platform gesture is now the only one, everywhere — the same
         behaviour the AI pages have always had.
       */}
-      <OfflineBanner />
-      <ScrollPerfMonitor />
+      
+      
       {/* The mobile inbox's persistent top chrome (title + profile/tools +
           Stories). In the shell, above the page-transition template, so it never
           unmounts on the iOS back-swipe out of a chat — the fix for the
           long-running "stories/profile flash on swipe back". Renders only on
           /messages (mobile); see InboxMobileChrome. */}
       <InboxMobileChrome />
-      <FloatingMessages />
+      
       <Toaster />
       {/* Drops down after a follow/friend-request to offer that person's
           notifications (owner, 2026-08-24). Mounted beside Toaster because it is
           the same kind of app-wide, imperatively-raised layer. */}
-      <CreatorNotifyNudgeHost />
+      
       {/* Floating-reaction layer — Wow taps rise from the tap point. */}
-      <ReactionFloatLayer />
+      
       {/* Live in-app drop-down notification. */}
-      <NotificationLiveToast />
+      
       {/* And the Frenz AI one, which covers what that cannot: a GUEST (no
           notifications row to fire on) and a job that finishes while the member
           is on a page this layout does not own. Idle cost is one request. */}
-      <AiJobAlertMount />
+      
       {/* Heavy, hidden-until-triggered overlays — code-split out of the initial
           bundle (composer, Story Studio, download player, iOS install nudge). */}
       <AppOverlays />
       {/* Joins the shared presence channel so this user shows as online. */}
-      <PresenceTracker />
+      
       {/* available <-> away after 5 minutes idle; never touches a manually
           chosen Busy/DND/Invisible. */}
-      <AutoAwayTracker />
+      
       {/* Live inbox badge — was dead code before, only updated while a thread was open. */}
-      <InboxRealtimeTracker />
+      
       {/* Replays any offline-queued Like/Save writes on load + reconnect. */}
-      <OfflineQueueSync />
-      <ReferralClaim />
+      
+      
       {/* Once-per-browser-session "new device" security check. */}
-      <DeviceCheck />
+      
       {/* App-level quick-lock PIN — gates Secret Chats and /account/security only. */}
       <PinLockGate />
     </div>

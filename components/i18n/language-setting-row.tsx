@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronRight, Globe } from "lucide-react";
+import dynamic from "next/dynamic";
 import { type ComponentType, useEffect, useState } from "react";
 
 import { readCookie } from "@/lib/dom/cookie";
@@ -9,7 +10,8 @@ import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
 
-import { LanguageMenu } from "./language-menu";
+// lazy: the menu carries every language's strings (~25 kB gz) — loaded on the tap, never with Settings (2026-10-20)
+const LanguageMenu = dynamic(() => import("./language-menu").then((m) => m.LanguageMenu), { ssr: false });
 
 /**
  * Language picker as a full-width SETTINGS ROW — for the profile menu and the
@@ -49,6 +51,8 @@ export function LanguageSettingRow({
   useEffect(() => setCurrent(readLang()), []);
   const active = findLanguage(current);
 
+  // the chunk starts loading the moment a finger lands, so the panel opens without a wait
+  const preload = () => void import("./language-menu");
   const openMenu = () => {
     haptic("light");
     playSound("tap");
@@ -69,7 +73,7 @@ export function LanguageSettingRow({
   if (variant === "tile") {
     return (
       <>
-        <button type="button" onClick={openMenu} className={cn("flex w-full flex-col gap-3.5 rounded-[20px] border border-frenz-line bg-frenz-card p-3.5 text-left transition active:scale-[0.98]", className)}>
+        <button type="button" onClick={openMenu} onPointerDown={preload} className={cn("flex w-full flex-col gap-3.5 rounded-[20px] border border-frenz-line bg-frenz-card p-3.5 text-left transition active:scale-[0.98]", className)}>
           <span aria-hidden className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-frenz-blue text-white">
             <Icon className="h-[18px] w-[18px]" />
           </span>
@@ -86,7 +90,7 @@ export function LanguageSettingRow({
   if (variant === "list") {
     return (
       <>
-        <button type="button" onClick={openMenu} className={cn("flex min-h-[60px] w-full items-center gap-3 px-3.5 py-2 text-left transition active:bg-frenz-fill", className)}>
+        <button type="button" onClick={openMenu} onPointerDown={preload} className={cn("flex min-h-[60px] w-full items-center gap-3 px-3.5 py-2 text-left transition active:bg-frenz-fill", className)}>
           <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-frenz-blue text-white">
             <Icon className="h-[17px] w-[17px]" />
           </span>
@@ -106,7 +110,7 @@ export function LanguageSettingRow({
     <>
       <button
         type="button"
-        onClick={openMenu}
+        onClick={openMenu} onPointerDown={preload}
         className={cn(
           "group flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-secondary/70",
           className,

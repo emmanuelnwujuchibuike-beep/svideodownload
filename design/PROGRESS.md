@@ -510,7 +510,7 @@ says "push".** White backgrounds, the brand gradient only where it earns its pla
 new colours.
 
 - [x] 15. Chat options sheet → design/ChatMenu.dc.html
-- [ ] 16. Frenz AI welcome → design/AIStudio.dc.html
+- [x] 16. Frenz AI welcome → design/AIStudio.dc.html
 - [ ] 17. Frenz AI — AI Studio → design/AIExplore.dc.html
 - [ ] 18. Frenz AI — Text to Video → design/TextToVideo.dc.html
 - [ ] 19. Frenz AI — Image to Video → design/ImageToVideo.dc.html
@@ -573,3 +573,11 @@ Frenz AI — Image to Video
 - Search in chat searches this chat only (the search API's own `conversationId` scope).
 - Block or restrict and Report are red rows; Delete conversation stays under them.
 - Email me new messages (0262) stays in the list.
+
+**Step 16 · Frenz AI welcome**
+- The featured video carousel is the admin's existing showcase (lib/ai/showcase — images and short clips are uploaded in Admin), shown full-bleed: clips autoplay muted only while their slide is on screen (no Data Saver, no reduced motion), as before. A slide with no upload shows the showcase's own navy artwork — that is the media placeholder, not a page background; the page itself stays white.
+- The app's top bar (and the Studio tabs on /studio/ai) stay above the hero; the design draws the hero from the very top.
+- Glass over the video (pills, chip, page dots) uses the shared AI glass tiers with a dark-tinted `--media` variant, so the white words stay readable when the glass turns solid (reduced transparency / low-power phones). Blur is the tiers' 8 px, not the design's 20 px (the glass-cost rule).
+- Credits: the glass pill and the credits card read the strip's one live balance snapshot (no extra request). Earn → the quests, View → Usage & history. A guest sees "Sign in to create" instead of a figure.
+- "Create. Transform. Perfect." — Perfect. is flat violet (no gradient text). Chips Fast / Secure / Natural results replace the old trust row.
+- Create with AI (gradient, docked above the tab bar) opens the AI Studio (`/character-replace`, the explore page step 17 redesigns); the round button opens History.

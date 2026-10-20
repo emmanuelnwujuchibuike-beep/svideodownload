@@ -231,7 +231,8 @@ describe("Part 7 §57 — AI glass fallback hierarchy", () => {
 
   it("the fill is never computed with math (an invalid alpha would make the fallback transparent)", () => {
     const full = tierBody(css, TIER_MARKERS[0][0]);
-    expect(full).toMatch(/background-color:\s*rgb\(255 255 255 \/ var\(--ai-glass-fill\)\)/);
+    // the tint is a variable since 2026-10-19 (`.ai-glass--media`, dark over a photo); white stays the default
+    expect(full).toMatch(/background-color:\s*rgb\(var\(--ai-glass-rgb, 255 255 255\) \/ var\(--ai-glass-fill\)\)/);
     for (const m of css.matchAll(/--ai-glass-fill:\s*([^;]+);/g)) {
       expect(m[1]!.trim()).toMatch(/^[\d.]+$/);
     }

@@ -1,9 +1,9 @@
 import { SelfAdSlot } from "@/features/ads-platform/serve/self-ad-slot";
-import { AiCreditStrip } from "@/features/ai/design/ai-credit-strip";
 import { AiMembersGate } from "@/features/ai/design/ai-members-gate";
 import { AiShowcase } from "@/features/ai/design/ai-showcase";
-import { AiHero } from "@/features/ai/design/ai-surface";
-import { FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
+import { AiCreditsCard, AiCreditsPill } from "@/features/ai/design/ai-welcome-parts";
+import { FrenzLogo } from "@/components/brand/frenz-logo";
+import { BadgeCheck, ShieldCheck, Zap } from "lucide-react";
 import { FrenzAIWelcomeLive } from "@/features/ai/frenz-ai-welcome-live";
 import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
 
@@ -56,29 +56,58 @@ export function FrenzAIWelcome({
         exploreHref={`${base}/character-replace`}
         historyHref={`${base}/history`}
         footer={
-          <>
-            {/* Ad Platform Part 5: a paid AI-pages card (ai_banner) at the end of the hub — never inside a creation flow. Nothing without a live campaign. */}
-            <SelfAdSlot slot="ai_hub_card" placement="ai_banner" page="ai" className="mt-7" />
-            {/* Secure · Fast · Natural Results — closes both reference images. */}
-            <FrenzAITrustRow className="mt-7 border-t border-border/60 pt-5" />
-          </>
+          /* Ad Platform Part 5: a paid AI-pages card (ai_banner) at the end of the hub — never inside a creation flow. Nothing without a live campaign. */
+          <SelfAdSlot slot="ai_hub_card" placement="ai_banner" page="ai" className="mt-7" />
+        }
+        hero={
+          /*
+            Step 16 (design/AIStudio.dc.html, 2026-10-19): the admin's showcase as a full-bleed featured
+            carousel — its videos autoplay muted while on screen — with the glass Frenz AI and credits
+            pills over it. The page under it stays plain white (owner's hard rule).
+          */
+          <AiShowcase
+            slides={slides}
+            base={base}
+            variant="hero"
+            className="-mx-3 -mt-1 sm:-mx-4 lg:mx-0 lg:rounded-[28px]"
+            overlay={
+              <>
+                <span className="flex h-11 items-center gap-2 rounded-full ai-glass ai-glass--media pl-1.5 pr-3.5">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-white/90">
+                    <FrenzLogo size={20} alt="" className="h-5 w-5" />
+                  </span>
+                  <span className="font-heading text-[16px] font-bold text-white">Frenz AI</span>
+                </span>
+                <AiCreditsPill />
+              </>
+            }
+          />
         }
       >
-        {/*
-          The reference's order (owner, 2026-10-05): the showcase FIRST, the
-          credits strip under it, then the page's own headline.
-        */}
-        <AiShowcase slides={slides} base={base} />
-        <AiCreditStrip base={base} className="mt-3" />
-        <AiHero
-          tool="AI Studio"
-          title="Create. Transform."
-          highlight="Perfect."
-          stack
-          subtitle="Professional AI tools for video, voice and audio creation."
-          className="mt-6 px-0"
-        />
-
+        {/* the white sheet rising over the hero's foot, as drawn */}
+        <div className="relative -mx-3 -mt-7 rounded-t-[28px] bg-frenz-page px-4 pt-[18px] sm:-mx-4 lg:mx-0 lg:mt-4 lg:rounded-none lg:px-0">
+          <AiCreditsCard base={base} />
+          <div className="px-1 pt-6">
+            <h1 className="m-0 font-heading text-[30px] font-extrabold leading-[1.08] tracking-[-1px] text-frenz-ink">
+              {/* no gradient text — the highlighted word is flat violet, as on every Frenz page */}
+              Create. Transform. <span className="text-frenz-violet">Perfect.</span>
+            </h1>
+            <p className="m-0 mt-2 text-[16px] leading-[1.45] text-frenz-ink/80">Professional AI tools for video, voice and audio creation.</p>
+          </div>
+          {/* the trust row, as the design's three chips */}
+          <ul className="m-0 flex list-none flex-wrap gap-2 px-1 pt-[18px]" aria-label="Why Frenz AI">
+            {[
+              { icon: Zap, label: "Fast" },
+              { icon: ShieldCheck, label: "Secure" },
+              { icon: BadgeCheck, label: "Natural results" },
+            ].map(({ icon: Icon, label }) => (
+              <li key={label} className="flex h-[34px] items-center gap-1.5 rounded-full bg-frenz-fill px-3 text-[13px] font-bold text-frenz-ink/80">
+                <Icon className="h-4 w-4 text-frenz-violet" aria-hidden />
+                {label}
+              </li>
+            ))}
+          </ul>
+        </div>
       </FrenzAIWelcomeLive>
       <AiMembersGate />
     </>

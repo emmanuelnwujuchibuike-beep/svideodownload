@@ -1,13 +1,12 @@
 "use client";
 
-import { ArrowRight, History, BrainCircuit } from "lucide-react";
+import { ArrowRight, History } from "lucide-react";
 import Link from "next/link";
 
 import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
-import { aiButtonClass } from "@/features/ai/design/ai-button";
 import { FrenzAIAllowanceBar } from "@/features/ai/frenz-ai-chrome";
 import { LinkPendingStripe } from "@/features/navigation/link-pending-stripe";
 import { getAiEntitlement, type AiMemberEntitlement } from "@/lib/ai/client";
@@ -34,12 +33,15 @@ export function FrenzAIWelcomeLive({
   exploreHref,
   historyHref,
   footer,
+  hero,
   children,
 }: {
   exploreHref: string;
   historyHref: string;
-  /** Rendered after the allowance, inside the environment — the trust row. */
+  /** Rendered after the allowance, inside the environment — the ad card. */
   footer: ReactNode;
+  /** Step 16 (2026-10-19): the full-bleed featured carousel, above everything and outside the page's top padding. */
+  hero?: ReactNode;
   children: ReactNode;
 }) {
   /*
@@ -91,7 +93,8 @@ export function FrenzAIWelcomeLive({
         */
         className="ai-wash relative"
       >
-        <div className="pb-6 pt-3 sm:pt-4">
+        {hero}
+        <div className={hero ? "pb-6" : "pb-6 pt-3 sm:pt-4"}>
           {children}
 
           {/*
@@ -132,41 +135,30 @@ export function FrenzAIWelcomeLive({
             background: "linear-gradient(to top, hsl(var(--background)) 0%, hsl(var(--background) / 0.92) 55%, transparent 100%)",
           }}
         >
+          {/*
+            Step 16 (design/AIStudio.dc.html, 2026-10-19): the big gradient "Create with AI →" (the page's one
+            primary action) and a round History button beside it — glass, because the page scrolls under it.
+            "Create with AI" opens the AI Studio. Both keep data-ai-members (a guest gets the sign-in dialog).
+          */}
           <div className="pointer-events-auto flex gap-2">
             <Link
               href={exploreHref}
               data-ai-members=""
-              className={aiButtonClass({ size: "lg", className: "relative min-w-0 flex-1 overflow-hidden" })}
+              className="relative flex h-[60px] min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden rounded-full bg-frenz-gradient-x font-heading text-[17px] font-bold text-white no-underline shadow-frenz-float transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2"
             >
-              <BrainCircuit className="h-[18px] w-[18px] shrink-0 opacity-90" aria-hidden />
               <span className="truncate">Create with AI</span>
-              <span className="ai-btn__icon-end flex shrink-0" aria-hidden>
-                <ArrowRight className="h-[18px] w-[18px]" />
-              </span>
+              <ArrowRight className="h-5 w-5 shrink-0" aria-hidden />
               <LinkPendingStripe />
             </Link>
-            {/*
-              Icon-only below `sm`: on a 320–430 px phone two labelled buttons
-              split the row and the PRIMARY's label was the one cut off
-              ("Create …", measured 2026-10-05). The primary keeps the row; the
-              name stays on the link for a screen reader.
-            */}
             <TapOnceLink
               href={historyHref}
-              // No viewport prefetch (its target is a dynamic route — a server render on
-              // EVERY welcome visit). It warms on finger-DOWN and presses at once, going
-              // once, like Earn (owner, 2026-10-09: "make the AI history button respond
-              // instantly on tap like the earn and credit button").
               spinner={false}
-              // owner 2026-10-09: "doesn't respond on first tap" - the route is warmed once the page is
-              // idle (members only: a guest's tap opens the sign-in dialog), and the press shows at once
               warmOnIdle={hasAuthCookie()}
               data-ai-members=""
               aria-label="Your creations"
-              className={aiButtonClass({ variant: "secondary", size: "lg", className: "ai-btn--round w-[3.375rem] shrink-0 px-0 sm:w-auto sm:px-5 data-[pending]:scale-95 data-[pending]:bg-secondary" })}
+              className="frenz-nav-glass flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full text-frenz-ink transition active:scale-95 data-[pending]:scale-95"
             >
-              <History className="h-[18px] w-[18px] shrink-0 text-muted-foreground [[data-pending]>&]:animate-spin [[data-pending]>&]:text-indigo-600 motion-reduce:animate-none" aria-hidden />
-              <span className="hidden sm:inline">Your creations</span>
+              <History className="h-[22px] w-[22px] [[data-pending]>&]:animate-spin [[data-pending]>&]:text-frenz-violet motion-reduce:animate-none" aria-hidden />
             </TapOnceLink>
           </div>
         </div>

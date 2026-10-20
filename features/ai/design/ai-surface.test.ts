@@ -134,7 +134,7 @@ describe("every migrated tool opens with the breadcrumb pill", () => {
     ["features/ai/text-to-audio/text-to-audio-workspace.tsx", "Text to Audio"],
     ["features/ai/voice-clone/voice-cloning-workspace.tsx", "Voice Cloning"],
     ["features/ai/lip-sync/lip-sync-workspace.tsx", "Lip Sync Pro"],
-    ["features/ai/frenz-ai-welcome.tsx", "AI Studio"],
+    // the welcome page left this list 2026-10-19: design/AIStudio.dc.html names it with the glass Frenz AI pill over the hero (frenz-ai-welcome-step16.test.ts)
     ["features/ai/frenz-ai-explore.tsx", "Explore"],
   ];
 
@@ -225,8 +225,8 @@ describe("the surface is APPLIED, not merely defined", () => {
       reference images, and had been sitting in frenz-ai-chrome.tsx rendered on
       no page at all. The allowance bar was on one page of eight.
     */
+    // the welcome page closes with the design's Fast / Secure / Natural results chips since 2026-10-19 (frenz-ai-welcome-step16.test.ts)
     const pages = [
-      "features/ai/frenz-ai-welcome.tsx",
       "features/ai/text-to-audio/text-to-audio-workspace.tsx",
       "features/ai/voice-clone/voice-cloning-workspace.tsx",
       "features/ai/lip-sync/lip-sync-workspace.tsx",

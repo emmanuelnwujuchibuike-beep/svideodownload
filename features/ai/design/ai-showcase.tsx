@@ -2,7 +2,7 @@
 
 import { ArrowLeft, ArrowRight, AudioLines, Clapperboard, History, ImagePlus, Mic, Pause, Play, type LucideIcon, Compass } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { SHOWCASE_VIDEO, slideHref, type ShowcaseSlide, type ShowcaseTarget } from "@/lib/ai/showcase/slides";
 import { cn } from "@/lib/utils";
@@ -53,9 +53,19 @@ export function AiShowcase({
   slides,
   base,
   desktopOnly,
+  variant = "card",
+  overlay,
   className,
 }: {
   slides: ShowcaseSlide[];
+  /**
+   * "hero" (step 16, design/AIStudio.dc.html, 2026-10-19): the welcome page's full-bleed featured carousel
+   * — one slide at a time edge to edge, the words and "Try it" over the foot, glass page dots. Same
+   * autoplay, clip and pause rules as the card carousel; only the layout differs.
+   */
+  variant?: "card" | "hero";
+  /** Hero only: what sits over the top of every slide (the Frenz AI and credits pills). */
+  overlay?: ReactNode;
   /** The door's base path — "/ai" or "/studio/ai". */
   base: string;
   /**
@@ -176,6 +186,81 @@ export function AiShowcase({
     go((active + delta + count) % count);
   };
 
+  if (variant === "hero") {
+    return (
+      <section
+        ref={rootRef}
+        aria-roledescription="carousel"
+        aria-label="What Frenz AI makes"
+        className={cn("ai-showcase-art relative h-[500px] overflow-hidden", className)}
+        onFocus={() => setFocused(true)}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+            setFocused(false);
+            hold();
+          }
+        }}
+      >
+        <div
+          ref={trackRef}
+          className="flex h-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          aria-live={autoplay ? "off" : "polite"}
+          onPointerDown={hold}
+          onWheel={hold}
+          onTouchStart={hold}
+          onKeyDown={hold}
+        >
+          {slides.map((s, i) => (
+            <HeroSlide
+              key={s.id}
+              slide={s}
+              index={i}
+              count={count}
+              href={slideHref(base, s.target)}
+              first={i === 0}
+              playing={motionOk && i === active}
+              onDuration={i === active ? (sec) => setDwell(Math.min(SHOWCASE_VIDEO.maxDwellMs, Math.max(ADVANCE_MS, Math.round(sec * 1000)))) : undefined}
+            />
+          ))}
+        </div>
+        {overlay ? <div className="pointer-events-none absolute inset-x-4 top-3.5 flex items-center justify-between gap-2 [&>*]:pointer-events-auto">{overlay}</div> : null}
+        {count > 1 ? (
+          // the design's glass page dots — glass because they sit over the video
+          <div className="pointer-events-none absolute inset-x-0 bottom-[34px] flex justify-center">
+            <div className="pointer-events-auto flex h-[30px] items-center rounded-full ai-glass ai-glass--media px-1.5">
+              {slides.map((s, i) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    hold();
+                    go(i);
+                  }}
+                  aria-label={`Show slide ${i + 1} of ${count}`}
+                  aria-current={i === active ? "true" : undefined}
+                  className="flex h-[30px] items-center justify-center px-[3px]"
+                >
+                  <span className={cn("block h-1.5 rounded-full transition-[width,background-color]", i === active ? "w-[18px] bg-white" : "w-1.5 bg-white/50")} />
+                </button>
+              ))}
+              {!reduced ? (
+                <button
+                  type="button"
+                  onClick={() => setPaused((p) => !p)}
+                  aria-label={paused ? "Play the showcase" : "Pause the showcase"}
+                  aria-pressed={paused}
+                  className="ml-0.5 flex h-[30px] w-6 items-center justify-center text-white/80"
+                >
+                  {paused ? <Play className="h-3 w-3" aria-hidden /> : <Pause className="h-3 w-3" aria-hidden />}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </section>
+    );
+  }
+
   return (
     <section
       ref={rootRef}
@@ -287,6 +372,86 @@ export function AiShowcase({
         </div>
       ) : null}
     </section>
+  );
+}
+
+/** One full-bleed hero slide: the picture (and its clip while active), the scrims, and the words with "Try it". */
+function HeroSlide({
+  slide,
+  index,
+  count,
+  href,
+  first,
+  playing,
+  onDuration,
+}: {
+  slide: ShowcaseSlide;
+  index: number;
+  count: number;
+  href: string;
+  first: boolean;
+  playing: boolean;
+  onDuration?: (seconds: number) => void;
+}) {
+  const Icon = TARGET_ICON[slide.target];
+  return (
+    <div role="group" aria-roledescription="slide" aria-label={`${index + 1} of ${count}`} data-index={index} className="relative h-full w-full shrink-0 snap-center overflow-hidden">
+      {slide.image ? (
+        // eslint-disable-next-line @next/next/no-img-element -- already-sized webp on the CDN (see SlideCard)
+        <img
+          src={slide.image.sm}
+          srcSet={`${slide.image.sm} 720w, ${slide.image.lg} 1280w`}
+          sizes="100vw"
+          width={slide.image.width}
+          height={slide.image.height}
+          alt={slide.alt}
+          loading={first ? "eager" : "lazy"}
+          fetchPriority={first ? "high" : "low"}
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : (
+        <Icon className="absolute -right-6 top-1/3 h-52 w-52 -translate-y-1/2 text-white/[0.08]" strokeWidth={1} aria-hidden />
+      )}
+      {slide.video && playing ? (
+        <video
+          src={slide.video.url}
+          poster={slide.image?.sm}
+          muted
+          playsInline
+          autoPlay
+          loop
+          preload="auto"
+          aria-hidden
+          onLoadedMetadata={(e) => onDuration?.(e.currentTarget.duration)}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : null}
+      {/* the design's scrims, so the pills and the words read on any picture */}
+      <span aria-hidden className="absolute inset-x-0 top-0 h-[140px] bg-gradient-to-b from-black/45 to-transparent" />
+      <span aria-hidden className="absolute inset-x-0 bottom-0 h-[300px] bg-gradient-to-t from-black/85 to-transparent" />
+      <div className="absolute inset-x-5 bottom-[78px] flex flex-col gap-2.5">
+        {slide.chip ? (
+          <span className="flex items-center gap-1.5 self-start rounded-full ai-glass ai-glass--media py-1.5 pl-2 pr-3 text-[13px] font-semibold text-white">
+            <Icon className="h-3.5 w-3.5" aria-hidden />
+            {slide.chip}
+          </span>
+        ) : null}
+        <h2 className="m-0 line-clamp-2 font-heading text-[34px] font-extrabold leading-[1.05] tracking-[-1.2px] text-white">
+          {slide.title}
+          {slide.highlight ? ` ${slide.highlight}` : ""}
+        </h2>
+        {slide.description ? <p className="m-0 line-clamp-2 text-[15px] leading-snug text-white/90">{slide.description}</p> : null}
+        <Link
+          href={href}
+          prefetch={false}
+          data-ai-members=""
+          className="mt-1 inline-flex h-11 items-center gap-1.5 self-start rounded-full bg-white px-[18px] text-[15px] font-bold text-frenz-ink no-underline transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+        >
+          Try it <ArrowRight className="h-4 w-4" aria-hidden />
+        </Link>
+      </div>
+    </div>
   );
 }
 

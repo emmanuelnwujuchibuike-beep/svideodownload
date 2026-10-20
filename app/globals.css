@@ -929,7 +929,7 @@
   .ai-glass {
     --ai-glass-fill: 0.7;
     --ai-glass-blur: 8px;
-    background-color: rgb(255 255 255 / var(--ai-glass-fill));
+    background-color: rgb(var(--ai-glass-rgb, 255 255 255) / var(--ai-glass-fill));
     -webkit-backdrop-filter: blur(var(--ai-glass-blur));
     backdrop-filter: blur(var(--ai-glass-blur));
   }
@@ -939,6 +939,9 @@
   .ai-glass--rail { --ai-glass-fill: 0.6; }
   .ai-glass--pill { --ai-glass-fill: 0.75; }
   .ai-glass--bar { --ai-glass-fill: 0.8; }
+  /* Over a photo or video (the Frenz AI welcome hero, 2026-10-19): a DARK tint, so white words stay readable
+     when a tier raises the fill all the way to solid. */
+  .ai-glass--media { --ai-glass-rgb: 14 12 30; --ai-glass-fill: 0.32; border: 1px solid rgb(255 255 255 / 0.28); }
 
   /* ── The floating glass bottom nav (2026-10-09) ────────────────────────────
      "A genuinely floating Instagram/WhatsApp-inspired glass bottom navigation

@@ -85,7 +85,12 @@ export function EarnButton({ size = "sm", className }: { size?: "sm" | "md" | "l
 */
 let stripHydrated = false;
 
-export function AiCreditStrip({ base, className }: { base: string; className?: string }) {
+/**
+ * Who is looking (guest / member) and the member's live AI balance and free creations — the strip's
+ * own logic, shared with the welcome page's credits pill and card (step 16, 2026-10-19) so every place
+ * showing the balance reads the same snapshot and repaints on the same event.
+ */
+export function useAiCreditBalance() {
   const [who, setWho] = useState<"unknown" | "guest" | "member">(() => (stripHydrated ? (hasAuthCookie() ? "member" : "guest") : "unknown"));
   const [balance, setBalance] = useState<CharacterReplaceBalance | null>(() => (stripHydrated && hasAuthCookie() ? readCachedCharacterReplaceBalance() : null));
   const [free, setFree] = useState<CharacterReplaceFreeAccess | null>(() => (stripHydrated && hasAuthCookie() ? readAiFreeAccessCache() : null));
@@ -140,6 +145,11 @@ export function AiCreditStrip({ base, className }: { base: string; className?: s
   }, []);
 
   const freeLeft = free?.enabled && free.remaining !== null && free.remaining > 0 ? free.remaining : null;
+  return { who, balance, free, freeLeft };
+}
+
+export function AiCreditStrip({ base, className }: { base: string; className?: string }) {
+  const { who, balance, freeLeft } = useAiCreditBalance();
 
   /*
     ── COMPACT (Download page refinement, 2026-10-09, to the improved reference:

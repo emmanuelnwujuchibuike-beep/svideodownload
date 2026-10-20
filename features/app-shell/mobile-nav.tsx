@@ -118,6 +118,9 @@ const TAB_CLASS =
  * tab set: since the Full Bleed merge (owner, 2026-10-09) there is one bar,
  * chosen only by whether the visitor is signed in.
  */
+/** Text to Video and Image to Video, in either door (/ai or /studio/ai). */
+export const AI_CREATION_SCREEN = /^\/(studio\/)?ai\/(text-to-video|image-to-video)\/?$/;
+
 export function MobileNav({
   marketing: _marketing = false,
 }: {
@@ -191,6 +194,12 @@ export function MobileNav({
     which is the whole reason this is a named condition and not an inline test.
   */
   const immersive = pathname.startsWith("/reels");
+  /*
+    The AI creation screens (owner, 2026-10-19, steps 18–19: "Hide the bottom tab bar on this screen") — their
+    own glass Generate bar takes the bottom of the screen. Hidden the same way as on scroll: by transform, so
+    the nav keeps publishing its height.
+  */
+  const creationScreen = AI_CREATION_SCREEN.test(pathname);
 
   // Warm the primary destinations once so the FIRST tap opens instantly — dynamic
   // routes (Messages/Friends) otherwise fetch on first navigation, which felt like
@@ -295,7 +304,7 @@ export function MobileNav({
     exactly where it is. Two facts that used to be derived separately are now
     one fact, read from one place.
   */
-  const hideForScroll = bottomAdBarPresent && scrollDir === "down";
+  const hideForScroll = (bottomAdBarPresent && scrollDir === "down") || creationScreen;
 
   /*
     The tap answers at once (owner, 2026-10-17: "the history page still doesn't have a stripe loader
@@ -338,6 +347,8 @@ export function MobileNav({
       height plus its gap, so it leaves the screen completely.
     */}
     <div
+      // off-screen on a creation screen: out of the tab order too
+      inert={creationScreen || undefined}
       className={cn(
         "pointer-events-none fixed inset-x-0 bottom-[var(--frenz-nav-gap)] z-40 mx-auto flex w-[calc(100%-1.75rem)] max-w-[560px] items-center gap-2.5 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] lg:hidden motion-reduce:transition-none",
         hideForScroll && "translate-y-[calc(100%+var(--frenz-nav-gap)+0.5rem)]",

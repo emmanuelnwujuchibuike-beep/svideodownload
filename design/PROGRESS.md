@@ -512,8 +512,8 @@ new colours.
 - [x] 15. Chat options sheet → design/ChatMenu.dc.html
 - [x] 16. Frenz AI welcome → design/AIStudio.dc.html
 - [x] 17. Frenz AI — AI Studio → design/AIExplore.dc.html
-- [ ] 18. Frenz AI — Text to Video → design/TextToVideo.dc.html
-- [ ] 19. Frenz AI — Image to Video → design/ImageToVideo.dc.html
+- [x] 18. Frenz AI — Text to Video → design/TextToVideo.dc.html
+- [x] 19. Frenz AI — Image to Video → design/ImageToVideo.dc.html
 - [ ] 20. Subscriptions dashboard → design/SubsDashboard.dc.html (owner, 2026-10-19)
 - [ ] 21. Subscriptions analysis / earnings → design/Earnings.dc.html (owner, 2026-10-19)
 - [ ] 22. Frenz AI — History → design/AIHistory.dc.html (owner, 2026-10-19)
@@ -594,3 +594,12 @@ Frenz AI — Image to Video
 - **AI models — ours, not the design's:** the app runs **Kling 3.0 Omni** (`kling-v3-omni`, Text to Video and Image to Video) and **Kling Lip Sync** (`kling-lip-sync`, Lip Sync Pro) — lib/ai/kling. The design's Kling 4.0, 2.6, O3 and O1 are not in our config, so they are not shown. The model cards are information, not buttons.
 - One credits card at the foot: balance, BUSINESS tag only for a Business member, Earn credits, Usage & history, and the complimentary note only when this account has one.
 - Removed (owner): How it works, the separate Business banner and the bottom "← Frenz AI" button. `AiHero` had no page left using it and was removed.
+
+**Steps 18–19 · Text to Video, Image to Video**
+- One set of shared components for both (features/ai/design/ai-generate.tsx): `AiCreateHeader` (‹ Studio · centred title · balance), `AiPromptBox` with a footer (Explore prompts + the dictation mic inside the box, the live 0 / 2,500 counter), `AiStylePicker` (Realistic, Anime, Cartoon, 3D — the real sample pictures, a ring and a check), `AiSettingsList` + `AiSettingRow` (each row opens the native picker), `AiAdvancedSettings` (collapsible, the existing options inside), `AiActionBar docked` (the glass bar pinned to the bottom) with `AiCost` ("—" until the server prices it) and `AiGenerateButton` (disabled without a prompt / photo and while the server refuses the quote, e.g. not enough credits).
+- The bottom tab bar is hidden on these two screens (mobile-nav `AI_CREATION_SCREEN`; by transform and `inert`, so it leaves the tab order too).
+- **Dictation** (new): the browser's own speech recognition; what is said is added to the prompt within its limit. Where the browser has none (e.g. Firefox), the mic is not drawn.
+- **Model**: the real list is Kling 3.0 Omni alone (`KLING_MODELS`), and it is the default. Owner, same day: "Use Kling 4.0 as the AI model … I just haven't paid for the API" — Kling 4.0 is not in the code: no model id has been verified (the API answered "model is not supported" to the next id tried), and showing 4.0 while 3.0 renders would bill for one model and show another. When the API is paid and Kling gives the id: add it to `KLING_MODELS` + a name in video-model-row.tsx, verify with one generation, make it the default.
+- References (Text to Video): up to 7 images, or 4 with one MP4/MOV — the limits the server already enforces (`klingMaxReferenceImages`), count shown as 0 / 7.
+- **Image to Video keeps what it already supported**: reference images + a reference video, and the ending photo (in Advanced). Its third setting is Quality, not Aspect ratio — the photo sets the shape. The "Choose a photo" tile is one file input: a phone offers Photos, Files and the camera from it; once picked, the photo shows with Replace.
+- The photo stage is the light fill, not a dark one (backgrounds stay white).

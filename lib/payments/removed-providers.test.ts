@@ -38,7 +38,8 @@ describe("Bachs is gone from the code", () => {
   it("no source file imports it, reads its keys or calls its API", () => {
     const offenders = ["app", "lib", "features", "components"].flatMap((d) => sources(join(ROOT, d))).filter((f) => integration(readFileSync(f, "utf8")));
     expect(offenders.map((f) => f.slice(ROOT.length + 1))).toEqual([]);
-  });
+    // reads every source file: ~5 s on a busy machine, so the default 5 s timeout made it flaky (2026-10-19)
+  }, 30_000);
 
   it("teeth: each way back in is caught", () => {
     expect(integration(`import { createBachsCheckout } from "@/lib/payments/bachs";`)).toBe(true);

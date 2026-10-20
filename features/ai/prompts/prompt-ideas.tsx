@@ -55,9 +55,11 @@ export interface PromptIdeasProps {
   onInserted?: () => void;
   disabled?: boolean;
   className?: string;
+  /** "inline" (steps 18–19): only the "Explore prompts" button, for the prompt box's own footer; its notice wraps onto its own row. */
+  variant?: "card" | "inline";
 }
 
-export function PromptIdeas({ mode, prompt, onPromptChange, max, assets, onShowReferences, onUseEditMode, base, onInserted, disabled, className }: PromptIdeasProps) {
+export function PromptIdeas({ mode, prompt, onPromptChange, max, assets, onShowReferences, onUseEditMode, base, onInserted, disabled, className, variant = "card" }: PromptIdeasProps) {
   const [Library, setLibrary] = useState<Library | null>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -125,38 +127,9 @@ export function PromptIdeas({ mode, prompt, onPromptChange, max, assets, onShowR
     }
   };
 
-  return (
-    <section aria-labelledby="prompt-ideas-title" className={cn("rounded-2xl bg-gradient-to-br from-blue-500/[0.07] via-indigo-500/[0.06] to-violet-500/[0.07] p-3.5 ring-1 ring-inset ring-indigo-500/15 dark:from-blue-400/[0.08] dark:via-indigo-400/[0.07] dark:to-violet-400/[0.08] dark:ring-indigo-300/15", className)}>
-      {/* on a phone the button takes its own full-width row, so the heading reads on one or two lines */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/70 text-indigo-600 ring-1 ring-inset ring-indigo-500/15 dark:bg-white/[0.06] dark:text-indigo-300" aria-hidden>
-          <PenLine className="h-[18px] w-[18px]" />
-        </span>
-        <div className="min-w-[11rem] flex-1">
-          <h2 id="prompt-ideas-title" className="text-[14.5px] font-bold tracking-[-0.01em]">
-            What do you want to create?
-          </h2>
-          <p className="mt-0.5 text-[12.5px] leading-snug text-muted-foreground">Choose an idea and we&apos;ll write the prompt for you.</p>
-        </div>
-        <button
-          ref={trigger}
-          type="button"
-          onClick={() => void openLibrary()}
-          onPointerEnter={warm}
-          onFocus={warm}
-          disabled={disabled}
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          className={aiButtonClass({ variant: "secondary", size: "sm", className: "min-h-[2.75rem] w-full shrink-0 px-3.5 sm:w-auto" })}
-        >
-          {loading ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : null}
-          <span>Explore Prompts</span>
-        </button>
-      </div>
-
-      {/* what the chosen prompt still needs — said plainly, with the way to fix it; nothing changes by itself */}
-      {chosen && state && state.kind !== "ready" ? (
-        <div role="status" className="mt-3 flex gap-2.5 rounded-xl bg-card/90 p-3 text-[12.5px] leading-snug ring-1 ring-inset ring-amber-500/30">
+  // what the chosen prompt still needs — said plainly, with the way to fix it; nothing changes by itself
+  const notice = chosen && state && state.kind !== "ready" ? (
+        <div role="status" className="mt-3 flex basis-full gap-2.5 rounded-xl bg-card/90 p-3 text-[12.5px] leading-snug ring-1 ring-inset ring-amber-500/30">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
           <div className="min-w-0 flex-1">
             <p className="font-semibold">“{chosen.title}”</p>
@@ -203,7 +176,61 @@ export function PromptIdeas({ mode, prompt, onPromptChange, max, assets, onShowR
             <X className="h-4 w-4" aria-hidden />
           </button>
         </div>
-      ) : null}
+      ) : null;
+
+  if (variant === "inline") {
+    return (
+      <>
+        <button
+          ref={trigger}
+          type="button"
+          onClick={() => void openLibrary()}
+          onPointerEnter={warm}
+          onFocus={warm}
+          disabled={disabled}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          className={cn("inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-frenz-violet/10 px-3.5 text-[13.5px] font-bold text-frenz-violet transition active:scale-95 disabled:opacity-50", className)}
+        >
+          {loading ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <PenLine className="h-4 w-4" aria-hidden />}
+          Explore prompts
+        </button>
+        {notice}
+        {open && Library ? <Library mode={mode} currentPrompt={prompt} max={max} assets={assets} onChoose={onChoose} onClose={close} /> : null}
+      </>
+    );
+  }
+
+  return (
+    <section aria-labelledby="prompt-ideas-title" className={cn("rounded-2xl bg-gradient-to-br from-blue-500/[0.07] via-indigo-500/[0.06] to-violet-500/[0.07] p-3.5 ring-1 ring-inset ring-indigo-500/15 dark:from-blue-400/[0.08] dark:via-indigo-400/[0.07] dark:to-violet-400/[0.08] dark:ring-indigo-300/15", className)}>
+      {/* on a phone the button takes its own full-width row, so the heading reads on one or two lines */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/70 text-indigo-600 ring-1 ring-inset ring-indigo-500/15 dark:bg-white/[0.06] dark:text-indigo-300" aria-hidden>
+          <PenLine className="h-[18px] w-[18px]" />
+        </span>
+        <div className="min-w-[11rem] flex-1">
+          <h2 id="prompt-ideas-title" className="text-[14.5px] font-bold tracking-[-0.01em]">
+            What do you want to create?
+          </h2>
+          <p className="mt-0.5 text-[12.5px] leading-snug text-muted-foreground">Choose an idea and we&apos;ll write the prompt for you.</p>
+        </div>
+        <button
+          ref={trigger}
+          type="button"
+          onClick={() => void openLibrary()}
+          onPointerEnter={warm}
+          onFocus={warm}
+          disabled={disabled}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          className={aiButtonClass({ variant: "secondary", size: "sm", className: "min-h-[2.75rem] w-full shrink-0 px-3.5 sm:w-auto" })}
+        >
+          {loading ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : null}
+          <span>Explore Prompts</span>
+        </button>
+      </div>
+
+      {notice}
 
       {open && Library ? <Library mode={mode} currentPrompt={prompt} max={max} assets={assets} onChoose={onChoose} onClose={close} /> : null}
     </section>

@@ -1,26 +1,29 @@
 "use client";
 
-import { Clock, Gauge, ImagePlay, Palette } from "lucide-react";
+import { Clock, Gauge, Palette } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { AiCreditStrip } from "@/features/ai/design/ai-credit-strip";
 import {
   AiActionBar,
   AiAdvancedSettings,
   AiCost,
+  AiCreateHeader,
   AiField,
   AiGenerateButton,
   AiGenerationStatus,
   AiPromptBox,
   AiSegmented,
   AiSettingRow,
+  AiSettingsList,
   AiStylePicker,
 } from "@/features/ai/design/ai-generate";
 import { PromptIdeas } from "@/features/ai/prompts/prompt-ideas";
 import { scrollToSection, showInsertedPrompt } from "@/features/ai/prompts/show-inserted";
 import { FreeVideoNotice } from "@/features/ai/video/free-video-notice";
 import { AiShowcase } from "@/features/ai/design/ai-showcase";
-import { AiPageShell, AiPanel, AiToolTitle } from "@/features/ai/design/ai-surface";
+import { AiDictationButton } from "@/features/ai/design/ai-dictation";
+import { AiPageShell } from "@/features/ai/design/ai-surface";
+import { VideoModelRow } from "@/features/ai/video/video-model-row";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { AiImageDrop } from "@/features/ai/video/ai-image-drop";
 import { AiReferenceSection } from "@/features/ai/video/ai-reference-section";
@@ -166,85 +169,86 @@ export function ImageToVideoWorkspace({
     <FrenzAIEnvironment stage={envStage} bare>
     <AiPageShell>
       <AiShowcase slides={slides} base={base} desktopOnly className="mb-3" />
-      <AiCreditStrip base={base} className="mt-1 lg:mt-0" />
+      {/*
+        Step 19 (design/ImageToVideo.dc.html, owner 2026-10-19): the same layout and components as Text to Video
+        (AiCreateHeader, AiPromptBox with Explore prompts + dictation, AiStylePicker, AiSettingsList, the docked
+        Generate bar). Differences: the large "Choose a photo" tile first, the prompt describes the motion. The
+        references and the ending photo this page already supports stay (PROGRESS).
+      */}
+      <AiCreateHeader backHref={`${base}/character-replace`} title="Image to Video" tagline="Your photo. Now in motion." />
 
-      <AiToolTitle
-        icon={ImagePlay}
-        title="Image to Video"
-        tagline={
-          <>
-            Bring a photo <span className="text-gradient">to life.</span>
-          </>
-        }
-        body="Turn a still image into a cinematic video with Frenz AI."
-        className="mt-6"
-      />
-
-      {/* ── THE ONE CARD: the photo first and largest (§14) ──────────────── */}
-      <AiPanel className="mt-5 space-y-4">
+      <div className="frenz-ui mt-5 space-y-5">
         <div ref={photoRef} className="scroll-mt-24">
-        <AiImageDrop
-          label="Your photo"
-          hint="The video opens on this image and animates from it."
-          value={firstFrameUrl}
-          onChange={setFirst}
-          upload={upload}
-          accept={KLING_OMNI.images.mimeTypes}
-          maxBytes={KLING_OMNI.images.maxBytes}
-        />
+          <AiImageDrop
+            large
+            label="Your photo"
+            note="Your photo stays on your device until you press Generate."
+            value={firstFrameUrl}
+            onChange={setFirst}
+            upload={upload}
+            accept={KLING_OMNI.images.mimeTypes}
+            maxBytes={KLING_OMNI.images.maxBytes}
+          />
         </div>
-
-        {/* Prompt ideas (owner, 2026-10-15): compact here, the library loads on the first tap */}
-        <PromptIdeas
-          mode="image_to_video"
-          prompt={prompt}
-          onPromptChange={setPrompt}
-          max={KLING_OMNI.prompt.maxChars}
-          assets={assets}
-          onShowReferences={() => scrollToSection(firstFrameUrl ? referencesRef.current : photoRef.current)}
-          onInserted={() => showInsertedPrompt(promptRef.current)}
-          base={base}
-          disabled={locked}
-        />
 
         <AiPromptBox
           inputRef={promptRef}
-          label="What should happen?"
-          hint="Optional — describe the motion, or leave it and let the model decide."
+          label="Describe the motion"
+          hint="Optional — or leave it and let the model decide."
           value={prompt}
           onChange={setPrompt}
           max={KLING_OMNI.prompt.maxChars}
           rows={3}
           disabled={locked}
           placeholder="A slow, gentle push in. The light shifts softly."
+          footer={
+            <>
+              {/* Prompt ideas (owner, 2026-10-15): the library loads on the first tap */}
+              <PromptIdeas
+                variant="inline"
+                mode="image_to_video"
+                prompt={prompt}
+                onPromptChange={setPrompt}
+                max={KLING_OMNI.prompt.maxChars}
+                assets={assets}
+                onShowReferences={() => scrollToSection(firstFrameUrl ? referencesRef.current : photoRef.current)}
+                onInserted={() => showInsertedPrompt(promptRef.current)}
+                base={base}
+                disabled={locked}
+              />
+              <AiDictationButton value={prompt} onChange={setPrompt} max={KLING_OMNI.prompt.maxChars} disabled={locked} />
+            </>
+          }
         />
 
-        <div className="space-y-3">
-          <AiStylePicker icon={Palette} label="Video Style" value={style} options={VIDEO_STYLES} onChange={setStyle} disabled={locked} />
+        <AiStylePicker icon={Palette} label="Style" value={style} options={VIDEO_STYLES} onChange={setStyle} disabled={locked} />
 
-          <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
-            <AiSettingRow
-              icon={Clock}
-              label="Duration"
-              value={String(durationSeconds)}
-              onChange={(v) => setDuration(Number(v))}
-              options={[...DURATIONS.map((d) => ({ value: String(d), label: `${d} seconds` })), ...(oneMinute && !referenceVideoUrl ? [{ value: "60", label: "1 minute (60 s)" }] : [])]}
-              disabled={locked}
-            />
-            <AiSettingRow
-              icon={Gauge}
-              label="Quality"
-              value={resolution}
-              onChange={setResolution}
-              options={[
-                { value: "720p", label: "720p" },
-                { value: "1080p", label: "1080p" },
-                { value: "4k", label: "4K" },
-              ]}
-              disabled={locked}
-            />
-          </div>
+        {/* the photo sets the shape, so this page has no aspect-ratio row; Quality is its third setting, as before */}
+        <AiSettingsList>
+          <VideoModelRow disabled={locked} />
+          <AiSettingRow
+            icon={Clock}
+            label="Duration"
+            value={String(durationSeconds)}
+            onChange={(v) => setDuration(Number(v))}
+            options={[...DURATIONS.map((d) => ({ value: String(d), label: `${d} sec` })), ...(oneMinute && !referenceVideoUrl ? [{ value: "60", label: "1 minute" }] : [])]}
+            disabled={locked}
+          />
+          <AiSettingRow
+            icon={Gauge}
+            label="Quality"
+            value={resolution}
+            onChange={setResolution}
+            options={[
+              { value: "720p", label: "720p" },
+              { value: "1080p", label: "1080p" },
+              { value: "4k", label: "4K" },
+            ]}
+            disabled={locked}
+          />
+        </AiSettingsList>
 
+        <div>
           <div ref={referencesRef} className="scroll-mt-24">
             <AiReferenceSection
               images={referenceImageUrls}
@@ -280,7 +284,7 @@ export function ImageToVideoWorkspace({
             />
           </AiField>
         </AiAdvancedSettings>
-      </AiPanel>
+      </div>
 
       {gen.status === "running" ? <AiGenerationStatus className="mt-4" title="Creating your video…" /> : null}
       {gen.result ? <AiVideoResult className="mt-4" job={gen.result} historyHref={historyHref} onAgain={gen.reset} feature="ai_image_to_video" /> : null}
@@ -292,7 +296,7 @@ export function ImageToVideoWorkspace({
       ) : null}
 
       <FreeVideoNotice offer={gen.freeOffer} className="mt-4" />
-      <AiActionBar>
+      <AiActionBar docked>
         <AiCost
           credits={gen.complimentary ? 0 : (gen.quote?.credits ?? null)}
           detail={gen.quote ? `${gen.quote.billableSeconds}s · ${resolution}` : null}
@@ -303,7 +307,7 @@ export function ImageToVideoWorkspace({
         <AiGenerateButton onClick={gen.submit} busy={locked} disabled={!firstFrameUrl || !!gen.quoteProblem} className="ml-auto min-w-0 flex-1">
           {/* the price takes the bar's left side; under 400 px the full label truncated (page 4 lesson) */}
           <span className="min-[400px]:hidden">Generate</span>
-          <span className="hidden min-[400px]:inline">Generate Video</span>
+          <span className="hidden min-[400px]:inline">Generate video</span>
         </AiGenerateButton>
       </AiActionBar>
     </AiPageShell>

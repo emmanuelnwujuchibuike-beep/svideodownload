@@ -1,7 +1,6 @@
 "use client";
 
 import { AiReferenceRail, type AiReferenceRailProps } from "@/features/ai/video/ai-reference-rail";
-import { cn } from "@/lib/utils";
 
 /**
  * The references on Text to Video and Image to Video — image slots AND the
@@ -21,5 +20,5 @@ import { cn } from "@/lib/utils";
  */
 export function AiReferenceSection(props: AiReferenceRailProps) {
   // the card surface of the redesign instead of the rail's own tinted panel
-  return <AiReferenceRail {...props} className={cn("!bg-card !ring-black/[0.07]", props.className)} />;
+  return <AiReferenceRail {...props} />;
 }

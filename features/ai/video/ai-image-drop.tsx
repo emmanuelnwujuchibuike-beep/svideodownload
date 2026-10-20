@@ -46,6 +46,10 @@ export interface AiImageDropProps {
   maxBytes: number;
   /** A second, optional slot reads less prominently than the required one. */
   optional?: boolean;
+  /** Step 19: the large first tile ("Choose a photo · From Photos, Files or your camera") with the on-device note under it. */
+  large?: boolean;
+  /** A line under the tile — the on-device privacy note. */
+  note?: string;
   className?: string;
 }
 
@@ -64,7 +68,7 @@ const EXT = (mime: string) => mime.replace("image/", "").toUpperCase();
   · 🔴 the object URL is revoked on unmount too, not only on replace/clear —
     leaving the page with a photo picked used to leak it.
 */
-export function AiImageDrop({ value, onChange, upload, label, hint, accept = ["image/jpeg", "image/png"], maxBytes, optional, className }: AiImageDropProps) {
+export function AiImageDrop({ value, onChange, upload, label, hint, accept = ["image/jpeg", "image/png"], maxBytes, optional, large, note, className }: AiImageDropProps) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -137,11 +141,11 @@ export function AiImageDrop({ value, onChange, upload, label, hint, accept = ["i
   return (
     <div className={className}>
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-[15px] font-bold tracking-[-0.015em]">
+        <span className={cn("font-bold text-frenz-ink", large ? "sr-only" : "text-[15px]")}>
           {label}
           {optional ? <span className="ml-1.5 text-[12px] font-medium text-muted-foreground">Optional</span> : null}
         </span>
-        {filled ? null : <span className="text-[11.5px] text-muted-foreground">{formats}</span>}
+        {filled || large ? null : <span className="text-[11.5px] text-frenz-muted">{formats}</span>}
       </div>
       {hint ? <p className="mt-0.5 text-[12.5px] leading-snug text-muted-foreground">{hint}</p> : null}
       <div
@@ -156,9 +160,11 @@ export function AiImageDrop({ value, onChange, upload, label, hint, accept = ["i
           void take(e.dataTransfer.files?.[0]);
         }}
         className={cn(
-          "relative mt-3 overflow-hidden rounded-2xl transition",
-          filled ? "bg-[#0b1340] ring-1 ring-inset ring-black/[0.08]" : "border-[1.5px] border-dashed",
-          !filled && (dragging ? "border-indigo-400 bg-indigo-50/80" : "border-indigo-300/70 bg-indigo-50/30"),
+          "relative overflow-hidden rounded-[22px] transition",
+          large ? "mt-0" : "mt-3",
+          // the photo on the light fill, never a dark stage (backgrounds stay white — owner, 2026-10-19)
+          filled ? "border border-frenz-line bg-frenz-fill" : "border-[1.5px] border-dashed",
+          !filled && (dragging ? "border-frenz-violet bg-frenz-violet/[0.06]" : "border-frenz-line bg-frenz-card"),
         )}
       >
         {filled ? (
@@ -194,13 +200,14 @@ export function AiImageDrop({ value, onChange, upload, label, hint, accept = ["i
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
-            className="flex min-h-[10rem] w-full flex-col items-center justify-center gap-1.5 px-4 py-6 text-center transition active:scale-[0.99] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            className={cn("flex w-full flex-col items-center justify-center gap-1.5 px-4 text-center transition active:scale-[0.99] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet", large ? "min-h-[13rem] py-8" : "min-h-[10rem] py-6")}
           >
-            <span className="mb-1 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-indigo-600 ring-1 ring-inset ring-indigo-200/80">
-              <ImagePlus className="h-[18px] w-[18px]" aria-hidden />
+            <span className={cn("mb-1 inline-flex items-center justify-center text-white", large ? "h-14 w-14 rounded-2xl bg-frenz-gradient" : "h-10 w-10 rounded-xl bg-frenz-violet")}>
+              <ImagePlus className={large ? "h-6 w-6" : "h-[18px] w-[18px]"} aria-hidden />
             </span>
-            <span className="text-[14.5px] font-semibold">Choose a photo</span>
-            <span className="text-[12.5px] text-muted-foreground">or drag one here</span>
+            <span className={cn("font-bold text-frenz-ink", large ? "font-heading text-[18px]" : "text-[14.5px]")}>Choose a photo</span>
+            {/* one file input: on a phone it offers Photos, Files and the camera itself */}
+            <span className="text-[13px] text-frenz-muted">{large ? "From Photos, Files or your camera" : "or drag one here"}</span>
           </button>
         )}
       </div>
@@ -209,6 +216,7 @@ export function AiImageDrop({ value, onChange, upload, label, hint, accept = ["i
           {meta.name} · {(meta.size / (1024 * 1024)).toFixed(1)} MB
         </p>
       ) : null}
+      {note ? <p className="m-0 mt-2 px-1 text-[12.5px] text-frenz-muted">{note}</p> : null}
       {problem ? (
         <p className="mt-1.5 text-[12px] font-medium text-rose-600" role="alert">
           {problem}

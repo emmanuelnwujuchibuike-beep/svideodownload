@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowRight, ChevronDown, ChevronRight, Loader2, type LucideIcon, Play } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Loader2, type LucideIcon } from "lucide-react";
+import Link from "next/link";
 import { useId, useState, type ReactNode, type Ref } from "react";
 
-import { aiButtonClass } from "@/features/ai/design/ai-button";
+import { AiCreditsChip } from "@/features/ai/design/ai-welcome-parts";
 import { formatCredits } from "@/lib/ai/credits/units";
 import { cn } from "@/lib/utils";
 
@@ -63,20 +64,21 @@ export function AiCost({ credits, detail, funding, loading, problem }: AiCostPro
   return (
     <div className="min-w-0 shrink-0">
       <div className="flex items-baseline gap-2">
-        <span className="whitespace-nowrap text-[11.5px] font-semibold text-violet-700/80">Estimated cost</span>
-        {loading ? <Loader2 className="h-3 w-3 animate-spin text-violet-500 motion-reduce:animate-none" aria-hidden /> : null}
+        <span className="whitespace-nowrap text-[12px] font-semibold text-frenz-muted">Estimated cost</span>
+        {loading ? <Loader2 className="h-3 w-3 animate-spin text-frenz-violet motion-reduce:animate-none" aria-hidden /> : null}
       </div>
       {problem ? (
-        <p className="mt-0.5 text-[13px] font-medium leading-snug text-rose-600">{problem}</p>
+        <p className="m-0 mt-0.5 text-[13px] font-semibold leading-snug text-rose-600 dark:text-rose-400">{problem}</p>
       ) : (
-        <p className={cn("mt-0.5 text-[19px] font-bold leading-none tabular-nums tracking-[-0.02em]", loading && "opacity-55")}>
+        <p className={cn("m-0 mt-0.5 font-heading text-[18px] font-bold leading-none tabular-nums text-frenz-ink", loading && "opacity-55")}>
+          {/* "—" until the server has priced it (step 18: never a guessed number) */}
           {money ?? "—"}
-          {detail ? <span className="ml-2 align-middle text-[12px] font-medium text-muted-foreground">{detail}</span> : null}
+          {detail ? <span className="ml-2 align-middle font-body text-[12px] font-medium text-frenz-muted">{detail}</span> : null}
         </p>
       )}
       {funding ? (
-        <p className="mt-1 text-[11.5px] leading-snug text-muted-foreground">
-          <span className="font-semibold text-foreground/75">{funding.label}</span>
+        <p className="m-0 mt-1 text-[11.5px] leading-snug text-frenz-muted">
+          <span className="font-semibold text-frenz-ink/80">{funding.label}</span>
           {funding.hint ? ` · ${funding.hint}` : null}
         </p>
       ) : null}
@@ -120,23 +122,14 @@ export function AiGenerateButton({
       onClick={onClick}
       disabled={disabled || busy}
       aria-busy={busy ? true : undefined}
-      /*
-        Redesign page 3 (owner's reference, 2026-10-05): the shared primary —
-        a full pill in the reference's blue → violet → pink, STATIC. This was
-        `.ai-cta`, whose gradient ran a 9 s pass forever (paused only by the
-        environment's --ai-play). The reference button does not move, so
-        nothing here animates except the spinner while it is busy.
-        56 px: the tap-target floor this project already holds AI actions to.
-      */
-      className={cn(aiButtonClass({ size: "lg", className: "min-h-[3.5rem] shrink-0 px-6" }), className)}
-    >
-      {busy ? <Loader2 className="h-[18px] w-[18px] animate-spin motion-reduce:animate-none" aria-hidden /> : <Play className="h-[18px] w-[18px]" aria-hidden />}
-      <span className="truncate">{busy ? busyLabel : children}</span>
-      {busy ? null : (
-        <span className="ai-btn__icon-end flex" aria-hidden>
-          <ArrowRight className="h-[18px] w-[18px]" />
-        </span>
+      // the page's one primary action: the brand gradient, static, 56 px (step 18, design/TextToVideo.dc.html)
+      className={cn(
+        "inline-flex min-h-[3.5rem] shrink-0 items-center justify-center gap-2 rounded-full bg-frenz-gradient-x px-6 font-heading text-[16px] font-bold text-white shadow-frenz-card transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2 disabled:opacity-45 motion-reduce:active:scale-100",
+        className,
       )}
+    >
+      {busy ? <Loader2 className="h-[18px] w-[18px] animate-spin motion-reduce:animate-none" aria-hidden /> : null}
+      <span className="truncate">{busy ? busyLabel : children}</span>
     </button>
   );
 }
@@ -151,20 +144,27 @@ export function AiGenerateButton({
  * clear of the home indicator, and the bottom offset clears the app's own nav
  * bar so the two never overlap (§27).
  */
-export function AiActionBar({ children, className }: { children: ReactNode; className?: string }) {
+export function AiActionBar({ children, className, docked = false }: { children: ReactNode; className?: string; /** The creation screens (steps 18–19): the bottom nav is hidden there, so the bar takes the bottom edge. */ docked?: boolean }) {
   return (
     <div
       className={cn(
-        "sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 mt-6 lg:bottom-6",
+        "sticky z-20 mt-6",
+        docked ? "bottom-[calc(0.75rem+env(safe-area-inset-bottom))]" : "bottom-[calc(4.5rem+env(safe-area-inset-bottom))] lg:bottom-6",
         className,
       )}
     >
       {/*
-        Page 3: lighter. A hairline edge and a small shadow instead of a white
-        glow ring and a 50 px violet bloom; the glass stays (it rides over the
-        page while it scrolls, the one place a blur earns its cost).
+        The one floating surface on a generation screen, so the one that earns glass. On the creation screens
+        it is the design's white glass bar (the nav's own tiers: solid when transparency is reduced).
       */}
-      <div className="flex items-center gap-3 ai-glass ai-glass--bar rounded-[1.75rem] py-2.5 pl-4 pr-2.5 ring-1 ring-inset ring-black/[0.07] shadow-[0_10px_28px_-18px_rgba(30,40,90,0.4)]">
+      <div
+        className={cn(
+          "flex items-center gap-3",
+          docked
+            ? "frenz-nav-glass rounded-[26px] py-2 pl-4 pr-2"
+            : "ai-glass ai-glass--bar rounded-[1.75rem] py-2.5 pl-4 pr-2.5 ring-1 ring-inset ring-black/[0.07] shadow-[0_10px_28px_-18px_rgba(30,40,90,0.4)]",
+        )}
+      >
         {children}
       </div>
     </div>
@@ -218,20 +218,21 @@ export function AiGenerationStatus({ title, note, className }: { title: string; 
 export function AiAdvancedSettings({ children, label = "Advanced settings", defaultOpen = false }: { children: ReactNode; label?: string; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
   const id = useId();
+  // step 18: a collapsible white row, the existing options inside it
   return (
-    <div className="mt-4 border-t border-black/[0.06] pt-3">
+    <div className="mt-4 rounded-[20px] border border-frenz-line bg-frenz-card">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls={id}
-        className="flex min-h-[2.75rem] w-full items-center justify-between gap-3 rounded-xl px-1 text-left text-[13.5px] font-semibold text-foreground/80 transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+        className="flex min-h-[3.25rem] w-full items-center justify-between gap-3 rounded-[20px] px-3.5 text-left text-[15px] font-bold text-frenz-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet"
       >
         {label}
-        <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none", open && "rotate-180")} aria-hidden />
+        <ChevronDown className={cn("h-4 w-4 shrink-0 text-frenz-muted transition-transform duration-200 motion-reduce:transition-none", open && "rotate-180")} aria-hidden />
       </button>
       {open ? (
-        <div id={id} className="mt-3 space-y-4">
+        <div id={id} className="space-y-4 border-t border-frenz-line px-3.5 pb-4 pt-3.5">
           {children}
         </div>
       ) : null}
@@ -332,30 +333,23 @@ export function AiSettingRow<T extends string>({
 }) {
   const id = useId();
   const current = options.find((o) => o.value === value)?.label ?? value;
+  // step 18: one row of the Settings list — title on the left, the value on the right, a native picker underneath
   return (
-    <div
-      className={cn(
-        "relative flex min-h-[3.75rem] items-center gap-2.5 rounded-2xl bg-card px-2.5 ring-1 ring-inset ring-black/[0.07] transition dark:ring-white/10 min-[400px]:gap-3 min-[400px]:px-3",
-        "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring [@media(hover:hover)]:hover:ring-indigo-300/60",
-        disabled && "opacity-55",
-        className,
-      )}
-    >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300 min-[400px]:h-9 min-[400px]:w-9">
+    <div className={cn("relative flex min-h-[3.5rem] items-center gap-3 px-3.5 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-frenz-violet", disabled && "opacity-55", className)}>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-frenz-violet/10 text-frenz-violet">
         <Icon className="h-[17px] w-[17px]" aria-hidden />
       </span>
-      <span className="min-w-0 flex-1">
-        <span id={`${id}-l`} className="block truncate text-[13.5px] font-semibold leading-tight">{label}</span>
-        <span className="mt-0.5 block truncate text-[12px] text-muted-foreground">{current}</span>
+      <span id={`${id}-l`} className="min-w-0 flex-1 truncate text-[15px] font-semibold text-frenz-ink">
+        {label}
       </span>
-      {/* hidden on the narrowest phones: the whole row is the control, and the label needs the room */}
-      <ChevronRight className="hidden h-4 w-4 shrink-0 text-muted-foreground min-[400px]:block" aria-hidden />
+      <span className="max-w-[45%] truncate text-[14px] text-frenz-muted">{current}</span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-frenz-muted" aria-hidden />
       <select
         aria-labelledby={`${id}-l`}
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value as T)}
-        className="absolute inset-0 h-full w-full cursor-pointer appearance-none rounded-2xl opacity-0 disabled:cursor-not-allowed"
+        className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 disabled:cursor-not-allowed"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -364,6 +358,38 @@ export function AiSettingRow<T extends string>({
         ))}
       </select>
     </div>
+  );
+}
+
+/** The design's "Settings" group: one white card, a hairline between rows (steps 18–19). */
+export function AiSettingsList({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <section aria-label="Settings" className={className}>
+      <h2 className="m-0 mb-2 px-1 font-heading text-[17px] font-bold text-frenz-ink">Settings</h2>
+      <div className="divide-y divide-frenz-line overflow-hidden rounded-[20px] border border-frenz-line bg-frenz-card shadow-frenz-card">{children}</div>
+    </section>
+  );
+}
+
+/**
+ * The creation screens' header (steps 18–19): "‹ Studio" back on the left, the tool's name centred, the
+ * balance on the right; then the tool's line in large type.
+ */
+export function AiCreateHeader({ backHref, title, tagline }: { backHref: string; title: string; tagline: string }) {
+  return (
+    <header className="frenz-ui pt-1">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+        <Link href={backHref} className="-ml-1 inline-flex min-h-[44px] items-center gap-0.5 justify-self-start text-[16px] font-bold text-frenz-blue no-underline">
+          <ChevronLeft className="h-5 w-5" aria-hidden />
+          Studio
+        </Link>
+        <h1 className="m-0 truncate text-center font-heading text-[17px] font-bold text-frenz-ink">{title}</h1>
+        <span className="justify-self-end">
+          <AiCreditsChip />
+        </span>
+      </div>
+      <p className="m-0 mt-3 px-1 font-heading text-[26px] font-extrabold leading-[1.1] tracking-[-0.8px] text-frenz-ink">{tagline}</p>
+    </header>
   );
 }
 
@@ -386,6 +412,7 @@ export function AiPromptBox({
   disabled,
   aside,
   inputRef,
+  footer,
 }: {
   label: string;
   hint?: string | null;
@@ -399,20 +426,22 @@ export function AiPromptBox({
   aside?: ReactNode;
   /** the textarea — a prompt suggestion focuses it and grows it to show the whole text (2026-10-15) */
   inputRef?: Ref<HTMLTextAreaElement>;
+  /** Step 18: inside the box, under the text — "Explore prompts" and the dictation mic. The counter sits on the right. */
+  footer?: ReactNode;
 }) {
   const id = useId();
   return (
     <div>
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <label htmlFor={id} className="block text-[15px] font-bold tracking-[-0.015em]">
+          <label htmlFor={id} className="block font-heading text-[17px] font-bold text-frenz-ink">
             {label}
           </label>
-          {hint ? <p className="mt-0.5 text-[12.5px] leading-snug text-muted-foreground">{hint}</p> : null}
+          {hint ? <p className="m-0 mt-0.5 text-[12.5px] leading-snug text-frenz-muted">{hint}</p> : null}
         </div>
         {aside}
       </div>
-      <div className="relative mt-3 rounded-2xl bg-card ring-1 ring-inset ring-black/[0.08] transition focus-within:ring-2 focus-within:ring-indigo-400 dark:ring-white/10">
+      <div className="relative mt-2.5 rounded-[20px] border border-frenz-line bg-frenz-card shadow-frenz-card transition focus-within:ring-2 focus-within:ring-frenz-violet/50">
         <textarea
           ref={inputRef}
           id={id}
@@ -421,11 +450,14 @@ export function AiPromptBox({
           onChange={(e) => onChange(e.target.value.slice(0, max))}
           rows={rows}
           placeholder={placeholder}
-          className="block w-full resize-y rounded-2xl border-0 bg-transparent px-4 pb-8 pt-3.5 text-[15px] leading-relaxed placeholder:text-muted-foreground/75 focus-visible:outline-none"
+          className="block w-full resize-y rounded-[20px] border-0 bg-transparent px-4 pb-2 pt-3.5 text-base leading-relaxed text-frenz-ink placeholder:text-frenz-muted focus-visible:outline-none"
         />
-        <span className="pointer-events-none absolute bottom-2.5 right-3.5 text-[11.5px] tabular-nums text-muted-foreground" aria-live="off">
-          {value.length.toLocaleString("en-US")} / {max.toLocaleString("en-US")}
-        </span>
+        <div className="flex flex-wrap items-center gap-2 px-3 pb-3">
+          {footer}
+          <span className="ml-auto text-[12px] tabular-nums text-frenz-muted" aria-live="off">
+            {value.length.toLocaleString("en-US")} / {max.toLocaleString("en-US")}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -462,7 +494,7 @@ export interface AiStyleOption<T extends string> {
  * already the right size — no image optimizer, no request to our servers.
  */
 export function AiStylePicker<T extends string>({
-  icon: Icon,
+  icon: _icon,
   label,
   value,
   options,
@@ -477,24 +509,16 @@ export function AiStylePicker<T extends string>({
   disabled?: boolean;
 }) {
   const id = useId();
-  const current = options.find((o) => o.value === value)?.label ?? "Any style, from your description";
+  // step 18: "Style · Or describe any style" — the real sample pictures, a ring and a check on the chosen one
   return (
-    <div className="rounded-2xl bg-card px-3 pb-3 pt-2.5 ring-1 ring-inset ring-black/[0.07] dark:ring-white/10">
-      <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">
-          <Icon className="h-[18px] w-[18px]" aria-hidden />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span id={`${id}-l`} className="block text-[13.5px] font-semibold leading-tight">{label}</span>
-          <span className="mt-0.5 block truncate text-[13px] text-foreground/75">{current}</span>
-        </span>
-        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+    <section aria-labelledby={`${id}-l`}>
+      <div className="flex items-baseline justify-between gap-3 px-1">
+        <h2 id={`${id}-l`} className="m-0 font-heading text-[17px] font-bold text-frenz-ink">
+          {label}
+        </h2>
+        <span className="text-[13px] text-frenz-muted">Or describe any style</span>
       </div>
-      <div
-        role="radiogroup"
-        aria-labelledby={`${id}-l`}
-        className="-mx-1 mt-2.5 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] min-[360px]:grid min-[360px]:grid-cols-4 min-[360px]:overflow-visible"
-      >
+      <div role="radiogroup" aria-labelledby={`${id}-l`} className="mt-2.5 grid grid-cols-4 gap-2">
         {options.map((o) => {
           const on = o.value === value;
           return (
@@ -505,31 +529,22 @@ export function AiStylePicker<T extends string>({
               aria-checked={on}
               disabled={disabled}
               onClick={() => onChange(on ? null : o.value)}
-              className={cn(
-                "w-[5.5rem] shrink-0 rounded-[1rem] p-[1.5px] text-center transition active:scale-[0.97] motion-reduce:active:scale-100 min-[360px]:w-auto",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                on ? "bg-gradient-to-br from-sky-300 via-indigo-300 to-violet-400 shadow-[0_6px_16px_-10px_rgba(99,102,241,0.6)]" : "bg-transparent",
-              )}
+              className="text-center transition active:scale-[0.97] focus-visible:outline-none motion-reduce:active:scale-100 [&:focus-visible>span]:ring-frenz-violet"
             >
-              <span className={cn("block rounded-[0.9rem] p-1", on ? "bg-[#f4f5ff]" : "")}>
+              <span className={cn("relative block overflow-hidden rounded-2xl ring-2 ring-offset-2 ring-offset-frenz-page transition", on ? "ring-frenz-violet" : "ring-transparent")}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- a 264×152 webp already at its display size */}
-                <img
-                  src={o.image}
-                  alt=""
-                  width={264}
-                  height={152}
-                  loading="lazy"
-                  decoding="async"
-                  className="block aspect-[264/152] w-full rounded-[0.75rem] object-cover"
-                />
-                <span className={cn("mt-1 block truncate text-[12px] leading-tight", on ? "font-semibold text-foreground" : "text-foreground/75")}>
-                  {o.label}
-                </span>
+                <img src={o.image} alt="" width={264} height={152} loading="lazy" decoding="async" className="block aspect-[3/4] w-full object-cover" />
+                {on ? (
+                  <span aria-hidden className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-frenz-violet text-white">
+                    <Check className="h-3 w-3" strokeWidth={3} />
+                  </span>
+                ) : null}
               </span>
+              <span className={cn("mt-1.5 block truncate text-[13px] leading-tight", on ? "font-bold text-frenz-ink" : "font-semibold text-frenz-muted")}>{o.label}</span>
             </button>
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }

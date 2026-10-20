@@ -1,26 +1,29 @@
 "use client";
 
-import { Clock, Palette, Play, RectangleHorizontal } from "lucide-react";
+import { Clock, Palette, RectangleHorizontal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { AiCreditStrip } from "@/features/ai/design/ai-credit-strip";
 import {
   AiActionBar,
   AiAdvancedSettings,
   AiCost,
+  AiCreateHeader,
   AiField,
   AiGenerateButton,
   AiGenerationStatus,
   AiPromptBox,
   AiSegmented,
   AiSettingRow,
+  AiSettingsList,
   AiStylePicker,
 } from "@/features/ai/design/ai-generate";
 import { PromptIdeas } from "@/features/ai/prompts/prompt-ideas";
 import { scrollToSection, showInsertedPrompt } from "@/features/ai/prompts/show-inserted";
 import { FreeVideoNotice } from "@/features/ai/video/free-video-notice";
 import { AiShowcase } from "@/features/ai/design/ai-showcase";
-import { AiPageShell, AiPanel, AiToolTitle } from "@/features/ai/design/ai-surface";
+import { AiDictationButton } from "@/features/ai/design/ai-dictation";
+import { AiPageShell } from "@/features/ai/design/ai-surface";
+import { VideoModelRow } from "@/features/ai/video/video-model-row";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { AiReferenceSection } from "@/features/ai/video/ai-reference-section";
 import { AiVideoResult } from "@/features/ai/video/ai-video-result";
@@ -188,67 +191,70 @@ export function TextToVideoWorkspace({
     <FrenzAIEnvironment stage={envStage} bare>
     <AiPageShell>
       <AiShowcase slides={slides} base={base} desktopOnly className="mb-3" />
-      <AiCreditStrip base={base} className="mt-1 lg:mt-0" />
+      {/*
+        Step 18 (design/TextToVideo.dc.html, owner 2026-10-19): "‹ Studio", the tool's name, the balance; the
+        prompt first (with Explore prompts and the dictation mic inside it), the style tiles, the Settings list,
+        the references, Advanced settings, and the glass Generate bar pinned to the bottom (the tab bar is hidden
+        on this screen — mobile-nav AI_CREATION_SCREEN). Every control is the one this page already had.
+      */}
+      <AiCreateHeader backHref={`${base}/character-replace`} title="Text to Video" tagline="Describe it. Watch it come to life." />
 
-      <AiToolTitle
-        icon={Play}
-        title="Text to Video"
-        tagline="Describe it. Watch it come to life."
-        body="Turn your ideas into videos with Frenz AI — type a prompt and let it film the scene."
-        className="mt-6"
-      />
-
-      {/* ── THE ONE CARD: input first and largest (§14), then the settings ─── */}
-      <AiPanel className="mt-5 space-y-3">
-        {/* Prompt ideas (owner, 2026-10-15): compact here, the library loads on the first tap */}
-        <PromptIdeas
-          mode="text_to_video"
-          prompt={prompt}
-          onPromptChange={setPrompt}
-          max={KLING_OMNI.prompt.maxChars}
-          assets={assets}
-          onShowReferences={() => scrollToSection(referencesRef.current)}
-          onUseEditMode={() => setReferenceVideoMode("base")}
-          onInserted={() => showInsertedPrompt(promptRef.current)}
-          base={base}
-          disabled={locked}
-        />
+      <div className="frenz-ui mt-5 space-y-5">
         <AiPromptBox
           inputRef={promptRef}
           label="Describe your video"
-          hint={`Up to ${KLING_OMNI.prompt.maxChars.toLocaleString("en-US")} characters. Be as detailed as you want — scene, style, mood, action.`}
           value={prompt}
           onChange={setPrompt}
           max={KLING_OMNI.prompt.maxChars}
           rows={5}
           disabled={locked}
           placeholder="A cinematic shot of a futuristic city at sunset, with flying cars, neon lights and a dramatic sky…"
+          footer={
+            <>
+              {/* Prompt ideas (owner, 2026-10-15): the library loads on the first tap */}
+              <PromptIdeas
+                variant="inline"
+                mode="text_to_video"
+                prompt={prompt}
+                onPromptChange={setPrompt}
+                max={KLING_OMNI.prompt.maxChars}
+                assets={assets}
+                onShowReferences={() => scrollToSection(referencesRef.current)}
+                onUseEditMode={() => setReferenceVideoMode("base")}
+                onInserted={() => showInsertedPrompt(promptRef.current)}
+                base={base}
+                disabled={locked}
+              />
+              <AiDictationButton value={prompt} onChange={setPrompt} max={KLING_OMNI.prompt.maxChars} disabled={locked} />
+            </>
+          }
         />
 
-        <AiStylePicker icon={Palette} label="Video Style" value={style} options={VIDEO_STYLES} onChange={setStyle} disabled={locked} />
+        <AiStylePicker icon={Palette} label="Style" value={style} options={VIDEO_STYLES} onChange={setStyle} disabled={locked} />
 
-        <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
+        <AiSettingsList>
+          <VideoModelRow disabled={locked} />
           <AiSettingRow
             icon={Clock}
             label="Duration"
             value={String(durationSeconds)}
             onChange={(v) => setDuration(Number(v))}
-            options={[...DURATIONS.map((d) => ({ value: String(d), label: `${d} seconds` })), ...(oneMinute && !referenceVideoUrl ? [{ value: "60", label: "1 minute (60 s)" }] : [])]}
+            options={[...DURATIONS.map((d) => ({ value: String(d), label: `${d} sec` })), ...(oneMinute && !referenceVideoUrl ? [{ value: "60", label: "1 minute" }] : [])]}
             disabled={locked}
           />
           <AiSettingRow
             icon={RectangleHorizontal}
-            label="Aspect Ratio"
+            label="Aspect ratio"
             value={aspectRatio}
             onChange={setAspect}
             options={[
-              { value: "16:9", label: "16:9 (Landscape)" },
-              { value: "9:16", label: "9:16 (Portrait)" },
-              { value: "1:1", label: "1:1 (Square)" },
+              { value: "16:9", label: "16:9" },
+              { value: "9:16", label: "9:16" },
+              { value: "1:1", label: "1:1" },
             ]}
             disabled={locked}
           />
-        </div>
+        </AiSettingsList>
 
         <div ref={referencesRef} className="scroll-mt-24">
           <AiReferenceSection
@@ -307,7 +313,7 @@ export function TextToVideoWorkspace({
             />
           </AiField>
         </AiAdvancedSettings>
-      </AiPanel>
+      </div>
 
       {/* ── STATUS / RESULT ───────────────────────────────────────────────── */}
       {gen.status === "running" ? <AiGenerationStatus className="mt-4" title="Making your video" /> : null}
@@ -321,7 +327,7 @@ export function TextToVideoWorkspace({
 
       {/* ── COST + GENERATE, always reachable (§19, §21) ──────────────────── */}
       <FreeVideoNotice offer={gen.freeOffer} className="mt-4" />
-      <AiActionBar>
+      <AiActionBar docked>
         <AiCost
           credits={gen.complimentary ? 0 : (gen.quote?.credits ?? null)}
           detail={gen.quote ? `${gen.quote.billableSeconds}s · ${resolution}` : null}
@@ -332,7 +338,7 @@ export function TextToVideoWorkspace({
         <AiGenerateButton onClick={gen.submit} busy={locked} disabled={!prompt.trim() || !!gen.quoteProblem} className="ml-auto min-w-0 flex-1">
           {/* the price takes the bar's left side; under 400 px the full label truncated (page 4 lesson) */}
           <span className="min-[400px]:hidden">Generate</span>
-          <span className="hidden min-[400px]:inline">Generate Video</span>
+          <span className="hidden min-[400px]:inline">Generate video</span>
         </AiGenerateButton>
       </AiActionBar>
     </AiPageShell>

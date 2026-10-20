@@ -152,13 +152,13 @@ export function AiReferenceRail({ images, onImagesChange, videoUrl, onVideoChang
   const lock = disabled || busyImage;
 
   return (
-    <div className={cn("rounded-[1.25rem] bg-secondary/40 p-3.5 ring-1 ring-inset ring-black/[0.04] dark:bg-white/[0.035] dark:ring-white/[0.06]", className)}>
+    <div className={cn("rounded-[20px] border border-frenz-line bg-frenz-card p-3.5 shadow-frenz-card", className)}>
       <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-[13px] font-bold tracking-[-0.01em]">
-          References <span className="font-medium text-muted-foreground">· optional</span>
+        <h3 className="m-0 font-heading text-[17px] font-bold text-frenz-ink">
+          References <span className="font-body text-[14px] font-semibold text-frenz-muted">· optional</span>
         </h3>
-        <span className="shrink-0 text-[11px] font-semibold tabular-nums text-muted-foreground">
-          {images.length}/{maxImages}
+        <span className="shrink-0 text-[13px] font-semibold tabular-nums text-frenz-muted">
+          {images.length} / {maxImages}
         </span>
       </div>
 

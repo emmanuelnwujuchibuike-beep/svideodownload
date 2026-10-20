@@ -106,7 +106,8 @@ export function FrenzAIExplore({
 }) {
   const router = useRouter();
   const characterReplaceHref = createPath.replace(/\/create$/, "");
-  const [config, setConfig] = useState<CharacterReplacePublicConfig | null>(
+  // kept warm for the create page (sessionStorage), not drawn here since step 17
+  const [_config, setConfig] = useState<CharacterReplacePublicConfig | null>(
     null,
   );
   const [unavailable, setUnavailable] = useState<string | null>(null);

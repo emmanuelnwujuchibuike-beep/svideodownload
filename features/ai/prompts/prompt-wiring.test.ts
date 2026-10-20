@@ -18,14 +18,15 @@ const library = code("features/ai/prompts/prompt-library.tsx");
 describe("one section per tool, next to its prompt field", () => {
   it.each([
     ["Text to Video", t2v, "text_to_video", "Describe your video"],
-    ["Image to Video", i2v, "image_to_video", "What should happen?"],
+    ["Image to Video", i2v, "image_to_video", "Describe the motion"],
   ])("%s", (_name, ws, mode, label) => {
     expect(ws.match(/<PromptIdeas\b/g)).toHaveLength(1);
     expect(ws).toContain(`mode="${mode}"`);
-    // directly before the prompt box, which gets the ref to show the inserted text
-    const at = ws.indexOf("<PromptIdeas");
-    const box = ws.indexOf("<AiPromptBox", at);
-    expect(box).toBeGreaterThan(at);
+    // INSIDE the prompt box since steps 18–19 (2026-10-19: "Explore prompts" sits in the box), which gets the ref to show the inserted text
+    const box = ws.indexOf("<AiPromptBox");
+    const at = ws.indexOf("<PromptIdeas", box);
+    expect(at).toBeGreaterThan(box);
+    expect(ws.slice(box, at)).toContain("footer={");
     expect(ws.slice(box, ws.indexOf(`label="${label}"`, box))).toContain("inputRef={promptRef}");
     // it is handed the prompt setter — never submit, the generation hook or the references' setters
     const props = ws.slice(at, ws.indexOf("/>", at));

@@ -5,7 +5,10 @@ import Link from "next/link";
 
 import type { AdTiming } from "@/lib/monetization/ad-timing";
 import type { AdZone } from "@/lib/monetization/types";
+import type { DirectLinkSpot } from "@/lib/monetization/direct-link";
 import { cn } from "@/lib/utils";
+
+import { useDirectLink } from "./use-direct-link";
 
 import { Portal } from "@/components/ui/portal";
 
@@ -35,6 +38,7 @@ export function FullscreenInterstitial({
   remaining = 0,
   upsell,
   z = "z-[60]",
+  directLinkSpot,
 }: {
   zone: AdZone;
   /** Open AND the slot has confirmed a creative. */
@@ -65,7 +69,15 @@ export function FullscreenInterstitial({
    * clear a viewer asks for more.
    */
   z?: string;
+  /**
+   * Owner, 2026-10-19 (the Download complete and reward ads): with this spot's Monetag direct link on, a tap
+   * on the close control's ring or dark circle, or on the dark backdrop, opens the direct link (a new tab;
+   * the ad stays). Only the X glyph itself closes the ad. With the link off or not set, everything closes
+   * as before. Admin › Monetization › Direct link › "Ad close button".
+   */
+  directLinkSpot?: DirectLinkSpot;
 }) {
+  const openDirectLink = useDirectLink(directLinkSpot ?? null);
   /*
       🔴 PORTALLED (owner, 2026-08-30: "multi link fetch video ad is showing a
       black background", with a screenshot showing page chrome around it).
@@ -113,7 +125,11 @@ export function FullscreenInterstitial({
         type="button"
         aria-label="Close advertisement"
         tabIndex={shown && canSkip ? 0 : -1}
-        onClick={() => canSkip && onClose()}
+        onClick={() => {
+          // the dark backdrop opens the direct link when it is on; otherwise it closes once skippable, as before
+          if (directLinkSpot && openDirectLink()) return;
+          if (canSkip) onClose();
+        }}
         className={cn("absolute inset-0 h-full w-full", canSkip ? "cursor-pointer" : "cursor-not-allowed", !shown && "hidden")}
       />
 
@@ -187,7 +203,35 @@ export function FullscreenInterstitial({
 
       {/* Skip / close — top-right, clear of the status bar / Dynamic Island. */}
       <div className="absolute right-4 z-20" style={{ top: "calc(0.75rem + var(--frenz-safe-top))" }}>
-        {canSkip ? (
+        {canSkip && directLinkSpot ? (
+          /*
+            The ring and the dark circle are the direct link; the X glyph alone is the close button (and the
+            only part a keyboard or screen reader reaches). With no link set up, the ring closes too.
+          */
+          <div
+            onClick={() => {
+              if (!openDirectLink()) onClose();
+            }}
+            aria-hidden={!shown}
+            className={cn(
+              "flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-white/15 text-white ring-1 ring-white/25 backdrop-blur-md",
+              !shown && "hidden",
+            )}
+          >
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              tabIndex={shown ? 0 : -1}
+              aria-label="Close advertisement"
+              className="flex h-6 w-6 items-center justify-center rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <X className="h-6 w-6" strokeWidth={2.5} aria-hidden />
+            </button>
+          </div>
+        ) : canSkip ? (
           <button
             type="button"
             onClick={onClose}

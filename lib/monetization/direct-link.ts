@@ -19,7 +19,7 @@
  * /api/ads/config only when Monetag's master switch is on too.
  */
 
-export const DIRECT_LINK_SPOTS = ["wallpaper", "resultPreview"] as const;
+export const DIRECT_LINK_SPOTS = ["wallpaper", "resultPreview", "adClose"] as const;
 export type DirectLinkSpot = (typeof DIRECT_LINK_SPOTS)[number];
 
 export interface DirectLinkConfig {
@@ -33,7 +33,8 @@ export interface DirectLinkConfig {
 export const DEFAULT_DIRECT_LINK: DirectLinkConfig = {
   enabled: false,
   url: "",
-  spots: { wallpaper: true, resultPreview: true },
+  // adClose (owner, 2026-10-19): the Download complete and reward ads' close control — see FullscreenInterstitial
+  spots: { wallpaper: true, resultPreview: true, adClose: true },
   chancePercent: 50,
 };
 

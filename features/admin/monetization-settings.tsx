@@ -2714,6 +2714,7 @@ function DirectLinkEditor({
   const spots: { id: keyof DirectLinkConfig["spots"]; label: string; hint: string }[] = [
     { id: "wallpaper", label: "Wallpaper download", hint: "A tap anywhere around the wallpaper viewer's Download button" },
     { id: "resultPreview", label: "Download result preview", hint: "A tap on the media preview at the top of the result card" },
+    { id: "adClose", label: "Ad close button (Download complete & reward ads)", hint: "A tap on the close button's ring, its dark circle or the dark backdrop opens the link; only the X itself closes the ad" },
   ];
   return (
     <div className="mt-4 space-y-3 border-t border-border/50 pt-4">

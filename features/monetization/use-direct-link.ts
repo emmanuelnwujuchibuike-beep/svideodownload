@@ -14,12 +14,12 @@ import type { DirectLinkSpot } from "@/lib/monetization/direct-link";
  * Free plan only (no placement passed to useShowAds), and never on the
  * sign-in/profile routes. Every tap at the spot may open it (no session lock).
  */
-export function useDirectLink(spot: DirectLinkSpot): () => void {
+export function useDirectLink(spot: DirectLinkSpot | null): () => boolean {
   const { showAds, ready } = useShowAds();
   const opener = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    if (!ready || !showAds) return;
+    if (!spot || !ready || !showAds) return;
     let alive = true;
     void import("./direct-link-runtime")
       .then((m) => m.loadDirectLinkOpener(spot))
@@ -35,5 +35,10 @@ export function useDirectLink(spot: DirectLinkSpot): () => void {
     };
   }, [ready, showAds, spot]);
 
-  return useCallback(() => opener.current?.(), []);
+  // true when this spot has a direct link set up (it then rolls the admin's chance and opens it); false = nothing to open
+  return useCallback(() => {
+    if (!opener.current) return false;
+    opener.current();
+    return true;
+  }, []);
 }

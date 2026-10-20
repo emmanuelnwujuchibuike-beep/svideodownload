@@ -210,6 +210,8 @@ export function DownloadInterstitial({
   return (
     <FullscreenInterstitial
       zone="idle_interstitial"
+      // the owner's close-button direct link (2026-10-19) — ring and backdrop open it, the X closes
+      directLinkSpot="adClose"
       shown={shown}
       onClose={close}
       onResolved={setHasAd}

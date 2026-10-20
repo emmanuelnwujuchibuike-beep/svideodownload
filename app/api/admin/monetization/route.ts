@@ -79,7 +79,7 @@ const schema = z.object({
         .refine((v) => v === "" || isValidDirectLinkUrl(v), { message: "Direct link must be a full https:// URL" })
         .default(""),
       spots: z
-        .object({ wallpaper: z.boolean().default(true), resultPreview: z.boolean().default(true) })
+        .object({ wallpaper: z.boolean().default(true), resultPreview: z.boolean().default(true), adClose: z.boolean().default(true) })
         .default(DEFAULT_DIRECT_LINK.spots),
       chancePercent: z.number().int().min(1).max(100).default(50),
     })

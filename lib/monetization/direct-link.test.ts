@@ -37,12 +37,12 @@ describe("Monetag direct link (owner, 2026-10-16)", () => {
   });
 
   it("is served only when Monetag is on, it is enabled, it has a URL and a spot", () => {
-    const on = { enabled: true, url: OWNER_LINK, spots: { wallpaper: true, resultPreview: false }, chancePercent: 40 };
+    const on = { enabled: true, url: OWNER_LINK, spots: { wallpaper: true, resultPreview: false, adClose: false }, chancePercent: 40 };
     expect(publicDirectLink(on, true)).toEqual({ url: OWNER_LINK, spots: ["wallpaper"], chancePercent: 40 });
     expect(publicDirectLink(on, false)).toBeNull();
     expect(publicDirectLink({ ...on, enabled: false }, true)).toBeNull();
     expect(publicDirectLink({ ...on, url: "" }, true)).toBeNull();
-    expect(publicDirectLink({ ...on, spots: { wallpaper: false, resultPreview: false } }, true)).toBeNull();
+    expect(publicDirectLink({ ...on, spots: { wallpaper: false, resultPreview: false, adClose: false } }, true)).toBeNull();
   });
 
   it("the roll follows the chance: 100% always, 1% almost never", () => {
@@ -62,7 +62,8 @@ describe("Monetag direct link (owner, 2026-10-16)", () => {
   });
 
   it("opens inside the tap (no await before window.open), from its own chunk, on every tap (no session lock)", () => {
-    expect(code("features/monetization/use-direct-link.ts")).toContain("return useCallback(() => opener.current?.(), [])");
+    // 2026-10-19: it answers whether a link is set up (the ad close control falls back to closing), still synchronous
+    expect(code("features/monetization/use-direct-link.ts")).toMatch(/return useCallback\(\(\) => \{\s*if \(!opener\.current\) return false;\s*opener\.current\(\);\s*return true;\s*\}, \[\]\)/);
     const rt = code("features/monetization/direct-link-runtime.ts");
     const body = rt.slice(rt.indexOf("return () => {"));
     expect(body).not.toMatch(/await|\.then\(/);
@@ -76,7 +77,7 @@ describe("Monetag direct link (owner, 2026-10-16)", () => {
     // useShowAds() with NO placement = ads only for Free. A placement would let
     // Pro through wherever planSeesAd lists it (Reels, Feed, the download result).
     expect(hook).toMatch(/useShowAds\(\)/);
-    expect(hook).toContain("if (!ready || !showAds) return;");
+    expect(hook).toContain("if (!spot || !ready || !showAds) return;");
     expect(planSeesAd("pro", null)).toBe(false);
     expect(planSeesAd("business", null)).toBe(false);
     expect(planSeesAd("free", null)).toBe(true);

@@ -517,7 +517,7 @@ new colours.
 - [x] 20. Subscriptions dashboard → design/SubsDashboard.dc.html (owner, 2026-10-19)
 - [x] 21. Subscriptions analysis / earnings → design/Earnings.dc.html (owner, 2026-10-19)
 - [x] 22. Frenz AI — History → design/AIHistory.dc.html (owner, 2026-10-19)
-- [ ] 23. Frenz AI — Credits → design/Credits.dc.html (owner, 2026-10-19; the credit earnings and analysis may follow design/Earnings.dc.html)
+- [x] 23. Frenz AI — Credits → design/Credits.dc.html (owner, 2026-10-19; the credit earnings and analysis may follow design/Earnings.dc.html)
 
 Owner, 2026-10-19: "make you do as they are, make sure all pages worked on must be lighter and faster by 20% or more" — each page is measured against its pre-redesign build (c:/tmp/fz-base, 3739e7c): first-load JS and a throttled cold load.
 
@@ -624,3 +624,10 @@ Frenz AI — Image to Video
 - Groups Today · Yesterday · This week · Last week · Earlier, then **Expired** (new: the files that are gone, last and dimmed). One white card per group; each row a square thumbnail (the real poster, or the audio plate) with its length, the tool, the title, when, and a status chip — green "N days left" from the job's own expiry, grey "Expired", or the job's state.
 - **Select** (new): pick finished creations and Delete — each through the existing owner-only DELETE /api/ai/jobs/[id] (files go, no balance moves); a running job can't be picked.
 - The bottom "Back to Frenz AI" button is gone (the back link is at the top).
+
+**Step 23 · AI Credits**
+- ‹ Frenz AI and the large "Credits" title (the bottom back button is gone). The balance card keeps its brand gradient — it is the balance's identity card, not the page ground (the page stays white) — with the Sora figure, the two kinds (usable / cashable, as the app names them), Top up and Withdraw side by side and the four quick packs in a row (the operator's real packs).
+- **Word kept from the app, not the design:** the design says "tokens"; the app counts **credits** (owner: 1 credit = $0.10), so it says credits.
+- Rewards & referrals as a white row; the three figures as white cards; Statement with the design's **All · Earned · Transfers · Spent** chips (new: a client filter over the ledger's own kinds — Earned = top-ups, bonuses, earned credits, refunds, returned withdrawals; Transfers = sent, received, fees; Spent = creations, withdrawals), grouped by day, a white card per group.
+- Unlock withdrawals, AI plans, send & receive (wallet number) are the existing components, unchanged in behaviour.
+- Screenshot: only the loading state could be captured locally (the balance needs a signed-in account); the filled layout is checked by typecheck and tests.

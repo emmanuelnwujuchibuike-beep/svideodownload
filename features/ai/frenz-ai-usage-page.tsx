@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownLeft, ArrowLeft, ArrowUpRight, ChevronRight, Eye, EyeOff, Plus, RotateCcw, ShieldCheck, Wallet, Gift, Trophy, type LucideIcon, Clapperboard } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, Eye, EyeOff, Plus, RotateCcw, ShieldCheck, Gift, Trophy, type LucideIcon, Clapperboard } from "lucide-react";
 import dynamic from "next/dynamic";
 
 import { refreshWallet, useWallet } from "@/features/ai/wallet/use-wallet";
@@ -19,7 +19,6 @@ import { HIDDEN_AMOUNT, useBalanceHidden } from "@/lib/ai/character-replace/bala
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { aiButtonClass } from "@/features/ai/design/ai-button";
 import { AiShowcase } from "@/features/ai/design/ai-showcase";
-import { AiToolTitle } from "@/features/ai/design/ai-surface";
 import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
 import { takeTopupReturnReference, verifyCharacterReplaceTopup } from "@/lib/ai/character-replace/client";
 import type { CharacterReplaceTransaction } from "@/lib/ai/character-replace/types";
@@ -56,6 +55,20 @@ import { cn } from "@/lib/utils";
 type LedgerKind = "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal" | "bonus" | "grant" | "withdrawal" | "withdrawal_reversal" | "transfer_out" | "transfer_in" | "transfer_fee";
 
 type LedgerRow = CharacterReplaceTransaction;
+
+/** Step 23: the statement's chips, mapped onto the ledger's own kinds (nothing reclassified). */
+type StatementFilter = "all" | "earned" | "transfers" | "spent";
+const STATEMENT_FILTERS: { id: StatementFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "earned", label: "Earned" },
+  { id: "transfers", label: "Transfers" },
+  { id: "spent", label: "Spent" },
+];
+const FILTER_KINDS: Record<Exclude<StatementFilter, "all">, readonly LedgerKind[]> = {
+  earned: ["recharge", "bonus", "grant", "refund", "withdrawal_reversal"],
+  transfers: ["transfer_in", "transfer_out", "transfer_fee"],
+  spent: ["processing_charge", "withdrawal"],
+};
 
 const LEDGER_COPY: Record<LedgerKind, { label: string; Icon: LucideIcon; tone: "in" | "out" | "neutral" }> = {
   recharge: { label: "Credits added", Icon: ArrowDownLeft, tone: "in" },
@@ -200,9 +213,11 @@ export function FrenzAIUsagePage({
     return { videos, spent: Math.max(0, spent - refunded), refunded, partial: ledger.length >= 100 };
   }, [ledger]);
 
+  const [statementFilter, setStatementFilter] = useState<StatementFilter>("all");
   /* ── Today / Yesterday / This week / Last week / Earlier — the product's one calendar ── */
   const sections = useMemo(() => {
     if (!ledger) return [];
+    const rows = statementFilter === "all" ? ledger : ledger.filter((row) => FILTER_KINDS[statementFilter].includes(row.kind));
     const midnight = new Date();
     midnight.setHours(0, 0, 0, 0);
     const today = midnight.getTime();
@@ -216,14 +231,14 @@ export function FrenzAIUsagePage({
       { key: "lastweek", label: "Last week", items: [] },
       { key: "earlier", label: "Earlier", items: [] },
     ];
-    for (const row of ledger) {
+    for (const row of rows) {
       const t = Date.parse(row.createdAt);
       const at = Number.isFinite(t) ? t : 0;
       const i = at >= today ? 0 : at >= yesterday ? 1 : at >= week ? 2 : at >= lastWeek ? 3 : 4;
       buckets[i]!.items.push(row);
     }
     return buckets.filter((b) => b.items.length > 0);
-  }, [ledger]);
+  }, [ledger, statementFilter]);
 
   const symbol = balance?.symbol ?? "₦";
 
@@ -237,12 +252,13 @@ export function FrenzAIUsagePage({
     <FrenzAIEnvironment stage="idle" bare className="relative">
       <div className="pb-10 pt-3">
         <AiShowcase slides={slides} base={aiHref} desktopOnly className="mb-5" />
-        <AiToolTitle
-          icon={Wallet}
-          title="Credit Balance"
-          tagline="What you have, and every line of it."
-          body="Your AI balance, your plan's allowance, and each recharge, creation and refund."
-        />
+        {/* step 23 (design/Credits.dc.html, owner 2026-10-19): ‹ Frenz AI, then the large title */}
+        <header className="frenz-ui px-1 text-frenz-ink">
+          <TapOnceLink href={aiHref} spinner={false} className="-ml-1 inline-flex min-h-[44px] items-center gap-0.5 text-[16px] font-bold text-frenz-blue no-underline">
+            <ChevronLeft className="h-5 w-5" aria-hidden /> Frenz AI
+          </TapOnceLink>
+          <h1 className="m-0 font-heading text-[34px] font-extrabold leading-tight tracking-[-1px]">Credits</h1>
+        </header>
 
         {failed ? (
           <div className="mt-6 rounded-2xl bg-card/95 p-4 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10">
@@ -269,12 +285,13 @@ export function FrenzAIUsagePage({
               aria-label="Balance"
               className={cn(
                 "relative mt-6 overflow-hidden rounded-[1.6rem] p-5 text-white sm:p-6",
-                "bg-[linear-gradient(135deg,#1d4ed8_0%,#4f46e5_55%,#a21caf_100%)] shadow-[0_24px_48px_-28px_rgba(79,70,229,0.75)]",
+                // the balance card is identity (the brand gradient), never the page ground — the page stays white
+                "bg-frenz-gradient shadow-frenz-raised",
               )}
             >
               <div className="relative flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">AI credits</p>
+                  <p className="text-[13px] font-bold text-white/85">AI balance</p>
                   <button
                     type="button"
                     onClick={() => {
@@ -283,7 +300,7 @@ export function FrenzAIUsagePage({
                     }}
                     aria-pressed={hidden}
                     aria-label={hidden ? "Show balance" : "Hide balance"}
-                    className="mt-1.5 block rounded-lg text-left text-[2.35rem] font-bold leading-none tracking-[-0.035em] tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 sm:text-[2.7rem]"
+                    className="mt-1.5 block rounded-lg text-left font-heading text-[2.6rem] font-extrabold leading-none tracking-[-1.5px] tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 sm:text-[3.25rem]"
                   >
                     {hidden ? <span aria-hidden>{HIDDEN_AMOUNT}</span> : formatCredits(balance.balanceCents)}
                   </button>
@@ -320,14 +337,14 @@ export function FrenzAIUsagePage({
                   {notice}
                 </p>
               ) : null}
-              <div className="relative mt-5 flex flex-wrap items-center gap-2">
+              <div className="relative mt-5 grid grid-cols-2 gap-2.5">
                 <button
                   type="button"
                   onClick={() => openSheet(null)}
-                  className="inline-flex min-h-[46px] items-center gap-2 rounded-full bg-white px-5 text-[14px] font-bold text-indigo-700 shadow-sm transition active:scale-[0.98] motion-safe:hover:-translate-y-0.5"
+                  className="inline-flex min-h-[50px] items-center justify-center gap-2 rounded-full bg-white font-heading text-[15px] font-bold text-frenz-violet transition active:scale-[0.98]"
                 >
                   <Plus className="h-4 w-4" aria-hidden />
-                  Top up credits
+                  Top up
                 </button>
                 <button
                   type="button"
@@ -335,7 +352,7 @@ export function FrenzAIUsagePage({
                     haptic("selection");
                     setWithdrawOpen(true);
                   }}
-                  className="inline-flex min-h-[46px] items-center gap-2 rounded-full px-4 text-[14px] font-semibold text-white/90 ring-1 ring-inset ring-white/30 transition hover:bg-white/10 active:scale-[0.98]"
+                  className="inline-flex min-h-[50px] items-center justify-center gap-2 rounded-full bg-white/15 font-heading text-[15px] font-bold text-white ring-1 ring-inset ring-white/30 transition active:scale-[0.98]"
                 >
                   <ArrowDownLeft className="h-4 w-4" aria-hidden />
                   Withdraw
@@ -343,15 +360,15 @@ export function FrenzAIUsagePage({
                 {withdrawOpen ? <WithdrawChooser onClose={() => setWithdrawOpen(false)} creditsLabel={typeof balance.withdrawableCents === "number" && !hidden ? formatKind(balance.withdrawableCents, "withdrawable") : null} /> : null}
               </div>
               {balance.offer.packs.length > 0 ? (
-                <div className="relative mt-4 flex flex-wrap gap-1.5" aria-label="Quick credit packs">
+                <div className="relative mt-3 grid grid-cols-4 gap-1.5" aria-label="Quick credit packs">
                   {balance.offer.packs.slice(0, 4).map((p) => (
                     <button
                       key={p.id}
                       type="button"
                       onClick={() => openSheet(p.credits)}
-                      className="rounded-full bg-white/12 px-3 py-1.5 text-[12.5px] font-semibold tabular-nums text-white/90 ring-1 ring-inset ring-white/20 transition hover:bg-white/20"
+                      className="h-9 truncate rounded-full bg-white/12 px-1 text-[13px] font-bold tabular-nums text-white ring-1 ring-inset ring-white/28 transition active:scale-95"
                     >
-                      + {formatCredits(p.credits)}
+                      +{formatCredits(p.credits, { short: true })}
                     </button>
                   ))}
                 </div>
@@ -365,14 +382,14 @@ export function FrenzAIUsagePage({
             <TapOnceLink
               href="/rewards"
               spinner={false}
-              className="mt-4 flex items-center gap-3 rounded-2xl transition-[transform,opacity] active:scale-[0.98] data-[pending]:scale-[0.98] data-[pending]:opacity-80 bg-card/95 px-4 py-3.5 ring-1 ring-inset ring-black/[0.05] transition hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 dark:ring-white/10"
+              className="frenz-ui mt-3 flex min-h-[60px] items-center gap-3 rounded-[20px] border border-frenz-line bg-frenz-card px-3.5 py-3 text-frenz-ink no-underline shadow-frenz-card transition active:scale-[0.99] data-[pending]:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-violet-500 text-white">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-frenz-violet/10 text-frenz-violet">
                 <Gift className="h-4 w-4" aria-hidden />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[14px] font-semibold">Rewards &amp; referrals</span>
-                <span className="block text-[12.5px] text-muted-foreground">Earn credits by creating, sharing and inviting friends.</span>
+                <span className="block text-[15px] font-bold">Rewards &amp; referrals</span>
+                <span className="block text-[13px] text-frenz-muted">Earn by creating, sharing and inviting</span>
               </span>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
             </TapOnceLink>
@@ -392,20 +409,37 @@ export function FrenzAIUsagePage({
 
             {/* ── the statement ─────────────────────────────────────────── */}
             <section aria-label="Statement" className="mt-8">
-              <div className="flex items-baseline justify-between gap-3">
-                <h2 className="text-[1.05rem] font-bold tracking-[-0.02em]">Statement</h2>
-                <span className="text-[12px] text-muted-foreground">Newest first</span>
+              <div className="frenz-ui flex items-baseline justify-between gap-3 px-1">
+                <h2 className="m-0 font-heading text-[20px] font-bold text-frenz-ink">Statement</h2>
+                <span className="text-[13px] text-frenz-muted">Newest first</span>
+              </div>
+              <div role="radiogroup" aria-label="Show" className="mt-2.5 grid grid-cols-4 gap-0.5 rounded-xl bg-frenz-fill p-[3px]">
+                {STATEMENT_FILTERS.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={statementFilter === f.id}
+                    onClick={() => {
+                      haptic("selection");
+                      setStatementFilter(f.id);
+                    }}
+                    className={cn("min-h-[38px] rounded-[9px] text-[13.5px] transition-colors", statementFilter === f.id ? "bg-frenz-card font-bold text-frenz-ink shadow-[0_1px_3px_rgba(18,17,26,0.12)]" : "font-semibold text-frenz-muted")}
+                  >
+                    {f.label}
+                  </button>
+                ))}
               </div>
               {sections.length === 0 ? (
                 <div className="mt-3 rounded-2xl border border-dashed border-border/70 px-5 py-8 text-center">
-                  <p className="text-sm font-semibold">Nothing here yet</p>
+                  <p className="text-sm font-semibold">{statementFilter === "all" ? "Nothing here yet" : "Nothing of this kind yet"}</p>
                   <p className="mx-auto mt-1 max-w-xs text-[12.5px] leading-relaxed text-muted-foreground">Your first top-up, creation or refund will appear here.</p>
                 </div>
               ) : (
                 sections.map((section) => (
                   <div key={section.key} className="mt-4">
-                    <h3 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{section.label}</h3>
-                    <ul className="mt-2 divide-y divide-border/60 overflow-hidden rounded-2xl bg-card/95 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10">
+                    <h3 className="m-0 px-1 font-heading text-[15px] font-bold text-frenz-ink">{section.label}</h3>
+                    <ul className="mt-2 divide-y divide-frenz-line overflow-hidden rounded-[20px] border border-frenz-line bg-frenz-card shadow-frenz-card">
                       {section.items.map((row) => {
                         const copy = LEDGER_COPY[row.kind] ?? LEDGER_COPY.adjustment;
                         const Icon = copy.Icon;
@@ -423,7 +457,7 @@ export function FrenzAIUsagePage({
                             <span
                               className={cn(
                                 "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
-                                copy.tone === "in" ? "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" : copy.tone === "out" ? "bg-secondary text-foreground/80" : "bg-secondary text-muted-foreground",
+                                copy.tone === "in" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400" : "bg-frenz-fill text-frenz-ink/80",
                               )}
                             >
                               <Icon className="h-4 w-4" aria-hidden />
@@ -458,12 +492,6 @@ export function FrenzAIUsagePage({
         ) : null}
         {celebrate ? <PlanCelebration {...celebrate} onClose={closeCelebration} /> : null}
 
-        <div className="mt-8">
-          <TapOnceLink href={aiHref} className={aiButtonClass({ variant: "secondary", size: "sm", className: "ai-btn--round" })}>
-            <ArrowLeft className="h-4 w-4" aria-hidden />
-            Back to Frenz AI
-          </TapOnceLink>
-        </div>
       </div>
 
       {sheetMounted && balance ? (
@@ -481,9 +509,9 @@ export function FrenzAIUsagePage({
 
 function Figure({ label, value, tone }: { label: string; value: string; tone?: "in" }) {
   return (
-    <div className="rounded-2xl bg-card/95 px-3 py-3 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10 sm:px-4">
-      <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{label}</p>
-      <p className={cn("mt-1 truncate text-[17px] font-bold tabular-nums tracking-[-0.02em]", tone === "in" && "text-emerald-600 dark:text-emerald-400")}>{value}</p>
+    <div className="frenz-ui rounded-[18px] border border-frenz-line bg-frenz-card px-3 py-3 text-center shadow-frenz-card">
+      <p className={cn("m-0 truncate font-heading text-[18px] font-bold tabular-nums text-frenz-ink", tone === "in" && "text-emerald-600 dark:text-emerald-400")}>{value}</p>
+      <p className="m-0 mt-0.5 text-[12px] font-semibold text-frenz-muted">{label}</p>
     </div>
   );
 }

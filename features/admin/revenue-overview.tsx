@@ -1,4 +1,4 @@
-import { AlertTriangle, MousePointerClick, Eye, TrendingUp, Users } from "lucide-react";
+import { AlertTriangle, Eye, TrendingUp, Users } from "lucide-react";
 
 import { PageViewsChart } from "./page-views-chart";
 
@@ -105,7 +105,7 @@ export function RevenueOverview({
     );
   }
 
-  const { subscribers, affiliate, api } = revenue;
+  const { subscribers } = revenue;
 
   /*
     🔴 Owner, 2026-10-12: "remove all the ad network ad stats and card from the admin
@@ -164,25 +164,7 @@ export function RevenueOverview({
         </p>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Metric
-          icon={MousePointerClick}
-          label="Affiliate clicks (7d)"
-          value={formatCompactNumber(affiliate.clicks7d)}
-          sub={`${formatCompactNumber(affiliate.clicksToday)} today`}
-        />
-        <Metric
-          icon={TrendingUp}
-          label="API calls (7d)"
-          value={formatCompactNumber(api.calls7d)}
-          sub={`${formatCompactNumber(api.callsToday)} today`}
-        />
-        <Metric
-          icon={Users}
-          label="Active API keys"
-          value={formatCompactNumber(api.activeKeys)}
-        />
-      </div>
+      {/* Affiliate clicks, API calls and Active API keys removed (owner, 2026-10-19: "remove this section from the admin, revenue section") */}
     </div>
   );
 }

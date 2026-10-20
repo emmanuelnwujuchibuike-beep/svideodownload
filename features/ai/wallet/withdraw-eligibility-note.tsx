@@ -1,6 +1,6 @@
 "use client";
 
-import { Info } from "lucide-react";
+import { Check, Lock } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -48,26 +48,51 @@ export function WithdrawEligibilityNote({ uid }: { uid: string | null | undefine
   // qualified members, and an unknown or restricted standing, get no note
   if (!q || q.qualified || q.restricted) return null;
 
-  const steps = [
-    q.requiredEngagements > 0 ? `${Math.min(q.engagements, q.requiredEngagements).toLocaleString("en-US")} of ${q.requiredEngagements.toLocaleString("en-US")} engagements` : null,
-    q.requiredActiveDays > 0 ? `${Math.min(q.activeDays, q.requiredActiveDays)} of ${q.requiredActiveDays} active days` : null,
-  ].filter(Boolean);
+  const bars = [
+    q.requiredEngagements > 0 ? { label: "Engagements", have: Math.min(q.engagements, q.requiredEngagements), need: q.requiredEngagements } : null,
+    q.requiredActiveDays > 0 ? { label: "Active days", have: Math.min(q.activeDays, q.requiredActiveDays), need: q.requiredActiveDays } : null,
+  ].filter((x): x is { label: string; have: number; need: number } => !!x);
 
+  // design/Credits.dc.html (2026-10-20): a white card under the balance, not text inside it
   return (
-    <div role="note" className="relative mt-3 flex gap-2.5 rounded-2xl bg-white/[0.14] px-3.5 py-3 ring-1 ring-inset ring-white/25 backdrop-blur-sm">
-      <Info className="mt-0.5 h-4 w-4 shrink-0 text-white/90" aria-hidden />
-      <div className="min-w-0 text-[12.5px] leading-snug">
-        <p className="font-semibold">Cashable credits unlock once your account meets the withdrawal requirements.</p>
-        <p className="mt-0.5 text-white/85">
-          {q.status === "applied"
-            ? "Your application is being reviewed. Until it's approved, your credits can be used for AI creation and AI plans only."
-            : "Until then, your credits can be used for AI creation and AI plans only."}
-        </p>
-        {steps.length && q.status !== "applied" ? <p className="mt-1.5 text-[11.5px] font-medium text-white/75">Your progress: {steps.join(" · ")}</p> : null}
-        <Link href="/rewards" className="mt-1.5 inline-block text-[12px] font-semibold text-white underline decoration-white/50 underline-offset-2">
-          See the requirements
-        </Link>
+    <div role="note" className="frenz-ui mt-3 flex flex-col gap-3 rounded-[22px] border border-frenz-line bg-frenz-card p-3.5 text-frenz-ink">
+      <div className="flex gap-3">
+        <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-frenz-violet/10 text-frenz-violet">
+          <Lock className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
+          <p className="m-0 text-[15px] font-bold">Unlock withdrawals</p>
+          <p className="m-0 mt-0.5 text-[13px] leading-snug text-frenz-muted">
+            {q.status === "applied"
+              ? "Your application is being reviewed. Until it is approved, credits work for AI creation and AI plans only."
+              : "Until then, credits work for AI creation and AI plans only."}
+          </p>
+        </div>
       </div>
+      {q.status !== "applied"
+        ? bars.map((x) => (
+            <div key={x.label} className="flex flex-col gap-1.5">
+              <span className="flex justify-between text-[13px] font-semibold">
+                <span>{x.label}</span>
+                {x.have >= x.need ? (
+                  <span className="flex items-center gap-1 text-emerald-700">
+                    <Check className="h-3.5 w-3.5" aria-hidden /> {x.have.toLocaleString("en-US")} / {x.need.toLocaleString("en-US")}
+                  </span>
+                ) : (
+                  <span className="tabular-nums text-frenz-muted">
+                    {x.have.toLocaleString("en-US")} / {x.need.toLocaleString("en-US")}
+                  </span>
+                )}
+              </span>
+              <span className="h-2 overflow-hidden rounded-full bg-frenz-fill">
+                <span className="block h-full rounded-full bg-frenz-gradient-x" style={{ width: `${Math.max(1, Math.round((x.have / x.need) * 100))}%` }} />
+              </span>
+            </div>
+          ))
+        : null}
+      <Link href="/rewards" className="text-[14px] font-bold text-frenz-blue no-underline">
+        See all requirements
+      </Link>
     </div>
   );
 }

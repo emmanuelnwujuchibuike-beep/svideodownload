@@ -188,11 +188,13 @@ export function TransferPanel({ rules, balance, withdrawable = null, deposited =
   const shown = history ? (showAll ? history : history.slice(0, 5)) : null;
 
   return (
-    <section aria-label="Send and receive credits" className={cn("rounded-2xl bg-card/95 p-4 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10", className)}>
+    <>
+    <h2 className="frenz-ui m-0 mt-6 px-1 font-heading text-[19px] font-bold tracking-[-0.4px] text-frenz-ink">Send &amp; receive</h2>
+    <section aria-label="Send and receive credits" className={cn("rounded-[22px] border border-frenz-line bg-frenz-card p-3.5", className)}>
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Your wallet number</p>
-          <p className="mt-0.5 select-all font-mono text-[19px] font-bold tabular-nums tracking-[0.06em]">{account ? `${account.slice(0, 3)} ${account.slice(3, 6)} ${account.slice(6)}` : "··· ··· ····"}</p>
+          <p className="mt-0.5 select-all font-heading text-[22px] font-bold tabular-nums tracking-[1px]">{account ? `${account.slice(0, 3)} ${account.slice(3, 6)} ${account.slice(6)}` : "··· ··· ····"}</p>
           <p className="text-[11.5px] text-muted-foreground">Share it to receive credits.</p>
         </div>
         <button type="button" onClick={() => void copy()} disabled={!account} className="inline-flex min-h-[2.75rem] shrink-0 items-center gap-1.5 rounded-full bg-secondary px-3.5 text-[13px] font-semibold disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400">
@@ -208,7 +210,7 @@ export function TransferPanel({ rules, balance, withdrawable = null, deposited =
             haptic("selection");
             setSheetOpen(true);
           }}
-          className="mt-3 inline-flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500 text-[14.5px] font-semibold text-white shadow-[0_12px_28px_-16px_rgb(79_70_229/0.9)] transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 motion-reduce:active:scale-100"
+          className="mt-3 inline-flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-full bg-frenz-gradient-x text-[15px] font-bold text-white transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 motion-reduce:active:scale-100"
         >
           <Send className="h-4 w-4" aria-hidden />
           Send credits
@@ -287,6 +289,7 @@ export function TransferPanel({ rules, balance, withdrawable = null, deposited =
         />
       ) : null}
     </section>
+    </>
   );
 }
 

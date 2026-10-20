@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, Eye, EyeOff, Plus, RotateCcw, ShieldCheck, Gift, Trophy, type LucideIcon, Clapperboard } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Plus, RotateCcw, ShieldCheck, Gift, Trophy, type LucideIcon, Clapperboard } from "lucide-react";
 import dynamic from "next/dynamic";
 
 import { refreshWallet, useWallet } from "@/features/ai/wallet/use-wallet";
@@ -214,6 +214,26 @@ export function FrenzAIUsagePage({
   }, [ledger]);
 
   const [statementFilter, setStatementFilter] = useState<StatementFilter>("all");
+  // owner 2026-10-20: the Statement collapses (remembered on this device)
+  const [statementOpen, setStatementOpen] = useState(true);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("frenz:statement-open") === "0") setStatementOpen(false);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const toggleStatement = () => {
+    haptic("selection");
+    setStatementOpen((o) => {
+      try {
+        localStorage.setItem("frenz:statement-open", o ? "0" : "1");
+      } catch {
+        /* ignore */
+      }
+      return !o;
+    });
+  };
   /* ── Today / Yesterday / This week / Last week / Earlier — the product's one calendar ── */
   const sections = useMemo(() => {
     if (!ledger) return [];
@@ -289,6 +309,7 @@ export function FrenzAIUsagePage({
                 "bg-frenz-gradient shadow-frenz-raised",
               )}
             >
+              <div aria-hidden className="pointer-events-none absolute -right-10 -top-12 h-44 w-44 rounded-full bg-white/10" />
               <div className="relative flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[13px] font-bold text-white/85">AI balance</p>
@@ -330,8 +351,6 @@ export function FrenzAIUsagePage({
                   />
                 </dl>
               ) : null}
-              {/* 2026-10-14 (owner): not qualified for withdrawals yet → what credits are for until then */}
-              <WithdrawEligibilityNote uid={uid} />
               {notice ? (
                 <p role="status" className="relative mt-3 rounded-xl bg-white/15 px-3 py-2 text-[12.5px] font-medium ring-1 ring-inset ring-white/20">
                   {notice}
@@ -375,6 +394,9 @@ export function FrenzAIUsagePage({
               ) : null}
             </section>
 
+            {/* 2026-10-14 (owner): not qualified for withdrawals yet -> what credits are for until then; the design's white card with the real progress */}
+            <WithdrawEligibilityNote uid={uid} />
+
             {/* ── 0167: the AI plan and its allowance — or the door to one ─────── */}
             <AiCreditsCard className="mt-4" refreshKey={creditsKey} returnTo="/studio/ai/usage" />
 
@@ -399,7 +421,7 @@ export function FrenzAIUsagePage({
 
             {/* ── three figures, from the statement itself ─────────────────── */}
             {figures ? (
-              <section aria-label="Your account at a glance" className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
+              <section aria-label="Your account at a glance" className="mt-4 grid grid-cols-3 divide-x divide-frenz-line rounded-[22px] bg-frenz-fill py-3">
                 <Figure label="Creations" value={String(figures.videos)} />
                 <Figure label="Credits spent" value={hidden ? HIDDEN_AMOUNT : formatCredits(figures.spent, { short: true })} />
                 <Figure label="Refunded" value={hidden ? HIDDEN_AMOUNT : formatCredits(figures.refunded, { short: true })} tone={figures.refunded > 0 ? "in" : undefined} />
@@ -409,10 +431,14 @@ export function FrenzAIUsagePage({
 
             {/* ── the statement ─────────────────────────────────────────── */}
             <section aria-label="Statement" className="mt-8">
-              <div className="frenz-ui flex items-baseline justify-between gap-3 px-1">
+              <button type="button" onClick={toggleStatement} aria-expanded={statementOpen} aria-controls="statement-body" className="frenz-ui flex min-h-[44px] w-full items-center justify-between gap-3 px-1 text-left">
                 <h2 className="m-0 font-heading text-[20px] font-bold text-frenz-ink">Statement</h2>
-                <span className="text-[13px] text-frenz-muted">Newest first</span>
-              </div>
+                <span className="flex items-center gap-1 text-[13px] text-frenz-muted">
+                  {statementOpen ? "Newest first" : ledger ? `${ledger.length} lines` : ""}
+                  <ChevronDown className={cn("h-4 w-4 transition-transform", statementOpen && "rotate-180")} aria-hidden />
+                </span>
+              </button>
+              <div id="statement-body" hidden={!statementOpen}>
               <div role="radiogroup" aria-label="Show" className="mt-2.5 grid grid-cols-4 gap-0.5 rounded-xl bg-frenz-fill p-[3px]">
                 {STATEMENT_FILTERS.map((f) => (
                   <button
@@ -486,6 +512,7 @@ export function FrenzAIUsagePage({
               )}
               {ledger && ledger.length >= 100 ? <p className="mt-3 text-[12px] text-muted-foreground">Showing your most recent 100 lines.</p> : null}
               <p className="mt-2 text-[12px] text-muted-foreground">Tap a line for its full details and ID — handy for a support request.</p>
+              </div>
             </section>
             <StatementDetailSheet row={openLine} symbol={symbol} onClose={() => setOpenLine(null)} />
           </>

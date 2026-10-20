@@ -191,6 +191,9 @@ export const DATA_DOMAINS: DataDomain[] = [
       "sub_posts",
       "sub_post_media",
       "sub_post_likes",
+      // 0265: one row per visitor per day to a creator's profile, and per viewer per day to an exclusive post — Earnings & analytics
+      "profile_visits",
+      "sub_post_views",
       "sub_post_comments",
       "creator_notes",
       "creator_recognitions",

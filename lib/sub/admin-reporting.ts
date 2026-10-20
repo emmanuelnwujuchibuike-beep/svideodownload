@@ -44,7 +44,8 @@ export interface AdminSummary {
 }
 
 export async function adminSummary(days: Period = 30, now = Date.now()): Promise<({ ok: true; summary: AdminSummary }) | Fail> {
-  if (!isPeriod(days)) return fail("Choose 7, 30 or 90 days.");
+  // All (0) is a creator-dashboard view (step 21); the admin report keeps its fixed windows
+  if (!isPeriod(days) || days === 0) return fail("Choose 7, 30 or 90 days.");
   const since = periodStart(days, now);
   const { data, error } = await createAdminClient().rpc("sub_admin_summary", { p_since: since });
   if (error) return fail(/function|schema cache|does not exist/i.test(error.message) ? "The overview arrives with the next update (migration 0252)." : "Couldn't load the overview.", 503);

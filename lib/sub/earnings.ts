@@ -7,6 +7,7 @@ import { usd } from "@/lib/creator/membership/engine";
 import { withdrawalFlatFeeCents, type WithdrawalFlatFees } from "@/lib/rewards/config";
 
 import { subConfig } from "./server";
+import { profileVisitsSince, topSubPostsSince, type TopSubPost } from "./visits";
 
 /**
  * Creator earnings and analytics (Frenz Exclusive Part 7). Every number has ONE source:
@@ -34,7 +35,8 @@ type Row = Record<string, unknown>;
 type Fail = { ok: false; error: string; status: number };
 const fail = (error: string, status = 400): Fail => ({ ok: false, error, status });
 const num = (v: unknown) => (typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : 0);
-export const PERIODS = [7, 30, 90] as const;
+/** 0 = All (step 21, design/Earnings.dc.html): from the creator's first ledger entry. */
+export const PERIODS = [7, 30, 90, 0] as const;
 export type Period = (typeof PERIODS)[number];
 export const isPeriod = (v: unknown): v is Period => PERIODS.includes(Number(v) as Period);
 export const LEDGER_PAGE = 25;
@@ -77,6 +79,8 @@ export interface PeriodSummary {
   likes: number;
   comments: number;
   daily: { day: string; netCents: number; newSubs: number; renewals: number }[];
+  /** step 21: what the same length of time just before earned ("vs. previous 30 days"); null for All or when unknown */
+  previousEarnedCents: number | null;
 }
 
 export interface Overview {
@@ -86,11 +90,15 @@ export interface Overview {
   posts: { published: number; locked: number; hidden: number };
   withdrawal: { enabled: boolean; minCents: number; feePercent: number; flatFees: WithdrawalFlatFees; openRequest: boolean; reason: string | null };
   period: PeriodSummary | null;
+  /** step 21 (0265): visits to the creator's profile in the period; null when they can't be read */
+  profileVisits: number | null;
+  /** step 21 (0265): the most-viewed exclusive posts in the period; null when the views can't be read */
+  topPosts: TopSubPost[] | null;
   /** false before 0252 runs: balances and counts still show, period analytics say so */
   analyticsReady: boolean;
 }
 
-function toSummary(days: Period, since: string, s: Row, daily: Row[]): PeriodSummary {
+function toSummary(days: Period, since: string, s: Row, daily: Row[], previousEarnedCents: number | null): PeriodSummary {
   const g = (s.gross_by_currency ?? {}) as Record<string, unknown>;
   const earned = num(s.earned_cents);
   const clawed = num(s.clawed_cents);
@@ -116,24 +124,35 @@ function toSummary(days: Period, since: string, s: Row, daily: Row[]): PeriodSum
     likes: num(s.likes),
     comments: num(s.comments),
     daily: daily.map((d) => ({ day: String(d.day).slice(0, 10), netCents: num(d.earned_cents) - num(d.clawed_cents), newSubs: num(d.new_subs), renewals: num(d.renewals) })),
+    previousEarnedCents,
   };
 }
 
 /** The period's start: midnight UTC `days` days ago, so the daily series and the totals share one boundary. */
-export function periodStart(days: Period, now = Date.now()): string {
+export function periodStart(days: number, now = Date.now()): string {
   const d = new Date(now);
   d.setUTCHours(0, 0, 0, 0);
   d.setUTCDate(d.getUTCDate() - days);
   return d.toISOString();
 }
 
+/** The creator's first ledger day (midnight UTC), for All; today when there is none yet. */
+async function firstLedgerDay(db: ReturnType<typeof createAdminClient>, creatorId: string, now: number): Promise<string> {
+  const { data } = await db.from("sub_ledger").select("created_at").eq("creator_id", creatorId).order("created_at", { ascending: true }).limit(1);
+  const first = (data as { created_at: string }[] | null)?.[0]?.created_at;
+  const d = new Date(first ?? now);
+  d.setUTCHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
 export async function earningsOverview(creatorId: string, days: Period = 30, now = Date.now()): Promise<({ ok: true } & Overview) | Fail> {
   if (!isUuid(creatorId)) return fail("Invalid request.");
-  if (!isPeriod(days)) return fail("Choose 7, 30 or 90 days.");
+  if (!isPeriod(days)) return fail("Choose 7, 30 or 90 days, or All.");
   const db = createAdminClient();
   // move anything whose hold has passed to available first (the same call the earnings read always made)
   await db.rpc("release_sub_earnings", { p_creator: creatorId });
-  const since = periodStart(days, now);
+  // All (0): from the creator's first ledger entry, so the daily series only spans days with a history
+  const since = days === 0 ? await firstLedgerDay(db, creatorId, now) : periodStart(days, now);
   const nowIso = new Date(now).toISOString();
   const [cfg, balR, activeR, pubR, hiddenR, openR, sumR, dayR] = await Promise.all([
     subConfig(),
@@ -145,6 +164,14 @@ export async function earningsOverview(creatorId: string, days: Period = 30, now
     db.rpc("sub_creator_summary", { p_creator: creatorId, p_since: since }),
     db.rpc("sub_creator_daily", { p_creator: creatorId, p_since: since }),
   ]);
+  // step 21: the period before (the summary counts up to now, so the earlier window = twice the period minus this one),
+  // profile visits and the top exclusive posts (0265) — each fails open to null, never to a wrong number
+  const [doubleR, visits, topPosts] = await Promise.all([
+    days === 0 ? Promise.resolve(null) : db.rpc("sub_creator_summary", { p_creator: creatorId, p_since: periodStart((days * 2) as Period, now) }),
+    profileVisitsSince(creatorId, since).catch(() => null),
+    topSubPostsSince(creatorId, since).catch(() => null),
+  ]);
+  const previousEarnedCents = !doubleR || doubleR.error || sumR.error ? null : Math.max(0, num((doubleR.data as Row | null)?.earned_cents) - num((sumR.data as Row | null)?.earned_cents));
   if (balR.error) return fail("Couldn't load your earnings.", 503);
   const b = (balR.data ?? {}) as Row;
   const balances: Balances = { availableCents: num(b.available_cents), pendingCents: num(b.pending_cents), heldCents: num(b.held_cents), debtCents: num(b.debt_cents), lifetimeCents: num(b.lifetime_cents), withdrawnCents: num(b.withdrawn_cents) };
@@ -162,8 +189,10 @@ export async function earningsOverview(creatorId: string, days: Period = 30, now
     ending: sumR.error ? 0 : num((sumR.data as Row | null)?.ending_now),
     posts: { published, locked: Math.max(0, published - hidden), hidden },
     withdrawal: { enabled: cfg.withdrawalsEnabled, minCents: cfg.minWithdrawalCents, feePercent: cfg.withdrawalFeePercent, flatFees: cfg.flatFees, openRequest, reason },
-    period: analyticsReady ? toSummary(days, since, (sumR.data ?? {}) as Row, (dayR.data ?? []) as Row[]) : null,
+    period: analyticsReady ? toSummary(days, since, (sumR.data ?? {}) as Row, (dayR.data ?? []) as Row[], previousEarnedCents) : null,
     analyticsReady,
+    profileVisits: visits,
+    topPosts,
   };
 }
 

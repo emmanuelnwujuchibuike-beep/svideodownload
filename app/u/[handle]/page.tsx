@@ -14,8 +14,10 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { after } from "next/server";
 import Link from "next/link";
+import { guestVisitorKey, recordProfileVisit } from "@/lib/sub/visits";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
@@ -177,6 +179,14 @@ async function ProfileData({
   const me = await viewerId();
   const profile = await getPublicProfile(handle, me);
   if (!profile) notFound();
+
+  // 0265: one visit per visitor per day for the owner's Earnings & analytics — after the page is sent, never
+  // slowing it; a guest is a daily one-way hash, never an address (lib/sub/visits.ts)
+  if (!profile.isOwner) {
+    const h = await headers();
+    const guestKey = me ? null : guestVisitorKey(h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? h.get("x-real-ip"), h.get("user-agent"));
+    after(() => recordProfileVisit(profile.id, me, guestKey));
+  }
 
   // The profile header renders immediately; the (heavier) posts grid streams in
   // behind a skeleton so the page never blocks on the post query.

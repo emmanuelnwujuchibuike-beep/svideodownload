@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { usd } from "@/lib/creator/membership/engine";
 
 /**
@@ -22,6 +24,8 @@ const PAD = 6;
 const short = (day: string) => new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
 
 export function EarningsChart({ points, days }: { points: DailyPoint[]; days: number }) {
+  // step 21 (design/Earnings.dc.html): "Tap a bar for that day" — the chosen day's figures replace the summary line
+  const [picked, setPicked] = useState<DailyPoint | null>(null);
   const max = Math.max(1, ...points.map((p) => Math.abs(p.netCents)));
   const hasNeg = points.some((p) => p.netCents < 0);
   const base = hasNeg ? H / 2 : H - PAD;
@@ -36,15 +40,21 @@ export function EarningsChart({ points, days }: { points: DailyPoint[]; days: nu
 
   return (
     <figure className="m-0">
-      <figcaption className="mb-3 text-[12px] leading-snug text-muted-foreground">{summary}</figcaption>
+      <figcaption className="mb-3 min-h-[2.5em] text-[12.5px] leading-snug text-frenz-muted" aria-live="polite">
+        {picked ? `${short(picked.day)}: ${picked.netCents < 0 ? "−" : ""}${usd(Math.abs(picked.netCents))} · ${picked.newSubs} new · ${picked.renewals} renewed` : summary}
+      </figcaption>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={summary} className="block h-28 w-full">
         <line x1={0} x2={W} y1={base} y2={base} className="stroke-black/[0.08] dark:stroke-white/[0.12]" strokeWidth={1} vectorEffect="non-scaling-stroke" strokeDasharray="3 4" />
         {points.map((p, i) => {
           if (!p.netCents) return null;
           const h = Math.max(2, Math.abs(p.netCents) * scale);
           const x = i * bw + bw * 0.18;
-          return <rect key={p.day} x={x} width={Math.max(1, bw * 0.64)} y={p.netCents > 0 ? base - h : base} height={h} rx={Math.min(3, bw * 0.3)} className={p.netCents > 0 ? "fill-primary" : "fill-rose-500"} opacity={p.netCents > 0 ? 0.85 : 0.7} />;
+          return <rect key={p.day} x={x} width={Math.max(1, bw * 0.64)} y={p.netCents > 0 ? base - h : base} height={h} rx={Math.min(3, bw * 0.3)} className={p.netCents > 0 ? "fill-frenz-violet" : "fill-rose-500"} opacity={picked && picked.day !== p.day ? 0.35 : p.netCents > 0 ? 0.9 : 0.7} />;
         })}
+        {/* a full-height tap target per day (the bars themselves can be 2 px), so any day can be read */}
+        {points.map((p, i) => (
+          <rect key={`hit-${p.day}`} x={i * bw} width={bw} y={0} height={H} fill="transparent" className="cursor-pointer" onClick={() => setPicked((cur) => (cur?.day === p.day ? null : p))} />
+        ))}
       </svg>
       <div className="mt-1 flex justify-between text-[11px] tabular-nums text-muted-foreground" aria-hidden>
         <span>{points[0] ? short(points[0].day) : ""}</span>

@@ -11,6 +11,7 @@ import { afterCursorFilter, audienceOf, decodeSubCursor, encodeSubCursor, isSubA
 import { ensureBlurPreview, readBlurPreviews } from "./blur-preview";
 import { hasActiveSub, subConfig } from "./server";
 import { checkUpload } from "./upload-check";
+import { recordSubPostView } from "./visits";
 
 /**
  * Subscriber-only posts (0227, owner briefs 2026-10-11).
@@ -388,6 +389,8 @@ export async function openSubPost(postId: string, viewerId: string | null): Prom
   // 0261: a Mature post opens only for the creator or a viewer who confirmed they're 18+
   if (gate.mature && viewerId !== gate.creatorId && !(await isAdult(viewerId).catch(() => false))) return AGE_REQUIRED;
   if (!hasPrivateR2) return fail("Private storage isn't available right now.", 503);
+  // 0265: one view per viewer per day, for the creator's Top exclusive posts — after the answer, never slowing it
+  after(() => recordSubPostView(postId, gate.creatorId, viewerId));
   return { ok: true, caption: gate.caption, audience: gate.audience, ...(gate.mature ? { mature: true } : {}), media: await signMedia((media ?? []) as Row[]), expiresAt: new Date(Date.now() + SIGNED_TTL_SECONDS * 1000).toISOString(), ...mk };
 }
 

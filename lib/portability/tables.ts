@@ -97,6 +97,8 @@ export const NOT_EXPORTED: Record<string, string> = {
   sub_fanout_jobs: "The send queue for a creator's announcement or private-post alerts (0251): counts and a cursor. The announcements themselves are in creator_notes, which is exported.",
   sub_fanout_deliveries: "Bookkeeping that stops one alert being sent to you twice (0251). The alerts themselves are in your notifications, which are exported.",
   sub_membership_reminders: "Bookkeeping that stops a renewal reminder being sent twice (0250). The reminders themselves are in your notifications, which are exported.",
+  profile_visits: "Counts for a creator's analytics (0265): one row per visitor per day to their profile — a signed-in visitor by id, a guest by a daily one-way hash. It records nothing you did beyond opening the page, and is not part of your own data.",
+  sub_post_views: "Counts for a creator's analytics (0265): that an exclusive post was opened, once per viewer per day. The posts and your subscriptions themselves are exported.",
   message_email_sends: "Bookkeeping that stops a busy chat emailing you once per message (0262): when each chat last emailed you. Your email choice itself is in notification_settings, which is exported.",
   email_unsubscribe_tokens: "Only a one-way hash of the secret in your unsubscribe links (0253), so they can be checked without storing a usable link. Your optional-email choice itself is in notification_settings, which is exported.",
   follower_milestone_checks: "When each follower milestone was last checked (0255), so the check runs at most daily. The milestone rewards themselves are in reward_events, which is exported.",

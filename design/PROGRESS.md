@@ -515,7 +515,7 @@ new colours.
 - [x] 18. Frenz AI — Text to Video → design/TextToVideo.dc.html
 - [x] 19. Frenz AI — Image to Video → design/ImageToVideo.dc.html
 - [x] 20. Subscriptions dashboard → design/SubsDashboard.dc.html (owner, 2026-10-19)
-- [ ] 21. Subscriptions analysis / earnings → design/Earnings.dc.html (owner, 2026-10-19)
+- [x] 21. Subscriptions analysis / earnings → design/Earnings.dc.html (owner, 2026-10-19)
 - [ ] 22. Frenz AI — History → design/AIHistory.dc.html (owner, 2026-10-19)
 - [ ] 23. Frenz AI — Credits → design/Credits.dc.html (owner, 2026-10-19; the credit earnings and analysis may follow design/Earnings.dc.html)
 
@@ -609,3 +609,12 @@ Frenz AI — Image to Video
 - ‹ Profile · LIVE / PAUSED · Subscriptions · n subscribers · price / month; Available to withdraw + Withdraw (the existing withdraw sheet); Earned all time · Clearing · Withdrawn; Earnings & analytics. All figures from `/api/sub/earnings`, "—" on a failed read.
 - Subscription: Price (opens the same price editor and save), Pause new subscribers as a switch (on = paused; current subscribers keep access), Announce to subscribers and Subscriber notifications (the same panels).
 - Payout: the saved bank with Change, Auto-withdrawal switch, Remove payout account (red) — `SubPayoutSettings variant="list"`, the same calls.
+
+**Step 21 · Earnings & analytics**
+- ‹ Subscriptions back link; 7D · 30D · 90D · **All** (new: from the creator's first ledger entry; the chart shows months for All); Earned · period with **vs. the period before** (new: two server reads, never estimated); the bar chart — **tap a bar for that day** (new) — and View as table.
+- Four tiles: Subscribers (+ new this period), New subscribers, Cancelled, **Profile visits** (new backend, 0265: one row per visitor per day; a guest is a daily one-way hash, never an address; the owner's own visits not counted; written after the profile page is sent).
+- Where your money is: earned all time, clearing, withdrawn, available (with the withdrawal fee), then Withdraw.
+- **Top exclusive posts** (new backend, 0265: a view = a viewer with access opening the post, once a day each; the creator's own opens not counted), with the post's tiny blurred preview as its picture.
+- The existing detail rows (renewals, access ended, refunds, withdrawals, posts, likes · comments, what subscribers paid) are kept under "More figures for this period"; the history list is "Recent activity" with its filters.
+- **0265 must be applied** (not live until it runs); until then visits and top posts show "—" / "couldn't be loaded", never a made-up number.
+- Owner, same day: the white fade behind the bottom nav is removed.

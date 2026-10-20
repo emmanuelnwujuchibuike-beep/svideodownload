@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   const { success } = await trackLimiter.limit(`sub-earn:${user.id}`);
   if (!success) return NextResponse.json({ error: "Too many requests." }, { status: 429, headers });
   const days = Number(new URL(request.url).searchParams.get("days") ?? 30);
-  if (!isPeriod(days)) return NextResponse.json({ error: "Choose 7, 30 or 90 days." }, { status: 400, headers });
+  if (!isPeriod(days)) return NextResponse.json({ error: "Choose 7, 30 or 90 days, or All." }, { status: 400, headers });
   const out = await earningsOverview(user.id, days);
   if (!out.ok) return NextResponse.json({ error: out.error }, { status: out.status, headers });
   const { ok: _ok, ...body } = out;

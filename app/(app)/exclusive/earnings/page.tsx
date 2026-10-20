@@ -1,4 +1,4 @@
-import { ArrowLeft } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -23,16 +23,15 @@ export default async function EarningsRoute() {
   if (!user) redirect("/login?next=/exclusive/earnings");
   const [overview, ledger] = await Promise.all([earningsOverview(user.id, 30), ledgerPage(user.id)]);
   return (
-    <div className="ex-ground w-full flex-1">
+    <div className="w-full flex-1 bg-frenz-page">
       <div className="mx-auto w-full max-w-2xl px-4 pt-4" style={{ paddingBottom: "calc(var(--frenz-bottom-nav) + 1rem)" }}>
-      <header className="mb-5 flex items-center gap-3">
-        <Link href="/exclusive" aria-label="Back to Exclusive" className="ex-icon-btn -ml-1">
-          <ArrowLeft className="h-5 w-5" aria-hidden />
+      {/* step 21 (design/Earnings.dc.html): ‹ Subscriptions, then the large title */}
+      <header className="frenz-ui mb-4 text-frenz-ink">
+        <Link href="/exclusive/dashboard" className="-ml-1 inline-flex min-h-[44px] items-center gap-0.5 text-[16px] font-bold text-frenz-blue no-underline">
+          <ChevronLeft className="h-5 w-5" aria-hidden /> Subscriptions
         </Link>
-        <div>
-          <h1 className="text-[28px] font-bold leading-tight tracking-[-0.03em]">Earnings</h1>
-          <p className="text-[13.5px] text-muted-foreground">Your Exclusive income, in US dollars. Only you can see this.</p>
-        </div>
+        <h1 className="m-0 font-heading text-[30px] font-extrabold leading-tight tracking-[-0.8px]">Earnings &amp; analytics</h1>
+        <p className="m-0 mt-0.5 text-[13.5px] text-frenz-muted">Your Exclusive income, in US dollars. Only you can see this.</p>
       </header>
       <EarningsDashboard initial={overview.ok ? (({ ok: _ok, ...rest }) => rest)(overview) : null} initialLedger={ledger.ok ? { items: ledger.items, next: ledger.next } : null} />
       </div>

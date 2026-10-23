@@ -56,6 +56,31 @@ export function AiPromoDriver({ promo }: { promo: AiPromo }) {
   */
   const [clipPlaying, setClipPlaying] = useState(false);
   const [clipBlocked, setClipBlocked] = useState(false);
+  /*
+    🔴 THE CLIP WAITS FOR THE PAGE (owner, 2026-10-22: "the landing page takes ages to load …
+    each time I go back to the browser it loads afresh"). A whole MP4 with preload="auto" and a
+    warm-up play started at hydration — the largest file on the landing, competing on a phone
+    connection with the page's own scripts. And a decoded clip held while the tab sat in the
+    background is the memory iOS reclaims by discarding the tab, so coming back rebuilt the page.
+    Now the pictures still paint at once; the clip mounts after the page's `load` (plus an idle
+    moment) and is unmounted while the tab is hidden, mounted again on return from HTTP cache.
+  */
+  const [armed, setArmed] = useState(false);
+  const stageRef = useRef<PromoStage>(stage);
+  stageRef.current = stage;
+
+  useEffect(() => {
+    let timer = 0;
+    const arm = () => {
+      timer = window.setTimeout(() => setArmed(true), 1200);
+    };
+    if (document.readyState === "complete") arm();
+    else window.addEventListener("load", arm, { once: true });
+    return () => {
+      window.removeEventListener("load", arm);
+      window.clearTimeout(timer);
+    };
+  }, []);
 
   useEffect(() => {
     setReduced(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
@@ -74,12 +99,14 @@ export function AiPromoDriver({ promo }: { promo: AiPromo }) {
     };
   }, []);
 
-  const useClip = !!promo.video?.enabled && !lite && !clipBlocked;
+  const wantsClip = !!promo.video?.enabled && !lite && !clipBlocked;
+  // the element exists only once the page has loaded and while the tab is visible (see `armed`)
+  const useClip = wantsClip && armed && tabVisible;
 
   useEffect(() => {
     const v = video.current;
-    // a clip that opens the loop simply plays (the stage effect below); only a LATER turn is warmed
-    if (!v || !useClip || reduced || firstStage(promo) === "video") return;
+    // a clip on its own turn simply plays (the stage effect below); otherwise it is warmed for its turn
+    if (!v || !useClip || reduced || stageRef.current === "video") return;
     let warmed = false;
     const onPlaying = () => {
       if (warmed) return;
@@ -90,10 +117,10 @@ export function AiPromoDriver({ promo }: { promo: AiPromo }) {
     v.addEventListener("playing", onPlaying, { once: true });
     v.play().catch(() => setClipBlocked(true));
     return () => v.removeEventListener("playing", onPlaying);
-    // once, at mount — warms a clip whose turn comes after the picture pair
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const stages = promoStages(promo).filter((s) => s !== "video" || useClip || !!promo.video?.poster);
+    // each time the element mounts — after load, and again after the tab comes back
+  }, [useClip, reduced]);
+  // `wantsClip`, not `useClip`: a clip that is not mounted yet keeps its turn (the intro shows meanwhile)
+  const stages = promoStages(promo).filter((s) => s !== "video" || wantsClip || !!promo.video?.poster);
   const running = onScreen && tabVisible && stages.length > 1;
 
   // the cycle: a single timeout for the current stage; paused = no timer, stage kept
@@ -117,14 +144,17 @@ export function AiPromoDriver({ promo }: { promo: AiPromo }) {
   // play only on its own stage, while running; otherwise paused — never unmounted
   useEffect(() => {
     const v = video.current;
-    if (!v) return;
+    if (!v) {
+      setClipPlaying(false);
+      return;
+    }
     if (running && stage === "video" && !reduced) {
       v.play().catch(() => setClipBlocked(true));
     } else {
       v.pause();
       setClipPlaying(false);
     }
-  }, [running, stage, reduced]);
+  }, [running, stage, reduced, useClip]);
 
   const fade = reduced ? "" : "transition-opacity duration-500";
   return (
@@ -144,7 +174,7 @@ export function AiPromoDriver({ promo }: { promo: AiPromo }) {
               muted
               playsInline
               loop
-              // loaded once, during the opening delay, then only played and paused
+              // mounted only after the page's load — see `armed`
               preload="auto"
               onPlaying={() => stage === "video" && setClipPlaying(true)}
               className="absolute inset-0 h-full w-full object-cover"

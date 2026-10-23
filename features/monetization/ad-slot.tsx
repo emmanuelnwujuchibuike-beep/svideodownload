@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import type { AdSlotData, AdZone } from "@/lib/monetization/types";
 
 import { loadZoneAd } from "./ad-cache";
-import { AdSenseUnit } from "./adsense-unit";
+// import { AdSenseUnit } from "./adsense-unit"; — AdSense is off (owner, 2026-10-23)
 import { ExoClickUnit } from "./exoclick-unit";
 import { injectAdMarkup } from "./inject";
 
@@ -398,6 +398,12 @@ export function AdSlot({
   */
   if (ad.format === "adsense" && !allowsGoogleAdsInZone(pathname, zone)) return null;
 
+  /*
+    🔴 ADSENSE IS OFF (owner, 2026-10-23: "comment out all Adsense code, am not using Adsense and I won't use it").
+    An AdSense row left in the ad table renders nothing and loads nothing; the unit it used to mount is below.
+  */
+  if (ad.format === "adsense") return null;
+  /*
   // AdSense — must run in the top-level document, never in the display iframe.
   if (ad.format === "adsense" && ad.adClient && ad.adSlotId) {
     return (
@@ -421,12 +427,12 @@ export function AdSlot({
             dropped, so the unit sizes itself to the slot exactly as the ExoClick
             video does. Non-full-bleed placements are untouched: there a declared
             size is the operator's deliberate choice.
-          */
+          * /
           layout={fullBleed ? "auto" : ad.adLayout}
           width={fullBleed ? null : ad.width}
           height={fullBleed ? null : ad.height}
           className="w-full"
-          /* The real answer for this format — see the fetch above. */
+          /* The real answer for this format — see the fetch above. * /
           onFill={(filled) => {
             if (notified.current) return;
             notified.current = true;
@@ -436,6 +442,7 @@ export function AdSlot({
       </div>
     );
   }
+  */
 
   /*
     ExoClick — a VIDEO zone, played from its VAST response.

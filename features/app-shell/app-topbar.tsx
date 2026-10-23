@@ -7,6 +7,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
 import { IconTile } from "@/components/icons/icon-tile";
+import { FLOATING_GLASS_CIRCLE } from "@/features/ui/floating-glass";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { InstallHeaderCta } from "@/features/pwa/install-button";
@@ -81,6 +82,13 @@ export function AppTopbar() {
     point regardless of sign-in state.
   */
   const onFeedIndex = pathname === "/feed";
+  /*
+    🔴 THE FEED'S HEADER IS FLOATING GLASS (owner, 2026-10-23: "change the feed top header to be like the profile
+    premium floating glass, so the search, post and notification button become a floating glass button very
+    premium and professional, like Instagram"). The Feed tab is /home. The white bar becomes a see-through,
+    tap-through strip; each button is the profile's glass circle; the feed scrolls under them.
+  */
+  const glassBar = pathname === "/home";
   /*
     The full product name in the Downloads header (owner, 2026-08-23: "put the
     text frenzsave with the brand style like it is with the brand text frenz…
@@ -202,7 +210,7 @@ export function AppTopbar() {
         // a gradient here without a fresh, explicit ask — this exact feature
         // was built, reshaped twice for seam/intensity issues, and then
         // explicitly removed in one conversation.
-        "border-b border-border/20 bg-background",
+        glassBar ? "pointer-events-none border-b border-transparent bg-transparent lg:pointer-events-auto lg:border-border/20 lg:bg-background" : "border-b border-border/20 bg-background",
         // the Download page's slide-away (see above): transform only — no layout shift, GPU-cheap
         "transition-transform duration-300 ease-out motion-reduce:transition-none lg:translate-y-0",
         slideAway && "-translate-y-full",
@@ -226,7 +234,7 @@ export function AppTopbar() {
               haptic("light");
               playSound("tap");
             }}
-            className={cn("flex h-11 items-center justify-center", onDownloads ? "w-10 sm:w-11" : "w-11")}
+            className={cn("flex h-11 items-center justify-center", onDownloads ? "w-10 sm:w-11" : "w-11", glassBar && FLOATING_GLASS_CIRCLE)}
           >
             <IconTile>
               <IoSearchOutline className="h-[26px] w-[26px]" />
@@ -298,7 +306,7 @@ export function AppTopbar() {
                 outline one every other icon in this bar uses, so it reads as
                 visually heavier without a box around it.
               */
-              className="flex h-11 w-11 items-center justify-center text-foreground transition active:scale-95"
+              className={cn("flex h-11 w-11 items-center justify-center text-foreground transition active:scale-95", glassBar && FLOATING_GLASS_CIRCLE)}
             >
               <IoAdd className="h-7 w-7 [filter:drop-shadow(0_3px_5px_rgba(2,6,23,0.35))]" />
             </button>
@@ -311,7 +319,7 @@ export function AppTopbar() {
           {/* A page-owned center slot (currently just the feed's tabs)
               replaces the search bar/spacer entirely — centered in the
               middle of the bar at every width. */}
-          <div className="flex flex-1 items-center justify-center">{center}</div>
+          <div className="pointer-events-auto flex flex-1 items-center justify-center">{center}</div>
           {/* Desktop search fallback — the inline pill is off-screen while the
               slot is active, so ⌘K/search still needs a reachable entry point. */}
           {searchActive ? null : (
@@ -466,7 +474,7 @@ export function AppTopbar() {
         {pathname === "/downloads" && !searchActive ? <PromoteButton /> : null}
 
         <span className={searchActive ? "hidden" : "lg:hidden"}>
-          {searchActive ? null : <NotificationBell />}
+          {searchActive ? null : <NotificationBell glass={glassBar} />}
         </span>
 
         <div className="hidden sm:block">

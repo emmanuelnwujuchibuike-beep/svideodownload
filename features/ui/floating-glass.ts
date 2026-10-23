@@ -1,0 +1,11 @@
+/**
+ * The floating glass circle (owner, 2026-10-07: "more premium and glassy like iOS Instagram"): dark frosted
+ * glass, legible over a bright cover AND over page content scrolling under it, with a hairline light edge, a
+ * soft drop and a spring press. Shared by the profile's cover controls and, since 2026-10-23, the feed's
+ * header ("change the feed top header to be like the profile premium floating glass").
+ */
+export const FLOATING_GLASS =
+  "bg-black/30 text-white ring-1 ring-inset ring-white/25 backdrop-blur-lg backdrop-saturate-150 shadow-[0_10px_28px_-12px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.28)] transition-[background-color,transform] duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:bg-black/40 active:scale-90 active:duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 motion-reduce:active:scale-100";
+
+/** A glass circle button: the glass, round, clickable through a pass-through bar, icons sized like the profile's. */
+export const FLOATING_GLASS_CIRCLE = `pointer-events-auto rounded-full ${FLOATING_GLASS} [&_svg]:h-[21px] [&_svg]:w-[21px] [&_svg]:text-white`;

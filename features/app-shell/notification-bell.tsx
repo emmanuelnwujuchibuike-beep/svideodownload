@@ -3,6 +3,7 @@
 import { IoNotifications, IoNotificationsOutline } from "react-icons/io5";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { FLOATING_GLASS_CIRCLE } from "@/features/ui/floating-glass";
 
 import { IconTile } from "@/components/icons/icon-tile";
 import { mutate, revalidate, useQuery } from "@/features/data";
@@ -19,7 +20,8 @@ import { playSound } from "@/lib/notifications/sound-fx";
 import { categoryForType } from "@/lib/platform/notifications-registry";
 import { cn } from "@/lib/utils";
 
-export function NotificationBell() {
+/** `glass`: the feed's floating glass circle (features/ui/floating-glass.ts, owner 2026-10-23). */
+export function NotificationBell({ glass = false }: { glass?: boolean } = {}) {
   // Cached-first: the bell shows last-known notifications instantly on every page
   // (it lives in the topbar app-wide) and revalidates in the background + on focus.
   const { data } = useQuery<NotifData>(KEY, loadNotifications);
@@ -93,7 +95,7 @@ export function NotificationBell() {
         onClick={toggle}
         aria-label={`Notifications${unread > 0 ? ` (${unread} unread)` : ""}`}
         aria-expanded={open}
-        className="relative inline-flex h-11 w-11 items-center justify-center"
+        className={cn("relative inline-flex h-11 w-11 items-center justify-center", glass && FLOATING_GLASS_CIRCLE)}
       >
         {/* Owner correction (2026-07-13): unread used to also swap this tile
             to the dark brand tint — the mockup's own unread state is just the

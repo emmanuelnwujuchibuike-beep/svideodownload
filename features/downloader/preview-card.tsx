@@ -6,6 +6,7 @@ import {
   BadgeCheck,
   Check,
   CheckCircle2,
+  ArrowUp,
   Crown,
   Download,
   Eye,
@@ -1191,6 +1192,18 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
             </>
           )}
         </button>
+
+        {/*
+          One short line under the Download button pointing at the Install button (owner, 2026-10-23, replacing the
+          "ad opened by mistake? close its tab" hint the same day — closing an ad early loses the Monetag view).
+          `hide-when-installed`: gone inside the installed app, the same rule the Install button follows.
+        */}
+        {phase !== "done" ? (
+          <p className="hide-when-installed mt-2.5 flex items-center justify-center gap-1.5 text-center text-xs font-medium text-muted-foreground">
+            <ArrowUp className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            Tap the Install button above to install the app.
+          </p>
+        ) : null}
 
         {/*
           🔴 "Fast, private & free — no app, no sign-up." is GONE (owner,

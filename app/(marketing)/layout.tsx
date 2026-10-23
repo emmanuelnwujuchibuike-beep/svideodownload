@@ -1,7 +1,8 @@
 import { MobileAppNav } from "@/components/landing/mobile-app-nav";
 import { ReelsWarmup } from "@/components/landing/reels-warmup";
 import { AiJobAlertMount } from "@/features/ai/ai-job-alert-mount";
-import { AdSenseSiteScript } from "@/features/monetization/adsense-site-script";
+// 🔴 AdSense is OFF (owner, 2026-10-23: "comment out all Adsense code, am not using Adsense and I won't use it")
+// import { AdSenseSiteScript } from "@/features/monetization/adsense-site-script";
 import { DeferredAdFurniture } from "@/features/monetization/deferred-ad-furniture";
 import { PageRefresh } from "@/features/app-shell/page-refresh";
 import { getFeed } from "@/lib/social/feed";
@@ -83,7 +84,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
         `lib/monetization/ad-policy.ts` states the same rule in a form that can
         be read and tested; this is where it is enforced for Google.
       */}
-      <AdSenseSiteScript />
+      {/* <AdSenseSiteScript /> — off (owner, 2026-10-23: not using AdSense); nothing of Google's loads on these pages */}
       {/* Reserve room for the fixed TOP bars: the GLOBAL announcement bar
           (--frenz-announce-h) plus the content-page top ad stacked below it
           (--frenz-topbanner-h). Each is 0 when absent, so an unbannered page keeps

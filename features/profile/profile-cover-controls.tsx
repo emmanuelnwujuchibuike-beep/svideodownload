@@ -4,6 +4,7 @@ import { Camera, Search } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState } from "react";
+import { FLOATING_GLASS } from "@/features/ui/floating-glass";
 
 import type { MenuUser } from "./profile-menu-panel";
 
@@ -42,7 +43,7 @@ const ProfileMenuBottomSheet = dynamic(() => import("./profile-menu-bottom-sheet
  * bright cover AND on page content once the profile scrolls under them — with
  * a hairline light edge, a soft drop, and a spring press so a tap is felt.
  */
-const GLASS = "bg-black/30 text-white ring-1 ring-inset ring-white/25 backdrop-blur-lg backdrop-saturate-150 shadow-[0_10px_28px_-12px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.28)] transition-[background-color,transform] duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:bg-black/40 active:scale-90 active:duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 motion-reduce:active:scale-100";
+const GLASS = FLOATING_GLASS; // shared with the feed header (features/ui/floating-glass.ts)
 
 export function ProfileCoverControls({ user }: { user: MenuUser }) {
   const [open, setOpen] = useState(false);

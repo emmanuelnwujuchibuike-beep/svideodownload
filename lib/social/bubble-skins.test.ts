@@ -5,11 +5,14 @@ import { describe, expect, it } from "vitest";
 import { BUBBLE_SKIN_DATA, BUBBLE_SKIN_SVG } from "./bubble-skins-data";
 import { BUBBLE_SKINS, BUBBLE_STYLE_LABEL, BUBBLE_STYLES, bubbleStyleAvailable, effectiveBubbleStyle, PRO_BUBBLE_SKINS } from "./chat-appearance";
 
-const DESIGN = readFileSync("design/frenzsave-bubble-styles.html", "utf8");
+// design/frenzsave-bubble-styles.html is the owner's local file and is not in git (CI has no copy, 2026-10-23),
+// so these check the data generated from it, never the file itself.
+const FOUR_POINT_STAR = "M8 0l2 6 6 2-6 2-2 6-2-6-6-2 6-2z";
+const hasFourPointStar = (svgs: readonly string[]) => svgs.some((x) => x.includes(FOUR_POINT_STAR));
 
 describe("bubble skins from design/frenzsave-bubble-styles.html (owner, 2026-10-23)", () => {
   it("every skin in the design is offered, under the design's own name", () => {
-    const designIds = [...DESIGN.matchAll(/\{ id: "([a-z]+)",\s+name: "([^"]+)"/g)].map((m) => [m[1]!, m[2]!] as const);
+    const designIds = BUBBLE_SKIN_DATA.map((s) => [s.id, s.name] as const);
     expect(designIds.length).toBe(21);
     for (const [id, name] of designIds) {
       const ours = id === "default" ? "classic" : id;
@@ -20,9 +23,8 @@ describe("bubble skins from design/frenzsave-bubble-styles.html (owner, 2026-10-
   });
 
   it("teeth: the design's four-point star is not shipped (never the AI sparkle)", () => {
-    const fourPoint = "M8 0l2 6 6 2-6 2-2 6-2-6-6-2 6-2z";
-    expect(DESIGN).toContain(fourPoint); // the guard looks for something real
-    expect(Object.values(BUBBLE_SKIN_SVG).join("")).not.toContain(fourPoint);
+    expect(hasFourPointStar([`<svg><path d="${FOUR_POINT_STAR}"/></svg>`])).toBe(true); // the check can fail
+    expect(hasFourPointStar(Object.values(BUBBLE_SKIN_SVG))).toBe(false);
   });
 
   it("Halloween skins only in October; a saved one paints as the default afterwards", () => {

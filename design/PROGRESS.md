@@ -196,6 +196,10 @@ they are applied while each page is built and there is no separate cleanup step.
 - Composer: round attach (+), the pill on the input fill with emoji and camera, 16 px text
   (no iOS zoom), and one gradient circle that is the mic when empty and Send once there is
   text or an attachment (that swap already existed and still works).
+- 2026-10-22 (owner: replace the bubbles with the design's, keep the existing font): yours are now the
+  design's own gradient (bg-frenz-bubble: 135deg, #3D5AFE → #6A44EA) (replacing the flat blue above), theirs plain white with a soft shadow, on the
+  design's lilac ground (frenz-chat, #F3F2F9), 14 × 10 px padding. Font family and size unchanged. Themes, wallpapers and personal
+  colours still win. Swipe right on a message replies; Enter adds a line (Ctrl/Cmd+Enter sends).
 - Not matched: the design's "Message" placeholder — kept the owner's literal "Send a chat"
   (2026-08-16); the design's "Read" — the app's word is "Seen".
 

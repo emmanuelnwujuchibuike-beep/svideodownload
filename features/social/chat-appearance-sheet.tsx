@@ -59,7 +59,8 @@ export function ChatAppearanceSheet({
   }, [open]);
 
   const shape = BUBBLE_STYLE_SHAPE[appearance.bubbleStyle];
-  const mineStyle = appearance.bubbleColor ? { backgroundColor: appearance.bubbleColor } : undefined;
+  // a chosen colour must also clear the default gradient (a background IMAGE, which a colour alone does not cover)
+  const mineStyle = appearance.bubbleColor ? { backgroundImage: "none", backgroundColor: appearance.bubbleColor } : undefined;
 
   if (!mounted) return null;
   return createPortal(
@@ -107,11 +108,12 @@ export function ChatAppearanceSheet({
                 markup (same rounded/tail classes, same font) so what's shown
                 here is exactly what a real thread will look like, not an
                 approximation. */}
-            <div className="mx-5 mb-5 space-y-1.5 rounded-2xl bg-secondary/30 p-4">
+            {/* the preview draws the chat's own default look (design/Chat.dc.html, 2026-10-22): lilac ground, white and gradient bubbles */}
+            <div className="mx-5 mb-5 space-y-1.5 rounded-2xl bg-frenz-chat p-4">
               <div className="flex flex-col items-start">
                 <div
                   className={cn(
-                    "glass max-w-[75%] px-4 py-2.5 leading-relaxed text-foreground shadow-sm",
+                    "max-w-[75%] bg-white px-3.5 py-2.5 leading-relaxed text-neutral-900 shadow-sm",
                     shape.base,
                     shape.tailTheirs,
                     shape.protrudingTail && "relative overflow-visible chat-bubble-tail-theirs",
@@ -125,7 +127,7 @@ export function ChatAppearanceSheet({
                 <div
                   style={mineStyle}
                   className={cn(
-                    "bg-brand max-w-[75%] px-4 py-2.5 leading-relaxed text-white shadow-md shadow-violet-500/20",
+                    "max-w-[75%] bg-frenz-bubble px-3.5 py-2.5 leading-relaxed text-white",
                     shape.base,
                     shape.tailMine,
                     shape.protrudingTail && "relative overflow-visible chat-bubble-tail-mine",

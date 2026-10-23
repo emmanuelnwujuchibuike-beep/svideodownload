@@ -206,10 +206,13 @@ export function VideoComment({
           // and `loading="lazy"` made it worse (a poster below the fold doesn't
           // even START loading until scrolled toward, so the shift lands late).
           // eslint-disable-next-line @next/next/no-img-element
+          // eager (owner, 2026-10-23): a poster is small and a chat opens on the newest messages — it must paint
+          // with the thread, not wait for the browser to decide it is near the screen
           <img
             src={thumbnailUrl}
             alt=""
-            loading="lazy"
+            loading="eager"
+            decoding="async"
             width={width ?? undefined}
             height={height ?? undefined}
             className="max-h-64 w-auto max-w-full object-cover"

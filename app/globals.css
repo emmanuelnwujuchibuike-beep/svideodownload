@@ -37,6 +37,8 @@
     --frenz-card: 0 0% 100%; /* #FFFFFF */
     --frenz-line: 253 47% 94%; /* #ECE9F7 */
     --frenz-fill: 250 25% 95%; /* #F1F0F6 */
+    --frenz-bubble-end: 254 80% 59%; /* #6A44EA */
+    --frenz-chat: 249 37% 96%; /* #F3F2F9 */
     --ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* shared easing */
     --ease-spring: cubic-bezier(0.34, 1.4, 0.5, 1);
     --dur-fast: 160ms;
@@ -76,6 +78,8 @@
     --frenz-card: 226 36% 10%;
     --frenz-line: 225 28% 16%;
     --frenz-fill: 224 30% 14%;
+    --frenz-bubble-end: 254 80% 59%;
+    --frenz-chat: 229 55% 5%;
   }
   /* design-tokens:end */
 
@@ -2134,6 +2138,11 @@
 .chat-bubble-tail-theirs::after {
   left: -5px;
   clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+/* The default sent bubble is the design's blue→violet gradient (2026-10-22); its pointer takes the
+   gradient's end colour instead of inheriting a tiny gradient of its own. */
+.chat-bubble-gradient.chat-bubble-tail-mine::after {
+  background: hsl(var(--frenz-bubble-end));
 }
 
 /* ── Landing hero ambient effects ─────────────────────────────────────────────

@@ -58,6 +58,8 @@ const config: Config = {
           card: "hsl(var(--frenz-card) / <alpha-value>)",
           line: "hsl(var(--frenz-line) / <alpha-value>)",
           fill: "hsl(var(--frenz-fill) / <alpha-value>)",
+          // the chat's lilac ground (design/Chat.dc.html, 2026-10-22)
+          chat: "hsl(var(--frenz-chat) / <alpha-value>)",
         },
       },
       borderRadius: {
@@ -107,6 +109,8 @@ const config: Config = {
         // The brand gradient: the full three stops (avatars, rings, profile button) and the two-stop button fill.
         "frenz-gradient": "linear-gradient(135deg, hsl(var(--frenz-blue)), hsl(var(--frenz-violet)) 55%, hsl(var(--frenz-magenta)))",
         "frenz-gradient-x": "linear-gradient(90deg, hsl(var(--frenz-blue)), hsl(var(--frenz-violet)))",
+        // The sent chat bubble, exactly as design/Chat.dc.html draws it: 135deg, #3D5AFE → #6A44EA.
+        "frenz-bubble": "linear-gradient(135deg, hsl(var(--frenz-blue)), hsl(var(--frenz-bubble-end)))",
         "grid-pattern":
           "linear-gradient(to right, hsl(var(--border) / 0.4) 1px, transparent 1px), linear-gradient(to bottom, hsl(var(--border) / 0.4) 1px, transparent 1px)",
       },

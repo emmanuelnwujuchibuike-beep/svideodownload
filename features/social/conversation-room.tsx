@@ -87,7 +87,10 @@ import type { StoryGroup } from "@/lib/social/stories";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { useVisualViewport } from "@/lib/pwa/use-visual-viewport";
 import { createClient } from "@/lib/supabase/client";
+import Image from "next/image";
+
 import { cn } from "@/lib/utils";
+import { SwipeToReply } from "@/features/social/swipe-to-reply";
 import { sameMessageGroup } from "@/lib/social/message-groups";
 import { CameraIcon, MicIcon, SendIcon as SendGlyph } from "@/features/frenz-ui/icons";
 import { toast } from "@/features/ui/toast";
@@ -1221,10 +1224,13 @@ export function ConversationRoom({
       setMentionAnchor(null);
       return;
     }
-    // Enter sends; Shift+Enter (or any IME composition) inserts a newline —
-    // the standard chat-app convention, now meaningful since this is a real
-    // multi-line textarea instead of a single-line input.
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+    /*
+      🔴 ENTER STARTS A NEW LINE; THE SEND BUTTON SENDS (owner, 2026-10-22: "make the enter button not
+      to send but to give paragraph below"). Enter is left to the textarea, so it inserts a line break
+      like any text field. Ctrl/Cmd+Enter still sends from a desktop keyboard — a combination that
+      never types a line break, so it cannot surprise anyone mid-paragraph.
+    */
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
       e.preventDefault();
       void submit();
     }
@@ -1843,7 +1849,8 @@ export function ConversationRoom({
           // that file), spanning the header + this list + the composer in
           // one continuous photo instead of being cropped to just this box.
           // This box stays transparent so it shows through.
-          liveWallpaperUrl ? "bg-transparent" : useLightDefault ? "bg-white" : liveTheme ? THEME_WASH_CLASS[liveTheme] : undefined,
+          // the design's soft lilac ground behind the bubbles (white bubbles read on it without an outline)
+          liveWallpaperUrl ? "bg-transparent" : useLightDefault ? "bg-frenz-chat" : liveTheme ? THEME_WASH_CLASS[liveTheme] : undefined,
         )}
       >
         {liveOtherStoryGroup ? (
@@ -2011,7 +2018,7 @@ export function ConversationRoom({
                     <div
                       className={cn(
                         "mx-auto my-3 w-fit rounded-full bg-frenz-fill px-3 py-1 text-center text-xs font-bold text-frenz-ink/80",
-                        (useLightDefault || liveWallpaperUrl) && "!text-neutral-500",
+                        liveWallpaperUrl && "!text-neutral-500",
                       )}
                     >
                       {dayDividerLabel(m.createdAt)}
@@ -2084,7 +2091,12 @@ export function ConversationRoom({
                     column, so 80% here resolves against a DEFINITE width and
                     the bubble simply fills it (`max-w-full`). `min-w-0` keeps
                     long unbroken URLs wrapping instead of forcing an overflow. */}
-                <div className={cn("flex max-w-[80%] items-end gap-1", m.mine ? "flex-row-reverse" : "flex-row")}>
+                {/* swipe right to reply (owner, 2026-10-22) — the row itself, so the 80% cap below still resolves against the column */}
+                <SwipeToReply
+                  onReply={() => startReply(m)}
+                  disabled={!canAct || deleted}
+                  className={cn("flex max-w-[80%] items-end gap-1", m.mine ? "flex-row-reverse" : "flex-row")}
+                >
                   {canAct && hasMediaAttachment ? (
                     <button
                       type="button"
@@ -2127,7 +2139,7 @@ export function ConversationRoom({
                       bubbleShape.protrudingTail && !deleted && lastInGroup && (m.mine ? "chat-bubble-tail-mine" : "chat-bubble-tail-theirs"),
                       // `p-1` (4px), not the old `p-1.5` (6px): a hairline frame
                       // around media/voice/documents rather than a fat band.
-                      deleted ? "px-4 py-2.5 italic text-muted-foreground" : frameless ? "p-0" : shared || hasAttachmentFrame ? "p-1" : "px-4 py-2.5",
+                      deleted ? "px-3.5 py-2.5 italic text-muted-foreground" : frameless ? "p-0" : shared || hasAttachmentFrame ? "p-1" : "px-3.5 py-2.5",
                       deleted
                         ? "border border-dashed border-border/60 bg-transparent"
                         : frameless
@@ -2144,8 +2156,11 @@ export function ConversationRoom({
                               // CSS class (so nothing regresses when no personal
                               // color is set), but an inline `background-color`
                               // always wins over a class in CSS specificity.
-                              // the default is the flat brand blue — a gradient is not allowed on content (owner, 2026-10-18)
-                              liveTheme ? THEME_BUBBLE_CLASS[liveTheme] : "bg-frenz-blue",
+                              // 🔴 the design's gradient bubble (design/Chat.dc.html; owner 2026-10-22: "replace … with the chat
+                              // bubble design") — this REPLACES 2026-10-18's flat blue. A theme or a personal colour still wins.
+                              liveTheme ? THEME_BUBBLE_CLASS[liveTheme] : "bg-frenz-bubble",
+                              // the speech-tail pointer continues the gradient's end colour, not a little gradient of its own
+                              !liveTheme && !chatAppearance.bubbleColor && "chat-bubble-gradient",
                               lastInGroup && bubbleShape.tailMine,
                               "text-white",
                             )
@@ -2159,7 +2174,8 @@ export function ConversationRoom({
                             cn(
                               lastInGroup && bubbleShape.tailTheirs,
                               useLightDefault || liveWallpaperUrl
-                                ? "bg-white text-neutral-900 shadow-frenz-card ring-1 ring-frenz-line"
+                                ? // the design's received bubble: white, a soft shadow, no outline
+                                  "bg-white text-neutral-900 shadow-sm"
                                 : "glass text-foreground shadow-sm",
                             ),
                       m.mine && m.id.startsWith("optimistic-") && "animate-scale-in",
@@ -2250,14 +2266,30 @@ export function ConversationRoom({
                                       sent to the client (media_width/media_height,
                                       migration 0045); this <img> just never used
                                       them. */}
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={att.url}
-                                    alt=""
-                                    width={att.width ?? undefined}
-                                    height={att.height ?? undefined}
-                                    className="max-h-80 w-full max-w-full object-cover"
-                                  />
+                                  {/*
+                                    🔴 SHOWN AT THE BUBBLE'S SIZE, AT ONCE (owner, 2026-10-23: "when opening a chat with
+                                    media, the media doesn't show at landing — it should show the thumbnail immediately").
+                                    The bubble drew the ORIGINAL file — a phone photo is several MB — so nothing painted
+                                    until all of it arrived. Now the optimiser serves a bubble-sized, compressed copy
+                                    (cached at the edge after the first view), eagerly; the stored thumbnail, when there
+                                    is one, sits under it from the first frame. Tapping still opens the original.
+                                  */}
+                                  {att.width && att.height ? (
+                                    <Image
+                                      src={att.url}
+                                      alt=""
+                                      width={att.width}
+                                      height={att.height}
+                                      sizes="(max-width: 640px) 80vw, 360px"
+                                      quality={70}
+                                      loading="eager"
+                                      style={att.thumbnailUrl ? { backgroundImage: `url("${att.thumbnailUrl}")`, backgroundSize: "cover" } : undefined}
+                                      className="max-h-80 w-full max-w-full bg-muted object-cover"
+                                    />
+                                  ) : (
+                                    // eslint-disable-next-line @next/next/no-img-element -- no stored size: the plain element keeps its old behaviour
+                                    <img src={att.url} alt="" decoding="async" className="max-h-80 w-full max-w-full object-cover" />
+                                  )}
                                 </button>
                                 {frameless && attIdx === m.attachments.length - 1 ? <MediaMetaScrim>{bubbleMeta}</MediaMetaScrim> : null}
                                 </span>
@@ -2440,7 +2472,7 @@ export function ConversationRoom({
                         : null}
                     </div>
                   ) : null}
-                </div>
+                </SwipeToReply>
 
                 {reactingId === m.id ? (
                   <div className="relative mt-1">
@@ -2705,6 +2737,8 @@ export function ConversationRoom({
               aria-label="Message"
               maxLength={2000}
               rows={1}
+              // the keyboard's return key reads as a line break, not Send — Enter adds a line here (2026-10-22)
+              enterKeyHint="enter"
               style={{ maxHeight: COMPOSER_MAX_HEIGHT }}
               className={cn(
                 "max-h-32 min-h-11 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2.5 text-base leading-snug outline-none placeholder:text-frenz-muted",

@@ -110,6 +110,9 @@ export const FRENZ_TOKENS: ColorToken[] = [
   { name: "frenz-card", light: "0 0% 100%", dark: "226 36% 10%", comment: "#FFFFFF" },
   { name: "frenz-line", light: "253 47% 94%", dark: "225 28% 16%", comment: "#ECE9F7" },
   { name: "frenz-fill", light: "250 25% 95%", dark: "224 30% 14%", comment: "#F1F0F6" },
+  // 2026-10-22, design/Chat.dc.html: the sent bubble's gradient end (135deg, #3D5AFE → #6A44EA) and the chat's lilac ground
+  { name: "frenz-bubble-end", light: "254 80% 59%", dark: "254 80% 59%", comment: "#6A44EA" },
+  { name: "frenz-chat", light: "249 37% 96%", dark: "229 55% 5%", comment: "#F3F2F9" },
 ];
 
 /** Radius + the shared motion language. `:root`-only (inherited by `.dark`). */

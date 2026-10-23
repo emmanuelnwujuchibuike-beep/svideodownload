@@ -10,6 +10,7 @@ import { itemsLabel, membershipChip, priceLine } from "@/features/sub/exclusive-
 import { firstPageIsReplay, type LinkBirth, mayAutoRefresh, refreshPreview } from "@/features/sub/feed-previews";
 import { cancelOpening, startOpening } from "@/features/sub/opened-cache";
 import { exQuiet } from "@/features/sub/ui";
+import { GuestLock } from "@/features/social/guest-chat";
 import { cn } from "@/lib/utils";
 import { profilePath } from "@/lib/social/profile-url";
 
@@ -110,7 +111,15 @@ const ago = (iso: string) => {
 const now = () => (typeof performance !== "undefined" ? performance.now() : 0);
 const born = (page: ExclusiveFeedPageView, receivedAt: number) => (p: Post): Shown => ({ ...p, birth: { issuedAt: page.issuedAt, receivedAt, ttl: page.previewTtl } });
 
-export function ExclusiveFeed({ initial = null }: { initial?: ExclusiveFeedPageView | null }) {
+/**
+ * `guest`: a SIGNED-OUT visitor (owner, 2026-10-22: "make anonymous users able to see the exclusive
+ * feed, not the contents, without interacting — any like or interaction shows a sign in modal").
+ * The page hands it the public first page (lib/sub/feed.ts publicExclusiveFeed: locked cards only —
+ * a public cover or a 20 px blur, never a file). Nothing is fetched from here (the member feed API
+ * answers 401 and would bounce to login), the subscriptions row is a member's, and every tap, key or
+ * focus inside is caught by GuestLock and opens the sign-in modal instead.
+ */
+export function ExclusiveFeed({ initial = null, guest = false }: { initial?: ExclusiveFeedPageView | null; guest?: boolean }) {
   const [posts, setPosts] = useState<Shown[]>(() => (initial ? initial.posts.map(born(initial, now())) : []));
   const [creators, setCreators] = useState<Record<string, Creator>>(() => initial?.creators ?? {});
   const [discover, setDiscover] = useState<ExclusiveFeedPageView["discover"]>(() => initial?.discover);
@@ -168,6 +177,8 @@ export function ExclusiveFeed({ initial = null }: { initial?: ExclusiveFeedPageV
   }, []);
 
   useEffect(() => {
+    // a guest's page is the server's public one, complete — there is no member feed to ask
+    if (guest) return;
     if (initial) {
       if (replayed.current === null) {
         replayed.current = firstPageIsReplay(initial.issuedAt, shownPages.has(initial.issuedAt));
@@ -181,7 +192,7 @@ export function ExclusiveFeed({ initial = null }: { initial?: ExclusiveFeedPageV
       // an aborted request must not leave the guard set: a remount (or StrictMode's second run) loads again
       busy.current = false;
     };
-  }, [load, initial]);
+  }, [load, initial, guest]);
 
   // the next page, a little before the end; never while one is loading or after an error (Retry asks again)
   useEffect(() => {
@@ -206,7 +217,7 @@ export function ExclusiveFeed({ initial = null }: { initial?: ExclusiveFeedPageV
 
   /*
     design/ExclusiveFeed.dc.html (owner, 2026-10-18): one stream. Posts from creators the viewer subscribes
-    to are the Feed's own post card (exclusive mode); a locked card from a creator they follow but don't
+    to are the Feed's own post card (exclusive mode); a locked card from any creator (2026-10-22: not only followed) they don't
     subscribe to sits after every third post (the rest after the last) — the old "From creators you follow"
     section is gone. A Mature post the viewer hasn't confirmed 18+ for keeps its age card.
   */
@@ -219,9 +230,19 @@ export function ExclusiveFeed({ initial = null }: { initial?: ExclusiveFeedPageV
   });
   while (li < lockedCards.length) stream.push({ kind: "locked", card: lockedCards[li++]! });
 
-  return (
+  const feed = (
     <div className="space-y-3">
-      <SubscriptionsRow creators={creators} posts={posts} hasDiscover={lockedCards.length > 0} />
+      {guest ? (
+        <div className="rounded-[20px] border border-frenz-line bg-frenz-card p-4 shadow-frenz-card">
+          <p className="m-0 font-heading text-[17px] font-bold">Exclusive posts from creators</p>
+          <p className="m-0 mt-1 text-[13px] leading-snug text-frenz-muted">Subscribe to a creator to unlock their posts. Sign in to subscribe, like and follow.</p>
+          <button type="button" className="mt-3 flex min-h-11 items-center rounded-full bg-frenz-gradient px-5 text-[15px] font-bold text-white">
+            Sign in
+          </button>
+        </div>
+      ) : (
+        <SubscriptionsRow creators={creators} posts={posts} hasDiscover={lockedCards.length > 0} />
+      )}
       {stream.length ? (
         <ul className="-mx-3 sm:-mx-4">
           {stream.map((entry) =>
@@ -241,7 +262,11 @@ export function ExclusiveFeed({ initial = null }: { initial?: ExclusiveFeedPageV
           )}
         </ul>
       ) : null}
-      {!posts.length ? <EmptyFeed subscribed={(subscriptions ?? 0) > 0} /> : null}
+      {guest ? (
+        lockedCards.length ? null : <p className="py-10 text-center text-[13.5px] text-frenz-muted">No exclusive posts to show yet.</p>
+      ) : !posts.length ? (
+        <EmptyFeed subscribed={(subscriptions ?? 0) > 0} />
+      ) : null}
 
       {next ? (
         <div ref={sentinel} className="flex justify-center py-2">
@@ -268,6 +293,14 @@ export function ExclusiveFeed({ initial = null }: { initial?: ExclusiveFeedPageV
         />
       ) : null}
     </div>
+  );
+
+  return guest ? (
+    <GuestLock next="/exclusive" title="Sign in to unlock Exclusive" body="Subscribe to creators, like and follow with a free Frenz account." icon={Lock}>
+      {feed}
+    </GuestLock>
+  ) : (
+    feed
   );
 }
 

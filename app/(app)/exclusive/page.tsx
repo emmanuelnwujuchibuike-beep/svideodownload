@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { FeedTabLinks } from "@/features/feed/feed-topbar-tabs";
 import { ExclusiveFeed, FeedSkeleton } from "@/features/sub/exclusive-feed";
-import { exclusiveFeed } from "@/lib/sub/feed";
+import { exclusiveFeed, publicExclusiveFeed } from "@/lib/sub/feed";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -12,8 +11,13 @@ export const metadata: Metadata = { title: "Exclusive", robots: { index: false, 
 
 /**
  * /exclusive — the Exclusive feed (Frenz Exclusive Part 3): posts from the creators the viewer
- * subscribes to, and locked previews to discover. Signed-in only; access is decided on the
- * server per request (lib/sub/feed.ts).
+ * subscribes to, and locked previews to discover. Access is decided on the server per request
+ * (lib/sub/feed.ts).
+ *
+ * 🔴 OPEN TO SIGNED-OUT VISITORS (owner, 2026-10-22: "make anonymous users able to see the exclusive
+ * feed, not the contents, through the exclusive feed button on the landing page"). They get the
+ * public page — locked cards only, never a file — and every interaction asks them to sign in
+ * (ExclusiveFeed `guest`). This used to redirect them to /login.
  *
  * Part 15: the FIRST page is rendered here, for this viewer, by the same function /api/sub/feed
  * runs — streamed in behind the header (Suspense), so there is no client round trip before the
@@ -26,7 +30,6 @@ export default async function ExclusiveRoute() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login?next=/exclusive");
   return (
     <div className="w-full flex-1 bg-frenz-page">
       <div className="mx-auto w-full max-w-xl flex-1 px-3 sm:px-4" style={{ paddingBottom: "calc(var(--frenz-bottom-nav) + 1rem)" }}>
@@ -34,11 +37,15 @@ export default async function ExclusiveRoute() {
         <h1 className="sr-only">Exclusive</h1>
         <FeedTabLinks />
         <Suspense fallback={<FeedSkeleton />}>
-          <FirstPage viewerId={user.id} />
+          {user ? <FirstPage viewerId={user.id} /> : <GuestPage />}
         </Suspense>
       </div>
     </div>
   );
+}
+
+async function GuestPage() {
+  return <ExclusiveFeed initial={await publicExclusiveFeed()} guest />;
 }
 
 async function FirstPage({ viewerId }: { viewerId: string }) {

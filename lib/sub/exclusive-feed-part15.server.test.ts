@@ -135,6 +135,24 @@ describe("first page: discover alongside the feed, one block-list read", () => {
     expect(count("follows")).toBe(0);
   });
 
+  it("🔴 2026-10-22: EVERY creator taking subscriptions is offered — following them is not required", async () => {
+    // the viewer follows nobody now
+    db.tables.follows = [];
+    const out = await feed.discover(VIEWER, new Set([C.active]));
+    const creators = new Set(out.cards.map((c) => c.creatorId));
+    expect(creators.has(C.discover)).toBe(true);
+    // teeth: still never one the viewer subscribes to, one who blocked them, or the viewer themselves
+    expect(creators.has(C.active)).toBe(false);
+    expect(creators.has(C.blocksMe)).toBe(false);
+    expect(creators.has(VIEWER)).toBe(false);
+  });
+
+  it("several locked posts of one creator, not one card each", async () => {
+    db.tables.sub_posts!.push({ id: U(120), creator_id: C.discover, caption: "two", cover_url: null, status: "published", audience: "locked", created_at: "2026-10-16T10:00:00.000000+00:00" });
+    const out = await feed.discover(VIEWER, new Set([C.active]));
+    expect(out.cards.filter((c) => c.creatorId === C.discover).length).toBe(2);
+  });
+
   it("teeth: discover on its own (no block list handed over) still reads it itself", async () => {
     await feed.discover(VIEWER, new Set([C.active]));
     expect(count("blocks")).toBe(1);
@@ -144,15 +162,18 @@ describe("first page: discover alongside the feed, one block-list read", () => {
     delayMs = 25;
     const out = await feed.exclusiveFeed(VIEWER);
     if (!out.ok) throw new Error("feed failed");
-    const follows = reads.find((r) => r.table === "follows")!;
+    // 2026-10-22: discover no longer reads the viewer's follows (it offers every creator taking subscriptions),
+    // so its first round is the creators' subscription settings, its second their locked posts
     const feedPosts = reads.filter((r) => r.table === "sub_posts")[0]!;
     const settings = reads.find((r) => r.table === "creator_membership_settings")!;
+    const discoverPosts = reads.filter((r) => r.table === "sub_posts")[1]!;
     const feedMedia = reads.filter((r) => r.table === "sub_post_media")[0]!;
+    expect(reads.find((r) => r.table === "follows")).toBeUndefined();
     // discover's first read began before the feed's post read had even finished …
-    expect(follows.start).toBeLessThan(feedPosts.end);
+    expect(settings.start).toBeLessThan(feedPosts.end);
     // … and its SECOND round began before the feed's last read ended. Ordering, not durations (Part 16:
     // a wall-clock bound here failed under a loaded parallel run); run one after the other, impossible.
-    expect(settings.start).toBeLessThan(feedMedia.end);
+    expect(discoverPosts.start).toBeLessThan(feedMedia.end);
   });
 
   it("same result as discover computed the old way: same cards, order, exclusions and prices", async () => {
@@ -301,11 +322,23 @@ describe("the server-rendered first page", () => {
 
   it("is per-user and dynamic: signs in on the server, renders exclusiveFeed for THAT user, caches nothing", () => {
     expect(page).toContain('export const dynamic = "force-dynamic"');
-    expect(page).toMatch(/redirect\("\/login\?next=\/exclusive"\)/);
-    expect(page).toMatch(/<FirstPage viewerId=\{user\.id\} \/>/);
+    // 2026-10-22: a signed-out visitor gets the PUBLIC page in guest mode instead of a redirect to /login
+    expect(page).not.toMatch(/redirect\("\/login\?next=\/exclusive"\)/);
+    expect(page).toMatch(/\{user \? <FirstPage viewerId=\{user\.id\} \/> : <GuestPage \/>\}/);
+    expect(page).toMatch(/<ExclusiveFeed initial=\{await publicExclusiveFeed\(\)\} guest \/>/);
     expect(page).toMatch(/exclusiveFeed\(viewerId, null\)/);
     expect(page).toMatch(/<Suspense fallback=\{<FeedSkeleton \/>\}>/);
     expect(cachesSomething(page)).toBe(false);
+  });
+
+  it("🔴 the signed-out page signs NO media link — locked cards only (public cover / 20 px blur)", () => {
+    const lib = readFileSync(join(process.cwd(), "lib/sub/feed.ts"), "utf8");
+    const fn = lib.slice(lib.indexOf("export async function publicExclusiveFeed"), lib.indexOf("export async function feedPreviews"));
+    expect(fn).toContain("discover(null, new Set())");
+    expect(fn).toContain("posts: []");
+    expect(fn).not.toMatch(/presign|mediaOf|exclusiveFeed\(/);
+    // and a visitor (no viewer) is never shown a Mature cover
+    expect(lib).toContain("(viewerId ? isAdult(viewerId).catch(() => false) : Promise.resolve(false))");
   });
 
   it("teeth: a cached variant is caught", () => {

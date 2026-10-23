@@ -107,7 +107,20 @@ export function GuestSignInModal({
  * reaches a control and opens the sign-in modal instead. The modal sits OUTSIDE the
  * locked box, so its own buttons work (React events bubble through portals).
  */
-export function GuestLock({ children, next }: { children: React.ReactNode; next: string }) {
+export function GuestLock({
+  children,
+  next,
+  title = "Sign in to see your friends",
+  body = "Add friends, see requests and chat with a free Frenz account.",
+  icon = Users,
+}: {
+  children: React.ReactNode;
+  next: string;
+  /** The modal's words — the Friends page's by default; the Exclusive feed passes its own (2026-10-22). */
+  title?: string;
+  body?: string;
+  icon?: LucideIcon;
+}) {
   const [ask, setAsk] = useState(false);
   const stop = (e: React.SyntheticEvent) => {
     e.preventDefault();
@@ -132,7 +145,7 @@ export function GuestLock({ children, next }: { children: React.ReactNode; next:
       >
         {children}
       </div>
-      <GuestSignInModal open={ask} onClose={() => setAsk(false)} next={next} title="Sign in to see your friends" body="Add friends, see requests and chat with a free Frenz account." icon={Users} />
+      <GuestSignInModal open={ask} onClose={() => setAsk(false)} next={next} title={title} body={body} icon={icon} />
     </>
   );
 }

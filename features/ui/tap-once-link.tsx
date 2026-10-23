@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ComponentProps } from "react";
+import { createPortal } from "react-dom";
 
 /**
  * A link that goes ONCE (owner, 2026-10-07: "when I click on the earn button
@@ -30,8 +31,16 @@ export function TapOnceLink({
   children,
   spinner = true,
   warmOnIdle = false,
+  stripe = false,
   ...rest
 }: ComponentProps<typeof Link> & {
+  /**
+   * Show the loading stripe across the top of the screen from the tap until the next page takes
+   * over (owner, 2026-10-22: "the stripe loader should assist when there's a bad network"). For a
+   * door whose page is not yet prefetched on a slow connection, the stripe is the proof the tap
+   * landed. It outlives the 4 s re-tap guard (a bad network can take longer) and gives up at 15 s.
+   */
+  stripe?: boolean;
   href: string;
   /** false for an icon-only circle: the spinner would push the icon off-centre, so its `data-pending` style shows the press instead. */
   spinner?: boolean;
@@ -46,6 +55,7 @@ export function TapOnceLink({
   const pending = useRef(false);
   const [busy, setBusy] = useState(false);
   const timer = useRef<number | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(
     () => () => {
@@ -53,6 +63,11 @@ export function TapOnceLink({
     },
     [],
   );
+  useEffect(() => {
+    if (!loading) return;
+    const t = window.setTimeout(() => setLoading(false), 15_000);
+    return () => window.clearTimeout(t);
+  }, [loading]);
 
   const warm = () => {
     try {
@@ -97,6 +112,8 @@ export function TapOnceLink({
         }
         pending.current = true;
         setBusy(true);
+        // a new-tab / modified click navigates nothing here, so it shows no stripe
+        if (stripe && !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) setLoading(true);
         timer.current = window.setTimeout(() => {
           pending.current = false;
           setBusy(false);
@@ -106,6 +123,17 @@ export function TapOnceLink({
     >
       {children}
       {busy && spinner ? <span aria-hidden className="ml-1 inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent motion-reduce:animate-none" /> : null}
+      {loading && typeof document !== "undefined"
+        ? createPortal(
+            <div className="pointer-events-none fixed inset-x-0 top-0 z-[100]" style={{ paddingTop: "var(--frenz-safe-top, 0px)" }}>
+              {/* page-loader.tsx's LoadingStripe, drawn here so this link (on the landing) never pulls that module in */}
+              <div role="status" aria-label="Loading" className="w-full overflow-hidden bg-primary/10" style={{ height: "2px" }}>
+                <div className="frenz-loader-bar h-full w-2/5 bg-gradient-to-r from-blue-500 via-violet-500 to-fuchsia-500" />
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </Link>
   );
 }

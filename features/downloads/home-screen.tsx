@@ -241,21 +241,27 @@ export function HomeTools({ aiPromo, rotateUrls }: { aiPromo: AiPromo | null; ro
           <span className="relative text-[13px] leading-snug text-white/85">HD wallpapers for your screen</span>
         </Link>
         <ToolCard href="/quests" warm icon={<CoinIcon size={18} />} title="Earn" sub="Turn activity into rewards" />
-        <ToolCard href="/exclusive" icon={<LockIcon size={18} />} title="Exclusive" sub="Posts from creators you subscribe to." />
+        {/*
+          Exclusive (owner, 2026-10-22): open to signed-out visitors too, so its route is warmed once the page is
+          idle (a tap swaps straight to the feed's stripe + skeleton) and a slow network shows the stripe from the tap.
+        */}
+        <ToolCard href="/exclusive" warm stripe icon={<LockIcon size={18} />} title="Exclusive" sub="Posts from creators you subscribe to." />
       </div>
       <RowCard href="/explore" icon={<CompassIcon size={22} />} title="Explore" sub="Discover trending content" className="mt-3" />
     </section>
   );
 }
 
-function ToolCard({ href, icon, title, sub, warm = false }: { href: string; icon: ReactNode; title: string; sub: string; warm?: boolean }) {
+function ToolCard({ href, icon, title, sub, warm = false, stripe = false }: { href: string; icon: ReactNode; title: string; sub: string; warm?: boolean; stripe?: boolean }) {
   return (
     <TapOnceLink
       href={href}
       prefetch={false}
       spinner={false}
       warmOnIdle={warm}
-      className="flex min-h-[104px] flex-col justify-between gap-2 rounded-[22px] border border-frenz-line bg-frenz-card p-3.5 text-frenz-ink no-underline shadow-frenz-card transition active:scale-[0.98] data-[pending]:opacity-70"
+      stripe={stripe}
+      // the press shows on touch-down (active) with no double-tap-zoom wait (touch-manipulation): instant (owner, 2026-10-22)
+      className="flex min-h-[104px] touch-manipulation flex-col justify-between gap-2 rounded-[22px] border border-frenz-line bg-frenz-card p-3.5 text-frenz-ink no-underline shadow-frenz-card transition active:scale-[0.98] data-[pending]:opacity-70"
     >
       <span aria-hidden className="flex h-[34px] w-[34px] items-center justify-center rounded-[11px] bg-frenz-violet/10 text-frenz-violet">
         {icon}

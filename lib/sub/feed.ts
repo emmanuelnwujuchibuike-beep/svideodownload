@@ -63,8 +63,17 @@ const MISSING = (m: string) => /schema cache|does not exist|column/i.test(m);
 export const FEED_PAGE = 12;
 /** at most this many subscribed creators feed one page (an `in (…)` list must fit in a request URL) */
 export const FEED_MAX_CREATORS = 150;
-const DISCOVER_FOLLOWS = 200;
-const DISCOVER_CARDS = 8;
+/*
+  🔴 EVERYBODY'S EXCLUSIVE POSTS (owner, 2026-10-22: "Exclusive feed doesn't show all posts from all users, it
+  only shows the people you follow or subscribe to — it should show everybody's exclusive, and the posts of
+  people you're not subscribed to should be blurred"). Discover used to offer ONE locked card per creator the
+  viewer FOLLOWS, at most 8. It now draws the newest locked posts of EVERY creator taking subscriptions (not
+  the viewer, not blocked either way, not already subscribed — their posts are the feed proper), several per
+  creator, up to DISCOVER_CARDS. Still locked cards only: the public cover or the 20 px blur, never a file.
+*/
+const DISCOVER_CARDS = 40;
+/** How many creators taking subscriptions discover draws from. */
+const DISCOVER_PUBLIC_CREATORS = 200;
 export const SIGNED_TTL_SECONDS = 300;
 /**
  * Step 13 (ExclusiveFeed.dc.html, owner 2026-10-18: subscribed posts "play normally" in the feed): the
@@ -315,6 +324,18 @@ export async function exclusiveFeed(viewerId: string, cursor?: string | null): P
 }
 
 /**
+ * The Exclusive feed for a SIGNED-OUT visitor (owner, 2026-10-22: "make anonymous users able to see
+ * the exclusive feed, not the contents"). No subscriptions, so no posts and no signed links at all —
+ * only the discover cards (public cover / 20 px blur, prices from the same numbers checkout uses).
+ * Every action on the page asks them to sign in (features/sub/exclusive-feed.tsx `guest`).
+ */
+export async function publicExclusiveFeed(): Promise<ExclusiveFeedPage> {
+  const issuedAt = Date.now();
+  const found = await discover(null, new Set()).catch(() => ({ cards: [], creators: {} }));
+  return { posts: [], creators: {}, next: null, subscriptions: 0, ready: true, issuedAt, previewTtl: SIGNED_TTL_SECONDS, discover: found };
+}
+
+/**
  * Fresh preview links for feed tiles whose links ran out (Part 15). The ids come from the
  * browser, so they prove nothing: access is decided again exactly as for a feed page (active
  * paid membership, blocks both ways, suspended/hidden accounts, published posts only). A post
@@ -354,28 +375,35 @@ export async function feedPreviews(viewerId: string, ids: unknown): Promise<({ o
  * latest LOCKED post each, with the server's current price. Hidden posts are excluded in the
  * query. Nothing here starts or settles a purchase — the card's button goes to /api/sub/checkout.
  */
-export async function discover(viewerId: string, subscribed: Set<string>, knownBlocked?: Set<string> | null): Promise<{ cards: DiscoverCard[]; creators: Record<string, DiscoverCreator> }> {
+/**
+ * `viewerId: null` is a SIGNED-OUT visitor (2026-10-22, the landing's Exclusive button): they follow
+ * nobody and block nobody, so the candidates are every creator taking subscriptions — the newest
+ * locked posts across them win the cards. Nothing more is exposed than to a signed-in non-subscriber:
+ * the creator's public cover and the 20 px blur, never a file; a Mature cover is withheld (a visitor
+ * has confirmed no age).
+ */
+export async function discover(viewerId: string | null, subscribed: Set<string>, knownBlocked?: Set<string> | null): Promise<{ cards: DiscoverCard[]; creators: Record<string, DiscoverCreator> }> {
   const empty = { cards: [], creators: {} };
   // the feed already read the block list (null = that read failed → nothing to discover, as before)
   if (knownBlocked === null) return empty;
   const db = createAdminClient();
   // the settings, the follows and (only when not handed over) the block list, together
-  const [cfg, follows, blocks] = await Promise.all([
+  const [cfg, blocks] = await Promise.all([
     subConfig(),
-    db.from("follows").select("following_id").eq("follower_id", viewerId).limit(DISCOVER_FOLLOWS),
-    knownBlocked ? null : db.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`).limit(5000),
+    viewerId && !knownBlocked ? db.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`).limit(5000) : null,
   ]);
   if (!cfg.purchasesEnabled) return empty;
-  if (follows.error || blocks?.error) return empty;
+  if (blocks?.error) return empty;
   const blocked = knownBlocked ?? new Set(((blocks?.data ?? []) as Row[]).map((b) => (b.blocker_id === viewerId ? b.blocked_id : b.blocker_id) as string));
-  const candidates = ((follows.data ?? []) as Row[]).map((f) => f.following_id as string).filter((id) => id !== viewerId && !subscribed.has(id) && !blocked.has(id));
-  if (!candidates.length) return empty;
-  // only creators taking subscriptions right now, at a price inside the admin's bounds
-  const { data: settings } = await db.from("creator_membership_settings").select("creator_id, sub_price_cents").in("creator_id", candidates).eq("sub_active", true).not("sub_price_cents", "is", null);
+  // every creator taking subscriptions right now, at a price inside the admin's bounds — not only the ones followed
+  const { data: settings } = await db.from("creator_membership_settings").select("creator_id, sub_price_cents").eq("sub_active", true).not("sub_price_cents", "is", null).limit(DISCOVER_PUBLIC_CREATORS);
   const price = new Map<string, number>();
   for (const s of (settings ?? []) as Row[]) {
+    const id = s.creator_id as string;
+    // never the viewer's own posts, a creator blocked either way, or one already subscribed (their posts are the feed proper)
+    if (id === viewerId || subscribed.has(id) || blocked.has(id)) continue;
     const p = Number(s.sub_price_cents);
-    if (Number.isInteger(p) && p >= cfg.minPriceCents && p <= cfg.maxPriceCents) price.set(s.creator_id as string, p);
+    if (Number.isInteger(p) && p >= cfg.minPriceCents && p <= cfg.maxPriceCents) price.set(id, p);
   }
   const live = [...price.keys()];
   if (!live.length) return empty;
@@ -383,7 +411,7 @@ export async function discover(viewerId: string, subscribed: Set<string>, knownB
     creatorsById(live),
     // LOCKED only: a hidden post of a creator the viewer does not subscribe to never leaves the database
     (async () => {
-      const q = (cols: string) => db.from("sub_posts").select(cols).in("creator_id", live).eq("status", "published").eq("audience", "locked").order("created_at", { ascending: false }).order("id", { ascending: false }).limit(DISCOVER_CARDS * 4);
+      const q = (cols: string) => db.from("sub_posts").select(cols).in("creator_id", live).eq("status", "published").eq("audience", "locked").order("created_at", { ascending: false }).order("id", { ascending: false }).limit(DISCOVER_CARDS * 2);
       const r = await q("id, creator_id, cover_url, created_at, mature");
       // before 0261 there is no Mature column — the same read without it (the audience filter stays)
       return r.error && MISSING(r.error.message) && /mature/.test(r.error.message) ? q("id, creator_id, cover_url, created_at") : r;
@@ -391,16 +419,11 @@ export async function discover(viewerId: string, subscribed: Set<string>, knownB
   ]);
   // before 0248 (no audience column) discover stays empty rather than risk anything
   if (postsR.error) return empty;
-  const seen = new Set<string>();
-  const latest = ((postsR.data ?? []) as unknown as Row[]).filter((r) => {
-    const id = r.creator_id as string;
-    if (seen.has(id) || !people.has(id)) return false;
-    seen.add(id);
-    return true;
-  }).slice(0, DISCOVER_CARDS);
+  // the newest locked posts across them — several per creator now, not one — of visible accounts only
+  const latest = ((postsR.data ?? []) as unknown as Row[]).filter((r) => people.has(r.creator_id as string)).slice(0, DISCOVER_CARDS);
   const [media, adult, blurs] = await Promise.all([
     mediaOf(latest.map((r) => r.id as string), false),
-    latest.some((r) => r.mature === true) ? isAdult(viewerId).catch(() => false) : Promise.resolve(true),
+    latest.some((r) => r.mature === true) ? (viewerId ? isAdult(viewerId).catch(() => false) : Promise.resolve(false)) : Promise.resolve(true),
     readBlurPreviews(latest.map((r) => r.id as string)).catch(() => new Map<string, string>()),
   ]);
   const totals = new Map<string, number | null>(

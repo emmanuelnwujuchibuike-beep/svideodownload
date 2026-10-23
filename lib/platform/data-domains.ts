@@ -330,7 +330,7 @@ export const DATA_DOMAINS: DataDomain[] = [
     owner: "lib/notify, features/feedback",
     description:
       "App ratings, asked after two successful downloads and again no sooner than a fortnight later. Guests can rate — the downloader needs no account, so requiring one would collect feedback only from the least representative group — which is why the row carries a nullable user_id alongside the analytics visitor id.",
-    tables: ["app_ratings"],
+    tables: ["app_ratings", "app_bans"],
     storage: ["relational"],
   },
   {
@@ -356,7 +356,7 @@ export const DATA_DOMAINS: DataDomain[] = [
     owner: "lib/social/verification",
     description:
       "Blue-tick applications: the identity check, its decision and an append-only audit trail. Document images live in the PRIVATE verification-docs bucket and are only ever reached through short-lived signed URLs.",
-    tables: ["verification_requests", "verification_events"],
+    tables: ["verification_requests", "verification_events", "verification_purchases"],
     storage: ["relational", "object"],
   },
   {

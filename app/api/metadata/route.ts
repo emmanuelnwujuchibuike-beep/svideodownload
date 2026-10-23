@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { browserCorsHeaders, isBrowserDirectCall, trustedClientIp } from "@/lib/downloads/browser-direct";
+import { browserCorsHeaders, isBrowserDirectCall, trustedClientIp, userIdFromAccessToken } from "@/lib/downloads/browser-direct";
 import { getMetadata } from "@/server/extractors";
 import { ContentUnavailableError } from "@/server/extractors/types";
 import { LINK_NOT_SERVABLE_MESSAGE } from "@/lib/downloads/failure-copy";
+import { isBanned, requestIp } from "@/lib/security/app-bans";
+import { BANNED_CODE, BANNED_MESSAGE } from "@/lib/security/ban-copy";
 import { detectPlatform } from "@/lib/platforms";
 import { metadataLimiter, clientId } from "@/lib/rate-limit";
 import { parseTelegramUrl, telegramMtprotoConfigured } from "@/server/services/telegram-mtproto";
@@ -70,6 +72,19 @@ async function handle(request: Request, browser: boolean): Promise<Response> {
       "INVALID_URL",
       400,
     );
+  }
+
+  /*
+    🔴 A BANNED RATER CANNOT FETCH (0267, owner 2026-10-22). Checked before ANY work — the proxy hop,
+    the extractor — against the in-memory ban index (no database trip; fails open). The account, the
+    device id, the fingerprint, or this network address together with this browser.
+  */
+  {
+    const { d, f, t } = parsed.data;
+    const userId = t ? await userIdFromAccessToken(t).catch(() => null) : null;
+    if (await isBanned({ userId, deviceId: d ?? null, fingerprint: f ?? null, ip: requestIp(request.headers), userAgent: request.headers.get("user-agent") })) {
+      return fail(BANNED_MESSAGE, BANNED_CODE, 403);
+    }
   }
 
   // Frontend role: the worker has yt-dlp for fallback extraction.

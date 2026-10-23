@@ -1,3 +1,4 @@
+import { deviceSignals } from "@/lib/security/device-signals";
 import { getClient } from "@/lib/supabase/client-lazy";
 
 /**
@@ -48,21 +49,33 @@ export function isOldWorkerRefusal(res: Response): boolean {
   return res.status === 403 && !(res.headers.get("access-control-allow-origin") ?? "");
 }
 
-function sameOriginMetadata(url: string, signal?: AbortSignal): Promise<Response> {
-  return fetch("/api/metadata", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }), signal });
+function sameOriginMetadata(body: string, signal?: AbortSignal): Promise<Response> {
+  return fetch("/api/metadata", { method: "POST", headers: { "Content-Type": "application/json" }, body, signal });
+}
+
+/**
+ * The fetch body: the link, and who is asking — the device id, its fingerprint and (signed in) the
+ * access token — for the ban check (0267, app/api/metadata). In the BODY: the direct worker call
+ * carries no cookies, and a custom header would cost a CORS preflight. Never blocks the fetch: a
+ * signal that cannot be read is simply left out.
+ */
+async function metadataBody(url: string): Promise<string> {
+  const [sig, token] = await Promise.all([deviceSignals().catch(() => null), accessToken()]);
+  return JSON.stringify({ url, ...(sig?.deviceId ? { d: sig.deviceId } : {}), ...(sig?.fingerprint ? { f: sig.fingerprint } : {}), ...(token ? { t: token } : {}) });
 }
 
 /** POST /api/metadata — the preview. Same JSON answer as the old same-origin route. */
 export async function postMetadata(url: string, signal?: AbortSignal): Promise<Response> {
-  if (!workerDirectEnabled()) return sameOriginMetadata(url, signal);
+  const body = await metadataBody(url);
+  if (!workerDirectEnabled()) return sameOriginMetadata(body, signal);
   try {
-    const res = await fetch(`${DOWNLOAD_ORIGIN}/api/metadata`, { method: "POST", headers: SIMPLE, body: JSON.stringify({ url }), signal, mode: "cors", credentials: "omit" });
-    return isOldWorkerRefusal(res) ? sameOriginMetadata(url, signal) : res;
+    const res = await fetch(`${DOWNLOAD_ORIGIN}/api/metadata`, { method: "POST", headers: SIMPLE, body, signal, mode: "cors", credentials: "omit" });
+    return isOldWorkerRefusal(res) ? sameOriginMetadata(body, signal) : res;
   } catch (e) {
     if (signal?.aborted) throw e;
     // An old worker's 403 carries no CORS header, so the browser reports it as a
     // network error, not a 403 — the same compatibility door applies.
-    return sameOriginMetadata(url, signal);
+    return sameOriginMetadata(body, signal);
   }
 }
 

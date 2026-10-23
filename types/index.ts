@@ -255,6 +255,8 @@ export interface ApiError {
     | "FILE_TOO_LARGE"
     | "TIMEOUT"
     | "INTERNAL"
+    // 0267: an admin banned this rater (account or device) — lib/security/ban-copy.ts
+    | "BANNED"
     // Reward-session / download-authorization errors — see
     // lib/monetization/reward-sessions.ts's RewardErrorCode (same set).
     | "REWARD_SESSION_EXPIRED"

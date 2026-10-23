@@ -60,6 +60,14 @@ export const sourceUrlSchema = z
 
 export const metadataRequestSchema = z.object({
   url: sourceUrlSchema,
+  /*
+    0267 (2026-10-22): who is asking, for the ban check (lib/security/app-bans.ts). All optional — an
+    older page sends none and is still served. Sent in the BODY because a browser-direct call to the
+    worker carries no cookies and no custom headers (a custom header would cost a CORS preflight).
+  */
+  d: z.string().trim().max(64).optional(),
+  f: z.string().trim().max(128).optional(),
+  t: z.string().max(4096).optional(),
 });
 
 export const downloadRequestSchema = z.object({

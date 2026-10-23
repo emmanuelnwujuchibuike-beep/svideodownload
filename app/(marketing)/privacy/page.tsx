@@ -60,6 +60,15 @@ export default function PrivacyPage() {
           abuse prevention.
         </li>
         <li>
+          <strong>App ratings and abuse protection.</strong> When you rate the
+          app we keep, with your rating, the IP address and browser it came
+          from, a random device ID stored in your browser, and basic device
+          details (such as device model, screen, time zone, languages and a
+          fingerprint derived from them). We use these only to review ratings
+          and to enforce bans against abuse, and include the device ID and
+          fingerprint when you fetch a link so a ban can be applied.
+        </li>
+        <li>
           <strong>Local preferences.</strong> Your theme choice and download
           history are stored in your browser&apos;s local storage — on your
           device, not our servers.

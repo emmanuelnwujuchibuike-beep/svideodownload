@@ -130,6 +130,12 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   { method: "DELETE", path: "/api/sub/posts/[id]/comments", auth: "session", category: "subscriptions", description: "Delete your own comment, or any comment on your own post." },
   { method: "POST", path: "/api/sub/posts/[id]/capture", auth: "session", category: "subscriptions", description: "Report a screenshot shortcut seen while an exclusive post was open." },
   { method: "GET", path: "/api/admin/moderation/sub-review", auth: "admin", category: "subscriptions", description: "Admin review of a reported exclusive post or comment: five-minute links, audited." },
+  { method: "POST", path: "/api/verification/paid", auth: "session", category: "account", description: "0268: open (or reuse) a Paystack checkout for the blue tick at the admin's price." },
+  { method: "POST", path: "/api/verification/paid/confirm", auth: "session", category: "account", description: "0268: settle the member's own verification checkout from Paystack's verified charge (the return page)." },
+  { method: "GET", path: "/api/admin/verification/paid-settings", auth: "admin", category: "account", description: "0268: the paid-verification switch, price and period." },
+  { method: "POST", path: "/api/admin/verification/paid-settings", auth: "admin", category: "account", description: "0268: save the paid-verification switch, price and period (clamped)." },
+  { method: "POST", path: "/api/admin/ratings/ban", auth: "admin", category: "security", description: "0267: ban the person behind an app rating — account (suspended, audited) and every device identifier the rating carried; the fetch route then refuses them." },
+  { method: "DELETE", path: "/api/admin/ratings/ban", auth: "admin", category: "security", description: "0267: lift a rating ban (and the account suspension it made)." },
 ];
 
 export function getApiEndpoints(): ApiEndpoint[] {

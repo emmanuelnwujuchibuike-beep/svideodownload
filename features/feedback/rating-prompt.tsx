@@ -4,6 +4,7 @@ import { Star, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { getCompletedCount, getDailySingleDownloadCount, onDownloadCompleted } from "@/features/downloads/manager";
+import { deviceSignals } from "@/lib/security/device-signals";
 import { cn } from "@/lib/utils";
 
 /**
@@ -177,6 +178,8 @@ export function RatingPrompt({ surface = "downloads" }: { surface?: "landing" | 
       // they answer, and a network failure must not mean being asked again.
       remember("rated");
       try {
+        // who is rating (0267): the admin sees it, and a ban made from it holds for a guest too
+        const sig = await deviceSignals().catch(() => null);
         await fetch("/api/ratings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -186,6 +189,9 @@ export function RatingPrompt({ surface = "downloads" }: { surface?: "landing" | 
             downloads: getCompletedCount(),
             surface,
             visitorId: visitorId(),
+            ...(sig?.deviceId ? { deviceId: sig.deviceId } : {}),
+            ...(sig?.fingerprint ? { fingerprint: sig.fingerprint } : {}),
+            ...(sig ? { device: sig.details } : {}),
           }),
         });
       } catch {

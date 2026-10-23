@@ -1,6 +1,7 @@
 import { Star } from "lucide-react";
 import Link from "next/link";
 
+import { RatingBanButton } from "@/features/admin/rating-ban-button";
 import { alertsEnabled } from "@/lib/notify";
 import { getRatings } from "@/lib/social/ratings";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,45 @@ import { profilePath } from "@/lib/social/profile-url";
  * different fixes, and an operator staring at a blank panel should not have to
  * guess which one they are looking at.
  */
+/** Everything recorded about who left a rating — a native disclosure, no client script. */
+function WhoRated({ r }: { r: Awaited<ReturnType<typeof getRatings>>["rows"][number] }) {
+  const d = (r.device ?? {}) as Record<string, unknown>;
+  const val = (v: unknown) => (v == null || v === "" ? null : Array.isArray(v) ? v.join(", ") : String(v));
+  const rows: [string, string | null][] = [
+    ["Account", r.userId ? `${r.displayName ?? ""} @${r.handle ?? "?"} · ${r.userId}` : "Guest (not signed in)"],
+    ["Network address", r.ip],
+    ["Browser", r.userAgent],
+    ["Device", [val(d.model), val(d.platform), val(d.platformVersion)].filter(Boolean).join(" · ") || null],
+    ["Screen", [val(d.screen), d.pixelRatio != null ? `${val(d.pixelRatio)}x` : null, d.colorDepth != null ? `${val(d.colorDepth)}-bit` : null].filter(Boolean).join(" · ") || null],
+    ["Graphics", val(d.gpu)],
+    ["CPU / memory", [d.cores != null ? `${val(d.cores)} cores` : null, d.memoryGb != null ? `${val(d.memoryGb)} GB` : null].filter(Boolean).join(" · ") || null],
+    ["Touch points", val(d.touchPoints)],
+    ["Time zone", val(d.timeZone)],
+    ["Languages", val(d.languages)],
+    ["Installed app", d.standalone === true ? "yes" : d.standalone === false ? "no (browser)" : null],
+    ["Device id", r.deviceId],
+    ["Fingerprint", r.fingerprint],
+  ];
+  const known = rows.filter(([, v]) => !!v);
+  return (
+    <details className="mt-2 rounded-xl bg-muted/40 px-3 py-2 text-[12px]">
+      <summary className="cursor-pointer select-none font-semibold text-muted-foreground">Who rated</summary>
+      {known.length > 1 ? (
+        <dl className="mt-2 grid grid-cols-[8.5rem_1fr] gap-x-3 gap-y-1">
+          {known.map(([k, v]) => (
+            <div key={k} className="contents">
+              <dt className="text-muted-foreground">{k}</dt>
+              <dd className="m-0 break-all font-mono text-[11.5px]">{v}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="m-0 mt-2 text-muted-foreground">Left before device details were recorded (migration 0267) — only the account, if any, is known.</p>
+      )}
+    </details>
+  );
+}
+
 export async function RatingsSection() {
   const { rows, total, average, distribution, unavailable } = await getRatings();
   // Answers "why haven't I had any rating emails?" without a log dive.
@@ -107,6 +147,11 @@ export async function RatingsSection() {
                 </span>
               </div>
               {r.comment ? <p className="mt-1.5 text-sm leading-relaxed">{r.comment}</p> : null}
+              {/* 0267 (owner 2026-10-22): who rated — every detail the rating carried — and the ban control */}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <RatingBanButton ratingId={r.id} banned={r.banned} signedIn={!!r.userId} />
+              </div>
+              <WhoRated r={r} />
             </li>
           ))}
         </ul>

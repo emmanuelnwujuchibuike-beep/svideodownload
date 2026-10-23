@@ -22,6 +22,14 @@ export interface RatingRow {
   userId: string | null;
   handle: string | null;
   displayName: string | null;
+  /** 0267 — who rated, for the admin: the device's abuse-protection id, its fingerprint, the network address and browser, and the device traits. */
+  deviceId: string | null;
+  fingerprint: string | null;
+  ip: string | null;
+  userAgent: string | null;
+  device: Record<string, unknown> | null;
+  /** An active ban made from this rating. */
+  banned: boolean;
 }
 
 export interface RatingsSummary {
@@ -46,11 +54,11 @@ export async function getRatings(limit = 100): Promise<RatingsSummary> {
   if (!hasSupabase) return EMPTY;
   try {
     const db = createAdminClient();
-    const { data, error } = await db
-      .from("app_ratings")
-      .select("id, user_id, rating, comment, downloads, surface, created_at")
-      .order("created_at", { ascending: false })
-      .limit(limit);
+    // 0267's columns first; before it is applied the same read without them, so the panel never goes blank
+    const BASE = "id, user_id, rating, comment, downloads, surface, created_at";
+    let res = await db.from("app_ratings").select(`${BASE}, device_id, fingerprint, ip, user_agent, device`).order("created_at", { ascending: false }).limit(limit);
+    if (res.error) res = (await db.from("app_ratings").select(BASE).order("created_at", { ascending: false }).limit(limit)) as typeof res;
+    const { data, error } = res;
     if (error) return EMPTY;
 
     const raw = (data ?? []) as {
@@ -61,7 +69,19 @@ export async function getRatings(limit = 100): Promise<RatingsSummary> {
       downloads: number | null;
       surface: string | null;
       created_at: string;
+      device_id?: string | null;
+      fingerprint?: string | null;
+      ip?: string | null;
+      user_agent?: string | null;
+      device?: Record<string, unknown> | null;
     }[];
+
+    // which of these ratings carry an active ban (0267; an unapplied migration simply means none)
+    const bannedIds = new Set<string>();
+    if (raw.length) {
+      const { data: bans } = await db.from("app_bans").select("rating_id").in("rating_id", raw.map((r) => r.id)).is("lifted_at", null);
+      for (const b of (bans ?? []) as { rating_id: string | null }[]) if (b.rating_id) bannedIds.add(b.rating_id);
+    }
 
     // One lookup for every named rater, not one per row.
     const ids = [...new Set(raw.map((r) => r.user_id).filter((id): id is string => !!id))];
@@ -96,6 +116,12 @@ export async function getRatings(limit = 100): Promise<RatingsSummary> {
         userId: r.user_id,
         handle: r.user_id ? (profiles.get(r.user_id)?.handle ?? null) : null,
         displayName: r.user_id ? (profiles.get(r.user_id)?.displayName ?? null) : null,
+        deviceId: r.device_id ?? null,
+        fingerprint: r.fingerprint ?? null,
+        ip: r.ip ?? null,
+        userAgent: r.user_agent ?? null,
+        device: r.device ?? null,
+        banned: bannedIds.has(r.id),
       })),
       total: raw.length,
       average: raw.length > 0 ? Math.round((sum / raw.length) * 10) / 10 : null,

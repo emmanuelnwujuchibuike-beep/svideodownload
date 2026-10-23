@@ -54,6 +54,8 @@ export const SECRET_TABLES: Record<string, string> = {
  * is a very different thing from a gap they cannot.
  */
 export const NOT_EXPORTED: Record<string, string> = {
+  verification_purchases: "0268: payments for the blue tick sit in the verification domain, which is withheld from a bulk export like the applications themselves; a member's Paystack receipt is their record of the payment.",
+  app_bans: "0267: an operator's ban record about a rater (with the device identifiers it matches) — kept by the operator, not part of the person's own data.",
   ...SECRET_TABLES,
 
   /* Not about any individual — reference rows inside a personal domain. */

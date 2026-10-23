@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { sendAdminEmail } from "@/lib/notify";
+import { requestIp } from "@/lib/security/app-bans";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -26,6 +27,14 @@ const schema = z.object({
   surface: z.enum(["landing", "downloads", "history"]).optional(),
   /** The analytics visitor id, so a guest isn't asked twice. */
   visitorId: z.string().trim().max(64).optional(),
+  /*
+    0267 (2026-10-22): who this rater is, for the admin and for a ban — the device's abuse-protection id,
+    its fingerprint and the traits behind it (lib/security/device-signals.ts). The network address and
+    the browser string are read from the REQUEST, never taken from the body.
+  */
+  deviceId: z.string().trim().max(64).optional(),
+  fingerprint: z.string().trim().max(128).optional(),
+  device: z.record(z.string(), z.unknown()).optional(),
 });
 
 function escapeHtml(value: string): string {
@@ -62,7 +71,15 @@ export async function POST(request: Request) {
     /* signed out — a guest rating is still valid */
   }
 
-  const { rating, comment, downloads, surface, visitorId } = parsed.data;
+  const { rating, comment, downloads, surface, visitorId, deviceId, fingerprint, device } = parsed.data;
+  const deviceJson = device && JSON.stringify(device).length <= 3000 ? device : null;
+  const who = {
+    device_id: deviceId ?? null,
+    fingerprint: fingerprint ?? null,
+    ip: requestIp(request.headers),
+    user_agent: request.headers.get("user-agent")?.slice(0, 512) ?? null,
+    device: deviceJson,
+  };
   const row = {
     user_id: userId,
     visitor_id: userId ? null : (visitorId ?? null),
@@ -116,6 +133,7 @@ export async function POST(request: Request) {
     guarantee and this is only the fast path.
   */
   let stored = false;
+  let ratingId: string | null = null;
   try {
     const db = createAdminClient();
 
@@ -146,10 +164,12 @@ export async function POST(request: Request) {
     if (existingId) {
       const { error } = await db.from("app_ratings").update(row).eq("id", existingId);
       stored = !error;
+      if (stored) ratingId = existingId;
     } else {
-      const { error } = await db.from("app_ratings").insert(row);
+      const { data: inserted, error } = await db.from("app_ratings").insert(row).select("id").maybeSingle();
       if (!error) {
         stored = true;
+        ratingId = (inserted?.id as string | undefined) ?? null;
       } else if (error.code === "23505") {
         /*
           Lost a race: another request inserted this rater's row between the
@@ -161,8 +181,17 @@ export async function POST(request: Request) {
         if (raced) {
           const { error: updateError } = await db.from("app_ratings").update(row).eq("id", raced);
           stored = !updateError;
+          if (stored) ratingId = raced;
         }
       }
+    }
+    /*
+      Who rated (0267) — a SEPARATE, best-effort write: before the migration is applied these columns do
+      not exist, and that must cost the rating nothing (the row above and the email below stand alone).
+    */
+    if (ratingId) {
+      const { error: whoError } = await db.from("app_ratings").update(who).eq("id", ratingId);
+      if (whoError) console.warn("[ratings] device details not stored", { error: whoError.message.slice(0, 160) });
     }
   } catch {
     stored = false;

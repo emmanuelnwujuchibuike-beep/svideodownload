@@ -47,13 +47,24 @@
 
 set -uo pipefail
 
-# No parent commit to compare against (first deploy, shallow clone) → build.
-if ! git rev-parse HEAD^ >/dev/null 2>&1; then
-  echo "No parent commit to diff against — building."
+# ── 🔴 COMPARE WITH THE LAST DEPLOYED COMMIT, NOT JUST THE LAST COMMIT (2026-10-23) ──
+#
+# This diffed HEAD^..HEAD — only the push's LAST commit. A push of 13 commits whose last one
+# touched only a test file was skipped as "only documentation", and the other 12 (all code)
+# never reached production. Vercel hands this step the commit of the last successful
+# deployment for the branch (VERCEL_GIT_PREVIOUS_SHA); everything since THAT is what ships.
+# Unknown, or not in the clone (a shallow clone, a first deploy, a force-push) → build.
+base="${VERCEL_GIT_PREVIOUS_SHA:-}"
+if [ -z "$base" ]; then
+  echo "No previous deployment commit given — building."
+  exit 1
+fi
+if ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+  echo "Previous deployment commit ${base} is not in this clone — building."
   exit 1
 fi
 
-changed="$(git diff --name-only HEAD^ HEAD 2>/dev/null)" || {
+changed="$(git diff --name-only "$base" HEAD 2>/dev/null)" || {
   echo "Could not read the diff — building to be safe."
   exit 1
 }

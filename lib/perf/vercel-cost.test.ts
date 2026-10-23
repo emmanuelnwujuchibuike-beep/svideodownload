@@ -157,9 +157,18 @@ describe("a build that cannot change the deployment does not run", () => {
 
   it("🔴 it still fails TOWARD building — a wrongly skipped build is worse", () => {
     // every uncertain path must exit 1 (build), never 0 (skip)
-    expect(gate).toContain("No parent commit to diff against — building.");
+    // 2026-10-23: no previous deployment known, or it is not in the clone → build
+    expect(gate).toContain("No previous deployment commit given — building.");
+    expect(gate).toContain("is not in this clone — building.");
     expect(gate).toContain("Could not read the diff — building to be safe.");
     expect(gate).toContain("Empty diff — building to be safe.");
+  });
+
+  it("🔴 it compares with the LAST DEPLOYED commit, never only the push's last commit (2026-10-23)", () => {
+    // a 13-commit push whose last commit was test-only was skipped whole, and 12 code commits never shipped
+    expect(gate).toContain('git diff --name-only "$base" HEAD');
+    expect(gate).toContain("VERCEL_GIT_PREVIOUS_SHA");
+    expect(gate).not.toMatch(/git diff --name-only HEAD\^ HEAD/);
   });
 
   it("source, assets, scripts and migrations still build", () => {

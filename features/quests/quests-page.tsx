@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeft, ArrowUpRight, Banknote, Bookmark, CalendarDays, Check, ChevronRight, Clapperboard, Crown, Download, Gem, Heart, Music4, Send, Sun, UserPlus, Video, Target, BrainCircuit } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Banknote, Bookmark, CalendarDays, Check, ChevronRight, Clapperboard, Crown, Download, Gem, Heart, Music4, Send, Sun, UserPlus, Video, Target, BrainCircuit, ImageIcon, PenSquare, Film, CircleDashed, MessageSquare, Users, MessageCircle, Lock, Star, Trophy } from "lucide-react";
 import Link from "next/link";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
@@ -73,6 +73,16 @@ const QUEST_META: Record<QuestEvent, { icon: LucideIcon; hint: string; href: str
   ai_video_shared: { icon: Clapperboard, hint: "Share one of your AI videos to AI Reels.", href: "/ai", go: "Open AI" },
   follow: { icon: UserPlus, hint: "Follow people whose posts you enjoy.", href: "/explore", go: "Explore" },
   save: { icon: Bookmark, hint: "Save posts you want to come back to.", href: "/feed", go: "Open feed" },
+  // 0269 (2026-10-23): every activity the admin can now build a quest on
+  wallpaper_posted: { icon: ImageIcon, hint: "Share your own wallpapers on the Wallpapers page.", href: "/wallpapers", go: "Wallpapers" },
+  post_published: { icon: PenSquare, hint: "Publish a post to your feed.", href: "/create/post", go: "Post" },
+  reel_posted: { icon: Film, hint: "Post a reel.", href: "/create/reel", go: "New reel" },
+  story_posted: { icon: CircleDashed, hint: "Add to your story.", href: "/create/story", go: "New story" },
+  comment_posted: { icon: MessageSquare, hint: "Comment on posts in your feed.", href: "/feed", go: "Open feed" },
+  friend_added: { icon: Users, hint: "Add friends — each new friendship counts.", href: "/friends", go: "Friends" },
+  message_sent: { icon: MessageCircle, hint: "Chat with your friends.", href: "/messages", go: "Chats" },
+  exclusive_post_published: { icon: Lock, hint: "Publish an exclusive post for your subscribers.", href: "/exclusive/dashboard", go: "Exclusive" },
+  app_rated: { icon: Star, hint: "Rate Frenz after a download.", href: "/downloads", go: "Download" },
 };
 
 /**
@@ -140,8 +150,9 @@ export function QuestsPage() {
     const prev = shown.current;
     shown.current = board;
     if (!prev) return;
-    const was = new Set([...prev.daily, ...prev.weekly].filter((q) => q.completed).map((q) => q.id));
-    const ids = new Set([...board.daily, ...board.weekly].filter((q) => q.completed && !was.has(q.id)).map((q) => q.id));
+    // `?? []`: a board remembered from before one-time quests existed has no `once` list
+    const was = new Set([...prev.daily, ...prev.weekly, ...(prev.once ?? [])].filter((q) => q.completed).map((q) => q.id));
+    const ids = new Set([...board.daily, ...board.weekly, ...(board.once ?? [])].filter((q) => q.completed && !was.has(q.id)).map((q) => q.id));
     const balanceUp = !!(prev.wallet && board.wallet && board.wallet.credits > prev.wallet.credits);
     if (!ids.size && !balanceUp) return;
     setJustEarned({ ids, balanceUp });
@@ -219,6 +230,8 @@ export function QuestsPage() {
             {board.weeklyCreditCap > 0 ? <WeeklyProgress board={board} reached={capReached} /> : null}
             <QuestSection icon={Sun} title="Daily quests" endsAt={board.dayEndsAt} weekly={false} quests={board.daily} capReached={capReached} justEarned={justEarned?.ids} onPeriodEnd={onPeriodEnd} />
             <QuestSection icon={CalendarDays} title="Weekly quests" endsAt={board.weekEndsAt} weekly quests={board.weekly} capReached={capReached} justEarned={justEarned?.ids} onPeriodEnd={onPeriodEnd} />
+            {/* 0269: one-time quests — done once, ever, so no reset countdown */}
+            <QuestSection icon={Trophy} title="One-time quests" endsAt={null} weekly={false} quests={board.once ?? []} capReached={capReached} justEarned={justEarned?.ids} onPeriodEnd={onPeriodEnd} />
             <p className="mt-7 text-[12.5px] leading-relaxed text-muted-foreground">
               Credits are added automatically when a quest is complete, once per quest per period, up to the weekly limit. Quest credits pay for Frenz AI and AI plans. Once your account is approved for withdrawals, credits you earn after that can also be withdrawn.{" "}
               <Link href="/rewards" prefetch={false} className="font-semibold text-indigo-700 dark:text-indigo-300">

@@ -8,7 +8,7 @@ import { formatCents } from "@/lib/ai/economy";
 import type { LandingSettings } from "@/lib/landing/settings";
 import { REWARD_EVENT_LABELS, REWARD_EVENT_SOURCE, REWARD_EVENTS, type RewardEventType, type RewardRule } from "@/lib/rewards/config";
 import type { RewardsAdminView } from "@/lib/rewards/admin";
-import { QUEST_EVENT_LABELS, QUEST_EVENTS, questId, type Quest, type QuestEvent } from "@/lib/rewards/quests";
+import { QUEST_EVENT_LABELS, QUEST_EVENTS, QUEST_PERIOD_LABELS, questId, type Quest, type QuestEvent, type QuestPeriod } from "@/lib/rewards/quests";
 import { cn } from "@/lib/utils";
 
 import { SubAdmin } from "./sub-admin";
@@ -135,7 +135,7 @@ export function RewardsPanel({ settings }: { settings: LandingSettings }) {
         {/* 0192 — quests: daily (reset 01:00 Lagos) and weekly (reset Sunday 01:00 Lagos) */}
         <div className="mt-5 rounded-2xl border border-border/70 px-4 py-3">
           <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={questsOn} onChange={(x) => setQuestsOn(x.target.checked)} /> Quests on (members earn credits for finishing them)</label>
-          <p className="mt-1 text-xs text-muted-foreground">Daily quests reset at 1:00 AM Lagos time; weekly quests reset Sunday 1:00 AM Lagos time. Each activity counts once per item (a like, a download, a video), each quest pays once per period, and the weekly cap limits what quests pay a member in a week.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Daily quests reset at 1:00 AM Lagos time; weekly quests reset Sunday 1:00 AM Lagos time; one-time quests never reset (e.g. &quot;Post your first wallpaper&quot;). Any activity in the list can be counted — wallpapers, posts, reels, stories, comments, friends, messages, exclusive posts, ratings and more. Each activity counts once per item, each quest pays once per period, and the weekly cap limits what quests pay a member in a week.</p>
           <label className="mt-3 block text-xs text-muted-foreground">Weekly quest credit cap per member (0 = no cap)<input inputMode="numeric" value={questCap} onChange={(x) => setQuestCap(x.target.value)} className={cn(input, "mt-1 block w-32")} /></label>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full min-w-[640px] text-left text-xs">
@@ -157,9 +157,8 @@ export function RewardsPanel({ settings }: { settings: LandingSettings }) {
                       <td className="py-1 pr-2"><input inputMode="numeric" value={x.target} onChange={(e) => set({ target: e.target.value })} className={cn(input, "w-16")} /></td>
                       <td className="py-1 pr-2"><input inputMode="numeric" value={x.credits} onChange={(e) => set({ credits: e.target.value })} className={cn(input, "w-16")} /></td>
                       <td className="py-1 pr-2">
-                        <select value={x.period} onChange={(e) => set({ period: e.target.value as "daily" | "weekly" })} className={cn(input, "w-24")}>
-                          <option value="daily">Daily</option>
-                          <option value="weekly">Weekly</option>
+                        <select value={x.period} onChange={(e) => set({ period: e.target.value as QuestPeriod })} className={cn(input, "w-28")}>
+                          {(Object.keys(QUEST_PERIOD_LABELS) as QuestPeriod[]).map((p) => <option key={p} value={p}>{QUEST_PERIOD_LABELS[p]}</option>)}
                         </select>
                       </td>
                       <td className="py-1"><button type="button" onClick={() => setQuests((all) => all.filter((_, j) => j !== i))} className="text-rose-600">Remove</button></td>

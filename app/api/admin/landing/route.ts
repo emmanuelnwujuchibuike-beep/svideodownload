@@ -438,7 +438,7 @@ const schema = z.object({
           enabled: z.boolean().optional(),
           weeklyCreditCap: z.number().int().min(0).max(1_000_000).optional(),
           items: z
-            .array(z.object({ id: z.string().max(60).optional(), title: z.string().max(80), event: z.string().max(40), target: z.number().int().min(1).max(1000), credits: z.number().int().min(0).max(10_000), period: z.enum(["daily", "weekly"]), enabled: z.boolean().optional() }).strict())
+            .array(z.object({ id: z.string().max(60).optional(), title: z.string().max(80), event: z.string().max(40), target: z.number().int().min(1).max(1000), credits: z.number().int().min(0).max(10_000), period: z.enum(["daily", "weekly", "once"]), enabled: z.boolean().optional() }).strict())
             .max(20)
             .optional(),
         })

@@ -16,7 +16,30 @@
  * 🔴 Shipped OFF (`enabled: false`): quests pay real credits, and nothing may
  * cost money until the operator has looked at the list and switched it on.
  */
-export const QUEST_EVENTS = ["download_completed", "ai_video_completed", "ai_audio_completed", "ai_video_shared", "post_engagement", "follow", "save"] as const;
+/*
+  🔴 2026-10-23 (owner: "make admin can add any quest, like posting Wallpapers to earn credit … it should be
+  fully configurable"). The list grew from the seven events the reward engine raised to every activity the
+  database now reports to quests (migration 0269's triggers). Each one here has a real source — a quest on
+  an activity nothing reports would never pay, which is why there is no free-text activity.
+*/
+export const QUEST_EVENTS = [
+  "download_completed",
+  "ai_video_completed",
+  "ai_audio_completed",
+  "ai_video_shared",
+  "post_engagement",
+  "follow",
+  "save",
+  "wallpaper_posted",
+  "post_published",
+  "reel_posted",
+  "story_posted",
+  "comment_posted",
+  "friend_added",
+  "message_sent",
+  "exclusive_post_published",
+  "app_rated",
+] as const;
 export type QuestEvent = (typeof QUEST_EVENTS)[number];
 
 export const QUEST_EVENT_LABELS: Record<QuestEvent, string> = {
@@ -27,9 +50,20 @@ export const QUEST_EVENT_LABELS: Record<QuestEvent, string> = {
   post_engagement: "Likes or comments on posts",
   follow: "New follows",
   save: "Posts saved",
+  wallpaper_posted: "Wallpapers posted",
+  post_published: "Posts published",
+  reel_posted: "Reels posted",
+  story_posted: "Stories posted",
+  comment_posted: "Comments written",
+  friend_added: "Friends added",
+  message_sent: "Chat messages sent",
+  exclusive_post_published: "Exclusive posts published",
+  app_rated: "Rated the app",
 };
 
-export type QuestPeriod = "daily" | "weekly";
+/** 0269: "once" — a one-time quest, completed once per member, ever (its period key never resets). */
+export type QuestPeriod = "daily" | "weekly" | "once";
+export const QUEST_PERIOD_LABELS: Record<QuestPeriod, string> = { daily: "Daily", weekly: "Weekly", once: "One-time" };
 
 export interface Quest {
   id: string;
@@ -91,7 +125,7 @@ export function normalizeQuests(raw: unknown): QuestsConfig {
       event,
       target: int(q.target, 1, 1, QUEST_LIMITS.target),
       credits: int(q.credits, 0, 0, QUEST_LIMITS.credits),
-      period: q.period === "weekly" ? "weekly" : "daily",
+      period: q.period === "weekly" ? "weekly" : q.period === "once" ? "once" : "daily",
       enabled: q.enabled !== false,
     });
     if (items.length >= QUEST_LIMITS.items) break;
@@ -119,6 +153,8 @@ export interface QuestBoard {
   enabled: boolean;
   daily: QuestView[];
   weekly: QuestView[];
+  /** 0269: one-time quests — done once, ever. */
+  once: QuestView[];
   weeklyCreditCap: number;
   weekEarned: number;
   dayEndsAt: string;
@@ -131,7 +167,7 @@ export function buildQuestBoard(
   status: { periods: { day: string; week: string; dayEndsAt: string; weekEndsAt: string }; progress: { quest: string; period: string; progress: number; completedAt: string | null }[]; weekEarned: number },
 ): QuestBoard {
   const view = (q: Quest): QuestView => {
-    const key = q.period === "weekly" ? status.periods.week : status.periods.day;
+    const key = q.period === "weekly" ? status.periods.week : q.period === "once" ? "ONCE" : status.periods.day;
     const row = status.progress.find((p) => p.quest === q.id && p.period === key);
     const progress = Math.min(q.target, row?.progress ?? 0);
     return { id: q.id, title: q.title, event: q.event, period: q.period, target: q.target, credits: q.credits, progress, completed: !!row?.completedAt || progress >= q.target };
@@ -141,6 +177,7 @@ export function buildQuestBoard(
     enabled: cfg.enabled,
     daily: live.filter((q) => q.period === "daily").map(view),
     weekly: live.filter((q) => q.period === "weekly").map(view),
+    once: live.filter((q) => q.period === "once").map(view),
     weeklyCreditCap: cfg.weeklyCreditCap,
     weekEarned: Number(status.weekEarned) || 0,
     dayEndsAt: status.periods.dayEndsAt,

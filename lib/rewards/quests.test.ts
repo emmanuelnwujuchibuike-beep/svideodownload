@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { planCreditsPrice } from "@/lib/ai/credits/config";
 import { subscriptionIsActive } from "@/lib/ai/credits/subscription";
 import { normalizeRewardsConfig } from "@/lib/rewards/config";
-import { buildQuestBoard, normalizeQuests, QUESTS_DEFAULTS } from "@/lib/rewards/quests";
+import { buildQuestBoard, normalizeQuests, QUEST_EVENT_LABELS, QUEST_EVENTS, QUESTS_DEFAULTS } from "@/lib/rewards/quests";
 
 /**
  * Owner, 2026-10-07: daily (01:00 Lagos) and weekly (Sunday 01:00 Lagos) quests
@@ -132,5 +132,51 @@ describe("the quest page never reloads for nothing", () => {
     expect(strip).not.toContain("Trophy");
     const once = code("features/ui/tap-once-link.tsx");
     expect(once).toContain("if (pending.current) {\n          e.preventDefault();");
+  });
+});
+
+describe("🔴 0269: quests on any reported activity, and one-time quests (owner, 2026-10-23)", () => {
+  it("keeps the new activities and the 'once' period", () => {
+    const cfg = normalizeQuests({
+      enabled: true,
+      items: [
+        { title: "Post your first wallpaper", event: "wallpaper_posted", target: 1, credits: 5, period: "once" },
+        { title: "Add 3 friends", event: "friend_added", target: 3, credits: 2, period: "weekly" },
+        { title: "Post a reel", event: "reel_posted", target: 1, credits: 1, period: "daily" },
+      ],
+    });
+    expect(cfg.items.map((q) => [q.event, q.period])).toEqual([["wallpaper_posted", "once"], ["friend_added", "weekly"], ["reel_posted", "daily"]]);
+  });
+
+  it("teeth: an activity nothing reports is dropped — a quest that could never pay is never saved", () => {
+    const cfg = normalizeQuests({ enabled: true, items: [{ title: "Follow us on Instagram", event: "instagram_follow", target: 1, credits: 5, period: "once" }] });
+    expect(cfg.items).toEqual([]);
+  });
+
+  it("a one-time quest reads the never-resetting ONCE key, and lands in its own list", () => {
+    const cfg = normalizeQuests({ enabled: true, items: [{ id: "wp-first", title: "Post your first wallpaper", event: "wallpaper_posted", target: 1, credits: 5, period: "once" }] });
+    const b = buildQuestBoard(cfg, {
+      periods: { day: "D2026-10-23", week: "W2026-10-18", dayEndsAt: "", weekEndsAt: "" },
+      progress: [{ quest: "wp-first", period: "ONCE", progress: 1, completedAt: "2026-10-01T00:00:00Z" }],
+      weekEarned: 0,
+    });
+    expect(b.once.map((q) => [q.id, q.completed])).toEqual([["wp-first", true]]);
+    expect(b.daily).toEqual([]);
+    expect(b.weekly).toEqual([]);
+  });
+
+  it("every activity the admin can pick has a label, and the member page has its hint and link", () => {
+    const page = readFileSync(join(process.cwd(), "features/quests/quests-page.tsx"), "utf8");
+    for (const ev of QUEST_EVENTS) {
+      expect(QUEST_EVENT_LABELS[ev], ev).toBeTruthy();
+      expect(page, ev).toContain(`  ${ev}: { icon:`);
+    }
+  });
+
+  it("every new activity has a trigger in 0269", () => {
+    const sql = readFileSync(join(process.cwd(), "supabase/migrations/0269_quest_activities.sql"), "utf8");
+    for (const ev of ["wallpaper_posted", "post_published", "reel_posted", "story_posted", "comment_posted", "friend_added", "message_sent", "exclusive_post_published", "app_rated"]) {
+      expect(sql, ev).toContain(`'${ev}'`);
+    }
   });
 });

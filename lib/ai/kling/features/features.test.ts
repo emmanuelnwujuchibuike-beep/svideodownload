@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { KLING_LIP_SYNC, KLING_OMNI, KLING_RESOLUTIONS, KLING_VIDEO_RESOLUTIONS, klingElementRef, klingVideoRef } from "./capabilities";
 import { klingImageToVideo } from "./image-to-video";
 import { klingLipSync } from "./lip-sync";
-import { klingCapabilityReport, klingFeatureGate, klingFeatureProvenForBilling, KLING_IMPLEMENTED_FEATURE_IDS, KLING_UNAVAILABLE_FEATURES } from "./registry";
+import { klingCapabilityReport, klingFeatureGate, klingFeatureProvenForBilling, KLING_HOSTED_FEATURES, KLING_IMPLEMENTED_FEATURE_IDS, KLING_UNAVAILABLE_FEATURES } from "./registry";
 import { klingTextToVideo } from "./text-to-video";
 import { KLING_FEATURE_IDS } from "./types";
 
@@ -123,8 +123,14 @@ describe("Text to Video — the one handler verified END TO END", () => {
     for (const id of ["text_to_video", "image_to_video", "lip_sync"]) {
       expect(klingFeatureProvenForBilling(id), id).toBe(true);
     }
-    // Refused capabilities are not billable by construction.
-    for (const id of ["reference_video", "reference_image", "full_character", "face_only", "face_skin", "upper_body"]) {
+    // Reference inputs ride on Text to Video, each settled by generation on 2026-10-06 (contract doc §4.9).
+    for (const id of ["reference_video", "reference_image"]) {
+      expect(klingFeatureProvenForBilling(id), id).toBe(true);
+    }
+    // 🔴 Character Replace is AVAILABLE but only "fields"-verified (its exact prompt, a group video and two
+    // people have not been run) — so it is not proven for billing until the owner's paid test. Refused
+    // region scopes are not billable by construction.
+    for (const id of ["full_character", "face_only", "face_skin", "upper_body"]) {
       expect(klingFeatureProvenForBilling(id), id).toBe(false);
     }
   });
@@ -228,22 +234,32 @@ describe("Lip Sync — a REAL separate Kling endpoint (§6, and Part 3 was wrong
   });
 });
 
-describe("🔴 Character Replace has NO engine on the direct API — verified, not assumed", () => {
-  it("all four scopes are unavailable, and reference_image with them", () => {
-    for (const id of ["full_character", "upper_body", "face_only", "face_skin", "reference_image"]) {
-      const verdict = klingFeatureGate(id);
-      expect(verdict.available, id).toBe(false);
+describe("🔴 Character Replace runs whole-person only — the region scopes stay refused (2026-10-19)", () => {
+  it("full_character is Character Replace on Omni, verified by fields only; the three region scopes are unavailable", () => {
+    const full = klingFeatureGate("full_character");
+    expect(full.available).toBe(true);
+    if (!full.available) throw new Error("unreachable");
+    expect(full.verification).toBe("fields");
+    for (const id of ["upper_body", "face_only", "face_skin"]) {
+      expect(klingFeatureGate(id).available, id).toBe(false);
     }
   });
 
-  it("🔴 the reason is the ELEMENT finding, not Part 3's 'no region control'", () => {
-    const full = klingFeatureGate("full_character");
-    expect(full.available).toBe(false);
-    if (full.available) throw new Error("unreachable");
-    // Part 3 declared Full Character AVAILABLE. The live API refuses it, and the
-    // reason must name the mechanism so nobody re-enables it on a guess.
-    expect(full.reason).toMatch(/element/i);
-    expect(full.reason).toMatch(/Element id not found|element-creation|cannot be given a character/i);
+  it("🔴 a region scope's reason names the missing control, so nobody re-enables it on a guess", () => {
+    for (const id of ["upper_body", "face_only", "face_skin"]) {
+      const verdict = klingFeatureGate(id);
+      if (verdict.available) throw new Error(`${id} should be refused`);
+      expect(verdict.reason, id).toMatch(/no field that scopes an edit to a region|no mask, region, box, point or track/i);
+    }
+  });
+
+  it("reference image / video are INPUTS hosted by Text to Video, not tools of their own", () => {
+    for (const id of ["reference_image", "reference_video"] as const) {
+      expect(KLING_HOSTED_FEATURES[id], id).toBe("text_to_video");
+      const verdict = klingFeatureGate(id);
+      expect(verdict.available, id).toBe(true);
+      if (verdict.available) expect(verdict.hostedBy, id).toBe("text_to_video");
+    }
   });
 
   it("every refusal carries a concrete limitation and a revisit condition, not a shrug", () => {
@@ -272,13 +288,16 @@ describe("The capability gate — the billing-safety property (§13)", () => {
     const report = klingCapabilityReport();
     expect(report.map((r) => r.id).sort()).toEqual([...KLING_FEATURE_IDS].sort());
     const available = report.filter((r) => r.available).map((r) => r.id).sort();
-    expect(available).toEqual([...KLING_IMPLEMENTED_FEATURE_IDS].sort());
+    expect(available).toEqual([...KLING_IMPLEMENTED_FEATURE_IDS, ...Object.keys(KLING_HOSTED_FEATURES)].sort());
+    // …and nothing is both refused and served
+    const refused = KLING_UNAVAILABLE_FEATURES.map((f) => f.id);
+    for (const id of available) expect(refused, id).not.toContain(id);
   });
 
   it("🔴 an unsupported feature is refused BEFORE any input is looked at", () => {
     // No input at all, and still a definite answer — this is what makes it free
     // to call before reserving a member's money.
-    for (const id of ["full_character", "face_only", "reference_image"]) {
+    for (const id of ["face_only", "face_skin", "upper_body"]) {
       expect(klingFeatureGate(id).available, id).toBe(false);
     }
   });

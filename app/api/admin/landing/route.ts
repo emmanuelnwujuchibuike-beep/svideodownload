@@ -267,7 +267,7 @@ const schema = z.object({
       /** 0185: the per-tool rules table (lib/ai/credits/features.ts — the normaliser clamps again). */
       features: z
         .record(
-          z.enum(["ai_text_to_video", "ai_image_to_video", "ai_lip_sync", "ai_voice_clone", "ai_text_to_audio"]),
+          z.enum(["ai_text_to_video", "ai_image_to_video", "ai_lip_sync", "ai_voice_clone", "ai_text_to_audio", "ai_person_replace"]),
           z
             .object({
               enabled: z.boolean().optional(),
@@ -307,7 +307,7 @@ const schema = z.object({
     .object({
       matrix: z
         .record(
-          z.enum(["text_to_video:720p", "text_to_video:1080p", "text_to_video:4k", "image_to_video:720p", "image_to_video:1080p", "image_to_video:4k", "lip_sync:source"]),
+          z.enum(["text_to_video:720p", "text_to_video:1080p", "text_to_video:4k", "image_to_video:720p", "image_to_video:1080p", "image_to_video:4k", "lip_sync:source", "character_replace:720p", "character_replace:1080p", "character_replace:4k"]),
           z
             .object({
               enabled: z.boolean().optional(),

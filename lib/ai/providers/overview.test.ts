@@ -24,6 +24,7 @@ describe("provider overview", () => {
       ["ai_text_to_video", "kling"],
       ["ai_image_to_video", "kling"],
       ["ai_lip_sync", "kling"],
+      ["ai_person_replace", "kling"],
       ["ai_text_to_audio", "elevenlabs"],
       ["ai_voice_clone", "elevenlabs"],
     ]);

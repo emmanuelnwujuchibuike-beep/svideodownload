@@ -12,6 +12,7 @@ import {
   klingCapabilityReport,
   klingPipeline,
   klingPipelineFor,
+  KLING_PIPELINE_HOSTS,
   KLING_PIPELINES,
   KLING_RUNNABLE_FEATURES,
   KLING_UNSUPPORTED_PIPELINES,
@@ -24,7 +25,9 @@ import { normalizeKlingPricing, KLING_PRICING_DEFAULTS, type KlingPricingConfig 
 const src = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 const code = (p: string) => src(p).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
-const PIPELINE_FILES = ["types.ts", "registry.ts", "unsupported.ts", "text-to-video.ts", "image-to-video.ts", "lip-sync.ts"];
+const PIPELINE_FILES = ["types.ts", "registry.ts", "unsupported.ts", "text-to-video.ts", "image-to-video.ts", "lip-sync.ts", "person-replace.ts"];
+/** Each runnable feature's pipeline file. full_character is Character Replace, built in person-replace.ts. */
+const PIPELINE_FILE: Record<string, string> = { text_to_video: "text-to-video.ts", image_to_video: "image-to-video.ts", lip_sync: "lip-sync.ts", full_character: "person-replace.ts" };
 
 /** A configuration where everything is on sale and priced, so `available` is reachable. */
 const livePricing = (): KlingPricingConfig =>
@@ -54,13 +57,16 @@ const livePricing = (): KlingPricingConfig =>
 
 describe("§4 — the feature → pipeline map is explicit and complete", () => {
   it("every feature the product names has exactly one entry", () => {
+    const hosted = Object.keys(KLING_PIPELINE_HOSTS);
     for (const f of KLING_PIPELINE_FEATURES) {
-      expect(klingPipelineFor(f), f).not.toBeNull();
+      // a hosted input (reference image / video) answers through the pipeline that serves it
+      if (hosted.includes(f)) expect(isKlingRunnableFeature(KLING_PIPELINE_HOSTS[f]!), f).toBe(true);
+      else expect(klingPipelineFor(f), f).not.toBeNull();
     }
-    // …and the two sets partition cleanly.
+    // …and the three sets partition cleanly.
     const runnable = KLING_PIPELINE_FEATURES.filter((f) => isKlingRunnableFeature(f));
     const refused = KLING_UNSUPPORTED_PIPELINES.map((p) => p.feature);
-    expect([...runnable, ...refused].sort()).toEqual([...KLING_PIPELINE_FEATURES].sort());
+    expect([...runnable, ...refused, ...hosted].sort()).toEqual([...KLING_PIPELINE_FEATURES].sort());
   });
 
   it("🔴 each pipeline names the Kling endpoint that owns it", () => {
@@ -83,7 +89,8 @@ describe("§4 — the feature → pipeline map is explicit and complete", () => 
   it("an unknown feature is refused rather than defaulting to something", () => {
     expect(klingPipelineFor("video_extend")).toBeNull();
     expect(klingPipelineFor("")).toBeNull();
-    expect(isKlingRunnableFeature("full_character")).toBe(false);
+    expect(isKlingRunnableFeature("upper_body")).toBe(false);
+    expect(isKlingRunnableFeature("reference_video")).toBe(false);
   });
 });
 
@@ -253,7 +260,7 @@ describe("§21 — usage is calculated from the ACTUAL request", () => {
 
   it("every pipeline prices through the ONE shared calculator", () => {
     for (const f of KLING_RUNNABLE_FEATURES) {
-      const source = code(`lib/ai/kling/pipelines/${f.replace(/_/g, "-")}.ts`);
+      const source = code(`lib/ai/kling/pipelines/${PIPELINE_FILE[f]}`);
       expect(source, f).toContain("quoteKling(");
       // no pipeline does its own arithmetic on money
       expect(source, f).not.toMatch(/totalUsdCents\s*=/);

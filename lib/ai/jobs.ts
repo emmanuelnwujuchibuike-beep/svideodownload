@@ -62,6 +62,14 @@ export type AiFeature =
    * (`first_frame`). Verified end to end against the live API; migration 0179.
    */
   | "ai_image_to_video"
+  /**
+   * 2026-10-19: Character Replace on the direct Kling Omni endpoint — the
+   * member's video edited so one or two chosen people become the people in
+   * their photos (`base_video` + `refer_image`). A NEW value rather than a
+   * revived `ai_character_replace`: that one still names the retired
+   * Replicate/fal pipeline's rows and routes. Migration 0266.
+   */
+  | "ai_person_replace"
   | "ai_image_clean"
   | "ai_upscale"
   | "ai_caption"
@@ -458,6 +466,30 @@ export const AI_FEATURES: readonly AiFeatureDef[] = [
     maxDurationSeconds: 15,
     retentionHours: 72,
   },
+  {
+    /*
+      ── CHARACTER REPLACE (2026-10-19) ───────────────────────────────────────
+      Opened from Text to Video's "Edit this video": the member picks one or two
+      detected people and gives each a photo; Kling Omni edits the clip
+      (lib/ai/kling/pipelines/person-replace.ts). The video and photos go to
+      Kling as signed URLs of our own storage; nothing is re-encoded by us.
+
+      🔴 Not `ai_character_replace`. That value still names the retired
+      Replicate/fal tool, its rows, its routes and its finalizer branches;
+      registering it again would have re-opened all of them.
+    */
+    id: "ai_person_replace",
+    label: "Character Replace",
+    provider: "kling",
+    requires: "kling",
+    needsFinalizer: true,
+    freeDailyJobs: 0,
+    mimeTypes: ["video/mp4", "video/quicktime"],
+    maxBytes: 200 * 1024 * 1024,
+    // the documented reference-video ceiling the input is held to (KLING_OMNI.video)
+    maxDurationSeconds: 10,
+    retentionHours: 72,
+  },
 ] as const;
 
 /**
@@ -494,9 +526,20 @@ export const AI_FEATURES: readonly AiFeatureDef[] = [
   A tool that spends from the product wallet must be named here on the SAME
   commit that spends from it; `funding.test.ts` now fails if one is not.
 */
-export const WALLET_FUNDED_FEATURES: readonly AiFeature[] = ["ai_character_replace", "ai_lip_sync", "ai_text_to_audio", "ai_voice_clone", "ai_text_to_video", "ai_image_to_video"];
-export function isWalletFundedFeature(feature: string | null | undefined): feature is "ai_character_replace" | "ai_lip_sync" | "ai_text_to_audio" | "ai_voice_clone" | "ai_text_to_video" | "ai_image_to_video" {
-  return feature === "ai_character_replace" || feature === "ai_lip_sync" || feature === "ai_text_to_audio" || feature === "ai_voice_clone" || feature === "ai_text_to_video" || feature === "ai_image_to_video";
+export const WALLET_FUNDED_FEATURES: readonly AiFeature[] = ["ai_character_replace", "ai_lip_sync", "ai_text_to_audio", "ai_voice_clone", "ai_text_to_video", "ai_image_to_video", "ai_person_replace"];
+export function isWalletFundedFeature(
+  feature: string | null | undefined,
+): feature is "ai_character_replace" | "ai_lip_sync" | "ai_text_to_audio" | "ai_voice_clone" | "ai_text_to_video" | "ai_image_to_video" | "ai_person_replace" {
+  return (
+    feature === "ai_character_replace" ||
+    feature === "ai_lip_sync" ||
+    feature === "ai_text_to_audio" ||
+    feature === "ai_voice_clone" ||
+    feature === "ai_text_to_video" ||
+    feature === "ai_image_to_video" ||
+    // 🔴 funded by the same reserveAiWalletCharge as the two video tools — named on the commit that spends from it
+    feature === "ai_person_replace"
+  );
 }
 
 /**

@@ -158,7 +158,9 @@ export async function POST(request: Request) {
     featureId === "ai_character_replace" ||
     featureId === "ai_lip_sync" ||
     featureId === "ai_text_to_video" ||
-    featureId === "ai_image_to_video"
+    featureId === "ai_image_to_video" ||
+    // 2026-10-19: a Kling edit of the member's clip — verify and keep, exactly like the two above
+    featureId === "ai_person_replace"
       ? finalizeCharacterReplaceJob
       : finalizeAICleanJob;
   const work = finalize(jobId).catch((e) => {

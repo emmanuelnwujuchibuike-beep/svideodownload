@@ -33,7 +33,7 @@ export type AiTier = "free" | "ai_pro" | "ai_max";
 export const AI_TIERS: readonly AiTier[] = ["free", "ai_pro", "ai_max"];
 
 /** The paid tools, by their ai_jobs feature id. */
-export const AI_CREDIT_FEATURES = ["ai_text_to_video", "ai_image_to_video", "ai_lip_sync", "ai_voice_clone", "ai_text_to_audio"] as const;
+export const AI_CREDIT_FEATURES = ["ai_text_to_video", "ai_image_to_video", "ai_lip_sync", "ai_voice_clone", "ai_text_to_audio", "ai_person_replace"] as const;
 export type AiCreditFeatureId = (typeof AI_CREDIT_FEATURES)[number];
 
 export const AI_FEATURE_LABELS: Record<AiCreditFeatureId, string> = {
@@ -42,10 +42,11 @@ export const AI_FEATURE_LABELS: Record<AiCreditFeatureId, string> = {
   ai_lip_sync: "Lip Sync",
   ai_voice_clone: "Voice Cloning",
   ai_text_to_audio: "Text to Audio",
+  ai_person_replace: "Character Replace",
 };
 
 /** Features whose input has a length a ceiling can apply to. */
-export const AI_FEATURES_WITH_DURATION: readonly AiCreditFeatureId[] = ["ai_text_to_video", "ai_image_to_video", "ai_lip_sync"];
+export const AI_FEATURES_WITH_DURATION: readonly AiCreditFeatureId[] = ["ai_text_to_video", "ai_image_to_video", "ai_lip_sync", "ai_person_replace"];
 /**
  * Features with an allowance of their OWN — no `monthlyIncluded` here, so there are never two:
  * Text to Audio counts characters (its config), Voice Cloning free voices a month (its config).

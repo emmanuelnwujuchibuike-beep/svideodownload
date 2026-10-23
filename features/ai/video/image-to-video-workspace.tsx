@@ -104,19 +104,22 @@ export function ImageToVideoWorkspace({
   /* Optional references, on top of the first frame — the model keeps a face, a product or a place consistent. Priced by the server. */
   const [referenceImageUrls, setReferenceImages] = useState<string[]>([]);
   const [referenceVideoUrl, setReferenceVideo] = useState<string | null>(null);
+  // the worker's signed measurement of that video — the server prices and checks it from this
+  const [referenceVideoToken, setReferenceVideoToken] = useState<string | null>(null);
   /*
-    🔴 A reference video brings ITS OWN SOUND by default (owner, 2026-10-07:
-    "reference videos don't take the audio from the reference video"). Kling's
-    `audio: "original"` keeps it — proven by generation, no extra cost
-    (lib/ai/kling/features/capabilities.ts). Attaching a video selects it;
-    removing the video drops it (it needs a video). A minute can't use a
-    reference video, so the 60 s choice steps back to the default.
+    🔴 HERE THE VIDEO IS ALWAYS A MOTION REFERENCE (`feature_video` — the photo
+    is the opening frame, so the clip cannot be edited), and Kling's own 3.0
+    Omni reference says a feature video takes NO sound: "the audio parameter can
+    only be off" (2026-10-19 audit). It used to select "Keep video's sound",
+    which Kling's probe accepted but its documentation forbids. Attaching a
+    video now sets No sound; a minute can't use a reference video either.
   */
   useEffect(() => {
     if (referenceVideoUrl) {
-      setAudio("original");
+      setAudio("off");
       setDuration((d) => (d === 60 ? KLING_OMNI.duration.defaultSeconds : d));
     } else {
+      setReferenceVideoToken(null);
       setAudio((a) => (a === "original" ? "off" : a));
     }
   }, [referenceVideoUrl]);
@@ -139,10 +142,10 @@ export function ImageToVideoWorkspace({
       // Omitted entirely when empty: the wire schema is strict, and an empty
       // array would re-quote as though something had been attached.
       ...(referenceImageUrls.length ? { referenceImageUrls } : {}),
-      ...(referenceVideoUrl ? { referenceVideoUrl } : {}),
+      ...(referenceVideoUrl ? { referenceVideoUrl, ...(referenceVideoToken ? { referenceVideoToken } : {}) } : {}),
       options: { durationSeconds, resolution, audio },
     }),
-    [firstFrameUrl, lastFrameUrl, sentPrompt, durationSeconds, resolution, audio, referenceImageUrls, referenceVideoUrl],
+    [firstFrameUrl, lastFrameUrl, sentPrompt, durationSeconds, resolution, audio, referenceImageUrls, referenceVideoUrl, referenceVideoToken],
   );
 
   // Image to Video's prompt is optional, so the card falls back to the tool's name.
@@ -255,6 +258,7 @@ export function ImageToVideoWorkspace({
               onImagesChange={setReferenceImages}
               videoUrl={referenceVideoUrl}
               onVideoChange={setReferenceVideo}
+              onVideoUploaded={(v) => setReferenceVideoToken(v.token ?? null)}
               disabled={locked}
             />
           </div>
@@ -271,14 +275,13 @@ export function ImageToVideoWorkspace({
             accept={KLING_OMNI.images.mimeTypes}
             maxBytes={KLING_OMNI.images.maxBytes}
           />
-          <AiField label="Sound" hint={audio === "original" ? "The reference video's own sound, kept as it is." : "Generated audio to match the scene."}>
+          <AiField label="Sound" hint={referenceVideoUrl ? "A video that guides the motion makes a silent result." : "Generated audio to match the scene."}>
             <AiSegmented
               ariaLabel="Sound"
               value={audio}
               onChange={setAudio}
-              options={[
+              options={referenceVideoUrl ? [{ value: "off", label: "No sound" }] : [
                 { value: "off", label: "No sound" },
-                ...(referenceVideoUrl ? [{ value: "original" as const, label: "Keep video's sound" }] : []),
                 { value: "native", label: "Generate sound" },
               ]}
             />

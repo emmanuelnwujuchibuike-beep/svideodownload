@@ -41,6 +41,7 @@ export const klingImageToVideoPipeline: KlingSupportedPipeline<KlingImageToVideo
   endpoint: `${KLING_OMNI_VIDEO_PATH}/${KLING_OMNI_MODEL_NAME}`,
   model: KLING_OMNI_MODEL_NAME,
   pricedAs: "image_to_video",
+  complimentary: true,
 
   validate: (input) => klingImageToVideo.validate(input),
   buildRequest: (input) => klingImageToVideo.buildRequest(input),

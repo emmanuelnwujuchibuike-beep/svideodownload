@@ -78,6 +78,26 @@ export const KLING_ASPECT_RATIOS = ["16:9", "9:16", "1:1"] as const;
 export type KlingAspectRatio = (typeof KLING_ASPECT_RATIOS)[number];
 
 /**
+ * Which `settings.audio` values each video input allows (Kling 3.0 Omni API
+ * reference, 2026-10-19 audit):
+ *
+ *   base_video     "does not support generating native audio, that is, the
+ *                  audio parameter value cannot be native" → original | off
+ *                  (`original` also PROVEN by generation, task 936753170905833539)
+ *   feature_video  "Native audio generation is not supported and the audio
+ *                  parameter can only be off in this case" → off
+ *
+ * 🔴 `original` with a feature video was ACCEPTED by a probe (a 200), but the
+ * documentation forbids it and no generation ever showed it honoured — and
+ * "accepted by the API" is not "read by the model" (the 10-04 lesson). So the
+ * documented rule wins.
+ */
+export const KLING_AUDIO_FOR_VIDEO_INPUT = {
+  base: ["original", "off"],
+  feature: ["off"],
+} as const satisfies Record<"base" | "feature", readonly KlingAudioMode[]>;
+
+/**
  * `settings.audio`. ✅ VERIFIED the vendor accepts three names —
  * `"allowed values: native, off, original"`.
  *
@@ -154,12 +174,38 @@ export const KLING_OMNI = {
     extensions: [".jpg", ".jpeg", ".png"] as const,
   },
 
-  /** ⚠️ The reference/base video's own window, from the model guide. Note it is NOT the output's window. */
+  /**
+   * The reference/base video's own limits. Note they are NOT the output's window.
+   *
+   * 🔴 Read from Kling's OWN 3.0 Omni API reference (2026-10-19 audit), and where
+   * its two documents disagree the STRICTER value is kept, because a refusal
+   * before the quote is a sentence while a refusal at Kling is a refund:
+   *
+   *   duration   API reference 3–15.5 s, user guide 3–10 s      → 3–10 s
+   *   frame      "width and height between 700px and 4553px, total pixel
+   *              area not exceeding 8294400"; guide "resolution ≤ 2k" → 700 px
+   *              shortest side, 2560 px longest, 8,294,400 px area
+   *   aspect     "between 0.4 and 2" (the legacy page said 1:2.5–2.5:1) → 0.4–2
+   *   frame rate "24fps to 60fps (the frame rate for generating videos is 24fps)"
+   *   format     ".mp4, .mov" · size ≤ 200 MB · exactly one video
+   *
+   * These are checked against facts the WORKER measured (ffprobe), never the
+   * browser's claim — see `validateReferenceVideoFacts` in shared.ts.
+   */
   video: {
     minSeconds: 3,
     maxSeconds: 10,
     maxBytes: 200 * 1024 * 1024,
+    minEdgePx: 700,
     maxEdgePx: 2560,
+    maxPixels: 8_294_400,
+    minAspect: 0.4,
+    maxAspect: 2,
+    /** Compared after rounding, so 23.976 and 59.94 fps (common phone and film rates) count as 24 and 60. */
+    minFps: 24,
+    maxFps: 60,
+    /** ffprobe's `format_name` for both is "mov,mp4,m4a,3gp,3g2,mj2". */
+    containers: ["mp4", "mov"] as const,
     maxCount: 1,
   },
 } as const;

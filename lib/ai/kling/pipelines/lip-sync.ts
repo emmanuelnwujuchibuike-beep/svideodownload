@@ -51,6 +51,8 @@ export const klingLipSyncPipeline: KlingSupportedPipeline<KlingLipSyncInput> = {
   endpoint: KLING_LIP_SYNC_PATH,
   model: klingLipSync.model,
   pricedAs: "lip_sync",
+  // never: its input has no duration option, so the shape rule never matched it — now it says so
+  complimentary: false,
 
   validate: (input) => klingLipSync.validate(input),
   buildRequest: (input) => klingLipSync.buildRequest(input),

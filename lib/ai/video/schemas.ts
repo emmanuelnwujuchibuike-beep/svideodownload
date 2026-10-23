@@ -60,9 +60,46 @@ const referenceInputs = {
   referenceVideoUrl: mediaUrl.optional(),
   /** What the reference video is for: edit it ("base") or copy its motion ("feature"). 2026-10-06. */
   referenceVideoMode: z.enum(["base", "feature"]).optional(),
-  /** Its length as the browser measured it; prices an edit (Kling bills the clip length). */
+  /** Its length as the browser measured it — display only; the server prices from the token's measured facts. */
   referenceVideoSeconds: z.number().positive().max(600).optional(),
+  /** The worker's signed measurement of the reference video (2026-10-19), required with a video. */
+  referenceVideoToken: z.string().min(10).max(16_000).optional(),
 };
+
+/**
+ * CHARACTER REPLACE (2026-10-19). The browser sends what the member CHOSE and
+ * nothing it could forge: the inspection token (the worker's signed facts and
+ * people), which detected person each photo replaces, and storage PATHS — the
+ * server checks their owner and signs them itself (lib/ai/video/resolve-input.ts).
+ * `consent` is the permission box on the screen, required.
+ */
+export const personReplaceInputSchema = z
+  .object({
+    inspection: z.string().min(10).max(16_000),
+    targets: z
+      .array(
+        z
+          .object({
+            personId: z.string().regex(/^p\d{1,2}$/),
+            description: z.string().max(200).optional(),
+            referencePaths: z.array(z.string().min(1).max(300)).min(1).max(KLING_OMNI.images.maxWithReferenceVideo),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(2),
+    instructions: z.string().max(KLING_OMNI.prompt.maxChars).optional(),
+    consent: z.literal(true),
+    options: z
+      .object({
+        resolution: z.enum(KLING_VIDEO_RESOLUTIONS).optional(),
+        audio: z.enum(["original", "off"]).optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+export type PersonReplaceWireInput = z.infer<typeof personReplaceInputSchema>;
 
 export const textToVideoInputSchema = z
   .object({
@@ -118,6 +155,7 @@ export const videoQuoteRequestSchema = z.discriminatedUnion("feature", [
   z.object({ feature: z.literal("text_to_video"), input: textToVideoInputSchema }).strict(),
   z.object({ feature: z.literal("image_to_video"), input: imageToVideoInputSchema }).strict(),
   z.object({ feature: z.literal("lip_sync"), input: lipSyncInputSchema }).strict(),
+  z.object({ feature: z.literal("full_character"), input: personReplaceInputSchema }).strict(),
 ]);
 
 /** The body of a create request: the same, plus idempotency and what was shown. */
@@ -125,6 +163,7 @@ export const createVideoJobSchema = z.discriminatedUnion("feature", [
   z.object({ feature: z.literal("text_to_video"), input: textToVideoInputSchema, clientRequestId: z.string().min(8).max(64), shownTotalCents: z.number().int().nonnegative().optional(), funding: z.enum(["wallet", "credits"]).optional() }).strict(),
   z.object({ feature: z.literal("image_to_video"), input: imageToVideoInputSchema, clientRequestId: z.string().min(8).max(64), shownTotalCents: z.number().int().nonnegative().optional(), funding: z.enum(["wallet", "credits"]).optional() }).strict(),
   z.object({ feature: z.literal("lip_sync"), input: lipSyncInputSchema, clientRequestId: z.string().min(8).max(64), shownTotalCents: z.number().int().nonnegative().optional(), funding: z.enum(["wallet", "credits"]).optional() }).strict(),
+  z.object({ feature: z.literal("full_character"), input: personReplaceInputSchema, clientRequestId: z.string().min(8).max(64), shownTotalCents: z.number().int().nonnegative().optional(), funding: z.enum(["wallet", "credits"]).optional() }).strict(),
 ]);
 
 export type VideoQuoteRequest = z.infer<typeof videoQuoteRequestSchema>;

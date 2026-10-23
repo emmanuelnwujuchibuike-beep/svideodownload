@@ -232,6 +232,7 @@ export function meaningfulSourceName(name: string | null | undefined): string | 
 export function historyTitleFor(feature: AiFeature): string {
   switch (feature) {
     case "ai_character_replace":
+    case "ai_person_replace":
       return "Character Replace video";
     case "ai_lip_sync":
       return "Lip Sync Pro video";

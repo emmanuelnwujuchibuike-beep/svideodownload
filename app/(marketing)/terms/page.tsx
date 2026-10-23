@@ -81,7 +81,7 @@ export default function TermsPage() {
         is the same one `AI_RIGHTS_NOTICE` shows at the point of upload. If any
         of those change, this changes with them.
       */}
-      <h2>4. Frenz AI tools</h2>
+      <h2 id="frenz-ai-tools">4. Frenz AI tools</h2>
       <p>
         Frenz AI provides media editing tools — including removing unwanted
         text, captions, logos and other visual distractions from video. These

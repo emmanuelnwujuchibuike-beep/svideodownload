@@ -215,6 +215,7 @@ const MEDIA_NOUN: Record<AiFeature, string> = {
   */
   ai_text_to_video: "video",
   ai_image_to_video: "video",
+  ai_person_replace: "video",
   /*
     🔴 THE COMPILER FOUND THESE, WHICH IS WHY THE RECORD IS TOTAL. The first
     draft of this file listed `ai_clean` alone and typechecked as an object

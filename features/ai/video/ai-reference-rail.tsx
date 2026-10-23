@@ -4,7 +4,7 @@ import { Clapperboard, ImagePlus, Loader2, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { KLING_OMNI, klingMaxReferenceImages } from "@/lib/ai/kling/features/capabilities";
-import { ReferenceUploadError, uploadReference } from "@/lib/ai/video/reference-upload";
+import { ReferenceUploadError, uploadReference, type UploadedReference } from "@/lib/ai/video/reference-upload";
 import { cn } from "@/lib/utils";
 
 /**
@@ -52,12 +52,20 @@ export interface AiReferenceRailProps {
   onImagesChange: (urls: string[]) => void;
   videoUrl: string | null;
   onVideoChange: (url: string | null) => void;
+  /**
+   * The uploaded video's storage path and the worker's signed measurement
+   * (2026-10-19). The quote and the job need the token; Replace characters
+   * needs the path. Called right after `onVideoChange(url)` on an upload.
+   */
+  onVideoUploaded?: (video: UploadedReference) => void;
+  /** Each uploaded image's storage path, so Replace characters can reuse a reference photo ("From references"). */
+  onImageUploaded?: (image: UploadedReference) => void;
   /** Locked while a generation is in flight. */
   disabled?: boolean;
   className?: string;
 }
 
-export function AiReferenceRail({ images, onImagesChange, videoUrl, onVideoChange, disabled, className }: AiReferenceRailProps) {
+export function AiReferenceRail({ images, onImagesChange, videoUrl, onVideoChange, onVideoUploaded, onImageUploaded, disabled, className }: AiReferenceRailProps) {
   const maxImages = klingMaxReferenceImages(!!videoUrl);
   const [revealed, setRevealed] = useState(INITIAL_SLOTS);
   const [problem, setProblem] = useState<string | null>(null);
@@ -101,6 +109,7 @@ export function AiReferenceRail({ images, onImagesChange, videoUrl, onVideoChang
         for (const file of chosen) {
           const up = await uploadReference(file, "image");
           added.push(up.url);
+          onImageUploaded?.(up);
         }
       } catch (e) {
         setProblem(e instanceof ReferenceUploadError ? e.message : "That image couldn't be added.");
@@ -112,7 +121,7 @@ export function AiReferenceRail({ images, onImagesChange, videoUrl, onVideoChang
         if (imageInput.current) imageInput.current.value = "";
       }
     },
-    [images, maxImages, onImagesChange],
+    [images, maxImages, onImagesChange, onImageUploaded],
   );
 
   const addVideo = useCallback(
@@ -135,6 +144,7 @@ export function AiReferenceRail({ images, onImagesChange, videoUrl, onVideoChang
       try {
         const up = await uploadReference(file, "video", { onProgress: setVideoProgress });
         onVideoChange(up.url);
+        onVideoUploaded?.(up);
         setVideoName(file.name);
       } catch (e) {
         setProblem(e instanceof ReferenceUploadError ? e.message : "That video couldn't be added.");
@@ -143,7 +153,7 @@ export function AiReferenceRail({ images, onImagesChange, videoUrl, onVideoChang
         if (videoInput.current) videoInput.current.value = "";
       }
     },
-    [images.length, onVideoChange],
+    [images.length, onVideoChange, onVideoUploaded],
   );
 
   const removeImage = (index: number) => onImagesChange(images.filter((_, i) => i !== index));

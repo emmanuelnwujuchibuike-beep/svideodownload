@@ -91,7 +91,7 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
     failed every Text to Video generation AFTER charging for it. The note in
     `app/api/internal/ai/finalize/route.ts` has the production evidence.
   */
-  const FINALIZED_HERE = ["ai_character_replace", "ai_lip_sync", "ai_text_to_video", "ai_image_to_video"] as const;
+  const FINALIZED_HERE = ["ai_character_replace", "ai_lip_sync", "ai_text_to_video", "ai_image_to_video", "ai_person_replace"] as const;
   if (!feature || !(FINALIZED_HERE as readonly string[]).includes(feature.id)) return { ok: false, jobId, code: "AI_FINALIZATION_FAILED", detail: `${job.feature} is not finalized here` };
   const lipSyncPro = feature.id === "ai_lip_sync";
   /*
@@ -101,7 +101,13 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
     Sync schemas would not match its row anyway, but saying so here is what
     keeps the two families from quietly borrowing each other's assumptions.
   */
-  const klingVideo = feature.id === "ai_text_to_video" || feature.id === "ai_image_to_video";
+  /*
+    🔴 Character Replace (2026-10-19) is a Kling video on these terms too: no
+    Character Replace job meta (that schema is the RETIRED tool's), and its
+    expected length is `quote.seconds` — the clip's own measured length, which
+    is what an Omni edit returns.
+  */
+  const klingVideo = feature.id === "ai_text_to_video" || feature.id === "ai_image_to_video" || feature.id === "ai_person_replace";
   if (job.status === "completed" && job.result_path) return { ok: true, jobId, skipped: "already finalized" };
 
   const providerOutputUrl = typeof job.metadata?.provider_output_url === "string" ? job.metadata.provider_output_url : null;

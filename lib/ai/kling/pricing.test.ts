@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  characterReplaceOnSale,
   klingQuoteMarginUsdCents,
   klingTier,
   klingTierCostKnown,
@@ -53,9 +54,25 @@ describe("the matrix covers exactly what the live API serves", () => {
   });
 
   it("has no row for a capability the API does not have", () => {
-    for (const dead of ["character", "face", "reference_video", "reference_image", "full_character"]) {
+    // the region scopes have no engine; reference inputs are priced inside the tool that hosts them
+    for (const dead of ["face", "upper_body", "reference_video", "reference_image", "full_character"]) {
       expect(KLING_TIER_KEYS.some((k) => k.includes(dead)), dead).toBe(false);
     }
+  });
+
+  it("Replace characters is offered only once a Character Replace tier is on sale", () => {
+    expect(characterReplaceOnSale(KLING_PRICING_DEFAULTS)).toBe(false);
+    const on = { ...KLING_PRICING_DEFAULTS, matrix: { ...KLING_PRICING_DEFAULTS.matrix, "character_replace:1080p": { ...KLING_PRICING_DEFAULTS.matrix["character_replace:1080p"], enabled: true } } };
+    expect(characterReplaceOnSale(on)).toBe(true);
+    // teeth: another tool being on sale says nothing about this one
+    const other = { ...KLING_PRICING_DEFAULTS, matrix: { ...KLING_PRICING_DEFAULTS.matrix, "text_to_video:720p": { ...KLING_PRICING_DEFAULTS.matrix["text_to_video:720p"], enabled: true } } };
+    expect(characterReplaceOnSale(other)).toBe(false);
+  });
+
+  it("🔴 Character Replace has its own rows, and every one ships SWITCHED OFF (a new tier's price defaults to 0)", () => {
+    const rows = KLING_TIER_KEYS.filter((k) => k.startsWith("character_replace:"));
+    expect(rows.sort()).toEqual(["character_replace:1080p", "character_replace:4k", "character_replace:720p"]);
+    for (const k of rows) expect(KLING_PRICING_DEFAULTS.matrix[k].enabled, k).toBe(false);
   });
 
   it("lip sync is priced on ONE row, because the member chooses no resolution", () => {

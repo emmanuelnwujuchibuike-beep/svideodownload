@@ -6,6 +6,7 @@ import { aiFeature, isValidClientRequestId } from "@/lib/ai/jobs";
 import { klingPipeline } from "@/lib/ai/kling/pipelines/registry";
 import { resolveAiSubject } from "@/lib/ai/subject-server";
 import { createKlingVideoJob, publicKlingQuote } from "@/lib/ai/video/create";
+import { resolveVideoInput } from "@/lib/ai/video/resolve-input";
 import { createVideoJobSchema } from "@/lib/ai/video/schemas";
 import { getAdminUser } from "@/lib/admin/require-admin";
 import { getLandingSettings } from "@/lib/landing/settings";
@@ -56,9 +57,13 @@ export async function POST(request: Request) {
   try {
     const [settings, entitlement, adminUser] = await Promise.all([getLandingSettings(), getAiEntitlement(subject, feature), getAdminUser().catch(() => null)]);
     const origin = (process.env.NEXT_PUBLIC_SITE_URL ?? SITE_URL).replace(/\/$/, "");
+    // 🔴 the signed inspection re-checked against the stored object, every URL minted here — before any money moves
+    const resolved = await resolveVideoInput(parsed.data.feature, parsed.data.input, { userId: subject.userId, forCharge: true });
+    if (!resolved.ok) return fail("INVALID_INPUT", { error: resolved.error });
     const outcome = await createKlingVideoJob({
       feature: parsed.data.feature,
-      input: parsed.data.input as never,
+      input: resolved.input as never,
+      sourceFacts: resolved.sourceFacts,
       subject,
       clientRequestId: parsed.data.clientRequestId,
       shownTotalCents: parsed.data.shownTotalCents ?? null,

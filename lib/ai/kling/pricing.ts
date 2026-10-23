@@ -57,13 +57,14 @@
 /* ───────────────────────────── the dimensions ────────────────────────────── */
 
 /** The operations that can be priced. Only what the live API actually serves. */
-export type KlingPricedFeature = "text_to_video" | "image_to_video" | "lip_sync";
-export const KLING_PRICED_FEATURES: readonly KlingPricedFeature[] = ["text_to_video", "image_to_video", "lip_sync"];
+export type KlingPricedFeature = "text_to_video" | "image_to_video" | "lip_sync" | "character_replace";
+export const KLING_PRICED_FEATURES: readonly KlingPricedFeature[] = ["text_to_video", "image_to_video", "lip_sync", "character_replace"];
 
 export const KLING_PRICED_FEATURE_LABEL: Record<KlingPricedFeature, string> = {
   text_to_video: "Text to Video",
   image_to_video: "Image to Video",
   lip_sync: "Lip Sync",
+  character_replace: "Character Replace",
 };
 
 /**
@@ -102,6 +103,9 @@ export const KLING_TIER_KEYS: readonly KlingTierKey[] = [
   "image_to_video:1080p",
   "image_to_video:4k",
   "lip_sync:source",
+  "character_replace:720p",
+  "character_replace:1080p",
+  "character_replace:4k",
 ];
 
 /* ─────────────────────────────── the tier ────────────────────────────────── */
@@ -245,6 +249,22 @@ export const KLING_PRICING_DEFAULTS: KlingPricingConfig = {
       maxSeconds: 60,
       notes: "Measured 2026-09-28: 0.5 units for a ~3s clip. Recorded per run — only one length observed. Source must be 512–2160px tall and contain a person.",
     }),
+
+    /*
+      🔴 CHARACTER REPLACE SHIPS SWITCHED OFF (2026-10-19). Every tier above
+      defaults to a member price of 0 because the operator's saved row supplies
+      the real one; a NEW tier has no saved row, so "enabled" here would put a
+      paid Kling edit on sale for nothing the moment this deployed. Off means
+      the tool reports `admin_disabled` to members until the admin prices it
+      and switches it on (an admin may preview it while off — create.ts).
+
+      0.9 units/s is the video-input rate measured on a base-video edit at
+      720p (4.5 units for 5 s, task 936598991629459463). Its own tier is priced
+      as a video-input generation from the start, so the multiplier is 1.
+    */
+    "character_replace:720p": tier({ enabled: false, providerUnitsPerSecond: 0.9, videoInputMultiplier: 1, maxSeconds: 10, notes: "Measured 2026-10-06: 4.5 units for a 5s base-video edit at 720p (0.9 units/s). Billed on the clip's own length. Off until priced." }),
+    "character_replace:1080p": tier({ enabled: false, videoInputMultiplier: 1, maxSeconds: 10, notes: "Provider cost NOT measured at 1080p. Off until priced." }),
+    "character_replace:4k": tier({ enabled: false, videoInputMultiplier: 1, maxSeconds: 10, notes: "Provider cost NOT measured at 4k, and 4k with a video input is unverified. Off until priced." }),
   },
   paused: false,
   version: 1,
@@ -333,6 +353,15 @@ export function klingTierKey(feature: KlingPricedFeature, resolution: KlingPrice
 
 export function klingTier(c: KlingPricingConfig, feature: KlingPricedFeature, resolution: KlingPricedResolution): KlingTierPricing {
   return c.matrix[klingTierKey(feature, resolution)];
+}
+
+/**
+ * Whether Character Replace is on sale at any quality (2026-10-22). Its tiers ship off; the Text to Video
+ * page offers "Replace characters" only once the operator has priced and enabled one (or to an admin,
+ * who previews it — lib/ai/video/create.ts effectiveKlingPricing).
+ */
+export function characterReplaceOnSale(c: KlingPricingConfig): boolean {
+  return KLING_TIER_KEYS.some((k) => k.startsWith("character_replace:") && c.matrix[k]?.enabled === true);
 }
 
 /** Whether OUR cost for this tier is actually known, or merely unset. */

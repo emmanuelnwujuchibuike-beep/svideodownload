@@ -71,7 +71,7 @@ import { isActiveStatus, type AiJobStatus } from "@/lib/ai/jobs";
 
 export type GenerationPhase = "running" | "completed" | "failed";
 
-export type VideoFeature = "text_to_video" | "image_to_video" | "lip_sync";
+export type VideoFeature = "text_to_video" | "image_to_video" | "lip_sync" | "full_character";
 
 export interface ActiveGeneration {
   jobId: string;

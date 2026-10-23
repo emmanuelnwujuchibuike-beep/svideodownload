@@ -23,6 +23,7 @@ export const AI_VIDEO_FEATURES: ReadonlySet<AiFeature> = new Set<AiFeature>([
   "ai_lip_sync",
   "ai_text_to_video",
   "ai_image_to_video",
+  "ai_person_replace",
   "ai_clean",
 ]);
 
@@ -31,6 +32,7 @@ const TOOL_NAME: Partial<Record<AiFeature, string>> = {
   ai_lip_sync: "Lip Sync Pro",
   ai_text_to_video: "Text to Video",
   ai_image_to_video: "Image to Video",
+  ai_person_replace: "Character Replace",
   ai_clean: "AI Clean",
 };
 

@@ -60,6 +60,12 @@ function fromCredits(id: AiCreditFeatureId, settings: LandingSettings): { credit
       if (!q.ok) return null;
       return { credits: calculateCredits({ feature: id, priceCents: q.totalUsdCents, mode: "video", quality: q.resolution, durationMs: q.billableSeconds * 1000 }, plans).creditsRequired, per: "3 s video at 720p" };
     }
+    if (id === "ai_person_replace") {
+      // a 5 s clip, one person, one photo — null while the operator has the tier off (it ships off)
+      const q = klingPipeline("full_character").quote({ video: { durationMs: 5000 }, targets: [{ referenceImageUrls: ["x"] }], options: { resolution: "720p" } } as never, settings.frenzAiKlingPricing);
+      if (!q.ok) return null;
+      return { credits: calculateCredits({ feature: id, priceCents: q.totalUsdCents, mode: "video", quality: q.resolution, durationMs: q.billableSeconds * 1000 }, plans).creditsRequired, per: "5 s video, one person" };
+    }
     if (id === "ai_lip_sync") {
       const q = quoteLipSync({ durationMs: 5000, speechSource: "audio", speechPath: "audio", textCharacters: 0 }, settings.frenzAiLipSync, money);
       return { credits: lipSyncCredits(q, settings.frenzAiLipSync, plans).creditsRequired, per: "5 s clip" };

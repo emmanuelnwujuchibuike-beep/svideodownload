@@ -10,6 +10,7 @@ import {
   quoteKling,
   KLING_PRICED_FEATURE_LABEL,
   KLING_TIER_KEYS,
+  type KlingPricedFeature,
   type KlingPricingConfig,
   type KlingTierKey,
   type KlingTierPricing,
@@ -239,7 +240,8 @@ export function KlingPricingSettingsPanel({ settings }: { settings: LandingSetti
                 },
               },
               {
-                feature: key.startsWith("text_to_video") ? "text_to_video" : key.startsWith("image_to_video") ? "image_to_video" : "lip_sync",
+                // the tier key's own prefix — a fourth feature (Character Replace) must not be sampled as Lip Sync
+                feature: key.split(":")[0] as KlingPricedFeature,
                 resolution: key.endsWith("1080p") ? "1080p" : key.endsWith("4k") ? "4k" : "720p",
                 seconds: int(d.minBillableSeconds, 3),
               },

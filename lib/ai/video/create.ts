@@ -17,7 +17,7 @@ import { aiFeature, type AiFeatureDef } from "@/lib/ai/jobs";
 import { submitKlingPipeline } from "@/lib/ai/kling/pipelines/submit";
 import { klingCapability, klingPipeline, type KlingPipelineInputs, type KlingRunnableFeature } from "@/lib/ai/kling/pipelines/registry";
 import { klingConfigured } from "@/lib/ai/kling/client";
-import { quoteKling, type KlingQuote } from "@/lib/ai/kling/pricing";
+import { KLING_TIER_KEYS, quoteKling, type KlingPricingConfig, type KlingQuote } from "@/lib/ai/kling/pricing";
 import type { AiSubject } from "@/lib/ai/subject";
 import { subjectOwnerId } from "@/lib/ai/subject";
 import { concurrencyLimitFor, getAiWalletBalanceCents, reserveAiWalletCharge } from "@/lib/ai/wallet/server";
@@ -128,10 +128,7 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
     public switch is still off — the end-to-end check before members see it.
     Priced exactly as a member would be; only the switch is bypassed.
   */
-  const pricing =
-    opts.isAdmin && isOneMinute(opts.input) && !settings.frenzAiKlingPricing.oneMinute.enabled
-      ? { ...settings.frenzAiKlingPricing, oneMinute: { ...settings.frenzAiKlingPricing.oneMinute, enabled: true } }
-      : settings.frenzAiKlingPricing;
+  const pricing = effectiveKlingPricing(settings.frenzAiKlingPricing, { isAdmin: opts.isAdmin, feature: featureId, input: opts.input });
   const plans = settings.frenzAiPlans;
 
   /* ── 1 · the capability gate: free, and before anything else ───────────── */
@@ -182,7 +179,8 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
   const cr = settings.frenzAiCharacterReplace;
   let complimentary = false;
   let freeGranted: number | null = null;
-  if (opts.request && subject.kind === "user" && !isOneMinute(opts.input) && freeVideoQualifies(opts.input as unknown as FreeVideoRequest).ok) {
+  // 🔴 only a pipeline that opts in (pipelines/types.ts `complimentary`) — the shape rule alone once qualified a Character Replace edit
+  if (pipeline.complimentary && opts.request && subject.kind === "user" && !isOneMinute(opts.input) && freeVideoQualifies(opts.input as unknown as FreeVideoRequest).ok) {
     const deviceKnown = !cr.antiAbuse.deviceDetection || !!readDeviceId(opts.request);
     if (deviceKnown || opts.isAdmin) {
       const eligibility = await getCharacterReplaceFreeEligibility({ subject, config: cr, request: opts.request, isAdmin: opts.isAdmin, plans }).catch(() => null);
@@ -411,6 +409,29 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
   }
 
   return { ok: true, jobId: job.id, quote, funding: fundingKind, balanceCents: balanceBefore, credits: creditDecision ? creditDecisionView(creditDecision) : null };
+}
+
+/**
+ * The pricing a request is quoted and charged with — the operator's, plus two
+ * ADMIN PREVIEWS that let the owner run a tool end to end before members can:
+ *
+ *   · a one-minute video while the one-minute switch is off (2026-10-06);
+ *   · Character Replace while its tiers are off (2026-10-19) — they ship off,
+ *     and the approved paid test has to be runnable without opening the tool.
+ *
+ * Priced exactly as configured; only the switch is bypassed, and only for an
+ * admin. Used by both /quote and /jobs so the two cannot disagree.
+ */
+export function effectiveKlingPricing(pricing: KlingPricingConfig, opts: { isAdmin: boolean; feature: string; input: unknown }): KlingPricingConfig {
+  if (!opts.isAdmin) return pricing;
+  let out = pricing;
+  if (isOneMinute(opts.input) && !out.oneMinute.enabled) out = { ...out, oneMinute: { ...out.oneMinute, enabled: true } };
+  if (opts.feature === "full_character") {
+    const matrix = { ...out.matrix };
+    for (const key of KLING_TIER_KEYS) if (key.startsWith("character_replace:")) matrix[key] = { ...matrix[key], enabled: true };
+    out = { ...out, matrix };
+  }
+  return out;
 }
 
 /**

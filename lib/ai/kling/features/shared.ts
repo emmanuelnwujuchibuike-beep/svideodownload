@@ -1,5 +1,6 @@
 import {
   KLING_ASPECT_RATIOS,
+  KLING_AUDIO_FOR_VIDEO_INPUT,
   KLING_AUDIO_MODES,
   KLING_OMNI,
   KLING_VIDEO_RESOLUTIONS,
@@ -103,15 +104,8 @@ export function validateCommonOptions(options: KlingCommonOptions | undefined): 
     return invalid("That quality isn't one this engine offers.");
   }
   if (options.aspectRatio !== undefined && !KLING_ASPECT_RATIOS.includes(options.aspectRatio)) return invalid("That aspect ratio isn't one this engine offers.");
-  if (options.audio !== undefined && !KLING_AUDIO_MODES.includes(options.audio)) {
-    /*
-      🔴 `original` is a value the VENDOR lists but `kling-v3-omni` refuses:
-      "audio mode 'original' is not supported by the current model". Refusing it
-      here means a member sees a sentence instead of a provider rejection after
-      the charge.
-    */
-    return invalid("That sound setting isn't one this engine offers.");
-  }
+  // Which of the three values a REQUEST may carry depends on its video input — validateReferenceInputs decides that.
+  if (options.audio !== undefined && !KLING_AUDIO_MODES.includes(options.audio)) return invalid("That sound setting isn't one this engine offers.");
   return ok;
 }
 
@@ -198,14 +192,60 @@ export interface KlingReferenceInputs {
    */
   referenceVideoMode?: KlingReferenceVideoMode;
   /**
-   * The reference video length, measured in the browser at upload. Used ONLY to
-   * price an edit: Kling returns (and bills) the base clip length whatever
-   * duration is asked (asked 3 s, got 5.04 s, billed 5 s; 2026-10-06).
+   * The reference video length. Used ONLY to price an edit: Kling returns (and
+   * bills) the base clip length whatever duration is asked (asked 3 s, got
+   * 5.04 s, billed 5 s; 2026-10-06). Overwritten on the server from
+   * `referenceVideoFacts` — the browser's own measurement is never billed.
    */
   referenceVideoSeconds?: number;
+  /**
+   * What the WORKER measured about the reference video (ffprobe), carried in a
+   * signed inspection token and placed here by the server
+   * (lib/ai/video/resolve-input.ts). Required whenever a video is attached:
+   * the frame, rate and container limits can only be checked on real facts.
+   */
+  referenceVideoFacts?: KlingVideoFacts;
 }
 
 export type KlingReferenceVideoMode = "base" | "feature";
+
+/** A video as the worker measured it. */
+export interface KlingVideoFacts {
+  durationMs: number;
+  width: number;
+  height: number;
+  /** Frames per second; null when the stream did not say. */
+  fps: number | null;
+  /** ffprobe's `format_name`, e.g. "mov,mp4,m4a,3gp,3g2,mj2". */
+  container: string | null;
+  sizeBytes: number;
+}
+
+/**
+ * 🔴 The documented reference-video limits, checked against MEASURED facts
+ * (KLING_OMNI.video — Kling's own API reference). Every refusal here is a
+ * sentence before the quote instead of a Kling refusal after the charge.
+ */
+export function validateReferenceVideoFacts(f: KlingVideoFacts): KlingValidation {
+  const v = KLING_OMNI.video;
+  if (!Number.isFinite(f.durationMs) || f.durationMs <= 0) return invalid("We couldn't read this video's length. Try exporting it again as MP4.");
+  if (f.durationMs < v.minSeconds * 1000) return invalid(`The video must be at least ${v.minSeconds} seconds long.`);
+  // a rounding margin of one frame, so a 10.02 s phone clip is not refused as "over 10"
+  if (f.durationMs > v.maxSeconds * 1000 + 50) return invalid(`The video can be up to ${v.maxSeconds} seconds long. Trim it and try again.`);
+  if (!(f.width > 0 && f.height > 0)) return invalid("We couldn't read this video's picture size.");
+  if (Math.min(f.width, f.height) < v.minEdgePx) return invalid(`The video is too small (${f.width}×${f.height}). Its shorter side must be at least ${v.minEdgePx} pixels — 720p or larger.`);
+  if (Math.max(f.width, f.height) > v.maxEdgePx || f.width * f.height > v.maxPixels) return invalid(`The video is too large (${f.width}×${f.height}). Export it at 1080p and try again.`);
+  const aspect = f.width / f.height;
+  if (aspect < v.minAspect || aspect > v.maxAspect) return invalid("That video shape isn't supported. Use a landscape, portrait or square video.");
+  if (f.fps !== null) {
+    const fps = Math.round(f.fps);
+    if (fps < v.minFps || fps > v.maxFps) return invalid(`The video's frame rate (${Math.round(f.fps * 10) / 10} fps) isn't supported. Use ${v.minFps}–${v.maxFps} fps.`);
+  }
+  const container = (f.container ?? "").toLowerCase();
+  if (container && !v.containers.some((c) => container.split(",").includes(c))) return invalid("Use an MP4 or MOV video.");
+  if (!(f.sizeBytes > 0) || f.sizeBytes > v.maxBytes) return invalid(`The video can be up to ${Math.round(v.maxBytes / (1024 * 1024))} MB.`);
+  return ok;
+}
 
 export function validateReferenceInputs(input: KlingReferenceInputs, options?: KlingCommonOptions): KlingValidation {
   const images = input.referenceImageUrls ?? [];
@@ -214,6 +254,24 @@ export function validateReferenceInputs(input: KlingReferenceInputs, options?: K
   if (video) {
     const verdict = validateMediaUrl(video, "The reference video");
     if (!verdict.ok) return verdict;
+    // the documented frame / rate / length / container limits, on what the worker measured
+    if (!input.referenceVideoFacts) return invalid("This video needs to be checked before it can be used. Remove it and attach it again.");
+    const facts = validateReferenceVideoFacts(input.referenceVideoFacts);
+    if (!facts.ok) return facts;
+    /*
+      🔴 The sound a video input allows depends on what the video is FOR
+      (KLING_AUDIO_FOR_VIDEO_INPUT): an edit keeps its own sound or none, a
+      motion reference has none. Kling's own documentation, not a probe's 200.
+    */
+    const mode = input.referenceVideoMode === "feature" ? "feature" : "base";
+    const allowed: readonly string[] = KLING_AUDIO_FOR_VIDEO_INPUT[mode];
+    if (options?.audio !== undefined && !allowed.includes(options.audio)) {
+      return invalid(
+        mode === "feature"
+          ? "When copying a video's motion, the result can't have sound. Choose No sound."
+          : "Generated sound can't be added when editing a video. Keep the video's sound, or choose No sound.",
+      );
+    }
   }
   // "Keep the video's sound" needs a video to keep it from (Kling refuses it without one)
   if (!video && options?.audio === "original") return invalid("Keep the video's sound needs a reference video. Attach one, or choose another sound setting.");

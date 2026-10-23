@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const VIDEO_FEATURES = new Set(["ai_text_to_video", "ai_image_to_video", "ai_lip_sync"]);
+const VIDEO_FEATURES = new Set(["ai_text_to_video", "ai_image_to_video", "ai_lip_sync", "ai_person_replace"]);
 
 /**
  * GET /api/ai/jobs/[id]/rewards — what the result card may say about rewards

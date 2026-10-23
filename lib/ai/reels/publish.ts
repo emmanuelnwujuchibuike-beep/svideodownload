@@ -39,7 +39,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * keeps the results bucket's default 1-hour cache header, and every play of a
  * public reel would go back to the origin.
  */
-const VIDEO_FEATURES = new Set(["ai_text_to_video", "ai_image_to_video", "ai_lip_sync"]);
+const VIDEO_FEATURES = new Set(["ai_text_to_video", "ai_image_to_video", "ai_lip_sync", "ai_person_replace"]);
 const POST_MEDIA_BUCKET = "post-media";
 
 export type PublishAiReelResult =

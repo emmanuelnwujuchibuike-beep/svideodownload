@@ -39,7 +39,15 @@ import type { AiFeature } from "@/lib/ai/jobs";
  * feature the product names, and the UI can render an honest state for each.
  */
 
-/** The product features this migration names. One pipeline entry each, supported or not. */
+/**
+ * The product features this migration names. One pipeline entry each, supported or not.
+ *
+ * `full_character` is CHARACTER REPLACE (2026-10-19): the member's video edited
+ * so one or two chosen people become the people in their photos. The id is
+ * kept because it is the operation the old Full Character scope named.
+ * `reference_image` / `reference_video` are INPUTS of Text to Video and Image
+ * to Video, reported through the pipeline that hosts them.
+ */
 export type KlingPipelineFeature =
   | "text_to_video"
   | "image_to_video"
@@ -117,6 +125,17 @@ export interface KlingSupportedPipeline<TInput> {
   readonly model: string;
   /** Which row of the pricing matrix this feature bills against. */
   readonly pricedAs: KlingPricedFeature;
+  /**
+   * 🔴 May a request to this pipeline ever be the member's COMPLIMENTARY video?
+   *
+   * An explicit opt-in (2026-10-19). `freeVideoQualifies` reads only the input's
+   * shape — 3 s, 720p, no `referenceVideoUrl`, no native audio — so a pipeline
+   * whose input simply has no `referenceVideoUrl` field (Character Replace keeps
+   * its video elsewhere) would have qualified a whole edit as free on a
+   * `durationSeconds: 3`. Only the two tools the owner's rule was written for
+   * say yes.
+   */
+  readonly complimentary: boolean;
 
   /** 🔴 ITS OWN rules (§27). Pure — safe to call before anything is reserved. */
   validate(input: TInput): KlingValidation;

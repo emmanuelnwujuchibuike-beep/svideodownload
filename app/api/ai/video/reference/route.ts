@@ -5,6 +5,9 @@ import { NextResponse } from "next/server";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
 import { aiFeature } from "@/lib/ai/jobs";
 import { KLING_OMNI } from "@/lib/ai/kling/features/capabilities";
+import { validateReferenceVideoFacts } from "@/lib/ai/kling/features/shared";
+import { dispatchVideoInspect, inspectRefusal } from "@/lib/ai/video/inspect-dispatch";
+import { signInspection } from "@/lib/ai/video/inspection-token";
 import { AI_SOURCE_BUCKET } from "@/lib/ai/storage";
 import { signSourceUrl, statSourceObject } from "@/lib/ai/storage-server";
 import { resolveAiSubject } from "@/lib/ai/subject-server";
@@ -14,6 +17,8 @@ import { aiJobCreateLimiter, aiJobReadLimiter } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// a video's confirm waits for the worker's ffprobe (header bytes only)
+export const maxDuration = 45;
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -174,8 +179,26 @@ export async function PATCH(request: Request) {
   */
   if (stored.mimeType && !spec.mimeTypes.includes(stored.mimeType.split(";")[0]!.trim().toLowerCase())) return bad(spec.refusal);
 
+  /*
+    🔴 A VIDEO IS MEASURED HERE, BEFORE ANY QUOTE (2026-10-19). Kling's own
+    reference limits — shortest side ≥ 700 px, aspect 0.4–2, 24–60 fps, 3–10 s,
+    MP4/MOV — can only be read from the file, so the worker ffprobes it and the
+    facts come back signed. The quote and the job read them from the token; a
+    video that breaks a limit is refused now, as a sentence, not by Kling after
+    the charge.
+  */
+  let inspection: { token: string; facts: { durationMs: number; width: number; height: number; hasAudio: boolean } } | null = null;
+  if (body.kind === "video") {
+    const probed = await dispatchVideoInspect({ userId: who.ownerId, path: body.path, detect: false }, 30_000);
+    if (!probed.ok) return bad(inspectRefusal(probed.code));
+    const limits = validateReferenceVideoFacts(probed.facts);
+    if (!limits.ok) return bad(limits.reason);
+    const signed = signInspection({ kind: "video", userId: who.ownerId, path: body.path, fingerprint: probed.fingerprint, facts: probed.facts });
+    inspection = { token: signed.token, facts: { durationMs: probed.facts.durationMs, width: probed.facts.width, height: probed.facts.height, hasAudio: probed.hasAudio } };
+  }
+
   try {
-    return NextResponse.json({ url: await signSourceUrl(body.path), path: body.path }, { status: 200 });
+    return NextResponse.json({ url: await signSourceUrl(body.path), path: body.path, ...(inspection ?? {}) }, { status: 200 });
   } catch {
     return NextResponse.json(aiErrorBody("STORAGE_ERROR"), { status: aiErrorStatus("STORAGE_ERROR") });
   }

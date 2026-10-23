@@ -353,6 +353,7 @@ export function resultExtensionFor(mime: string | null | undefined): "mp4" | "mp
 export function resultSuffixFor(feature: string): string {
   switch (feature) {
     case "ai_character_replace":
+    case "ai_person_replace":
       return "replaced";
     case "ai_clean":
       return "cleaned";

@@ -43,7 +43,7 @@ const feature = aiFeature("ai_image_to_video")!;
 
 describe("the feature registry", () => {
   it("registers exactly the tools that exist — including the two Kling video features (Part 5)", () => {
-    expect(AI_FEATURES.map((f) => f.id)).toEqual(["ai_lip_sync", "ai_text_to_audio", "ai_voice_clone", "ai_text_to_video", "ai_image_to_video"]);
+    expect(AI_FEATURES.map((f) => f.id)).toEqual(["ai_lip_sync", "ai_text_to_audio", "ai_voice_clone", "ai_text_to_video", "ai_image_to_video", "ai_person_replace"]);
     expect(primaryAiFeature().id).toBe("ai_text_to_video");
   });
 
@@ -302,7 +302,8 @@ describe("status transitions", () => {
     };
     for (const root of ["lib", "server", "app", "features"]) walk(join(process.cwd(), root));
     expect(users.map((u) => u.slice(u.indexOf(process.cwd().replace(/\\/g, "/")) + process.cwd().length + 1))).toEqual(["server/services/ai-video-chain.ts"]);
-  });
+    // reads every source file — measured 5.2 s in a full run on a synced (OneDrive) checkout, past the 5 s default
+  }, 20_000);
 });
 
 describe("isValidClientRequestId", () => {

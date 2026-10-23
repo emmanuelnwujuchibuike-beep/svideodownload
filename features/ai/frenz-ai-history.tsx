@@ -124,6 +124,7 @@ const HISTORY_TOOL_ICON: Partial<Record<AiJobView["feature"], LucideIcon>> = {
   ai_text_to_audio: AudioLines,
   ai_voice_clone: Mic,
   ai_character_replace: PersonStanding,
+  ai_person_replace: PersonStanding,
 };
 
 export function FrenzAIHistory({
@@ -353,7 +354,7 @@ export function FrenzAIHistory({
       the downloads viewer (full-screen, swipe, save, send, Share to AI Reels).
       Anything else keeps the details sheet.
     */
-    if ((job.feature === "ai_text_to_video" || job.feature === "ai_image_to_video") && job.status === "completed") {
+    if ((job.feature === "ai_text_to_video" || job.feature === "ai_image_to_video" || job.feature === "ai_person_replace") && job.status === "completed") {
       openPlayer(aiJobRecord(job));
       return;
     }

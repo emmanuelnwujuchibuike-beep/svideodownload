@@ -25,6 +25,8 @@ import { KLING_PRICING_DEFAULTS, quoteKling, type KlingPricingConfig } from "../
  */
 const img = (n: number) => Array.from({ length: n }, (_, i) => `https://cdn.example.com/ref-${i}.jpg`);
 const VIDEO = "https://cdn.example.com/ref.mp4";
+/** What the worker's ffprobe would report for an ordinary 5 s 720p phone clip — the server puts it on the input from the signed inspection token. */
+const FACTS = { durationMs: 5000, width: 1280, height: 720, fps: 30, container: "mov,mp4,m4a,3gp,3g2,mj2", sizeBytes: 4 * 1024 * 1024 };
 
 describe("the reference-image ceiling", () => {
   it("is 7 on its own and 4 with a reference video", () => {
@@ -51,7 +53,7 @@ describe("the reference-image ceiling", () => {
   */
   it("flips on the same image count when a video is attached", () => {
     expect(validateReferenceInputs({ referenceImageUrls: img(5) }).ok).toBe(true);
-    const withVideo = validateReferenceInputs({ referenceImageUrls: img(5), referenceVideoUrl: VIDEO });
+    const withVideo = validateReferenceInputs({ referenceImageUrls: img(5), referenceVideoUrl: VIDEO, referenceVideoFacts: FACTS });
     expect(withVideo.ok).toBe(false);
     // and the message has to offer BOTH ways out, or it hides one of them
     if (!withVideo.ok) {
@@ -60,8 +62,15 @@ describe("the reference-image ceiling", () => {
     }
   });
 
+  it("teeth: a video the worker never measured is refused — the limits need real facts", () => {
+    const v = validateReferenceInputs({ referenceVideoUrl: VIDEO });
+    expect(v.ok).toBe(false);
+    if (!v.ok) expect(v.reason).toMatch(/checked/);
+    expect(validateReferenceInputs({ referenceVideoUrl: VIDEO, referenceVideoFacts: { ...FACTS, fps: 12 } }).ok).toBe(false);
+  });
+
   it("accepts 4 images with a video", () => {
-    expect(validateReferenceInputs({ referenceImageUrls: img(4), referenceVideoUrl: VIDEO }).ok).toBe(true);
+    expect(validateReferenceInputs({ referenceImageUrls: img(4), referenceVideoUrl: VIDEO, referenceVideoFacts: FACTS }).ok).toBe(true);
   });
 
   it("refuses a non-https or local reference", () => {
@@ -79,12 +88,12 @@ describe("both Omni features enforce it", () => {
   const base = { options: { aspectRatio: "16:9" as const } };
   it("text to video", () => {
     expect(klingTextToVideo.validate({ prompt: "a cat", ...base, referenceImageUrls: img(7) }).ok).toBe(true);
-    expect(klingTextToVideo.validate({ prompt: "a cat", ...base, referenceImageUrls: img(5), referenceVideoUrl: VIDEO }).ok).toBe(false);
+    expect(klingTextToVideo.validate({ prompt: "a cat", ...base, referenceImageUrls: img(5), referenceVideoUrl: VIDEO, referenceVideoFacts: FACTS }).ok).toBe(false);
   });
   it("image to video", () => {
     const first = { firstFrameUrl: "https://cdn.example.com/first.jpg" };
     expect(klingImageToVideo.validate({ ...first, referenceImageUrls: img(7) }).ok).toBe(true);
-    expect(klingImageToVideo.validate({ ...first, referenceImageUrls: img(5), referenceVideoUrl: VIDEO }).ok).toBe(false);
+    expect(klingImageToVideo.validate({ ...first, referenceImageUrls: img(5), referenceVideoUrl: VIDEO, referenceVideoFacts: FACTS }).ok).toBe(false);
   });
 });
 
@@ -100,7 +109,7 @@ describe("the request body carries them", () => {
       prompt: "a cat",
       options: { aspectRatio: "16:9" },
       referenceImageUrls: img(3),
-      referenceVideoUrl: VIDEO,
+      referenceVideoUrl: VIDEO, referenceVideoFacts: FACTS,
     }) as { contents: { type: string; url?: string; text?: string }[]; settings: Record<string, unknown> };
     expect(body.contents.filter((c) => c.type === "refer_image")).toHaveLength(3);
     expect(body.contents.filter((c) => c.type === "base_video")).toHaveLength(1);
@@ -111,29 +120,29 @@ describe("the request body carries them", () => {
   });
 
   it("a motion reference goes as `feature_video`", () => {
-    const body = klingTextToVideo.buildRequest({ prompt: "a cat", options: { aspectRatio: "16:9" }, referenceVideoUrl: VIDEO, referenceVideoMode: "feature" }) as { contents: { type: string }[] };
+    const body = klingTextToVideo.buildRequest({ prompt: "a cat", options: { aspectRatio: "16:9" }, referenceVideoUrl: VIDEO, referenceVideoFacts: FACTS, referenceVideoMode: "feature" }) as { contents: { type: string }[] };
     expect(body.contents.map((c) => c.type)).toContain("feature_video");
   });
 
   it("the prompt NAMES the references (how Omni binds them), and a prompt that already does is left as typed", () => {
-    const bound = bindReferencePrompt("make me dance", { referenceImageUrls: img(2), referenceVideoUrl: VIDEO });
+    const bound = bindReferencePrompt("make me dance", { referenceImageUrls: img(2), referenceVideoUrl: VIDEO, referenceVideoFacts: FACTS });
     expect(bound).toContain("<<<video_1>>>");
     expect(bound).toContain("<<<image_1>>>, <<<image_2>>>");
     expect(bound).toContain("make me dance");
     const typed = "Replace the woman in <<<video_1>>> with <<<image_1>>>";
-    expect(bindReferencePrompt(typed, { referenceImageUrls: img(1), referenceVideoUrl: VIDEO })).toBe(typed);
+    expect(bindReferencePrompt(typed, { referenceImageUrls: img(1), referenceVideoUrl: VIDEO, referenceVideoFacts: FACTS })).toBe(typed);
     expect(bindReferencePrompt("a cat", {})).toBe("a cat");
   });
 
   it("Image to Video sends a reference video as motion to follow, never a clip to edit", () => {
-    const body = klingImageToVideo.buildRequest({ firstFrameUrl: img(1)[0]!, prompt: "dance", referenceVideoUrl: VIDEO, referenceVideoMode: "base" }) as { contents: { type: string }[]; settings: Record<string, unknown> };
+    const body = klingImageToVideo.buildRequest({ firstFrameUrl: img(1)[0]!, prompt: "dance", referenceVideoUrl: VIDEO, referenceVideoFacts: FACTS, referenceVideoMode: "base" }) as { contents: { type: string }[]; settings: Record<string, unknown> };
     expect(body.contents.map((c) => c.type)).toContain("feature_video");
     expect(body.contents.map((c) => c.type)).not.toContain("base_video");
     expect(body.settings.multi_shot).toBe(false);
   });
 
   it("multi-shot with a reference video is refused before the charge", () => {
-    expect(klingTextToVideo.validate({ prompt: "a cat", multiShot: true, options: { aspectRatio: "16:9" }, referenceVideoUrl: VIDEO }).ok).toBe(false);
+    expect(klingTextToVideo.validate({ prompt: "a cat", multiShot: true, options: { aspectRatio: "16:9" }, referenceVideoUrl: VIDEO, referenceVideoFacts: FACTS }).ok).toBe(false);
   });
 
   it("sends nothing when nothing was attached", () => {
@@ -210,7 +219,7 @@ describe("a reference video is priced at Kling's video-input rate and an edit at
   it("an edit bills the longer of the asked length and the clip; an unmeasured clip bills the longest Kling accepts", async () => {
     const { klingTextToVideoPipeline } = await import("../pipelines/text-to-video");
     const q = (extra: Record<string, unknown>) =>
-      klingTextToVideoPipeline.quote({ prompt: "x", options: { aspectRatio: "16:9", durationSeconds: 3 }, referenceVideoUrl: VIDEO, ...extra } as never, paid);
+      klingTextToVideoPipeline.quote({ prompt: "x", options: { aspectRatio: "16:9", durationSeconds: 3 }, referenceVideoUrl: VIDEO, referenceVideoFacts: FACTS, ...extra } as never, paid);
     const measured = q({ referenceVideoSeconds: 5.04 });
     expect(measured.ok && measured.seconds).toBeCloseTo(5.04, 2);
     const unmeasured = q({});
@@ -222,8 +231,8 @@ describe("a reference video is priced at Kling's video-input rate and an edit at
 
 describe("keep the reference video's own sound (owner 2026-10-07; proven by generation, task 936753170905833539)", () => {
   it("audio 'original' is accepted with a reference video and sent as settings.audio", () => {
-    expect(validateReferenceInputs({ referenceVideoUrl: VIDEO }, { audio: "original" }).ok).toBe(true);
-    const body = klingTextToVideo.buildRequest({ prompt: "Make it a watercolor", referenceVideoUrl: VIDEO, options: { audio: "original" } } as never) as { settings: Record<string, unknown> };
+    expect(validateReferenceInputs({ referenceVideoUrl: VIDEO, referenceVideoFacts: FACTS }, { audio: "original" }).ok).toBe(true);
+    const body = klingTextToVideo.buildRequest({ prompt: "Make it a watercolor", referenceVideoUrl: VIDEO, referenceVideoFacts: FACTS, options: { audio: "original" } } as never) as { settings: Record<string, unknown> };
     expect(body.settings.audio).toBe("original");
     expect(body.settings.multi_shot).toBe(false);
   });
@@ -235,7 +244,7 @@ describe("keep the reference video's own sound (owner 2026-10-07; proven by gene
   });
 
   it("teeth: a one-minute video can't use a reference video (Kling ignores the length with one)", () => {
-    expect(validateReferenceInputs({ referenceVideoUrl: VIDEO }, { durationSeconds: 60 }).ok).toBe(false);
+    expect(validateReferenceInputs({ referenceVideoUrl: VIDEO, referenceVideoFacts: FACTS }, { durationSeconds: 60 }).ok).toBe(false);
     expect(validateReferenceInputs({}, { durationSeconds: 60 }).ok).toBe(true);
   });
 

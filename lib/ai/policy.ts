@@ -249,6 +249,8 @@ const FEATURE_POLICY: Partial<Record<AiFeature, Record<AiAudience, AiPlanPolicy>
   ai_lip_sync: PAID_VIDEO_TOOL,
   ai_text_to_video: PAID_VIDEO_TOOL,
   ai_image_to_video: PAID_VIDEO_TOOL,
+  // 🔴 paid like every Kling video tool — absent here it would inherit a FREE daily allowance
+  ai_person_replace: PAID_VIDEO_TOOL,
 };
 
 /** The policy for one audience and one feature. Never throws. */

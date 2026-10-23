@@ -1,7 +1,7 @@
 import "server-only";
 
 import { aiFeature, isActiveStatus, type AiJobStatus } from "@/lib/ai/jobs";
-import { KLING_RUNNABLE_FEATURES } from "@/lib/ai/kling/pipelines/registry";
+import { KLING_PIPELINES, KLING_RUNNABLE_FEATURES } from "@/lib/ai/kling/pipelines/registry";
 import { vendorConfigured } from "@/lib/ai/providers/resolve";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -38,7 +38,8 @@ export interface OverviewFeature {
 /** Every live tool, its provider and its pipeline — derived from the registries. */
 export function overviewFeatures(): OverviewFeature[] {
   const kling: OverviewFeature[] = KLING_RUNNABLE_FEATURES.map((p) => {
-    const id = `ai_${p}`;
+    // the job row's own feature value — Character Replace's pipeline is `full_character`, its rows `ai_person_replace`
+    const id: string = KLING_PIPELINES[p].aiFeature;
     return { id, label: aiFeature(id)?.label ?? p, vendor: "kling", pipeline: `Kling ${p.replace(/_/g, "-")}` };
   });
   const audio: OverviewFeature[] = [

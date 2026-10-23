@@ -1,6 +1,7 @@
 "use client";
 
-import { Clock, Palette, RectangleHorizontal } from "lucide-react";
+import { ChevronRight, Clock, Palette, RectangleHorizontal, Users } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -28,6 +29,7 @@ import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { AiReferenceSection } from "@/features/ai/video/ai-reference-section";
 import { AiVideoResult } from "@/features/ai/video/ai-video-result";
 import { VIDEO_STYLES } from "@/features/ai/video/video-styles";
+import type { ReplaceDraft } from "@/features/ai/video/replace-characters-screen";
 import { useVideoGeneration } from "@/features/ai/video/use-video-generation";
 import { KLING_OMNI } from "@/lib/ai/kling/features/capabilities";
 import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
@@ -79,6 +81,12 @@ import { withStyle, type VideoStyle } from "@/lib/ai/video/style";
 
 const DURATIONS = [3, 5, 8, 10, 15] as const;
 
+/*
+  Replace characters (design/ReplaceCharacters.dc.html, 2026-10-22): its own chunk, fetched only when the
+  member opens it — Text to Video's first paint carries none of it.
+*/
+const ReplaceCharactersScreen = dynamic(() => import("@/features/ai/video/replace-characters-screen").then((m) => m.ReplaceCharactersScreen), { ssr: false });
+
 
 
 export function TextToVideoWorkspace({
@@ -86,7 +94,10 @@ export function TextToVideoWorkspace({
   slides,
   base,
   oneMinute = false,
+  characterReplace = false,
 }: {
+  /** Character Replace is on sale (or the viewer is an admin previewing it) — the page decides (lib/ai/kling/pricing.ts characterReplaceOnSale). */
+  characterReplace?: boolean;
   /** The admin's one-minute switch (Kling pricing). On: a "1 minute" length is offered. */
   oneMinute?: boolean;
   historyHref: string;
@@ -106,6 +117,18 @@ export function TextToVideoWorkspace({
   /* Optional references — the model keeps a face, a product or a place consistent. Priced by the server. */
   const [referenceImageUrls, setReferenceImages] = useState<string[]>([]);
   const [referenceVideoUrl, setReferenceVideo] = useState<string | null>(null);
+  // the worker's signed measurement of that video — the server checks and prices it from this (2026-10-19)
+  const [referenceVideoToken, setReferenceVideoToken] = useState<string | null>(null);
+  // its storage path (Replace characters finds the people in THAT object), and each reference image's path
+  const [referenceVideoPath, setReferenceVideoPath] = useState<string | null>(null);
+  const [imagePaths, setImagePaths] = useState<Record<string, string>>({});
+  /*
+    🔴 REPLACE CHARACTERS (2026-10-22). Saved choices turn Generate into a Character Replace job on this
+    same video — `full_character`, priced and validated by the server from the signed inspection — and
+    the prompt becomes the optional "other changes". Cleared with the video it was made for.
+  */
+  const [replaceDraft, setReplaceDraft] = useState<ReplaceDraft | null>(null);
+  const [replaceOpen, setReplaceOpen] = useState(false);
   /*
     🔴 A reference video brings ITS OWN SOUND by default (owner, 2026-10-07:
     "reference videos don't take the audio from the reference video"). Kling's
@@ -119,9 +142,15 @@ export function TextToVideoWorkspace({
       setAudio("original");
       setDuration((d) => (d === 60 ? KLING_OMNI.duration.defaultSeconds : d));
     } else {
+      setReferenceVideoToken(null);
+      setReferenceVideoPath(null);
       setAudio((a) => (a === "original" ? "off" : a));
     }
   }, [referenceVideoUrl]);
+  // replacements belong to the video they were chosen on
+  useEffect(() => {
+    setReplaceDraft((d) => (d && d.videoPath === referenceVideoPath ? d : null));
+  }, [referenceVideoPath]);
   /*
     🔴 What the reference video is FOR, and how long it is (2026-10-06).
     "base" = edit that clip (keep its scene and motion, apply the prompt) — what
@@ -161,14 +190,41 @@ export function TextToVideoWorkspace({
       // array would re-quote as though something had been attached.
       ...(referenceImageUrls.length ? { referenceImageUrls } : {}),
       ...(referenceVideoUrl
-        ? { referenceVideoUrl, referenceVideoMode, ...(referenceVideoSeconds ? { referenceVideoSeconds } : {}) }
+        ? {
+            referenceVideoUrl,
+            referenceVideoMode,
+            ...(referenceVideoSeconds ? { referenceVideoSeconds } : {}),
+            // 🔴 required by the server with any video — without it the quote and the job refuse the clip
+            ...(referenceVideoToken ? { referenceVideoToken } : {}),
+          }
         : {}),
       options: { durationSeconds, aspectRatio, resolution, audio },
     }),
-    [prompt, style, durationSeconds, aspectRatio, resolution, audio, referenceImageUrls, referenceVideoUrl, referenceVideoMode, referenceVideoSeconds],
+    [prompt, style, durationSeconds, aspectRatio, resolution, audio, referenceImageUrls, referenceVideoUrl, referenceVideoMode, referenceVideoSeconds, referenceVideoToken],
   );
 
-  const gen = useVideoGeneration({ feature: "text_to_video", input, ready: prompt.trim().length > 0, label: prompt.trim() });
+  const replacing = characterReplace && !!referenceVideoUrl && referenceVideoMode === "base" && !!replaceDraft && replaceDraft.targets.length > 0;
+  // an edit keeps the video's own sound or has none — never generated sound (Kling's base-video rule)
+  const editAudio: "original" | "off" = audio === "off" ? "off" : "original";
+  const replaceInput = useMemo(() => {
+    if (!replaceDraft) return null;
+    const words = withStyle(prompt, style, KLING_OMNI.prompt.maxChars).trim();
+    return {
+      inspection: replaceDraft.inspection,
+      targets: replaceDraft.targets.map((t) => ({ personId: t.personId, ...(t.description.trim() ? { description: t.description.trim() } : {}), referencePaths: t.photos.map((p) => p.path) })),
+      ...(words ? { instructions: words } : {}),
+      // saved only after the member ticked the permission box on the Replace characters screen
+      consent: true as const,
+      options: { resolution, audio: editAudio },
+    };
+  }, [replaceDraft, prompt, style, resolution, editAudio]);
+  const referencePhotos = useMemo(() => referenceImageUrls.flatMap((url) => (imagePaths[url] ? [{ url, path: imagePaths[url]! }] : [])), [referenceImageUrls, imagePaths]);
+
+  const gen = useVideoGeneration(
+    replacing && replaceInput
+      ? { feature: "full_character", input: replaceInput, ready: true, label: prompt.trim() || "Character Replace" }
+      : { feature: "text_to_video", input, ready: prompt.trim().length > 0, label: prompt.trim() },
+  );
   // prompt suggestions (2026-10-15): they only ever set the prompt text; these let them show it and point at the references
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
   const referencesRef = useRef<HTMLDivElement | null>(null);
@@ -262,6 +318,11 @@ export function TextToVideoWorkspace({
             onImagesChange={setReferenceImages}
             videoUrl={referenceVideoUrl}
             onVideoChange={setReferenceVideo}
+            onVideoUploaded={(v) => {
+              setReferenceVideoToken(v.token ?? null);
+              setReferenceVideoPath(v.path);
+            }}
+            onImageUploaded={(img) => setImagePaths((m) => ({ ...m, [img.url]: img.path }))}
             disabled={locked}
           />
         </div>
@@ -287,6 +348,29 @@ export function TextToVideoWorkspace({
           </AiField>
         ) : null}
 
+        {characterReplace && referenceVideoUrl && referenceVideoMode === "base" ? (
+          <div>
+            <button
+              type="button"
+              onClick={() => setReplaceOpen(true)}
+              disabled={locked || !referenceVideoPath}
+              className="flex min-h-[3.5rem] w-full items-center gap-3 rounded-[20px] border border-frenz-line bg-frenz-card px-3.5 text-left shadow-frenz-card disabled:opacity-55"
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-frenz-violet/10 text-frenz-violet">
+                <Users className="h-[17px] w-[17px]" aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-frenz-ink">Replace characters</span>
+              <span className="truncate text-[14px] text-frenz-muted">{replacing ? (replaceDraft!.targets.length === 1 ? "1 person" : `${replaceDraft!.targets.length} people`) : "Off"}</span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-frenz-muted" aria-hidden />
+            </button>
+            <p className="m-0 mt-1.5 px-1 text-[11.5px] leading-snug text-frenz-muted">
+              {replacing
+                ? "The people you chose become the people in your photos. Your prompt is optional here — use it for any other changes. Reference images aren't used while replacing."
+                : "Swap up to two people in your video for the people in your photos."}
+            </p>
+          </div>
+        ) : null}
+
         <AiAdvancedSettings>
           <AiField label="Quality" hint="Higher quality costs more and takes longer.">
             <AiSegmented
@@ -308,7 +392,8 @@ export function TextToVideoWorkspace({
               options={[
                 { value: "off", label: "No sound" },
                 ...(referenceVideoUrl ? [{ value: "original" as const, label: "Keep video's sound" }] : []),
-                { value: "native", label: "Generate sound" },
+                // a replacement is an edit: no generated sound
+                ...(replacing ? [] : [{ value: "native" as const, label: "Generate sound" }]),
               ]}
             />
           </AiField>
@@ -335,12 +420,27 @@ export function TextToVideoWorkspace({
           loading={gen.quoting}
           problem={gen.quoteProblem}
         />
-        <AiGenerateButton onClick={gen.submit} busy={locked} disabled={!prompt.trim() || !!gen.quoteProblem} className="ml-auto min-w-0 flex-1">
+        <AiGenerateButton onClick={gen.submit} busy={locked} disabled={(!replacing && !prompt.trim()) || !!gen.quoteProblem} className="ml-auto min-w-0 flex-1">
           {/* the price takes the bar's left side; under 400 px the full label truncated (page 4 lesson) */}
           <span className="min-[400px]:hidden">Generate</span>
           <span className="hidden min-[400px]:inline">Generate video</span>
         </AiGenerateButton>
       </AiActionBar>
+      {replaceOpen && referenceVideoUrl && referenceVideoPath ? (
+        <ReplaceCharactersScreen
+          videoUrl={referenceVideoUrl}
+          videoPath={referenceVideoPath}
+          initial={replaceDraft}
+          referencePhotos={referencePhotos}
+          resolution={resolution}
+          audio={editAudio}
+          onSave={(draft) => {
+            setReplaceDraft(draft);
+            setReplaceOpen(false);
+          }}
+          onClose={() => setReplaceOpen(false)}
+        />
+      ) : null}
     </AiPageShell>
     </FrenzAIEnvironment>
   );

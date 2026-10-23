@@ -26,6 +26,10 @@ export interface UploadedReference {
   url: string;
   /** The storage key, so a later step can refer to the same object. */
   path: string;
+  /** A video only: the worker's signed measurement, sent back with the quote and the job (lib/ai/video/inspection-token.ts). */
+  token?: string;
+  /** A video only: what was measured, for display. The server reads the token, never this. */
+  facts?: { durationMs: number; width: number; height: number; hasAudio: boolean };
 }
 
 /** A sentence for the member. Thrown rather than returned so a caller cannot ignore it. */
@@ -59,8 +63,8 @@ export async function uploadReference(
     signal: opts.signal,
   });
   if (!doneRes.ok) throw new ReferenceUploadError(await readProblem(doneRes, "That upload didn't finish. Try again."));
-  const done = (await doneRes.json()) as { url: string; path: string };
-  return { url: done.url, path: done.path };
+  const done = (await doneRes.json()) as UploadedReference;
+  return { url: done.url, path: done.path, ...(done.token ? { token: done.token, facts: done.facts } : {}) };
 }
 
 /**

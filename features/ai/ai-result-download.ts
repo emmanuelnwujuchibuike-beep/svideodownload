@@ -96,7 +96,7 @@ export function startAiResultDownloadById(job: { id: string; feature: string; na
     thumbnail: null,
     formatId: "frenz-ai",
     kind: "video",
-    qualityLabel: job.feature === "ai_character_replace" ? "Character Replace" : "Frenz AI",
+    qualityLabel: job.feature === "ai_character_replace" || job.feature === "ai_person_replace" ? "Character Replace" : "Frenz AI",
     durationSeconds: job.durationSeconds ?? null,
   });
   /*

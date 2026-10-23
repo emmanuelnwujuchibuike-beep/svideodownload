@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { TextToVideoWorkspace } from "@/features/ai/video/text-to-video-workspace";
+import { getAdminUser } from "@/lib/admin/guard";
+import { characterReplaceOnSale } from "@/lib/ai/kling/pricing";
 import { getShowcaseSlides } from "@/lib/ai/showcase/server";
 import { aiCurrencySymbol } from "@/lib/landing/bounds";
 import { getLandingSettings } from "@/lib/landing/settings";
@@ -23,6 +25,8 @@ export default async function StudioTextToVideoWorkspacePage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/studio/ai/text-to-video");
   // The showcase opens every AI page (owner's reference); cached until an admin saves.
-  const [settings, slides] = await Promise.all([getLandingSettings(), getShowcaseSlides()]);
-  return <TextToVideoWorkspace historyHref="/studio/ai/history" currencySymbol={aiCurrencySymbol(settings.frenzAiCurrency)} oneMinute={settings.frenzAiKlingPricing.oneMinute.enabled} slides={slides} base="/studio/ai" />;
+  const [settings, slides, admin] = await Promise.all([getLandingSettings(), getShowcaseSlides(), getAdminUser().catch(() => null)]);
+  // Replace characters: offered once a tier is on sale, and always to an admin (who previews it while it is off)
+  const characterReplace = !!admin || characterReplaceOnSale(settings.frenzAiKlingPricing);
+  return <TextToVideoWorkspace historyHref="/studio/ai/history" currencySymbol={aiCurrencySymbol(settings.frenzAiCurrency)} oneMinute={settings.frenzAiKlingPricing.oneMinute.enabled} characterReplace={characterReplace} slides={slides} base="/studio/ai" />;
 }

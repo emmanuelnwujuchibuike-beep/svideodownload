@@ -8,7 +8,8 @@ import { aiFeature } from "@/lib/ai/jobs";
 import { klingConfigured } from "@/lib/ai/kling/client";
 import { klingCapability, klingPipeline } from "@/lib/ai/kling/pipelines/registry";
 import { resolveAiSubject } from "@/lib/ai/subject-server";
-import { publicKlingQuote, videoCredits } from "@/lib/ai/video/create";
+import { effectiveKlingPricing, publicKlingQuote, videoCredits } from "@/lib/ai/video/create";
+import { resolveVideoInput } from "@/lib/ai/video/resolve-input";
 import { FREE_VIDEO_SUMMARY, freeVideoQualifies, type FreeVideoRequest } from "@/lib/ai/video/free-video";
 import { videoQuoteRequestSchema } from "@/lib/ai/video/schemas";
 import { getAdminUser } from "@/lib/admin/guard";
@@ -48,8 +49,15 @@ export async function POST(request: Request) {
   const burst = await aiJobReadLimiter.limit(`ai-video-quote:${subject.key}`);
   if (!burst.success) return NextResponse.json(aiErrorBody("RATE_LIMITED"), { status: aiErrorStatus("RATE_LIMITED"), headers: { "Retry-After": String(Math.max(1, Math.ceil((burst.reset - Date.now()) / 1000))) } });
 
-  const [settings] = await Promise.all([getLandingSettings(), getAiEntitlement(subject, feature)]);
-  const capability = klingCapability(parsed.data.feature, { configured: klingConfigured(), pricing: settings.frenzAiKlingPricing });
+  // 2026-10-19: the admin check moved up — Character Replace's tiers ship off and an admin previews them
+  const [settings, , adminUser] = await Promise.all([getLandingSettings(), getAiEntitlement(subject, feature), getAdminUser().catch(() => null)]);
+  const isAdmin = !!adminUser;
+  // the signed inspection → measured facts; nothing in storage is touched for a quote
+  const resolved = await resolveVideoInput(parsed.data.feature, parsed.data.input, { userId: subject.userId, forCharge: false });
+  if (!resolved.ok) return NextResponse.json({ ok: false, reason: resolved.error }, { status: 200 });
+  const input = resolved.input;
+  const pricing = effectiveKlingPricing(settings.frenzAiKlingPricing, { isAdmin, feature: parsed.data.feature, input });
+  const capability = klingCapability(parsed.data.feature, { configured: klingConfigured(), pricing });
   if (capability.state !== "available") {
     return NextResponse.json({ ok: false, capability: { state: capability.state, reason: capability.reason } }, { status: 200 });
   }
@@ -64,7 +72,10 @@ export async function POST(request: Request) {
   const deviceId = readDeviceId(request);
   if (!deviceId) headers.append("set-cookie", deviceCookieHeader(newDeviceId()));
 
-  const quote = pipeline.quote(parsed.data.input as never, settings.frenzAiKlingPricing);
+  // the pipeline's OWN rules first, so a refusal is the sentence the member can act on, not a price
+  const verdict0 = pipeline.validate(input as never);
+  if (!verdict0.ok) return NextResponse.json({ ok: false, reason: verdict0.reason }, { status: 200, headers });
+  const quote = pipeline.quote(input as never, pricing);
   if (!quote.ok) return NextResponse.json({ ok: false, reason: quote.reason }, { status: 200, headers });
 
   /*
@@ -80,14 +91,14 @@ export async function POST(request: Request) {
     (`eligible`), and if not, which setting is in the way (`blockedBy`).
     Display only — /jobs decides again with the same rule.
   */
-  const verdict = freeVideoQualifies(parsed.data.input as unknown as FreeVideoRequest);
-  const oneMinute = (parsed.data.input as { options?: { durationSeconds?: unknown } }).options?.durationSeconds === 60;
+  const verdict = freeVideoQualifies(input as unknown as FreeVideoRequest);
+  const oneMinute = (input as { options?: { durationSeconds?: unknown } }).options?.durationSeconds === 60;
   let complimentary: { eligible: boolean; available: boolean; rules: string; blockedBy: string | null } = { eligible: false, available: false, rules: FREE_VIDEO_SUMMARY, blockedBy: null };
   const cr = settings.frenzAiCharacterReplace;
   // 2026-10-07: the admin check and the member's feature rules leave together (they were two more round trips in a row on every option change)
-  const [adminUser, fctx] = await Promise.all([getAdminUser().catch(() => null), featureContext(subject.userId, feature.id, settings.frenzAiPlans)]);
-  const isAdmin = !!adminUser;
-  if (deviceId || isAdmin || !cr.antiAbuse.deviceDetection) {
+  const fctx = await featureContext(subject.userId, feature.id, settings.frenzAiPlans);
+  // only a pipeline that opts in can ever be the complimentary video (pipelines/types.ts)
+  if (pipeline.complimentary && (deviceId || isAdmin || !cr.antiAbuse.deviceDetection)) {
     const e = await getCharacterReplaceFreeEligibility({ subject, config: cr, request, isAdmin, plans: settings.frenzAiPlans }).catch(() => null);
     const available = !!e?.eligible && (e.remainingFreeUses === null || e.remainingFreeUses > 0);
     const fits = verdict.ok && !oneMinute;

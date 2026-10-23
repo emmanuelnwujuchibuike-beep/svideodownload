@@ -38,6 +38,8 @@ export const klingTextToVideoPipeline: KlingSupportedPipeline<KlingTextToVideoIn
   endpoint: `${KLING_OMNI_VIDEO_PATH}/${KLING_OMNI_MODEL_NAME}`,
   model: KLING_OMNI_MODEL_NAME,
   pricedAs: "text_to_video",
+  // the owner's complimentary video (3 s · 720p · no reference video) was written for this tool
+  complimentary: true,
 
   // 🔴 Its own rules, delegated to the handler that owns this feature's shape.
   validate: (input) => klingTextToVideo.validate(input),

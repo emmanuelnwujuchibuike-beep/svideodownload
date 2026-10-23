@@ -300,9 +300,22 @@ export function useVideoGeneration({
   return { quote, quoting, quoteProblem, complimentary, freeOffer, status, error, result, submit, reset };
 }
 
-/** The input as the PRICE sees it: everything but the prompt text. Exported for the test. */
+/**
+ * The input as the PRICE sees it: everything but the words. Exported for the test.
+ *
+ * Character Replace (2026-10-19) adds two more kinds of words that never change
+ * a price — the extra-changes `instructions` and each person's `description` —
+ * so typing them must not re-quote either.
+ */
 export function withoutPrompt(input: unknown): unknown {
   if (!input || typeof input !== "object" || Array.isArray(input)) return input;
-  const { prompt: _prompt, ...rest } = input as Record<string, unknown>;
+  const { prompt: _prompt, instructions: _instructions, ...rest } = input as Record<string, unknown>;
+  if (Array.isArray(rest.targets)) {
+    rest.targets = rest.targets.map((t) => {
+      if (!t || typeof t !== "object") return t;
+      const { description: _description, ...priced } = t as Record<string, unknown>;
+      return priced;
+    });
+  }
   return rest;
 }

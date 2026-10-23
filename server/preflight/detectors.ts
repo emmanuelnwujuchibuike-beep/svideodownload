@@ -300,6 +300,26 @@ export async function measureFrame(file: string, dims: MediaDims, position: numb
   return { width: dims.width, height: dims.height, faces, people, sharpness: laplacianVariance(grey, gw, gh), position };
 }
 
+/**
+ * People only, at one moment of a video (Character Replace, 2026-10-19).
+ *
+ * One ffmpeg decode and the person model — none of the face, landmark or
+ * sharpness work `measureFrame` does for the preflight. `dims` must be the
+ * DISPLAYED size (rotation applied): ffmpeg decodes rotated, and the letterbox
+ * maths has to match the frame it actually decoded.
+ */
+export async function detectPeopleAt(file: string, dims: { width: number; height: number }, seekSeconds: number): Promise<PersonDetection[]> {
+  const lb = letterbox(dims.width, dims.height, PERSON_SIZE);
+  const rgb = await decodeLetterboxed(file, PERSON_SIZE, Math.max(0, seekSeconds));
+  return detectPeople(rgb, lb);
+}
+
+/** One frame as a small JPEG (longest side ≤ `maxEdge`), for the member to tap people on. */
+export async function renderFrameJpeg(file: string, seekSeconds: number, maxEdge = 960): Promise<Buffer> {
+  const args = ["-v", "error", "-nostdin", "-ss", Math.max(0, seekSeconds).toFixed(3), "-i", file, "-frames:v", "1", "-vf", `scale=${maxEdge}:${maxEdge}:force_original_aspect_ratio=decrease:flags=area`, "-f", "image2", "-vcodec", "mjpeg", "-q:v", "4", "-"];
+  return runFfmpeg(args, 4 * 1024 * 1024);
+}
+
 /** The photo: dims, then one measurement. Null when unreadable. */
 export async function measureImage(file: string): Promise<FrameMeasurement | null> {
   const dims = await probeDims(file);

@@ -140,7 +140,7 @@ export function FrenzAIHistoryPlayer({
           {downloading ? "Preparing…" : "Download video"}
         </button>
         {/* 2026-10-07 (owner brief §4): your own AI video — Share to AI Reels, or share the reel it already is */}
-        {["ai_text_to_video", "ai_image_to_video", "ai_lip_sync"].includes(job.feature) ? <AiResultShare jobId={job.id} /> : null}
+        {["ai_text_to_video", "ai_image_to_video", "ai_lip_sync", "ai_person_replace"].includes(job.feature) ? <AiResultShare jobId={job.id} /> : null}
       </div>
     </GlassSheetShell>
   );

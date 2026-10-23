@@ -1,5 +1,6 @@
 import { klingImageToVideo, type KlingImageToVideoInput } from "@/lib/ai/kling/features/image-to-video";
 import { klingLipSync, type KlingLipSyncInput } from "@/lib/ai/kling/features/lip-sync";
+import { klingPersonReplace, type KlingPersonReplaceInput } from "@/lib/ai/kling/features/person-replace";
 import { klingTextToVideo, type KlingTextToVideoInput } from "@/lib/ai/kling/features/text-to-video";
 import { klingUnavailableFeature, KLING_UNAVAILABLE_FEATURES } from "@/lib/ai/kling/features/unavailable";
 import { KLING_FEATURE_IDS, type KlingFeatureHandler, type KlingFeatureId, type KlingValidation, type KlingVerification } from "@/lib/ai/kling/features/types";
@@ -32,13 +33,14 @@ import { KLING_FEATURE_IDS, type KlingFeatureHandler, type KlingFeatureId, type 
  */
 
 /** A feature whose handler is built. Whether it may RUN is a separate question — see `klingFeatureGate`. */
-export type KlingImplementedFeatureId = "text_to_video" | "image_to_video" | "lip_sync";
+export type KlingImplementedFeatureId = "text_to_video" | "image_to_video" | "lip_sync" | "full_character";
 
 /** The input each implemented handler takes — so a caller cannot hand one feature another's input. */
 export interface KlingFeatureInputs {
   text_to_video: KlingTextToVideoInput;
   image_to_video: KlingImageToVideoInput;
   lip_sync: KlingLipSyncInput;
+  full_character: KlingPersonReplaceInput;
 }
 
 export const KLING_HANDLERS: {
@@ -47,9 +49,24 @@ export const KLING_HANDLERS: {
   text_to_video: klingTextToVideo,
   image_to_video: klingImageToVideo,
   lip_sync: klingLipSync,
+  // Character Replace (2026-10-19): base_video + refer_image on Omni — see person-replace.ts for what is and is not proven
+  full_character: klingPersonReplace,
 };
 
-export const KLING_IMPLEMENTED_FEATURE_IDS: readonly KlingImplementedFeatureId[] = ["text_to_video", "image_to_video", "lip_sync"];
+export const KLING_IMPLEMENTED_FEATURE_IDS: readonly KlingImplementedFeatureId[] = ["text_to_video", "image_to_video", "lip_sync", "full_character"];
+
+/**
+ * 🔴 REFERENCE IMAGES AND REFERENCE VIDEO ARE NOT TOOLS OF THEIR OWN — they are
+ * inputs Text to Video and Image to Video accept (2026-10-06: `refer_image`,
+ * `base_video`, `feature_video`, each settled by generation — contract doc
+ * §4.9). They used to be declared UNAVAILABLE here with the 10-04 evidence,
+ * which a later generation disproved; that was a false statement shipped in the
+ * capability table. They now answer with the handler that serves them.
+ */
+export const KLING_HOSTED_FEATURES: Readonly<Partial<Record<KlingFeatureId, KlingImplementedFeatureId>>> = {
+  reference_image: "text_to_video",
+  reference_video: "text_to_video",
+};
 
 export function isKlingImplementedFeature(id: string): id is KlingImplementedFeatureId {
   return (KLING_IMPLEMENTED_FEATURE_IDS as readonly string[]).includes(id);
@@ -63,7 +80,7 @@ export function klingHandler<K extends KlingImplementedFeatureId>(id: K): KlingF
 /* ─────────────────────────── the capability gate ─────────────────────────── */
 
 export type KlingCapability =
-  | { available: true; id: KlingImplementedFeatureId; label: string; model: string; verification: KlingVerification }
+  | { available: true; id: KlingFeatureId; label: string; model: string; verification: KlingVerification; hostedBy?: KlingImplementedFeatureId }
   | { available: false; id: KlingFeatureId; label: string; reason: string; revisitWhen: string | null };
 
 /**
@@ -75,13 +92,19 @@ export type KlingCapability =
  * regression violating, when a missing `supports()` entry failed every job after
  * the charge, the download and the prepare.
  *
- * `klingFeatureGate("full_character")` answers `available: false` with the
- * verified limitation, in nanoseconds, for free.
+ * `klingFeatureGate("face_only")` answers `available: false` with the
+ * documented limitation, in nanoseconds, for free.
  */
 export function klingFeatureGate(id: string): KlingCapability {
   if (isKlingImplementedFeature(id)) {
     const handler = KLING_HANDLERS[id];
     return { available: true, id, label: handler.label, model: handler.model, verification: handler.verification };
+  }
+  const host = KLING_HOSTED_FEATURES[id as KlingFeatureId];
+  if (host) {
+    const handler = KLING_HANDLERS[host];
+    // refer_image / base_video / feature_video were each proven by generation (contract doc §4.9)
+    return { available: true, id: id as KlingFeatureId, label: id === "reference_image" ? "Reference Image" : "Reference Video", model: handler.model, verification: "generation", hostedBy: host };
   }
   const declared = klingUnavailableFeature(id);
   if (declared) return { available: false, id: declared.id, label: declared.label, reason: declared.unavailableReason, revisitWhen: declared.revisitWhen };
@@ -100,9 +123,11 @@ export function klingFeatureGate(id: string): KlingCapability {
  *   image_to_video   "generation" — the reference photo came back animated, faithfully
  *   lip_sync         "generation" — the source video was preserved and the mouth driven
  *
- * All three were confirmed on 2026-09-28 at 720p. `reference_video` was removed
- * entirely rather than left gated: a generation PROVED Omni discards the supplied
- * video, so there is nothing to un-gate later (unavailable.ts records the runs).
+ *   full_character   "fields" — the request SHAPE ran (base_video + refer_image,
+ *                    task 936598991629459463) but not this prompt, a group video
+ *                    or two people; its pricing tiers ship OFF until a paid run
+ *
+ * The first three were confirmed on 2026-09-28 at 720p.
  *
  * Routing consults this, so nothing reaches a paying member on the strength of a
  * validation message alone. It is a one-line change per handler once a run is

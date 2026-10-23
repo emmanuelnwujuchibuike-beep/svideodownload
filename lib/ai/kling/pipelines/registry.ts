@@ -1,5 +1,6 @@
 import { klingImageToVideoPipeline } from "@/lib/ai/kling/pipelines/image-to-video";
 import { klingLipSyncPipeline } from "@/lib/ai/kling/pipelines/lip-sync";
+import { klingPersonReplacePipeline } from "@/lib/ai/kling/pipelines/person-replace";
 import { klingTextToVideoPipeline } from "@/lib/ai/kling/pipelines/text-to-video";
 import { klingUnsupportedPipeline, KLING_UNSUPPORTED_PIPELINES } from "@/lib/ai/kling/pipelines/unsupported";
 import {
@@ -14,6 +15,7 @@ import {
 import { klingTier, klingTierKey, type KlingPricingConfig } from "@/lib/ai/kling/pricing";
 import type { KlingImageToVideoInput } from "@/lib/ai/kling/features/image-to-video";
 import type { KlingLipSyncInput } from "@/lib/ai/kling/features/lip-sync";
+import type { KlingPersonReplaceInput } from "@/lib/ai/kling/features/person-replace";
 import type { KlingTextToVideoInput } from "@/lib/ai/kling/features/text-to-video";
 import type { AiFeature } from "@/lib/ai/jobs";
 
@@ -30,12 +32,12 @@ import type { AiFeature } from "@/lib/ai/jobs";
  *   text_to_video    → POST /omni-video/kling-v3-omni   (Omni, prompt)
  *   image_to_video   → POST /omni-video/kling-v3-omni   (Omni, first_frame)
  *   lip_sync         → POST /v1/videos/lip-sync         (its own endpoint+model)
- *   reference_image  → unsupported (verified)
- *   reference_video  → unsupported (verified)
- *   full_character   → unsupported (verified)
- *   face_only        → unsupported (verified)
- *   face_skin        → unsupported (verified)
- *   upper_body       → unsupported (verified)
+ *   full_character   → POST /omni-video/kling-v3-omni   (Omni, base_video + refer_image) — Character Replace
+ *   reference_image  → an INPUT of text_to_video / image_to_video (reported through text_to_video)
+ *   reference_video  → an INPUT of text_to_video / image_to_video (reported through text_to_video)
+ *   face_only        → unsupported (no region field on Omni)
+ *   face_skin        → unsupported (no region field on Omni)
+ *   upper_body       → unsupported (no region field on Omni)
  *
  * ── 🔴 A MAP, NOT A MASTER PIPELINE (§2) ───────────────────────────────────
  *
@@ -49,22 +51,34 @@ import type { AiFeature } from "@/lib/ai/jobs";
  */
 
 /** The features that actually have a working pipeline. */
-export type KlingRunnableFeature = "text_to_video" | "image_to_video" | "lip_sync";
+export type KlingRunnableFeature = "text_to_video" | "image_to_video" | "lip_sync" | "full_character";
 
 /** Each runnable feature's own input type, so one feature cannot be handed another's. */
 export interface KlingPipelineInputs {
   text_to_video: KlingTextToVideoInput;
   image_to_video: KlingImageToVideoInput;
   lip_sync: KlingLipSyncInput;
+  full_character: KlingPersonReplaceInput;
 }
 
 export const KLING_PIPELINES: { [K in KlingRunnableFeature]: KlingSupportedPipeline<KlingPipelineInputs[K]> } = {
   text_to_video: klingTextToVideoPipeline,
   image_to_video: klingImageToVideoPipeline,
   lip_sync: klingLipSyncPipeline,
+  full_character: klingPersonReplacePipeline,
 };
 
-export const KLING_RUNNABLE_FEATURES: readonly KlingRunnableFeature[] = ["text_to_video", "image_to_video", "lip_sync"];
+export const KLING_RUNNABLE_FEATURES: readonly KlingRunnableFeature[] = ["text_to_video", "image_to_video", "lip_sync", "full_character"];
+
+/**
+ * Features that are INPUTS of another pipeline rather than tools of their own,
+ * reported with the state of the pipeline that serves them (2026-10-19: they
+ * used to be listed as unsupported on disproved evidence — see unsupported.ts).
+ */
+export const KLING_PIPELINE_HOSTS: Readonly<Partial<Record<KlingPipelineFeature, KlingRunnableFeature>>> = {
+  reference_image: "text_to_video",
+  reference_video: "text_to_video",
+};
 
 export function isKlingRunnableFeature(id: string): id is KlingRunnableFeature {
   return (KLING_RUNNABLE_FEATURES as readonly string[]).includes(id);
@@ -107,6 +121,11 @@ export function isKlingVideoAiFeature(feature: string | null | undefined): boole
  * testable; the caller asks `klingConfigured()` once.
  */
 export function klingCapability(feature: KlingPipelineFeature, opts: { configured: boolean; pricing: KlingPricingConfig }): KlingCapabilityReport {
+  const host = KLING_PIPELINE_HOSTS[feature];
+  if (host) {
+    const served = klingCapability(host, opts);
+    return { ...served, feature, label: feature === "reference_image" ? "Reference Image" : "Reference Video" };
+  }
   const pipeline = klingPipelineFor(feature);
 
   if (!pipeline) {

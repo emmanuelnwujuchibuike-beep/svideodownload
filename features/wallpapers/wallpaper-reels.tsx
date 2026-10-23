@@ -695,7 +695,8 @@ export function WallpaperReels({
       {/* Caption + the one primary action */}
       <div
         ref={downloadAreaRef}
-        onClickCapture={openDirectLink}
+        data-ad-spot="wallpaper"
+        onClickCapture={() => openDirectLink()}
         className="pointer-events-none absolute inset-x-0 z-10 px-4 text-white"
         style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1.25rem)" }}
       >

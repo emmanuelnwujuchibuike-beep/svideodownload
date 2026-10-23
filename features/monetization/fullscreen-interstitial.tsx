@@ -124,6 +124,7 @@ export function FullscreenInterstitial({
       <button
         type="button"
         aria-label="Close advertisement"
+        data-ad-spot={directLinkSpot ?? undefined}
         tabIndex={shown && canSkip ? 0 : -1}
         onClick={() => {
           // the dark backdrop opens the direct link when it is on; otherwise it closes once skippable, as before
@@ -209,7 +210,10 @@ export function FullscreenInterstitial({
             reader reaches) also closes the ad. With no link set up, the ring closes too.
           */
           <div
-            onClick={() => {
+            data-ad-spot={directLinkSpot}
+            onClick={(e) => {
+              // a tap on the X is the X's own (it opens and closes); the ring acts only for taps on itself
+              if ((e.target as Element).closest("[data-ad-x]")) return;
               if (!openDirectLink()) onClose();
             }}
             aria-hidden={!shown}
@@ -220,9 +224,14 @@ export function FullscreenInterstitial({
           >
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                // owner, 2026-10-20: the X opens the Monetag link TOO, then closes — in the tap's own gesture
+              data-ad-x
+              data-ad-spot={directLinkSpot}
+              onClick={() => {
+                /*
+                  owner, 2026-10-20: the X opens the Monetag link TOO, then closes — in the tap's own gesture.
+                  2026-10-23: the pop-under first, the direct link its backup. The tap is NOT stopped here: the
+                  pop-under's listener sits on the document and must see it (the ring skips taps on the X).
+                */
                 openDirectLink();
                 onClose();
               }}

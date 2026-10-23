@@ -773,7 +773,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
       />
 
       {/* ---------------- Media cover ---------------- */}
-      <div className="relative aspect-video overflow-hidden bg-neutral-950" onClickCapture={openDirectLink}>
+      <div className="relative aspect-video overflow-hidden bg-neutral-950" data-ad-spot="resultPreview" onClickCapture={() => openDirectLink()}>
         {/* blurred fill so portrait/square media frames elegantly */}
         <AnimatePresence mode="popLayout">
           {cover ? (

@@ -137,6 +137,7 @@ import { claimPlayback, recordView, recordWatch, releasePlayback, suspendPlaybac
 import { toast } from "@/features/ui/toast";
 import { FrenzsaveError } from "@/lib/sdk";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
+import { onSoundPreference, onSoundUnlocked, playWithPreferredSound, setUserMutedSound, soundOn, userMutedSound } from "@/lib/media/sound-preference";
 import { getQualityPreference, QUALITY_LABELS, setQualityPreference, type QualityPreference } from "@/lib/media/network-conditions";
 import { getPlaybackPosition, savePlaybackPosition } from "@/lib/media/resume-positions";
 import { suppressReel } from "@/lib/social/reels-session";
@@ -1303,12 +1304,8 @@ function ReelCard({
       claimPlayback(v);
       setUi(true);
       scheduleHide();
-      v.play().catch(() => {
-        // Autoplay-with-sound blocked → play muted, offer a tap-to-unmute pill.
-        v.muted = true;
-        setMutedAuto(true);
-        v.play().catch(() => {});
-      });
+      // owner, 2026-10-23: with sound unless the member muted; a browser refusal plays muted until the first tap
+      void playWithPreferredSound(v).then((r) => setMutedAuto(r !== "sound"));
     } else {
       v.pause();
       try {
@@ -1481,11 +1478,33 @@ function ReelCard({
     await toggleFollowShared(item.publisher.id, !following, "reels");
   };
 
+  // follow the ONE sound choice (lib/media/sound-preference.ts): a mute/unmute on any video, or the first tap after a refusal
+  useEffect(() => {
+    const offPref = onSoundPreference((m) => {
+      const v = video.current;
+      if (!v || !isActive) return;
+      if (m) muteInstant(v);
+      else soundOn(v);
+      setMutedAuto(v.muted);
+    });
+    const offUnlock = onSoundUnlocked(() => {
+      const v = video.current;
+      if (!v || !isActive || v.paused || userMutedSound()) return;
+      soundOn(v);
+      setMutedAuto(false);
+    });
+    return () => {
+      offPref();
+      offUnlock();
+    };
+  }, [isActive]);
+
   const unmute = () => {
     const v = video.current;
     if (!v) return;
     unmuteWithFade(v); // smooth fade-in on the user's explicit tap
     setMutedAuto(false);
+    setUserMutedSound(false);
   };
 
   const toggleMute = () => {
@@ -1495,6 +1514,8 @@ function ReelCard({
     else {
       muteInstant(v);
       setMutedAuto(true);
+      // remembered for every video until the member unmutes (owner, 2026-10-23)
+      setUserMutedSound(true);
     }
   };
 

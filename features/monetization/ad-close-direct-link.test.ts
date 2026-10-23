@@ -15,10 +15,11 @@ const shell = src("features/monetization/fullscreen-interstitial.tsx");
 
 function rules(s: string) {
   return {
-    // the X is its own button: it stops the tap reaching the ring (no double open), opens the link, then closes
-    xCloses: /onClick=\{\(e\) => \{\s*e\.stopPropagation\(\);[\s\S]{0,160}?openDirectLink\(\);\s*onClose\(\);\s*\}\}[\s\S]{0,200}aria-label="Close advertisement"/.test(s),
-    // the ring opens the link; with no link set up it closes, as before
-    ringOpens: /onClick=\{\(\) => \{\s*if \(!openDirectLink\(\)\) onClose\(\);\s*\}\}/.test(s),
+    // the X is its own button (data-ad-x): it opens the spot's ad, then closes. 2026-10-23: the tap is NOT stopped —
+    // the pop-under's document listener must see it; the ring skips taps on the X instead (no double open)
+    xCloses: /data-ad-x\s+data-ad-spot=\{directLinkSpot\}\s+onClick=\{\(\) => \{[\s\S]{0,400}?openDirectLink\(\);\s*onClose\(\);\s*\}\}[\s\S]{0,200}aria-label="Close advertisement"/.test(s),
+    // the ring opens the link (skipping a tap that was the X's); with nothing set up it closes, as before
+    ringOpens: /onClick=\{\(e\) => \{[^}]*closest\("\[data-ad-x\]"\)\) return;\s*if \(!openDirectLink\(\)\) onClose\(\);\s*\}\}/.test(s),
     // the backdrop opens the link first, and only closes (once skippable) without one
     backdropOpens: /if \(directLinkSpot && openDirectLink\(\)\) return;\s*if \(canSkip\) onClose\(\);/.test(s),
   };
@@ -27,6 +28,12 @@ function rules(s: string) {
 describe("the ad close control's direct link", () => {
   it("the X opens the direct link and closes; so do the ring, circle and backdrop", () => {
     expect(rules(shell)).toEqual({ xCloses: true, ringOpens: true, backdropOpens: true });
+  });
+
+  it("the X no longer stops the tap (the pop-under must see it), and the ring ignores the X's own taps", () => {
+    const x = shell.slice(shell.indexOf("data-ad-x"), shell.indexOf('aria-label="Close advertisement"', shell.indexOf("data-ad-x")));
+    expect(x).not.toContain("stopPropagation");
+    expect(rules(shell.replace('if ((e.target as Element).closest("[data-ad-x]")) return;', "")).ringOpens).toBe(false);
   });
 
   it("teeth: each rule fails when it's taken out", () => {

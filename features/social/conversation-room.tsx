@@ -306,7 +306,7 @@ export function ConversationRoom({
   // a saved Halloween skin paints as the default after October (lib/social/chat-appearance.ts)
   const myBubbleStyle = effectiveBubbleStyle(chatAppearance.bubbleStyle);
   const bubbleShape = BUBBLE_STYLE_SHAPE[myBubbleStyle];
-  // the design's drawn bubbles (owner, 2026-10-23, design/frenzsave-bubble-styles.html) — my own text bubbles only
+  // the design's drawn bubbles (owner, 2026-10-23, design/frenzsave-bubble-styles.html) — every plain text bubble, mine and theirs
   const mySkin = isBubbleSkin(myBubbleStyle) ? myBubbleStyle : null;
   // Neither a color theme nor a custom wallpaper is set — the WhatsApp-style
   // light default (owner ask, 2026-07-14: "make the message page background
@@ -1986,7 +1986,7 @@ export function ConversationRoom({
             );
             // Inside a bubble only "edited" remains (the group's time is under it).
             const bubbleMeta = !deleted && m.editedAt ? (
-              <span className={cn("text-[10px] font-medium leading-none", frameless ? "text-white" : m.mine && mySkin ? "text-current opacity-70" : m.mine ? "text-white/75" : "text-neutral-500")}>edited</span>
+              <span className={cn("text-[10px] font-medium leading-none", frameless ? "text-white" : mySkin && !deleted && !m.metadata?.kind ? "text-current opacity-70" : m.mine ? "text-white/75" : "text-neutral-500")}>edited</span>
             ) : null;
             /* Floated to the end of the last line — the WhatsApp trick. */
             const inlineMeta = bubbleMeta ? <span className="float-right ml-2 mt-1.5 -mb-0.5 pl-1">{bubbleMeta}</span> : null;
@@ -2000,8 +2000,9 @@ export function ConversationRoom({
             // the "fat line". They're now framed like media: just enough to read
             // as a bubble, nothing more.
             const hasAttachmentFrame = !deleted && m.attachments.length > 0;
-            // only a plain text bubble of mine wears a skin — media, shared posts and placeholders keep their frame
-            const skinned = m.mine && mySkin && !deleted && !frameless && !shared && !hasAttachmentFrame && !m.metadata?.kind ? mySkin : null;
+            // owner, 2026-10-23: the chosen skin paints BOTH sides of the chat (mine and theirs) — only plain text
+            // bubbles wear it; media, shared posts and placeholders keep their frame
+            const skinned = mySkin && !deleted && !frameless && !shared && !hasAttachmentFrame && !m.metadata?.kind ? mySkin : null;
             const locationMeta = !deleted && m.metadata?.kind === "location" ? (m.metadata as { lat: number; lng: number; label: string | null }) : null;
             const contactMeta =
               !deleted && m.metadata?.kind === "contact"

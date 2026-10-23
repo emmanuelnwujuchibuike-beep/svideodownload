@@ -54,22 +54,27 @@ describe("Monetag direct link (owner, 2026-10-16)", () => {
 
   it("both spots call it, the config route serves it, and the read path normalizes it", () => {
     expect(code("features/wallpapers/wallpaper-reels.tsx")).toContain('useDirectLink("wallpaper")');
-    expect(code("features/wallpapers/wallpaper-reels.tsx")).toContain("onClickCapture={openDirectLink}");
+    // 2026-10-23: wrapped — the opener's first argument is now the outcome callback, never the click event
+    expect(code("features/wallpapers/wallpaper-reels.tsx")).toContain("onClickCapture={() => openDirectLink()}");
     expect(code("features/downloader/preview-card.tsx")).toContain('useDirectLink("resultPreview")');
-    expect(code("features/downloader/preview-card.tsx")).toContain("onClickCapture={openDirectLink}");
+    expect(code("features/downloader/preview-card.tsx")).toContain("onClickCapture={() => openDirectLink()}");
+    expect(code("features/wallpapers/wallpaper-reels.tsx")).not.toContain("onClickCapture={openDirectLink}");
+    expect(code("features/downloader/preview-card.tsx")).not.toContain("onClickCapture={openDirectLink}");
     expect(code("app/api/ads/config/route.ts")).toContain("monetagDirectLink: publicDirectLink(settings.monetagDirectLink, settings.monetag === true)");
     expect(code("lib/monetization/settings.ts")).toContain("merged.monetagDirectLink = normalizeDirectLink(merged.monetagDirectLink)");
   });
 
   it("opens inside the tap (no await before window.open), from its own chunk, on every tap (no session lock)", () => {
     // 2026-10-19: it answers whether a link is set up (the ad close control falls back to closing), still synchronous
-    expect(code("features/monetization/use-direct-link.ts")).toMatch(/return useCallback\(\(\) => \{\s*if \(!opener\.current\) return false;\s*opener\.current\(\);\s*return true;\s*\}, \[\]\)/);
+    expect(code("features/monetization/use-direct-link.ts")).toMatch(/return useCallback\(\(onOutcome\?: \(o: SpotOutcome\) => void\) => \{\s*if \(!opener\.current\) return false;\s*return opener\.current\(onOutcome\);\s*\}, \[\]\)/);
     const rt = code("features/monetization/direct-link-runtime.ts");
-    const body = rt.slice(rt.indexOf("return () => {"));
+    const body = rt.slice(rt.indexOf("const openDirect = (): boolean => {"));
     expect(body).not.toMatch(/await|\.then\(/);
     // owner, 2026-10-16: "it should show everytime the selected area i told you is tapped"
     expect(body).not.toContain("sessionStorage");
-    expect(body).toContain('window.open(c.url, "_blank", "noopener,noreferrer")');
+    // Part 2.1: through the open observer, which opens it in a new tab (noopener) — lib/monetization/open-observer.ts
+    expect(body).toContain("openOwnWindow(direct.url);");
+    expect(code("lib/monetization/open-observer.ts")).toContain('window.open(url, "_blank", "noopener,noreferrer");');
   });
 
   it("Pro and Business never get it (owner, 2026-10-18) — the plain Free-only answer, no placement", () => {

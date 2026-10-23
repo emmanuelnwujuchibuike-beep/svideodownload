@@ -37,6 +37,7 @@ import {
   parseHilltopVastUrl,
 } from "@/lib/monetization/hilltop";
 import { isValidDirectLinkUrl, type DirectLinkConfig } from "@/lib/monetization/direct-link";
+import { DEFAULT_SPOT_POPUNDER, type SpotPopunderConfig } from "@/lib/monetization/spot-popunder";
 import type { MonetizationSettings } from "@/lib/monetization/settings";
 import {
   DEFAULT_VAST_INTERSTITIAL,
@@ -1599,6 +1600,12 @@ export function MonetizationSettings({
               onChange={(monetagDirectLink) => setState((s) => ({ ...s, monetagDirectLink }))}
             />
 
+            <SpotPopunderEditor
+              value={state.monetagSpotPopunder ?? DEFAULT_SPOT_POPUNDER}
+              busy={busy}
+              onChange={(monetagSpotPopunder) => setState((s) => ({ ...s, monetagSpotPopunder }))}
+            />
+
             {/* WHERE Monetag shows. Pro/Business are ad-free regardless; this narrows
                 it further by page. Controlled by the parent state (one save path). */}
             <div className="mt-4 space-y-3 border-t border-border/50 pt-4">
@@ -2693,6 +2700,76 @@ function VastRow({
         <span className="block text-[11px] leading-relaxed text-muted-foreground">{hint}</span>
       </span>
       {control}
+    </div>
+  );
+}
+
+/**
+ * Monetag Pop-under at the direct-link spots (owner, 2026-10-23) — lib/monetization/spot-popunder.ts.
+ * The MAIN format at those spots; the direct link above is its backup and opens only when no pop-under
+ * opened. Never both on one tap. Part of the parent state, saved with the form's own Save button.
+ */
+function SpotPopunderEditor({ value, busy, onChange }: { value: SpotPopunderConfig; busy: boolean; onChange: (next: SpotPopunderConfig) => void }) {
+  const snippetBad = value.snippet.trim() !== "" && !parseMonetagSnippet(value.snippet);
+  const spots: { id: keyof SpotPopunderConfig["spots"]; label: string; hint: string }[] = [
+    { id: "adClose", label: "Ad close (X) button", hint: "The X / Skip of the Download complete, reward and full-screen ads" },
+    { id: "wallpaper", label: "Wallpapers", hint: "A tap around the wallpaper viewer's Download button" },
+    { id: "resultPreview", label: "Result card preview", hint: "A tap on the media preview at the top of the download result card" },
+  ];
+  return (
+    <div className="mt-4 space-y-3 border-t border-border/50 pt-4">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => onChange({ ...value, enabled: !value.enabled })}
+        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5 text-left transition hover:border-foreground/20 disabled:opacity-70"
+      >
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold">Pop-under (main at these spots)</span>
+          <span className="block text-xs text-muted-foreground">
+            Tried first on a tap at each chosen spot. The direct link above opens only when no pop-under opened (the tag didn&apos;t
+            load, Monetag skipped that tap, or the browser blocked it) — never both. Free plan only; needs the Monetag switch on.
+          </span>
+        </span>
+        <Switch on={value.enabled} />
+      </button>
+      <div>
+        <label htmlFor="monetag-spot-popunder" className="mb-1 block text-xs font-medium text-muted-foreground">
+          Pop-under tag (paste the Monetag script)
+        </label>
+        <textarea
+          id="monetag-spot-popunder"
+          value={value.snippet}
+          disabled={busy}
+          rows={3}
+          onChange={(e) => onChange({ ...value, snippet: e.target.value })}
+          placeholder="<script>(function(s){s.dataset.zone='…',s.src='https://…/tag.min.js'})(…)</script>"
+          spellCheck={false}
+          className={cn(
+            "w-full rounded-xl bg-background px-3 py-2 font-mono text-xs outline-none ring-1 ring-inset focus:ring-2 focus:ring-primary",
+            snippetBad ? "ring-rose-500" : "ring-border",
+          )}
+        />
+        {snippetBad ? <p className="mt-1 text-xs text-rose-500">Not a Monetag tag: it needs an https script src (and its zone).</p> : null}
+        <p className="mt-1 text-xs text-muted-foreground">Only the script address and zone are read from it — it is never run as pasted.</p>
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {spots.map((spot) => (
+          <button
+            key={spot.id}
+            type="button"
+            disabled={busy}
+            onClick={() => onChange({ ...value, spots: { ...value.spots, [spot.id]: !value.spots[spot.id] } })}
+            className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3 text-left transition hover:border-foreground/20 disabled:opacity-70"
+          >
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold">{spot.label}</span>
+              <span className="block text-xs text-muted-foreground">{spot.hint}</span>
+            </span>
+            <Switch on={value.spots[spot.id]} />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

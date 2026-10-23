@@ -420,6 +420,7 @@ export function DownloadCompleteAd({
           <button
             type="button"
             onClick={closeViaLink}
+            data-ad-spot="adClose"
             disabled={!canSkip}
             aria-label={canSkip ? "Close advertisement" : `Skip available in ${remaining} seconds`}
             aria-live={counting ? "off" : "polite"}

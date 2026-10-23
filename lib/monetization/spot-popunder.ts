@@ -1,0 +1,79 @@
+import { DIRECT_LINK_SPOTS, type DirectLinkSpot } from "./direct-link";
+import { parseMonetagSnippet } from "./monetag";
+
+/**
+ * Monetag Pop-under at the direct-link spots — the MAIN format there, the direct link the backup.
+ *
+ * Owner, 2026-10-23: "Make the X close button, Wallpapers, result card preview to also use pop
+ * under format … make the pop under the main, and the direct link to be backup that only works
+ * when there's no pop under or if the browser blocked it. Both shouldn't show."
+ *
+ * - Where: the same three spots as the direct link (`DIRECT_LINK_SPOTS`), each with its own switch.
+ * - The tag loads on the FIRST PRESS at an enabled spot (Part 2.1) — a page merely carrying a spot loads
+ *   nothing. Other scripts' windows are never blocked (lib/monetization/open-observer.ts only counts them).
+ *   ⚠️ Once loaded, Monetag's own script decides its later clicks (its frequency cap applies); confining it
+ *   to the spots would need blocking every other script's windows, which Part 2.1 rules out.
+ * - At a tap: the pop-under is tried; the direct link opens only when no pop-under opened (the tag
+ *   didn't load, Monetag skipped this tap, or the browser blocked it). After the direct link opens,
+ *   a late pop-under on that tap is refused for 1.5 s, so the two never both show.
+ *
+ * Lives in the `monetization` settings row (no migration); served by /api/ads/config only when
+ * Monetag's master switch is on. Pre-filled with the owner's tag (zone 12054432) but OFF until an admin
+ * switches it on (Part 2.1): no saved choice, or anything but a literal true, means off.
+ */
+
+export const OWNER_POPUNDER_SNIPPET =
+  "<script>(function(s){s.dataset.zone='12054432',s.src='https://al5sm.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>";
+
+export interface SpotPopunderConfig {
+  enabled: boolean;
+  /** The Monetag tag as pasted. Parsed to { src, zone } — never injected as raw HTML. */
+  snippet: string;
+  spots: Record<DirectLinkSpot, boolean>;
+}
+
+/** Part 2.1: OFF until the admin switches it on (the owner's zone stays pre-filled in the tag box). */
+export const DEFAULT_SPOT_POPUNDER: SpotPopunderConfig = {
+  enabled: false,
+  snippet: OWNER_POPUNDER_SNIPPET,
+  spots: { wallpaper: true, resultPreview: true, adClose: true },
+};
+
+export function normalizeSpotPopunder(raw: unknown): SpotPopunderConfig {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Partial<Record<keyof SpotPopunderConfig, unknown>>;
+  const spotsRaw = (r.spots && typeof r.spots === "object" ? r.spots : {}) as Record<string, unknown>;
+  return {
+    // ON only when an admin saved a literal true — missing, a string "true", anything else: off (Part 2.1)
+    enabled: r.enabled === true,
+    snippet: typeof r.snippet === "string" ? r.snippet.trim().slice(0, 4000) : DEFAULT_SPOT_POPUNDER.snippet,
+    spots: Object.fromEntries(DIRECT_LINK_SPOTS.map((id) => [id, typeof spotsRaw[id] === "boolean" ? spotsRaw[id] : DEFAULT_SPOT_POPUNDER.spots[id]])) as Record<DirectLinkSpot, boolean>,
+  };
+}
+
+export interface PublicSpotPopunder {
+  src: string;
+  zone: string | null;
+  cfAsync: boolean;
+  spots: DirectLinkSpot[];
+}
+
+/** What /api/ads/config serves: null unless it can actually load (Monetag on, switched on, a valid tag, a spot). */
+export function publicSpotPopunder(raw: unknown, monetagOn: boolean): PublicSpotPopunder | null {
+  const c = normalizeSpotPopunder(raw);
+  if (!monetagOn || !c.enabled) return null;
+  const tag = parseMonetagSnippet(c.snippet);
+  if (!tag) return null;
+  const spots = DIRECT_LINK_SPOTS.filter((id) => c.spots[id]);
+  return spots.length ? { src: tag.src, zone: tag.zone, cfAsync: tag.cfAsync, spots } : null;
+}
+
+export type SpotOutcome = "popunder" | "direct" | "none";
+
+/**
+ * The one rule (pure): the pop-under wins when it opened (a window opened through the guard, or the
+ * page lost focus to a new tab); otherwise the direct link, when one opened; otherwise nothing.
+ */
+export function spotOutcome(i: { popunderOpened: boolean; directOpened: boolean }): SpotOutcome {
+  if (i.popunderOpened) return "popunder";
+  return i.directOpened ? "direct" : "none";
+}

@@ -166,6 +166,7 @@ export function SelfInterstitial({
         ref={closeBtn}
         type="button"
         onClick={closeViaLink}
+        data-ad-spot="adClose"
         aria-label={reward ? "Close the sponsored video" : "Close the ad"}
         className={cn(
           "inline-flex h-9 w-9 items-center justify-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",

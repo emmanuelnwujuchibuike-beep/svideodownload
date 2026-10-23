@@ -7,6 +7,7 @@ import { useAdaptiveSource } from "@/features/media/use-adaptive-source";
 import { fireWowFeedback, WowBurst } from "@/features/ui/wow-burst";
 import { clampFeedRatio } from "@/lib/media/aspect";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
+import { onSoundPreference, onSoundUnlocked, playWithPreferredSound, setUserMutedSound, soundOn, userMutedSound } from "@/lib/media/sound-preference";
 import { getPlaybackPosition, savePlaybackPosition } from "@/lib/media/resume-positions";
 import { cancelVideoPrefetch, prefetchVideo } from "@/lib/media/prefetch-video";
 import { streamHlsUrl, streamIframeUrl } from "@/lib/media/stream";
@@ -201,7 +202,27 @@ export function FeedVideo({
 
   const playIfReady = useCallback(() => {
     const v = video.current;
-    if (v && inViewRef.current && readyRef.current && !userPaused.current && !isSuspended()) v.play().catch(() => {});
+    // owner, 2026-10-23: with sound unless the member muted (lib/media/sound-preference.ts)
+    if (v && inViewRef.current && readyRef.current && !userPaused.current && !isSuspended()) void playWithPreferredSound(v);
+  }, []);
+  // follow the ONE sound choice: a mute/unmute on any video, or the first tap after the browser refused sound
+  useEffect(() => {
+    // the element is read when the event fires (it can mount after this effect)
+    const offPref = onSoundPreference((m) => {
+      const v = video.current;
+      if (!v) return;
+      if (m) muteInstant(v);
+      else if (inViewRef.current && !v.paused) soundOn(v);
+      setMuted(v.muted);
+    });
+    const offUnlock = onSoundUnlocked(() => {
+      const v = video.current;
+      if (v && inViewRef.current && !v.paused && !userMutedSound()) soundOn(v);
+    });
+    return () => {
+      offPref();
+      offUnlock();
+    };
   }, []);
   /*
     `nextSrc` through a ref, NOT through the autoplay observer's dependency
@@ -384,6 +405,8 @@ export function FeedVideo({
     if (v.muted) unmuteWithFade(v);
     else muteInstant(v);
     setMuted(v.muted);
+    // remembered, and every other video follows (owner, 2026-10-23: muted only when muted manually)
+    setUserMutedSound(v.muted);
   }, []);
 
   const resumePlay = () => {
@@ -666,6 +689,7 @@ export function FeedVideo({
         poster={posterBroken ? undefined : (poster ?? undefined)}
         loop
         muted
+        onVolumeChange={(e) => setMuted(e.currentTarget.muted)}
         playsInline
         preload={priority ? "auto" : "metadata"}
         /*
@@ -777,7 +801,8 @@ export function FeedVideo({
         makes room for this without crowding the frame.
       */}
       {/* the control zone: 44 px targets, and padding around them that never opens reels (see cancelPendingOpen) */}
-      <div data-control className="absolute right-0 top-0 z-10 flex items-center gap-0.5 p-1">
+      {/* owner, 2026-10-23: brought DOWN to the bottom-right — at the top they sat under the floating glass feed header */}
+      <div data-control className="absolute bottom-0 right-0 z-10 flex items-center gap-0.5 p-1">
         <button
           type="button"
           onClick={togglePlay}

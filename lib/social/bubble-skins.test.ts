@@ -40,9 +40,10 @@ describe("bubble skins from design/frenzsave-bubble-styles.html (owner, 2026-10-
     expect(api).toContain("PRO_BUBBLE_SKINS as readonly string[]).includes(wanted) && planRank(await getUserPlan(user.id)) < 1");
   });
 
-  it("the chat paints my plain text bubbles with the skin, never media or a deleted one", () => {
+  it("the chat paints every plain text bubble — mine AND theirs (owner 2026-10-23) — with the skin, never media or a deleted one", () => {
     const room = readFileSync("features/social/conversation-room.tsx", "utf8");
-    expect(room).toContain("const skinned = m.mine && mySkin && !deleted && !frameless && !shared && !hasAttachmentFrame");
+    expect(room).toContain("const skinned = mySkin && !deleted && !frameless && !shared && !hasAttachmentFrame");
+    expect(room).not.toContain("const skinned = m.mine && mySkin");
     expect(room).toContain("<SkinDecorations skin={skinned} />");
   });
 });

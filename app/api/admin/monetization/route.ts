@@ -5,7 +5,8 @@ import { getAdminUser } from "@/lib/admin/guard";
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import { DEFAULT_DIRECT_LINK, isValidDirectLinkUrl } from "@/lib/monetization/direct-link";
 import { DEFAULT_VAST_INTERSTITIAL } from "@/lib/monetization/vast-interstitial";
-import { MONETAG_AD_TYPE_IDS, MONETAG_PLACEMENT_IDS, MONETAG_SURFACE_IDS } from "@/lib/monetization/monetag";
+import { MONETAG_AD_TYPE_IDS, MONETAG_PLACEMENT_IDS, MONETAG_SURFACE_IDS, parseMonetagSnippet } from "@/lib/monetization/monetag";
+import { DEFAULT_SPOT_POPUNDER } from "@/lib/monetization/spot-popunder";
 import {
   DEFAULT_HILLTOP,
   HILLTOP_MAX_EVERY,
@@ -85,6 +86,22 @@ const schema = z.object({
     })
     .refine((v) => !v.enabled || v.url !== "", { message: "Paste the direct link URL before switching it on" })
     .default(DEFAULT_DIRECT_LINK),
+  // Monetag Pop-under at the direct-link spots — the main format there, the link its backup (lib/monetization/spot-popunder.ts)
+  monetagSpotPopunder: z
+    .object({
+      enabled: z.boolean().default(DEFAULT_SPOT_POPUNDER.enabled),
+      snippet: z
+        .string()
+        .trim()
+        .max(4000)
+        .refine((v) => v === "" || parseMonetagSnippet(v) !== null, { message: "Pop-under tag must be a Monetag script with an https src" })
+        .default(DEFAULT_SPOT_POPUNDER.snippet),
+      spots: z
+        .object({ wallpaper: z.boolean().default(true), resultPreview: z.boolean().default(true), adClose: z.boolean().default(true) })
+        .default(DEFAULT_SPOT_POPUNDER.spots),
+    })
+    .refine((v) => !v.enabled || v.snippet !== "", { message: "Paste the pop-under tag before switching it on" })
+    .default(DEFAULT_SPOT_POPUNDER),
   monetagSurfaces: z.array(z.enum(MONETAG_SURFACE_IDS)).max(20).default([]),
   // Moment placements: one Monetag tag per moment, parsed (not injected) client-side.
   monetagPlacements: z

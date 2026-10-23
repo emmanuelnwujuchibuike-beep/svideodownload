@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { cronAuthorized } from "@/lib/cron/auth";
+import { expirePaidVerifications } from "@/lib/social/paid-verification";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -150,5 +151,16 @@ export async function GET(request: Request) {
 
   // `ok` reflects what actually happened. A query error used to render as a
   // successful run with zero rows, which is how this stayed broken.
-  return NextResponse.json({ ok: !failure, capturedOn, scanned, written, anniversaries, ...(failure ? { error: failure } : {}) });
+  /*
+    0268: the daily paid-verification sweep rides on this job — the plan has two Vercel cron slots and both are
+    taken. Its own try: a failure here never touches the snapshots above, and theirs never skips it.
+  */
+  let paidVerificationExpired = 0;
+  try {
+    paidVerificationExpired = (await expirePaidVerifications()).expired;
+  } catch (e) {
+    console.error("[cron] paid verification sweep failed", { error: String(e).slice(0, 200) });
+  }
+
+  return NextResponse.json({ ok: !failure, capturedOn, scanned, written, anniversaries, paidVerificationExpired, ...(failure ? { error: failure } : {}) });
 }

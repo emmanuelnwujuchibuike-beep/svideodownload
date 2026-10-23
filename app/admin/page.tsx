@@ -36,6 +36,8 @@ import { AdminSubsections } from "@/features/admin/section-tabs";
 import { SupportInbox } from "@/features/admin/support-inbox";
 import { RatingsSection } from "@/features/admin/ratings-section";
 import { VerificationQueue } from "@/features/admin/verification-queue";
+import { PaidVerificationSettings } from "@/features/admin/paid-verification-settings";
+import { getPaidVerificationConfig } from "@/lib/social/paid-verification";
 import { WallpaperManager } from "@/features/admin/wallpaper-manager";
 import { FeatureFlagManager } from "@/features/admin/feature-flags-manager";
 import { ExperimentsManager } from "@/features/admin/experiments-manager";
@@ -1142,8 +1144,14 @@ async function WallpapersSection() {
 }
 
 async function VerificationSection() {
-  const [queue, counts] = await Promise.all([listVerificationQueue(), verificationCounts()]);
-  return <VerificationQueue queue={queue} counts={counts} />;
+  const [queue, counts, paid] = await Promise.all([listVerificationQueue(), verificationCounts(), getPaidVerificationConfig()]);
+  return (
+    <>
+      {/* 0268: the paid way to the tick — the admin's switch, price and period */}
+      <PaidVerificationSettings initial={paid} />
+      <VerificationQueue queue={queue} counts={counts} />
+    </>
+  );
 }
 
 async function ContentSection() {

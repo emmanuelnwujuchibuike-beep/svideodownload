@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { SettingsPage } from "@/features/account/settings-page";
+import { PaidVerificationCard } from "@/features/account/paid-verification-card";
 import { VerificationFlow } from "@/features/account/verification-flow";
+import { paidVerificationOffer } from "@/lib/social/paid-verification";
 import { getVerificationState } from "@/lib/social/verification";
 import { checkEligibility } from "@/lib/social/verification-shared";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -26,7 +28,7 @@ export default async function VerificationSettingsPage() {
   if (!user) redirect("/login");
 
   const admin = createAdminClient();
-  const [state, { data: profile }, { data: sub }, posts] = await Promise.all([
+  const [state, { data: profile }, { data: sub }, posts, offer] = await Promise.all([
     getVerificationState(user.id),
     admin
       .from("profiles")
@@ -35,7 +37,12 @@ export default async function VerificationSettingsPage() {
       .maybeSingle(),
     admin.from("subscriptions").select("plan, status").eq("user_id", user.id).maybeSingle(),
     admin.from("posts").select("id", { head: true, count: "exact" }).eq("publisher_id", user.id).eq("status", "published"),
+    // 0268: the admin's paid-verification offer, and this member's paid tick
+    paidVerificationOffer(user.id),
   ]);
+  const paidTick = state.verified && state.request?.decisionReason === "Paid verification";
+  // the card: offered when on and not verified (or verified BY a payment, to renew); a reviewed or admin tick shows none
+  const showPaid = offer.config.enabled && (!state.verified || paidTick);
 
   const paidPlan =
     (sub?.status === "active" || sub?.status === "trialing") && (sub?.plan as string | undefined) !== "free";
@@ -55,6 +62,7 @@ export default async function VerificationSettingsPage() {
 
   return (
     <SettingsPage title="Verification" description="Prove who you are and get the blue tick." bare>
+      {showPaid ? <PaidVerificationCard priceCents={offer.config.priceCents} periodDays={offer.config.periodDays} verified={paidTick} paidUntil={offer.lifetime ? null : offer.paidUntil} /> : null}
       <VerificationFlow
         state={state}
         eligibility={eligibility}

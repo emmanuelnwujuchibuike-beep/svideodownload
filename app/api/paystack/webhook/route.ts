@@ -4,7 +4,8 @@ import { announceCharacterReplaceRecharge, creditVerifiedCharacterReplaceRecharg
 import { resolveCredit } from "@/lib/ai/character-replace/topup-fx";
 import { WALLET_UNIT } from "@/lib/ai/credits/units";
 import { getLandingSettings } from "@/lib/landing/settings";
-import { AD_CAMPAIGN_PURPOSE, AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, SUB_PURPOSE, verifyPaystackSignature, type PaystackEventData } from "@/lib/paystack/paystack";
+import { AD_CAMPAIGN_PURPOSE, AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, SUB_PURPOSE, VERIFICATION_PURPOSE, verifyPaystackSignature, type PaystackEventData } from "@/lib/paystack/paystack";
+import { confirmVerificationPayment, reversePaidVerification } from "@/lib/social/paid-verification";
 import { confirmSubPayment, reverseSub, reverseSubForRefund } from "@/lib/sub/server";
 import { isAiPlanEvent, syncAiPlanEvent } from "@/lib/ai/credits/paystack";
 import { syncPaystackEvent } from "@/lib/paystack/sync";
@@ -80,8 +81,33 @@ export async function POST(request: Request) {
     await markProviderEvent("paystack", key, out.status);
     return NextResponse.json({ received: true });
   }
+  /*
+    ── PAID VERIFICATION (0268) — its own purpose, so it can never credit a wallet or settle a SUB ──
+    confirmVerificationPayment re-verifies the reference with Paystack and grants the tick once
+    (a conditional update — the return page may get there first). Unsettled = 500, Paystack redelivers.
+  */
+  if (event.event === "charge.success" && event.data?.metadata?.purpose === VERIFICATION_PURPOSE) {
+    const ref = event.data.reference ?? "";
+    const key = `charge.success:${ref}`;
+    if ((await claimProviderEvent("paystack", key, event.event, ref)) === "done") return NextResponse.json({ received: true, duplicate: true });
+    const out = await confirmVerificationPayment(ref);
+    if (out === "pending") return NextResponse.json({ error: "Retry" }, { status: 500 });
+    await markProviderEvent("paystack", key, out);
+    return NextResponse.json({ received: true });
+  }
   if (event.event === "refund.processed" || event.event === "charge.dispute.create") {
     const ref = event.data?.transaction_reference ?? event.data?.transaction?.reference ?? event.data?.reference ?? "";
+    // 0268: a refunded or disputed verification charge takes the paid tick back
+    if (ref.startsWith("frenz_vf_")) {
+      const key = `${event.event}:${ref}`;
+      if ((await claimProviderEvent("paystack", key, event.event, ref)) === "done") return NextResponse.json({ received: true, duplicate: true });
+      try {
+        await markProviderEvent("paystack", key, await reversePaidVerification(ref));
+        return NextResponse.json({ received: true });
+      } catch {
+        return NextResponse.json({ error: "Retry" }, { status: 500 });
+      }
+    }
     if (ref.startsWith("frenz_sub_")) {
       /*
         🔴 Part 2 (2026-10-16, audit S2): a failed reversal used to be answered 200, so Paystack

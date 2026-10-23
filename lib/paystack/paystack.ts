@@ -253,6 +253,18 @@ export async function initializeSubCheckout(opts: { email: string; userId: strin
   return data.data.authorization_url;
 }
 
+/** 0268: a member paying for the blue tick. Its own purpose: it can never credit a wallet, touch a plan or settle a SUB. */
+export const VERIFICATION_PURPOSE = "frenz_verification";
+
+/** A hosted checkout for paid verification (lib/social/paid-verification.ts): the server's amount, currency and reference. */
+export async function initializeVerificationCheckout(opts: { email: string; userId: string; amount: number; currency: string; reference: string; callbackUrl: string; metadata: Record<string, string | number | null> }): Promise<string> {
+  const data = await paystack<{ data: { authorization_url: string } }>("/transaction/initialize", {
+    method: "POST",
+    body: { email: opts.email, amount: opts.amount, currency: opts.currency, reference: opts.reference, callback_url: opts.callbackUrl, metadata: { ...opts.metadata, user_id: opts.userId, purpose: VERIFICATION_PURPOSE } },
+  });
+  return data.data.authorization_url;
+}
+
 /**
  * Did Paystack REFUSE (nothing was created), or is the outcome unknown?
  * A refusal is Paystack answering with its own message. A timeout, a dropped

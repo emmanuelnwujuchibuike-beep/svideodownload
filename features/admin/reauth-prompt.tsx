@@ -20,6 +20,72 @@ export function ReauthPrompt({ onDone }: { onDone: (ok: boolean) => void }) {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /*
+    Forgot the password (owner, 2026-10-23: "make to be able to reset my admin password from dashboard and they
+    send a code to my admin email"): a six-digit code to the account's own email, then the code + a new password.
+    Success also counts as re-authenticated, so the action that asked goes straight through.
+  */
+  const [mode, setMode] = useState<"password" | "code">("password");
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+  const [next, setNext] = useState("");
+
+  const post = async (
+    url: string,
+    body: unknown,
+  ): Promise<{ ok: boolean; data: { error?: string; sentTo?: string } }> => {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(body),
+    });
+    return {
+      ok: res.ok,
+      data: (await res.json().catch(() => ({}))) as {
+        error?: string;
+        sentTo?: string;
+      },
+    };
+  };
+
+  const sendCode = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { ok, data } = await post("/api/admin/auth/password-code", {});
+      if (ok) {
+        setMode("code");
+        setSentTo(data.sentTo ?? "your admin email");
+      } else setError(data.error ?? "Could not send the code.");
+    } catch {
+      setError("Could not reach the server.");
+    }
+    setBusy(false);
+  };
+
+  const resetWithCode = async () => {
+    if (busy || code.length !== 6 || !next) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { ok, data } = await post("/api/admin/auth/password-code/verify", {
+        code,
+        password: next,
+      });
+      if (ok) {
+        setCode("");
+        setNext("");
+        onDone(true);
+        return;
+      }
+      setError(data.error ?? "Could not change the password.");
+    } catch {
+      setError("Could not reach the server.");
+    }
+    setBusy(false);
+  };
 
   const submit = async () => {
     if (busy || !password) return;
@@ -67,27 +133,84 @@ export function ReauthPrompt({ onDone }: { onDone: (ok: boolean) => void }) {
               <ShieldAlert className="h-5 w-5" aria-hidden />
             </span>
             <div className="min-w-0">
-              <h2 className="text-base font-bold">Confirm your password</h2>
+              <h2 className="text-base font-bold">
+                {mode === "code"
+                  ? "Set a new password"
+                  : "Confirm your password"}
+              </h2>
               <p className="mt-0.5 text-sm text-muted-foreground">
-                This action changes sensitive settings.
+                {mode === "code"
+                  ? `We sent a 6-digit code to ${sentTo}. It expires in 10 minutes.`
+                  : "This action changes sensitive settings."}
               </p>
             </div>
           </div>
 
-          <input
-            type="password"
-            autoComplete="current-password"
-            autoFocus
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && void submit()}
-            disabled={busy}
-            aria-label="Password"
-            className="mt-4 h-12 w-full rounded-xl bg-background px-3.5 text-base outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary disabled:opacity-60"
-          />
+          {mode === "code" ? (
+            <>
+              <input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                autoFocus
+                maxLength={6}
+                value={code}
+                onChange={(e) =>
+                  setCode(e.target.value.replace(/D/g, "").slice(0, 6))
+                }
+                disabled={busy}
+                aria-label="Code from the email"
+                placeholder="6-digit code"
+                className="mt-4 h-12 w-full rounded-xl bg-background px-3.5 text-center font-mono text-lg tracking-[0.4em] outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary disabled:opacity-60"
+              />
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={next}
+                onChange={(e) => setNext(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && void resetWithCode()}
+                disabled={busy}
+                aria-label="New password"
+                placeholder="New password (12+ characters)"
+                className="mt-2 h-12 w-full rounded-xl bg-background px-3.5 text-base outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary disabled:opacity-60"
+              />
+              <button
+                type="button"
+                onClick={() => void sendCode()}
+                disabled={busy}
+                className="mt-2 text-sm font-semibold text-primary disabled:opacity-60"
+              >
+                Send a new code
+              </button>
+            </>
+          ) : (
+            <input
+              type="password"
+              autoComplete="current-password"
+              autoFocus
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && void submit()}
+              disabled={busy}
+              aria-label="Password"
+              className="mt-4 h-12 w-full rounded-xl bg-background px-3.5 text-base outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary disabled:opacity-60"
+            />
+          )}
+          {mode === "password" ? (
+            <button
+              type="button"
+              onClick={() => void sendCode()}
+              disabled={busy}
+              className="mt-2 text-sm font-semibold text-primary disabled:opacity-60"
+            >
+              Forgot password? Email me a code
+            </button>
+          ) : null}
 
           {error ? (
-            <p role="alert" className="mt-2 text-sm font-medium text-rose-600 dark:text-rose-400">
+            <p
+              role="alert"
+              className="mt-2 text-sm font-medium text-rose-600 dark:text-rose-400"
+            >
               {error}
             </p>
           ) : null}
@@ -102,14 +225,21 @@ export function ReauthPrompt({ onDone }: { onDone: (ok: boolean) => void }) {
             </button>
             <button
               type="button"
-              onClick={() => void submit()}
-              disabled={busy || !password}
+              onClick={() =>
+                void (mode === "code" ? resetWithCode() : submit())
+              }
+              disabled={
+                busy ||
+                (mode === "code" ? code.length !== 6 || !next : !password)
+              }
               className={cn(
                 "inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-sm font-semibold text-white transition disabled:opacity-60",
               )}
             >
-              {busy ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : null}
-              Confirm
+              {busy ? (
+                <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+              ) : null}
+              {mode === "code" ? "Change password" : "Confirm"}
             </button>
           </div>
         </div>

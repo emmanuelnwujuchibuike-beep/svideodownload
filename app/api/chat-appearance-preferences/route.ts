@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getUserPlan, planRank } from "@/lib/monetization/plan";
 import {
   BUBBLE_STYLES,
+  bubbleStyleAvailable,
+  PRO_BUBBLE_SKINS,
   FONT_STYLES,
   fromChatAppearanceRow,
   isHexColor,
@@ -58,7 +61,9 @@ export async function GET(request: Request) {
     .eq("user_id", user.id)
     .eq("conversation_id", conversationId)
     .maybeSingle();
-  return NextResponse.json({ appearance: fromChatAppearanceRow(data as ChatAppearanceRow | null) });
+  // whether the Pro skins (Galaxy, Crowned, Neon sign) are open to this member — the picker locks them otherwise
+  const canUsePro = planRank(await getUserPlan(user.id)) >= 1;
+  return NextResponse.json({ appearance: fromChatAppearanceRow(data as ChatAppearanceRow | null), canUsePro });
 }
 
 /** PATCH /api/chat-appearance-preferences — partial update for ONE chat, merged with whatever's already saved. */
@@ -78,6 +83,13 @@ export async function PATCH(request: Request) {
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid preferences." }, { status: 400 });
   const { conversationId } = parsed.data;
+  const wanted = parsed.data.bubbleStyle;
+  if (wanted && !bubbleStyleAvailable(wanted)) {
+    return NextResponse.json({ error: "That style is only available in October." }, { status: 400 });
+  }
+  if (wanted && (PRO_BUBBLE_SKINS as readonly string[]).includes(wanted) && planRank(await getUserPlan(user.id)) < 1) {
+    return NextResponse.json({ error: "This style comes with Frenzsave Pro.", pro: true }, { status: 403 });
+  }
 
   const { data: existing } = await supabase
     .from("chat_appearance_preferences")

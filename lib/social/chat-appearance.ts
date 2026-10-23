@@ -22,8 +22,37 @@ export type ChatFontStyle = (typeof FONT_STYLES)[number];
  *  `classic` has a pinched tail corner, `modern` is uniformly rounded with no
  *  tail, `sharp` is boxy, `pill` is a full capsule, `tail` adds a genuine
  *  protruding pointer via a pseudo-element (see BUBBLE_STYLE_SHAPE below). */
-export const BUBBLE_STYLES = ["classic", "modern", "sharp", "pill", "tail"] as const;
+/**
+ * The design's bubble skins (owner, 2026-10-23, design/frenzsave-bubble-styles.html) — drawn bubbles with
+ * decorations, painted on the viewer's OWN sent text bubbles. "Default" in the picker is `classic` (the chat's
+ * gradient). Listed literally for the API's enum; bubble-skins.test.ts holds this list to the generated data.
+ */
+export const BUBBLE_SKINS = [
+  "doodle", "cat", "bee", "ghost", "pumpkin", "web", "bunny", "panda", "shark", "dino",
+  "sprout", "sunflower", "cloud", "berry", "galaxy", "crown", "neon", "boba", "pixel", "letter",
+] as const;
+export type ChatBubbleSkin = (typeof BUBBLE_SKINS)[number];
+export const BUBBLE_STYLES = ["classic", "modern", "sharp", "pill", "tail", ...BUBBLE_SKINS] as const;
 export type ChatBubbleStyle = (typeof BUBBLE_STYLES)[number];
+
+/** Pro-only skins (the design: "Galaxy, Crowned and Neon sign come with Frenzsave Pro") — the API refuses them to a free plan. */
+export const PRO_BUBBLE_SKINS: readonly ChatBubbleSkin[] = ["galaxy", "crown", "neon"];
+/** Halloween skins: "Spooky season only — gone after October". */
+export const HALLOWEEN_BUBBLE_SKINS: readonly ChatBubbleSkin[] = ["ghost", "pumpkin", "web"];
+
+export function isBubbleSkin(v: string): v is ChatBubbleSkin {
+  return (BUBBLE_SKINS as readonly string[]).includes(v);
+}
+
+/** Is this style on offer at `now`? Halloween skins only in October (the viewer's own month). */
+export function bubbleStyleAvailable(style: ChatBubbleStyle, now: Date = new Date()): boolean {
+  return !(HALLOWEEN_BUBBLE_SKINS as readonly string[]).includes(style) || now.getMonth() === 9;
+}
+
+/** The style a bubble is actually painted with: a saved Halloween skin falls back to the default after October. */
+export function effectiveBubbleStyle(style: ChatBubbleStyle, now: Date = new Date()): ChatBubbleStyle {
+  return bubbleStyleAvailable(style, now) ? style : "classic";
+}
 
 export interface ChatAppearance {
   fontStyle: ChatFontStyle;
@@ -127,12 +156,21 @@ export const BUBBLE_STYLE_SHAPE: Record<
   sharp: { base: "rounded-md", tailMine: null, tailTheirs: null },
   pill: { base: "rounded-full", tailMine: null, tailTheirs: null },
   tail: { base: "rounded-2xl", tailMine: null, tailTheirs: null, protrudingTail: true },
+  // skins draw their own outline (bubble-skins.module.css); the theirs side keeps the classic shape
+  ...(Object.fromEntries(BUBBLE_SKINS.map((k) => [k, { base: "rounded-[20px]", tailMine: null, tailTheirs: "rounded-bl-md" }])) as Record<
+    ChatBubbleSkin,
+    { base: string; tailMine: string | null; tailTheirs: string | null }
+  >),
 };
 
 export const BUBBLE_STYLE_LABEL: Record<ChatBubbleStyle, string> = {
-  classic: "Classic",
+  classic: "Default",
   modern: "Modern",
   sharp: "Sharp",
   pill: "Pill",
   tail: "Speech tail",
+  doodle: "Doodle", cat: "Sleepy cat", bee: "Honey bee", ghost: "Ghosty", pumpkin: "Jack-o", web: "Night web",
+  bunny: "Bunny ears", panda: "Panda hug", shark: "Shark fin", dino: "Dino", sprout: "Sprout", sunflower: "Sunflower",
+  cloud: "Cloudy day", berry: "Strawberry", galaxy: "Galaxy", crown: "Crowned", neon: "Neon sign", boba: "Boba",
+  pixel: "8-bit", letter: "Love letter",
 };

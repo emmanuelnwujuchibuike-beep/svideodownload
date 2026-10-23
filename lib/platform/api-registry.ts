@@ -63,6 +63,8 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   { method: "GET", path: "/api/v1/app/security/settings", auth: "session", category: "security", description: "Read account security settings." },
   { method: "PATCH", path: "/api/v1/app/security/settings", auth: "session", category: "security", description: "Update account security settings." },
   { method: "GET", path: "/api/v1/app/security/audit-log", auth: "session", category: "security", description: "The account's security audit log." },
+  { method: "POST", path: "/api/v1/app/security/password", auth: "session", category: "security", description: "Set or change the password; a session that signed in with a password must include the emailed code." },
+  { method: "POST", path: "/api/v1/app/security/password/code", auth: "session", category: "security", description: "Email the member a 6-digit code (10 minutes) for changing their password." },
   { method: "POST", path: "/api/v1/app/security/password-changed", auth: "session", category: "security", description: "Record a password change." },
   { method: "POST", path: "/api/v1/app/security/mfa-event", auth: "session", category: "security", description: "Record an MFA enrolment/removal event." },
   { method: "POST", path: "/api/v1/app/security/mfa/unenroll", auth: "session", category: "security", description: "Disable multi-factor auth." },
@@ -111,6 +113,8 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   { method: "POST", path: "/api/sub/announcements", auth: "session", category: "subscriptions", description: "Publish to YOUR subscribers (idempotency key). Fan-out is queued in bounded pages." },
   { method: "DELETE", path: "/api/sub/announcements", auth: "session", category: "subscriptions", description: "Delete one of your announcements (kept for audit, fan-out stopped)." },
   // Part 11 (0253): optional-email unsubscribe. No session — the unguessable token in the link is the authority, and it can only switch optional email OFF.
+  { method: "POST", path: "/api/admin/auth/password-code", auth: "admin", category: "account", description: "Email the signed-in admin a 6-digit code (10 minutes) for changing their password from the dashboard; counts on the login throttle." },
+  { method: "POST", path: "/api/admin/auth/password-code/verify", auth: "admin", category: "account", description: "Check the emailed code and set the new admin password; signs out other sessions and counts as re-authenticated." },
   { method: "DELETE", path: "/api/admin/users/age", auth: "admin", category: "account", description: "Clear a member's age answer so they answer again (audited). An admin can never set one." },
   { method: "GET", path: "/api/age", auth: "session-optional", category: "account", description: "The member age check: adult, minor (with the day they may answer again) or none. Never the date of birth." },
   { method: "POST", path: "/api/age", auth: "session", category: "account", description: "Answer the age check (date of birth + 18+ confirmation). The server decides and keeps only the outcome." },

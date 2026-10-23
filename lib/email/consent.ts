@@ -86,6 +86,10 @@ export const DIRECT_EMAIL_KINDS = {
   topup_receipt: "transactional",
   ad_campaign_notice: "transactional",
   support_reply: "transactional",
+  // 2026-10-23: a code to change your own password (admin dashboard, Account → Password) — never optional
+  password_code: "security",
+  // 2026-10-23: a failed AI job, to the administrators only (lib/ai/failure-alert.ts)
+  admin_ai_failure: "transactional",
 } as const satisfies Record<string, EmailCategory>;
 
 export const isOptional = (kind: MemberEmailKind): boolean => MEMBER_EMAIL_KINDS[kind] === "optional";

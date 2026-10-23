@@ -36,7 +36,22 @@ export function useChatAppearance(conversationId: string, initial?: ChatAppearan
 }
 
 /** Optimistic write with rollback-on-failure, scoped to one conversation. */
-export async function setChatAppearance(conversationId: string, patch: Partial<ChatAppearance>): Promise<void> {
+/** Is a Pro skin open to this member? Read from the appearance GET; false until known (the picker shows the lock). */
+export async function fetchCanUseProSkins(conversationId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/chat-appearance-preferences?conversationId=${encodeURIComponent(conversationId)}`);
+    if (!res.ok) return false;
+    return ((await res.json()) as { canUsePro?: boolean }).canUsePro === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Save part of the appearance, optimistically. Resolves with the server's own reason when it refuses (a Pro
+ * skin on a free plan, a Halloween skin out of season) so the caller can say why; a network failure still toasts.
+ */
+export async function setChatAppearance(conversationId: string, patch: Partial<ChatAppearance>): Promise<{ ok: boolean; error?: string; pro?: boolean }> {
   const key = keyFor(conversationId);
   const rollback = mutate<ChatAppearance>(key, (prev) => ({ ...(prev ?? DEFAULT_CHAT_APPEARANCE), ...patch }));
   try {
@@ -45,9 +60,15 @@ export async function setChatAppearance(conversationId: string, patch: Partial<C
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ conversationId, ...patch }),
     });
-    if (!res.ok) throw new Error();
+    if (res.ok) return { ok: true };
+    rollback();
+    const body = (await res.json().catch(() => ({}))) as { error?: string; pro?: boolean };
+    if (body.error) return { ok: false, error: body.error, pro: body.pro };
+    toast("Couldn't save that change.", "error");
+    return { ok: false };
   } catch {
     rollback();
     toast("Couldn't save that change.", "error");
+    return { ok: false };
   }
 }

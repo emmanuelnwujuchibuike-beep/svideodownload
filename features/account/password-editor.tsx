@@ -5,15 +5,15 @@ import { useSearchParams } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { toast } from "@/features/ui/toast";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 const MIN_LENGTH = 8;
 
 /**
  * Optional account password. Sign-in codes always work — a password is an
- * extra way in (and what "Forgot password?" resets). Set/changed via
- * supabase.auth.updateUser on the live session; the forgot-password flow
+ * extra way in (and what "Forgot password?" resets). Set/changed through
+ * POST /api/v1/app/security/password, which asks for an emailed code when this
+ * session signed in with a password (2026-10-23); the forgot-password flow
  * lands here with ?setPassword=1 (after proving email ownership via a code)
  * to set the replacement.
  */
@@ -24,6 +24,9 @@ export function PasswordEditor() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set when this session signed in WITH a password: the change needs the code we email (owner, 2026-10-23)
+  const [codeSentTo, setCodeSentTo] = useState<string | null>(null);
+  const [code, setCode] = useState("");
   const sectionRef = useRef<HTMLDivElement | null>(null);
   const searchParams = useSearchParams();
   const fromReset = searchParams.get("setPassword") === "1";
@@ -35,7 +38,19 @@ export function PasswordEditor() {
 
   const mismatch = confirm.length > 0 && password !== confirm;
   const tooShort = password.length > 0 && password.length < MIN_LENGTH;
-  const canSave = password.length >= MIN_LENGTH && password === confirm && !saving;
+  const canSave = password.length >= MIN_LENGTH && password === confirm && !saving && (!codeSentTo || code.length === 6);
+
+  const sendCode = async (): Promise<boolean> => {
+    const res = await fetch("/api/v1/app/security/password/code", { method: "POST", credentials: "same-origin" });
+    const body = (await res.json().catch(() => null)) as { ok?: boolean; data?: { sentTo?: string }; error?: { message?: string } } | null;
+    if (!res.ok || !body?.ok) {
+      setError(body?.error?.message ?? "Couldn't send the code. Try again.");
+      return false;
+    }
+    setCodeSentTo(body.data?.sentTo ?? "your email");
+    setCode("");
+    return true;
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -43,8 +58,23 @@ export function PasswordEditor() {
     setSaving(true);
     setError(null);
     try {
-      const { error } = await createClient().auth.updateUser({ password });
-      if (error) throw error;
+      const res = await fetch("/api/v1/app/security/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ password, code: codeSentTo ? code : undefined }),
+      });
+      const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: { message?: string; details?: { needsCode?: boolean } } } | null;
+      if (!res.ok || !body?.ok) {
+        // signed in with a password: prove the inbox first, the same way "Forgot password?" does
+        if (body?.error?.details?.needsCode && !codeSentTo) {
+          await sendCode();
+          return;
+        }
+        throw new Error(body?.error?.message ?? "Couldn't save the password. Try again.");
+      }
+      setCodeSentTo(null);
+      setCode("");
       fetch("/api/v1/app/security/password-changed", { method: "POST" }).catch(() => {});
       setSaved(true);
       setPassword("");
@@ -104,6 +134,25 @@ export function PasswordEditor() {
           className="h-12 w-full rounded-2xl bg-secondary/40 px-4 text-[15px] outline-none ring-1 ring-inset ring-border/60 transition placeholder:text-muted-foreground/60 focus:bg-background focus:ring-2 focus:ring-violet-500/55"
         />
 
+        {codeSentTo ? (
+          <div className="space-y-1.5">
+            <p className="text-sm text-muted-foreground">We sent a 6-digit code to {codeSentTo}. Enter it to save your new password.</p>
+            <input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/D/g, "").slice(0, 6))}
+              placeholder="6-digit code"
+              aria-label="Code from the email"
+              className="h-12 w-full rounded-2xl bg-secondary/40 px-4 text-center font-mono text-lg tracking-[0.4em] outline-none ring-1 ring-inset ring-border/60 transition placeholder:text-[15px] placeholder:tracking-normal placeholder:text-muted-foreground/60 focus:bg-background focus:ring-2 focus:ring-violet-500/55"
+            />
+            <button type="button" onClick={() => void sendCode()} className="text-xs font-semibold text-violet-600 hover:underline dark:text-violet-400">
+              Send a new code
+            </button>
+          </div>
+        ) : null}
+
         <p aria-live="polite" className="min-h-4 text-xs">
           {tooShort ? (
             <span className="text-amber-500">At least {MIN_LENGTH} characters.</span>
@@ -122,7 +171,7 @@ export function PasswordEditor() {
           className="inline-flex h-11 items-center gap-1.5 rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-5 text-sm font-semibold text-white shadow-md shadow-violet-500/25 transition hover:opacity-95 active:scale-[0.99] disabled:opacity-50"
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? <Check className="h-4 w-4" /> : null}
-          {saved ? "Saved" : "Save password"}
+          {saved ? "Saved" : codeSentTo ? "Verify and save" : "Save password"}
         </button>
       </form>
     </div>

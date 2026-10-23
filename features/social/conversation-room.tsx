@@ -70,7 +70,8 @@ import { useLongPress } from "@/lib/dom/use-long-press";
 import { springs } from "@/lib/motion/springs";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { useNetworkStatus } from "@/lib/pwa/use-network-status";
-import { BUBBLE_STYLE_SHAPE, type ChatAppearance } from "@/lib/social/chat-appearance";
+import { BUBBLE_STYLE_SHAPE, type ChatAppearance, effectiveBubbleStyle, isBubbleSkin } from "@/lib/social/chat-appearance";
+import { SkinDecorations, skinProps } from "@/features/social/bubble-skin";
 import { FONT_STYLE_CLASS } from "@/lib/social/chat-fonts";
 import { MESSAGE_REACTIONS } from "@/lib/social/message-meta";
 import {
@@ -302,7 +303,11 @@ export function ConversationRoom({
   // set) — see lib/social/chat-appearance.ts. Seeded from SSR (initialAppearance)
   // so the saved look paints on the first frame, no default-blue flash.
   const chatAppearance = useChatAppearance(conversationId, initialAppearance);
-  const bubbleShape = BUBBLE_STYLE_SHAPE[chatAppearance.bubbleStyle];
+  // a saved Halloween skin paints as the default after October (lib/social/chat-appearance.ts)
+  const myBubbleStyle = effectiveBubbleStyle(chatAppearance.bubbleStyle);
+  const bubbleShape = BUBBLE_STYLE_SHAPE[myBubbleStyle];
+  // the design's drawn bubbles (owner, 2026-10-23, design/frenzsave-bubble-styles.html) — my own text bubbles only
+  const mySkin = isBubbleSkin(myBubbleStyle) ? myBubbleStyle : null;
   // Neither a color theme nor a custom wallpaper is set — the WhatsApp-style
   // light default (owner ask, 2026-07-14: "make the message page background
   // color to be white like whatsapp"), regardless of the app's own dark
@@ -1981,7 +1986,7 @@ export function ConversationRoom({
             );
             // Inside a bubble only "edited" remains (the group's time is under it).
             const bubbleMeta = !deleted && m.editedAt ? (
-              <span className={cn("text-[10px] font-medium leading-none", frameless ? "text-white" : m.mine ? "text-white/75" : "text-neutral-500")}>edited</span>
+              <span className={cn("text-[10px] font-medium leading-none", frameless ? "text-white" : m.mine && mySkin ? "text-current opacity-70" : m.mine ? "text-white/75" : "text-neutral-500")}>edited</span>
             ) : null;
             /* Floated to the end of the last line — the WhatsApp trick. */
             const inlineMeta = bubbleMeta ? <span className="float-right ml-2 mt-1.5 -mb-0.5 pl-1">{bubbleMeta}</span> : null;
@@ -1995,6 +2000,8 @@ export function ConversationRoom({
             // the "fat line". They're now framed like media: just enough to read
             // as a bubble, nothing more.
             const hasAttachmentFrame = !deleted && m.attachments.length > 0;
+            // only a plain text bubble of mine wears a skin — media, shared posts and placeholders keep their frame
+            const skinned = m.mine && mySkin && !deleted && !frameless && !shared && !hasAttachmentFrame && !m.metadata?.kind ? mySkin : null;
             const locationMeta = !deleted && m.metadata?.kind === "location" ? (m.metadata as { lat: number; lng: number; label: string | null }) : null;
             const contactMeta =
               !deleted && m.metadata?.kind === "contact"
@@ -2117,9 +2124,10 @@ export function ConversationRoom({
                     // so a deleted/optimistic bubble stays inert rather than
                     // opening an empty menu.
                     data-message-id={m.id}
+                    {...(skinned ? { "data-skin": skinned } : {})}
                     // a media bubble has no hold (owner 2026-10-12): its menu is the ⋯ button beside it
                     {...(canAct && !hasMediaAttachment ? holdBubble : {})}
-                    style={m.mine && !deleted && chatAppearance.bubbleColor ? { backgroundImage: "none", backgroundColor: chatAppearance.bubbleColor } : undefined}
+                    style={m.mine && !deleted && !skinned && chatAppearance.bubbleColor ? { backgroundImage: "none", backgroundColor: chatAppearance.bubbleColor } : undefined}
                     className={cn(
                       // No pre-wrap here (owner 2026-10-19): in Safari it sized the bubble a hair narrower
                       // than its text, so "Afa na" broke one word per line. RichText keeps typed line breaks.
@@ -2130,6 +2138,10 @@ export function ConversationRoom({
                       canAct && "select-none [-webkit-touch-callout:none]",
                       bubbleShape.base,
                       FONT_STYLE_CLASS[chatAppearance.fontStyle],
+                      // a skin draws its own background, outline and colour; its decorations ride on the first
+                      // bubble of a run, with room above for the ones that sit on top
+                      skinned && skinProps(skinned).className,
+                      skinned && firstInGroup && "mt-7",
                       // "Speech tail" bubble style: a real protruding pointer
                       // (see the .chat-bubble-tail-* rules in globals.css),
                       // not a corner-radius pinch — needs `relative` to anchor
@@ -2147,6 +2159,8 @@ export function ConversationRoom({
                             // bubble, and it blends with whatever wallpaper is
                             // behind it. The media element carries its own radius.
                             "bg-transparent shadow-none"
+                          : skinned
+                          ? null
                           : m.mine
                           ? cn(
                               // A personal bubble-color preference (set via the
@@ -2192,7 +2206,7 @@ export function ConversationRoom({
                             onClick={() => scrollToMessage(m.replyTo!.id)}
                             className={cn(
                               "mb-1 block w-full truncate rounded-xl px-2.5 py-1 text-left text-[11px]",
-                              m.mine ? "bg-white/15 text-white/85" : "bg-secondary text-muted-foreground",
+                              skinned ? "bg-black/[0.06] text-current opacity-80" : m.mine ? "bg-white/15 text-white/85" : "bg-secondary text-muted-foreground",
                               shared && "mx-1.5 mt-1.5",
                             )}
                           >
@@ -2324,7 +2338,7 @@ export function ConversationRoom({
                           <span className={cn("block", hasAttachmentFrame && "px-2.5 pb-1 pt-0.5")}>
                             <RichText
                               text={m.body}
-                              linkClassName={cn("font-semibold underline underline-offset-2", m.mine ? "text-white" : "text-primary")}
+                              linkClassName={cn("font-semibold underline underline-offset-2", skinned ? "text-current" : m.mine ? "text-white" : "text-primary")}
                             />
                             {inlineMeta}
                           </span>
@@ -2333,6 +2347,7 @@ export function ConversationRoom({
                           // to float beside, so the meta is a foot row.
                           footMeta
                         )}
+                        {skinned && firstInGroup ? <SkinDecorations skin={skinned} /> : null}
                       </>
                     )}
                   </div>

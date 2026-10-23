@@ -932,7 +932,17 @@ export async function transitionJob(
     console.error("[ai/jobs] transition failed", { jobId, to, code: error.code, message: error.message });
     throw new AiJobError("INTERNAL_ERROR", error.message);
   }
-  return (data as AiJobRow | null) ?? null;
+  const row = (data as AiJobRow | null) ?? null;
+  /*
+    Owner, 2026-10-23: admins get an email for every failed AI job, with the reason and the member. Here because
+    every `→ failed` comes through this door, and only when the row really moved, so it is sent once per job.
+    Deferred-imported: the email module is only loaded on a failure.
+  */
+  if (row && to === "failed" && from.some((s) => s !== "failed")) {
+    const { notifyAdminsOfFailedAiJob } = await import("./failure-alert");
+    await notifyAdminsOfFailedAiJob(row, patch.error_message ?? null);
+  }
+  return row;
 }
 
 /**

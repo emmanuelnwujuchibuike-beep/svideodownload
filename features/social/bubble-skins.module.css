@@ -1,0 +1,160 @@
+/*
+ * Bubble skins (owner, 2026-10-23), copied from design/frenzsave-bubble-styles.html. Only the chat and the
+ * picker import this, so it never reaches a cold-entry page. "Default" is the chat's own gradient bubble (the classic style), not a skin.
+ */
+
+.skin {
+  position: relative;
+  isolation: isolate;
+  overflow: visible !important;
+  overflow-wrap: anywhere;
+}
+.skin.mini { width: 118px; height: 42px; padding: 0; max-width: none; }
+
+.deco { position: absolute; display: block; pointer-events: none; z-index: 2; }
+.deco svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+
+/* decoration motion */
+.float   { animation: float 3s ease-in-out infinite; }
+.bob     { animation: float 1.4s ease-in-out infinite; }
+.sway    { animation: sway 2.6s ease-in-out infinite; transform-origin: 50% 100%; }
+.spin    { animation: spin 12s linear infinite; }
+.twinkle { animation: twinkle 1.8s ease-in-out infinite; }
+.swim    { animation: swim 3.2s ease-in-out infinite; }
+.drop    { animation: drop 2.4s ease-in-out infinite; }
+.flap    { animation: flap .5s ease-in-out infinite alternate; }
+.crawl   { animation: crawl 4s ease-in-out infinite; }
+@keyframes float   { 50% { transform: translateY(-4px); } }
+@keyframes sway    { 0%,100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
+@keyframes spin    { to { transform: rotate(360deg); } }
+@keyframes twinkle { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.75); } }
+@keyframes swim    { 0%,100% { transform: translateX(0); } 50% { transform: translateX(14px); } }
+@keyframes drop    { 0%,100% { transform: translateY(0); } 50% { transform: translateY(6px); } }
+@keyframes flap    { to { transform: scaleY(.65) translateY(2px); } }
+@keyframes crawl   { 0%,100% { transform: translateX(0) rotate(-6deg); } 50% { transform: translateX(-8px) rotate(4deg); } }
+@media (prefers-reduced-motion: reduce) { .deco { animation: none !important; } }
+
+
+.spikes { position: absolute; display: block; pointer-events: none; z-index: 2; }
+
+
+/* Doodle — hand-drawn */
+.skin[data-skin="doodle"] {
+  background: #e4f8ff; color: #0b4a60; font-weight: 500;
+  border: 2.5px solid #29b6e8;
+  border-radius: 24px 10px 26px 12px / 12px 24px 10px 26px;
+}
+
+/* Ghosty — Halloween limited */
+.skin[data-skin="ghost"] { background: #fff; color: #111; border: 2.5px solid #111; border-radius: 24px; font-weight: 600; }
+
+/* Jack-o — Halloween limited */
+.skin[data-skin="pumpkin"] {
+  color: #3a1600; font-weight: 700;
+  background:
+    repeating-linear-gradient(90deg, rgba(120,40,0,.10) 0 2px, transparent 2px 26px),
+    linear-gradient(180deg, #ffa53d, #f27510);
+  border: 2.5px solid #c45800;
+  border-radius: 26px 26px 22px 22px / 20px 20px 26px 26px;
+}
+
+/* Web — Halloween limited */
+.skin[data-skin="web"] { background: #111; color: #fff; border-radius: 22px 22px 6px 22px; font-weight: 500; }
+
+/* Sleepy cat */
+.skin[data-skin="cat"] { background: #fff3e2; color: #4a2a0e; border: 2px solid #6b3d14; border-radius: 22px; font-weight: 500; }
+
+/* Bunny */
+.skin[data-skin="bunny"] { background: #ffe0ec; color: #7a1f45; border: 2px solid #e46a9a; border-radius: 22px; font-weight: 500; }
+
+/* Honey bee */
+.skin[data-skin="bee"] { background: #ffd23f; color: #3b2a00; border: 2px solid #e0a800; border-radius: 22px; font-weight: 600; }
+
+/* Panda hug */
+.skin[data-skin="panda"] { background: #fff; color: #1a1a1a; border: 2.5px solid #1a1a1a; border-radius: 22px; font-weight: 600; }
+
+/* Shark */
+.skin[data-skin="shark"] { background: linear-gradient(180deg, #5fb0ff, #2a6fe0); color: #fff; border-radius: 22px; font-weight: 600; }
+
+/* Dino */
+.skin[data-skin="dino"] { background: #5ccf7a; color: #0f3d1d; border: 2px solid #2e8b4c; border-radius: 22px; font-weight: 700; }
+.skin[data-skin="dino"] .spikes {
+  top: -9px; left: 18px; right: 18px; height: 9px;
+  background: #f4c430;
+  -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 14px 100%;
+          mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 14px 100%;
+}
+
+/* Sprout */
+.skin[data-skin="sprout"] { background: #dcf6cd; color: #1f4d14; border: 2px solid #4caf50; border-radius: 22px; font-weight: 500; }
+
+/* Sunflower */
+.skin[data-skin="sunflower"] { background: #fffbe6; color: #5a3d00; border: 2px solid #ffc928; border-radius: 22px; font-weight: 500; }
+
+/* Cloudy */
+.skin[data-skin="cloud"] { background: #fff; color: #24507a; border: 2px solid #9ec9f5; border-radius: 26px; font-weight: 500; }
+
+/* Strawberry */
+.skin[data-skin="berry"] {
+  color: #fff; font-weight: 700; text-shadow: 0 1px 0 rgba(120,0,20,.35);
+  background:
+    radial-gradient(circle, #ffe08a 1.3px, transparent 1.8px) 0 0 / 15px 13px,
+    radial-gradient(circle, #ffe08a 1.3px, transparent 1.8px) 7px 6px / 15px 13px,
+    #ff4d5e;
+  border: 2px solid #d81b3c;
+  border-radius: 22px 22px 26px 26px;
+}
+
+/* Galaxy — Pro */
+.skin[data-skin="galaxy"] {
+  color: #fff; font-weight: 500;
+  background:
+    radial-gradient(1.3px 1.3px at 14% 30%, #fff 50%, transparent 55%),
+    radial-gradient(1px 1px at 42% 72%, #fff 50%, transparent 55%),
+    radial-gradient(1.5px 1.5px at 78% 22%, #fff 50%, transparent 55%),
+    radial-gradient(1px 1px at 63% 55%, #ffe9a8 50%, transparent 55%),
+    radial-gradient(1px 1px at 28% 86%, #fff 50%, transparent 55%),
+    radial-gradient(1.2px 1.2px at 90% 78%, #cfe0ff 50%, transparent 55%),
+    linear-gradient(135deg, #1b0f3b 0%, #4a2a8a 55%, #2d6cdf 100%);
+  border-radius: 22px 22px 6px 22px;
+  box-shadow: 0 6px 18px rgba(74,42,138,.35);
+}
+
+/* Crowned — Pro */
+.skin[data-skin="crown"] { background: #fff; color: #3a2c00; border: 2px solid #e9b949; border-radius: 22px; font-weight: 600; box-shadow: 0 4px 14px rgba(233,185,73,.25); }
+
+/* Boba */
+.skin[data-skin="boba"] { background: #ecd8bb; color: #4a3218; border: 2px solid #8a6238; border-radius: 22px; font-weight: 600; }
+
+/* Pixel */
+.skin[data-skin="pixel"] {
+  background: none; color: #fff; padding: 11px 16px;
+  font-family: "JetBrains Mono", monospace; font-size: 13.5px; font-weight: 600; border-radius: 0;
+}
+.skin[data-skin="pixel"]::before {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background: #7b5cff;
+  box-shadow: inset 0 -4px 0 #5536d6;
+  clip-path: polygon(0 8px, 4px 8px, 4px 4px, 8px 4px, 8px 0, calc(100% - 8px) 0, calc(100% - 8px) 4px, calc(100% - 4px) 4px, calc(100% - 4px) 8px, 100% 8px,
+                     100% calc(100% - 8px), calc(100% - 4px) calc(100% - 8px), calc(100% - 4px) calc(100% - 4px), calc(100% - 8px) calc(100% - 4px), calc(100% - 8px) 100%,
+                     8px 100%, 8px calc(100% - 4px), 4px calc(100% - 4px), 4px calc(100% - 8px), 0 calc(100% - 8px));
+}
+
+/* Neon — Pro */
+.skin[data-skin="neon"] {
+  background: #140a22; color: #ffe1f7; font-weight: 600;
+  border: 2px solid #ff4fd8; border-radius: 18px;
+  box-shadow: 0 0 10px rgba(255,79,216,.6), inset 0 0 10px rgba(255,79,216,.25);
+  text-shadow: 0 0 6px rgba(255,79,216,.9);
+  animation: flicker 4s infinite;
+}
+@keyframes flicker { 0%,92%,100% { border-color: #ff4fd8; } 93% { border-color: #6a2a5c; } 95% { border-color: #ff4fd8; } 96% { border-color: #6a2a5c; } }
+
+/* Love letter */
+.skin[data-skin="letter"] {
+  background: #fff0f4; color: #8a1c46; font-weight: 500;
+  border: 2px solid #f06292; border-radius: 8px;
+  padding-top: 28px; overflow: hidden;
+}
+.skin.mini[data-skin="letter"] { padding-top: 0; }

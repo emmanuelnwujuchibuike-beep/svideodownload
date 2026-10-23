@@ -179,11 +179,20 @@ describe("every email is classified (no optional email bypasses the switch)", ()
     expect(found.length).toBeGreaterThanOrEqual(9);
   });
 
-  it("only the four classified direct senders call sendProductEmail / receipts / codes themselves", () => {
+  it("only the classified direct senders call sendProductEmail / receipts / codes themselves", () => {
     const direct = files.filter((f) => /sendProductEmail\(|sendTopupReceiptEmail\(|sendOtpEmail\(/.test(readFileSync(f, "utf8")) && !f.endsWith(join("email", "resend.ts")) && !f.endsWith(join("email", "member-email.ts")));
     const rel = direct.map((f) => f.slice(process.cwd().length + 1).replace(/\\/g, "/")).sort();
-    // sign_in_code, topup_receipt, ad_campaign_notice (paid campaigns), support_reply — see consent.ts
-    expect(rel).toEqual(["app/api/auth/otp/route.ts", "lib/ads-platform/ad-notify.ts", "lib/ai/topup-notify.ts", "lib/support/chat.ts"]);
+    // sign_in_code, topup_receipt, ad_campaign_notice (paid campaigns), support_reply, password_code (admin + member),
+    // admin_ai_failure — see consent.ts
+    expect(rel).toEqual([
+      "app/api/admin/auth/password-code/route.ts",
+      "app/api/auth/otp/route.ts",
+      "app/api/v1/app/security/password/code/route.ts",
+      "lib/ads-platform/ad-notify.ts",
+      "lib/ai/failure-alert.ts",
+      "lib/ai/topup-notify.ts",
+      "lib/support/chat.ts",
+    ]);
     // and the ad file's only direct send is the PAID campaign notice; the waitlist goes through emailMember
     const ad = readFileSync(join(process.cwd(), "lib", "ads-platform", "ad-notify.ts"), "utf8");
     expect(ad.match(/sendProductEmail\(/g)).toHaveLength(1);

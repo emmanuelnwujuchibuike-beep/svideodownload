@@ -1,280 +1,307 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, X, Type } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Check, Lock } from "lucide-react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
+import { SkinDecorations, skinProps } from "@/features/social/bubble-skin";
+import { fetchCanUseProSkins, setChatAppearance, useChatAppearance } from "@/features/social/use-chat-appearance";
+import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
+import { BUBBLE_SKIN_DATA, BUBBLE_SKIN_SECTIONS } from "@/lib/social/bubble-skins-data";
 import {
-  BUBBLE_STYLES,
   BUBBLE_STYLE_LABEL,
   BUBBLE_STYLE_SHAPE,
+  bubbleStyleAvailable,
+  type ChatAppearance,
+  type ChatBubbleStyle,
+  type ChatFontStyle,
   FONT_STYLES,
   FONT_STYLE_LABEL,
+  isBubbleSkin,
+  PRO_BUBBLE_SKINS,
 } from "@/lib/social/chat-appearance";
 import { FONT_STYLE_CLASS } from "@/lib/social/chat-fonts";
 import { cn } from "@/lib/utils";
-import { setChatAppearance, useChatAppearance } from "@/features/social/use-chat-appearance";
 
-/** Curated, premium-feeling swatches — not a raw `<input type=color>` wheel
- *  first (that's tucked behind "Custom"), matching how every other picker in
- *  this app (Chat Theme's 5 swatches, wallpaper) leads with a tasteful preset
- *  set. */
+/** Curated swatches for the plain bubbles; the custom wheel is behind "+". A skin brings its own colours. */
 const COLOR_SWATCHES = ["#0A84FF", "#6C4DFF", "#22C55E", "#F97316", "#EC4899", "#14B8A6", "#EF4444", "#64748B"];
 
+/** The design's sections, in its order; "Default" (the chat's gradient bubble) leads Suggested. */
+const SECTION_STYLES: Record<string, ChatBubbleStyle[]> = Object.fromEntries(
+  BUBBLE_SKIN_SECTIONS.map(([section]) => [
+    section,
+    BUBBLE_SKIN_DATA.filter((s) => s.section === section).map((s) => (s.id === "default" ? "classic" : s.id) as ChatBubbleStyle),
+  ]),
+);
+/** Notes from the design, with one change: this app's choice is per chat and only you see it. */
+const SECTION_NOTE: Record<string, string> = {
+  ...Object.fromEntries(BUBBLE_SKIN_SECTIONS.map(([section, note]) => [section, note])),
+  Suggested: "Applies to this chat. Only you see it, on the messages you send.",
+};
+/** The shapes that were here before the skins — kept, so nobody's saved choice disappears. */
+const SHAPES: ChatBubbleStyle[] = ["modern", "sharp", "pill", "tail"];
+const BADGE: Partial<Record<ChatBubbleStyle, string>> = Object.fromEntries(
+  BUBBLE_SKIN_DATA.flatMap((s) => ("badge" in s && s.badge ? [[s.id, s.badge]] : [])),
+);
+
 /**
- * Personal chat appearance — font style + bubble style/color, scoped to ONE
- * conversation (owner ask 2026-07-16: "should be only changed in the
- * particular chat ... not in all chats"). Personal to the viewer (only they
- * see their own bubble color), but no longer global: a change here applies to
- * THIS thread alone, via the per-conversation key on the shared
- * stale-while-revalidate cache (useChatAppearance/setChatAppearance). Leads
- * with a live 2-bubble preview so a choice is never made blind.
+ * A sent bubble in any style — the picker's preview and its tiles. A skin draws itself
+ * (bubble-skins.module.css); "Default" and the shapes are the chat's own gradient bubble, as conversation-room
+ * paints it.
  */
-export function ChatAppearanceSheet({
-  conversationId,
-  open,
-  onClose,
-}: {
-  conversationId: string;
-  open: boolean;
-  onClose: () => void;
-}) {
+function SentBubble({ style, color, font, mini = false, children }: { style: ChatBubbleStyle; color: string | null; font: ChatFontStyle; mini?: boolean; children?: ReactNode }) {
+  const size = mini ? "h-[42px] w-[118px] p-0" : "max-w-[78%] px-[15px] py-2.5 text-[15.5px] leading-[1.38]";
+  if (isBubbleSkin(style)) {
+    const p = skinProps(style, mini);
+    return (
+      <div data-skin={p["data-skin"]} className={cn(p.className, size, FONT_STYLE_CLASS[font])}>
+        {children}
+        <SkinDecorations skin={style} />
+      </div>
+    );
+  }
+  const shape = BUBBLE_STYLE_SHAPE[style];
+  return (
+    <div
+      style={color ? { backgroundImage: "none", backgroundColor: color } : undefined}
+      className={cn(
+        "bg-frenz-bubble text-white",
+        !color && "chat-bubble-gradient",
+        shape.base,
+        shape.tailMine,
+        shape.protrudingTail && "chat-bubble-tail-mine relative overflow-visible",
+        size,
+        FONT_STYLE_CLASS[font],
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * 🔴 "SELECT BUBBLE STYLE" — design/frenzsave-bubble-styles.html (owner, 2026-10-23: "This is how the chat bubble
+ * page still looks", after the design was asked for). Cancel · title · Save across the top, a live preview of
+ * the draft, and a sheet of drawn bubbles by section (Suggested, Halloween in October only, Critters, Nature,
+ * Vibes with the Pro three), then the earlier shapes, font style and bubble colour, so nothing that worked before
+ * is lost. Nothing is saved until Save. Still personal and per chat: only the viewer sees it.
+ */
+export function ChatAppearanceSheet({ conversationId, open, onClose }: { conversationId: string; open: boolean; onClose: () => void }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const appearance = useChatAppearance(conversationId);
+  const saved = useChatAppearance(conversationId);
+  const [draft, setDraft] = useState<ChatAppearance>(saved);
+  const [canUsePro, setCanUsePro] = useState(false);
+  const [saving, setSaving] = useState(false);
   const colorInputRef = useRef<HTMLInputElement | null>(null);
 
+  // every opening starts from what is saved, and learns whether the Pro skins are open to this member
   useEffect(() => {
     if (!open) return;
+    setDraft(saved);
+    let live = true;
+    void fetchCanUseProSkins(conversationId).then((v) => live && setCanUsePro(v));
     const prev = document.body.style.overflowY;
     document.body.style.overflowY = "hidden";
     return () => {
+      live = false;
       document.body.style.overflowY = prev;
     };
-  }, [open]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when the picker opens
+  }, [open, conversationId]);
 
-  const shape = BUBBLE_STYLE_SHAPE[appearance.bubbleStyle];
-  // a chosen colour must also clear the default gradient (a background IMAGE, which a colour alone does not cover)
-  const mineStyle = appearance.bubbleColor ? { backgroundImage: "none", backgroundColor: appearance.bubbleColor } : undefined;
+  const changed = draft.bubbleStyle !== saved.bubbleStyle || draft.fontStyle !== saved.fontStyle || draft.bubbleColor !== saved.bubbleColor;
+  const pick = (patch: Partial<ChatAppearance>) => {
+    haptic("light");
+    setDraft((d) => ({ ...d, ...patch }));
+  };
+
+  const save = async () => {
+    if (!changed || saving) return;
+    if ((PRO_BUBBLE_SKINS as readonly string[]).includes(draft.bubbleStyle) && !canUsePro) {
+      toast(`Get Frenzsave Pro to use ${BUBBLE_STYLE_LABEL[draft.bubbleStyle]}`, "error");
+      return;
+    }
+    setSaving(true);
+    const res = await setChatAppearance(conversationId, { bubbleStyle: draft.bubbleStyle, fontStyle: draft.fontStyle, bubbleColor: draft.bubbleColor });
+    setSaving(false);
+    if (!res.ok) {
+      if (res.error) toast(res.error, "error");
+      return;
+    }
+    toast("Bubble style saved", "success");
+    onClose();
+  };
+
+  const skinSelected = isBubbleSkin(draft.bubbleStyle);
+
+  const tile = (style: ChatBubbleStyle) => {
+    const active = draft.bubbleStyle === style;
+    const pro = (PRO_BUBBLE_SKINS as readonly string[]).includes(style);
+    const badge = BADGE[style];
+    return (
+      <motion.button
+        key={style}
+        type="button"
+        aria-pressed={active}
+        whileTap={{ scale: 0.96 }}
+        transition={springs.press}
+        onClick={() => pick({ bubbleStyle: style })}
+        className={cn(
+          "flex flex-col items-center rounded-[20px] border-2 px-1 pb-3 pt-1.5 transition-colors",
+          active ? "border-foreground bg-secondary" : "border-transparent",
+        )}
+      >
+        <span className="grid h-[92px] w-full place-items-center">
+          <span className="scale-[0.8]">
+            <SentBubble style={style} color={skinSelected || !active ? null : draft.bubbleColor} font={draft.fontStyle} mini />
+          </span>
+        </span>
+        <span className={cn("flex flex-col items-center gap-px text-center text-sm font-medium leading-tight", pro && "text-muted-foreground")}>
+          <span className="inline-flex items-center gap-1">
+            {pro && !canUsePro ? <Lock className="h-3 w-3" aria-hidden /> : null}
+            {BUBBLE_STYLE_LABEL[style]}
+          </span>
+          {badge ? <span className="text-[12.5px] text-muted-foreground">{badge}</span> : null}
+        </span>
+      </motion.button>
+    );
+  };
 
   if (!mounted) return null;
   return createPortal(
     <AnimatePresence>
       {open ? (
-        <div className="fixed inset-0 z-[120]" role="dialog" aria-modal="true" aria-label="Font style and bubble style">
-          <motion.button
-            type="button"
-            aria-label="Close"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="absolute inset-0 bg-black/55 backdrop-blur-sm"
-          />
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={springs.sheet}
-            className="glass-strong absolute inset-x-0 bottom-0 mx-auto max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-3xl shadow-[0_-24px_60px_-24px_rgba(0,0,0,0.35)] sm:bottom-6 sm:rounded-3xl"
-            style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-          >
-            <div className="flex justify-center pb-1 pt-2.5">
-              <span aria-hidden className="h-1.5 w-10 rounded-full bg-foreground/15" />
-            </div>
-            <motion.button
-              type="button"
-              onClick={onClose}
-              aria-label="Close"
-              whileTap={{ scale: 0.88 }}
-              transition={springs.press}
-              className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-secondary/80 text-muted-foreground backdrop-blur transition hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-            </motion.button>
+        <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Select bubble style"
+          initial={{ y: "100%" }}
+          animate={{ y: 0 }}
+          exit={{ y: "100%" }}
+          transition={springs.sheet}
+          className="fixed inset-0 z-[120] flex justify-center bg-background"
+        >
+          <div className="relative flex h-dvh w-full max-w-[440px] flex-col overflow-hidden bg-background" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+            <header className="grid grid-cols-[72px_1fr_72px] items-center px-4 pb-2 pt-4">
+              <button type="button" onClick={onClose} className="py-1.5 text-left text-[17px] font-medium">
+                Cancel
+              </button>
+              <h1 className="text-center text-lg font-bold tracking-tight">Select bubble style</h1>
+              <button
+                type="button"
+                onClick={() => void save()}
+                disabled={!changed || saving}
+                className="py-1.5 text-right text-[17px] font-semibold text-primary transition-opacity disabled:opacity-35"
+              >
+                Save
+              </button>
+            </header>
 
-            <div className="flex flex-col items-center gap-1 px-5 pb-4 pt-2 text-center">
-              <ModuleIconBadge icon={Type} className="h-12 w-12 rounded-2xl" />
-              <p className="mt-1.5 text-base font-bold tracking-tight">Font style & bubble style</p>
-              <p className="text-xs text-muted-foreground">Personal to you — applies to this chat only.</p>
-            </div>
-
-            {/* Live preview — mirrors conversation-room.tsx's real bubble
-                markup (same rounded/tail classes, same font) so what's shown
-                here is exactly what a real thread will look like, not an
-                approximation. */}
-            {/* the preview draws the chat's own default look (design/Chat.dc.html, 2026-10-22): lilac ground, white and gradient bubbles */}
-            <div className="mx-5 mb-5 space-y-1.5 rounded-2xl bg-frenz-chat p-4">
-              <div className="flex flex-col items-start">
-                <div
-                  className={cn(
-                    "max-w-[75%] bg-white px-3.5 py-2.5 leading-relaxed text-neutral-900 shadow-sm",
-                    shape.base,
-                    shape.tailTheirs,
-                    shape.protrudingTail && "relative overflow-visible chat-bubble-tail-theirs",
-                    FONT_STYLE_CLASS[appearance.fontStyle],
-                  )}
-                >
-                  Hey! How&apos;s it going? 👋
+            {/* the live preview: their bubble, then two of yours in the draft style */}
+            <section aria-label="Preview" className="flex min-h-[250px] shrink-0 flex-col gap-[30px] px-4 pb-[34px] pt-[26px]">
+              <div className="flex justify-start">
+                <div className={cn("max-w-[78%] rounded-[22px] rounded-bl-md bg-secondary px-[15px] py-2.5 text-[15.5px] leading-[1.38] text-foreground", FONT_STYLE_CLASS[draft.fontStyle])}>
+                  Did you see the clip I just saved? 😭
                 </div>
               </div>
-              <div className="flex flex-col items-end">
-                <div
-                  style={mineStyle}
-                  className={cn(
-                    "max-w-[75%] bg-frenz-bubble px-3.5 py-2.5 leading-relaxed text-white",
-                    shape.base,
-                    shape.tailMine,
-                    shape.protrudingTail && "relative overflow-visible chat-bubble-tail-mine",
-                    FONT_STYLE_CLASS[appearance.fontStyle],
-                  )}
-                >
-                  Doing great, thanks!
+              {["Bubble styles just dropped on Frenzsave!", "Every chat gets the new look 💅"].map((text) => (
+                <div key={text} className="flex justify-end">
+                  <SentBubble key={draft.bubbleStyle} style={draft.bubbleStyle} color={skinSelected ? null : draft.bubbleColor} font={draft.fontStyle}>
+                    {text}
+                  </SentBubble>
                 </div>
-              </div>
-            </div>
+              ))}
+            </section>
 
-            <div className="space-y-4 px-5 pb-6">
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Font style</p>
+            <section className="flex min-h-0 flex-1 flex-col rounded-t-[26px] bg-card shadow-[0_-8px_30px_rgba(0,0,0,0.07)]">
+              <span aria-hidden className="mx-auto mb-1 mt-2.5 h-[5px] w-[42px] shrink-0 rounded-full bg-foreground/15" />
+              <div className="overflow-y-auto px-3.5 pb-10 pt-2 [scrollbar-width:none]" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 40px)" }}>
+                {BUBBLE_SKIN_SECTIONS.map(([section]) => {
+                  const styles = SECTION_STYLES[section]?.filter((s) => bubbleStyleAvailable(s)) ?? [];
+                  if (styles.length === 0) return null;
+                  return (
+                    <div key={section}>
+                      <h2 className="mx-1.5 mb-1 mt-3.5 text-lg font-extrabold tracking-tight">{section}</h2>
+                      {SECTION_NOTE[section] ? <p className="mx-1.5 mb-2.5 text-sm leading-snug text-muted-foreground">{SECTION_NOTE[section]}</p> : null}
+                      <div className="grid grid-cols-3 gap-1.5">{styles.map(tile)}</div>
+                    </div>
+                  );
+                })}
+
+                <h2 className="mx-1.5 mb-1 mt-3.5 text-lg font-extrabold tracking-tight">Shapes</h2>
+                <div className="grid grid-cols-3 gap-1.5">{SHAPES.map(tile)}</div>
+
+                <h2 className="mx-1.5 mb-2 mt-5 text-lg font-extrabold tracking-tight">Font style</h2>
                 <div className="grid grid-cols-3 gap-1.5">
-                  {FONT_STYLES.map((style) => {
-                    const active = appearance.fontStyle === style;
-                    return (
-                      <motion.button
-                        key={style}
-                        type="button"
-                        whileTap={{ scale: 0.94 }}
-                        transition={springs.press}
-                        onClick={() => {
-                          haptic("light");
-                          void setChatAppearance(conversationId, { fontStyle: style });
-                        }}
-                        className={cn(
-                          "flex flex-col items-center gap-1 rounded-xl border px-1 py-2.5 text-center text-[11px] font-medium transition",
-                          active ? "border-transparent bg-primary text-primary-foreground shadow-md shadow-primary/30" : "border-border/60 text-muted-foreground hover:bg-secondary/40",
-                        )}
-                      >
-                        <span className={cn("text-base font-bold", FONT_STYLE_CLASS[style])}>Aa</span>
-                        {FONT_STYLE_LABEL[style]}
-                      </motion.button>
-                    );
-                  })}
+                  {FONT_STYLES.map((font) => (
+                    <motion.button
+                      key={font}
+                      type="button"
+                      aria-pressed={draft.fontStyle === font}
+                      whileTap={{ scale: 0.96 }}
+                      transition={springs.press}
+                      onClick={() => pick({ fontStyle: font })}
+                      className={cn(
+                        "flex flex-col items-center gap-1 rounded-[20px] border-2 px-1 py-2.5 text-center text-xs font-medium transition-colors",
+                        draft.fontStyle === font ? "border-foreground bg-secondary" : "border-transparent text-muted-foreground",
+                      )}
+                    >
+                      <span className={cn("text-base font-bold", FONT_STYLE_CLASS[font])}>Aa</span>
+                      {FONT_STYLE_LABEL[font]}
+                    </motion.button>
+                  ))}
                 </div>
-              </div>
 
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Bubble style</p>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {BUBBLE_STYLES.map((style) => {
-                    const active = appearance.bubbleStyle === style;
-                    const s = BUBBLE_STYLE_SHAPE[style];
+                <h2 className="mx-1.5 mb-1 mt-5 text-lg font-extrabold tracking-tight">Bubble color</h2>
+                <p className="mx-1.5 mb-2.5 text-sm leading-snug text-muted-foreground">
+                  {skinSelected ? "Drawn styles bring their own colours. Pick Default or a shape to colour your bubble." : "For Default and the shapes."}
+                </p>
+                <div className={cn("mx-1.5 flex flex-wrap items-center gap-2.5", skinSelected && "pointer-events-none opacity-40")}>
+                  {[null, ...COLOR_SWATCHES].map((hex) => {
+                    const active = draft.bubbleColor === hex;
                     return (
-                      <motion.button
-                        key={style}
+                      <button
+                        key={hex ?? "default"}
                         type="button"
-                        whileTap={{ scale: 0.94 }}
-                        transition={springs.press}
-                        onClick={() => {
-                          haptic("light");
-                          void setChatAppearance(conversationId, { bubbleStyle: style });
-                        }}
+                        aria-label={hex ?? "Default colour"}
+                        aria-pressed={active}
+                        onClick={() => pick({ bubbleColor: hex })}
+                        style={hex ? { backgroundColor: hex } : undefined}
                         className={cn(
-                          "flex flex-col items-center gap-2.5 rounded-xl border px-1 py-3 text-center text-[11px] font-medium transition",
-                          active ? "border-primary/60 bg-primary/10 text-primary" : "border-border/60 text-muted-foreground hover:bg-secondary/40",
+                          "flex h-10 w-10 items-center justify-center rounded-full ring-2 ring-offset-2 ring-offset-card transition",
+                          !hex && "bg-frenz-bubble chat-bubble-gradient",
+                          active ? "ring-foreground" : "ring-transparent",
                         )}
                       >
-                        {/* Real structural preview — the same base/tail classes
-                            the actual bubble renders with, including a genuine
-                            protruding pointer for "Speech tail" (not just a
-                            rounded bar), so the choice is never a guess. */}
-                        <span
-                          className={cn(
-                            "h-5 w-9 bg-foreground/70",
-                            s.base,
-                            s.protrudingTail && "relative overflow-visible chat-bubble-tail-mine",
-                          )}
-                        />
-                        {BUBBLE_STYLE_LABEL[style]}
-                      </motion.button>
+                        {active ? <Check className="h-4 w-4 text-white" aria-hidden /> : null}
+                      </button>
                     );
                   })}
-                </div>
-              </div>
-
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Bubble color</p>
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <motion.button
+                  <button
                     type="button"
-                    aria-label="Default"
-                    whileTap={{ scale: 0.88 }}
-                    animate={!appearance.bubbleColor ? { scale: 1.08 } : { scale: 1 }}
-                    transition={springs.bounce}
-                    onClick={() => {
-                      haptic("light");
-                      void setChatAppearance(conversationId, { bubbleColor: null });
-                    }}
-                    className={cn(
-                      "bg-brand relative flex h-10 w-10 items-center justify-center rounded-full ring-2 ring-offset-2 ring-offset-card transition",
-                      !appearance.bubbleColor ? "shadow-lg shadow-foreground/20 ring-foreground" : "ring-transparent",
-                    )}
+                    aria-label="Custom colour"
+                    onClick={() => colorInputRef.current?.click()}
+                    className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-dashed border-border text-base text-muted-foreground"
                   >
-                    {!appearance.bubbleColor ? <Check className="h-4 w-4 text-white" /> : null}
-                  </motion.button>
-                  {COLOR_SWATCHES.map((hex) => {
-                    const active = appearance.bubbleColor === hex;
-                    return (
-                      <motion.button
-                        key={hex}
-                        type="button"
-                        aria-label={hex}
-                        whileTap={{ scale: 0.88 }}
-                        animate={active ? { scale: 1.08 } : { scale: 1 }}
-                        transition={springs.bounce}
-                        onClick={() => {
-                          haptic("light");
-                          void setChatAppearance(conversationId, { bubbleColor: hex });
-                        }}
-                        style={{ backgroundColor: hex }}
-                        className={cn(
-                          "relative flex h-10 w-10 items-center justify-center rounded-full ring-2 ring-offset-2 ring-offset-card transition",
-                          active ? "shadow-lg shadow-foreground/20 ring-foreground" : "ring-transparent",
-                        )}
-                      >
-                        {active ? <Check className="h-4 w-4 text-white" /> : null}
-                      </motion.button>
-                    );
-                  })}
-                  <motion.button
-                    type="button"
-                    aria-label="Custom color"
-                    whileTap={{ scale: 0.88 }}
-                    onClick={() => {
-                      haptic("light");
-                      colorInputRef.current?.click();
-                    }}
-                    className="relative flex h-10 w-10 items-center justify-center rounded-full border-2 border-dashed border-border text-muted-foreground transition hover:bg-secondary/40"
-                  >
-                    <span className="text-base leading-none">+</span>
-                  </motion.button>
+                    +
+                  </button>
                   <input
                     ref={colorInputRef}
                     type="color"
                     className="sr-only"
-                    value={appearance.bubbleColor ?? "#0A84FF"}
-                    onChange={(e) => void setChatAppearance(conversationId, { bubbleColor: e.target.value })}
+                    value={draft.bubbleColor ?? "#0A84FF"}
+                    onChange={(e) => pick({ bubbleColor: e.target.value })}
                   />
                 </div>
               </div>
-            </div>
-          </motion.div>
-        </div>
+            </section>
+          </div>
+        </motion.div>
       ) : null}
     </AnimatePresence>,
     document.body,

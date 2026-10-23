@@ -147,7 +147,7 @@ export function ThreadHeader({
         // opened"). The container's re-anchoring to the visual viewport is
         // handled in ThreadAppearanceProvider — see useKeyboardViewportPin.
         // the design's header (design/Chat.dc.html, 2026-10-18): back, avatar, name + seal, presence, then the options circle
-        "frenz-ui frenz-thread-header relative z-10 flex shrink-0 items-center gap-1.5 border-b border-frenz-line py-2 pl-1 pr-2 pt-[calc(0.5rem+var(--frenz-safe-top))] lg:pt-2",
+        "frenz-ui frenz-thread-header relative z-10 flex shrink-0 items-center gap-1.5 border-b py-2 pl-1 pr-2 pt-[calc(0.5rem+var(--frenz-safe-top))] lg:pt-2",
         /*
           🔴 BLUR IS NOW THE DEFAULT, NOT JUST THE WALLPAPER CASE (owner,
           2026-08-16, with a reference screenshot: "make the top nav be like
@@ -164,11 +164,13 @@ export function ThreadHeader({
           already extends under the status bar with it, no separate layer
           needed.
         */
+        // 🔴 the divider is the default background's light line — over a wallpaper it read as a white stripe
+        // (owner, 2026-10-23: "the white line of the default background still shows"), so a wallpaper has none
         wallpaperActive
-          ? "bg-white/55 backdrop-blur-xl"
+          ? "!border-b-transparent !shadow-none bg-white/55 backdrop-blur-xl"
           : forceLight
-            ? "bg-white/90 backdrop-blur-xl"
-            : cn("bg-background/70 backdrop-blur-xl", themeHeaderClass),
+            ? "border-frenz-line bg-white/90 backdrop-blur-xl"
+            : cn("border-frenz-line bg-background/70 backdrop-blur-xl", themeHeaderClass),
       )}
     >
       {/* (the decorative corner glow that sat here is gone — owner, 2026-10-18: no washes or glows) */}

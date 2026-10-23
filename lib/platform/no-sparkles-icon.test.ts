@@ -53,7 +53,8 @@ describe("🔴 the sparkle ('AI star') icon is used nowhere (owner rule)", () =>
   it("no file imports, names or draws it", () => {
     const offenders = files.map((f) => ({ f: f.slice(process.cwd().length + 1), hits: sparkleUses(readFileSync(f, "utf8")) })).filter((x) => x.hits.length);
     expect(offenders).toEqual([]);
-  });
+    // reads every source file — measured past the 5 s default on the synced (OneDrive) checkout
+  }, 30_000);
 
   it("teeth: each way back in is caught", () => {
     expect(sparkleUses(`import { Bell, Sparkles } from "lucide-react";`)).toEqual(["import Sparkles"]);

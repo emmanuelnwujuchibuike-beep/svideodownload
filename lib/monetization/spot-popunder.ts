@@ -30,13 +30,26 @@ export interface SpotPopunderConfig {
   /** The Monetag tag as pasted. Parsed to { src, zone } — never injected as raw HTML. */
   snippet: string;
   spots: Record<DirectLinkSpot, boolean>;
+  /**
+   * Less aggressive (owner, 2026-10-23: "make it less aggressive without breaking the Monetag impression and CPM
+   * reading"). Once loaded, Monetag's script opens a pop-under on ANY click on the page; with this on, a window a
+   * THIRD-PARTY script opens is let through only during a tap at one of the spots. Our own features' windows are never
+   * touched. A pop-under that does show is a normal Monetag impression.
+   */
+  spotsOnly: boolean;
+  /** At most one pop-under every this many minutes per visitor (0 = only Monetag's own cap). */
+  cooldownMinutes: number;
 }
+
+export const POPUNDER_COOLDOWN_MAX_MINUTES = 1440;
 
 /** Part 2.1: OFF until the admin switches it on (the owner's zone stays pre-filled in the tag box). */
 export const DEFAULT_SPOT_POPUNDER: SpotPopunderConfig = {
   enabled: false,
   snippet: OWNER_POPUNDER_SNIPPET,
   spots: { wallpaper: true, resultPreview: true, adClose: true },
+  spotsOnly: true,
+  cooldownMinutes: 30,
 };
 
 export function normalizeSpotPopunder(raw: unknown): SpotPopunderConfig {
@@ -47,6 +60,9 @@ export function normalizeSpotPopunder(raw: unknown): SpotPopunderConfig {
     enabled: r.enabled === true,
     snippet: typeof r.snippet === "string" ? r.snippet.trim().slice(0, 4000) : DEFAULT_SPOT_POPUNDER.snippet,
     spots: Object.fromEntries(DIRECT_LINK_SPOTS.map((id) => [id, typeof spotsRaw[id] === "boolean" ? spotsRaw[id] : DEFAULT_SPOT_POPUNDER.spots[id]])) as Record<DirectLinkSpot, boolean>,
+    // a row saved before these existed gets the gentle defaults
+    spotsOnly: typeof r.spotsOnly === "boolean" ? r.spotsOnly : DEFAULT_SPOT_POPUNDER.spotsOnly,
+    cooldownMinutes: Number.isFinite(r.cooldownMinutes) ? Math.max(0, Math.min(POPUNDER_COOLDOWN_MAX_MINUTES, Math.round(r.cooldownMinutes as number))) : DEFAULT_SPOT_POPUNDER.cooldownMinutes,
   };
 }
 
@@ -55,6 +71,8 @@ export interface PublicSpotPopunder {
   zone: string | null;
   cfAsync: boolean;
   spots: DirectLinkSpot[];
+  spotsOnly: boolean;
+  cooldownMinutes: number;
 }
 
 /** What /api/ads/config serves: null unless it can actually load (Monetag on, switched on, a valid tag, a spot). */
@@ -64,7 +82,7 @@ export function publicSpotPopunder(raw: unknown, monetagOn: boolean): PublicSpot
   const tag = parseMonetagSnippet(c.snippet);
   if (!tag) return null;
   const spots = DIRECT_LINK_SPOTS.filter((id) => c.spots[id]);
-  return spots.length ? { src: tag.src, zone: tag.zone, cfAsync: tag.cfAsync, spots } : null;
+  return spots.length ? { src: tag.src, zone: tag.zone, cfAsync: tag.cfAsync, spots, spotsOnly: c.spotsOnly, cooldownMinutes: c.cooldownMinutes } : null;
 }
 
 export type SpotOutcome = "popunder" | "direct" | "none";

@@ -70,7 +70,7 @@ import { useLongPress } from "@/lib/dom/use-long-press";
 import { springs } from "@/lib/motion/springs";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { useNetworkStatus } from "@/lib/pwa/use-network-status";
-import { BUBBLE_STYLE_SHAPE, type ChatAppearance, effectiveBubbleStyle, isBubbleSkin } from "@/lib/social/chat-appearance";
+import { BUBBLE_STYLE_SHAPE, type ChatAppearance, type ChatBubbleSkin, effectiveBubbleStyle, isBubbleSkin } from "@/lib/social/chat-appearance";
 import { SkinDecorations, skinProps } from "@/features/social/bubble-skin";
 import { FONT_STYLE_CLASS } from "@/lib/social/chat-fonts";
 import { MESSAGE_REACTIONS } from "@/lib/social/message-meta";
@@ -249,6 +249,7 @@ export function ConversationRoom({
   viewerTypingIndicatorsEnabled = true,
   otherStoryGroup = null,
   initialAppearance,
+  memberSkins = {},
 }: {
   conversationId: string;
   viewerId: string;
@@ -260,6 +261,8 @@ export function ConversationRoom({
    *  saved bubble style/color/font shows immediately, never a default-blue
    *  flash-then-switch on every entry (owner report 2026-07-16). */
   initialAppearance?: ChatAppearance;
+  /** The other members' bubble skins for this chat, by user id — each paints that sender's own messages. */
+  memberSkins?: Record<string, ChatBubbleSkin>;
   type?: ConversationType;
   members?: ConversationMember[];
   viewerRole?: MemberRole | null;
@@ -306,8 +309,10 @@ export function ConversationRoom({
   // a saved Halloween skin paints as the default after October (lib/social/chat-appearance.ts)
   const myBubbleStyle = effectiveBubbleStyle(chatAppearance.bubbleStyle);
   const bubbleShape = BUBBLE_STYLE_SHAPE[myBubbleStyle];
-  // the design's drawn bubbles (owner, 2026-10-23, design/frenzsave-bubble-styles.html) — every plain text bubble, mine and theirs
+  // the design's drawn bubbles (owner, 2026-10-23, design/frenzsave-bubble-styles.html). "Just like TikTok": each
+  // sender's skin paints THEIR OWN messages, and everyone in the chat sees it — my skin on mine, theirs on theirs.
   const mySkin = isBubbleSkin(myBubbleStyle) ? myBubbleStyle : null;
+  const skinOf = (mine: boolean, senderId: string): ChatBubbleSkin | null => (mine ? mySkin : (memberSkins[senderId] ?? null));
   // Neither a color theme nor a custom wallpaper is set — the WhatsApp-style
   // light default (owner ask, 2026-07-14: "make the message page background
   // color to be white like whatsapp"), regardless of the app's own dark
@@ -1986,7 +1991,7 @@ export function ConversationRoom({
             );
             // Inside a bubble only "edited" remains (the group's time is under it).
             const bubbleMeta = !deleted && m.editedAt ? (
-              <span className={cn("text-[10px] font-medium leading-none", frameless ? "text-white" : mySkin && !deleted && !m.metadata?.kind ? "text-current opacity-70" : m.mine ? "text-white/75" : "text-neutral-500")}>edited</span>
+              <span className={cn("text-[10px] font-medium leading-none", frameless ? "text-white" : skinOf(m.mine, m.senderId) && !deleted && !m.metadata?.kind ? "text-current opacity-70" : m.mine ? "text-white/75" : "text-neutral-500")}>edited</span>
             ) : null;
             /* Floated to the end of the last line — the WhatsApp trick. */
             const inlineMeta = bubbleMeta ? <span className="float-right ml-2 mt-1.5 -mb-0.5 pl-1">{bubbleMeta}</span> : null;
@@ -2000,9 +2005,10 @@ export function ConversationRoom({
             // the "fat line". They're now framed like media: just enough to read
             // as a bubble, nothing more.
             const hasAttachmentFrame = !deleted && m.attachments.length > 0;
-            // owner, 2026-10-23: the chosen skin paints BOTH sides of the chat (mine and theirs) — only plain text
-            // bubbles wear it; media, shared posts and placeholders keep their frame
-            const skinned = mySkin && !deleted && !frameless && !shared && !hasAttachmentFrame && !m.metadata?.kind ? mySkin : null;
+            // owner, 2026-10-23 ("just like TikTok"): the SENDER's skin — mine on my messages, theirs on theirs, seen by
+            // both; only plain text bubbles wear it, media, shared posts and placeholders keep their frame
+            const senderSkin = skinOf(m.mine, m.senderId);
+            const skinned = senderSkin && !deleted && !frameless && !shared && !hasAttachmentFrame && !m.metadata?.kind ? senderSkin : null;
             const locationMeta = !deleted && m.metadata?.kind === "location" ? (m.metadata as { lat: number; lng: number; label: string | null }) : null;
             const contactMeta =
               !deleted && m.metadata?.kind === "contact"

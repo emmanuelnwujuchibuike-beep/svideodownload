@@ -3,9 +3,13 @@ import { after } from "next/server";
 
 import {
   DEFAULT_CHAT_APPEARANCE,
+  effectiveBubbleStyle,
   fromChatAppearanceRow,
+  isBubbleSkin,
+  isChatBubbleStyle,
   type ChatAppearance,
   type ChatAppearanceRow,
+  type ChatBubbleSkin,
 } from "@/lib/social/chat-appearance";
 
 import { flagsOf, isAccountVisibleTo, relationTo } from "@/lib/social/account-visibility";
@@ -1928,6 +1932,12 @@ export interface ConversationView {
   wallpaperUrl: string | null;
   /** The viewer's OWN personal appearance for this chat (migration 0078) — font style + bubble style/color, per-conversation. */
   appearance: ChatAppearance;
+  /**
+   * The OTHER members' bubble skins for this chat, by user id (owner, 2026-10-23, "just like TikTok"): a skin the
+   * sender chose paints THEIR messages for everyone in the chat; the viewer's own choice paints only the viewer's.
+   * Skins only — a member's plain colour or shape stays their own.
+   */
+  memberSkins: Record<string, ChatBubbleSkin>;
   /** Part 11b — viewer's OWN "show when I'm typing" preference; gates whether ConversationRoom broadcasts typing state at all (see use-typing.ts). */
   viewerTypingIndicatorsEnabled: boolean;
   messages: MessageItem[];
@@ -2096,13 +2106,24 @@ export async function getConversation(
       .eq("conversation_id", conversationId)
       .maybeSingle();
 
-    const [{ data: conv }, membershipRes, wallpaperRes, appearanceRes] = await Promise.all([
+    // the other members' skins for this chat — best-effort, like the queries above
+    const memberSkinsQuery = db.from("chat_appearance_preferences").select("user_id, bubble_style").eq("conversation_id", conversationId).neq("user_id", userId).limit(200);
+
+    const [{ data: conv }, membershipRes, wallpaperRes, appearanceRes, memberSkinsRes] = await Promise.all([
       convQuery,
       membershipQuery,
       wallpaperQuery,
       appearanceQuery,
+      memberSkinsQuery,
     ]);
     if (!conv) return null;
+
+    const memberSkins: Record<string, ChatBubbleSkin> = {};
+    for (const r of (memberSkinsRes.data ?? []) as { user_id: string; bubble_style: string | null }[]) {
+      // a seasonal skin past its season paints as the default, exactly as it does for its owner
+      const style = isChatBubbleStyle(r.bubble_style) ? effectiveBubbleStyle(r.bubble_style) : null;
+      if (style && isBubbleSkin(style)) memberSkins[r.user_id] = style;
+    }
 
     // Fetched separately from the main SELECT above, deliberately: migration
     // 0073 (wallpaper_url) may not be applied to the live database the
@@ -2319,6 +2340,7 @@ export async function getConversation(
       theme: (conv.theme as ConversationTheme | null) ?? null,
       wallpaperUrl,
       appearance,
+      memberSkins,
       viewerTypingIndicatorsEnabled: (viewerPriv?.typing_indicators_enabled as boolean | null) ?? true,
       messages,
       syncedAt: queryStartedAt,

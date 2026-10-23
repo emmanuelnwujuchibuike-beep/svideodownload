@@ -37,7 +37,7 @@ import {
   parseHilltopVastUrl,
 } from "@/lib/monetization/hilltop";
 import { isValidDirectLinkUrl, type DirectLinkConfig } from "@/lib/monetization/direct-link";
-import { DEFAULT_SPOT_POPUNDER, type SpotPopunderConfig } from "@/lib/monetization/spot-popunder";
+import { DEFAULT_SPOT_POPUNDER, POPUNDER_COOLDOWN_MAX_MINUTES, type SpotPopunderConfig } from "@/lib/monetization/spot-popunder";
 import type { MonetizationSettings } from "@/lib/monetization/settings";
 import {
   DEFAULT_VAST_INTERSTITIAL,
@@ -2769,6 +2769,39 @@ function SpotPopunderEditor({ value, busy, onChange }: { value: SpotPopunderConf
             <Switch on={value.spots[spot.id]} />
           </button>
         ))}
+      </div>
+      <p className="text-xs font-semibold text-muted-foreground">Less aggressive</p>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => onChange({ ...value, spotsOnly: !value.spotsOnly })}
+        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3 text-left transition hover:border-foreground/20 disabled:opacity-70"
+      >
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold">Only at these spots</span>
+          <span className="block text-xs text-muted-foreground">
+            Once loaded, Monetag pops on any click on the page. On: a pop-under opens only from a tap at a chosen spot. Our own
+            links and downloads are never affected. A pop-under that shows still counts as a normal Monetag impression.
+          </span>
+        </span>
+        <Switch on={value.spotsOnly} />
+      </button>
+      <div>
+        <label htmlFor="monetag-spot-popunder-cooldown" className="mb-1 block text-xs font-medium text-muted-foreground">
+          At most one pop-under every … minutes per visitor (0 = only Monetag&apos;s own limit)
+        </label>
+        <input
+          id="monetag-spot-popunder-cooldown"
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={POPUNDER_COOLDOWN_MAX_MINUTES}
+          value={value.cooldownMinutes}
+          disabled={busy}
+          onChange={(e) => onChange({ ...value, cooldownMinutes: Math.max(0, Math.min(POPUNDER_COOLDOWN_MAX_MINUTES, Math.round(Number(e.target.value) || 0))) })}
+          className="h-10 w-32 rounded-xl bg-background px-3 text-sm outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+        />
+        <p className="mt-1 text-xs text-muted-foreground">During the wait, a tap at a spot opens nothing (the direct link included).</p>
       </div>
     </div>
   );

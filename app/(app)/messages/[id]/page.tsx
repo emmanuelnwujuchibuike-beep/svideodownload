@@ -217,6 +217,7 @@ export default async function ConversationPage({
         viewerTypingIndicatorsEnabled={convo.viewerTypingIndicatorsEnabled}
         otherStoryGroup={otherStoryGroup}
         initialAppearance={convo.appearance}
+        memberSkins={convo.memberSkins}
       />
 
       {/*

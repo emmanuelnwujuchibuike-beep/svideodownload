@@ -33,9 +33,12 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Runtime media tooling.
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates ffmpeg python3 curl aria2 \
-  && curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
+# Network steps retry (2026-10-23: a Railway image build failed in "Build image" while the same code built
+# fine at the same 4 GB heap locally). A momentary apt mirror or GitHub hiccup should cost a retry, not a deploy.
+# `-f` makes an HTTP error fail the build instead of saving an error page as the yt-dlp binary.
+RUN apt-get -o Acquire::Retries=5 update \
+  && apt-get -o Acquire::Retries=5 install -y --no-install-recommends ca-certificates ffmpeg python3 curl aria2 \
+  && curl -fL --retry 5 --retry-delay 3 --retry-all-errors https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
   && chmod a+rx /usr/local/bin/yt-dlp \
   && rm -rf /var/lib/apt/lists/*
 

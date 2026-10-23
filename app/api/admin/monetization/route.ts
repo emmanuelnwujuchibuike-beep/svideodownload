@@ -6,7 +6,7 @@ import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import { DEFAULT_DIRECT_LINK, isValidDirectLinkUrl } from "@/lib/monetization/direct-link";
 import { DEFAULT_VAST_INTERSTITIAL } from "@/lib/monetization/vast-interstitial";
 import { MONETAG_AD_TYPE_IDS, MONETAG_PLACEMENT_IDS, MONETAG_SURFACE_IDS, parseMonetagSnippet } from "@/lib/monetization/monetag";
-import { DEFAULT_SPOT_POPUNDER } from "@/lib/monetization/spot-popunder";
+import { DEFAULT_SPOT_POPUNDER, POPUNDER_COOLDOWN_MAX_MINUTES } from "@/lib/monetization/spot-popunder";
 import {
   DEFAULT_HILLTOP,
   HILLTOP_MAX_EVERY,
@@ -99,6 +99,9 @@ const schema = z.object({
       spots: z
         .object({ wallpaper: z.boolean().default(true), resultPreview: z.boolean().default(true), adClose: z.boolean().default(true) })
         .default(DEFAULT_SPOT_POPUNDER.spots),
+      // less aggressive (owner 2026-10-23): only at spot taps, and at most one per N minutes per visitor
+      spotsOnly: z.boolean().default(DEFAULT_SPOT_POPUNDER.spotsOnly),
+      cooldownMinutes: z.number().int().min(0).max(POPUNDER_COOLDOWN_MAX_MINUTES).default(DEFAULT_SPOT_POPUNDER.cooldownMinutes),
     })
     .refine((v) => !v.enabled || v.snippet !== "", { message: "Paste the pop-under tag before switching it on" })
     .default(DEFAULT_SPOT_POPUNDER),

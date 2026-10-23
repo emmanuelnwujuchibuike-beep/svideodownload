@@ -15,7 +15,34 @@ import { allowWindowOpen } from "./popunder-guard";
  * Composes with the guard where it is installed (Hilltop pages): our own opens are announced to it.
  */
 
-const state = { installed: false, foreignOpened: 0, suppressUntil: 0, suppressed: 0, own: false };
+const state = { installed: false, foreignOpened: 0, suppressUntil: 0, suppressed: 0, own: false, gated: 0 };
+
+/**
+ * The spot pop-under's "less aggressive" rule (owner, 2026-10-23), set by the runtime: may a THIRD-PARTY script open
+ * a window right now? Asked only for a call whose stack names a script from another origin (an ad tag) — the app's
+ * own windows (downloads, viewers, notifications, VAST click-through) never reach it. `onOpened` hears each one let through.
+ */
+let thirdPartyGate: { allow: () => boolean; onOpened: () => void } | null = null;
+
+export function setThirdPartyOpenGate(gate: { allow: () => boolean; onOpened: () => void } | null): void {
+  thirdPartyGate = gate;
+}
+
+/**
+ * Did a script from ANOTHER origin make this call? Read from the call stack's script URLs. No stack, or nothing
+ * but this origin, answers false — the window is let through (failing open never breaks one of our own features).
+ */
+export function calledByThirdParty(stack: string | undefined, origin: string): boolean {
+  if (!stack) return false;
+  for (const m of stack.matchAll(/https?:\/\/[^\s)'"]+/g)) {
+    try {
+      if (new URL(m[0]).origin !== origin) return true;
+    } catch {
+      /* not a URL */
+    }
+  }
+  return false;
+}
 
 export function installOpenObserver(): void {
   if (typeof window === "undefined" || state.installed) return;
@@ -26,9 +53,15 @@ export function installOpenObserver(): void {
       state.suppressed += 1;
       return null;
     }
+    const thirdParty = !state.own && !!thirdPartyGate && calledByThirdParty(new Error().stack, window.location?.origin ?? "");
+    if (thirdParty && !thirdPartyGate!.allow()) {
+      state.gated += 1;
+      return null;
+    }
     const w = prev(url as string, target as string, features as string);
     // a browser's own popup blocker returns null: that is NOT a pop-under that showed
     if (w && !state.own) state.foreignOpened += 1;
+    if (w && thirdParty) thirdPartyGate?.onOpened();
     return w;
   } as typeof window.open;
 }
@@ -54,6 +87,6 @@ export function suppressForeignOpens(ms: number): void {
   state.suppressUntil = Date.now() + ms;
 }
 
-export function openObserverStats(): { installed: boolean; foreignOpened: number; suppressed: number } {
-  return { installed: state.installed, foreignOpened: state.foreignOpened, suppressed: state.suppressed };
+export function openObserverStats(): { installed: boolean; foreignOpened: number; suppressed: number; gated: number } {
+  return { installed: state.installed, foreignOpened: state.foreignOpened, suppressed: state.suppressed, gated: state.gated };
 }

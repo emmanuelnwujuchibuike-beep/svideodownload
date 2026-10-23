@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { calledByThirdParty } from "@/lib/monetization/open-observer";
 import { DEFAULT_SPOT_POPUNDER, OWNER_POPUNDER_SNIPPET, normalizeSpotPopunder, publicSpotPopunder, spotOutcome } from "@/lib/monetization/spot-popunder";
 
 /**
@@ -22,12 +23,14 @@ let scripts: FakeScript[];
 let opened: string[];
 let browserBlocks: boolean;
 let listeners: Map<string, Set<(e: unknown) => void>>;
+let store: Map<string, string>;
 
 function installDom() {
   scripts = [];
   opened = [];
   browserBlocks = false;
   listeners = new Map();
+  store = new Map();
   vi.stubGlobal("window", {
     open: (url: string) => {
       if (browserBlocks) return null;
@@ -37,6 +40,8 @@ function installDom() {
     addEventListener: (t: string, fn: (e: unknown) => void) => void (listeners.get(t) ?? listeners.set(t, new Set()).get(t)!).add(fn),
     removeEventListener: (t: string, fn: (e: unknown) => void) => void listeners.get(t)?.delete(fn),
     setTimeout: (fn: () => void, ms?: number) => setTimeout(fn, ms),
+    location: { origin: "https://frenzsave.com" },
+    localStorage: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) },
   });
   vi.stubGlobal("document", {
     head: { appendChild: (el: FakeScript) => void scripts.push(el) },
@@ -58,13 +63,14 @@ async function opener(spot: "wallpaper" | "resultPreview" | "adClose" = "adClose
   const m = await import("./direct-link-runtime");
   return (await m.loadDirectLinkOpener(spot))!;
 }
-/** load the tag (first press) and let it finish loading */
+/** the spot is shown: the tag preloads, and finishes loading */
 async function readyOpener() {
   const open = await opener();
-  press("adClose");
+  vi.advanceTimersByTime(PRELOAD_MS);
   scripts[0]!.onload!();
   return open;
 }
+const PRELOAD_MS = 1200;
 
 beforeEach(() => {
   vi.resetModules();
@@ -79,7 +85,7 @@ afterEach(() => {
 
 describe("the config — OFF unless an admin switched it on", () => {
   it("default OFF, the owner's zone still pre-filled; nothing is served while off", () => {
-    expect(DEFAULT_SPOT_POPUNDER).toEqual({ enabled: false, snippet: OWNER_POPUNDER_SNIPPET, spots: { wallpaper: true, resultPreview: true, adClose: true } });
+    expect(DEFAULT_SPOT_POPUNDER).toEqual({ enabled: false, snippet: OWNER_POPUNDER_SNIPPET, spots: { wallpaper: true, resultPreview: true, adClose: true }, spotsOnly: true, cooldownMinutes: 30 });
     expect(publicSpotPopunder(DEFAULT_SPOT_POPUNDER, true)).toBeNull();
     expect(publicSpotPopunder(undefined, true)).toBeNull();
   });
@@ -92,7 +98,7 @@ describe("the config — OFF unless an admin switched it on", () => {
     expect(normalizeSpotPopunder({ enabled: false }).enabled).toBe(false);
   });
   it("explicitly ON: served with the parsed tag — only with Monetag on, a valid tag and a spot", () => {
-    expect(POP).toEqual({ src: "https://al5sm.com/tag.min.js", zone: "12054432", cfAsync: false, spots: ["wallpaper", "resultPreview", "adClose"] });
+    expect(POP).toEqual({ src: "https://al5sm.com/tag.min.js", zone: "12054432", cfAsync: false, spots: ["wallpaper", "resultPreview", "adClose"], spotsOnly: true, cooldownMinutes: 30 });
     expect(publicSpotPopunder(ON, false)).toBeNull();
     expect(publicSpotPopunder({ ...ON, snippet: "<script>alert(1)</script>" }, true)).toBeNull();
     expect(publicSpotPopunder({ ...ON, snippet: "" }, true)).toBeNull();
@@ -105,21 +111,47 @@ describe("the config — OFF unless an admin switched it on", () => {
   });
 });
 
-describe("loading — on the first press at an enabled spot, never just because a page has a spot", () => {
-  it("mounting a spot loads nothing; a press elsewhere loads nothing; a press on the spot loads it once", async () => {
+describe("loading — preloaded once an ENABLED spot is shown, so the FIRST tap can open it (owner 2026-10-23)", () => {
+  it("not at first paint; shortly after an enabled spot appears; once, however many spots or presses", async () => {
     await opener();
     expect(scripts).toEqual([]);
-    press(null);
+    vi.advanceTimersByTime(PRELOAD_MS - 1);
     expect(scripts).toEqual([]);
-    press("adClose");
-    press("adClose");
+    vi.advanceTimersByTime(1);
     expect(scripts).toHaveLength(1);
     expect(scripts[0]).toMatchObject({ src: "https://al5sm.com/tag.min.js", dataset: { zone: "12054432" } });
+    await opener("wallpaper");
+    vi.advanceTimersByTime(PRELOAD_MS);
+    press("adClose");
+    expect(scripts).toHaveLength(1);
   });
-  it("a spot switched off for the pop-under never loads it there", async () => {
+  it("the regression: a page's FIRST tap at the spot opens the pop-under (the tag is ready before it)", async () => {
+    const open = await readyOpener();
+    const outcome = vi.fn();
+    press("adClose");
+    open(outcome);
+    monetagOpens();
+    fire("click");
+    expect(outcome).toHaveBeenCalledWith("popunder");
+    expect(opened).toEqual(["https://pop.example/ad"]);
+  });
+  it("a press before the preload ran still loads it (once)", async () => {
+    await opener();
+    press("adClose");
+    vi.advanceTimersByTime(PRELOAD_MS);
+    expect(scripts).toHaveLength(1);
+  });
+  it("a spot switched off for the pop-under never loads it there — preload or press", async () => {
     config = { monetagDirectLink: DIRECT, monetagSpotPopunder: { ...POP, spots: ["wallpaper"] } };
     await opener("adClose");
+    vi.advanceTimersByTime(PRELOAD_MS);
     press("adClose");
+    expect(scripts).toEqual([]);
+  });
+  it("no pop-under configured: nothing ever loads", async () => {
+    config = { monetagDirectLink: DIRECT, monetagSpotPopunder: null };
+    await opener();
+    vi.advanceTimersByTime(PRELOAD_MS);
     expect(scripts).toEqual([]);
   });
   it("the tap that loads the tag (not ready yet) gets the direct link — in the tap, as before", async () => {
@@ -260,5 +292,75 @@ describe("wiring", () => {
   });
   it("the close control closes at once after a pop-under (it opens behind), waits for the return after a direct link", () => {
     expect(src("features/monetization/use-direct-link.ts")).toContain('const handled = openDirectLink((outcome) => (outcome === "direct" ? waitForReturn() : close()));');
+  });
+});
+
+/**
+ * What the REAL tag does: Monetag's own script (served from al5sm.com) calls window.open. Compiled with a sourceURL so
+ * the call stack names that script exactly as a browser's would — the observer decides from the stack.
+ */
+// eslint-disable-next-line @typescript-eslint/no-implied-eval
+const thirdPartyOpen = new Function("u", "return window.open(u, '_blank');\n//# sourceURL=https://al5sm.com/tag.min.js") as (u: string) => Window | null;
+
+describe("less aggressive (owner 2026-10-23) — fewer pop-unders, the ones that show are normal Monetag impressions", () => {
+  it("the caller test: another origin's script is third-party; this origin, or no stack, is not (fails open)", () => {
+    expect(calledByThirdParty("Error\n    at x (https://al5sm.com/tag.min.js:1:200)", "https://frenzsave.com")).toBe(true);
+    expect(calledByThirdParty("Error\n    at y (https://frenzsave.com/_next/static/chunks/1.js:3:9)", "https://frenzsave.com")).toBe(false);
+    expect(calledByThirdParty(undefined, "https://frenzsave.com")).toBe(false);
+    expect(calledByThirdParty("Error\n    at <anonymous>", "https://frenzsave.com")).toBe(false);
+  });
+
+  it("spots only: Monetag's window on a click ELSEWHERE on the page is refused; at a spot tap it opens", async () => {
+    await readyOpener();
+    expect(thirdPartyOpen("https://pop.example/elsewhere")).toBeNull();
+    expect(opened).toEqual([]);
+    press("adClose");
+    expect(thirdPartyOpen("https://pop.example/spot")).not.toBeNull();
+    expect(opened).toEqual(["https://pop.example/spot"]);
+  });
+
+  it("our own windows (downloads, viewers, notifications) are never held back, spot or not", async () => {
+    await readyOpener();
+    expect(window.open("https://frenzsave.com/download/1", "_blank")).not.toBeNull();
+    expect(opened).toEqual(["https://frenzsave.com/download/1"]);
+  });
+
+  it("the cooldown: after a pop-under, the next 30 minutes open nothing at the spots (no direct link either); then again", async () => {
+    const open = await readyOpener();
+    press("adClose");
+    const first = vi.fn();
+    open(first);
+    thirdPartyOpen("https://pop.example/1");
+    fire("click");
+    expect(first).toHaveBeenCalledWith("popunder");
+
+    vi.advanceTimersByTime(5 * 60_000);
+    press("adClose");
+    const second = vi.fn();
+    open(second);
+    expect(second).toHaveBeenCalledWith("none");
+    expect(thirdPartyOpen("https://pop.example/2")).toBeNull();
+    expect(opened).toEqual(["https://pop.example/1"]);
+
+    vi.advanceTimersByTime(26 * 60_000);
+    press("adClose");
+    const third = vi.fn();
+    open(third);
+    thirdPartyOpen("https://pop.example/3");
+    fire("click");
+    expect(third).toHaveBeenCalledWith("popunder");
+  });
+
+  it("both off (spots only off, cooldown 0): Monetag behaves exactly as its own tag would", async () => {
+    config = { monetagDirectLink: DIRECT, monetagSpotPopunder: { ...POP, spotsOnly: false, cooldownMinutes: 0 } };
+    await readyOpener();
+    expect(thirdPartyOpen("https://pop.example/a")).not.toBeNull();
+    expect(thirdPartyOpen("https://pop.example/b")).not.toBeNull();
+  });
+
+  it("settings: a row saved before these existed gets the gentle defaults; values are bounded", () => {
+    expect(normalizeSpotPopunder({ enabled: true })).toMatchObject({ spotsOnly: true, cooldownMinutes: 30 });
+    expect(normalizeSpotPopunder({ spotsOnly: false, cooldownMinutes: 99999 })).toMatchObject({ spotsOnly: false, cooldownMinutes: 1440 });
+    expect(normalizeSpotPopunder({ cooldownMinutes: -5 }).cooldownMinutes).toBe(0);
   });
 });

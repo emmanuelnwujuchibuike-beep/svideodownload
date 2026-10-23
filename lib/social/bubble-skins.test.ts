@@ -40,10 +40,18 @@ describe("bubble skins from design/frenzsave-bubble-styles.html (owner, 2026-10-
     expect(api).toContain("PRO_BUBBLE_SKINS as readonly string[]).includes(wanted) && planRank(await getUserPlan(user.id)) < 1");
   });
 
-  it("the chat paints every plain text bubble — mine AND theirs (owner 2026-10-23) — with the skin, never media or a deleted one", () => {
+  it("each plain text bubble wears its SENDER's skin (owner 2026-10-23, 'just like TikTok'), never media or a deleted one", () => {
     const room = readFileSync("features/social/conversation-room.tsx", "utf8");
-    expect(room).toContain("const skinned = mySkin && !deleted && !frameless && !shared && !hasAttachmentFrame");
-    expect(room).not.toContain("const skinned = m.mine && mySkin");
+    // mine → my skin; theirs → the skin THEY chose for this chat (never mine painted on their messages)
+    expect(room).toContain("(mine ? mySkin : (memberSkins[senderId] ?? null))");
+    expect(room).toContain("const senderSkin = skinOf(m.mine, m.senderId);");
+    expect(room).toContain("const skinned = senderSkin && !deleted && !frameless && !shared && !hasAttachmentFrame");
+    expect(room).not.toContain("const skinned = mySkin &&");
     expect(room).toContain("<SkinDecorations skin={skinned} />");
+    // the thread loader hands the other members' skins over (skins only — never their colour)
+    const loader = readFileSync("lib/social/messages.ts", "utf8");
+    expect(loader).toMatch(/from\("chat_appearance_preferences"\)\.select\("user_id, bubble_style"\)\.eq\("conversation_id", conversationId\)\.neq\("user_id", userId\)/);
+    expect(loader).toContain("if (style && isBubbleSkin(style)) memberSkins[r.user_id] = style;");
+    expect(readFileSync("app/(app)/messages/[id]/page.tsx", "utf8")).toContain("memberSkins={convo.memberSkins}");
   });
 });

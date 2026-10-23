@@ -1,24 +1,21 @@
 import type { CSSProperties } from "react";
 
 /*
-  The feed's media frame (owner, 2026-10-18): "Videos card doesn't reach width to width … the image
-  of 9:16 shouldn't go longer than the screen view, users shouldn't need to scroll to see the full
-  length, a view should contain a 9:16 video or image with the next post, user name, title and caption".
+  The feed's media frame.
 
-  So the frame is ALWAYS the card's full width, and its height is the smaller of
-    · the media's own height at that width (a wide clip keeps its true shape, no bars), and
-    · the screen less what must share it: the top bar, the creator row, a caption, the action row,
-      the top of the next post and the floating nav (~25rem), never below 18rem.
-  A tall clip is then shown WHOLE inside it (object-contain) over the blurred backdrop the two
-  components already paint — never cropped, never taller than the screen.
+  🔴 FULL WIDTH, NEVER CROPPED, NO BLUR (owner, 2026-10-22: "I don't want those side blur, it should
+  be full screen, full width in feed not blur, it should be full width and never cropped"). This
+  REPLACES the 2026-10-18 frame, which capped the height to the screen and showed a tall clip whole
+  inside it (object-contain) — the cap is what left the blurred side bars beside every portrait clip.
 
-  The width basis is the viewport, capped at the feed column (42rem): on a phone the card is the
-  full screen width, which is exact; on wider screens it only sets where the height cap starts.
-  No container queries, so it holds on older iOS.
+  So the frame is always the card's full width, and its height is simply the media's own height at
+  that width: its true shape, nothing cut off and no space left over. The media fills it exactly
+  (object-cover on a box of the media's own ratio crops nothing). Before the real shape is known (an
+  older post with no stored size) the box is 4:5 and corrects itself on the media's first metadata.
 */
-export const FEED_MEDIA_CAP = "max(18rem, calc(100svh - 25rem))";
+export const FEED_FALLBACK_RATIO = 4 / 5;
 
 export function feedFrameStyle(ratio: number | null | undefined): CSSProperties {
-  const r = ratio && ratio > 0 ? ratio : 4 / 5;
-  return { width: "100%", aspectRatio: "auto", height: `min(calc(min(100vw, 42rem) / ${r.toFixed(4)}), ${FEED_MEDIA_CAP})` };
+  const r = ratio && ratio > 0 ? ratio : FEED_FALLBACK_RATIO;
+  return { width: "100%", aspectRatio: String(r.toFixed(4)) };
 }

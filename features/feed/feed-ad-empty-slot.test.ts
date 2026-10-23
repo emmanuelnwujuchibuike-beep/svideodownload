@@ -33,7 +33,10 @@ describe("feed ads: no empty slot, Pro yes, Business no", () => {
   it("🔴 the feed_inline slot gives up its reserved box when no answer comes", () => {
     const s = code("features/feed/feed-ad-slot.tsx");
     expect(s).toMatch(/setFilled\(\(f\) => \(f === null \? false : f\)\), RESERVE_FOR_MS\)/);
-    expect(s).toContain('filled !== false && "my-4 first:mt-0"');
+    // the full-width post-like row (2026-10-22) is drawn only for a slot that has not turned out empty
+    expect(s).toContain('filled !== false && "border-t border-frenz-line bg-frenz-card max-sm:-mx-3"');
+    // and its Sponsored line only once an ad is there
+    expect(s).toMatch(/\{filled \? <p[^>]*>Sponsored<\/p> : null\}/);
     expect(code("features/monetization/ad-surface.tsx")).toMatch(/if \(noProvider\) onResolved\?\.\(false\)/);
   });
 });

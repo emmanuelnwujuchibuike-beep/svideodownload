@@ -1,5 +1,7 @@
 "use client";
 
+import { reelectAutoplay } from "@/lib/media/feed-autoplay";
+
 /**
  * Ensures only ONE video plays at a time across the feed and reels. When any
  * player starts, it "claims" playback and the previously-playing element is
@@ -63,6 +65,8 @@ export function suspendPlayback(): () => void {
     if (released) return;
     released = true;
     suspendCount = Math.max(0, suspendCount - 1);
+    // the viewer over the feed closed: the most visible feed video takes its turn again, no tap needed
+    if (suspendCount === 0) reelectAutoplay();
   };
 }
 

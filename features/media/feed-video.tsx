@@ -10,6 +10,7 @@ import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
 import { getPlaybackPosition, savePlaybackPosition } from "@/lib/media/resume-positions";
 import { cancelVideoPrefetch, prefetchVideo } from "@/lib/media/prefetch-video";
 import { streamHlsUrl, streamIframeUrl } from "@/lib/media/stream";
+import { registerAutoplay, reportVisibility, visibleScore } from "@/lib/media/feed-autoplay";
 import { claimPlayback, isSuspended, recentlyScrolled, recordView, recordWatch, releasePlayback } from "@/lib/media/video-coordinator";
 import { cn } from "@/lib/utils";
 import { feedFrameStyle } from "@/features/media/feed-frame";
@@ -60,7 +61,7 @@ export function FeedVideo({
   nextSrc,
   fit = "natural",
 }: {
-  /** "frame": full card width, height capped to the screen, the clip shown whole (feed-frame.ts). */
+  /** "frame": full card width at the clip's own shape — never cropped, no blurred bars (feed-frame.ts). */
   fit?: "natural" | "frame";
   /**
    * The clip's natural pixel size, when the server knows it (`posts.media_width`
@@ -243,43 +244,72 @@ export function FeedVideo({
     if (!el) return;
     const obs = new IntersectionObserver(([entry]) => setShouldLoad(!!entry?.isIntersecting), { rootMargin: "1200px 0px" });
     obs.observe(el);
-    return () => obs.disconnect();
+    /*
+      🔴 THE NEXT CLIP BUFFERS BEFORE IT IS REACHED (owner, 2026-10-22: "medias doesn't load instantly
+      on scroll"). An attached source on `preload="metadata"` fetches headers only, so a clip started
+      buffering the moment it won the autoplay turn — visibly late. Within one screen of the viewport
+      it switches to "auto" (and stays there): the clip a scroll lands on already has its opening
+      seconds. Bounded to one screen ahead, so it is the next clip or two, not the whole feed.
+    */
+    const near = new IntersectionObserver(
+      ([entry]) => {
+        const v = video.current;
+        if (entry?.isIntersecting && v && v.preload !== "auto") v.preload = "auto";
+      },
+      { rootMargin: "100% 0px" },
+    );
+    near.observe(el);
+    return () => {
+      obs.disconnect();
+      near.disconnect();
+    };
   }, [iframeMode]);
 
-  // In-view autoplay / pause — unchanged 200px margin (just before visible),
-  // plays muted once 40% on screen. Plays as soon as the source is ready.
+  /*
+    🔴 AUTOPLAY IS ONE ELECTION ACROSS THE FEED (owner, 2026-10-22: "the video being scrolled to should
+    auto play instantly and never needs the play button"). This clip reports how much of it is on
+    screen on every change (no rootMargin — the real screen), and lib/media/feed-autoplay.ts plays the
+    most visible clip and pauses the one before. It replaces a per-clip 40% observer on a root
+    stretched 200 px past the screen, which let a clip below the fold steal the turn and, reporting
+    only threshold crossings, left the watched clip paused after a small scroll back.
+  */
   useEffect(() => {
     if (iframeMode) return;
     const el = wrap.current;
     const v = video.current;
     if (!el || !v) return;
+    const unregister = registerAutoplay({
+      el,
+      play: () => {
+        const was = inViewRef.current;
+        inViewRef.current = true;
+        playIfReady();
+        /*
+          "Clear the path for reels" — this clip is now the one playing, so it is the one a tap opens,
+          and it streams its own bytes already. The clip the first SWIPE lands on is the cold one, so
+          warm its opening megabytes here. Bounded, deduped and gated on Data Saver / slow radios
+          inside `prefetchVideo`.
+        */
+        if (!was) prefetchVideo(nextSrcRef.current);
+      },
+      pause: () => {
+        // losing the turn resets a manual pause, so the clip plays fresh when it wins again
+        inViewRef.current = false;
+        v.pause();
+        userPaused.current = false;
+        setShowPause(false);
+      },
+    });
     const obs = new IntersectionObserver(
       ([entry]) => {
-        if (!entry) return;
-        if (entry.isIntersecting && entry.intersectionRatio >= 0.4) {
-          inViewRef.current = true;
-          playIfReady();
-          /*
-            "Clear the path for reels" — this clip is now playing, so it is the
-            one a tap opens, and it is streaming its own bytes already. The clip
-            the first SWIPE lands on is the cold one, so warm its opening
-            megabytes here. Bounded, deduped and gated on Data Saver / slow
-            radios inside `prefetchVideo`.
-          */
-          prefetchVideo(nextSrcRef.current);
-        } else {
-          // Leaving view resets a manual pause so it resumes fresh on return.
-          inViewRef.current = false;
-          v.pause();
-          userPaused.current = false;
-          setShowPause(false);
-        }
+        if (entry) reportVisibility(el, entry.isIntersecting ? visibleScore(entry, window.innerHeight) : 0);
       },
-      { threshold: [0, 0.4, 1], rootMargin: "200px 0px" },
+      { threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1] },
     );
     obs.observe(el);
     return () => {
       obs.disconnect();
+      unregister();
       // Scrolled away (or unmounted) before the warm finished — drop it rather
       // than let a fast scroll leave a trail of fetches racing the clip the
       // viewer actually stopped on.
@@ -399,7 +429,30 @@ export function FeedVideo({
   //   • press-hold   → pause (while held); release resumes
   // Guarded so a graze, drag, hover, or scroll-tail never triggers any of them.
   const onControl = (e: React.SyntheticEvent) => !!(e.target as HTMLElement).closest?.("button, a, [data-control]");
+  /*
+    🔴 A CONTROL NEVER OPENS REELS (owner, 2026-10-22: "Play and sound button in feed should never open
+    the feed in reels … Feed should only open in reels when the video elements not the background").
+    A press on the play/sound cluster — or the padded zone around it, where a finger that just missed a
+    button lands — is the control's alone, and it also cancels an "open" still waiting out the
+    double-tap window from an earlier tap on the picture.
+  */
+  const cancelPendingOpen = () => {
+    if (expandTimer.current) clearTimeout(expandTimer.current);
+    expandTimer.current = null;
+    lastTapAt.current = 0;
+    if (holdTimer.current) clearTimeout(holdTimer.current);
+    startPt.current = null;
+  };
+  // Only the picture itself opens anything — never the blurred backdrop beside a narrower clip.
+  const onPicture = (e: React.PointerEvent) => {
+    const r = video.current?.getBoundingClientRect();
+    return !r || (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom);
+  };
   const onPointerDown = (e: React.PointerEvent) => {
+    if (!onPicture(e)) {
+      cancelPendingOpen();
+      return;
+    }
     holding.current = false;
     moved.current = false;
     startPt.current = { x: e.clientX, y: e.clientY };
@@ -515,7 +568,7 @@ export function FeedVideo({
         onExpand?.();
       }}
       // the play/pause and mute buttons sit inside this frame — a press on THEM is theirs alone
-      onPointerDown={(e) => !onControl(e) && onPointerDown(e)}
+      onPointerDown={(e) => (onControl(e) ? cancelPendingOpen() : onPointerDown(e))}
       onPointerMove={onPointerMove}
       onPointerUp={(e) => !onControl(e) && endHold()}
       onPointerLeave={onPointerLeaveCancel}
@@ -586,7 +639,8 @@ export function FeedVideo({
         `poster` frame this component already has on hand. Once the box
         resizes to the correct ratio, this is fully covered and invisible.
       */}
-      {poster && !posterBroken ? (
+      {/* the frame is the clip's own shape (feed-frame.ts), so there is no gap for a blurred backdrop to fill */}
+      {fit !== "frame" && poster && !posterBroken ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={poster}
@@ -628,7 +682,7 @@ export function FeedVideo({
           the page whose stillness is load-bearing, and the pause indicator
           already gives the gesture unambiguous feedback.
         */
-        className={fit === "frame" ? "pointer-events-none h-full w-full object-contain" : "pointer-events-none h-full max-h-[60vh] w-full object-cover lg:h-auto lg:max-h-[60vh] lg:w-auto"}
+        className={fit === "frame" ? "pointer-events-none h-full w-full object-cover" : "pointer-events-none h-full max-h-[60vh] w-full object-cover lg:h-auto lg:max-h-[60vh] lg:w-auto"}
         draggable={false}
         // Keyboard access (owner spec, 2026-08-17: "Keyboard users can still
         // open media") — purely additive: Enter/Space opens directly,
@@ -722,22 +776,27 @@ export function FeedVideo({
         there moved out below the card (feed-post-card.tsx), which is what
         makes room for this without crowding the frame.
       */}
-      <div className="absolute right-2.5 top-2.5 z-10 flex items-center gap-1.5">
+      {/* the control zone: 44 px targets, and padding around them that never opens reels (see cancelPendingOpen) */}
+      <div data-control className="absolute right-0 top-0 z-10 flex items-center gap-0.5 p-1">
         <button
           type="button"
           onClick={togglePlay}
           aria-label={paused ? "Play" : "Pause"}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65"
+          className="group/ctl flex h-11 w-11 items-center justify-center rounded-full"
         >
-          {paused ? <Play className="ml-0.5 h-4 w-4 fill-white" /> : <Pause className="h-4 w-4 fill-white" />}
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition group-hover/ctl:bg-black/65">
+            {paused ? <Play className="ml-0.5 h-4 w-4 fill-white" /> : <Pause className="h-4 w-4 fill-white" />}
+          </span>
         </button>
         <button
           type="button"
           onClick={toggleMute}
           aria-label={muted ? "Unmute" : "Mute"}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65"
+          className="group/ctl flex h-11 w-11 items-center justify-center rounded-full"
         >
-          {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition group-hover/ctl:bg-black/65">
+            {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+          </span>
         </button>
       </div>
 

@@ -136,8 +136,12 @@ export function FeedAdSlot({
       ref={host}
       data-feed-ad-slot={slotId}
       className={cn(
-        // no spacing around a slot that turned out empty
-        filled !== false && "my-4 first:mt-0",
+        /*
+          🔴 FULL SCREEN WIDTH, LIKE A POST (owner, 2026-10-22: "Ads in feed should be full screen width
+          too, like post"). The same bleed past the page gutter and the same hairline seam a post card
+          has (feed-post-card.tsx), instead of an inset card with margins. Nothing at all when empty.
+        */
+        filled !== false && "border-t border-frenz-line bg-frenz-card max-sm:-mx-3",
         /*
           The reserved box applies only while the outcome is unknown. Once the
           zone reports back, an unfilled slot collapses to nothing (no label, no
@@ -170,7 +174,14 @@ export function FeedAdSlot({
           means this placement inherits the same card treatment as every other
           one instead of inventing a second look.
         */
-        <AdSurface zone="feed_inline" maxWidth="max-w-2xl" onResolved={setFilled} />
+        <>
+          {/*
+            The disclosure, in a post's header position. `fullBleed` drops AdSurface's card AND its
+            caption, so the label is drawn here — an in-feed unit without one is an ad posing as a post.
+          */}
+          {filled ? <p className="m-0 px-4 py-2.5 text-[12px] font-semibold text-frenz-muted">Sponsored</p> : null}
+          <AdSurface zone="feed_inline" fullBleed onResolved={setFilled} />
+        </>
       ) : (
         /*
           The placeholder is deliberately inert — no shimmer, no animation, no

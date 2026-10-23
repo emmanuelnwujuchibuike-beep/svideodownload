@@ -31,7 +31,7 @@ export function FeedImage({
   priority = false,
   fit = "natural",
 }: {
-  /** "frame": full card width, height capped to the screen, the photo shown whole (feed-frame.ts). */
+  /** "frame": full card width at the photo's own shape — never cropped, no blurred bars (feed-frame.ts). */
   fit?: "natural" | "frame";
   src: string;
   alt: string;
@@ -245,7 +245,8 @@ export function FeedImage({
           width={16}
           height={16}
           quality={20}
-          className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-30 blur-2xl"
+          // in the feed frame it is only the measurement (the frame IS the photo's shape) — never a visible blur
+          className={cn("pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover", fit === "frame" ? "opacity-0" : "opacity-30 blur-2xl")}
           onError={() => setBroken(true)}
           // See the `ratio` state's own note above — this is the measurement,
           // not just the backdrop. Only overrides when the DB didn't already
@@ -295,7 +296,7 @@ export function FeedImage({
           // screen first.
           loading="eager"
           fetchPriority={priority ? "high" : "low"}
-          className="object-contain"
+          className={fit === "frame" ? "object-cover" : "object-contain"}
           onError={() => setBroken(true)}
         />
       )}

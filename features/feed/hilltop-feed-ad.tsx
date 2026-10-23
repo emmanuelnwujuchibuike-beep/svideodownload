@@ -84,11 +84,12 @@ export function HilltopFeedAd({
   if (!ready || !showAds) return null;
 
   return (
-    <div ref={host} className={painted ? "my-4 first:mt-0" : undefined}>
+    // full screen width with a post's hairline seam, like the posts around it (owner, 2026-10-22)
+    <div ref={host} className={painted ? "border-t border-frenz-line bg-frenz-card max-sm:-mx-3" : undefined}>
       {eligible ? (
         <>
           {painted ? (
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
+            <p className="m-0 px-4 py-2.5 text-[12px] font-semibold text-frenz-muted">
               Sponsored
             </p>
           ) : null}

@@ -93,6 +93,14 @@ async function HomeData() {
   // part of "home is slow to come up at all" (owner report 2026-07-16). getUser
   // above must still resolve first (it decides the auth redirect + owns user.id).
   const viewerId = user.id;
+  /*
+    🔴 THE FIRST FEED PAGE STARTS NOW, beside the profile and preferences reads (owner, 2026-10-22:
+    "Feed page loads really slow"). It used to start only once those had returned — a third
+    Supabase round trip (~290 ms measured each) in series before a single post could stream. It
+    needs only the viewer; `quietMode` is the client's. Settled with its own fallbacks, so a
+    redirect below that never reads it leaves no unhandled rejection.
+  */
+  const firstFeed = loadFirstFeed(viewerId);
   const [profile, prefs, cookieStore] = await Promise.all([
     getHomeProfile(user.id),
     // Feature 17 Part 13 — the viewer's own Home Module Editor choices
@@ -157,7 +165,7 @@ async function HomeData() {
         {/* Smart Feed — the intelligent, blended, endless heart of the home
             experience. Rendered last because it never ends. */}
         <Suspense fallback={<FeedSkeleton count={3} />}>
-          <SmartFeedSection viewerId={viewerId} quietMode={prefs.quietMode} />
+          <SmartFeedSection firstFeed={firstFeed} quietMode={prefs.quietMode} />
         </Suspense>
       </div>
     </AppContent>
@@ -237,7 +245,7 @@ async function RailSection({ viewerId }: { viewerId: string }) {
   return <HomeRail suggestions={suggestions} />;
 }
 
-async function SmartFeedSection({ viewerId, quietMode }: { viewerId: string; quietMode: boolean }) {
+function loadFirstFeed(viewerId: string) {
   // A fresh reshuffle token per REQUEST — this is what makes "every refresh
   // reshuffles the feed like TikTok" true from the very first painted frame.
   // Minting it on the client instead would mean SSR always rendered one fixed
@@ -248,13 +256,17 @@ async function SmartFeedSection({ viewerId, quietMode }: { viewerId: string; qui
   // 2026-10-09 (owner: "Feed shows Something went wrong"): one failing query must not take
   // the whole page to the error screen. The feed then starts empty at offset 0 and the
   // client loads its first page itself (its own retry state); the failure is logged.
-  const [page, friends] = await Promise.all([
+  return Promise.all([
     getHomeFeed({ viewerId, sort: "for_you", offset: 0, limit: 8, seed }).catch((e: unknown) => {
       console.error("[home] first feed page failed - the client will load it", { error: String(e).slice(0, 300) });
       return { items: [], nextOffset: 0, adInterval: FEED_AD_INTERVAL };
     }),
     friendsCount(viewerId).catch(() => 0),
-  ]);
+  ]).then(([page, friends]) => ({ seed, page, friends }));
+}
+
+async function SmartFeedSection({ firstFeed, quietMode }: { firstFeed: ReturnType<typeof loadFirstFeed>; quietMode: boolean }) {
+  const { seed, page, friends } = await firstFeed;
   return (
     <SmartFeed
       initialItems={page.items}

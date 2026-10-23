@@ -123,9 +123,14 @@ export function creativeFitsSlot(slot: SlotSpec, w: number | null, h: number | n
     (within the slot's own 10:1 ± 35 %, i.e. at least 6.5 : 1); anything taller — or of
     unknown size — never enters them. Every other slot still shows it, whole.
   */
+  /*
+    🔴 REPLACED 2026-10-22 (owner chose "show any picture, 33px bar"): the top banner is now a fixed
+    full-width 33 px bar the creative fills (media-spec topStripStyle), so its shape no longer keeps a
+    creative out — the 1600 × 534 TOP_BANNER creative that never showed under the 10-12 rule now does.
+  */
   if (slot.paidPlacement === "global_top_banner") {
-    if (!w || !h || !slot.aspect) return false;
-    return w / h >= slot.aspect.ratio * (1 - slot.aspect.tolerance);
+    if (w == null || h == null) return true;
+    return w > 0 && h > 0;
   }
   if (w == null || h == null) return true;
   return w > 0 && h > 0;

@@ -2,10 +2,12 @@
 
 import { usePathname } from "next/navigation";
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { useSlotProvider } from "@/features/ads-platform/serve/use-slot-provider";
 import { pageForPath } from "@/lib/ads-platform/pages";
+import { topBannerAllowed } from "@/lib/ads-platform/top-banner-pages";
+import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
 
 import { cn } from "@/lib/utils";
 
@@ -41,7 +43,14 @@ const SelfTopCreative = dynamic(() => import("@/features/ads-platform/serve/self
   reserved by the marketing layout, so the cold entry and the hero are untouched.
   The guest library keeps it off.
 */
+/*
+  🔴 2026-10-22 (owner: "Global top banner shouldn't show on feed, reels, exclusive, profile, friends, all
+  signed in pages — only the unsigned in pages, download page, earn, Quest and support"). The pages are
+  decided by ONE pure rule (lib/ads-platform/top-banner-pages.ts, tested), read in BOTH layouts — the bar
+  is now also mounted on the signed-in tree (AppShellDeferred) for Quests. The guest library stays off.
+*/
 const HIDDEN_PATHS = new Set(["/library"]);
+const noop = () => () => {};
 
 export function TopPageBannerAd() {
   const pathname = usePathname();
@@ -58,7 +67,9 @@ export function TopPageBannerAd() {
   const { state: occupant, networkEmpty } = useSlotProvider("top_banner", pageForPath(pathname));
   const paid = occupant.status === "ready" && occupant.provider === "frenzsave" ? occupant : null;
   const network = occupant.status === "ready" && occupant.provider === "network";
-  const allowedPath = !HIDDEN_PATHS.has(pathname);
+  // the auth cookie, read without a request; the server snapshot is "signed in" so a guest gains the bar after hydration, never loses it
+  const signedIn = useSyncExternalStore(noop, hasAuthCookie, () => true);
+  const allowedPath = !HIDDEN_PATHS.has(pathname) && topBannerAllowed(pathname, signedIn);
   const visible = allowedPath && (!!paid || (network && hasAd === true));
 
   useEffect(() => {
@@ -95,7 +106,8 @@ export function TopPageBannerAd() {
       )}
       aria-hidden={!visible}
     >
-      <div className="mx-auto flex w-full max-w-5xl items-center justify-center px-3 py-2">
+      {/* full screen width, the 33 px strip edge to edge (2026-10-22) */}
+      <div className="flex w-full items-center justify-center">
         {/*
           Keyed by the PATH (owner, 2026-10-10: "it should read one every page
           view, and all entry"). This bar lives in the persistent layout, so a

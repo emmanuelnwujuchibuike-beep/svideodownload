@@ -28,12 +28,15 @@ const InboxRealtimeTracker = dynamic(() => import("@/features/social/inbox").the
 const OfflineQueueSync = dynamic(() => import("@/features/app-shell/offline-queue-sync").then((m) => m.OfflineQueueSync), { ssr: false });
 const ReferralClaim = dynamic(() => import("@/features/app-shell/referral-claim").then((m) => m.ReferralClaim), { ssr: false });
 const DeviceCheck = dynamic(() => import("@/features/app-shell/device-check").then((m) => m.DeviceCheck), { ssr: false });
+// the global top banner on the signed-in tree too — it shows only where lib/ads-platform/top-banner-pages.ts allows (Quests, Earn, Support; 2026-10-22)
+const TopPageBannerAd = dynamic(() => import("@/features/monetization/top-page-banner-ad").then((m) => m.TopPageBannerAd), { ssr: false });
 const VastInterstitialTriggers = dynamic(() => import("@/features/monetization/vast-interstitial/triggers").then((m) => m.VastInterstitialTriggers), { ssr: false });
 
 export function AppShellDeferred() {
   return (
     <>
       <VastInterstitialTriggers />
+      <TopPageBannerAd />
       <OfflineBanner />
       <ScrollPerfMonitor />
       <FloatingMessages />

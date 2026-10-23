@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { EligibleAd, FormatRules } from "@/lib/ads-platform/eligibility";
-import { cardMediaBox, RESULT_VIDEO_BOX, topStripBox } from "@/lib/ads-platform/media-spec";
+import { cardMediaBox, RESULT_VIDEO_BOX, topStripStyle } from "@/lib/ads-platform/media-spec";
 import { dwellSeconds, VIDEO_MIN_DWELL_SECONDS, VIDEO_STALL_SECONDS } from "@/lib/ads-platform/rotation";
 
 /** How far outside the viewport a tile/card keeps its media mounted — about a screen, so scrolling meets a ready ad. */
@@ -100,9 +100,6 @@ export function SelfAdBanner({
   const dwell = dwellSeconds(current?.mediaType, seconds);
   const [playingCr, setPlayingCr] = useState<string | null>(null);
   const waitingForPlay = current?.mediaType === "video" && playingCr !== current.cr;
-  // The strip's shape: the media's REAL size once loaded (a stored w × h can be wrong or missing), else the stored one
-  const [measured, setMeasured] = useState<{ cr: string; ratio: number } | null>(null);
-  const stripRatio = measured && measured.cr === current?.cr ? measured.ratio : current?.w && current?.h ? current.w / current.h : null;
 
   // Remember what this placement showed, so its NEXT mount (the next download, page view or entry) starts after it.
   useEffect(() => {
@@ -190,8 +187,8 @@ export function SelfAdBanner({
       ad={current}
       placement={placement}
       page={page}
-      // 0208: every variant shows the creative whole (contain)
-      fit="contain"
+      // 0208: every variant shows the creative whole (contain) — except the top strip, a 33 px bar the creative FILLS (2026-10-22)
+      fit={variant === "strip" ? "cover" : "contain"}
       eager={variant === "strip"}
       backdrop={opts.backdrop}
       className={opts.className}
@@ -203,7 +200,6 @@ export function SelfAdBanner({
       // a lone ad keeps looping
       loop={count <= 1}
       onEnded={count > 1 && dwell ? () => setIndex((i) => (i + 1) % count) : undefined}
-      onSize={variant === "strip" ? (w, h) => w > 0 && h > 0 && setMeasured({ cr: current.cr, ratio: w / h }) : undefined}
       onFail={() => bump((n) => n + 1)}
     />
   );
@@ -277,12 +273,12 @@ export function SelfAdBanner({
         visitAd(current, viewRef.current);
       }}
       aria-label={`Ad from ${current.sponsor}${current.headline ? `: ${current.headline}` : ""} (opens the advertiser's site)`}
-      // 2026-10-11 (owner): the top strip is the creative's own shape (topStripBox), so nothing is cropped and there are no side bars
-      style={variant === "strip" ? topStripBox(stripRatio) : undefined}
+      // 2026-10-22 (owner): the top strip is a full-width 33 px bar (topStripStyle) that the creative fills
+      style={variant === "strip" ? topStripStyle() : undefined}
       className={cn(
         "relative block touch-manipulation select-none overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",
         variant === "strip"
-          ? "mx-auto"
+          ? "w-full"
           : "aspect-square w-full rounded-2xl bg-black/40",
         className,
       )}

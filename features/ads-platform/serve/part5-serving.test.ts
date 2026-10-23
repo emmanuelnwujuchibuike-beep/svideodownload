@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EligibleAd, FormatRules } from "@/lib/ads-platform/eligibility";
-import { topStripBox } from "@/lib/ads-platform/media-spec";
+import { TOP_STRIP_HEIGHT, topStripStyle } from "@/lib/ads-platform/media-spec";
 import { bannerIndexAt, msUntilNextRotation } from "@/lib/ads-platform/rotation";
 import type { ServingPayload } from "@/lib/ads-platform/serving-payload";
 import {
@@ -156,17 +156,14 @@ describe("TOP_BANNER — 10 ads, 5-second LOCAL rotation", () => {
     }
   });
 
-  it("the paid top creative takes its OWN shape — no crop, no side bars (owner, 2026-10-11)", () => {
-    // a 5.4 : 1 banner on a phone: full width, its own ratio
-    expect(topStripBox(1035 / 190)).toEqual({ width: "min(100%, 728px)", aspectRatio: String(1035 / 190) });
-    // a taller shape is narrowed to keep its ratio under 140 px, never cropped
-    expect(topStripBox(2)).toEqual({ width: "min(100%, 280px)", aspectRatio: "2" });
-    // unknown size falls back to the 10 : 1 TOP_BANNER format
-    expect(topStripBox(null).aspectRatio).toBe("10");
-    expect(topStripBox(Number.NaN).aspectRatio).toBe("10");
+  it("the paid top banner is a full-width 33 px bar the creative fills (owner, 2026-10-22 — replaces 10-11's own-shape strip)", () => {
+    expect(TOP_STRIP_HEIGHT).toBe(33);
+    expect(topStripStyle()).toEqual({ width: "100%", height: "33px" });
     const banner = src("features/ads-platform/serve/self-ad-banner.tsx");
-    // the strip's box follows the MEASURED media, and draws no blurred bars
-    expect(banner).toContain('style={variant === "strip" ? topStripBox(stripRatio) : undefined}');
+    expect(banner).toContain('style={variant === "strip" ? topStripStyle() : undefined}');
+    // the strip FILLS its bar; every other variant still shows the creative whole
+    expect(banner).toContain('fit={variant === "strip" ? "cover" : "contain"}');
+    // and draws no blurred bars
     expect(banner).toContain('backdrop: variant === "strip" ? false : undefined');
     expect(banner).not.toContain('"h-8 w-full"');
     // the wrapper no longer forces the FIRST ad's shape onto every creative
@@ -386,11 +383,12 @@ describe("ONE physical slot → ONE provider (slots addendum)", () => {
     const card = slotById("under_download")!;
     expect(creativeFitsSlot(card, 640, 400)).toBe(true);
     expect(creativeFitsSlot(card, 1080, 1920)).toBe(true); // portrait in a landscape card: letterboxed, not dropped
-    // 2026-10-12: the TOP BANNER is the exception — a tall creative is blocked there (owner), shown everywhere else
-    expect(creativeFitsSlot(slotById("top_banner")!, 640, 400)).toBe(false);
-    expect(creativeFitsSlot(slotById("downloads_top")!, 1080, 1080)).toBe(false);
-    expect(creativeFitsSlot(slotById("top_banner")!, null, null)).toBe(false);
+    // 2026-10-22: the TOP BANNER takes any real creative too (it fills a fixed 33 px bar) — the 10-12 strip-only gate is gone;
+    // the live 1600 × 534 TOP_BANNER creative that never showed under it is the case that must pass
+    expect(creativeFitsSlot(slotById("top_banner")!, 1600, 534)).toBe(true);
+    expect(creativeFitsSlot(slotById("downloads_top")!, 1080, 1080)).toBe(true);
     expect(creativeFitsSlot(slotById("top_banner")!, 1600, 160)).toBe(true);
+    expect(creativeFitsSlot(slotById("top_banner")!, 0, 534)).toBe(false);
     expect(creativeFitsSlot(slotById("feed_inline")!, 1080, 1080)).toBe(true);
     // teeth: nonsense dimensions are still refused
     expect(creativeFitsSlot(card, 0, 400)).toBe(false);

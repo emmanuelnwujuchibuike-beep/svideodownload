@@ -49,7 +49,18 @@ export function cardMediaBox(w: number | null | undefined, h: number | null | un
  */
 export const TOP_STRIP_MAX = { width: 728, height: 140 } as const;
 
-/** The strip's CSS width + aspect-ratio for a creative of ratio w/h (unknown → the 10 : 1 TOP_BANNER format). */
+/**
+ * 🔴 THE TOP BANNER IS A 33 px BAR, FULL SCREEN WIDTH (owner, 2026-10-22: "the rules should be 32 to 33px
+ * height, width should auto adjust by the device screen"; chose "show any picture, 33px bar"). This
+ * REPLACES 2026-10-11's "the creative's own shape" for the global top banner: every creative is shown in
+ * this bar and FILLS it — a picture of another shape has its top/bottom (or sides) trimmed to fit.
+ */
+export const TOP_STRIP_HEIGHT = 33;
+export function topStripStyle(): { width: string; height: string } {
+  return { width: "100%", height: `${TOP_STRIP_HEIGHT}px` };
+}
+
+/** The strip's CSS width + aspect-ratio for a creative of ratio w/h (unknown → the 10 : 1 TOP_BANNER format). Kept for previews that draw a creative's own shape. */
 export function topStripBox(ratio: number | null | undefined, max: { width: number; height: number } = TOP_STRIP_MAX): { width: string; aspectRatio: string } {
   const r = ratio && ratio > 0 && Number.isFinite(ratio) ? ratio : 10;
   const widthAtMaxHeight = Math.round(max.height * r);

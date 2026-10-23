@@ -114,6 +114,8 @@ function loadStrategies(script: (req: RequestLike, n: number) => ResponseLike | 
     Map,
     Set,
     setTimeout,
+    // a real ServiceWorkerGlobalScope has it; the worker clears its navigation timers (2026-10-23)
+    clearTimeout,
     caches: { open: async () => cache, match: async (req: RequestLike) => store.get(req.url), keys: async () => [] },
     fetch: async (req: RequestLike) => {
       fetchCalls.push(req);
@@ -232,6 +234,47 @@ describe("networkFirst — a document from the HTTP cache is not the network's a
     const req: RequestLike = { ...navigation(), url: `${ORIGIN}/api/thing`, mode: "cors" };
     const res = await h.networkFirst(req, { cacheName: null, offlineFallback: () => doc("offline", 0) });
     expect(res.body).toBe("old-api");
+    expect(h.fetchCalls).toHaveLength(1);
+  });
+});
+
+/*
+  2026-10-23 (owner: "when I leave the PWA for a few minutes to hours and come back it gets stuck at the brand
+  loader"). A connection kept across a long background can be dead while the phone still says it is online:
+  a request on it neither answers nor fails. Every wait now resolves — with milliseconds standing in for the
+  real 3 s / 6 s / 25 s.
+*/
+describe("networkFirst — a hung request never holds a navigation forever", () => {
+  const never = () => new Promise<ResponseLike>(() => {});
+  const fast = { preloadWaitMs: 20, retryAfterMs: 40, hardLimitMs: 400 };
+
+  it("a navigation PRELOAD that never answers is passed over for a direct fetch", async () => {
+    const h = loadStrategies(() => doc("direct", 0));
+    const res = await h.networkFirst(navigation(), { cacheName: "pages", preload: never(), offlineFallback: () => doc("offline", 0), ...fast });
+    expect(res.body).toBe("direct");
+  });
+
+  it("🔴 a first request that hangs is beaten by a FRESH one on a new connection", async () => {
+    const h = loadStrategies((_req, n) => (n === 1 ? never() : doc("fresh-connection", 0)));
+    const res = await h.networkFirst(navigation(), { cacheName: "pages", offlineFallback: () => doc("offline", 0), ...fast });
+    expect(res.body).toBe("fresh-connection");
+    expect(h.fetchCalls[1]!.cache).toBe("no-cache");
+  });
+
+  it("🔴 when everything hangs, the offline page (which retries itself) — never an endless wait or an old document", async () => {
+    const h = loadStrategies(() => never());
+    h.store.set(`${ORIGIN}/`, doc("cached-from-last-deploy", 0));
+    const started = Date.now();
+    const res = await h.networkFirst(navigation(), { cacheName: "pages", offlineFallback: () => doc("offline", 0), ...fast });
+    expect(res.body).toBe("offline");
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
+  it("teeth: a quick answer is served at once — no retry is started", async () => {
+    const h = loadStrategies(() => doc("quick", 0));
+    const res = await h.networkFirst(navigation(), { cacheName: "pages", offlineFallback: () => doc("offline", 0), ...fast });
+    expect(res.body).toBe("quick");
+    await new Promise((r) => setTimeout(r, 80));
     expect(h.fetchCalls).toHaveLength(1);
   });
 });

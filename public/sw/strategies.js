@@ -169,10 +169,35 @@ function revalidatingRequest(request) {
   });
 }
 
-async function fetchDocument(request, preload) {
+/*
+  🔴 A HUNG PROMISE IS NOT AN ANSWER (owner, 2026-10-23: "when I leave the PWA for a few minutes to hours
+  and come back it gets stuck at the brand loader"). After iOS keeps an app in the background, the
+  connection it held can be dead while the phone still reports itself online — a request on it neither
+  answers nor fails. Navigation PRELOAD hangs the same way. So the preload gets PRELOAD_WAIT_MS, then
+  the document is fetched directly; and networkFirst below retries on a fresh connection and has a hard
+  limit. Every wait resolves; none can hold the loader forever.
+*/
+const PRELOAD_WAIT_MS = 3000;
+function within(promise, ms) {
+  return new Promise((resolve) => {
+    const t = setTimeout(() => resolve(null), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      () => {
+        clearTimeout(t);
+        resolve(null);
+      },
+    );
+  });
+}
+
+async function fetchDocument(request, preload, preloadWaitMs = PRELOAD_WAIT_MS) {
   let res = null;
   try {
-    res = (preload && (await preload)) || (await fetch(request));
+    res = (preload && (await within(Promise.resolve(preload), preloadWaitMs))) || (await fetch(request));
   } catch (err) {
     // The radio-wake rejection: one retry while the browser still says online.
     if (request.mode === "navigate" && self.navigator?.onLine !== false) {
@@ -225,7 +250,12 @@ SWX.fetchRevalidated = async function fetchRevalidated(request) {
   }
 };
 
-SWX.networkFirst = async function networkFirst(request, { cacheName, preload, offlineFallback, timeoutMs = 20000 }) {
+/** networkFirst's limits for a NAVIGATION: a fresh retry after this long, and give up (the offline page, which retries itself) after this. */
+const NAV_RETRY_AFTER_MS = 6000;
+const NAV_HARD_LIMIT_MS = 25000;
+const HUNG = { hung: true };
+
+SWX.networkFirst = async function networkFirst(request, { cacheName, preload, offlineFallback, timeoutMs = 20000, retryAfterMs = NAV_RETRY_AFTER_MS, hardLimitMs = NAV_HARD_LIMIT_MS, preloadWaitMs = PRELOAD_WAIT_MS }) {
   /*
     ═══════════════════════════════════════════════════════════════════════════
      🔴 A SLOW NETWORK IS NOT AN OFFLINE NETWORK
@@ -256,13 +286,39 @@ SWX.networkFirst = async function networkFirst(request, { cacheName, preload, of
     from holding the page forever when we ARE offline and the failure has not
     surfaced as a rejection yet.
   */
-  const fromNetwork = fetchDocument(request, preload);
+  const fromNetwork = fetchDocument(request, preload, preloadWaitMs);
   /* Nothing may observe this as an unhandled rejection while we wait on the race. */
   fromNetwork.catch(() => {});
 
   try {
     let res;
-    try {
+    if (request.mode === "navigate") {
+      /*
+        A navigation (the 2026-10-23 resume hang): the first request, OR a fresh one started after
+        retryAfterMs on a new connection — whichever answers first — and never longer than hardLimitMs.
+        A genuine failure of the first still falls back at once (fetchDocument already retried it).
+      */
+      let hardTimer;
+      let retryTimer;
+      const retry = new Promise((resolve) => {
+        retryTimer = setTimeout(() => {
+          if (self.navigator?.onLine === false) return;
+          // a fresh request; it only ever WINS — its failure leaves the first request in charge
+          fetch(revalidatingRequest(request)).then(resolve, () => {});
+        }, retryAfterMs);
+      });
+      const hard = new Promise((resolve) => {
+        hardTimer = setTimeout(() => resolve(HUNG), hardLimitMs);
+      });
+      try {
+        res = await Promise.race([fromNetwork, retry, hard]);
+      } finally {
+        clearTimeout(hardTimer);
+        clearTimeout(retryTimer);
+      }
+      // still nothing: not a stale document (it would lose its styles) — the offline page, which retries itself
+      if (res === HUNG) return offlineFallback();
+    } else try {
       res = await Promise.race([
         fromNetwork,
         new Promise((_, reject) => setTimeout(() => reject(new Error("navigation timed out")), timeoutMs)),

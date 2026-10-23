@@ -195,7 +195,7 @@ export function eligibleForPlacement(snapshot: ServingSnapshot, placementCode: s
   for (const c of snapshot.campaigns) {
     // 0211: an All-slots campaign joins this slot's rotation when its media fits THIS slot's rules
     // 2026-10-23 (owner: "the banner should only show this image"): an all-slots campaign joins every placement EXCEPT the
-    // global top banner, which carries only creatives bought for it (the 2172 × 129 strip shape, media-spec TOP_STRIP_RATIO)
+    // global top banner, which carries only creatives bought for it (the 320 × 50 strip shape, media-spec TOP_STRIP_RATIO)
     const allSlots = c.placement_code === ALL_SLOTS_PLACEMENT && placementCode !== ALL_SLOTS_PLACEMENT && placementCode !== "global_top_banner";
     if (c.placement_code !== placementCode && !allSlots) continue;
     if (campaignServingProblem(c)) continue;

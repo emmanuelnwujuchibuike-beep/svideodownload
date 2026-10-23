@@ -125,7 +125,7 @@ export function creativeFitsSlot(slot: SlotSpec, w: number | null, h: number | n
   */
   /*
     🔴 REPLACED 2026-10-22 (owner chose "show any picture, 33px bar"): the top banner is now a fixed
-    fixed-shape bar (2172 × 129, media-spec topStripStyle) the creative fills, so its shape no longer keeps a
+    fixed-shape bar (320 × 50, media-spec topStripStyle) the creative fills, so its shape no longer keeps a
     creative out — the 1600 × 534 TOP_BANNER creative that never showed under the 10-12 rule now does.
   */
   if (slot.paidPlacement === "global_top_banner") {

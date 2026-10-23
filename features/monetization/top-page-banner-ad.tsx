@@ -106,7 +106,7 @@ export function TopPageBannerAd() {
       )}
       aria-hidden={!visible}
     >
-      {/* full screen width, the 33 px strip edge to edge (2026-10-22) */}
+      {/* full screen width, the 320 × 50 strip edge to edge (2026-10-23) */}
       <div className="flex w-full items-center justify-center">
         {/*
           Keyed by the PATH (owner, 2026-10-10: "it should read one every page

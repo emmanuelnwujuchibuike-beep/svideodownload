@@ -156,10 +156,13 @@ describe("TOP_BANNER — 10 ads, 5-second LOCAL rotation", () => {
     }
   });
 
-  it("the paid top banner has the Frenz AI banner's fixed 2172 × 129 shape, filled, square (owner, 2026-10-23)", () => {
-    // 2026-10-23: the fixed shape is the Frenz AI banner's own strip, 2172 × 129 — full width, no cap
-    expect(TOP_STRIP_RATIO).toEqual({ width: 2172, height: 129 });
-    expect(topStripStyle()).toEqual({ width: "100%", aspectRatio: "2172 / 129" });
+  it("the paid top banner is Adsterra's 320 × 50 shape, full width, at most 90 px, filled, square (owner, 2026-10-23)", () => {
+    expect(TOP_STRIP_RATIO).toEqual({ width: 320, height: 50 });
+    expect(topStripStyle()).toEqual({ width: "100%", aspectRatio: "320 / 50", maxHeight: "90px" });
+    // teeth: on a 390 px phone it is a real banner, not the 23 px strip it replaced
+    expect((390 * TOP_STRIP_RATIO.height) / TOP_STRIP_RATIO.width).toBeGreaterThan(55);
+    // the live 1402 × 219 banner fits the shape within 1 % (so it is not cropped)
+    expect(Math.abs(1402 / 219 / (TOP_STRIP_RATIO.width / TOP_STRIP_RATIO.height) - 1)).toBeLessThan(0.01);
     // square corners (owner, 2026-10-23)
     expect(src("features/ads-platform/serve/self-top-creative.tsx")).toContain('variant="strip" className="rounded-none"');
     const banner = src("features/ads-platform/serve/self-ad-banner.tsx");

@@ -50,16 +50,17 @@ export function cardMediaBox(w: number | null | undefined, h: number | null | un
 export const TOP_STRIP_MAX = { width: 728, height: 140 } as const;
 
 /**
- * 🔴 THE TOP BANNER'S FIXED SHAPE IS THE FRENZ AI BANNER'S OWN STRIP: 2172 × 129 (owner, 2026-10-23: "the
- * height of the top banner is too thin, use the height of the existing image as the fixed rule of top
- * banners", with the image). Measured from it: the banner is a 2172 × 129 strip centred in a canvas of
- * transparent space, so this is the strip's shape, not the canvas's. This REPLACES the 33 px bar. Full
- * screen width, height from the shape (≈23 px at 390 px, ≈85 px at 1440 px), square corners. Every
- * creative FILLS it: that banner shows exactly, its empty margin cropped away; another shape is trimmed.
+ * 🔴 THE TOP BANNER IS ADSTERRA'S 320 × 50 MOBILE BANNER SHAPE (owner, 2026-10-23: "the height increase a bit
+ * to look more like an adsterra top and bottom banner", choosing this over each image's own shape). Full screen
+ * width, height from 320 : 50 (≈61 px at 390 px, ≈67 px at 430 px), never above a 728 × 90 leaderboard's 90 px,
+ * square corners. Every creative FILLS it (cover): a 6.4 : 1 creative such as 1280 × 200 fits exactly; a
+ * thinner strip loses its two ends. This replaces the 2172 × 129 strip of the same day, which made the live
+ * 1402 × 219 and 1600 × 296 banners lose their top and bottom.
  */
-export const TOP_STRIP_RATIO = { width: 2172, height: 129 } as const;
-export function topStripStyle(): { width: string; aspectRatio: string } {
-  return { width: "100%", aspectRatio: `${TOP_STRIP_RATIO.width} / ${TOP_STRIP_RATIO.height}` };
+export const TOP_STRIP_RATIO = { width: 320, height: 50 } as const;
+export const TOP_STRIP_MAX_HEIGHT_PX = 90;
+export function topStripStyle(): { width: string; aspectRatio: string; maxHeight: string } {
+  return { width: "100%", aspectRatio: `${TOP_STRIP_RATIO.width} / ${TOP_STRIP_RATIO.height}`, maxHeight: `${TOP_STRIP_MAX_HEIGHT_PX}px` };
 }
 
 /** The strip's CSS width + aspect-ratio for a creative of ratio w/h (unknown → the 10 : 1 TOP_BANNER format). Kept for previews that draw a creative's own shape. */

@@ -273,7 +273,7 @@ export function SelfAdBanner({
         visitAd(current, viewRef.current);
       }}
       aria-label={`Ad from ${current.sponsor}${current.headline ? `: ${current.headline}` : ""} (opens the advertiser's site)`}
-      // 2026-10-23 (owner): the top strip has the Frenz AI banner's 2172 × 129 shape (topStripStyle), full width, filled, square
+      // 2026-10-23 (owner): the top strip is Adsterra's 320 × 50 shape (topStripStyle), full width, at most 90 px, filled, square
       style={variant === "strip" ? topStripStyle() : undefined}
       className={cn(
         "relative block touch-manipulation select-none overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",

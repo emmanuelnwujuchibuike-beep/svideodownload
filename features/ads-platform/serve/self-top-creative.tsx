@@ -19,7 +19,7 @@ import { SelfAdBanner } from "./self-ad-banner";
 export function SelfTopCreative({ ads, rules, page }: { ads: readonly EligibleAd[]; rules: FormatRules | null; page: string }) {
   return (
     <div className="flex w-full justify-center">
-      <SelfAdBanner ads={ads} rules={rules} placement="global_top_banner" page={page} variant="strip" className="rounded-md" />
+      <SelfAdBanner ads={ads} rules={rules} placement="global_top_banner" page={page} variant="strip" className="rounded-none" />
     </div>
   );
 }

@@ -13,7 +13,7 @@ import { momentClaimed } from "@/lib/ads-platform/moment-events";
 
 import { AdSlot } from "./ad-slot";
 import { useAdGateCountdown } from "./use-ad-gate-countdown";
-import { useDirectLink } from "./use-direct-link";
+import { useCloseViaDirectLink } from "./use-direct-link";
 import { useShowAds } from "./use-show-ads";
 
 /**
@@ -107,28 +107,7 @@ export function DownloadCompleteAd({
     new tab inside the tap itself; the ad closes when this tab is visible again — or after 4 s if the tab
     never went hidden (a blocked pop-up), so the button can never leave the ad stuck.
   */
-  const openDirectLink = useDirectLink("adClose");
-  const closeViaLink = useCallback(() => {
-    if (!openDirectLink()) {
-      close();
-      return;
-    }
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      document.removeEventListener("visibilitychange", onVisible);
-      window.clearTimeout(timer);
-      close();
-    };
-    const onVisible = () => {
-      if (document.visibilityState === "visible") finish();
-    };
-    const timer = window.setTimeout(() => {
-      if (document.visibilityState === "visible") finish();
-    }, 4000);
-    document.addEventListener("visibilitychange", onVisible);
-  }, [openDirectLink, close]);
+  const closeViaLink = useCloseViaDirectLink("adClose", close);
 
   useEffect(() => {
     if (open === wasOpen.current) return;

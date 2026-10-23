@@ -42,3 +42,35 @@ export function useDirectLink(spot: DirectLinkSpot | null): () => boolean {
     return true;
   }, []);
 }
+
+/**
+ * A close control that first opens the Monetag direct link (owner, 2026-10-20: "make the whole X button open
+ * the Monetag direct link and still close the ad when the user comes back"; 2026-10-23: the PAID full-screen
+ * ad's X never did). The link opens in a new tab inside the tap itself; the ad closes when this tab is
+ * visible again — or after 4 s if the tab never went hidden (a blocked pop-up), so the control can never
+ * leave the ad stuck. With no link set up for the spot it simply closes. Shared by every ad close button.
+ */
+export function useCloseViaDirectLink(spot: DirectLinkSpot | null, close: () => void): () => void {
+  const openDirectLink = useDirectLink(spot);
+  return useCallback(() => {
+    if (!openDirectLink()) {
+      close();
+      return;
+    }
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.clearTimeout(timer);
+      close();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") finish();
+    };
+    const timer = window.setTimeout(() => {
+      if (document.visibilityState === "visible") finish();
+    }, 4000);
+    document.addEventListener("visibilitychange", onVisible);
+  }, [openDirectLink, close]);
+}

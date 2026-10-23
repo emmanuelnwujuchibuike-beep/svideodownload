@@ -44,9 +44,12 @@ function snap(campaigns: SnapshotCampaign[], slotCount = 10): ServingSnapshot {
 }
 
 describe("All slots", () => {
-  it("an All-slots IMAGE shows in every image slot, and not in a video-only slot", () => {
+  it("an All-slots IMAGE shows in every image slot but the top banner, and not in a video-only slot", () => {
     const s = snap([campaign("everywhere", "all_slots", creative("ALL_SLOTS", "image"))]);
-    expect(eligibleForPlacement(s, "global_top_banner", NOW).map((a) => a.c)).toEqual(["everywhere"]);
+    // 2026-10-23 (owner: "the banner should only show this image"): the top banner carries only creatives bought for it
+    expect(eligibleForPlacement(s, "global_top_banner", NOW)).toEqual([]);
+    const own = snap([campaign("strip", "global_top_banner", creative("TOP_BANNER", "image"))]);
+    expect(eligibleForPlacement(own, "global_top_banner", NOW).map((a) => a.c)).toEqual(["strip"]);
     expect(eligibleForPlacement(s, "feed_banner", NOW).map((a) => a.c)).toEqual(["everywhere"]);
     expect(eligibleForPlacement(s, "ai_video_save_reward", NOW)).toEqual([]);
   });

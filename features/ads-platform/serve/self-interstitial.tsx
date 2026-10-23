@@ -6,6 +6,7 @@ import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } f
 import { createPortal } from "react-dom";
 
 import type { EligibleAd } from "@/lib/ads-platform/eligibility";
+import { useCloseViaDirectLink } from "@/features/monetization/use-direct-link";
 import { loadAdsConfig } from "@/lib/monetization/ads-config-client";
 import { DEFAULT_VAST_INTERSTITIAL, normalizeVastInterstitial } from "@/lib/monetization/vast-interstitial";
 import { cn } from "@/lib/utils";
@@ -128,6 +129,14 @@ export function SelfInterstitial({
     };
   }, [onClose]);
 
+  /*
+    🔴 THE X OPENS THE MONETAG DIRECT LINK, THEN CLOSES (owner, 2026-10-23: "the X button to close that should open
+    the Monetag direct link still doesn't work"). A paid campaign takes the Download complete moment from the
+    network panel (momentClaimed), and this full-screen ad's X only closed — the link was wired on the network
+    panel alone. Same "Ad close button" spot and the same admin switch; no link set up → it just closes.
+  */
+  const closeViaLink = useCloseViaDirectLink("adClose", onClose);
+
   if (typeof document === "undefined") return null;
 
   // History viewer: a swipe moves on, but only once the ad may be skipped
@@ -156,7 +165,7 @@ export function SelfInterstitial({
       <button
         ref={closeBtn}
         type="button"
-        onClick={onClose}
+        onClick={closeViaLink}
         aria-label={reward ? "Close the sponsored video" : "Close the ad"}
         className={cn(
           "inline-flex h-9 w-9 items-center justify-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",

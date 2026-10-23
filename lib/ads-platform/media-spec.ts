@@ -50,14 +50,16 @@ export function cardMediaBox(w: number | null | undefined, h: number | null | un
 export const TOP_STRIP_MAX = { width: 728, height: 140 } as const;
 
 /**
- * 🔴 THE TOP BANNER IS A 33 px BAR, FULL SCREEN WIDTH (owner, 2026-10-22: "the rules should be 32 to 33px
- * height, width should auto adjust by the device screen"; chose "show any picture, 33px bar"). This
- * REPLACES 2026-10-11's "the creative's own shape" for the global top banner: every creative is shown in
- * this bar and FILLS it — a picture of another shape has its top/bottom (or sides) trimmed to fit.
+ * 🔴 THE TOP BANNER'S FIXED SHAPE IS THE FRENZ AI BANNER'S OWN STRIP: 2172 × 129 (owner, 2026-10-23: "the
+ * height of the top banner is too thin, use the height of the existing image as the fixed rule of top
+ * banners", with the image). Measured from it: the banner is a 2172 × 129 strip centred in a canvas of
+ * transparent space, so this is the strip's shape, not the canvas's. This REPLACES the 33 px bar. Full
+ * screen width, height from the shape (≈23 px at 390 px, ≈85 px at 1440 px), square corners. Every
+ * creative FILLS it: that banner shows exactly, its empty margin cropped away; another shape is trimmed.
  */
-export const TOP_STRIP_HEIGHT = 33;
-export function topStripStyle(): { width: string; height: string } {
-  return { width: "100%", height: `${TOP_STRIP_HEIGHT}px` };
+export const TOP_STRIP_RATIO = { width: 2172, height: 129 } as const;
+export function topStripStyle(): { width: string; aspectRatio: string } {
+  return { width: "100%", aspectRatio: `${TOP_STRIP_RATIO.width} / ${TOP_STRIP_RATIO.height}` };
 }
 
 /** The strip's CSS width + aspect-ratio for a creative of ratio w/h (unknown → the 10 : 1 TOP_BANNER format). Kept for previews that draw a creative's own shape. */

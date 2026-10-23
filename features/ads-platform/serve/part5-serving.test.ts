@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EligibleAd, FormatRules } from "@/lib/ads-platform/eligibility";
-import { TOP_STRIP_HEIGHT, topStripStyle } from "@/lib/ads-platform/media-spec";
+import { TOP_STRIP_RATIO, topStripStyle } from "@/lib/ads-platform/media-spec";
 import { bannerIndexAt, msUntilNextRotation } from "@/lib/ads-platform/rotation";
 import type { ServingPayload } from "@/lib/ads-platform/serving-payload";
 import {
@@ -156,9 +156,12 @@ describe("TOP_BANNER — 10 ads, 5-second LOCAL rotation", () => {
     }
   });
 
-  it("the paid top banner is a full-width 33 px bar the creative fills (owner, 2026-10-22 — replaces 10-11's own-shape strip)", () => {
-    expect(TOP_STRIP_HEIGHT).toBe(33);
-    expect(topStripStyle()).toEqual({ width: "100%", height: "33px" });
+  it("the paid top banner has the Frenz AI banner's fixed 2172 × 129 shape, filled, square (owner, 2026-10-23)", () => {
+    // 2026-10-23: the fixed shape is the Frenz AI banner's own strip, 2172 × 129 — full width, no cap
+    expect(TOP_STRIP_RATIO).toEqual({ width: 2172, height: 129 });
+    expect(topStripStyle()).toEqual({ width: "100%", aspectRatio: "2172 / 129" });
+    // square corners (owner, 2026-10-23)
+    expect(src("features/ads-platform/serve/self-top-creative.tsx")).toContain('variant="strip" className="rounded-none"');
     const banner = src("features/ads-platform/serve/self-ad-banner.tsx");
     expect(banner).toContain('style={variant === "strip" ? topStripStyle() : undefined}');
     // the strip FILLS its bar; every other variant still shows the creative whole

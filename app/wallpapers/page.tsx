@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { SiteFooter } from "@/components/layout/site-footer";
-import { PageLoaderWithHeader } from "@/features/ui/page-loader";
 import { WallpaperSeoContent } from "@/components/wallpapers/wallpaper-seo-content";
 import { WallpaperExplore } from "@/features/wallpapers/wallpaper-explore";
+import { WallpaperExploreSkeleton } from "@/features/wallpapers/wallpaper-explore-skeleton";
 import { jsonLd } from "@/lib/seo/json-ld";
 import {
   WALLPAPERS_DESCRIPTION,
@@ -87,8 +87,9 @@ export const metadata: Metadata = {
   See app/(app)/home/page.tsx for why `loading.tsx` alone cannot fix that.
 */
 export default function WallpapersPage(props: { searchParams: Promise<{ reels?: string }> }) {
+  // the redesigned page's own skeleton (2026-10-22) — the generic loader showed the old chrome on a cold load
   return (
-    <Suspense fallback={<PageLoaderWithHeader />}>
+    <Suspense fallback={<WallpaperExploreSkeleton />}>
       <WallpapersData {...props} />
     </Suspense>
   );

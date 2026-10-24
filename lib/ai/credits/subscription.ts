@@ -39,6 +39,10 @@ export interface AiSubscriptionRow {
   canceled_at: string | null;
   created_at: string;
   updated_at: string;
+  /** 0274: what each Flutterwave renewal must charge (from the verified first charge) — never the admin's current price. */
+  contract_amount_minor?: number | null;
+  contract_currency?: string | null;
+  contract_interval?: string | null;
 }
 
 export interface AiSubscription {
@@ -54,26 +58,34 @@ export interface AiSubscription {
    * Which rail bills it — Paystack (a manage link) or credits (one period, never renews — 0192).
    * Bachs was removed on 2026-10-17; production held no Bachs-billed subscription rows then.
    */
-  provider: "paystack" | "credits";
+  provider: "paystack" | "credits" | "flutterwave";
 }
 
 /** A period end more than this far in the past means the renewal is not coming (Paystack retries for a few days). */
 const GRACE_MS = 3 * 24 * 60 * 60 * 1000;
 
-export function subscriptionIsActive(row: Pick<AiSubscriptionRow, "status" | "current_period_end"> & { provider?: string | null }, now: number = Date.now()): boolean {
+export function subscriptionIsActive(row: Pick<AiSubscriptionRow, "status" | "current_period_end"> & { provider?: string | null; cancel_at_period_end?: boolean | null }, now: number = Date.now()): boolean {
   if (row.status !== "active" && row.status !== "trialing" && row.status !== "past_due") return false;
   if (!row.current_period_end) return row.status !== "past_due";
   const end = Date.parse(row.current_period_end);
   if (!Number.isFinite(end)) return row.status !== "past_due";
   // 0192: a plan paid with credits is one period and never renews — no renewal grace, it ends when it ends
   if (row.provider === "credits") return now <= end;
+  // Part 3.3: a Flutterwave plan the member (or Flutterwave) CANCELLED has no renewal coming — it ends at its paid-through time
+  if (row.provider === "flutterwave" && row.cancel_at_period_end) return now <= end;
   // active/trialing: honoured until the period end plus a grace for the renewal charge; past_due: only inside the paid period
   return row.status === "past_due" ? now <= end : now <= end + GRACE_MS;
 }
 
+/** Which rail bills a row: credits, Flutterwave (2026-10-23, payment plans) or — every older row — Paystack. */
+function providerOf(row: AiSubscriptionRow): AiSubscription["provider"] {
+  const p = (row as { provider?: string }).provider;
+  return p === "credits" || p === "flutterwave" ? p : "paystack";
+}
+
 export function toAiSubscription(row: AiSubscriptionRow | null, now: number = Date.now()): AiSubscription | null {
   if (!row) return null;
-  return { plan: row.plan, status: row.status, active: subscriptionIsActive(row as AiSubscriptionRow & { provider?: string | null }, now), currentPeriodEnd: row.current_period_end, cancelAtPeriodEnd: row.cancel_at_period_end, subscriptionRef: row.subscription_ref, emailToken: row.email_token, provider: (row as { provider?: string }).provider === "credits" ? "credits" : "paystack" };
+  return { plan: row.plan, status: row.status, active: subscriptionIsActive(row as AiSubscriptionRow & { provider?: string | null }, now), currentPeriodEnd: row.current_period_end, cancelAtPeriodEnd: row.cancel_at_period_end, subscriptionRef: row.subscription_ref, emailToken: row.email_token, provider: providerOf(row) };
 }
 
 export async function getAiSubscription(userId: string): Promise<AiSubscription | null> {
@@ -114,11 +126,15 @@ export async function upsertAiSubscription(input: {
   subscriptionRef?: string | null;
   emailToken?: string | null;
   reference?: string | null;
+  /** 0274 (Flutterwave): the contract each renewal is held to. */
+  contractAmountMinor?: number | null;
+  contractCurrency?: string | null;
+  contractInterval?: string | null;
   currentPeriodStart?: string | null;
   currentPeriodEnd?: string | null;
   cancelAtPeriodEnd?: boolean;
-  /** Which rail billed it (0186). Absent = Paystack. */
-  provider?: "paystack";
+  /** Which rail billed it (0186). Absent = Paystack. Flutterwave since 2026-10-23 (payment plans). */
+  provider?: "paystack" | "flutterwave";
 }): Promise<{ written: boolean; plan: AiPlanId | null }> {
   const admin = createAdminClient();
   const { data: existing } = await admin.from("ai_subscriptions").select("*").eq("user_id", input.userId).maybeSingle();
@@ -142,6 +158,9 @@ export async function upsertAiSubscription(input: {
   if (input.customerRef) patch.customer_ref = input.customerRef;
   if (input.subscriptionRef) patch.subscription_ref = input.subscriptionRef;
   if (input.emailToken) patch.email_token = input.emailToken;
+  if (input.contractAmountMinor) patch.contract_amount_minor = input.contractAmountMinor;
+  if (input.contractCurrency) patch.contract_currency = input.contractCurrency;
+  if (input.contractInterval) patch.contract_interval = input.contractInterval;
   if (input.reference) patch.last_reference = input.reference;
   if (input.currentPeriodStart) patch.current_period_start = input.currentPeriodStart;
   if (input.currentPeriodEnd) patch.current_period_end = input.currentPeriodEnd;

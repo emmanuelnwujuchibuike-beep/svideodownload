@@ -23,9 +23,13 @@
  * The providers a NEW payment may use. Bachs was removed on 2026-10-17 (owner): a row written
  * before then may still say `provider = 'bachs'` in the database (kept for history, typed as a
  * plain string where it is read) — but no setting, route or checkout can name it any more.
+ *
+ * Flutterwave added 2026-10-23 (owner: the primary rail, charging USD; Paystack the backup in
+ * NGN). Being listed here only lets a route NAME it — a checkout uses it only when the account
+ * capability gate in lib/flutterwave/config.ts says the purpose and currency are confirmed.
  */
-export type TopupProviderId = "paystack";
-export const TOPUP_PROVIDER_IDS: readonly TopupProviderId[] = ["paystack"];
+export type TopupProviderId = "flutterwave" | "paystack";
+export const TOPUP_PROVIDER_IDS: readonly TopupProviderId[] = ["flutterwave", "paystack"];
 
 export interface CreditPack {
   /** Stable id the browser sends back ("pack_100"). */
@@ -39,9 +43,14 @@ export interface CreditPack {
 }
 
 /** What is being paid for — each has its own routing row. */
-export type PaymentPurpose = "wallet_topup" | "ai_subscription" | "ad_campaign";
-/** 0197: ad_campaign — an advertiser paying for a campaign (lib/ads-platform/payment-server.ts). Same rails, its own route. */
-export const PAYMENT_PURPOSES: readonly PaymentPurpose[] = ["wallet_topup", "ai_subscription", "ad_campaign"];
+export type PaymentPurpose = "wallet_topup" | "ai_subscription" | "ad_campaign" | "sub_purchase" | "verification" | "site_subscription";
+/**
+ * 0197: ad_campaign — an advertiser paying for a campaign (lib/ads-platform/payment-server.ts). Same rails, its own route.
+ * Part 2 (Flutterwave): sub_purchase (a creator subscription, lib/sub/server.ts) and verification (the paid blue
+ * tick, lib/social/paid-verification.ts) ask the router too — before, both called Paystack directly.
+ */
+// site_subscription (2026-10-23): the Pro / Business site plans — Flutterwave first too (owner: "Pro and business should be Flutterwave too")
+export const PAYMENT_PURPOSES: readonly PaymentPurpose[] = ["wallet_topup", "ai_subscription", "ad_campaign", "sub_purchase", "verification", "site_subscription"];
 /** Where the member is, decided SERVER-SIDE from the edge's country header (lib/payments/router.ts). */
 export type PaymentMarket = "NG" | "other";
 export const PAYMENT_MARKETS: readonly PaymentMarket[] = ["NG", "other"];
@@ -57,11 +66,13 @@ export interface AiWalletConfig {
   /** A member-typed amount of credits, within bounds. Off = packs only. */
   custom: { enabled: boolean; minCredits: number; maxCredits: number };
   /**
-   * Which provider takes a payment, per market and purpose. Since Bachs was removed
-   * (2026-10-17) every route is Paystack with no fallback; the shape is kept so a
-   * future provider slots in without a config migration.
+   * Which provider takes a payment, per market and purpose. Default (owner 2026-10-23):
+   * Flutterwave first, Paystack the fallback, in every market. Flutterwave is skipped while
+   * its account capability is unconfirmed, so the effective route stays Paystack.
    */
   routing: PaymentRouting;
+  /** Part 2.1: which routing rules the saved table was written under (absent = 1, before Flutterwave). See `normalizeRoute`. */
+  routingVersion: number;
   /**
    * On: when a market's route has TWO usable providers, the member picks one in the
    * sheet (the primary pre-selected). With Paystack alone there is never a choice.
@@ -83,14 +94,15 @@ export const WALLET_BOUNDS = {
   bonus: { min: 0, max: 1_000_000 },
 } as const;
 
+const FW_THEN_PAYSTACK: PaymentRoute = { primary: "flutterwave", fallback: "paystack" };
+const ROUTE_DEFAULTS: Record<PaymentPurpose, PaymentRoute> = { wallet_topup: FW_THEN_PAYSTACK, ai_subscription: FW_THEN_PAYSTACK, ad_campaign: FW_THEN_PAYSTACK, sub_purchase: FW_THEN_PAYSTACK, verification: FW_THEN_PAYSTACK, site_subscription: FW_THEN_PAYSTACK };
+
 /** $5 · $10 · $25 · $50 · $100 at 10¢ — the dollar shortcuts that were live before 0184, as credits. No bonus is invented. */
 export const AI_WALLET_DEFAULTS: AiWalletConfig = {
   packs: [50, 100, 250, 500, 1000].map((credits) => ({ id: `pack_${credits}`, credits, bonusCredits: 0, enabled: true, highlight: credits === 100 })),
   custom: { enabled: true, minCredits: 10, maxCredits: 5000 },
-  routing: {
-    NG: { wallet_topup: { primary: "paystack", fallback: null }, ai_subscription: { primary: "paystack", fallback: null }, ad_campaign: { primary: "paystack", fallback: null } },
-    other: { wallet_topup: { primary: "paystack", fallback: null }, ai_subscription: { primary: "paystack", fallback: null }, ad_campaign: { primary: "paystack", fallback: null } },
-  },
+  routing: { NG: ROUTE_DEFAULTS, other: ROUTE_DEFAULTS },
+  routingVersion: 2,
   memberChoice: true,
   transfers: { enabled: true, feePercent: 5, depositedFeePercent: 10, minCredits: 10, maxCredits: 5000, dailyMaxCredits: 20000 },
   provider: "paystack",
@@ -148,24 +160,79 @@ function normalizeTransfers(raw: unknown): CreditTransferConfig {
   };
 }
 
-/** Only a provider that still exists is kept: a saved "bachs" (removed 2026-10-17) reads as the default, Paystack. */
+/** Only a provider that still exists is kept: a saved "bachs" (removed 2026-10-17) reads as the route's default. */
 const knownProvider = (v: unknown): v is TopupProviderId => (TOPUP_PROVIDER_IDS as readonly unknown[]).includes(v);
 
-function normalizeRoute(raw: unknown, d: PaymentRoute): PaymentRoute {
+/**
+ * ── Saved routes and Flutterwave (Part 2.1, 2026-10-23) ─────────────────────────
+ * The routing table is saved inside `frenzAiPlans.wallet`. Every table saved BEFORE Flutterwave
+ * existed (no `routingVersion`, i.e. version 1) could only say "Paystack" — between 2026-10-07 and
+ * 10-17 the choice was Paystack vs Bachs, and since 10-17 the card re-saved the normalized
+ * Paystack-only table untouched (it had no editor). Such a route is not a decision against
+ * Flutterwave, so on READ a version-1 route that names only Paystack takes the new default
+ * (Flutterwave → Paystack). From version 2 on (written by every save from now, and by the Part 5
+ * editor), the saved table is authoritative.
+ *
+ * Whatever the table says, two rules hold:
+ *   · Flutterwave is used only through its capability gate (lib/payments/rails.ts) — a route can
+ *     NAME it, never enable it;
+ *   · Paystack is always the backup behind Flutterwave (owner policy): a route "Flutterwave, no
+ *     fallback" reads as "Flutterwave → Paystack", so a closed gate can never close payments.
+ * Open attempts are never re-routed: routing only picks the rail of a NEW checkout, and every open
+ * attempt answers through the provider written on its own row.
+ */
+export const ROUTING_VERSION = 2;
+
+function normalizeRoute(raw: unknown, d: PaymentRoute, version: number): PaymentRoute {
   const r = isRecord(raw) ? raw : {};
-  const primary: TopupProviderId = knownProvider(r.primary) ? r.primary : d.primary;
+  // a saved route whose primary is not a live provider (a removed "bachs", nothing saved) is the WHOLE default
+  // route — never "Flutterwave with no fallback", which would close payments while Flutterwave is unconfirmed
+  if (!knownProvider(r.primary)) return { ...d };
+  const primary: TopupProviderId = r.primary;
   const fb = r.fallback === null ? null : knownProvider(r.fallback) ? r.fallback : d.fallback;
+  // a version-1 Paystack-only route predates Flutterwave: the new default
+  if (version < ROUTING_VERSION && primary === "paystack" && (fb === null || fb === "paystack")) return { ...d };
+  // Paystack always backs Flutterwave
+  if (primary === "flutterwave" && (fb === null || fb === "flutterwave")) return { primary, fallback: "paystack" };
   // a fallback to the primary itself is no fallback
   return { primary, fallback: fb === primary ? null : fb };
 }
 
-export function normalizePaymentRouting(raw: unknown): PaymentRouting {
+/**
+ * Part 5 — what an ADMIN may save, checked server-side before anything is written (the normaliser above repairs a
+ * stored row silently; a save is refused out loud instead). Every market × purpose must be a known pair, and:
+ *   · a fallback is never the primary itself;
+ *   · Flutterwave is always backed by Paystack (Paystack stays the backup — a Flutterwave-only route would close
+ *     payments whenever Flutterwave's gate is shut).
+ * Naming Flutterwave here never makes it usable: the capability gate (lib/flutterwave/config.ts) still decides, and it
+ * is OFF until its currency, purposes and amount unit are confirmed. Returns the first problem, or null.
+ */
+export function paymentRoutingProblem(raw: unknown): string | null {
+  if (raw === undefined) return null;
+  if (!isRecord(raw)) return "Routing must be a table of markets.";
+  for (const [market, row] of Object.entries(raw)) {
+    if (!(PAYMENT_MARKETS as readonly string[]).includes(market)) return `Unknown market "${market}".`;
+    if (!isRecord(row)) return `Routing for ${market} must be a table of purposes.`;
+    for (const [purpose, route] of Object.entries(row)) {
+      if (!(PAYMENT_PURPOSES as readonly string[]).includes(purpose)) return `Unknown payment purpose "${purpose}".`;
+      if (!isRecord(route) || !knownProvider(route.primary)) return `${market} · ${purpose}: choose Flutterwave or Paystack.`;
+      if (route.fallback !== null && !knownProvider(route.fallback)) return `${market} · ${purpose}: unknown backup provider.`;
+      if (route.fallback === route.primary) return `${market} · ${purpose}: the backup can't be the same provider.`;
+      if (route.primary === "flutterwave" && route.fallback !== "paystack") return `${market} · ${purpose}: Flutterwave must have Paystack as its backup.`;
+    }
+  }
+  return null;
+}
+
+/** `version`: the saved table's `routingVersion` (absent = 1, from before Flutterwave). */
+export function normalizePaymentRouting(raw: unknown, version?: unknown): PaymentRouting {
   const r = isRecord(raw) ? raw : {};
   const d = AI_WALLET_DEFAULTS.routing;
+  const v = typeof version === "number" && Number.isInteger(version) ? version : 1;
   return Object.fromEntries(
     PAYMENT_MARKETS.map((m) => {
       const mr = isRecord(r[m]) ? (r[m] as Record<string, unknown>) : {};
-      return [m, Object.fromEntries(PAYMENT_PURPOSES.map((p) => [p, normalizeRoute(mr[p], d[m][p])]))];
+      return [m, Object.fromEntries(PAYMENT_PURPOSES.map((p) => [p, normalizeRoute(mr[p], d[m][p], v)]))];
     }),
   ) as PaymentRouting;
 }
@@ -179,7 +246,7 @@ function int(v: unknown, fallback: number, min: number, max: number): number {
 
 export function normalizeAiWalletConfig(raw: unknown): AiWalletConfig {
   const d = AI_WALLET_DEFAULTS;
-  if (!isRecord(raw)) return { ...d, packs: d.packs.map((p) => ({ ...p })), custom: { ...d.custom }, routing: normalizePaymentRouting(null), transfers: { ...d.transfers } };
+  if (!isRecord(raw)) return { ...d, packs: d.packs.map((p) => ({ ...p })), custom: { ...d.custom }, routing: normalizePaymentRouting(null, ROUTING_VERSION), transfers: { ...d.transfers } };
   const seen = new Set<string>();
   const packs: CreditPack[] = [];
   if (Array.isArray(raw.packs)) {
@@ -200,7 +267,9 @@ export function normalizeAiWalletConfig(raw: unknown): AiWalletConfig {
   return {
     packs: (Array.isArray(raw.packs) ? packs : d.packs.map((p) => ({ ...p }))).sort((a, b) => a.credits - b.credits),
     custom: { enabled: typeof c.enabled === "boolean" ? c.enabled : d.custom.enabled, minCredits, maxCredits: Math.max(minCredits, int(c.maxCredits, d.custom.maxCredits, WALLET_BOUNDS.credits.min, WALLET_BOUNDS.credits.max)) },
-    routing: normalizePaymentRouting(raw.routing),
+    routing: normalizePaymentRouting(raw.routing, raw.routingVersion),
+    // what is read is now a version-2 table: a save from the admin card writes it back as authoritative
+    routingVersion: ROUTING_VERSION,
     memberChoice: typeof raw.memberChoice === "boolean" ? raw.memberChoice : d.memberChoice,
     transfers: normalizeTransfers(raw.transfers),
     provider: "paystack",

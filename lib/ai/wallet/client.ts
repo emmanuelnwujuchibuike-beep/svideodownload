@@ -94,7 +94,7 @@ export async function getAiWalletBalance(opts?: { ledger?: number }): Promise<Ai
  * credits. Answers with the payment page; nothing here moves money — the
  * server re-checks the choice against the offer and prices it itself.
  */
-export function beginAiWalletTopup(choice: { packId: string } | { credits: number }, returnTo: string, provider?: "paystack" | null): Promise<AiWalletResult<{ url: string }>> {
+export function beginAiWalletTopup(choice: { packId: string } | { credits: number }, returnTo: string, provider?: "flutterwave" | "paystack" | null): Promise<AiWalletResult<{ url: string }>> {
   return request("/api/ai/wallet/topup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...choice, returnTo, ...(provider ? { provider } : {}) }) });
 }
 

@@ -6,8 +6,15 @@ import { trackEvent } from "@/lib/analytics/events";
 import { resolveCheckoutRate } from "@/lib/ai/character-replace/fx-rate-server";
 import { quoteCheckout } from "@/lib/ai/character-replace/topup-fx";
 import { subscriptionCharge, usd, validatePrice, withdrawalSplit } from "@/lib/creator/membership/engine";
+import { normalizePaymentRouting, type PaymentMarket } from "@/lib/ai/credits/wallet-config";
+import { createFlutterwaveCheckout, flutterwaveFailureIsDefinite, verifyFlutterwaveByReference } from "@/lib/flutterwave/client";
+import { FLUTTERWAVE_CHECKOUT_CURRENCY } from "@/lib/flutterwave/config";
 import { getLandingSettings } from "@/lib/landing/settings";
-import { initializeSubCheckout, paystackFailureIsDefinite, SUB_PURPOSE, verifyTransaction } from "@/lib/paystack/paystack";
+import { chargeMatches, type VerifiedCharge } from "@/lib/payments/charge";
+import { usableRails } from "@/lib/payments/rails";
+import { isFlutterwaveReference, newFlutterwaveReference } from "@/lib/payments/references";
+import { firstRail, routePayment, type RailAttempt } from "@/lib/payments/router";
+import { initializeSubCheckout, paystackFailureIsDefinite, paystackRefusedForSure, SUB_PURPOSE, verifyTransaction } from "@/lib/paystack/paystack";
 import { withdrawalFlatFeeCents, type SubConfig } from "@/lib/rewards/config";
 import { resolveAccount } from "@/lib/rewards/paystack-banks";
 import { payWithdrawalViaPaystack } from "@/lib/rewards/paystack-payouts";
@@ -169,7 +176,7 @@ export async function quoteSub(creatorId: string): Promise<SubQuote | null> {
 }
 
 /** Opens (or reuses) a Paystack checkout for a subscription. `returnPath` is where the subscriber lands after paying. */
-export async function startSubCheckout(input: { subscriberId: string; email: string; creatorId: string; returnPath: string }): Promise<Result<{ url: string; reused: boolean }>> {
+export async function startSubCheckout(input: { subscriberId: string; email: string; creatorId: string; returnPath: string; market?: PaymentMarket }): Promise<Result<{ url: string; reused: boolean }>> {
   const cfg = await subConfig();
   if (!cfg.purchasesEnabled) return fail("Subscriptions are paused right now.", 503, "paused");
   if (!isUuid(input.subscriberId) || !isUuid(input.creatorId)) return fail("Invalid request.", 400, "invalid");
@@ -202,39 +209,163 @@ export async function startSubCheckout(input: { subscriberId: string; email: str
   const since = new Date(Date.now() - 30 * 60_000).toISOString();
   const { data: open } = await db.from("sub_purchases").select("checkout_url").eq("subscriber_id", input.subscriberId).eq("creator_id", input.creatorId).eq("status", "initiated").gte("created_at", since).not("checkout_url", "is", null).order("created_at", { ascending: false }).limit(1).maybeSingle();
   if ((open as Row | null)?.checkout_url) return { ok: true, url: (open as Row).checkout_url as string, reused: true };
+  // Part 4.2: a Paystack checkout whose creation outcome was unknown is resolved before a new one on EITHER rail
+  const held = await resolveHeldPaystackSub(db, input.subscriberId, input.creatorId);
+  if (held) return held;
 
   const charge = subscriptionCharge(s.priceCents, cfg.purchaseFeePercent);
   const landing = await getLandingSettings();
-  const cr = landing.frenzAiCharacterReplace;
-  const rate = await resolveCheckoutRate(cr, "USD");
-  if (rate && "error" in rate) return fail("Payments are unavailable right now. Try again shortly.", 503);
-  const q = quoteCheckout({ walletAmountCents: charge.totalCents, walletCurrency: "USD", checkoutCurrency: cr.recharge.checkoutCurrency, minorPerUsd: rate?.minorPerUsd ?? 0 });
-  if ("error" in q) return fail("Payments are unavailable right now. Try again shortly.", 503);
+  const safeReturn = subReturnPath(input.returnPath, `${profilePath(creator.handle as string)}`);
+  const pair = { db, input, charge, cfg, safeReturn };
 
-  const reference = `frenz_sub_${crypto.randomUUID().replace(/-/g, "")}`;
-  const { data: row, error } = await db
+  /*
+    ── WHICH RAIL (Part 2) ────────────────────────────────────────────────────
+    The router, purpose sub_purchase: Flutterwave first (USD, the exact price —
+    only when its account capability is confirmed), then Paystack (NGN at the
+    live rate, as before). Paystack is tried only after Flutterwave DEFINITELY
+    refused; an unknown outcome ends here and is reconciled.
+  */
+  const usable = await usableRails("sub_purchase");
+  const candidates = routePayment({ purpose: "sub_purchase", market: input.market ?? "other", routing: normalizePaymentRouting(landing.frenzAiPlans?.wallet?.routing, landing.frenzAiPlans?.wallet?.routingVersion), usable });
+  if (!candidates.length) return fail("Payments are unavailable right now. Try again shortly.", 503);
+  const out = await firstRail(
+    candidates,
+    (p) => (p === "flutterwave" ? openFlutterwaveSub(pair) : openPaystackSub(pair, landing)),
+    (from, to) => console.warn("[sub] fallback_triggered", { from, to, subscriberId: input.subscriberId }),
+  );
+  return out.ok ? { ok: true, url: out.value, reused: false } : fail(out.error, out.status);
+}
+
+interface SubPair {
+  db: ReturnType<typeof createAdminClient>;
+  input: { subscriberId: string; email: string; creatorId: string };
+  charge: ReturnType<typeof subscriptionCharge>;
+  cfg: SubConfig;
+  safeReturn: string;
+}
+
+/**
+ * Insert the purchase row FIRST (the immutable record: who, what, how much, which provider) — through
+ * begin_sub_purchase (0276), which locks the pair and answers `open` when another request just started one:
+ * that one's link is handed back, or the member is told it is being confirmed. Never a second checkout.
+ * Before 0276 is applied: the plain insert, as before (no protection against simultaneous requests).
+ */
+async function insertPurchase(p: SubPair, row: { reference: string; provider: "paystack" | "flutterwave"; currency: string; minor: number; fx: number | null }): Promise<{ id: string } | { stop: RailAttempt<string> }> {
+  const begun = await p.db.rpc("begin_sub_purchase", {
+    p_subscriber: p.input.subscriberId, p_creator: p.input.creatorId, p_reference: row.reference, p_provider: row.provider,
+    p_price_cents: p.charge.priceCents, p_fee_cents: p.charge.feeCents, p_total_cents: p.charge.totalCents, p_fee_bp: p.charge.feeBp,
+    p_charged_currency: row.currency, p_charged_minor: row.minor, p_fx_minor_per_usd: row.fx, p_period_days: p.cfg.periodDays, p_hold_days: p.cfg.holdDays,
+  });
+  if (!begun.error) {
+    const r = begun.data as { ok?: boolean; id?: string; reason?: string; checkout_url?: string | null } | null;
+    if (r?.ok && r.id) return { id: r.id };
+    // another request for this pair opened one a moment ago: its link, or "being confirmed" — `unknown` so no other rail is tried
+    if (r?.reason === "open" && r.checkout_url) return { stop: { ok: true, value: r.checkout_url } };
+    return { stop: { ok: false, refusal: "unknown", status: 409, error: "Your last payment is still being confirmed. Try again in a few minutes." } };
+  }
+  if (!MISSING(begun.error.message)) return { stop: { ok: false, refusal: "definite", status: 500, error: "Couldn't start the payment." } };
+  console.warn("[sub] begin_sub_purchase missing (migration 0276) — plain insert, no simultaneous-request guard");
+  const { data, error } = await p.db
     .from("sub_purchases")
-    .insert({ creator_id: input.creatorId, subscriber_id: input.subscriberId, price_cents: charge.priceCents, fee_cents: charge.feeCents, total_cents: charge.totalCents, fee_bp: charge.feeBp, charged_currency: q.currency, charged_minor: q.amount, fx_minor_per_usd: q.minorPerUsd || null, reference, period_days: cfg.periodDays, hold_days: cfg.holdDays })
+    .insert({ creator_id: p.input.creatorId, subscriber_id: p.input.subscriberId, price_cents: p.charge.priceCents, fee_cents: p.charge.feeCents, total_cents: p.charge.totalCents, fee_bp: p.charge.feeBp, charged_currency: row.currency, charged_minor: row.minor, fx_minor_per_usd: row.fx, reference: row.reference, provider: row.provider, period_days: p.cfg.periodDays, hold_days: p.cfg.holdDays })
     .select("id")
     .single();
-  if (error) return MISSING(error.message) ? fail("Subscriptions arrive with the next update.", 503) : fail("Couldn't start the payment.", 500);
-  const safeReturn = subReturnPath(input.returnPath, `${profilePath(creator.handle as string)}`);
+  if (error) return { stop: { ok: false, refusal: "definite", status: MISSING(error.message) ? 503 : 500, error: MISSING(error.message) ? "Subscriptions arrive with the next update." : "Couldn't start the payment." } };
+  return { id: (data as Row).id as string };
+}
+
+const subCallback = (reference: string, safeReturn: string) => `${SITE_URL}/sub/return?ref=${encodeURIComponent(reference)}&next=${encodeURIComponent(safeReturn)}`;
+
+/** Longer than initialize's 15 s timeout: a younger link-less row may still be mid-request on a parallel tap. */
+const HELD_INIT_GRACE_MS = 60_000;
+
+/**
+ * Part 4.2 — a Paystack SUB purchase left `initiated` with no link (its initialize timed out or
+ * Paystack answered 5xx) may exist at Paystack. Before any new checkout for this pair it is asked
+ * about by reference, never retried: paid → settled and the member told; Paystack's own 4xx
+ * ("Transaction reference not found", past the grace) → it was never created, closed as
+ * init_refused (recoverable: a later verified charge still settles); anything else stays held.
+ * The 10-minute reconcile only reads rows WITH a link, so this is where such a row resolves.
+ */
+async function resolveHeldPaystackSub(db: ReturnType<typeof createAdminClient>, subscriberId: string, creatorId: string): Promise<Result<never> | null> {
+  const { data, error } = await db.from("sub_purchases").select("reference, created_at").eq("subscriber_id", subscriberId).eq("creator_id", creatorId).eq("status", "initiated").is("checkout_url", null).order("created_at", { ascending: false }).limit(5);
+  if (error) return fail("Payments are unavailable right now. Try again shortly.", 503);
+  const stillConfirming = fail("Your last payment is still being confirmed. Try again in a few minutes.", 409);
+  for (const h of ((data ?? []) as Row[]).filter((r) => !isFlutterwaveReference(r.reference as string))) {
+    const reference = h.reference as string;
+    if (!(Date.now() - Date.parse(h.created_at as string) >= HELD_INIT_GRACE_MS)) return stillConfirming;
+    try {
+      await verifyTransaction(reference);
+    } catch (e) {
+      if (!paystackRefusedForSure(e)) return stillConfirming;
+      await markPurchaseFailed(reference, "init_refused");
+      continue;
+    }
+    const r = await confirmSubPayment(reference).catch(() => null);
+    if (r?.status === "paid") return fail("Your payment went through — your subscription is active.", 409);
+    if (r?.status !== "failed") return stillConfirming;
+  }
+  return null;
+}
+
+/** The Paystack rail — unchanged in what it charges (NGN at the live rate). */
+async function openPaystackSub(p: SubPair, landing: Awaited<ReturnType<typeof getLandingSettings>>): Promise<RailAttempt<string>> {
+  const cr = landing.frenzAiCharacterReplace;
+  const unavailable: RailAttempt<string> = { ok: false, refusal: "definite", status: 503, error: "Payments are unavailable right now. Try again shortly." };
+  const rate = await resolveCheckoutRate(cr, "USD");
+  if (rate && "error" in rate) return unavailable;
+  // `recharge.checkoutCurrency` is Paystack's checkout currency, never Flutterwave's
+  const q = quoteCheckout({ walletAmountCents: p.charge.totalCents, walletCurrency: "USD", checkoutCurrency: cr.recharge.checkoutCurrency, minorPerUsd: rate?.minorPerUsd ?? 0 });
+  if ("error" in q) return unavailable;
+
+  const reference = `frenz_sub_${crypto.randomUUID().replace(/-/g, "")}`;
+  const row = await insertPurchase(p, { reference, provider: "paystack", currency: q.currency, minor: q.amount, fx: q.minorPerUsd || null });
+  if ("stop" in row) return row.stop;
   try {
     const url = await initializeSubCheckout({
-      email: input.email,
-      userId: input.subscriberId,
+      email: p.input.email,
+      userId: p.input.subscriberId,
       amount: q.amount,
       currency: q.currency,
       reference,
-      callbackUrl: `${SITE_URL}/sub/return?ref=${encodeURIComponent(reference)}&next=${encodeURIComponent(safeReturn)}`,
-      metadata: { purchase_id: (row as Row).id as string, creator_id: input.creatorId, price_cents: charge.priceCents, fee_cents: charge.feeCents, total_cents: charge.totalCents },
+      callbackUrl: subCallback(reference, p.safeReturn),
+      metadata: { purchase_id: row.id, creator_id: p.input.creatorId, price_cents: p.charge.priceCents, fee_cents: p.charge.feeCents, total_cents: p.charge.totalCents },
     });
-    await db.from("sub_purchases").update({ checkout_url: url, updated_at: new Date().toISOString() }).eq("reference", reference);
-    return { ok: true, url, reused: false };
+    await p.db.from("sub_purchases").update({ checkout_url: url, updated_at: new Date().toISOString() }).eq("reference", reference);
+    return { ok: true, value: url };
   } catch (e) {
     // a definite refusal: nothing was created at Paystack, so this purchase can never be paid
-    if (paystackFailureIsDefinite(e)) await markPurchaseFailed(reference, "init_refused");
-    return fail("Paystack couldn't open the payment. Try again.", 502);
+    const definite = paystackFailureIsDefinite(e);
+    if (definite) await markPurchaseFailed(reference, "init_refused");
+    // 503, never 502: Cloudflare replaces an origin 502 with its own HTML page. `refusal`, not the status, decides the fallback
+    return { ok: false, refusal: definite ? "definite" : "unknown", status: 503, error: "Paystack couldn't open the payment. Try again." };
+  }
+}
+
+/** The Flutterwave rail (Part 2): USD, the exact total, no conversion. */
+async function openFlutterwaveSub(p: SubPair): Promise<RailAttempt<string>> {
+  // a Flutterwave checkout for this pair whose creation outcome was unknown is resolved first — never two at once
+  const { data: held } = await p.db.from("sub_purchases").select("reference").eq("subscriber_id", p.input.subscriberId).eq("creator_id", p.input.creatorId).eq("status", "initiated").eq("provider", "flutterwave").is("checkout_url", null).limit(3);
+  for (const h of (held ?? []) as Row[]) {
+    const r = await confirmSubPayment(h.reference as string).catch(() => null);
+    if (r?.status === "paid") return { ok: false, refusal: "unknown", status: 409, error: "Your payment went through — your subscription is active." };
+    if (r?.status !== "failed") return { ok: false, refusal: "unknown", status: 409, error: "Your last payment is still being confirmed. Try again in a few minutes." };
+  }
+
+  const reference = newFlutterwaveReference("sub_purchase");
+  const total = p.charge.totalCents;
+  const row = await insertPurchase(p, { reference, provider: "flutterwave", currency: FLUTTERWAVE_CHECKOUT_CURRENCY, minor: total, fx: null });
+  if ("stop" in row) return row.stop;
+  try {
+    const url = await createFlutterwaveCheckout({ reference, amountMinor: total, currency: FLUTTERWAVE_CHECKOUT_CURRENCY, email: p.input.email, redirectUrl: subCallback(reference, p.safeReturn), title: "Frenz subscription", meta: { purchase_id: row.id } });
+    await p.db.from("sub_purchases").update({ checkout_url: url, updated_at: new Date().toISOString() }).eq("reference", reference);
+    return { ok: true, value: url };
+  } catch (e) {
+    const definite = flutterwaveFailureIsDefinite(e);
+    // definite: nothing exists at Flutterwave. Unknown: the row stays `initiated` with no link, resolved by reference before any new checkout
+    if (definite) await markPurchaseFailed(reference, "init_refused");
+    console.error("[sub] flutterwave initialize failed", { reference, definite, error: e instanceof Error ? e.name : "unknown" });
+    return { ok: false, refusal: definite ? "definite" : "unknown", status: 503, error: definite ? "Couldn't open the payment. Try again." : "We couldn't confirm the payment page opened. Try again in a few minutes." };
   }
 }
 
@@ -264,8 +395,9 @@ async function markPurchaseFailed(reference: string, source: "verify_abandoned" 
   if (error && MISSING(error.message)) await db.from("sub_purchases").update({ status: "failed", updated_at: at }).eq("reference", reference).eq("status", "initiated");
 }
 
-export async function confirmSubPayment(reference: string): Promise<{ ok: boolean; status: SubConfirmStatus; next?: string }> {
+export async function confirmSubPayment(reference: string, opts: { flutterwaveCharge?: VerifiedCharge } = {}): Promise<{ ok: boolean; status: SubConfirmStatus; next?: string }> {
   if (!isSubReference(reference)) return { ok: false, status: "unknown" };
+  if (isFlutterwaveReference(reference)) return confirmFlutterwaveSub(reference, opts.flutterwaveCharge);
   const db = createAdminClient();
   /*
     Our own record first (Part 2, 2026-10-16). A reference we never issued costs no Paystack
@@ -302,7 +434,63 @@ export async function confirmSubPayment(reference: string): Promise<{ ok: boolea
     await markPurchaseFailed(reference, outcome.source);
     return { ok: false, status: "failed" };
   }
-  const { data, error } = await db.rpc("settle_sub_purchase", { p_reference: reference, p_paid_minor: charge.amount ?? 0, p_paid_currency: charge.currency ?? "", p_provider_ref: charge.id ? String(charge.id) : null });
+  return settleSub(reference, { paidMinor: charge.amount ?? 0, paidCurrency: charge.currency ?? "", providerRef: charge.id ? String(charge.id) : null });
+}
+
+/**
+ * A Flutterwave SUB purchase (Part 2). Our row first (as above), then Flutterwave's own record of
+ * OUR reference — fetched here, or already fetched by the webhook (by transaction id). The amount and
+ * currency are checked by `settle_sub_purchase` against the row written before the checkout.
+ */
+async function confirmFlutterwaveSub(reference: string, given?: VerifiedCharge): Promise<{ ok: boolean; status: SubConfirmStatus; next?: string }> {
+  const db = createAdminClient();
+  const { data, error } = await db.from("sub_purchases").select("id, status, created_at, failure_source, provider, checkout_url, charged_minor, charged_currency").eq("reference", reference).maybeSingle();
+  if (error) return { ok: false, status: "pending" };
+  const row = data as { id?: string; status: string; created_at: string; failure_source?: string | null; provider?: string; checkout_url?: string | null; charged_minor?: number | string; charged_currency?: string } | null;
+  if (!row || row.provider !== "flutterwave") return { ok: false, status: "unknown" };
+  if (row.status === "paid") return { ok: true, status: "paid" };
+  if (row.status === "refund_due") return { ok: false, status: "held" };
+  if (row.status === "refunded" || row.status === "disputed" || row.status === "reversed") return { ok: false, status: "failed" };
+  if (row.status === "failed" && FINAL_FAILURES.has(row.failure_source ?? "")) return { ok: false, status: "failed" };
+
+  let charge: VerifiedCharge;
+  try {
+    charge = given ?? (await verifyFlutterwaveByReference(reference));
+  } catch {
+    return { ok: false, status: "pending" };
+  }
+  if (charge.status !== "not_found" && charge.reference !== reference) return { ok: false, status: "unknown" };
+  // a checkout that was never handed out and that Flutterwave does not know: nothing can be paid on it
+  if (charge.status === "not_found" && !row.checkout_url) {
+    await markPurchaseFailed(reference, "init_refused");
+    return { ok: false, status: "failed" };
+  }
+  // the shared classifier speaks Paystack's words; Flutterwave holding no transaction yet for a handed-out link is an unfinished checkout
+  const words = { success: "success", failed: "failed", abandoned: "abandoned", not_found: "abandoned", pending: "pending" } as const;
+  const outcome = classifyVerification(words[charge.status], Date.now() - Date.parse(row.created_at));
+  if (outcome.kind === "pending") return { ok: false, status: "pending" };
+  if (outcome.kind === "fail") {
+    await markPurchaseFailed(reference, outcome.source);
+    return { ok: false, status: "failed" };
+  }
+  /*
+    🔴 Part 2.1: EXACTLY the amount and currency stored on the purchase (lib/payments/charge.ts). The shared
+    settle_sub_purchase accepts "at least" — kept as it is for Paystack — so a Flutterwave over- or underpayment
+    is stopped here: nothing settles, the purchase stays open, and the audit log holds it for a person.
+  */
+  const match = chargeMatches(charge, { provider: "flutterwave", reference, amountMinor: Number(row.charged_minor), currency: String(row.charged_currency ?? "") });
+  if (!match.ok) {
+    await db.from("financial_audit_log").insert({ action: "sub_payment_mismatch", target_type: "sub_purchase", target_id: row.id ?? null, reference, details: { provider: "flutterwave", mismatch: match.mismatch, paid: charge.amountMinor, currency: charge.currency, expected: Number(row.charged_minor), expected_currency: row.charged_currency ?? null, review: "no access or earnings granted" } });
+    console.error("[sub] flutterwave charge does not match the purchase", { reference, mismatch: match.mismatch });
+    return { ok: false, status: "mismatch" };
+  }
+  return settleSub(reference, { paidMinor: charge.amountMinor ?? 0, paidCurrency: charge.currency ?? "", providerRef: charge.externalId });
+}
+
+/** The one door into `settle_sub_purchase` for both rails: the SQL checks amount and currency against our row, once. */
+async function settleSub(reference: string, paid: { paidMinor: number; paidCurrency: string; providerRef: string | null }): Promise<{ ok: boolean; status: SubConfirmStatus; next?: string }> {
+  const db = createAdminClient();
+  const { data, error } = await db.rpc("settle_sub_purchase", { p_reference: reference, p_paid_minor: paid.paidMinor, p_paid_currency: paid.paidCurrency, p_provider_ref: paid.providerRef });
   if (error) return { ok: false, status: "pending" };
   const r = data as { ok?: boolean; reason?: string; duplicate?: boolean } | null;
   if (r?.ok) {

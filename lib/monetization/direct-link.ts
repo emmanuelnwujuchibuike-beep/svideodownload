@@ -22,9 +22,24 @@
 export const DIRECT_LINK_SPOTS = ["wallpaper", "resultPreview", "adClose"] as const;
 export type DirectLinkSpot = (typeof DIRECT_LINK_SPOTS)[number];
 
+/**
+ * Which network fills a spot format (owner, 2026-10-24: "make the Monetag direct link and pop under to also use
+ * adsterra pop under, smart link … I want to try adsterra out"). The admin picks ONE per format — the direct link and
+ * the pop-under separately — and each network needs its own master switch on (Monetag / Adsterra). Same spots, same
+ * tap rules: one physical spot, the provider is a setting.
+ */
+export const SPOT_AD_PROVIDERS = ["monetag", "adsterra"] as const;
+export type SpotAdProvider = (typeof SPOT_AD_PROVIDERS)[number];
+export const normalizeSpotAdProvider = (v: unknown): SpotAdProvider => (v === "adsterra" ? "adsterra" : "monetag");
+
 export interface DirectLinkConfig {
   enabled: boolean;
+  /** Which network's link a tap opens (2026-10-24). */
+  provider: SpotAdProvider;
+  /** The Monetag direct link. */
   url: string;
+  /** The Adsterra Smartlink (its "Direct Link"). */
+  adsterraUrl: string;
   spots: Record<DirectLinkSpot, boolean>;
   /** 1–100: the odds an eligible tap opens the link. */
   chancePercent: number;
@@ -32,7 +47,9 @@ export interface DirectLinkConfig {
 
 export const DEFAULT_DIRECT_LINK: DirectLinkConfig = {
   enabled: false,
+  provider: "monetag",
   url: "",
+  adsterraUrl: "",
   // adClose (owner, 2026-10-19): the Download complete and reward ads' close control — see FullscreenInterstitial
   spots: { wallpaper: true, resultPreview: true, adClose: true },
   chancePercent: 50,
@@ -58,10 +75,14 @@ export function normalizeDirectLink(raw: unknown): DirectLinkConfig {
   ) as Record<DirectLinkSpot, boolean>;
   const n = Number(r.chancePercent);
   const url = typeof r.url === "string" ? r.url.trim() : "";
+  const adsterraUrl = typeof r.adsterraUrl === "string" ? r.adsterraUrl.trim() : "";
   return {
     // Must be literally true: a stored "false" string is truthy.
     enabled: r.enabled === true,
+    // a row saved before 2026-10-24 has no provider: Monetag, as it was
+    provider: normalizeSpotAdProvider(r.provider),
     url: isValidDirectLinkUrl(url) ? url : "",
+    adsterraUrl: isValidDirectLinkUrl(adsterraUrl) ? adsterraUrl : "",
     spots,
     chancePercent: Number.isFinite(n) ? Math.min(100, Math.max(1, Math.round(n))) : DEFAULT_DIRECT_LINK.chancePercent,
   };
@@ -69,16 +90,19 @@ export function normalizeDirectLink(raw: unknown): DirectLinkConfig {
 
 /**
  * The public shape /api/ads/config serves: null unless it can actually open.
- * `monetagOn` is Monetag's master switch: turning Monetag off turns this off.
+ * The chosen provider's master switch gates it (`monetagOn` / `adsterraOn`): turning that network off turns this off.
  */
 export function publicDirectLink(
   raw: unknown,
   monetagOn: boolean,
-): { url: string; spots: DirectLinkSpot[]; chancePercent: number } | null {
+  adsterraOn = false,
+): { provider: SpotAdProvider; url: string; spots: DirectLinkSpot[]; chancePercent: number } | null {
   const c = normalizeDirectLink(raw);
-  if (!monetagOn || !c.enabled || !c.url) return null;
+  const on = c.provider === "adsterra" ? adsterraOn : monetagOn;
+  const url = c.provider === "adsterra" ? c.adsterraUrl : c.url;
+  if (!on || !c.enabled || !url) return null;
   const spots = DIRECT_LINK_SPOTS.filter((id) => c.spots[id]);
-  return spots.length ? { url: c.url, spots, chancePercent: c.chancePercent } : null;
+  return spots.length ? { provider: c.provider, url, spots, chancePercent: c.chancePercent } : null;
 }
 
 /** The roll: `random` is in [0, 1). */

@@ -21,6 +21,18 @@ export async function getUserPlan(userId: string | null | undefined): Promise<Bi
   return resolved;
 }
 
+/**
+ * A Flutterwave site plan (2026-10-23) is PERIOD-based: it counts only inside its paid period plus the 3-day renewal
+ * grace (lib/ai/credits/flutterwave-plans.ts). A Paystack row is driven by its own lifecycle events, as before.
+ */
+export function flutterwaveSitePlanCurrent(row: { provider?: string | null; current_period_end?: string | null; cancel_at_period_end?: boolean | null }, now = Date.now()): boolean {
+  if (row.provider !== "flutterwave") return true;
+  const end = row.current_period_end ? Date.parse(row.current_period_end) : NaN;
+  if (!Number.isFinite(end)) return false;
+  // Part 3.3: cancelled → paid access to the paid-through time exactly (no renewal is coming, so no renewal grace)
+  return now <= end + (row.cancel_at_period_end ? 0 : 3 * 86_400_000);
+}
+
 /** The REAL plan from the `subscriptions` table, ignoring any promo. */
 async function resolveSubscriptionPlan(userId: string | null | undefined): Promise<BillingPlan> {
   if (!userId || !hasSupabase) return "free";
@@ -28,11 +40,12 @@ async function resolveSubscriptionPlan(userId: string | null | undefined): Promi
     const supabase = createAdminClient();
     const { data } = await supabase
       .from("subscriptions")
-      .select("plan, status")
+      .select("plan, status, provider, current_period_end, cancel_at_period_end")
       .eq("user_id", userId)
       .maybeSingle();
     if (!data) return "free";
-    if (data.status === "active" || data.status === "trialing") {
+    // a Flutterwave plan is period-based: it counts only inside the paid period plus the 3-day renewal grace
+    if ((data.status === "active" || data.status === "trialing") && flutterwaveSitePlanCurrent(data)) {
       return (data.plan as BillingPlan) ?? "free";
     }
     return "free";

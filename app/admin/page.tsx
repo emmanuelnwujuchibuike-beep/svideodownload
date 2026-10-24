@@ -158,6 +158,7 @@ import { PlanManager } from "@/features/admin/plan-manager";
 import { AnalyticsDashboard } from "@/features/admin/analytics-dashboard";
 import { DownloadHistoryPanel } from "@/features/admin/download-history-panel";
 import { AnnouncementSettings } from "@/features/admin/announcement-settings";
+import { FlutterwaveSettingsLazy } from "@/features/admin/flutterwave-settings-lazy";
 import { PaystackSettings } from "@/features/admin/paystack-settings";
 import { StatAdjuster } from "@/features/admin/stat-adjuster";
 import { PricingEditor } from "@/features/admin/pricing-editor";
@@ -479,6 +480,8 @@ export default async function AdminPage() {
                    because it is set once and then never touched, unlike the
                    four above it. */
                 { id: "paystack", label: "Paystack", content: <PaystackSettings /> },
+                /* Flutterwave (2026-10-23): the primary rail once its account is confirmed — keys, webhook and capability switches */
+                { id: "flutterwave", label: "Flutterwave", content: <FlutterwaveSettingsLazy /> },
               ]}
             />
           </AdminPanel>

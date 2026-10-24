@@ -15,6 +15,6 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(request: Request) {
   const settings = await getLandingSettings();
-  const options = await paymentOptions(paymentMarket(request.headers), settings.frenzAiPlans);
+  const options = await paymentOptions(paymentMarket(request.headers), settings.frenzAiPlans, settings.frenzAiCurrency);
   return NextResponse.json(options, { headers: { "cache-control": "private, no-store" } });
 }

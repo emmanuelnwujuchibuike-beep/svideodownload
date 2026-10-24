@@ -37,7 +37,7 @@ async function paystack<T = Record<string, unknown>>(
   init: { method?: string; body?: unknown } = {},
 ): Promise<T> {
   const { secretKey } = await getPaystackConfig();
-  if (!secretKey) throw new Error("Paystack is not configured");
+  if (!secretKey) throw new PaystackNotConfiguredError();
   const res = await fetch(`${BASE}${path}`, {
     method: init.method ?? "GET",
     headers: {
@@ -68,6 +68,14 @@ export class PaystackHttpError extends Error {
   ) {
     super(message);
     this.name = "PaystackHttpError";
+  }
+}
+
+/** No secret key: thrown BEFORE any request leaves, so nothing can exist at Paystack (Part 4.2). Same message as before. */
+export class PaystackNotConfiguredError extends Error {
+  constructor() {
+    super("Paystack is not configured");
+    this.name = "PaystackNotConfiguredError";
   }
 }
 
@@ -105,8 +113,12 @@ export async function initializeTransaction(opts: {
   callbackUrl: string;
   /** 0167: extra metadata echoed back on every event of the subscription — the AI plans set purpose and ai_plan so the webhook routes them away from the site-plan sync. */
   metadata?: Record<string, string>;
+  /** Part 3: OUR reference (the AI plans' attempt row), so the first charge can be verified and recovered. Absent = Paystack picks one (site plans, as before). */
+  reference?: string;
+  /** Part 3: the plan amount the caller already read (and stored on its attempt) — saves the second read. */
+  amount?: number;
 }): Promise<string> {
-  const amount = await planAmount(opts.planCode);
+  const amount = opts.amount ?? (await planAmount(opts.planCode));
   const data = await paystack<{ data: { authorization_url: string } }>(
     "/transaction/initialize",
     {
@@ -116,6 +128,7 @@ export async function initializeTransaction(opts: {
         plan: opts.planCode,
         // Required by the API; the plan amount governs the actual charge.
         ...(amount != null ? { amount } : {}),
+        ...(opts.reference ? { reference: opts.reference } : {}),
         callback_url: opts.callbackUrl,
         metadata: { ...(opts.metadata ?? {}), user_id: opts.userId },
       },
@@ -266,15 +279,16 @@ export async function initializeVerificationCheckout(opts: { email: string; user
 }
 
 /**
- * Did Paystack REFUSE (nothing was created), or is the outcome unknown?
- * A refusal is Paystack answering with its own message. A timeout, a dropped
- * connection or a body that is not JSON (a 5xx page) is UNKNOWN: the
- * transaction may exist, so the caller must not open a second checkout - it
- * verifies the reference instead.
+ * Did a checkout INITIALIZE fail for sure (nothing was created), or is the outcome unknown?
+ * Definite: Paystack's own 4xx answer, or no key (nothing was sent). Everything else is
+ * UNKNOWN: a timeout, a dropped connection, a body that is not JSON, and — Part 4.2 — a
+ * Paystack 5xx (a JSON 5xx used to count as a refusal, yet Paystack failing says nothing
+ * about whether the transaction was created) or any unrecognised error. An unknown outcome
+ * must not open a second checkout or fall back to another rail; the reference is verified.
+ * Never for a VERIFY call: "no key" is not "never created" there — use `paystackRefusedForSure`.
  */
 export function paystackFailureIsDefinite(e: unknown): boolean {
-  if (!(e instanceof Error)) return false;
-  return !["TimeoutError", "AbortError", "TypeError", "SyntaxError"].includes(e.name);
+  return paystackRefusedForSure(e) || e instanceof PaystackNotConfiguredError;
 }
 
 /**
@@ -326,6 +340,17 @@ export interface PaystackVerifiedCharge {
   gateway_response?: string | null;
   channel?: string | null;
   paid_at?: string | null;
+  /** Part 3.1: the plan a subscription charge was for, as Paystack recorded it (a code, or an object with one). */
+  plan?: string | { plan_code?: string } | null;
+  plan_object?: { plan_code?: string } | null;
+  customer?: { customer_code?: string; email?: string } | null;
+}
+
+/** The plan code on a verified charge, whichever shape Paystack used. */
+export function verifiedPlanCode(c: PaystackVerifiedCharge): string | null {
+  if (typeof c.plan === "string" && c.plan) return c.plan;
+  if (c.plan && typeof c.plan === "object" && typeof c.plan.plan_code === "string") return c.plan.plan_code;
+  return typeof c.plan_object?.plan_code === "string" ? c.plan_object.plan_code : null;
 }
 
 export async function verifyTransaction(reference: string): Promise<PaystackVerifiedCharge> {

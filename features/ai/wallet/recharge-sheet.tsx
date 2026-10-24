@@ -2,7 +2,7 @@
 
 import { Check } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { formatCredits } from "@/lib/ai/credits/units";
 import { formatCents } from "@/lib/ai/economy";
@@ -69,6 +69,8 @@ export function AiWalletRechargeSheet({
   suggestedCredits?: number | null;
 }) {
   const [busy, setBusy] = useState(false);
+  // Part 4: a synchronous latch — two taps in the same frame (before "busy" disables the button) start ONE checkout
+  const starting = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [custom, setCustom] = useState("");
@@ -105,13 +107,15 @@ export function AiWalletRechargeSheet({
   const ready = pack !== null || customValid;
 
   const confirm = useCallback(async () => {
-    if (!ready) return;
+    if (!ready || starting.current) return;
+    starting.current = true;
     haptic("selection");
     setBusy(true);
     setError(null);
     const res = await beginAiWalletTopup(pack ? { packId: pack.id } : { credits: customCredits ?? 0 }, returnTo, providers.length > 1 ? chosen : null);
     if (!res.ok) {
       setError(res.error);
+      starting.current = false;
       setBusy(false);
       return;
     }

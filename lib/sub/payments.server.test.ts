@@ -20,6 +20,8 @@ vi.mock("@/lib/paystack/paystack", () => ({
   verifyTransaction: (ref: string) => verify(ref),
   initializeSubCheckout: vi.fn(),
   paystackFailureIsDefinite: () => false,
+  // Part 2: the router asks whether Paystack is configured before a SUB checkout
+  paystackEnabled: async () => true,
 }));
 vi.mock("@/lib/landing/settings", async () => {
   const { SUB_DEFAULTS } = await import("@/lib/rewards/config");

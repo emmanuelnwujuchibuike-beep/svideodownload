@@ -15,6 +15,7 @@ import {
   FRENZ_AI_MIN_PAID_CREDITS,
   setLandingSettings,
 } from "@/lib/landing/settings";
+import { PAYMENT_PURPOSES, paymentRoutingProblem, type PaymentPurpose } from "@/lib/ai/credits/wallet-config";
 import { SITE_URL } from "@/lib/site";
 
 export const runtime = "nodejs";
@@ -104,6 +105,8 @@ const aiPlanSchema = z
     weeklyCredits: z.number().int().min(0).max(1_000_000).optional(),
     creditsPrice: z.number().int().min(0).max(10_000_000).optional(),
     paystackPlanCode: z.string().max(100).optional(),
+    // the Flutterwave payment plan id (digits) — empty = not sold on Flutterwave
+    flutterwavePlanId: z.string().trim().regex(/^(|\d{1,12})$/, "A Flutterwave plan id is a number").optional(),
     blurb: z.string().max(160).optional(),
   })
   .strict();
@@ -255,12 +258,20 @@ const schema = z.object({
           provider: z.enum(["paystack"]).optional(),
           memberChoice: z.boolean().optional(),
           transfers: z.object({ enabled: z.boolean().optional(), feePercent: z.number().min(0).max(50).optional(), depositedFeePercent: z.number().min(0).max(50).optional(), minCredits: z.number().int().min(1).max(1_000_000).optional(), maxCredits: z.number().int().min(1).max(10_000_000).optional(), dailyMaxCredits: z.number().int().min(1).max(100_000_000).optional() }).strict().optional(),
+          // Part 2/2.1: the live providers and every routed purpose (lib/ai/credits/wallet-config.ts). Naming a provider here
+          // never makes it usable — Flutterwave still needs its capability gate (lib/flutterwave/config.ts).
           routing: z
             .record(
               z.enum(["NG", "other"]),
-              z.record(z.enum(["wallet_topup", "ai_subscription", "ad_campaign"]), z.object({ primary: z.enum(["paystack"]), fallback: z.enum(["paystack"]).nullable() }).strict()),
+              z.record(z.enum(PAYMENT_PURPOSES as unknown as [PaymentPurpose, ...PaymentPurpose[]]), z.object({ primary: z.enum(["flutterwave", "paystack"]), fallback: z.enum(["flutterwave", "paystack"]).nullable() }).strict()),
             )
+            // Part 5: every market × purpose checked — no self-backup, and Flutterwave always backed by Paystack
+            .superRefine((v, ctx) => {
+              const problem = paymentRoutingProblem(v);
+              if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem });
+            })
             .optional(),
+          routingVersion: z.number().int().min(1).max(10).optional(),
         })
         .strict()
         .optional(),

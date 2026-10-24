@@ -1,4 +1,4 @@
-import { DIRECT_LINK_SPOTS, type DirectLinkSpot } from "./direct-link";
+import { DIRECT_LINK_SPOTS, normalizeSpotAdProvider, type DirectLinkSpot, type SpotAdProvider } from "./direct-link";
 import { parseMonetagSnippet } from "./monetag";
 
 /**
@@ -27,8 +27,12 @@ export const OWNER_POPUNDER_SNIPPET =
 
 export interface SpotPopunderConfig {
   enabled: boolean;
+  /** Which network's pop-under loads at the spots (2026-10-24; see SPOT_AD_PROVIDERS). */
+  provider: SpotAdProvider;
   /** The Monetag tag as pasted. Parsed to { src, zone } — never injected as raw HTML. */
   snippet: string;
+  /** The Adsterra Popunder code as pasted (`<script src="//….js">`). Only its https script address is read. */
+  adsterraSnippet: string;
   spots: Record<DirectLinkSpot, boolean>;
   /**
    * Less aggressive (owner, 2026-10-23: "make it less aggressive without breaking the Monetag impression and CPM
@@ -46,7 +50,9 @@ export const POPUNDER_COOLDOWN_MAX_MINUTES = 1440;
 /** Part 2.1: OFF until the admin switches it on (the owner's zone stays pre-filled in the tag box). */
 export const DEFAULT_SPOT_POPUNDER: SpotPopunderConfig = {
   enabled: false,
+  provider: "monetag",
   snippet: OWNER_POPUNDER_SNIPPET,
+  adsterraSnippet: "",
   spots: { wallpaper: true, resultPreview: true, adClose: true },
   spotsOnly: true,
   cooldownMinutes: 30,
@@ -58,7 +64,10 @@ export function normalizeSpotPopunder(raw: unknown): SpotPopunderConfig {
   return {
     // ON only when an admin saved a literal true — missing, a string "true", anything else: off (Part 2.1)
     enabled: r.enabled === true,
+    // a row saved before 2026-10-24 has no provider: Monetag, as it was
+    provider: normalizeSpotAdProvider(r.provider),
     snippet: typeof r.snippet === "string" ? r.snippet.trim().slice(0, 4000) : DEFAULT_SPOT_POPUNDER.snippet,
+    adsterraSnippet: typeof r.adsterraSnippet === "string" ? r.adsterraSnippet.trim().slice(0, 4000) : DEFAULT_SPOT_POPUNDER.adsterraSnippet,
     spots: Object.fromEntries(DIRECT_LINK_SPOTS.map((id) => [id, typeof spotsRaw[id] === "boolean" ? spotsRaw[id] : DEFAULT_SPOT_POPUNDER.spots[id]])) as Record<DirectLinkSpot, boolean>,
     // a row saved before these existed gets the gentle defaults
     spotsOnly: typeof r.spotsOnly === "boolean" ? r.spotsOnly : DEFAULT_SPOT_POPUNDER.spotsOnly,
@@ -67,6 +76,7 @@ export function normalizeSpotPopunder(raw: unknown): SpotPopunderConfig {
 }
 
 export interface PublicSpotPopunder {
+  provider: SpotAdProvider;
   src: string;
   zone: string | null;
   cfAsync: boolean;
@@ -75,14 +85,28 @@ export interface PublicSpotPopunder {
   cooldownMinutes: number;
 }
 
-/** What /api/ads/config serves: null unless it can actually load (Monetag on, switched on, a valid tag, a spot). */
-export function publicSpotPopunder(raw: unknown, monetagOn: boolean): PublicSpotPopunder | null {
+/**
+ * The Adsterra Popunder code: Adsterra hands out a plain `<script type='text/javascript' src='//pl….com/…/….js'></script>`.
+ * Only a clean https script address is kept (protocol-relative becomes https); inline code, markup or http → null.
+ * Adsterra codes carry no zone attribute — the unit is in the address.
+ */
+export function parseAdsterraSnippet(snippet: string | null | undefined): { src: string } | null {
+  const tag = parseMonetagSnippet(snippet);
+  return tag && /\.js$/i.test(new URL(tag.src).pathname) ? { src: tag.src } : null;
+}
+
+/**
+ * What /api/ads/config serves: null unless it can actually load — the CHOSEN network's master switch on (Monetag or
+ * Adsterra), switched on, a valid tag for that network, a spot.
+ */
+export function publicSpotPopunder(raw: unknown, monetagOn: boolean, adsterraOn = false): PublicSpotPopunder | null {
   const c = normalizeSpotPopunder(raw);
-  if (!monetagOn || !c.enabled) return null;
-  const tag = parseMonetagSnippet(c.snippet);
+  if (!c.enabled || !(c.provider === "adsterra" ? adsterraOn : monetagOn)) return null;
+  const adsterra = c.provider === "adsterra" ? parseAdsterraSnippet(c.adsterraSnippet) : null;
+  const tag = c.provider === "adsterra" ? (adsterra ? { src: adsterra.src, zone: null, cfAsync: false } : null) : parseMonetagSnippet(c.snippet);
   if (!tag) return null;
   const spots = DIRECT_LINK_SPOTS.filter((id) => c.spots[id]);
-  return spots.length ? { src: tag.src, zone: tag.zone, cfAsync: tag.cfAsync, spots, spotsOnly: c.spotsOnly, cooldownMinutes: c.cooldownMinutes } : null;
+  return spots.length ? { provider: c.provider, src: tag.src, zone: tag.zone, cfAsync: tag.cfAsync, spots, spotsOnly: c.spotsOnly, cooldownMinutes: c.cooldownMinutes } : null;
 }
 
 export type SpotOutcome = "popunder" | "direct" | "none";

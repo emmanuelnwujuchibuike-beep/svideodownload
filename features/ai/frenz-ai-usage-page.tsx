@@ -24,6 +24,7 @@ import { takeTopupReturnReference, verifyCharacterReplaceTopup } from "@/lib/ai/
 import type { CharacterReplaceTransaction } from "@/lib/ai/character-replace/types";
 import { formatCredits, formatLedgerAmount, WALLET_UNIT } from "@/lib/ai/credits/units";
 import { formatDate, formatTime } from "@/lib/i18n/format";
+import { topupReturnLine } from "@/lib/ai/wallet/topup-return";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
@@ -179,7 +180,8 @@ export function FrenzAIUsagePage({
         if (e?.plan && e.subscription?.active) setCelebrate(aiCelebration(e.plan, e.planLabel ?? "your AI plan", e.dailyLimit, e.weeklyLimit));
       } else if (reference) {
         const verified = await verifyCharacterReplaceTopup(reference);
-        setNotice(verified.ok ? (verified.credited ? "Payment received — your balance has been updated." : verified.pending ? "Your payment is still being confirmed. This will update shortly." : null) : null);
+        // Part 4: one honest line for every outcome — including a failed payment and a check that couldn't run
+        setNotice(topupReturnLine(verified));
       }
       // Only a return from a payment is news. A plain entry paints the cached
       // wallet and fetches nothing (a cold cache is loaded by useQuery itself).

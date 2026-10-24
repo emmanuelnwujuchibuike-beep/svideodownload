@@ -28,12 +28,13 @@ export interface PaymentOptionsView {
 }
 
 const COPY: Record<PaymentProvider, { label: string; hint: string }> = {
+  flutterwave: { label: "Flutterwave", hint: "Card, in US dollars" },
   paystack: { label: "Paystack", hint: "Card, bank, transfer" },
 };
 
-/** Paystack when the route allows it (the recommended method), else the route's first. */
+/** The route's first provider — the server orders them (Flutterwave first when it is enabled, owner 2026-10-23). */
 export function defaultProvider(providers: PaymentProvider[]): PaymentProvider | null {
-  return providers.includes("paystack") ? "paystack" : (providers[0] ?? null);
+  return providers[0] ?? null;
 }
 
 /** One read per sheet opening; null until it answers (or if it cannot — then no picker, the server routes). */
@@ -56,7 +57,7 @@ export function usePaymentOptions(open: boolean): PaymentOptionsView | null {
 }
 
 export function PaymentProviderPicker({ providers, value, onChange, disabled, light = false, className }: { providers: PaymentProvider[]; value: PaymentProvider | null; onChange: (p: PaymentProvider) => void; disabled?: boolean; light?: boolean; className?: string }) {
-  const recommended: PaymentProvider | null = providers.includes("paystack") ? "paystack" : null;
+  const recommended: PaymentProvider | null = providers[0] ?? null;
   const [more, setMore] = useState(false);
   if (providers.length < 2) return null;
   const others = providers.filter((p) => p !== recommended);

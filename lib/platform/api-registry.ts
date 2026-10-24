@@ -32,7 +32,8 @@ export type ApiCategory =
   | "sessions"
   | "security"
   | "subscriptions"
-  | "messaging";
+  | "messaging"
+  | "payments";
 
 export interface ApiEndpoint {
   method: ApiMethod;
@@ -140,6 +141,14 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   { method: "POST", path: "/api/admin/verification/paid-settings", auth: "admin", category: "account", description: "0268: save the paid-verification switch, price and period (clamped)." },
   { method: "POST", path: "/api/admin/ratings/ban", auth: "admin", category: "security", description: "0267: ban the person behind an app rating — account (suspended, audited) and every device identifier the rating carried; the fetch route then refuses them." },
   { method: "DELETE", path: "/api/admin/ratings/ban", auth: "admin", category: "security", description: "0267: lift a rating ban (and the account suspension it made)." },
+  // Flutterwave admin controls (Parts 2, 3.3, 5)
+  { method: "GET", path: "/api/admin/flutterwave", auth: "admin", category: "payments", description: "Flutterwave settings: masks and sources of the key and hash (never the secrets), the capability gate per purpose, plan ids, the webhook URL." },
+  { method: "POST", path: "/api/admin/flutterwave", auth: "admin", category: "payments", description: "Save Flutterwave settings to the private 0272 table (fresh password). Secrets are write-only." },
+  { method: "GET", path: "/api/admin/flutterwave/reviews", auth: "admin", category: "payments", description: "Plan billing waiting for a person (0274 plan_billing_reviews)." },
+  { method: "POST", path: "/api/admin/flutterwave/reviews", auth: "admin", category: "payments", description: "Apply a proven renewal once, or resolve / dismiss a review (fresh password)." },
+  { method: "POST", path: "/api/admin/flutterwave/test", auth: "admin", category: "payments", description: "Part 5: test the saved Flutterwave key with one read-only call — a fixed code and copy, never the key or provider text. Audited." },
+  { method: "GET", path: "/api/admin/flutterwave/transactions", auth: "admin", category: "payments", description: "Part 5: payment attempts across the existing ledgers plus the webhook log, filtered by provider / purpose / reconciliation state / reference." },
+  { method: "POST", path: "/api/admin/flutterwave/transactions", auth: "admin", category: "payments", description: "Part 5: recheck ONE attempt by reference through its purpose's existing idempotent settle path (fresh password, rate limited, audited)." },
 ];
 
 export function getApiEndpoints(): ApiEndpoint[] {

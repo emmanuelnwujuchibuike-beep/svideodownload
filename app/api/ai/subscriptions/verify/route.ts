@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { getAiCreditEntitlement } from "@/lib/ai/credits/entitlement";
 import { activateAiPlanFromVerifiedCharge } from "@/lib/ai/credits/paystack";
+import { isPlanReference, settleOwnPlanAttempt } from "@/lib/ai/credits/plan-attempts";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { isRemovedProviderReference } from "@/lib/payments/removed-providers";
 import { paystackEnabled, verifyTransaction } from "@/lib/paystack/paystack";
@@ -35,6 +37,19 @@ export async function GET(request: Request) {
   if (!(await paystackEnabled())) return NextResponse.json({ error: "Billing isn't available yet." }, { status: 503 });
   try {
     const settings = await getLandingSettings();
+    /*
+      Part 3: a checkout started since attempts exist carries OUR reference (frenz_ai_plan_…). It settles through its
+      attempt row — the exact amount, the plan, the member — the same routine the cron sweep uses; the browser's
+      return proves nothing. An older Paystack-chosen reference keeps the path below, unchanged.
+    */
+    if (isPlanReference(reference)) {
+      const o = await settleOwnPlanAttempt(user.id, reference, settings.frenzAiPlans);
+      if (o !== "settled") return NextResponse.json({ activated: false, status: o === "failed" ? "failed" : o === "mismatched" ? "review" : "pending", reason: null });
+      const sub = await getAiCreditEntitlement(user.id, settings.frenzAiPlans);
+      const { data } = await createAdminClient().from("ai_topup_attempts").select("item_id").eq("reference", reference).maybeSingle();
+      const plan = (data as { item_id?: string } | null)?.item_id === "ai_max" ? "ai_max" : "ai_pro";
+      return NextResponse.json({ activated: true, plan, planLabel: settings.frenzAiPlans.plans[plan].label, dailyLimit: sub.dailyLimit, weeklyLimit: sub.weeklyLimit });
+    }
     const charge = await verifyTransaction(reference);
     const outcome = await activateAiPlanFromVerifiedCharge(user.id, charge, settings.frenzAiPlans);
     if (!outcome.ok) {

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fakeDb, type FakeDb } from "@/lib/testing/fake-supabase";
+import { scriptOpenCheckoutGuard } from "@/lib/testing/open-checkout-guard";
 
 /**
  * Frenz Exclusive Part 3 — hidden posts, the Exclusive feed and locked previews, through the
@@ -31,7 +32,7 @@ vi.mock("@/lib/notifications/smart-delivery", () => ({ sendSmartPush: (to: strin
 vi.mock("@/lib/email/member-email", () => ({ emailMember: (to: string) => emailed(to) }));
 vi.mock("@/lib/push/identity", () => ({ pushPerson: async () => ({ name: "Creator", handle: "c1", icon: null }) }));
 vi.mock("@/lib/social/creator-notify-emit", () => ({ excludedFor: async () => new Set<string>() }));
-vi.mock("@/lib/paystack/paystack", () => ({ SUB_PURPOSE: "frenz_sub", verifyTransaction: vi.fn(), initializeSubCheckout: vi.fn(async () => "https://checkout.paystack.com/x"), paystackFailureIsDefinite: () => false }));
+vi.mock("@/lib/paystack/paystack", () => ({ SUB_PURPOSE: "frenz_sub", verifyTransaction: vi.fn(), initializeSubCheckout: vi.fn(async () => "https://checkout.paystack.com/x"), paystackFailureIsDefinite: () => false, paystackEnabled: async () => true }));
 
 const feed = await import("./feed");
 const posts = await import("./posts");
@@ -95,6 +96,7 @@ function seed() {
 
 beforeEach(() => {
   db = seed();
+  scriptOpenCheckoutGuard(db);
   db.defaults.reports = { status: "open" };
   db.unique.reports = [["reporter_id", "target_type", "target_id"]];
   sessionUser = null;

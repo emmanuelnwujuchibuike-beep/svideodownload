@@ -104,10 +104,20 @@ export function AiCreditsCard({ className, refreshKey = 0, returnTo, compact = f
   const manage = useCallback(async () => {
     haptic("selection");
     setManaging(true);
-    const res = await openAiPlanManage();
+    let res = await openAiPlanManage();
+    // a Flutterwave plan has no hosted page: confirm, then cancel at Flutterwave (access stays to the period end)
+    if (res.ok && res.confirmCancel) {
+      const until = res.periodEnd ? new Date(res.periodEnd).toLocaleDateString() : null;
+      if (!window.confirm(`Cancel your AI plan? You keep it${until ? ` until ${until}` : " until the end of this period"} and won't be charged again.`)) {
+        setManaging(false);
+        return;
+      }
+      res = await openAiPlanManage(true);
+    }
     setManaging(false);
-    if (res.ok) window.location.assign(res.url);
-    else setError(res.error);
+    if (!res.ok) setError(res.error);
+    else if (res.url) window.location.assign(res.url);
+    else if (res.cancelled) setError(res.periodEnd ? `Cancelled — your plan stays active until ${new Date(res.periodEnd).toLocaleDateString()}.` : "Cancelled — no further charges.");
   }, []);
 
   if (!data) {

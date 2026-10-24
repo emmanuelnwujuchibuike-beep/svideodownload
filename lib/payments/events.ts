@@ -29,6 +29,24 @@ export async function claimProviderEvent(provider: TopupProviderId, eventId: str
   return (data as { processed_at?: string | null } | null)?.processed_at ? "done" : "retry";
 }
 
+/**
+ * Part 3.3: the same claim, but it NEVER fails open. A delivery whose idempotency cannot be established (the log could
+ * not be written for any reason but "already there", or not read back) answers "unavailable": the caller asks the
+ * provider to retry instead of carrying on as if it were new. Used where a duplicate could grant something (Flutterwave).
+ */
+export async function claimProviderEventStrict(provider: TopupProviderId, eventId: string, eventType: string, reference: string | null): Promise<ProviderEventClaim | "unavailable"> {
+  const db = createAdminClient();
+  const { error } = await db.from("payment_provider_events").insert({ provider, event_id: eventId.slice(0, 200), event_type: eventType.slice(0, 80), reference: reference?.slice(0, 200) ?? null });
+  if (!error) return "new";
+  if (error.code !== "23505") {
+    console.error("[payments] event log write failed — asking for a retry", { provider, eventId, code: error.code });
+    return "unavailable";
+  }
+  const { data, error: readError } = await db.from("payment_provider_events").select("processed_at").eq("provider", provider).eq("event_id", eventId.slice(0, 200)).maybeSingle();
+  if (readError) return "unavailable";
+  return (data as { processed_at?: string | null } | null)?.processed_at ? "done" : "retry";
+}
+
 export async function markProviderEvent(provider: TopupProviderId, eventId: string | null | undefined, outcome: string): Promise<void> {
   if (!eventId) return;
   const { error } = await createAdminClient().from("payment_provider_events").update({ processed_at: new Date().toISOString(), outcome: outcome.slice(0, 120) }).eq("provider", provider).eq("event_id", eventId.slice(0, 200));

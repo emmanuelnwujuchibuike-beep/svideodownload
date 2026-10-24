@@ -7,7 +7,8 @@ import { getLandingSettings } from "@/lib/landing/settings";
 import { AD_CAMPAIGN_PURPOSE, AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, SUB_PURPOSE, VERIFICATION_PURPOSE, verifyPaystackSignature, type PaystackEventData } from "@/lib/paystack/paystack";
 import { confirmVerificationPayment, reversePaidVerification } from "@/lib/social/paid-verification";
 import { confirmSubPayment, reverseSub, reverseSubForRefund } from "@/lib/sub/server";
-import { isAiPlanEvent, syncAiPlanEvent } from "@/lib/ai/credits/paystack";
+import { isAiPlanEvent } from "@/lib/ai/credits/paystack";
+import { handleAiPlanWebhook } from "@/lib/ai/credits/plan-webhook";
 import { syncPaystackEvent } from "@/lib/paystack/sync";
 import { handlePaystackAdCharge, handlePaystackAdReversal } from "@/lib/ads-platform/payment-server";
 import { claimProviderEvent, markProviderEvent } from "@/lib/payments/events";
@@ -355,7 +356,17 @@ export async function POST(request: Request) {
     try {
       const plans = (await getLandingSettings()).frenzAiPlans;
       if (await isAiPlanEvent(event.data, plans)) {
-        await syncAiPlanEvent(event.event, event.data, plans);
+        /*
+          Part 3.1: what an AI plan event may GRANT is decided in lib/ai/credits/plan-webhook.ts — a first purchase only on a
+          charge re-verified with Paystack and EXACTLY matched (our attempt row, or the Paystack plan's own price for an
+          older checkout); renewals and lifecycle of a subscription the member already holds keep the established path.
+          Not final (verification unreachable, a purchase still in flight) → 500, Paystack redelivers.
+        */
+        const key = event.event === "charge.success" && event.data?.reference ? `charge.success:${event.data.reference}` : null;
+        if (key && (await claimProviderEvent("paystack", key, event.event, event.data.reference ?? null)) === "done") return NextResponse.json({ received: true, duplicate: true });
+        const out = await handleAiPlanWebhook(event.event, event.data, plans);
+        if (!out.ack) return NextResponse.json({ error: "Retry" }, { status: 500 });
+        if (key) await markProviderEvent("paystack", key, `ai_plan:${out.outcome}`);
         return NextResponse.json({ received: true, aiPlan: true });
       }
     } catch (e) {

@@ -405,10 +405,11 @@ export async function verifyCharacterReplaceTopup(reference: string): Promise<
 export function takeTopupReturnReference(): string | null {
   if (typeof window === "undefined") return null;
   const params = new URLSearchParams(window.location.search);
-  const reference = params.get("reference") ?? params.get("trxref");
+  // Paystack appends reference/trxref; Flutterwave appends tx_ref (+ status, transaction_id — never trusted, only removed)
+  const reference = params.get("reference") ?? params.get("trxref") ?? params.get("tx_ref");
   if (!reference) return null;
   params.delete("reference");
-  params.delete("trxref");
+  for (const k of ["trxref", "tx_ref", "transaction_id", "status"]) params.delete(k);
   const rest = params.toString();
   const clean = `${window.location.pathname}${rest ? `?${rest}` : ""}${window.location.hash}`;
   window.history.replaceState(window.history.state, "", clean);

@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { getAdminUser } from "@/lib/admin/require-admin";
 import { requireSensitiveAdmin } from "@/lib/admin/reauth";
-import { getPaystackConfig, setPaystackConfig } from "@/lib/paystack/config";
+import { getPaystackConfig, paystackSecretFromEnv, setPaystackConfig } from "@/lib/paystack/config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +25,8 @@ export async function GET() {
     mode: c.mode,
     secretSet: !!c.secretKey,
     secretMasked: mask(c.secretKey),
+    // Part 2.1: where the live secret is read from — "env" (server-only) or "settings" (admin-readable table)
+    secretSource: paystackSecretFromEnv() ? "env" : "settings",
     publicKey: c.publicKey,
     planPro: c.planPro,
     planBusiness: c.planBusiness,

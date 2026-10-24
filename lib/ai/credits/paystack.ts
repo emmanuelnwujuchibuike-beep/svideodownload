@@ -63,7 +63,7 @@ export async function isAiPlanEvent(data: PaystackEventData, config: AiPlansConf
   return false;
 }
 
-async function resolveUserId(data: PaystackEventData): Promise<string | null> {
+export async function resolveUserId(data: PaystackEventData): Promise<string | null> {
   const supabase = createAdminClient();
   const meta = (data.metadata ?? {}) as AiPlanMetadata;
   if (meta.user_id) return meta.user_id;

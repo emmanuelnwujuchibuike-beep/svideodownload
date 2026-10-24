@@ -7,7 +7,8 @@ import { quoteCharacterReplace } from "@/lib/ai/character-replace/pricing";
 import { REPLACEMENT_MODES, replacementModeLabel } from "@/lib/ai/character-replace/modes";
 import { AI_PLAN_IDS, AI_PLANS_BOUNDS, normalizeAiPlansConfig, type AiPlanId, type AiPlansConfig } from "@/lib/ai/credits/config";
 import { AI_CREDIT_FEATURES, AI_FEATURE_LABELS, AI_FEATURES_BY_CHARACTER, AI_FEATURES_WITH_DURATION, AI_TIERS, type AiCreditFeatureId, type AiFeaturePolicies, type AiTier } from "@/lib/ai/credits/features";
-import { WALLET_BOUNDS, type PaymentRouting } from "@/lib/ai/credits/wallet-config";
+import { paymentRoutingProblem, WALLET_BOUNDS, type PaymentRouting } from "@/lib/ai/credits/wallet-config";
+import { PaymentRoutingEditor } from "@/features/admin/payment-routing-editor";
 
 const TIER_LABEL: Record<AiTier, string> = { free: "Free", ai_pro: "AI Pro", ai_max: "AI Max" };
 type FeatureRow = { enabled: boolean; payAsYouGo: boolean; tiers: Record<AiTier, boolean>; multiplier: string; minimum: string; maxSeconds: string; included: Record<AiTier, string> };
@@ -53,9 +54,9 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
   const symbol = aiCurrencySymbol(settings.frenzAiCurrency);
 
   const [enabled, setEnabled] = useState(cfg.enabled);
-  const [plans, setPlans] = useState<Record<AiPlanId, { enabled: boolean; label: string; price: string; interval: "monthly" | "yearly"; daily: string; weekly: string; code: string; creditsPrice: string; blurb: string }>>({
-    ai_pro: { enabled: cfg.plans.ai_pro.enabled, label: cfg.plans.ai_pro.label, price: minorToMajorInput(cfg.plans.ai_pro.priceCents), interval: cfg.plans.ai_pro.interval, daily: String(cfg.plans.ai_pro.dailyCredits), weekly: String(cfg.plans.ai_pro.weeklyCredits), code: cfg.plans.ai_pro.paystackPlanCode, creditsPrice: String(cfg.plans.ai_pro.creditsPrice || ""), blurb: cfg.plans.ai_pro.blurb },
-    ai_max: { enabled: cfg.plans.ai_max.enabled, label: cfg.plans.ai_max.label, price: minorToMajorInput(cfg.plans.ai_max.priceCents), interval: cfg.plans.ai_max.interval, daily: String(cfg.plans.ai_max.dailyCredits), weekly: String(cfg.plans.ai_max.weeklyCredits), code: cfg.plans.ai_max.paystackPlanCode, creditsPrice: String(cfg.plans.ai_max.creditsPrice || ""), blurb: cfg.plans.ai_max.blurb },
+  const [plans, setPlans] = useState<Record<AiPlanId, { enabled: boolean; label: string; price: string; interval: "monthly" | "yearly"; daily: string; weekly: string; code: string; fwPlan: string; creditsPrice: string; blurb: string }>>({
+    ai_pro: { enabled: cfg.plans.ai_pro.enabled, label: cfg.plans.ai_pro.label, price: minorToMajorInput(cfg.plans.ai_pro.priceCents), interval: cfg.plans.ai_pro.interval, daily: String(cfg.plans.ai_pro.dailyCredits), weekly: String(cfg.plans.ai_pro.weeklyCredits), code: cfg.plans.ai_pro.paystackPlanCode, fwPlan: cfg.plans.ai_pro.flutterwavePlanId, creditsPrice: String(cfg.plans.ai_pro.creditsPrice || ""), blurb: cfg.plans.ai_pro.blurb },
+    ai_max: { enabled: cfg.plans.ai_max.enabled, label: cfg.plans.ai_max.label, price: minorToMajorInput(cfg.plans.ai_max.priceCents), interval: cfg.plans.ai_max.interval, daily: String(cfg.plans.ai_max.dailyCredits), weekly: String(cfg.plans.ai_max.weeklyCredits), code: cfg.plans.ai_max.paystackPlanCode, fwPlan: cfg.plans.ai_max.flutterwavePlanId, creditsPrice: String(cfg.plans.ai_max.creditsPrice || ""), blurb: cfg.plans.ai_max.blurb },
   });
   const [freeEnabled, setFreeEnabled] = useState(cfg.freeCreations.enabled);
   const [freeCounts, setFreeCounts] = useState({ free: cfg.freeCreations.free === null ? "" : String(cfg.freeCreations.free), pro: cfg.freeCreations.pro === null ? "" : String(cfg.freeCreations.pro), business: cfg.freeCreations.business === null ? "" : String(cfg.freeCreations.business) });
@@ -71,8 +72,8 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
   const [customMin, setCustomMin] = useState(String(cfg.wallet.custom.minCredits));
   const [customMax, setCustomMax] = useState(String(cfg.wallet.custom.maxCredits));
   const [provider] = useState(cfg.wallet.provider);
-  // which rail takes a payment, per market and purpose (lib/payments/router.ts) — saved as it is: Paystack everywhere since 2026-10-17
-  const [routing] = useState<PaymentRouting>(cfg.wallet.routing);
+  // which rail takes a payment, per market and purpose (lib/payments/router.ts) — editable since Flutterwave Part 5 (PaymentRoutingEditor)
+  const [routing, setRouting] = useState<PaymentRouting>(cfg.wallet.routing);
   const [memberChoice] = useState<boolean>(cfg.wallet.memberChoice);
   // 0193: member-to-member credit transfers
   const [xfer, setXfer] = useState({ enabled: cfg.wallet.transfers.enabled, fee: String(cfg.wallet.transfers.feePercent), depFee: String(cfg.wallet.transfers.depositedFeePercent), min: String(cfg.wallet.transfers.minCredits), max: String(cfg.wallet.transfers.maxCredits), daily: String(cfg.wallet.transfers.dailyMaxCredits) });
@@ -109,6 +110,31 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
     }
   };
 
+  // 2026-10-23: "Check with Flutterwave" — the payment plan read back (name, amount, currency, interval) before it is saved
+  const [fwCheck, setFwCheck] = useState<Record<AiPlanId, { busy: boolean; text: string | null; ok: boolean }>>({ ai_pro: { busy: false, text: null, ok: false }, ai_max: { busy: false, text: null, ok: false } });
+  const checkFw = async (id: AiPlanId) => {
+    const planId = plans[id].fwPlan.trim();
+    setFwCheck((c) => ({ ...c, [id]: { busy: true, text: null, ok: false } }));
+    try {
+      const res = await fetch("/api/admin/ai/plans/verify-flutterwave", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: planId, for: id }) });
+      const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; usable?: boolean; checkoutCurrency?: string; compat?: { ok: boolean; detail?: string } | null; plan?: { name: string; amountMinor: number | null; currency: string; interval: string; active: boolean } } | null;
+      if (json?.ok && json.plan && json.compat) {
+        // Part 6: the checkout's own rule, against the SAVED price (save first after changing the price)
+        const p = json.plan;
+        const amount = p.amountMinor === null ? "no fixed amount" : `${p.currency} ${(p.amountMinor / 100).toFixed(2)}`;
+        setFwCheck((c) => ({ ...c, [id]: { busy: false, ok: json.compat!.ok, text: json.compat!.ok ? `Flutterwave: "${p.name}" — ${amount} ${p.interval}, equal to the saved price. It will be used.` : `Flutterwave: "${p.name}" — ${amount} ${p.interval}. Won't be used: ${json.compat!.detail}` } }));
+      } else if (json?.ok && json.plan) {
+        const amount = json.plan.amountMinor === null ? "no fixed amount (members pay the card price)" : `${json.plan.currency} ${(json.plan.amountMinor / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+        const warn = !json.plan.active ? " — this plan is not active, it will not be used." : json.plan.currency !== json.checkoutCurrency ? ` — not ${json.checkoutCurrency}: Flutterwave charges ${json.checkoutCurrency} here, so this plan will not be used.` : ".";
+        setFwCheck((c) => ({ ...c, [id]: { busy: false, ok: !!json.usable, text: `Flutterwave: "${json.plan!.name}" — ${amount} ${json.plan!.interval}${warn} The card shows ${symbol}${plans[id].price || "0"}/${plans[id].interval === "yearly" ? "year" : "month"}.` } }));
+      } else {
+        setFwCheck((c) => ({ ...c, [id]: { busy: false, ok: false, text: json?.error ?? "Flutterwave did not answer." } }));
+      }
+    } catch {
+      setFwCheck((c) => ({ ...c, [id]: { busy: false, ok: false, text: "Network error." } }));
+    }
+  };
+
   const payload = useMemo(
     () => ({
       enabled,
@@ -123,6 +149,7 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
             dailyCredits: int(plans[id].daily, cfg.plans[id].dailyCredits),
             weeklyCredits: int(plans[id].weekly, cfg.plans[id].weeklyCredits),
             paystackPlanCode: plans[id].code.trim(),
+            flutterwavePlanId: plans[id].fwPlan.trim(),
             creditsPrice: plans[id].creditsPrice.trim() === "" ? 0 : int(plans[id].creditsPrice, 0),
             blurb: plans[id].blurb.trim() || cfg.plans[id].blurb,
           },
@@ -144,6 +171,8 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
         custom: { enabled: customEnabled, minCredits: int(customMin, cfg.wallet.custom.minCredits), maxCredits: int(customMax, cfg.wallet.custom.maxCredits) },
         provider,
         routing,
+        // Part 2.1: the table above was read under the current rules — saved as such, so it is authoritative from now on
+        routingVersion: cfg.wallet.routingVersion,
         memberChoice,
         transfers: { enabled: xfer.enabled, feePercent: Math.min(50, Math.max(0, Number(xfer.fee) || 0)), depositedFeePercent: Math.min(50, Math.max(0, Number(xfer.depFee) || 0)), minCredits: int(xfer.min, cfg.wallet.transfers.minCredits), maxCredits: int(xfer.max, cfg.wallet.transfers.maxCredits), dailyMaxCredits: int(xfer.daily, cfg.wallet.transfers.dailyMaxCredits) },
       },
@@ -160,6 +189,9 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
   /* the same bounds the server enforces, refused before the request leaves */
   const problems = useMemo(() => {
     const out: string[] = [];
+    // the same check the server makes before saving (Part 5)
+    const routingProblem = paymentRoutingProblem(payload.wallet.routing);
+    if (routingProblem) out.push(`Payment routing: ${routingProblem}`);
     const B = AI_PLANS_BOUNDS;
     for (const id of AI_PLAN_IDS) {
       const p = payload.plans[id];
@@ -192,7 +224,8 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
     if (!payload.enabled) out.push("The AI plans are OFF: nothing can be bought and no credits are spent; the wallet and the complimentary creations work as before.");
     for (const id of AI_PLAN_IDS) {
       const p = payload.plans[id];
-      if (p.enabled && !p.paystackPlanCode) out.push(`${p.label} has no Paystack plan code — it is shown as coming soon and cannot be bought.`);
+      if (p.enabled && !p.paystackPlanCode && !p.flutterwavePlanId) out.push(`${p.label} has no Paystack plan code or Flutterwave plan id — it is shown as coming soon and cannot be bought.`);
+      else if (p.enabled && !p.paystackPlanCode) out.push(`${p.label} has no Paystack plan code — Flutterwave only: members who can't pay by card, or anyone while Flutterwave is unavailable, can't buy it.`);
     }
     if (payload.walletFallback === "allow") out.push("Wallet fallback = allow: a plan member whose allowance is short is charged from their balance without being asked.");
     if (!payload.wallet.packs.some((p) => p.enabled) && !payload.wallet.custom.enabled) out.push("No pack is on and the custom amount is off: nobody can buy credits.");
@@ -286,6 +319,15 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
                       </div>
                       {p.code.trim() && !/^PLN_[A-Za-z0-9]{4,60}$/.test(p.code.trim()) ? <span className="mt-1 block text-[11px] text-rose-600">Not a plan code — it must start with PLN_. Saving will leave the plan as “coming soon”.</span> : null}
                       {codeCheck[id].text ? <span className={cn("mt-1 block text-[11px] leading-relaxed", codeCheck[id].ok ? "text-emerald-700 dark:text-emerald-300" : "text-rose-600")}>{codeCheck[id].text}</span> : null}
+                    </Field>
+                    <Field id={`${id}-fw-plan`} className="col-span-2" label="Flutterwave plan id (USD) — tried first" hint="Flutterwave dashboard → Payments → Payment plans → the plan → its id (a number). Card only; members paying another way use Paystack. Empty = Paystack only.">
+                      <div className="mt-1 flex gap-2">
+                        <input id={`${id}-fw-plan`} inputMode="numeric" value={p.fwPlan} onChange={(e) => set({ fwPlan: e.target.value.replace(/[^0-9]/g, "") })} className={cn(input, "mt-0 min-w-0 flex-1")} placeholder="e.g. 123456" />
+                        <button type="button" onClick={() => checkFw(id)} disabled={fwCheck[id].busy || !p.fwPlan.trim()} className="shrink-0 rounded-xl border border-border px-3 text-xs font-semibold disabled:opacity-50">
+                          {fwCheck[id].busy ? "Checking…" : "Check with Flutterwave"}
+                        </button>
+                      </div>
+                      {fwCheck[id].text ? <span className={cn("mt-1 block text-[11px] leading-relaxed", fwCheck[id].ok ? "text-emerald-700 dark:text-emerald-300" : "text-rose-600")}>{fwCheck[id].text}</span> : null}
                     </Field>
                     <Field id={`${id}-credits-price`} label="Price when paid with credits" hint="Credits for one period of this plan. Empty = the plan price at the normal credit rate.">
                       <input id={`${id}-credits-price`} inputMode="numeric" value={p.creditsPrice} onChange={(e) => set({ creditsPrice: e.target.value.replace(/[^0-9]/g, "") })} placeholder="Normal rate" className={small} />
@@ -466,8 +508,12 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
               </div>
             </div>
             <p className="text-xs font-semibold text-muted-foreground">Payments</p>
-            <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">Every top-up, AI plan and ad campaign is paid through Paystack, in every country.</p>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">Top-ups and ad campaigns go to Flutterwave (USD) first once its account is confirmed on the server, with Paystack (NGN) as the backup; until then — and always for AI plans — Paystack.</p>
           </div>
+        </Group>
+
+        <Group title="Payment routing — which provider takes each payment">
+          <PaymentRoutingEditor value={routing} busy={busy} onChange={setRouting} />
         </Group>
 
         <Group title="Reset">

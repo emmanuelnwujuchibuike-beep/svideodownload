@@ -16,7 +16,7 @@ import { createSqlBridge, loadPGlite, subHarnessStub } from "@/lib/testing/pglit
  * MOCKED: Supabase PostgREST/auth (the in-memory client + a mocked server session), Paystack (initialize,
  * verify, transfers — scripted answers, nothing leaves the test), R2 (presign stand-ins), push and email
  * senders, the FX rate. REAL: the route handlers, lib/sub/*, and the SQL money functions from
- * supabase/migrations (0227 0231 0237 0239 0247 0248 0250 0254 0256). PGlite is not a repo dependency:
+ * supabase/migrations (0227 0231 0237 0239 0247 0248 0250 0254 0256 0258 0276). PGlite is not a repo dependency:
  * when it can't be found this suite SKIPS (see loadPGlite) — it never passes without running.
  */
 
@@ -125,7 +125,7 @@ describe.skipIf(!PGlite)("the Exclusive journey, end to end (real SQL money func
     });
     bridge = await createSqlBridge(PGlite!, db, {
       setup: [subHarnessStub()],
-      migrations: ["0227_sub_monetization.sql", "0231_sub_promo_dismiss.sql", "0237_sub_post_thumbs.sql", "0239_private_post_interactions.sql", "0247_sub_settlement_hardening.sql", "0248_sub_post_audience_feed.sql", "0250_sub_membership_lifecycle.sql", "0254_payout_reversal_dispute_restore.sql", "0256_withdrawal_rejection_settles_debt.sql", "0258_withdrawal_flat_fee.sql"],
+      migrations: ["0227_sub_monetization.sql", "0231_sub_promo_dismiss.sql", "0237_sub_post_thumbs.sql", "0239_private_post_interactions.sql", "0247_sub_settlement_hardening.sql", "0248_sub_post_audience_feed.sql", "0250_sub_membership_lifecycle.sql", "0254_payout_reversal_dispute_restore.sql", "0256_withdrawal_rejection_settles_debt.sql", "0258_withdrawal_flat_fee.sql", "0276_open_checkout_guard.sql"],
       userIds: [CREATOR, SUB, STRANGER, ADMIN],
     });
     // JOURNEY_MUTANT=dup-settle breaks ONE protection in the real SQL (settle forgets "already paid"):

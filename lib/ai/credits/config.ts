@@ -52,6 +52,12 @@ export interface AiPlanConfig {
   /** PLN_… from the Paystack dashboard. Empty = Paystack cannot sell this plan. */
   paystackPlanCode: string;
   /**
+   * The Flutterwave PAYMENT PLAN id (a number, Flutterwave dashboard → Payments → Payment plans) — the USD plan
+   * (owner 2026-10-23: plans go to Flutterwave first, Paystack only as the backup). Empty = Flutterwave cannot sell
+   * this plan. Card only (Flutterwave payment plans charge cards); a member paying another way uses Paystack.
+   */
+  flutterwavePlanId: string;
+  /**
    * 0194 (owner 2026-10-07: "credits used for subscription should not be calculated with the normal
    * rate — the credit price for a subscription can be set by admin"): what ONE period of this plan
    * costs when paid with wallet credits. 0 = priced at the normal credit rate (priceCents ÷ centsPerCredit).
@@ -119,8 +125,8 @@ export const AI_PLANS_BOUNDS = {
 export const AI_PLANS_DEFAULTS: AiPlansConfig = {
   enabled: true,
   plans: {
-    ai_pro: { enabled: true, label: "AI Pro", priceCents: 1000, interval: "monthly", dailyCredits: 15, weeklyCredits: 70, paystackPlanCode: "", creditsPrice: 0, blurb: "Every Frenz AI tool — video, audio, voice cloning and lip sync — with a daily allowance of credits." },
-    ai_max: { enabled: true, label: "AI Max", priceCents: 2000, interval: "monthly", dailyCredits: 50, weeklyCredits: 250, paystackPlanCode: "", creditsPrice: 0, blurb: "Everything in AI Pro with the largest allowance — the maximum AI usage tier." },
+    ai_pro: { enabled: true, label: "AI Pro", priceCents: 1000, interval: "monthly", dailyCredits: 15, weeklyCredits: 70, paystackPlanCode: "", flutterwavePlanId: "", creditsPrice: 0, blurb: "Every Frenz AI tool — video, audio, voice cloning and lip sync — with a daily allowance of credits." },
+    ai_max: { enabled: true, label: "AI Max", priceCents: 2000, interval: "monthly", dailyCredits: 50, weeklyCredits: 250, paystackPlanCode: "", flutterwavePlanId: "", creditsPrice: 0, blurb: "Everything in AI Pro with the largest allowance — the maximum AI usage tier." },
   },
   // null = the count on the Character Replace tab (`freeAccess.creationsPerAccount`) — one control until the operator sets a plan apart
   freeCreations: { enabled: true, free: null, pro: null, business: null },
@@ -212,6 +218,7 @@ function normalizePlan(raw: unknown, d: AiPlanConfig): AiPlanConfig {
     // a week can never allow less than a day
     weeklyCredits: Math.max(daily, int(r.weeklyCredits, d.weeklyCredits, AI_PLANS_BOUNDS.weeklyCredits.min, AI_PLANS_BOUNDS.weeklyCredits.max)),
     paystackPlanCode: planCode(r.paystackPlanCode),
+    flutterwavePlanId: typeof r.flutterwavePlanId === "string" && /^\d{1,12}$/.test(r.flutterwavePlanId.trim()) ? r.flutterwavePlanId.trim() : typeof r.flutterwavePlanId === "number" && Number.isInteger(r.flutterwavePlanId) && r.flutterwavePlanId > 0 ? String(r.flutterwavePlanId) : "",
     creditsPrice: int(r.creditsPrice, 0, 0, 10_000_000),
     blurb: text(r.blurb, d.blurb, 160),
   };
@@ -294,7 +301,8 @@ export function publicAiPlansConfig(c: AiPlansConfig, currency: { code: string; 
     symbol: currency.symbol,
     plans: AI_PLAN_IDS.filter((id) => c.plans[id].enabled).map((id) => {
       const p = c.plans[id];
-      return { id, label: p.label, priceCents: p.priceCents, interval: p.interval, dailyCredits: p.dailyCredits, weeklyCredits: p.weeklyCredits, blurb: p.blurb, purchasable: c.enabled && p.paystackPlanCode.length > 0, creditsPrice: planCreditsPrice(p, c.credits.centsPerCredit) };
+      return { id, label: p.label, priceCents: p.priceCents, interval: p.interval, dailyCredits: p.dailyCredits, weeklyCredits: p.weeklyCredits, blurb: p.blurb, // buyable on either rail: a Paystack PLN_ code or a Flutterwave plan id (2026-10-23); the checkout decides which is usable
+        purchasable: c.enabled && (p.paystackPlanCode.length > 0 || p.flutterwavePlanId.length > 0), creditsPrice: planCreditsPrice(p, c.credits.centsPerCredit) };
     }),
     walletFallback: c.walletFallback,
     centsPerCredit: c.credits.centsPerCredit,

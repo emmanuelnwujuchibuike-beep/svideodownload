@@ -48,7 +48,7 @@ describe("the 10-minute cron runs both Rewards v2 sweeps", () => {
     for (const fn of ["sweepFollowerMilestones", "sweepAffiliateCommissions"]) {
       expect(cron).toContain(`${fn}().catch(`);
     }
-    expect(cron).toMatch(/followerMilestones, affiliateCommissions \}\);/);
+    expect(cron).toMatch(/followerMilestones, affiliateCommissions[,\s}]/);
   });
 
   it("pushes only after the database granted, and the commission is converted before the grant", () => {

@@ -2,7 +2,7 @@
 
 import { BadgeCheck, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * Paying for the blue tick (0268, owner 2026-10-22). The offer — price and period — is the admin's; the
@@ -25,38 +25,64 @@ export function PaidVerificationCard({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState<"idle" | "checking" | "pending" | "failed">("idle");
+  // Part 4: "unchecked" = the confirm request itself failed (offline, server busy) — unknown, never shown as a failure
+  const [confirming, setConfirming] = useState<"idle" | "checking" | "pending" | "unchecked" | "failed">("idle");
   const asked = useRef(false);
+  const paidRef = useRef<string | null>(null);
+  const inflight = useRef(false);
+
+  /*
+    Asks the server to settle THIS reference (idempotent: the purchase flips initiated → paid once) — never a new
+    payment. Polled a few times for a bank transfer or USSD, then "still confirming" with a Check again that asks the
+    same question once more. The tick comes only from the server's answer, never from this URL.
+  */
+  const confirmPaid = useCallback(async (attempts: number) => {
+    const ref = paidRef.current;
+    if (!ref || inflight.current) return;
+    inflight.current = true;
+    setConfirming("checking");
+    let tries = 0;
+    const ask = async (): Promise<void> => {
+      tries++;
+      const res = await fetch("/api/verification/paid/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reference: ref }) }).catch(() => null);
+      const json = (await res?.json().catch(() => null)) as { status?: string } | null;
+      if (json?.status === "paid") {
+        window.history.replaceState(null, "", window.location.pathname);
+        inflight.current = false;
+        setConfirming("idle");
+        router.refresh();
+        return;
+      }
+      if (json?.status === "failed" || json?.status === "unknown") {
+        inflight.current = false;
+        setConfirming("failed");
+        return;
+      }
+      // a bank transfer or USSD payment can take a moment: ask again a few times, then say so
+      if (tries < attempts) {
+        window.setTimeout(() => void ask(), 4000);
+        return;
+      }
+      inflight.current = false;
+      setConfirming(json?.status === "pending" ? "pending" : "unchecked");
+    };
+    await ask();
+  }, [router]);
 
   useEffect(() => {
     if (asked.current) return;
     const ref = new URLSearchParams(window.location.search).get("paid");
     if (!ref) return;
     asked.current = true;
-    setConfirming("checking");
-    let tries = 0;
-    const ask = async () => {
-      tries++;
-      const res = await fetch("/api/verification/paid/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reference: ref }) }).catch(() => null);
-      const json = (await res?.json().catch(() => null)) as { status?: string } | null;
-      if (json?.status === "paid") {
-        window.history.replaceState(null, "", window.location.pathname);
-        setConfirming("idle");
-        router.refresh();
-        return;
-      }
-      if (json?.status === "failed" || json?.status === "unknown") {
-        setConfirming("failed");
-        return;
-      }
-      // a bank transfer or USSD payment can take a moment: ask again a few times, then say so
-      if (tries < 6) window.setTimeout(() => void ask(), 4000);
-      else setConfirming("pending");
-    };
-    void ask();
-  }, [router]);
+    paidRef.current = ref;
+    void confirmPaid(6);
+  }, [confirmPaid]);
 
+  // Part 4: a synchronous latch — two taps in the same frame (before "busy" re-renders) start ONE checkout
+  const starting = useRef(false);
   const pay = async () => {
+    if (starting.current) return;
+    starting.current = true;
     setBusy(true);
     setProblem(null);
     try {
@@ -64,12 +90,14 @@ export function PaidVerificationCard({
       const json = (await res.json().catch(() => null)) as { url?: string; error?: string } | null;
       if (!res.ok || !json?.url) {
         setProblem(json?.error ?? "Couldn't open the payment. Try again.");
+        starting.current = false;
         setBusy(false);
         return;
       }
       window.location.href = json.url;
     } catch {
       setProblem("Couldn't reach the server. Check your connection.");
+      starting.current = false;
       setBusy(false);
     }
   };
@@ -104,14 +132,20 @@ export function PaidVerificationCard({
             <>
               <p className="m-0 text-[15px] font-bold">Get verified now</p>
               <p className="m-0 mt-0.5 text-[13px] text-muted-foreground">
-                Skip the application: the blue tick {term} for {price}, charged in your local currency at today&apos;s rate.
+                Skip the application: the blue tick {term} for {price}. The secure checkout shows the exact amount in the currency it charges.
               </p>
             </>
           )}
-          {confirming === "pending" ? <p className="m-0 mt-2 text-[12.5px] text-amber-700">Your payment is still being confirmed. The tick appears as soon as it clears — you can leave this page.</p> : null}
-          {confirming === "failed" ? <p className="m-0 mt-2 text-[12.5px] text-rose-600">That payment didn&apos;t go through. Nothing was granted — you can try again.</p> : null}
-          {problem ? <p className="m-0 mt-2 text-[12.5px] text-rose-600">{problem}</p> : null}
-          {!verified || paidUntil ? (
+          {confirming === "pending" ? <p className="m-0 mt-2 text-[12.5px] text-amber-700 dark:text-amber-300" role="status">Your payment is still being confirmed. The tick appears as soon as it clears — you don&apos;t need to pay again, and you can leave this page.</p> : null}
+          {confirming === "unchecked" ? <p className="m-0 mt-2 text-[12.5px] text-amber-700 dark:text-amber-300" role="status">We couldn&apos;t check your payment just now. If you paid, the tick appears once it clears — you don&apos;t need to pay again.</p> : null}
+          {confirming === "failed" ? <p className="m-0 mt-2 text-[12.5px] text-rose-600" role="status">That payment didn&apos;t go through. Nothing was granted — you can try again.</p> : null}
+          {problem ? <p className="m-0 mt-2 text-[12.5px] text-rose-600" role="alert">{problem}</p> : null}
+          {confirming === "pending" || confirming === "unchecked" ? (
+            // a payment may still be on its way: no second Pay here — only the same status question again
+            <button type="button" onClick={() => void confirmPaid(1)} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-full border border-blue-500/40 px-5 text-[14px] font-bold text-blue-700 transition active:scale-[0.98] dark:text-blue-300">
+              Check again
+            </button>
+          ) : !verified || paidUntil ? (
             <button type="button" onClick={() => void pay()} disabled={busy} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-full bg-blue-600 px-5 text-[14px] font-bold text-white transition active:scale-[0.98] disabled:opacity-60">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
               {verified ? `Renew · ${price}` : `Pay ${price}`}

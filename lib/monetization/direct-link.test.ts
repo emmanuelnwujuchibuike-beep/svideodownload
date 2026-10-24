@@ -38,11 +38,23 @@ describe("Monetag direct link (owner, 2026-10-16)", () => {
 
   it("is served only when Monetag is on, it is enabled, it has a URL and a spot", () => {
     const on = { enabled: true, url: OWNER_LINK, spots: { wallpaper: true, resultPreview: false, adClose: false }, chancePercent: 40 };
-    expect(publicDirectLink(on, true)).toEqual({ url: OWNER_LINK, spots: ["wallpaper"], chancePercent: 40 });
+    expect(publicDirectLink(on, true)).toEqual({ provider: "monetag", url: OWNER_LINK, spots: ["wallpaper"], chancePercent: 40 });
     expect(publicDirectLink(on, false)).toBeNull();
     expect(publicDirectLink({ ...on, enabled: false }, true)).toBeNull();
     expect(publicDirectLink({ ...on, url: "" }, true)).toBeNull();
     expect(publicDirectLink({ ...on, spots: { wallpaper: false, resultPreview: false, adClose: false } }, true)).toBeNull();
+  });
+
+  it("Adsterra Smartlink (2026-10-24): served when the admin picked Adsterra, only with ADSTERRA's switch on; Monetag's link is not used then", () => {
+    const SMART = "https://www.profitableratecpm.com/k1abc2def?key=0123456789abcdef";
+    const on = { enabled: true, provider: "adsterra", url: OWNER_LINK, adsterraUrl: SMART, spots: { wallpaper: true, resultPreview: false, adClose: false }, chancePercent: 40 };
+    expect(publicDirectLink(on, false, true)).toEqual({ provider: "adsterra", url: SMART, spots: ["wallpaper"], chancePercent: 40 });
+    expect(publicDirectLink(on, true, false)).toBeNull();
+    expect(publicDirectLink({ ...on, adsterraUrl: "" }, true, true)).toBeNull();
+    // Monetag picked: Adsterra's switch alone never serves it
+    expect(publicDirectLink({ ...on, provider: "monetag" }, false, true)).toBeNull();
+    expect(normalizeDirectLink({ adsterraUrl: "javascript:alert(1)" }).adsterraUrl).toBe("");
+    expect(normalizeDirectLink({ enabled: true }).provider).toBe("monetag");
   });
 
   it("the roll follows the chance: 100% always, 1% almost never", () => {
@@ -60,7 +72,7 @@ describe("Monetag direct link (owner, 2026-10-16)", () => {
     expect(code("features/downloader/preview-card.tsx")).toContain("onClickCapture={() => openDirectLink()}");
     expect(code("features/wallpapers/wallpaper-reels.tsx")).not.toContain("onClickCapture={openDirectLink}");
     expect(code("features/downloader/preview-card.tsx")).not.toContain("onClickCapture={openDirectLink}");
-    expect(code("app/api/ads/config/route.ts")).toContain("monetagDirectLink: publicDirectLink(settings.monetagDirectLink, settings.monetag === true)");
+    expect(code("app/api/ads/config/route.ts")).toContain("monetagDirectLink: publicDirectLink(settings.monetagDirectLink, settings.monetag === true, settings.adsterra === true)");
     expect(code("lib/monetization/settings.ts")).toContain("merged.monetagDirectLink = normalizeDirectLink(merged.monetagDirectLink)");
   });
 

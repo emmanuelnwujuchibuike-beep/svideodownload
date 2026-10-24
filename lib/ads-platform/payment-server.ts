@@ -8,8 +8,13 @@ import { resolveCheckoutRate } from "@/lib/ai/character-replace/fx-rate-server";
 import { quoteCheckout } from "@/lib/ai/character-replace/topup-fx";
 import type { PaymentMarket, TopupProviderId } from "@/lib/ai/credits/wallet-config";
 import { getLandingSettings } from "@/lib/landing/settings";
+import { createFlutterwaveCheckout, flutterwaveFailureIsDefinite, verifyFlutterwaveByReference } from "@/lib/flutterwave/client";
+import { FLUTTERWAVE_CHECKOUT_CURRENCY } from "@/lib/flutterwave/config";
+import { chargeMatches, type VerifiedCharge } from "@/lib/payments/charge";
+import { usableRails } from "@/lib/payments/rails";
+import { newFlutterwaveReference } from "@/lib/payments/references";
 import { routePayment } from "@/lib/payments/router";
-import { initializeAdCheckout, paystackEnabled, paystackFailureIsDefinite, verifyTransaction } from "@/lib/paystack/paystack";
+import { initializeAdCheckout, paystackFailureIsDefinite, paystackRefusedForSure, verifyTransaction } from "@/lib/paystack/paystack";
 import { SITE_URL } from "@/lib/site";
 
 import { notifyAdvertiser } from "./ad-notify";
@@ -55,8 +60,9 @@ type Rpc = { ok: boolean; reason?: string; [k: string]: unknown };
 export const AD_PAYSTACK_PREFIX = "frenz_ad_";
 const PROVIDER_CHECK_MIN_AGE_MS = 5_000;
 
-/** A row written by a removed provider: held as it is, for manual reconciliation. */
-const legacyProvider = (a: { provider: string }) => a.provider !== "paystack";
+/** A row written by a removed provider (Bachs): held as it is, for manual reconciliation. Paystack and Flutterwave (Part 2) are live rails. */
+const legacyProvider = (a: { provider: string }) => a.provider !== "paystack" && a.provider !== "flutterwave";
+const liveProvider = (a: { provider: string }): TopupProviderId => (a.provider === "flutterwave" ? "flutterwave" : "paystack");
 
 const log = (event: string, fields: Record<string, unknown>) => console.info(`[ads-pay] ${event}`, fields);
 
@@ -138,7 +144,7 @@ export async function createAdCampaignPayment(
   if (open) {
     // a removed provider's open checkout is never handed back (it would send the member there): held
     if (legacyProvider(open)) return { kind: "verifying", reference: open.reference };
-    if (open.status === "pending" && open.checkout_url) return { kind: "redirect", url: open.checkout_url, reference: open.reference, provider: "paystack" };
+    if (open.status === "pending" && open.checkout_url) return { kind: "redirect", url: open.checkout_url, reference: open.reference, provider: liveProvider(open) };
     const resolved = await resolveUncertainAttempt(db, open);
     if (resolved.kind !== "refused" || resolved.code !== "released") return resolved;
   }
@@ -157,19 +163,20 @@ export async function createAdCampaignPayment(
   const totalUsd = Number(quote.total_minor);
 
   const landing = await getLandingSettings();
-  const paystackOk = await paystackEnabled();
+  // Part 2: Flutterwave (USD, the quote as it is) when its account capability is confirmed; Paystack (NGN) otherwise or after a refusal
+  const usable = await usableRails("ad_campaign");
   const candidates = routePayment({
     purpose: "ad_campaign",
     market: input.market,
     routing: landing.frenzAiPlans.wallet.routing,
-    usable: (p) => p === "paystack" && paystackOk,
+    usable,
     preferred: landing.frenzAiPlans.wallet.memberChoice ? input.preferredProvider : undefined,
   });
   if (!candidates.length) return { kind: "refused", code: "payments_unavailable", status: 503 };
 
   return firstCheckout(candidates, (provider, i) => {
     log("payment_provider_selected", { applicationId, provider, attempt: i + 1, market: input.market });
-    return beginPaystack(db, input, applicationId, input.quoteId, totalUsd, landing);
+    return provider === "flutterwave" ? beginFlutterwave(db, input, applicationId, input.quoteId, totalUsd) : beginPaystack(db, input, applicationId, input.quoteId, totalUsd, landing);
   });
 }
 
@@ -186,7 +193,8 @@ export async function firstCheckout(candidates: readonly TopupProviderId[], tryP
     if (r.kind !== "refused" || r.code !== "provider_refused") return r;
     if (i + 1 < candidates.length) console.warn("[ads-pay] fallback_triggered", { from: provider, to: candidates[i + 1] });
   }
-  return { kind: "refused", code: "payment_not_started", status: 502 };
+  // 503, never 502: Cloudflare replaces an origin 502 with its own HTML page. `code`, not the status, decides the fallback
+  return { kind: "refused", code: "payment_not_started", status: 503 };
 }
 
 async function begin(db: Db, input: { userId: string }, applicationId: string, quoteId: string, reference: string, provider: TopupProviderId, totalUsd: number, providerCurrency: string, providerAmount: number, fx: number | null, metadata: Record<string, unknown>): Promise<PaymentStart | null> {
@@ -198,7 +206,7 @@ async function begin(db: Db, input: { userId: string }, applicationId: string, q
     // the unique index lost a race to a parallel tap - hand back that one
     if (error.code === "23505") {
       const open = await openAttempt(db, applicationId);
-      if (open?.checkout_url && !legacyProvider(open)) return { kind: "redirect", url: open.checkout_url, reference: open.reference, provider: "paystack" };
+      if (open?.checkout_url && !legacyProvider(open)) return { kind: "redirect", url: open.checkout_url, reference: open.reference, provider: liveProvider(open) };
       return { kind: "verifying", reference: open?.reference ?? reference };
     }
     throw new Error(`ad_payment_begin: ${error.message}`);
@@ -249,12 +257,93 @@ async function beginPaystack(db: Db, input: { userId: string; email: string }, a
     if (paystackFailureIsDefinite(e)) {
       await release(db, reference, "failed", "checkout refused by provider");
       console.warn("[ads-pay] provider refused checkout", { provider: "paystack", reference, error: String(e).slice(0, 200) });
-      return { kind: "refused", code: "provider_refused", status: 502 };
+      return { kind: "refused", code: "provider_refused", status: 503 };
     }
     await release(db, reference, "verification_required", "checkout outcome unknown");
     console.warn("[ads-pay] checkout outcome unknown — held for verification", { provider: "paystack", reference, error: String(e).slice(0, 200) });
     return { kind: "verifying", reference };
   }
+}
+
+/**
+ * The Flutterwave rail (Part 2): USD — the quote's own currency — at the quoted amount, no
+ * conversion. Same attempt ledger (ad_payment_begin), same settle (ad_payment_settle checks the
+ * amount and currency against the row it wrote), same fallback rule. A row the database refuses
+ * (a CHECK from before migration 0271) is a refusal before anything was created: Paystack may follow.
+ */
+async function beginFlutterwave(db: Db, input: { userId: string; email: string }, applicationId: string, quoteId: string, totalUsd: number): Promise<PaymentStart> {
+  const reference = newFlutterwaveReference("ad_campaign");
+  let stop: PaymentStart | null;
+  try {
+    stop = await begin(db, input, applicationId, quoteId, reference, "flutterwave", totalUsd, FLUTTERWAVE_CHECKOUT_CURRENCY, totalUsd, null, { quoted_usd_cents: totalUsd });
+  } catch (e) {
+    console.warn("[ads-pay] flutterwave attempt not recorded", { reference, error: String(e).slice(0, 200) });
+    return { kind: "refused", code: "provider_refused", status: 503 };
+  }
+  if (stop) return stop;
+  try {
+    const url = await createFlutterwaveCheckout({ reference, amountMinor: totalUsd, currency: FLUTTERWAVE_CHECKOUT_CURRENCY, email: input.email, redirectUrl: returnUrl(reference), title: "Frenz ad campaign", meta: { application_id: applicationId, quote_id: quoteId } });
+    await db.from("ai_topup_attempts").update({ checkout_url: url, updated_at: new Date().toISOString() }).eq("reference", reference);
+    log("payment_session_created", { provider: "flutterwave", reference, applicationId, currency: FLUTTERWAVE_CHECKOUT_CURRENCY, amount: totalUsd });
+    return { kind: "redirect", url, reference, provider: "flutterwave" };
+  } catch (e) {
+    if (flutterwaveFailureIsDefinite(e)) {
+      await release(db, reference, "failed", "checkout refused by provider");
+      console.warn("[ads-pay] provider refused checkout", { provider: "flutterwave", reference, error: e instanceof Error ? e.name : "unknown" });
+      return { kind: "refused", code: "provider_refused", status: 503 };
+    }
+    await release(db, reference, "verification_required", "checkout outcome unknown");
+    console.warn("[ads-pay] checkout outcome unknown — held for verification", { provider: "flutterwave", reference, error: e instanceof Error ? e.name : "unknown" });
+    return { kind: "verifying", reference };
+  }
+}
+
+/** Ask Flutterwave about one of our ad references and act on the answer (verify-on-return, uncertain attempts, reconcile). */
+async function askFlutterwave(db: Db, a: Attempt, given?: VerifiedCharge): Promise<"settled" | "released" | "held" | "pending"> {
+  const charge = given ?? (await verifyFlutterwaveByReference(a.reference));
+  if (charge.status === "success") {
+    if (charge.reference !== a.reference) return "pending";
+    /*
+      🔴 Part 2.1: EXACTLY the amount and currency on the attempt row (lib/payments/charge.ts). ad_payment_settle
+      allows "at least" (one unit of rounding, kept as it is for Paystack), so a Flutterwave over- or underpayment
+      is stopped here and held as a mismatch for review — no campaign goes live on it.
+    */
+    const match = chargeMatches(charge, { provider: "flutterwave", reference: a.reference, amountMinor: Number(a.provider_amount ?? a.amount_cents), currency: a.provider_currency ?? a.currency });
+    if (!match.ok) {
+      await release(db, a.reference, "mismatch", `flutterwave ${match.mismatch}: paid ${charge.amountMinor ?? "?"} ${charge.currency ?? "?"}`);
+      console.error("[ads-pay] payment_mismatch", { reference: a.reference, provider: "flutterwave", mismatch: match.mismatch });
+      // money moved: HELD for review — never "released", which would let a new checkout open
+      return "held";
+    }
+    // ad_payment_settle checks provider, amount and currency against the attempt row again — never this charge's word alone
+    await settleVerified(db, { reference: a.reference, provider: "flutterwave", paidAmount: charge.amountMinor, paidCurrency: charge.currency, chargeId: charge.externalId, externalId: charge.externalId, fullPaymentAsserted: false, via: given ? "flutterwave webhook" : "flutterwave verify" });
+    return "settled";
+  }
+  // a checkout whose link was never handed out, unknown to Flutterwave: never created
+  if (charge.status === "not_found" && !a.checkout_url) {
+    await release(db, a.reference, "failed", "checkout never created");
+    return "released";
+  }
+  if (charge.status === "failed") {
+    await release(db, a.reference, "failed", charge.reason ?? "payment failed");
+    return "released";
+  }
+  if ((charge.status === "abandoned" || charge.status === "not_found") && Date.now() - Date.parse(a.created_at) > 30 * 60_000) {
+    await release(db, a.reference, "abandoned", "checkout abandoned");
+    return "released";
+  }
+  return "pending";
+}
+
+/** The Flutterwave webhook's door for an ad reference: the charge was ALREADY re-verified with the API by transaction id. */
+export async function handleFlutterwaveAdCharge(db: Db, charge: VerifiedCharge): Promise<string> {
+  if (!charge.reference) return "ad charge without reference";
+  const { data } = await db.from("ai_topup_attempts").select(ATTEMPT_COLUMNS).eq("reference", charge.reference).eq("purpose", "ad_campaign").maybeSingle();
+  const a = data as Attempt | null;
+  if (!a || a.provider !== "flutterwave") return "ad attempt not found";
+  const out = await askFlutterwave(db, a, charge);
+  if (out === "pending") throw new Error("ad payment still pending");
+  return `ad ${out}`;
 }
 
 /**
@@ -266,7 +355,15 @@ async function beginPaystack(db: Db, input: { userId: string; email: string }, a
  */
 export async function resolveUncertainAttempt(db: Db, a: Attempt): Promise<PaymentStart> {
   if (legacyProvider(a)) return { kind: "verifying", reference: a.reference };
-  if (a.status === "pending" && a.checkout_url) return { kind: "redirect", url: a.checkout_url, reference: a.reference, provider: "paystack" };
+  if (a.status === "pending" && a.checkout_url) return { kind: "redirect", url: a.checkout_url, reference: a.reference, provider: liveProvider(a) };
+  if (a.provider === "flutterwave") {
+    try {
+      const out = await askFlutterwave(db, a);
+      return out === "released" ? { kind: "refused", code: "released", status: 409 } : { kind: "verifying", reference: a.reference };
+    } catch {
+      return { kind: "verifying", reference: a.reference };
+    }
+  }
   try {
     const charge = await verifyTransaction(a.reference);
     if (charge.status === "success") {
@@ -276,7 +373,8 @@ export async function resolveUncertainAttempt(db: Db, a: Attempt): Promise<Payme
     await release(db, a.reference, "abandoned", "checkout created but never shown");
     return { kind: "refused", code: "released", status: 409 };
   } catch (e) {
-    if (paystackFailureIsDefinite(e)) {
+    // Part 4.2: only Paystack's own 4xx ("Transaction reference not found") — a 5xx or a missing key is not proof it was never created
+    if (paystackRefusedForSure(e)) {
       // "Transaction reference not found": it was never created
       await release(db, a.reference, "failed", "checkout never created");
       return { kind: "refused", code: "released", status: 409 };
@@ -459,11 +557,29 @@ function view(a: Attempt, campaigns: PaymentView["campaigns"]): PaymentView {
 }
 
 /** Ask the provider what happened to a pending attempt (verify-on-return, reconciliation). */
+/**
+ * Part 5 — an admin's "Recheck" of ONE ad payment: exactly the sweep's step (askProvider) for an OPEN attempt, so it
+ * settles through the same ad_payment_settle (idempotent) or releases on the same evidence. A settled, released or
+ * removed-provider attempt is answered as it stands — never re-asked.
+ */
+export async function reconcileAdAttempt(db: Db, reference: string): Promise<"checked" | "not_open" | "not_found"> {
+  const { data } = await db.from("ai_topup_attempts").select(ATTEMPT_COLUMNS).eq("reference", reference).eq("purpose", "ad_campaign").maybeSingle();
+  const a = data as Attempt | null;
+  if (!a) return "not_found";
+  if (!["pending", "verification_required"].includes(a.status)) return "not_open";
+  await askProvider(db, a);
+  return "checked";
+}
+
 async function askProvider(db: Db, a: Attempt): Promise<void> {
   // a removed provider's row: never re-asked, never released — held for manual reconciliation
   if (legacyProvider(a)) return;
   if (a.status === "verification_required" && !a.checkout_url) {
     await resolveUncertainAttempt(db, a);
+    return;
+  }
+  if (a.provider === "flutterwave") {
+    await askFlutterwave(db, a);
     return;
   }
   if (a.provider === "paystack") {
@@ -535,7 +651,7 @@ export async function reconcilePendingAdPayments(db: Db, now: number = Date.now(
     .from("ai_topup_attempts")
     .select(ATTEMPT_COLUMNS)
     .eq("purpose", "ad_campaign")
-    .eq("provider", "paystack")
+    .in("provider", ["paystack", "flutterwave"])
     .in("status", ["pending", "verification_required"])
     .lt("created_at", new Date(now - 2 * 60_000).toISOString())
     .gt("created_at", new Date(now - 48 * 3_600_000).toISOString())

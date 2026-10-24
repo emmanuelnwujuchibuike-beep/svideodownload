@@ -30,17 +30,19 @@ describe("🔴 a deposit is settled even when the member never comes back", () =
   const rec = code("lib/ai/wallet/reconcile-topups.ts");
   it("asks Paystack about the member's OWN pending top-ups — on demand, bounded, never a timer", () => {
     expect(rec).toContain('.eq("user_id", userId)');
-    expect(rec).toContain('.eq("status", "pending")');
-    expect(rec).toContain(".limit(MAX_PER_PASS)");
+    // Part 3: open = pending or held for verification; the member's read is bounded at 5, the cron sweep has its own bound
+    expect(rec).toContain('const OPEN = ["pending", "verification_required"] as const;');
+    expect(rec).toContain(".limit(5);");
     expect(rec).not.toMatch(/setInterval/);
-    expect(rec).toContain("if (charge.metadata?.user_id !== userId) return 0;");
+    // a charge that is not this attempt's member (or reference) never credits — held for review
+    expect(rec).toContain("charge.metadata?.user_id !== row.user_id");
   });
   it("a checkout Paystack calls abandoned is cancelled only after 30 minutes (it may still be open)", () => {
     expect(rec).toContain("const CANCEL_AFTER_MS = 30 * 60_000;");
     expect(rec).toContain('(charge.status === "abandoned" && old)');
   });
   it("credits through the ONE settle path the return uses — the same once-only credit as the webhook", () => {
-    expect(rec).toContain("settleCharacterReplaceCharge(userId, row.reference, charge)");
+    expect(rec).toContain("settleCharacterReplaceCharge(row.user_id, row.reference, charge)");
     const verify = code("app/api/ai/balance/topup/verify/route.ts");
     expect(verify).toContain("settleCharacterReplaceCharge(user.id, reference, charge)");
     expect(code("lib/ai/wallet/paystack-settle.ts")).toContain("creditVerifiedCharacterReplaceRecharge({");

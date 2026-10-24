@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { calledByThirdParty } from "@/lib/monetization/open-observer";
-import { DEFAULT_SPOT_POPUNDER, OWNER_POPUNDER_SNIPPET, normalizeSpotPopunder, publicSpotPopunder, spotOutcome } from "@/lib/monetization/spot-popunder";
+import { DEFAULT_SPOT_POPUNDER, OWNER_POPUNDER_SNIPPET, normalizeSpotPopunder, parseAdsterraSnippet, publicSpotPopunder, spotOutcome } from "@/lib/monetization/spot-popunder";
 
 /**
  * The spot pop-under (owner 2026-10-23), with the Part 2.1 safety rules: OFF unless an admin switched it
@@ -89,9 +89,47 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("Adsterra at the spots (owner, 2026-10-24: \"I want to try adsterra out\") — the admin picks the network", () => {
+  const ADSTERRA_CODE = "<script type='text/javascript' src='//pl27012345.profitableratecpm.com/0a/1b/2c/0a1b2c3d4e5f.js'></script>";
+  const AON = { ...ON, provider: "adsterra", adsterraSnippet: ADSTERRA_CODE };
+  const src = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
+
+  it("parses Adsterra's code to an https script address only (protocol-relative becomes https); anything else is refused", () => {
+    expect(parseAdsterraSnippet(ADSTERRA_CODE)).toEqual({ src: "https://pl27012345.profitableratecpm.com/0a/1b/2c/0a1b2c3d4e5f.js" });
+    expect(parseAdsterraSnippet("<script>alert(1)</script>")).toBeNull();
+    expect(parseAdsterraSnippet("<script src='http://x.example/a.js'></script>")).toBeNull();
+    expect(parseAdsterraSnippet("<script src='https://x.example/page.html'></script>")).toBeNull();
+    expect(parseAdsterraSnippet("")).toBeNull();
+  });
+
+  it("served as Adsterra (no zone) only with ADSTERRA's switch on — Monetag's switch does not count", () => {
+    expect(publicSpotPopunder(AON, false, true)).toEqual({ provider: "adsterra", src: "https://pl27012345.profitableratecpm.com/0a/1b/2c/0a1b2c3d4e5f.js", zone: null, cfAsync: false, spots: ["wallpaper", "resultPreview", "adClose"], spotsOnly: true, cooldownMinutes: 30 });
+    expect(publicSpotPopunder(AON, true, false)).toBeNull();
+    expect(publicSpotPopunder({ ...AON, adsterraSnippet: "" }, true, true)).toBeNull();
+    expect(publicSpotPopunder({ ...AON, enabled: false }, true, true)).toBeNull();
+  });
+
+  it("Monetag stays the pick (and Adsterra's switch doesn't serve it) unless the admin chose Adsterra; a row saved before has no provider", () => {
+    expect(publicSpotPopunder(ON, false, true)).toBeNull();
+    expect(normalizeSpotPopunder({ enabled: true }).provider).toBe("monetag");
+    expect(normalizeSpotPopunder({ provider: "something" }).provider).toBe("monetag");
+    expect(normalizeSpotPopunder({ provider: "adsterra" }).provider).toBe("adsterra");
+  });
+
+  it("the runtime labels the tag by network and keeps one set of tap rules; the admin form offers both networks", () => {
+    expect(src("features/monetization/direct-link-runtime.ts")).toContain('el.setAttribute(p.provider === "adsterra" ? "data-adsterra" : "data-monetag", "spot_popunder");');
+    const admin = src("features/admin/monetization-settings.tsx");
+    expect(admin).toContain('<SpotProviderPicker id="spot-popunder-network"');
+    expect(admin).toContain('<SpotProviderPicker id="direct-link-network"');
+    const route = src("app/api/admin/monetization/route.ts");
+    expect(route).toContain("parseAdsterraSnippet(v) !== null");
+    expect(route).toContain('(v.provider === "adsterra" ? v.adsterraSnippet : v.snippet) !== ""');
+  });
+});
+
 describe("the config — OFF unless an admin switched it on", () => {
   it("default OFF, the owner's zone still pre-filled; nothing is served while off", () => {
-    expect(DEFAULT_SPOT_POPUNDER).toEqual({ enabled: false, snippet: OWNER_POPUNDER_SNIPPET, spots: { wallpaper: true, resultPreview: true, adClose: true }, spotsOnly: true, cooldownMinutes: 30 });
+    expect(DEFAULT_SPOT_POPUNDER).toEqual({ enabled: false, provider: "monetag", snippet: OWNER_POPUNDER_SNIPPET, adsterraSnippet: "", spots: { wallpaper: true, resultPreview: true, adClose: true }, spotsOnly: true, cooldownMinutes: 30 });
     expect(publicSpotPopunder(DEFAULT_SPOT_POPUNDER, true)).toBeNull();
     expect(publicSpotPopunder(undefined, true)).toBeNull();
   });
@@ -104,7 +142,7 @@ describe("the config — OFF unless an admin switched it on", () => {
     expect(normalizeSpotPopunder({ enabled: false }).enabled).toBe(false);
   });
   it("explicitly ON: served with the parsed tag — only with Monetag on, a valid tag and a spot", () => {
-    expect(POP).toEqual({ src: "https://al5sm.com/tag.min.js", zone: "12054432", cfAsync: false, spots: ["wallpaper", "resultPreview", "adClose"], spotsOnly: true, cooldownMinutes: 30 });
+    expect(POP).toEqual({ provider: "monetag", src: "https://al5sm.com/tag.min.js", zone: "12054432", cfAsync: false, spots: ["wallpaper", "resultPreview", "adClose"], spotsOnly: true, cooldownMinutes: 30 });
     expect(publicSpotPopunder(ON, false)).toBeNull();
     expect(publicSpotPopunder({ ...ON, snippet: "<script>alert(1)</script>" }, true)).toBeNull();
     expect(publicSpotPopunder({ ...ON, snippet: "" }, true)).toBeNull();
@@ -287,7 +325,7 @@ describe("wiring", () => {
     expect(src("features/monetization/download-complete-ad.tsx")).toContain('data-ad-spot="adClose"');
     expect(src("features/ads-platform/serve/self-interstitial.tsx")).toContain('data-ad-spot="adClose"');
     expect(src("features/monetization/fullscreen-interstitial.tsx")).toContain("data-ad-spot={directLinkSpot}");
-    expect(src("app/api/ads/config/route.ts")).toContain("monetagSpotPopunder: publicSpotPopunder(settings.monetagSpotPopunder, settings.monetag === true)");
+    expect(src("app/api/ads/config/route.ts")).toContain("monetagSpotPopunder: publicSpotPopunder(settings.monetagSpotPopunder, settings.monetag === true, settings.adsterra === true)");
     expect(src("lib/monetization/settings.ts")).toContain("merged.monetagSpotPopunder = normalizeSpotPopunder(merged.monetagSpotPopunder)");
     expect(src("app/api/admin/monetization/route.ts")).toContain("monetagSpotPopunder: z");
     expect(src("features/admin/monetization-settings.tsx")).toContain("<SpotPopunderEditor");

@@ -2,7 +2,7 @@
 
 import { BadgeCheck, Check, Loader2, Lock, RotateCcw } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { EX_CARD, exPrimary } from "@/features/sub/ui";
 import { haptic } from "@/lib/motion/haptics";
@@ -34,8 +34,12 @@ export function CreatorSubscribeCard({
   const v = offerView({ creatorName, quote, membership, signedIn });
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  // Part 4: a synchronous latch — two taps in the same frame (before "busy" re-renders the button) start ONE checkout
+  const starting = useRef(false);
 
   const checkout = async () => {
+    if (starting.current) return;
+    starting.current = true;
     haptic("selection");
     setBusy(true);
     setNote(null);
@@ -45,6 +49,7 @@ export function CreatorSubscribeCard({
       window.location.assign(j.url);
       return;
     }
+    starting.current = false;
     setBusy(false);
     setNote(res?.status === 401 ? "Sign in again to subscribe." : (j?.error ?? "Couldn't open the payment. Nothing was charged. Try again."));
   };
@@ -131,7 +136,7 @@ export function CreatorSubscribeCard({
         )}
         {v.feeLine ? <p className="mt-2 text-center text-xs text-frenz-muted">{v.feeLine}</p> : null}
         <p className="mt-1 text-center text-xs text-frenz-muted">
-          {period ? `One payment for ${period} days. Nothing renews automatically — you renew when you choose. ` : ""}Paid securely with Paystack; unlocks once the payment is confirmed.
+          {period ? `One payment for ${period} days. Nothing renews automatically — you renew when you choose. ` : ""}Paid on a secure checkout; unlocks once the payment is confirmed.
         </p>
         {note ? (
           <p role="alert" className="mt-1.5 text-center text-[12.5px] font-medium text-rose-600 dark:text-rose-400">

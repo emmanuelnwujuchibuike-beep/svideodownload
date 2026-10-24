@@ -38,6 +38,7 @@ import {
 } from "@/lib/ai/character-replace/workspace";
 import { readAudioDuration, readImageSize, readVideoMetadata } from "@/features/ai/character-replace/read-media";
 import { track } from "@/lib/analytics/client";
+import { topupReturnLine } from "@/lib/ai/wallet/topup-return";
 import { haptic } from "@/lib/motion/haptics";
 
 /**
@@ -218,13 +219,8 @@ export function useCharacterReplaceWorkspace(opts: { initialMode?: ReplacementMo
         if (!alive.current) return;
         setLoads((l) => ({
           ...l,
-          topupNotice: verified.ok
-            ? verified.credited
-              ? "Payment received — your balance has been updated."
-              : verified.pending
-                ? "Your payment is still being confirmed. This will update shortly."
-                : null
-            : null,
+          // Part 4: one honest line for every outcome — including a failed payment and a check that couldn't run
+          topupNotice: topupReturnLine(verified),
         }));
       }
       await loadBalance();

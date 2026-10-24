@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fakeDb, type FakeDb } from "@/lib/testing/fake-supabase";
+import { scriptOpenCheckoutGuard } from "@/lib/testing/open-checkout-guard";
 
 /**
  * Frenz Exclusive Part 4 — the profile's Exclusive tab and the creator's studio, through the
@@ -26,7 +27,7 @@ vi.mock("@/lib/landing/settings", async () => {
   subCfg = { ...SUB_DEFAULTS };
   return { getLandingSettings: async () => ({ frenzRewards: { sub: subCfg }, frenzAiCharacterReplace: { recharge: { checkoutCurrency: "NGN" } } }) };
 });
-vi.mock("@/lib/paystack/paystack", () => ({ SUB_PURPOSE: "frenz_sub", verifyTransaction: vi.fn(), initializeSubCheckout: () => initCheckout(), paystackFailureIsDefinite: () => false }));
+vi.mock("@/lib/paystack/paystack", () => ({ SUB_PURPOSE: "frenz_sub", verifyTransaction: vi.fn(), initializeSubCheckout: () => initCheckout(), paystackFailureIsDefinite: () => false, paystackEnabled: async () => true }));
 vi.mock("@/lib/ai/character-replace/fx-rate-server", () => ({ resolveCheckoutRate: async () => ({ minorPerUsd: 150000 }) }));
 
 const { subTabFor } = await import("./profile");
@@ -73,6 +74,7 @@ beforeEach(() => {
   });
   db.unique.sub_purchases = [["reference"]];
   db.defaults.sub_purchases = { status: "initiated" }; // 0227's column default
+  scriptOpenCheckoutGuard(db);
 });
 
 describe("the profile's Exclusive tab", () => {

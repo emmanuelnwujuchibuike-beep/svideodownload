@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Subscription", robots: { index: false, follow: false } };
 
 /**
- * /sub/return — where Paystack sends a subscriber back. The payment is verified
+ * /sub/return — where the payment provider (Flutterwave or Paystack) sends a subscriber back. The payment is verified
  * with Paystack HERE (never from the URL), then settled in the database; only a
  * verified, settled payment sends them on to the post they wanted. A failed,
  * cancelled or still-pending payment unlocks nothing and says so.
@@ -65,12 +65,12 @@ export default async function SubReturnPage({ searchParams }: { searchParams: Pr
   if (!user) redirect(`/login?next=${encodeURIComponent(again)}`);
   const copy =
     status === "pending"
-      ? { title: "Confirming your payment…", line: "Paystack hasn't confirmed it yet. Nothing is unlocked until it does. A bank transfer or USSD payment can take a few minutes." }
+      ? { title: "Confirming your payment…", line: "The payment provider hasn't confirmed it yet. Nothing is unlocked until it does — you don't need to pay again. A bank transfer or USSD payment can take a few minutes." }
       : status === "mismatch"
         ? { title: "We couldn't match that payment", line: "The amount paid doesn't match the subscription, so nothing was unlocked. Our team has been alerted." }
         : status === "held"
           ? { title: "Your payment was received", line: "This creator removed you from their subscribers before the payment went through, so nothing was unlocked. The payment is recorded for a refund and our team will return it." }
-          : { title: "The payment didn't go through", line: "Nothing was unlocked for this subscription. If you were charged, it will settle automatically once Paystack confirms it." };
+          : { title: "The payment didn't go through", line: "Nothing was unlocked for this subscription. If you were charged, it will settle automatically once the payment provider confirms it." };
   return (
     <div className="mx-auto w-full max-w-md flex-1 px-4 py-16 text-center">
       <h1 className="text-[22px] font-extrabold tracking-[-0.02em]">{copy.title}</h1>

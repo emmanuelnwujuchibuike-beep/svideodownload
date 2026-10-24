@@ -20,6 +20,8 @@ import { formatCredits } from "@/lib/ai/credits/units";
 import { isActiveStatus, type AiJobView } from "@/lib/ai/jobs";
 import { track } from "@/lib/analytics/client";
 import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
+import { TopupReturnNotice } from "@/features/ai/wallet/topup-return-notice";
+import { useTopupReturn } from "@/features/ai/wallet/use-topup-return";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
@@ -79,6 +81,8 @@ export function VoiceCloningWorkspace({
   */
   const voicesHref = `${basePath.replace(/\/voice-cloning$/, "")}/voices`;
   const ws = useVoiceCloning({ initialJobId });
+  // the wallet re-reads itself (useWallet's realtime row): the notice only reports what the server settled
+  const topup = useTopupReturn();
   const cfg = ws.config?.config ?? null;
   const picker = useRef<HTMLInputElement | null>(null);
   const [plansSheet, setPlansSheet] = useState(false);
@@ -107,6 +111,8 @@ export function VoiceCloningWorkspace({
   return (
     <FrenzAIEnvironment stage={envStage} bare>
       <div className="pb-24">
+        {/* Part 4: coming back from a credit top-up started here — verified by the server, never by the URL */}
+        <TopupReturnNotice view={topup.view} onRecheck={topup.recheck} onDismiss={topup.dismiss} className="mx-4 mt-3" />
         {/*
           The shared Frenz AI hero (2026-09-27).
 

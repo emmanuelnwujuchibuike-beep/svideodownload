@@ -4,7 +4,10 @@ import { getLandingSettings } from "@/lib/landing/settings";
 import { announceCharacterReplaceRecharge, creditVerifiedCharacterReplaceRecharge } from "@/lib/ai/character-replace/recharge-server";
 import { getCharacterReplaceBalanceCents } from "@/lib/ai/character-replace/wallet";
 import { WALLET_UNIT } from "@/lib/ai/credits/units";
+import { settleFlutterwaveTopup } from "@/lib/ai/wallet/flutterwave-settle";
 import { settleCharacterReplaceCharge, settleUnpaidTopup } from "@/lib/ai/wallet/paystack-settle";
+import { flutterwaveConfigured, getFlutterwaveConfig } from "@/lib/flutterwave/config";
+import { flutterwaveReferencePurpose, isFlutterwaveReference } from "@/lib/payments/references";
 import { isRemovedProviderReference } from "@/lib/payments/removed-providers";
 import { AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, paystackEnabled, verifyTransaction } from "@/lib/paystack/paystack";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
@@ -95,6 +98,30 @@ export async function POST(request: Request) {
   // a removed provider's reference (Bachs, 2026-10-17): answered "pending" with no network call and no write —
   // it must never reach the Paystack path below, which could mark a historical attempt failed
   if (isRemovedProviderReference(reference)) return NextResponse.json({ credited: false, pending: true });
+
+  /*
+    ── A FLUTTERWAVE TOP-UP (Part 2) ──────────────────────────────────────────
+    Recognised by its own reference shape, so it never reaches the Paystack call
+    below. The browser's `status` / `transaction_id` query parameters are NOT read:
+    the server asks Flutterwave about OUR reference and credits only what matches
+    the attempt row written before the checkout (lib/ai/wallet/flutterwave-settle.ts).
+  */
+  if (isFlutterwaveReference(reference)) {
+    if (flutterwaveReferencePurpose(reference) !== "wallet_topup") return NextResponse.json({ credited: false });
+    if (!flutterwaveConfigured(await getFlutterwaveConfig())) return NextResponse.json({ credited: false, pending: true });
+    try {
+      const settled = await settleFlutterwaveTopup(reference, { userId: user.id });
+      if (settled.kind === "credited") {
+        after(settled.announce);
+        return NextResponse.json({ credited: true, balanceCents: settled.balanceAfterCents, balanceCredits: settled.balanceAfterCents, creditsAdded: settled.creditsAdded, product: "character_replace" });
+      }
+      return NextResponse.json({ credited: false, pending: settled.kind === "pending" });
+    } catch (e) {
+      // unreachable or unknown: still confirming — never "failed"
+      console.error("[ai/topup-verify] flutterwave check failed", { userId: user.id, reference, error: e instanceof Error ? e.name : "unknown" });
+      return NextResponse.json({ credited: false, pending: true });
+    }
+  }
 
   if (!(await paystackEnabled())) {
     return NextResponse.json({ error: "Payments aren't available right now." }, { status: 503 });

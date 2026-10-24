@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 
 import { flushFundingAlerts } from "@/lib/admin/funding-alerts";
 import { reconcilePendingAdPayments } from "@/lib/ads-platform/payment-server";
+import { expireFlutterwaveSitePlans, reconcileFlutterwaveRenewals } from "@/lib/ai/credits/flutterwave-plans";
+import { reconcilePendingPlanAttempts } from "@/lib/ai/credits/plan-attempts";
+import { reconcilePendingTopups } from "@/lib/ai/wallet/reconcile-topups";
+import { getLandingSettings } from "@/lib/landing/settings";
 import { sweepAiJobs } from "@/lib/ai/recovery";
 import { awardClosedWeek } from "@/lib/ai/weekly-top";
 import { verifyProcessingPayouts } from "@/lib/rewards/paystack-payouts";
@@ -40,13 +44,23 @@ async function run(request: Request) {
   }
   // 2026-10-09: ad payments whose provider webhook never arrived are confirmed every 10 minutes too
   // 2026-10-12: SUB purchases too — a paid subscription whose webhook never came and whose payer never got past the return page
-  const [ai, adPayments, subPurchases] = await Promise.all([
+  /*
+    Part 3 (2026-10-23): wallet top-ups (Paystack + Flutterwave, each asked of ITS OWN provider) and AI plan purchases
+    whose webhook never came and whose member never came back. Bounded batches with time budgets; every attempt is
+    claimed (compare-and-set) before its provider is asked, and settling is idempotent on the reference, so an overlap
+    with a webhook, a return page or another run credits once. Aggregate counts only in the response.
+  */
+  const [ai, adPayments, subPurchases, walletTopups, aiPlanPurchases] = await Promise.all([
     sweepAiJobs(),
     reconcilePendingAdPayments(createAdminClient()).catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
     reconcilePendingSubPurchases().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
+    reconcilePendingTopups({ limit: 20, budgetMs: 45_000 }).catch(() => ({ error: "wallet top-up sweep failed" })),
+    getLandingSettings()
+      .then((s) => reconcilePendingPlanAttempts(s.frenzAiPlans, { limit: 10, budgetMs: 30_000 }))
+      .catch(() => ({ error: "AI plan sweep failed" })),
   ]);
   // 0218: any payment alert a webhook did not send yet; and the weekly AI prizes once a week has closed
-  const [fundingAlerts, weeklyAwards, payouts, autoWithdrawals, privacyExpiry, subReminders, subFanout, followerMilestones, affiliateCommissions] = await Promise.all([
+  const [fundingAlerts, weeklyAwards, payouts, autoWithdrawals, privacyExpiry, subReminders, subFanout, followerMilestones, affiliateCommissions, sitePlanExpiry, flutterwaveRenewals] = await Promise.all([
     flushFundingAlerts().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
     awardClosedWeek(createAdminClient()).catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
     // Paystack payouts still processing whose webhook never came
@@ -62,8 +76,12 @@ async function run(request: Request) {
     // Rewards v2 (0255): follower milestones the follow trigger could not pay yet, and queued affiliate shares
     sweepFollowerMilestones().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
     sweepAffiliateCommissions().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
+    // 2026-10-23: Pro / Business plans on Flutterwave whose paid period (plus grace) ran out with no renewal
+    expireFlutterwaveSitePlans().catch(() => ({ error: "site plan expiry failed" })),
+    // Part 3.3: Flutterwave renewals a webhook may have missed — listed, re-verified by id, through the one renewal ledger
+    reconcileFlutterwaveRenewals({ limit: 10, budgetMs: 20_000 }).catch(() => ({ error: "flutterwave renewal sweep failed" })),
   ]);
-  return NextResponse.json({ ...ai, adPayments, subPurchases, fundingAlerts, weeklyAwards, payouts, autoWithdrawals, privacyExpiry, subReminders, subFanout, followerMilestones, affiliateCommissions });
+  return NextResponse.json({ ...ai, adPayments, subPurchases, walletTopups, aiPlanPurchases, fundingAlerts, weeklyAwards, payouts, autoWithdrawals, privacyExpiry, subReminders, subFanout, followerMilestones, affiliateCommissions, sitePlanExpiry, flutterwaveRenewals });
 }
 
 export const GET = run;

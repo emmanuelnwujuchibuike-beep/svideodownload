@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AnimatedAmount } from "@/features/ai/animated-amount";
 import { readAiBalanceCache, writeAiBalanceCache } from "@/lib/ai/balance-cache";
 import { formatCents } from "@/lib/ai/economy";
+import { topupReturnLine } from "@/lib/ai/wallet/topup-return";
 import { majorInputToMinor } from "@/lib/money/units";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -201,11 +202,12 @@ export function FrenzAIDashboard({
   */
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const reference = params.get("reference") ?? params.get("trxref");
+    // Paystack appends reference/trxref; Flutterwave appends tx_ref (+ status, transaction_id — never trusted, only removed)
+    const reference = params.get("reference") ?? params.get("trxref") ?? params.get("tx_ref");
     if (!reference) return;
 
     params.delete("reference");
-    params.delete("trxref");
+    for (const k of ["trxref", "tx_ref", "transaction_id", "status"]) params.delete(k);
     const rest = params.toString();
     const clean = `${window.location.pathname}${rest ? `?${rest}` : ""}${window.location.hash}`;
     window.history.replaceState(window.history.state, "", clean);
@@ -218,26 +220,25 @@ export function FrenzAIDashboard({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reference }),
         });
-        const json = (await res.json()) as { credited?: boolean; pending?: boolean };
+        const json = (await res.json().catch(() => null)) as { credited?: boolean; pending?: boolean } | null;
         if (!alive) return;
         await load();
         if (!alive) return;
         /*
           Opened on the member's behalf, whichever way it went: a credited
-          payment deserves to be SEEN, and a pending one deserves a sentence
-          rather than a silent old number.
+          payment deserves to be SEEN, a pending one a sentence rather than a
+          silent old number — and (Part 4) a failed one, or a check that could
+          not run, an honest line too instead of nothing.
         */
-        setNotice(
-          json.credited
-            ? "Payment received — your AI balance has been updated."
-            : json.pending
-              ? "Your payment is still being confirmed. This will update shortly."
-              : null,
-        );
+        setNotice(topupReturnLine(res.ok && json ? { ok: true, ...json } : { ok: false }));
         setSheetMounted(true);
         setOpen(true);
       } catch {
-        if (alive) void load();
+        if (!alive) return;
+        void load();
+        setNotice(topupReturnLine({ ok: false }));
+        setSheetMounted(true);
+        setOpen(true);
       }
     })();
     return () => {

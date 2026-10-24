@@ -36,8 +36,8 @@ import {
   parseHilltopTag,
   parseHilltopVastUrl,
 } from "@/lib/monetization/hilltop";
-import { isValidDirectLinkUrl, type DirectLinkConfig } from "@/lib/monetization/direct-link";
-import { DEFAULT_SPOT_POPUNDER, POPUNDER_COOLDOWN_MAX_MINUTES, type SpotPopunderConfig } from "@/lib/monetization/spot-popunder";
+import { isValidDirectLinkUrl, type DirectLinkConfig, type SpotAdProvider } from "@/lib/monetization/direct-link";
+import { DEFAULT_SPOT_POPUNDER, parseAdsterraSnippet, POPUNDER_COOLDOWN_MAX_MINUTES, type SpotPopunderConfig } from "@/lib/monetization/spot-popunder";
 import type { MonetizationSettings } from "@/lib/monetization/settings";
 import {
   DEFAULT_VAST_INTERSTITIAL,
@@ -2709,8 +2709,44 @@ function VastRow({
  * The MAIN format at those spots; the direct link above is its backup and opens only when no pop-under
  * opened. Never both on one tap. Part of the parent state, saved with the form's own Save button.
  */
+/**
+ * Which network fills a spot format (owner, 2026-10-24: "I want to try adsterra out") — one pick per format, saved with
+ * the form. The chosen network's own master switch must be on too (Monetag / Adsterra, above).
+ */
+function SpotProviderPicker({ id, value, busy, onChange }: { id: string; value: SpotAdProvider; busy: boolean; onChange: (next: SpotAdProvider) => void }) {
+  const options: { id: SpotAdProvider; label: string }[] = [
+    { id: "monetag", label: "Monetag" },
+    { id: "adsterra", label: "Adsterra" },
+  ];
+  return (
+    <div role="radiogroup" aria-labelledby={id} className="flex flex-wrap items-center gap-2">
+      <span id={id} className="text-xs font-medium text-muted-foreground">
+        Network
+      </span>
+      {options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          role="radio"
+          aria-checked={value === o.id}
+          disabled={busy}
+          onClick={() => onChange(o.id)}
+          className={cn(
+            "rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ring-inset transition disabled:opacity-70",
+            value === o.id ? "bg-primary text-primary-foreground ring-primary" : "bg-background text-foreground ring-border hover:ring-foreground/30",
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function SpotPopunderEditor({ value, busy, onChange }: { value: SpotPopunderConfig; busy: boolean; onChange: (next: SpotPopunderConfig) => void }) {
+  const adsterra = value.provider === "adsterra";
   const snippetBad = value.snippet.trim() !== "" && !parseMonetagSnippet(value.snippet);
+  const adsterraBad = value.adsterraSnippet.trim() !== "" && !parseAdsterraSnippet(value.adsterraSnippet);
   const spots: { id: keyof SpotPopunderConfig["spots"]; label: string; hint: string }[] = [
     { id: "adClose", label: "Ad close (X) button", hint: "The X / Skip of the Download complete, reward and full-screen ads" },
     { id: "wallpaper", label: "Wallpapers", hint: "A tap around the wallpaper viewer's Download button" },
@@ -2728,12 +2764,36 @@ function SpotPopunderEditor({ value, busy, onChange }: { value: SpotPopunderConf
           <span className="block text-sm font-semibold">Pop-under (main at these spots)</span>
           <span className="block text-xs text-muted-foreground">
             Tried first on a tap at each chosen spot. The direct link above opens only when no pop-under opened (the tag didn&apos;t
-            load, Monetag skipped that tap, or the browser blocked it) — never both. Free plan only; needs the Monetag switch on.
+            load, the network skipped that tap, or the browser blocked it) — never both. Free plan only; needs the chosen
+            network&apos;s switch on (Monetag or Adsterra).
           </span>
         </span>
         <Switch on={value.enabled} />
       </button>
-      <div>
+      <SpotProviderPicker id="spot-popunder-network" value={value.provider} busy={busy} onChange={(provider) => onChange({ ...value, provider })} />
+      {adsterra ? (
+        <div>
+          <label htmlFor="adsterra-spot-popunder" className="mb-1 block text-xs font-medium text-muted-foreground">
+            Adsterra Popunder code (paste it as Adsterra gives it)
+          </label>
+          <textarea
+            id="adsterra-spot-popunder"
+            value={value.adsterraSnippet}
+            disabled={busy}
+            rows={3}
+            onChange={(e) => onChange({ ...value, adsterraSnippet: e.target.value })}
+            placeholder="<script type='text/javascript' src='//pl….com/…/….js'></script>"
+            spellCheck={false}
+            className={cn(
+              "w-full rounded-xl bg-background px-3 py-2 font-mono text-xs outline-none ring-1 ring-inset focus:ring-2 focus:ring-primary",
+              adsterraBad ? "ring-rose-500" : "ring-border",
+            )}
+          />
+          {adsterraBad ? <p className="mt-1 text-xs text-rose-500">Not an Adsterra code: it needs an https (or //) .js script src.</p> : null}
+          <p className="mt-1 text-xs text-muted-foreground">Only the script address is read from it — it is never run as pasted.</p>
+        </div>
+      ) : null}
+      <div className={adsterra ? "hidden" : undefined}>
         <label htmlFor="monetag-spot-popunder" className="mb-1 block text-xs font-medium text-muted-foreground">
           Pop-under tag (paste the Monetag script)
         </label>
@@ -2780,15 +2840,15 @@ function SpotPopunderEditor({ value, busy, onChange }: { value: SpotPopunderConf
         <span className="min-w-0">
           <span className="block text-sm font-semibold">Only at these spots</span>
           <span className="block text-xs text-muted-foreground">
-            Once loaded, Monetag pops on any click on the page. On: a pop-under opens only from a tap at a chosen spot. Our own
-            links and downloads are never affected. A pop-under that shows still counts as a normal Monetag impression.
+            Once loaded, the network&apos;s script pops on any click on the page. On: a pop-under opens only from a tap at a chosen
+            spot. Our own links and downloads are never affected. A pop-under that shows still counts as a normal impression.
           </span>
         </span>
         <Switch on={value.spotsOnly} />
       </button>
       <div>
         <label htmlFor="monetag-spot-popunder-cooldown" className="mb-1 block text-xs font-medium text-muted-foreground">
-          At most one pop-under every … minutes per visitor (0 = only Monetag&apos;s own limit)
+          At most one pop-under every … minutes per visitor (0 = only the network&apos;s own limit)
         </label>
         <input
           id="monetag-spot-popunder-cooldown"
@@ -2820,7 +2880,9 @@ function DirectLinkEditor({
   busy: boolean;
   onChange: (next: DirectLinkConfig) => void;
 }) {
+  const adsterra = value.provider === "adsterra";
   const urlBad = value.url.trim() !== "" && !isValidDirectLinkUrl(value.url.trim());
+  const adsterraUrlBad = value.adsterraUrl.trim() !== "" && !isValidDirectLinkUrl(value.adsterraUrl.trim());
   const spots: { id: keyof DirectLinkConfig["spots"]; label: string; hint: string }[] = [
     { id: "wallpaper", label: "Wallpaper download", hint: "A tap anywhere around the wallpaper viewer's Download button" },
     { id: "resultPreview", label: "Download result preview", hint: "A tap on the media preview at the top of the result card" },
@@ -2838,14 +2900,36 @@ function DirectLinkEditor({
           <span className="block text-sm font-semibold">Direct link</span>
           <span className="block text-xs text-muted-foreground">
             Opens in a new tab on a tap at each chosen spot, by the chance below (100% = every tap). The tap&apos;s own action
-            (the download, the preview) still happens. Free plan only; needs the Monetag switch on.
+            (the download, the preview) still happens. Free plan only; needs the chosen network&apos;s switch on (Monetag or
+            Adsterra).
           </span>
         </span>
         <Switch on={value.enabled} />
       </button>
-      <div>
+      <SpotProviderPicker id="direct-link-network" value={value.provider} busy={busy} onChange={(provider) => onChange({ ...value, provider })} />
+      {adsterra ? (
+        <div>
+          <label htmlFor="adsterra-direct-link" className="mb-1 block text-xs font-medium text-muted-foreground">
+            Adsterra Smartlink URL
+          </label>
+          <input
+            id="adsterra-direct-link"
+            value={value.adsterraUrl}
+            disabled={busy}
+            onChange={(e) => onChange({ ...value, adsterraUrl: e.target.value })}
+            placeholder="https://…"
+            inputMode="url"
+            className={cn(
+              "h-10 w-full rounded-xl bg-background px-3 font-mono text-sm outline-none ring-1 ring-inset focus:ring-2 focus:ring-primary",
+              adsterraUrlBad ? "ring-rose-500" : "ring-border",
+            )}
+          />
+          {adsterraUrlBad ? <p className="mt-1 text-xs text-rose-500">Must be a full https:// link.</p> : null}
+        </div>
+      ) : null}
+      <div className={adsterra ? "hidden" : undefined}>
         <label htmlFor="monetag-direct-link" className="mb-1 block text-xs font-medium text-muted-foreground">
-          Direct link URL
+          Monetag direct link URL
         </label>
         <input
           id="monetag-direct-link"

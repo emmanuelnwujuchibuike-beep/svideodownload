@@ -149,7 +149,7 @@ export const ADMIN_SETTING_ENTRIES: AdminSearchEntry[] = [
     label: "Plan prices and currencies",
     section: "pricing",
     hint: "Pricing & plans",
-    keywords: ["price", "pricing", "plan", "pro", "business", "currency", "paystack", "subscription"],
+    keywords: ["price", "pricing", "plan", "pro", "business", "currency", "paystack", "flutterwave", "webhook", "subscription"],
   },
   {
     id: "plan-limits",

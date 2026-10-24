@@ -91,7 +91,8 @@ function loadTag(p: PublicSpotPopunder): void {
   el.src = p.src;
   if (p.zone) el.dataset.zone = p.zone;
   if (p.cfAsync) el.setAttribute("data-cfasync", "false");
-  el.setAttribute("data-monetag", "spot_popunder");
+  // Monetag or Adsterra (the admin's pick, 2026-10-24): the same tap rules either way — this only labels the tag
+  el.setAttribute(p.provider === "adsterra" ? "data-adsterra" : "data-monetag", "spot_popunder");
   el.onload = () => {
     tagState = "ready";
   };

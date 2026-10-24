@@ -15,8 +15,8 @@ export function isUuid(v: unknown): v is string {
   return typeof v === "string" && UUID_RE.test(v);
 }
 
-/** The only reference shape `startSubCheckout` ever creates: `frenz_sub_` + a dashless UUID. */
-const REFERENCE_RE = /^frenz_sub_[0-9a-f]{32}$/;
+/** The only reference shapes `startSubCheckout` ever creates: `frenz_sub_` (Paystack) or `frenz_sub_fw_` (Flutterwave, Part 2) + a dashless UUID. */
+const REFERENCE_RE = /^frenz_sub_(fw_)?[0-9a-f]{32}$/;
 
 export function isSubReference(v: unknown): v is string {
   return typeof v === "string" && REFERENCE_RE.test(v);

@@ -119,6 +119,10 @@ export const NOT_EXPORTED: Record<string, string> = {
   ai_provider_health: "Provider health for the AI circuit breaker. Not personal data.",
   /* One row per verified payment-provider webhook delivery (0186): provider, event id, type, our reference. The payment it concerns is exported with the member's top-ups and statement. */
   payment_provider_events: "Payment-provider delivery log keyed by event id; the payment itself is exported with the statement.",
+  payment_provider_settings: "Operator payment-provider configuration (keys, webhook secret, switches) — about no member; never exported.",
+  /* 0274: the renewal ledger and the admin review queue for Flutterwave plans. The plan itself (period, status) is exported with the member's subscription. */
+  plan_renewals: "Renewal ledger keyed by the provider's transaction id; the member's plan and period are exported with their subscription.",
+  plan_billing_reviews: "Operator review queue for plan billing (reasons, ids, amounts) — an internal work list, not the member's data.",
   reward_config: "The operator's reward rules (one row, a mirror of the admin settings) - about nobody.",
   poll_options: "Options belonging to a poll; the poll itself is exported.",
   /* Rows belonging to a streak, keyed by `streak_id` rather than by a person —

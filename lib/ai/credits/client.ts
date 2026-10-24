@@ -73,7 +73,7 @@ export function getAiCredits(opts?: { ledger?: number }): Promise<Result<AiCredi
 }
 
 /** Begin an AI plan checkout: the server answers Paystack's hosted page; the browser navigates there. */
-export function beginAiPlanCheckout(plan: "ai_pro" | "ai_max", returnTo: string, provider?: "paystack" | null): Promise<Result<{ url: string }>> {
+export function beginAiPlanCheckout(plan: "ai_pro" | "ai_max", returnTo: string, provider?: "flutterwave" | "paystack" | null): Promise<Result<{ url: string }>> {
   return request<{ url: string }>("/api/ai/subscriptions/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ plan, returnTo, ...(provider ? { provider } : {}) }) });
 }
 
@@ -87,9 +87,12 @@ export function verifyAiPlanReturn(reference: string): Promise<Result<{ activate
   return request(`/api/ai/subscriptions/verify?reference=${encodeURIComponent(reference)}`);
 }
 
-/** Paystack's hosted page for the member's AI plan (card, cancellation). */
-export function openAiPlanManage(): Promise<Result<{ url: string }>> {
-  return request<{ url: string }>("/api/ai/subscriptions/manage", { method: "POST" });
+/**
+ * Manage the member's AI plan: Paystack answers with its hosted page (url); a Flutterwave plan answers
+ * { confirmCancel } first, then — called again with confirm=true — cancels at Flutterwave ({ cancelled }).
+ */
+export function openAiPlanManage(confirm = false): Promise<Result<{ url?: string; confirmCancel?: boolean; cancelled?: boolean; periodEnd?: string | null }>> {
+  return request("/api/ai/subscriptions/manage", { method: "POST", ...(confirm ? { headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "cancel" }) } : {}) });
 }
 
 /**
@@ -108,9 +111,10 @@ export function takeAiPlanReturn(): { plan: string | null; reference: string | n
   if (typeof window === "undefined") return null;
   const params = new URLSearchParams(window.location.search);
   const plan = params.get("ai_plan");
-  const reference = params.get("reference") ?? params.get("trxref");
+  // Paystack appends reference/trxref; Flutterwave appends tx_ref (+ status, transaction_id — never trusted, only removed)
+  const reference = params.get("reference") ?? params.get("trxref") ?? params.get("tx_ref");
   if (!plan) return null;
-  for (const k of ["ai_plan", "reference", "trxref"]) params.delete(k);
+  for (const k of ["ai_plan", "reference", "trxref", "tx_ref", "transaction_id", "status"]) params.delete(k);
   const rest = params.toString();
   window.history.replaceState(window.history.state, "", `${window.location.pathname}${rest ? `?${rest}` : ""}${window.location.hash}`);
   return { plan, reference };

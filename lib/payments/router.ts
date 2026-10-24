@@ -6,9 +6,10 @@ import type { PaymentMarket, PaymentPurpose, PaymentRouting, TopupProviderId } f
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Owner, 2026-10-07: "Do not hard-code provider selection in pages … Do not
- * trust a country value sent from the client." Paystack is the only provider
- * since Bachs was removed (2026-10-17); the router stays the one place a
- * provider is chosen, so a future provider needs no page changes.
+ * trust a country value sent from the client." Two rails since 2026-10-23:
+ * Flutterwave first (USD, when its account capability is confirmed) and
+ * Paystack as the backup (NGN). The router stays the one place a provider is
+ * chosen.
  *
  * The ONE place a provider is chosen. Every paid flow asks `routePayment`
  * with the purpose; the market comes from `paymentMarket(headers)`, which
@@ -60,4 +61,25 @@ export function routePayment(input: {
 export function offeredProviders(input: { purpose: PaymentPurpose; market: PaymentMarket; routing: PaymentRouting; usable: (p: TopupProviderId) => boolean; memberChoice: boolean }): TopupProviderId[] {
   const all = routePayment(input);
   return input.memberChoice ? all : all.slice(0, 1);
+}
+
+/**
+ * The result of trying ONE rail. `definite` refusals (nothing was created at the provider)
+ * may move to the next rail; `unknown` outcomes may not — a checkout may exist and be paid.
+ */
+export type RailAttempt<T> = { ok: true; value: T } | { ok: false; refusal: "definite" | "unknown"; status: number; error: string };
+
+/**
+ * Try the router's candidates in order, moving on ONLY after a definite refusal. The same rule
+ * as the ads' `firstCheckout`, for the flows that do not use its PaymentStart shape.
+ */
+export async function firstRail<T>(candidates: readonly TopupProviderId[], attempt: (p: TopupProviderId, index: number) => Promise<RailAttempt<T>>, log: (from: TopupProviderId, to: TopupProviderId) => void = () => {}): Promise<RailAttempt<T>> {
+  let last: RailAttempt<T> = { ok: false, refusal: "definite", status: 503, error: "Payments aren't available right now." };
+  for (const [i, p] of candidates.entries()) {
+    last = await attempt(p, i);
+    if (last.ok || last.refusal === "unknown") return last;
+    const next = candidates[i + 1];
+    if (next) log(p, next);
+  }
+  return last;
 }

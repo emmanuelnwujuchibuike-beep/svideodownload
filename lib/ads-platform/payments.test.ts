@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { AI_WALLET_DEFAULTS, normalizePaymentRouting, type TopupProviderId } from "@/lib/ai/credits/wallet-config";
 import { routePayment } from "@/lib/payments/router";
-import { paystackFailureIsDefinite } from "@/lib/paystack/paystack";
+import { PaystackHttpError, PaystackNotConfiguredError, paystackFailureIsDefinite, paystackRefusedForSure } from "@/lib/paystack/paystack";
 
 import { firstCheckout, paymentState, type PaymentStart } from "./payment-server";
 
@@ -27,14 +27,21 @@ describe("routing — the existing router, a new purpose", () => {
   const routing = normalizePaymentRouting(null);
   const both = () => true;
 
-  it("default: Paystack in every market, no fallback (Bachs removed 2026-10-17)", () => {
-    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: both })).toEqual(["paystack"]);
-    expect(routePayment({ purpose: "ad_campaign", market: "other", routing, usable: both })).toEqual(["paystack"]);
+  it("default (owner 2026-10-23): Flutterwave first, Paystack the fallback, in every market", () => {
+    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: both })).toEqual(["flutterwave", "paystack"]);
+    expect(routePayment({ purpose: "ad_campaign", market: "other", routing, usable: both })).toEqual(["flutterwave", "paystack"]);
   });
-  it("a SAVED route that still names Bachs reads as Paystack — never an error, never Bachs", () => {
+  it("while Flutterwave's account capability is unconfirmed (not usable), the route is Paystack alone — as before", () => {
+    const paystackOnly = (p: string) => p === "paystack";
+    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: paystackOnly })).toEqual(["paystack"]);
+    expect(routePayment({ purpose: "ad_campaign", market: "other", routing, usable: paystackOnly })).toEqual(["paystack"]);
+  });
+  it("a SAVED route that still names Bachs reads as the whole default route (Paystack always the fallback) — never an error, never Bachs", () => {
     const saved = normalizePaymentRouting({ NG: { ad_campaign: { primary: "bachs", fallback: "paystack" }, wallet_topup: { primary: "bachs", fallback: null } } });
-    expect(saved.NG.ad_campaign).toEqual({ primary: "paystack", fallback: null });
-    expect(saved.NG.wallet_topup).toEqual({ primary: "paystack", fallback: null });
+    expect(saved.NG.ad_campaign).toEqual({ primary: "flutterwave", fallback: "paystack" });
+    // 🔴 not "Flutterwave with no fallback": that would close payments while Flutterwave is unconfirmed
+    expect(saved.NG.wallet_topup).toEqual({ primary: "flutterwave", fallback: "paystack" });
+    expect(routePayment({ purpose: "wallet_topup", market: "NG", routing: saved, usable: (p) => p === "paystack" })).toEqual(["paystack"]);
     expect(JSON.stringify(normalizePaymentRouting(saved))).not.toContain("bachs");
   });
   it("a saved config from before 0197 gains the ads row with the defaults", () => {
@@ -42,8 +49,10 @@ describe("routing — the existing router, a new purpose", () => {
     expect(normalizePaymentRouting(old).NG.ad_campaign).toEqual(AI_WALLET_DEFAULTS.routing.NG.ad_campaign);
   });
   it("T20 a provider the route does not allow (a removed one included), or an unconfigured one, is ignored", () => {
-    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: both, preferred: "bachs" })).toEqual(["paystack"]);
-    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: both, preferred: "stripe" })).toEqual(["paystack"]);
+    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: both, preferred: "bachs" })).toEqual(["flutterwave", "paystack"]);
+    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: both, preferred: "stripe" })).toEqual(["flutterwave", "paystack"]);
+    // a member's preference only REORDERS what the route allows
+    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: both, preferred: "paystack" })).toEqual(["paystack", "flutterwave"]);
     expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: () => false })).toEqual([]);
   });
 });
@@ -66,7 +75,7 @@ describe("the fallback rule — only after a REFUSAL (generic: shown with two st
   });
   it("T2 the first refused BEFORE a session existed → the second", async () => {
     const { r, tried } = await run({
-      first: { kind: "refused", code: "provider_refused", status: 502 },
+      first: { kind: "refused", code: "provider_refused", status: 503 },
       second: { kind: "redirect", url: "https://checkout.paystack.com/y", reference: "b", provider: "paystack" },
     });
     expect(tried).toEqual(["first", "second"]);
@@ -82,20 +91,38 @@ describe("the fallback rule — only after a REFUSAL (generic: shown with two st
     expect(tried).toEqual(["first"]);
   });
   it("everything refused → payment_not_started (nobody was charged)", async () => {
-    const { r } = await run({ first: { kind: "refused", code: "provider_refused", status: 502 }, second: { kind: "refused", code: "provider_refused", status: 502 } });
-    expect(r).toEqual({ kind: "refused", code: "payment_not_started", status: 502 });
+    const { r } = await run({ first: { kind: "refused", code: "provider_refused", status: 503 }, second: { kind: "refused", code: "provider_refused", status: 503 } });
+    expect(r).toEqual({ kind: "refused", code: "payment_not_started", status: 503 });
     warn.mockClear();
   });
 });
 
 describe("what counts as a refusal (Paystack's own message)", () => {
   const err = (m: string, name = "Error") => Object.assign(new Error(m), { name });
-  it("Paystack: its own message is a refusal; a timeout, a network drop or a non-JSON 5xx page is UNKNOWN", () => {
-    expect(paystackFailureIsDefinite(err("Duplicate Transaction Reference"))).toBe(true);
+  it("Paystack: its own 4xx answer is a refusal; a timeout, a network drop or a non-JSON 5xx page is UNKNOWN", () => {
+    // every Paystack answer arrives as a PaystackHttpError carrying its HTTP status (paystack() in lib/paystack/paystack.ts)
+    expect(paystackFailureIsDefinite(new PaystackHttpError("Duplicate Transaction Reference", 400))).toBe(true);
     expect(paystackFailureIsDefinite(err("aborted", "TimeoutError"))).toBe(false);
     expect(paystackFailureIsDefinite(err("aborted", "AbortError"))).toBe(false);
     expect(paystackFailureIsDefinite(err("fetch failed", "TypeError"))).toBe(false);
     expect(paystackFailureIsDefinite(err("Unexpected token <", "SyntaxError"))).toBe(false);
+  });
+  it("Part 4.2: a JSON 5xx from Paystack is UNKNOWN (it may have created the transaction); no key is definite (nothing was sent)", () => {
+    expect(paystackFailureIsDefinite(new PaystackHttpError("An error occurred", 500))).toBe(false);
+    expect(paystackFailureIsDefinite(new PaystackHttpError("Service unavailable", 503))).toBe(false);
+    // a 2xx with status:false is not a documented refusal
+    expect(paystackFailureIsDefinite(new PaystackHttpError("no", 200))).toBe(false);
+    // an error that is not Paystack's answer proves nothing
+    expect(paystackFailureIsDefinite(err("something else"))).toBe(false);
+    expect(paystackFailureIsDefinite("not an error")).toBe(false);
+    expect(paystackFailureIsDefinite(new PaystackNotConfiguredError())).toBe(true);
+    expect(new PaystackNotConfiguredError().message).toBe("Paystack is not configured");
+  });
+  it("Part 4.2: the stricter rule (Character Replace, plans, payouts, verify calls) is unchanged: only a 4xx", () => {
+    expect(paystackRefusedForSure(new PaystackHttpError("Invalid key", 401))).toBe(true);
+    expect(paystackRefusedForSure(new PaystackHttpError("upstream", 502))).toBe(false);
+    expect(paystackRefusedForSure(new PaystackNotConfiguredError())).toBe(false);
+    expect(paystackRefusedForSure(err("aborted", "TimeoutError"))).toBe(false);
   });
 });
 
@@ -108,8 +135,9 @@ describe("Bachs removed (2026-10-17): its historical rows are held, never touche
   it("never re-asked, released or settled by code: resolve, askProvider and the reconcile sweep all stop at it", () => {
     expect(pay).toMatch(/export async function resolveUncertainAttempt\(db: Db, a: Attempt\): Promise<PaymentStart> \{\s*if \(legacyProvider\(a\)\) return \{ kind: "verifying", reference: a\.reference \};/);
     expect(pay).toMatch(/async function askProvider\(db: Db, a: Attempt\): Promise<void> \{\s*\/\/[^\n]*\n\s*if \(legacyProvider\(a\)\) return;/);
-    expect(pay).toMatch(/\.eq\("purpose", "ad_campaign"\)\s*\.eq\("provider", "paystack"\)\s*\.in\("status", \["pending", "verification_required"\]\)/);
-    expect(pay).toContain('const legacyProvider = (a: { provider: string }) => a.provider !== "paystack";');
+    // the sweep asks only the LIVE rails (Paystack, Flutterwave since Part 2) — never a removed provider's rows
+    expect(pay).toMatch(/\.eq\("purpose", "ad_campaign"\)\s*\.in\("provider", \["paystack", "flutterwave"\]\)\s*\.in\("status", \["pending", "verification_required"\]\)/);
+    expect(pay).toContain('const legacyProvider = (a: { provider: string }) => a.provider !== "paystack" && a.provider !== "flutterwave";');
   });
   it("no Bachs code is left to call", () => {
     expect(pay).not.toMatch(/postBachsCheckout|getBachsCheckout|handleBachsAd|beginBachs|@\/lib\/payments\/bachs/);
@@ -276,10 +304,10 @@ describe("2026-10-09: pending ad payments are confirmed with nobody watching", (
 });
 
 describe("2026-10-09: ad payments go through Paystack alone; a paid campaign goes live by itself", () => {
-  it("the ad checkout router can only choose Paystack", () => {
+  it("the ad checkout router chooses only the live rails, each through its own begin (Part 2)", () => {
     const pay = src("lib/ads-platform/payment-server.ts");
-    expect(pay).toContain('usable: (p) => p === "paystack" && paystackOk,');
-    expect(pay).toContain("return beginPaystack(db, input, applicationId, input.quoteId, totalUsd, landing);");
+    expect(pay).toContain('const usable = await usableRails("ad_campaign");');
+    expect(pay).toContain('return provider === "flutterwave" ? beginFlutterwave(db, input, applicationId, input.quoteId, totalUsd) : beginPaystack(db, input, applicationId, input.quoteId, totalUsd, landing);');
   });
   it("0210: only HARD reasons hold activation — a pending link or a safety review does not", () => {
     const m = src("supabase/migrations/0210_ad_auto_activation.sql");

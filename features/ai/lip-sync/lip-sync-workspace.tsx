@@ -23,6 +23,8 @@ import { formatCredits } from "@/lib/ai/credits/units";
 import { isActiveStatus, type AiJobView } from "@/lib/ai/jobs";
 import { LIP_SYNC_EXPRESSIONS } from "@/lib/ai/lip-sync/config";
 import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
+import { TopupReturnNotice } from "@/features/ai/wallet/topup-return-notice";
+import { useTopupReturn } from "@/features/ai/wallet/use-topup-return";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
@@ -70,6 +72,8 @@ export function LipSyncWorkspace({
   audioHref?: string;
 }) {
   const ws = useLipSyncWorkspace({ initialJobId, initialAssetId, initialVoiceId });
+  // the wallet re-reads itself (useWallet's realtime row): the notice only reports what the server settled
+  const topup = useTopupReturn();
   const cfg = ws.config?.config ?? null;
   const [plansSheet, setPlansSheet] = useState(false);
   const [plansCatalogue, setPlansCatalogue] = useState<AiPlansPublic | null>(null);
@@ -98,6 +102,8 @@ export function LipSyncWorkspace({
   return (
     <FrenzAIEnvironment stage={envStage as never} armed={!!ws.video} bare>
       <div className="mx-auto w-full max-w-2xl px-4 pb-32 pt-4 sm:px-6">
+        {/* Part 4: coming back from a credit top-up started here — verified by the server, never by the URL */}
+        <TopupReturnNotice view={topup.view} onRecheck={topup.recheck} onDismiss={topup.dismiss} className="mb-4" />
         {/*
           The shared Frenz AI hero (2026-09-27). The headline still changes
           with the job — that is this screen's whole character and it is kept

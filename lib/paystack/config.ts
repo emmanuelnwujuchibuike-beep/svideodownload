@@ -58,7 +58,23 @@ const hasSupabase = !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPA
 let cache: { at: number; value: PaystackConfig } | null = null;
 const TTL_MS = 15_000;
 
-/** The effective Paystack config: admin DB value first, env as the fallback. */
+/**
+ * ── Where the SECRET comes from (Part 2.1, 2026-10-23) ─────────────────────────
+ * The `settings` table's RLS policy is "admin all" (0001): any signed-in admin's own browser
+ * session can read the stored `paystack.secretKey` through the database API, masking in the
+ * admin route notwithstanding. The secret belongs in server-only env instead.
+ *
+ * Opt-in, so nothing changes until the operator does it on purpose:
+ *   PAYSTACK_SECRET_SOURCE=env  AND  PAYSTACK_SECRET_KEY set  → the env secret is used and the
+ *   stored one is ignored (and never overwritten by an admin save).
+ * Otherwise the existing rule stands: the stored value first, env as the fallback. Staged rollout:
+ * docs/PAYMENTS.md "Paystack secret".
+ */
+export function paystackSecretFromEnv(env: Record<string, string | undefined> = process.env): boolean {
+  return env.PAYSTACK_SECRET_SOURCE?.trim().toLowerCase() === "env" && !!env.PAYSTACK_SECRET_KEY?.trim();
+}
+
+/** The effective Paystack config: admin DB value first, env as the fallback — or env only for the secret when opted in. */
 export async function getPaystackConfig(): Promise<PaystackConfig> {
   if (cache && Date.now() - cache.at < TTL_MS) return cache.value;
   const env = fromEnv();
@@ -69,14 +85,15 @@ export async function getPaystackConfig(): Promise<PaystackConfig> {
     const stored = (data?.value ?? {}) as Partial<PaystackConfig>;
     // Field-by-field: a non-empty admin value wins; otherwise fall back to env.
     const pick = (a: string | undefined, b: string) => (a && a.trim() ? a.trim() : b);
-    const secretKey = pick(stored.secretKey, env.secretKey);
+    const secretKey = paystackSecretFromEnv() ? env.secretKey : pick(stored.secretKey, env.secretKey);
     const publicKey = pick(stored.publicKey, env.publicKey);
     const value: PaystackConfig = {
       secretKey,
       publicKey,
       planPro: pick(stored.planPro, env.planPro),
       planBusiness: pick(stored.planBusiness, env.planBusiness),
-      mode: stored.mode === "live" || stored.mode === "test" ? stored.mode : modeFromKeys(secretKey, publicKey),
+      // with the env secret, the mode is that key's own (a stored "live" must not describe an env test key)
+      mode: paystackSecretFromEnv() ? env.mode : stored.mode === "live" || stored.mode === "test" ? stored.mode : modeFromKeys(secretKey, publicKey),
     };
     cache = { at: Date.now(), value };
     return value;
@@ -92,7 +109,8 @@ export async function setPaystackConfig(patch: Partial<PaystackConfig>): Promise
   const { data } = await db.from("settings").select("value").eq("key", "paystack").maybeSingle();
   const current = (data?.value ?? {}) as Partial<PaystackConfig>;
   const merged: PaystackConfig = {
-    secretKey: patch.secretKey?.trim() || current.secretKey || "",
+    // with the env as the secret's source, an admin save never writes a secret into the table again
+    secretKey: paystackSecretFromEnv() ? current.secretKey || "" : patch.secretKey?.trim() || current.secretKey || "",
     publicKey: patch.publicKey?.trim() ?? current.publicKey ?? "",
     planPro: patch.planPro?.trim() ?? current.planPro ?? "",
     planBusiness: patch.planBusiness?.trim() ?? current.planBusiness ?? "",

@@ -3,10 +3,10 @@ import { z } from "zod";
 
 import { getAdminUser } from "@/lib/admin/guard";
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
-import { DEFAULT_DIRECT_LINK, isValidDirectLinkUrl } from "@/lib/monetization/direct-link";
+import { DEFAULT_DIRECT_LINK, isValidDirectLinkUrl, SPOT_AD_PROVIDERS } from "@/lib/monetization/direct-link";
 import { DEFAULT_VAST_INTERSTITIAL } from "@/lib/monetization/vast-interstitial";
 import { MONETAG_AD_TYPE_IDS, MONETAG_PLACEMENT_IDS, MONETAG_SURFACE_IDS, parseMonetagSnippet } from "@/lib/monetization/monetag";
-import { DEFAULT_SPOT_POPUNDER, POPUNDER_COOLDOWN_MAX_MINUTES } from "@/lib/monetization/spot-popunder";
+import { DEFAULT_SPOT_POPUNDER, parseAdsterraSnippet, POPUNDER_COOLDOWN_MAX_MINUTES } from "@/lib/monetization/spot-popunder";
 import {
   DEFAULT_HILLTOP,
   HILLTOP_MAX_EVERY,
@@ -73,18 +73,26 @@ const schema = z.object({
   monetagDirectLink: z
     .object({
       enabled: z.boolean().default(false),
+      // 2026-10-24: Monetag direct link or Adsterra Smartlink — one network per format, the admin's pick
+      provider: z.enum(SPOT_AD_PROVIDERS).default("monetag"),
       url: z
         .string()
         .trim()
         .max(2000)
         .refine((v) => v === "" || isValidDirectLinkUrl(v), { message: "Direct link must be a full https:// URL" })
         .default(""),
+      adsterraUrl: z
+        .string()
+        .trim()
+        .max(2000)
+        .refine((v) => v === "" || isValidDirectLinkUrl(v), { message: "Adsterra Smartlink must be a full https:// URL" })
+        .default(""),
       spots: z
         .object({ wallpaper: z.boolean().default(true), resultPreview: z.boolean().default(true), adClose: z.boolean().default(true) })
         .default(DEFAULT_DIRECT_LINK.spots),
       chancePercent: z.number().int().min(1).max(100).default(50),
     })
-    .refine((v) => !v.enabled || v.url !== "", { message: "Paste the direct link URL before switching it on" })
+    .refine((v) => !v.enabled || (v.provider === "adsterra" ? v.adsterraUrl : v.url) !== "", { message: "Paste the chosen network's direct link URL before switching it on" })
     .default(DEFAULT_DIRECT_LINK),
   // Monetag Pop-under at the direct-link spots — the main format there, the link its backup (lib/monetization/spot-popunder.ts)
   monetagSpotPopunder: z
@@ -96,6 +104,13 @@ const schema = z.object({
         .max(4000)
         .refine((v) => v === "" || parseMonetagSnippet(v) !== null, { message: "Pop-under tag must be a Monetag script with an https src" })
         .default(DEFAULT_SPOT_POPUNDER.snippet),
+      provider: z.enum(SPOT_AD_PROVIDERS).default("monetag"),
+      adsterraSnippet: z
+        .string()
+        .trim()
+        .max(4000)
+        .refine((v) => v === "" || parseAdsterraSnippet(v) !== null, { message: "Adsterra pop-under code must be a script with an https .js src" })
+        .default(""),
       spots: z
         .object({ wallpaper: z.boolean().default(true), resultPreview: z.boolean().default(true), adClose: z.boolean().default(true) })
         .default(DEFAULT_SPOT_POPUNDER.spots),
@@ -103,7 +118,7 @@ const schema = z.object({
       spotsOnly: z.boolean().default(DEFAULT_SPOT_POPUNDER.spotsOnly),
       cooldownMinutes: z.number().int().min(0).max(POPUNDER_COOLDOWN_MAX_MINUTES).default(DEFAULT_SPOT_POPUNDER.cooldownMinutes),
     })
-    .refine((v) => !v.enabled || v.snippet !== "", { message: "Paste the pop-under tag before switching it on" })
+    .refine((v) => !v.enabled || (v.provider === "adsterra" ? v.adsterraSnippet : v.snippet) !== "", { message: "Paste the chosen network's pop-under code before switching it on" })
     .default(DEFAULT_SPOT_POPUNDER),
   monetagSurfaces: z.array(z.enum(MONETAG_SURFACE_IDS)).max(20).default([]),
   // Moment placements: one Monetag tag per moment, parsed (not injected) client-side.

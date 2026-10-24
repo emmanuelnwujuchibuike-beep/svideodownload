@@ -31,6 +31,7 @@ function installDom() {
   browserBlocks = false;
   listeners = new Map();
   store = new Map();
+  spotEls = [visibleSpot("adClose"), visibleSpot("wallpaper"), visibleSpot("resultPreview")];
   vi.stubGlobal("window", {
     open: (url: string) => {
       if (browserBlocks) return null;
@@ -40,15 +41,20 @@ function installDom() {
     addEventListener: (t: string, fn: (e: unknown) => void) => void (listeners.get(t) ?? listeners.set(t, new Set()).get(t)!).add(fn),
     removeEventListener: (t: string, fn: (e: unknown) => void) => void listeners.get(t)?.delete(fn),
     setTimeout: (fn: () => void, ms?: number) => setTimeout(fn, ms),
-    location: { origin: "https://frenzsave.com" },
+    location: { origin: "https://frenzsave.com", href: "https://frenzsave.com/" },
+    innerWidth: 390,
+    innerHeight: 844,
     localStorage: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) },
   });
   vi.stubGlobal("document", {
     head: { appendChild: (el: FakeScript) => void scripts.push(el) },
     createElement: (): FakeScript => ({ dataset: {}, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } }),
-    querySelectorAll: () => [],
+    querySelectorAll: () => spotEls,
   });
 }
+/** the spot elements rendered on the page (visible, inside the viewport); [] = a page with no spot on screen */
+let spotEls: { getAttribute: () => string; getBoundingClientRect: () => { width: number; height: number; top: number; left: number; bottom: number; right: number } }[];
+const visibleSpot = (spot: string) => ({ getAttribute: () => spot, getBoundingClientRect: () => ({ width: 120, height: 40, top: 300, left: 20, bottom: 340, right: 140 }) });
 const fire = (type: string, e: unknown = {}) => [...(listeners.get(type) ?? [])].forEach((fn) => fn(e));
 /** a press on an element carrying data-ad-spot={spot} */
 const press = (spot: string | null) => fire("pointerdown", { target: { closest: () => (spot ? { getAttribute: () => spot } : null) }, clientX: 0, clientY: 0 });
@@ -204,7 +210,8 @@ describe("a tap once the pop-under is ready", () => {
     expect(opened).toEqual(["https://direct.example/go"]);
   });
 
-  it("other scripts' windows are NOT blocked outside that moment (other ads keep working)", async () => {
+  it("with 'only at these spots' OFF, other scripts' windows are NOT blocked outside that moment (other ads keep working)", async () => {
+    config = { monetagDirectLink: DIRECT, monetagSpotPopunder: { ...POP, spotsOnly: false, cooldownMinutes: 0 } };
     const open = await readyOpener();
     monetagOpens(); // a click anywhere, no spot tap involved
     expect(opened).toEqual(["https://pop.example/ad"]);
@@ -301,13 +308,22 @@ describe("wiring", () => {
  */
 // eslint-disable-next-line @typescript-eslint/no-implied-eval
 const thirdPartyOpen = new Function("u", "return window.open(u, '_blank');\n//# sourceURL=https://al5sm.com/tag.min.js") as (u: string) => Window | null;
+/** Our own code (a bundle of this site) opening a window. */
+// eslint-disable-next-line @typescript-eslint/no-implied-eval
+const firstPartyOpen = new Function("u", "return window.open(u, '_blank');\n//# sourceURL=https://frenzsave.com/_next/static/chunks/app.js") as (u: string) => Window | null;
+/** An ad's code run from eval with no file name — no script URL in the stack at all. */
+// eslint-disable-next-line @typescript-eslint/no-implied-eval
+const evalOpen = new Function("u", "return window.open(u, '_blank');") as (u: string) => Window | null;
 
 describe("less aggressive (owner 2026-10-23) — fewer pop-unders, the ones that show are normal Monetag impressions", () => {
-  it("the caller test: another origin's script is third-party; this origin, or no stack, is not (fails open)", () => {
-    expect(calledByThirdParty("Error\n    at x (https://al5sm.com/tag.min.js:1:200)", "https://frenzsave.com")).toBe(true);
+  it("the caller test: ours ONLY when every script in the stack is ours — eval/blob/inline/no stack count as an ad's", () => {
     expect(calledByThirdParty("Error\n    at y (https://frenzsave.com/_next/static/chunks/1.js:3:9)", "https://frenzsave.com")).toBe(false);
-    expect(calledByThirdParty(undefined, "https://frenzsave.com")).toBe(false);
-    expect(calledByThirdParty("Error\n    at <anonymous>", "https://frenzsave.com")).toBe(false);
+    expect(calledByThirdParty("y@https://frenzsave.com/_next/static/chunks/1.js:3:9", "https://frenzsave.com")).toBe(false); // Safari's format
+    expect(calledByThirdParty("Error\n    at x (https://al5sm.com/tag.min.js:1:200)", "https://frenzsave.com")).toBe(true);
+    expect(calledByThirdParty("Error\n    at x (https://al5sm.com/a.js:1:2)\n    at y (https://frenzsave.com/_next/1.js:3:9)", "https://frenzsave.com")).toBe(true);
+    expect(calledByThirdParty(undefined, "https://frenzsave.com")).toBe(true);
+    expect(calledByThirdParty("Error\n    at <anonymous>:1:5\n    at eval (eval at f)", "https://frenzsave.com")).toBe(true);
+    expect(calledByThirdParty("Error\n    at x (blob:https://frenzsave.com/1b2c:1:9)", "https://frenzsave.com")).toBe(true);
   });
 
   it("spots only: Monetag's window on a click ELSEWHERE on the page is refused; at a spot tap it opens", async () => {
@@ -319,10 +335,35 @@ describe("less aggressive (owner 2026-10-23) — fewer pop-unders, the ones that
     expect(opened).toEqual(["https://pop.example/spot"]);
   });
 
-  it("our own windows (downloads, viewers, notifications) are never held back, spot or not", async () => {
+  it("our own windows (downloads, viewers, notifications — called from our bundles) are never held back, spot or not", async () => {
     await readyOpener();
-    expect(window.open("https://frenzsave.com/download/1", "_blank")).not.toBeNull();
+    expect(firstPartyOpen("https://frenzsave.com/download/1")).not.toBeNull();
     expect(opened).toEqual(["https://frenzsave.com/download/1"]);
+  });
+
+  it("🔴 an ad's code with NO script URL in its stack (eval / inline) is held to the spot taps too (owner: 'opens everywhere')", async () => {
+    await readyOpener();
+    expect(evalOpen("https://pop.example/eval")).toBeNull();
+    expect(opened).toEqual([]);
+    press("adClose");
+    expect(evalOpen("https://pop.example/at-spot")).not.toBeNull();
+  });
+
+  it("the history page (no spot on screen): the tag never loads at all", async () => {
+    spotEls = [];
+    await opener();
+    vi.advanceTimersByTime(PRELOAD_MS * 5);
+    expect(scripts).toEqual([]);
+  });
+
+  it("a spot element that is mounted but not rendered (zero size, or below the screen) does not load it either", async () => {
+    spotEls = [
+      { getAttribute: () => "adClose", getBoundingClientRect: () => ({ width: 0, height: 0, top: 0, left: 0, bottom: 0, right: 0 }) },
+      { getAttribute: () => "adClose", getBoundingClientRect: () => ({ width: 100, height: 40, top: 2000, left: 0, bottom: 2040, right: 100 }) },
+    ];
+    await opener();
+    vi.advanceTimersByTime(PRELOAD_MS * 5);
+    expect(scripts).toEqual([]);
   });
 
   it("the cooldown: after a pop-under, the next 30 minutes open nothing at the spots (no direct link either); then again", async () => {

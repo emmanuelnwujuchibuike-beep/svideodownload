@@ -102,6 +102,50 @@ function loadTag(p: PublicSpotPopunder): void {
   document.head.appendChild(el);
 }
 
+/** Is an element carrying an ENABLED spot rendered and inside the viewport right now? */
+export function enabledSpotOnScreen(p: PublicSpotPopunder): boolean {
+  for (const el of document.querySelectorAll(`[${AD_SPOT_ATTRIBUTE}]`)) {
+    if (!p.spots.includes(el.getAttribute(AD_SPOT_ATTRIBUTE) as DirectLinkSpot)) continue;
+    const r = el.getBoundingClientRect();
+    const vw = window.innerWidth || 0;
+    const vh = window.innerHeight || 0;
+    if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && (!vh || r.top < vh) && (!vw || r.left < vw)) return true;
+  }
+  return false;
+}
+
+let watching = false;
+/** Load the tag the moment an enabled spot is on screen: checked now, then on DOM changes and scrolls until it loads. */
+function watchForVisibleSpot(p: PublicSpotPopunder): void {
+  if (tagState !== "idle" || watching) return;
+  if (enabledSpotOnScreen(p)) {
+    loadTag(p);
+    return;
+  }
+  if (typeof MutationObserver === "undefined") return;
+  watching = true;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const check = () => {
+    if (timer) return;
+    timer = setTimeout(() => {
+      timer = null;
+      if (tagState !== "idle") return stop();
+      if (enabledSpotOnScreen(p)) {
+        stop();
+        loadTag(p);
+      }
+    }, 400);
+  };
+  const mo = new MutationObserver(check);
+  const stop = () => {
+    mo.disconnect();
+    window.removeEventListener("scroll", check, true);
+    watching = false;
+  };
+  mo.observe(document.body, { childList: true, subtree: true });
+  window.addEventListener("scroll", check, { capture: true, passive: true });
+}
+
 /** A press on an enabled spot: the first one loads the tag; each one arms the pop-under for its tap. */
 function onPress(e: PointerEvent): void {
   if (!popunder) return;
@@ -135,8 +179,10 @@ export async function loadDirectLinkOpener(spot: DirectLinkSpot): Promise<SpotOp
       pressListening = true;
       window.addEventListener("pointerdown", onPress, true);
     }
-    // ready BEFORE the first tap (a tag loaded by the tap itself arrives too late to open on it)
-    window.setTimeout(() => loadTag(spotPopunder), POPUNDER_PRELOAD_MS);
+    // ready BEFORE the first tap (a tag loaded by the tap itself arrives too late to open on it) — but only once an
+    // enabled spot is really ON SCREEN: the ad close X lives in components mounted on most pages, and loading on mount
+    // put Monetag everywhere (owner, 2026-10-23: "opens everywhere even in history")
+    window.setTimeout(() => watchForVisibleSpot(spotPopunder), POPUNDER_PRELOAD_MS);
   }
 
   /** The backup: rolls the admin's chance, then opens in a new tab; a late pop-under is refused for a moment. */

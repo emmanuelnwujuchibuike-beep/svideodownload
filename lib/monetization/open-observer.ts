@@ -26,22 +26,80 @@ let thirdPartyGate: { allow: () => boolean; onOpened: () => void } | null = null
 
 export function setThirdPartyOpenGate(gate: { allow: () => boolean; onOpened: () => void } | null): void {
   thirdPartyGate = gate;
+  if (gate) installLinkGate();
 }
 
 /**
- * Did a script from ANOTHER origin make this call? Read from the call stack's script URLs. No stack, or nothing
- * but this origin, answers false — the window is let through (failing open never breaks one of our own features).
+ * Is this call PROVABLY ours? Owner, 2026-10-23: "still aggressive and opens everywhere even in history". The first
+ * version only stopped callers it could NAME as another origin — but an ad tag that runs its code from eval, a blob or an
+ * inline script leaves no foreign URL in the stack, and slipped through. Now it is the other way round: a call is ours
+ * only when its stack names script files and EVERY one is from this origin (our bundles always are: /_next/…).
+ * Anything else — another origin, no file at all, no stack — is treated as an ad's and held to the spot taps.
  */
 export function calledByThirdParty(stack: string | undefined, origin: string): boolean {
-  if (!stack) return false;
-  for (const m of stack.matchAll(/https?:\/\/[^\s)'"]+/g)) {
+  if (!stack) return true;
+  let ours = 0;
+  for (const m of stack.matchAll(/blob:[^\s)'"]+|https?:\/\/[^\s)'"]+/g)) {
+    if (m[0].startsWith("blob:")) return true;
     try {
       if (new URL(m[0]).origin !== origin) return true;
+      ours += 1;
     } catch {
-      /* not a URL */
+      return true;
     }
   }
-  return false;
+  return ours === 0;
+}
+
+/**
+ * A link an ad script opens by CLICKING it from code (a synthetic click on an <a target=_blank>) instead of window.open —
+ * the other way pop-unders open tabs. Only a synthetic click, a new-tab target, an http(s) page on another origin and no
+ * download: a member's own tap (a trusted click) and our download links are never touched.
+ */
+function adLikeLinkClick(a: HTMLAnchorElement, trusted: boolean): boolean {
+  if (trusted || a.hasAttribute("download") || (a.target || "").toLowerCase() !== "_blank") return false;
+  try {
+    const u = new URL(a.href, window.location.href);
+    return (u.protocol === "https:" || u.protocol === "http:") && u.origin !== window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+/** The gate's verdict for a window or a link click right now; counts what it refused. */
+function refusedByGate(stack: string | undefined): boolean {
+  if (state.own || !thirdPartyGate) return false;
+  if (!calledByThirdParty(stack, window.location?.origin ?? "")) return false;
+  if (thirdPartyGate.allow()) return false;
+  state.gated += 1;
+  return true;
+}
+
+let linkGateInstalled = false;
+function installLinkGate(): void {
+  if (linkGateInstalled || typeof HTMLAnchorElement === "undefined") return;
+  linkGateInstalled = true;
+  const click = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function gatedClick(this: HTMLAnchorElement) {
+    if (adLikeLinkClick(this, false)) {
+      const stack = new Error().stack;
+      if (refusedByGate(stack)) return;
+      if (!state.own && thirdPartyGate && calledByThirdParty(stack, window.location?.origin ?? "")) thirdPartyGate.onOpened();
+    }
+    return click.call(this);
+  };
+  // a synthetic click DISPATCHED on a link in the page: first in line (capture on window), cancelled when refused
+  window.addEventListener(
+    "click",
+    (e) => {
+      const a = (e.target as Element | null)?.closest?.("a") as HTMLAnchorElement | null;
+      if (a && adLikeLinkClick(a, e.isTrusted) && refusedByGate(new Error().stack)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    },
+    true,
+  );
 }
 
 export function installOpenObserver(): void {
@@ -53,11 +111,9 @@ export function installOpenObserver(): void {
       state.suppressed += 1;
       return null;
     }
-    const thirdParty = !state.own && !!thirdPartyGate && calledByThirdParty(new Error().stack, window.location?.origin ?? "");
-    if (thirdParty && !thirdPartyGate!.allow()) {
-      state.gated += 1;
-      return null;
-    }
+    const stack = new Error().stack;
+    const thirdParty = !state.own && !!thirdPartyGate && calledByThirdParty(stack, window.location?.origin ?? "");
+    if (thirdParty && refusedByGate(stack)) return null;
     const w = prev(url as string, target as string, features as string);
     // a browser's own popup blocker returns null: that is NOT a pop-under that showed
     if (w && !state.own) state.foreignOpened += 1;

@@ -73,8 +73,9 @@ export function getAiCredits(opts?: { ledger?: number }): Promise<Result<AiCredi
 }
 
 /** Begin an AI plan checkout: the server answers Paystack's hosted page; the browser navigates there. */
-export function beginAiPlanCheckout(plan: "ai_pro" | "ai_max", returnTo: string, provider?: "flutterwave" | "paystack" | null): Promise<Result<{ url: string }>> {
-  return request<{ url: string }>("/api/ai/subscriptions/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ plan, returnTo, ...(provider ? { provider } : {}) }) });
+/** billing (2026-10-24, Nigeria): the pressed button — "renew" (card, monthly) or "once" (one naira month). Never a price. */
+export function beginAiPlanCheckout(plan: "ai_pro" | "ai_max", returnTo: string, provider?: "flutterwave" | "paystack" | null, billing?: "renew" | "once"): Promise<Result<{ url: string }>> {
+  return request<{ url: string }>("/api/ai/subscriptions/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ plan, returnTo, ...(provider ? { provider } : {}), ...(billing ? { billing } : {}) }) });
 }
 
 /** 0192: one period of an AI plan paid with wallet credits — the server prices it and debits atomically. */

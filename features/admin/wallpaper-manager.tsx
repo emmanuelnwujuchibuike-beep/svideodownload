@@ -61,7 +61,7 @@ export function WallpaperManager({ wallpapers }: { wallpapers: AdminWallpaper[] 
       form.append("name", name);
       for (const f of Array.from(files)) form.append("files", f);
       const res = await fetch("/api/admin/wallpapers", { method: "POST", body: form });
-      const json = (await res.json()) as { ok?: boolean; created?: number; failed?: string[]; error?: string };
+      const json = (await res.json()) as { ok?: boolean; created?: number; failed?: string[]; lowRes?: string[]; error?: string };
       if (!res.ok || !json.ok) {
         setMsg({ ok: false, text: json.error ?? "Upload failed." });
         return;
@@ -70,7 +70,9 @@ export function WallpaperManager({ wallpapers }: { wallpapers: AdminWallpaper[] 
         ok: (json.created ?? 0) > 0,
         text:
           `${json.created ?? 0} uploaded.` +
-          (json.failed?.length ? ` ${json.failed.length} skipped: ${json.failed.join("; ")}` : ""),
+          (json.failed?.length ? ` ${json.failed.length} skipped: ${json.failed.join("; ")}` : "") +
+          // stored as uploaded — but too small to look sharp: no code can add detail the file doesn't have
+          (json.lowRes?.length ? ` Low resolution — will look soft on phones: ${json.lowRes.join("; ")}. Upload at least 1080×1920 for sharp Pro wallpapers.` : ""),
       });
       setName("");
       router.refresh();

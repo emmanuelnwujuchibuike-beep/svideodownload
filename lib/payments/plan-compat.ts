@@ -16,13 +16,16 @@ import { FLUTTERWAVE_CHECKOUT_CURRENCY } from "@/lib/flutterwave/config";
 export type PlanIncompatibility = "inactive" | "currency" | "no_fixed_amount" | "price_unknown" | "amount_mismatch" | "interval_mismatch";
 export type PlanCompat = { ok: true } | { ok: false; reason: PlanIncompatibility; detail: string };
 
-const fmt = (minor: number) => `${FLUTTERWAVE_CHECKOUT_CURRENCY} ${(minor / 100).toFixed(2)}`;
-
-export function flutterwavePlanCompat(facts: Pick<FlutterwavePlanFacts, "active" | "currency" | "amountMinor" | "interval">, shown: { amountMinor: number | null; interval: "monthly" | "yearly" }): PlanCompat {
+/**
+ * `currency`: what the plan must be in — USD (default), or NGN for the naira card plan offered in Nigeria (2026-10-24),
+ * whose own fixed amount is the price shown on the "Card — renews monthly" button.
+ */
+export function flutterwavePlanCompat(facts: Pick<FlutterwavePlanFacts, "active" | "currency" | "amountMinor" | "interval">, shown: { amountMinor: number | null; interval: "monthly" | "yearly" }, currency: string = FLUTTERWAVE_CHECKOUT_CURRENCY): PlanCompat {
+  const fmt = (minor: number) => `${currency} ${(minor / 100).toFixed(2)}`;
   if (!facts.active) return { ok: false, reason: "inactive", detail: "The Flutterwave plan is not active." };
-  if (facts.currency !== FLUTTERWAVE_CHECKOUT_CURRENCY) return { ok: false, reason: "currency", detail: `The Flutterwave plan is in ${facts.currency || "an unknown currency"}; Flutterwave charges ${FLUTTERWAVE_CHECKOUT_CURRENCY} here. Create the plan in ${FLUTTERWAVE_CHECKOUT_CURRENCY}.` };
+  if (facts.currency !== currency) return { ok: false, reason: "currency", detail: `The Flutterwave plan is in ${facts.currency || "an unknown currency"}; this plan must be in ${currency}. Create the plan in ${currency}.` };
   if (!(facts.amountMinor && facts.amountMinor > 0)) return { ok: false, reason: "no_fixed_amount", detail: "The Flutterwave plan has no fixed amount; renewals must be at a known price." };
-  if (shown.amountMinor === null) return { ok: false, reason: "price_unknown", detail: `The price members are shown is not a ${FLUTTERWAVE_CHECKOUT_CURRENCY} amount, so it can't be proven equal to the plan's ${fmt(facts.amountMinor)}.` };
+  if (shown.amountMinor === null) return { ok: false, reason: "price_unknown", detail: `The price members are shown is not a ${currency} amount, so it can't be proven equal to the plan's ${fmt(facts.amountMinor)}.` };
   if (facts.amountMinor !== shown.amountMinor) return { ok: false, reason: "amount_mismatch", detail: `The Flutterwave plan charges ${fmt(facts.amountMinor)} but members are shown ${fmt(shown.amountMinor)}. Make them equal (edit the plan, or the shown price).` };
   const interval = String(facts.interval ?? "").trim().toLowerCase();
   const normalized = interval === "annually" ? "yearly" : interval;

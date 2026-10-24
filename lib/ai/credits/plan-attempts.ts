@@ -3,7 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import type { AiPlanId, AiPlansConfig } from "@/lib/ai/credits/config";
-import { activateFlutterwavePlan, activateFlutterwaveSitePlan } from "@/lib/ai/credits/flutterwave-plans";
+import { activateFlutterwavePlan, activateFlutterwaveSitePlan, activateOneOffAiPlan, activateOneOffSitePlan } from "@/lib/ai/credits/flutterwave-plans";
 import { activateAiPlanFromVerifiedCharge, AI_PLAN_PURPOSE, isAiPlanId } from "@/lib/ai/credits/paystack";
 import { verifyFlutterwaveByReference } from "@/lib/flutterwave/client";
 import { flutterwaveConfigured, getFlutterwaveConfig } from "@/lib/flutterwave/config";
@@ -65,7 +65,7 @@ export interface PlanAttemptRow {
   /** Part 3.3: the provider's transaction id of the charge that SETTLED this attempt (its first charge) — null until then. */
   charge_id?: string | null;
   /** Part 3.3.2: { provider_plan_id } — the Flutterwave payment-plan id the SERVER chose at checkout (absent on Paystack rows). */
-  metadata?: { provider_plan_id?: unknown } | null;
+  metadata?: { provider_plan_id?: unknown; one_off_period?: unknown } | null;
 }
 const COLUMNS = "reference, user_id, provider, status, purpose, item_id, provider_amount, provider_currency, checkout_url, created_at, updated_at, charge_id, metadata";
 /** The columns a PlanAttemptRow needs (Part 5: the admin recheck reads a row the same way the sweep does). */
@@ -77,8 +77,24 @@ export function attemptPlanId(row: Pick<PlanAttemptRow, "metadata">): string | n
   return typeof v === "string" && /^\d{1,12}$/.test(v) ? v : null;
 }
 
+/**
+ * A ONE-OFF month (owner, 2026-10-24: "Nigeria: one-off naira month"): a plan paid once in naira — bank transfer,
+ * USSD, card — for one period, with no subscription and nothing renewing. Recorded on the attempt at checkout, so
+ * activation never guesses it from today's configuration.
+ */
+export function attemptIsOneOff(row: Pick<PlanAttemptRow, "metadata">): boolean {
+  return attemptOneOffPeriod(row) !== null;
+}
+
+/** The prepaid period recorded at checkout: one month, or the 3-month bundle (Nigeria, 2026-10-24). */
+export type OneOffPeriod = "monthly" | "quarterly";
+export function attemptOneOffPeriod(row: Pick<PlanAttemptRow, "metadata">): OneOffPeriod | null {
+  const v = row.metadata?.one_off_period;
+  return v === "monthly" || v === "quarterly" ? v : null;
+}
+
 /** Write the attempt BEFORE Paystack is called. False = not written → the checkout must not open. */
-export async function recordPlanAttempt(a: { reference: string; userId: string; plan: AiPlanId | SitePlanId; listCents: number; listCurrency: string; providerAmount: number; providerCurrency: string; provider?: "paystack" | "flutterwave"; purpose?: "ai_subscription" | "site_subscription"; providerPlanId?: string }): Promise<boolean> {
+export async function recordPlanAttempt(a: { reference: string; userId: string; plan: AiPlanId | SitePlanId; listCents: number; listCurrency: string; providerAmount: number; providerCurrency: string; provider?: "paystack" | "flutterwave"; purpose?: "ai_subscription" | "site_subscription"; providerPlanId?: string; oneOffPeriod?: OneOffPeriod; fxMinorPerUsd?: number | null }): Promise<boolean> {
   const { error } = await createAdminClient()
     .from("ai_topup_attempts")
     .insert({
@@ -96,6 +112,8 @@ export async function recordPlanAttempt(a: { reference: string; userId: string; 
       // Part 3.3.2: the payment plan the server opened the checkout on — activation is held to THIS, not to whatever the
       // admin configures later (0197's metadata column; nothing else writes it on a plan attempt)
       ...(a.providerPlanId ? { metadata: { provider_plan_id: a.providerPlanId } } : {}),
+      // a one-off naira month: no payment plan, one period, the rate it was priced at
+      ...(a.oneOffPeriod ? { metadata: { one_off_period: a.oneOffPeriod }, fx_minor_per_usd: a.fxMinorPerUsd ?? null } : {}),
     });
   if (error) console.error("[ai/plans] attempt record failed — checkout not opened", { reference: a.reference });
   return !error;
@@ -296,6 +314,17 @@ async function reconcileFlutterwavePlanAttempt(row: PlanAttemptRow, config: AiPl
       if (!match.ok || !plan) {
         await setStatus(row.reference, { status: "mismatch", status_reason: `flutterwave ${match.ok ? "plan" : match.mismatch}`, paid_amount: charge.amountMinor, paid_currency: charge.currency, charge_id: charge.externalId });
         return "mismatched";
+      }
+      // a one-off naira month (2026-10-24): no subscription to prove — the exact verified charge grants one period
+      if (attemptIsOneOff(row)) {
+        const period = attemptOneOffPeriod(row) ?? "monthly";
+        const once = site ? await activateOneOffSitePlan({ userId: row.user_id, plan: plan as SitePlanId, reference: row.reference, charge, period }) : await activateOneOffAiPlan({ userId: row.user_id, plan: plan as AiPlanId, reference: row.reference, charge, config, period });
+        if (!once.ok) {
+          await setStatus(row.reference, { status: "mismatch", status_reason: `not activated: ${once.reason}`.slice(0, 200), charge_id: charge.externalId });
+          return "mismatched";
+        }
+        await setStatus(row.reference, { status: "success", verified_at: new Date().toISOString(), charge_id: charge.externalId, external_id: charge.externalId, paid_amount: charge.amountMinor, paid_currency: charge.currency });
+        return "settled";
       }
       const planId = attemptPlanId(row);
       const activated = site ? await activateFlutterwaveSitePlan({ userId: row.user_id, plan: plan as SitePlanId, reference: row.reference, charge, planId }) : await activateFlutterwavePlan({ userId: row.user_id, plan: plan as AiPlanId, reference: row.reference, charge, config, planId });

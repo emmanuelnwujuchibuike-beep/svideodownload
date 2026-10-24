@@ -67,6 +67,9 @@ export interface FlutterwaveConfig {
   /** The Flutterwave PAYMENT PLAN ids (digits) of the Pro / Business site plans — "" = that plan is Paystack only. */
   sitePlanPro: string;
   sitePlanBusiness: string;
+  /** 2026-10-24: NAIRA payment plans for members in Nigeria paying by card (renew monthly). "" = the USD plan. */
+  sitePlanProNgn: string;
+  sitePlanBusinessNgn: string;
   /**
    * Part 3.3: may a RENEWAL be tied to its subscription automatically? Only once a SANDBOX renewal has proved that
    * GET /v3/subscriptions?transaction_id=<the renewal's id> returns the stored subscription (Flutterwave documents that
@@ -103,6 +106,8 @@ export interface StoredFlutterwave {
   /** Pro / Business site plans: their Flutterwave payment-plan ids */
   sitePlanPro?: string;
   sitePlanBusiness?: string;
+  sitePlanProNgn?: string;
+  sitePlanBusinessNgn?: string;
 }
 
 /**
@@ -134,6 +139,8 @@ export function resolveFlutterwaveConfig(env: Record<string, string | undefined>
     amountUnitConfirmed: unit.trim().toLowerCase() === "major",
     sitePlanPro: planId(stored?.sitePlanPro) || planId(env.FLUTTERWAVE_PLAN_PRO),
     sitePlanBusiness: planId(stored?.sitePlanBusiness) || planId(env.FLUTTERWAVE_PLAN_BUSINESS),
+    sitePlanProNgn: planId(stored?.sitePlanProNgn) || planId(env.FLUTTERWAVE_PLAN_PRO_NGN),
+    sitePlanBusinessNgn: planId(stored?.sitePlanBusinessNgn) || planId(env.FLUTTERWAVE_PLAN_BUSINESS_NGN),
     renewalLookupConfirmed: (env.FLUTTERWAVE_RENEWAL_TX_LOOKUP ?? "").trim().toLowerCase() === "confirmed",
   };
 }
@@ -179,6 +186,8 @@ export async function setFlutterwaveConfig(patch: StoredFlutterwave & { clearSec
     amountUnit: patch.amountUnit ?? current.amountUnit ?? "",
     sitePlanPro: patch.sitePlanPro ?? current.sitePlanPro ?? "",
     sitePlanBusiness: patch.sitePlanBusiness ?? current.sitePlanBusiness ?? "",
+    sitePlanProNgn: patch.sitePlanProNgn ?? current.sitePlanProNgn ?? "",
+    sitePlanBusinessNgn: patch.sitePlanBusinessNgn ?? current.sitePlanBusinessNgn ?? "",
   };
   const { error } = await db.from("payment_provider_settings").upsert({ provider: "flutterwave", value: next, updated_at: new Date().toISOString(), updated_by: adminId }, { onConflict: "provider" });
   if (error) throw new Error("payment_provider_settings write failed");

@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useState } from "react";
 
 import { aiButtonClass } from "@/features/ai/design/ai-button";
-import { defaultProvider, PaymentProviderPicker, usePaymentOptions, type PaymentProvider } from "@/features/ai/wallet/payment-provider-picker";
+import { defaultProvider, formatPlanPrice, PaymentProviderPicker, usePaymentOptions, type PaymentProvider } from "@/features/ai/wallet/payment-provider-picker";
 import type { CharacterReplaceCreditsView } from "@/lib/ai/character-replace/types";
 import { beginAiPlanCheckout, buyAiPlanWithCredits } from "@/lib/ai/credits/client";
 import type { AiPlansPublic } from "@/lib/ai/credits/config";
@@ -66,14 +66,20 @@ export function AiPlansSheet({
     return provider && list.includes(provider) ? provider : defaultProvider(list);
   };
 
+  // Nigeria (2026-10-24): the two buttons, each with its price — card renews monthly, or one month by bank transfer / USSD
+  const ngFor = (plan: "ai_pro" | "ai_max") => {
+    const b = options?.ngBilling?.[plan];
+    return b && (b.renew || b.once) ? b : null;
+  };
   const subscribe = useCallback(
-    async (plan: "ai_pro" | "ai_max") => {
+    async (plan: "ai_pro" | "ai_max", billing?: "renew" | "once") => {
       setBusy(plan);
       setError(null);
       haptic("medium");
       const list = options?.plans[plan] ?? [];
       const pick = provider && list.includes(provider) ? provider : (list[0] ?? null);
-      const res = await beginAiPlanCheckout(plan, returnTo, list.length > 1 ? pick : null);
+      // a Nigerian button is Flutterwave's (the server routes it); otherwise the member's provider pick as before
+      const res = await beginAiPlanCheckout(plan, returnTo, billing ? null : list.length > 1 ? pick : null, billing);
       if (!res.ok) {
         setBusy(null);
         setError(res.error);
@@ -182,9 +188,12 @@ export function AiPlansSheet({
                       </li>
                     ))}
                   </ul>
-                  {!isCurrent && !lower && p.purchasable ? (
+                  {!isCurrent && !lower && p.purchasable && !ngFor(p.id) ? (
                     <PaymentProviderPicker providers={providersFor(p.id)} value={chosenFor(p.id)} onChange={setProvider} disabled={busy !== null} light={top} className="mt-4" />
                   ) : null}
+                  {!isCurrent && !lower && p.purchasable && ngFor(p.id) ? (
+                    <NgPlanButtons buttons={ngFor(p.id)!} busy={busy === p.id} disabled={busy !== null} top={top} onPick={(billing) => void subscribe(p.id, billing)} />
+                  ) : (
                   <button
                     type="button"
                     disabled={isCurrent || lower || !p.purchasable || busy !== null}
@@ -197,6 +206,7 @@ export function AiPlansSheet({
                   >
                     {busy === p.id ? "Opening checkout…" : isCurrent ? "Current plan" : lower ? "Included in your plan" : !p.purchasable ? "Coming soon" : currentPlan ? `Upgrade to ${p.label}` : `Get ${p.label}`}
                   </button>
+                  )}
                   {!isCurrent && !lower ? (
                     <button
                       type="button"
@@ -256,4 +266,34 @@ export function relative(iso: string): string {
   if (h < 24) return `in ${Math.round(h)} hour${Math.round(h) === 1 ? "" : "s"}`;
   const d = Math.round(h / 24);
   return d === 1 ? "tomorrow" : `in ${d} days`;
+}
+
+/**
+ * Nigeria (2026-10-24): "Card — renews monthly" and "Bank transfer / USSD — 1 month", each showing what it charges
+ * (lib/payments/ng-plan-billing.ts). A button whose price is unavailable is not shown.
+ */
+function NgPlanButtons({ buttons, busy, disabled, top, onPick }: { buttons: { renew: { currency: string; amountMinor: number } | null; once: { currency: string; amountMinor: number } | null }; busy: boolean; disabled: boolean; top: boolean; onPick: (billing: "renew" | "once") => void }) {
+  const primary = top
+    ? "mt-4 flex min-h-[48px] w-full flex-col items-center justify-center rounded-full bg-white px-4 text-indigo-700 transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+    : aiButtonClass({ block: true, className: "mt-4 flex-col disabled:cursor-not-allowed disabled:opacity-60" });
+  const secondary = cn(
+    "mt-2 flex min-h-[48px] w-full flex-col items-center justify-center rounded-full px-4 transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60",
+    top ? "bg-white/15 text-white ring-1 ring-inset ring-white/40" : "bg-secondary text-foreground ring-1 ring-inset ring-black/[0.06]",
+  );
+  return (
+    <div>
+      {buttons.renew ? (
+        <button type="button" disabled={disabled} onClick={() => onPick("renew")} className={primary}>
+          <span className="text-[14px] font-bold">{busy ? "Opening checkout…" : `Card — ${formatPlanPrice(buttons.renew)}/month`}</span>
+          <span className="text-[11px] font-medium opacity-80">Renews monthly · cancel anytime</span>
+        </button>
+      ) : null}
+      {buttons.once ? (
+        <button type="button" disabled={disabled} onClick={() => onPick("once")} className={buttons.renew ? secondary : primary}>
+          <span className="text-[13px] font-semibold">{busy ? "Opening checkout…" : `Bank transfer / USSD — ${formatPlanPrice(buttons.once)}`}</span>
+          <span className="text-[11px] font-medium opacity-80">1 month · doesn&apos;t renew</span>
+        </button>
+      ) : null}
+    </div>
+  );
 }

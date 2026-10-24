@@ -31,6 +31,8 @@ interface Loaded {
   amountUnitConfirmed: boolean;
   sitePlanPro: string;
   sitePlanBusiness: string;
+  sitePlanProNgn: string;
+  sitePlanBusinessNgn: string;
   checkoutCurrency: string;
   webhookUrl: string;
   gates: Record<Purpose, { ok: true } | { ok: false; reason: string }>;
@@ -74,6 +76,9 @@ export function FlutterwaveSettings() {
   const [purposes, setPurposes] = useState<Purpose[]>([]);
   const [sitePlanPro, setSitePlanPro] = useState("");
   const [sitePlanBusiness, setSitePlanBusiness] = useState("");
+  // 2026-10-24: naira plans for card renewals in Nigeria
+  const [sitePlanProNgn, setSitePlanProNgn] = useState("");
+  const [sitePlanBusinessNgn, setSitePlanBusinessNgn] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
@@ -90,6 +95,8 @@ export function FlutterwaveSettings() {
       setPurposes(d.enabledPurposes);
       setSitePlanPro(d.sitePlanPro ?? "");
       setSitePlanBusiness(d.sitePlanBusiness ?? "");
+      setSitePlanProNgn(d.sitePlanProNgn ?? "");
+      setSitePlanBusinessNgn(d.sitePlanBusinessNgn ?? "");
     } catch {
       /* leave the form empty */
     }
@@ -107,6 +114,8 @@ export function FlutterwaveSettings() {
         amountUnit: unitConfirmed ? "major" : "unconfirmed",
         sitePlanPro: sitePlanPro.trim(),
         sitePlanBusiness: sitePlanBusiness.trim(),
+        sitePlanProNgn: sitePlanProNgn.trim(),
+        sitePlanBusinessNgn: sitePlanBusinessNgn.trim(),
         ...extra,
       };
       // secrets only when typed (blank = keep the saved one)
@@ -222,6 +231,8 @@ export function FlutterwaveSettings() {
         <div className="grid gap-2 sm:grid-cols-2">
           <SitePlanField label="Pro plan id" plan="pro" value={sitePlanPro} onChange={setSitePlanPro} />
           <SitePlanField label="Business plan id" plan="business" value={sitePlanBusiness} onChange={setSitePlanBusiness} />
+          <SitePlanField label="Pro NAIRA plan id — card renewals in Nigeria (optional)" value={sitePlanProNgn} onChange={setSitePlanProNgn} />
+          <SitePlanField label="Business NAIRA plan id — card renewals in Nigeria (optional)" value={sitePlanBusinessNgn} onChange={setSitePlanBusinessNgn} />
         </div>
       </div>
 
@@ -381,12 +392,12 @@ function Check({ checked, onChange, label }: { checked: boolean; onChange: (v: b
 }
 
 /** A site plan's Flutterwave payment-plan id, with "Check" — read back from Flutterwave (name, amount, interval) before it is saved. */
-function SitePlanField({ label, plan, value, onChange }: { label: string; plan: "pro" | "business"; value: string; onChange: (v: string) => void }) {
+function SitePlanField({ label, plan, value, onChange }: { label: string; plan?: "pro" | "business"; value: string; onChange: (v: string) => void }) {
   const [check, setCheck] = useState<{ busy: boolean; ok: boolean; text: string | null }>({ busy: false, ok: false, text: null });
   const run = async () => {
     setCheck({ busy: true, ok: false, text: null });
     try {
-      const res = await fetch("/api/admin/ai/plans/verify-flutterwave", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: value.trim(), for: plan }) });
+      const res = await fetch("/api/admin/ai/plans/verify-flutterwave", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(plan ? { id: value.trim(), for: plan } : { id: value.trim() }) });
       const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; usable?: boolean; checkoutCurrency?: string; compat?: { ok: boolean; detail?: string } | null; plan?: { name: string; amountMinor: number | null; currency: string; interval: string; active: boolean } } | null;
       if (json?.ok && json.plan && json.compat) {
         // Part 6: the same rule checkout applies — active, USD, monthly, and EQUAL to the /pricing price members see

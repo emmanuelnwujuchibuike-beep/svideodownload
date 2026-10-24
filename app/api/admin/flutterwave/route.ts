@@ -45,6 +45,8 @@ export async function GET() {
     // Pro / Business site plans: their Flutterwave payment-plan ids (not secrets)
     sitePlanPro: cfg.sitePlanPro,
     sitePlanBusiness: cfg.sitePlanBusiness,
+    sitePlanProNgn: cfg.sitePlanProNgn,
+    sitePlanBusinessNgn: cfg.sitePlanBusinessNgn,
     checkoutCurrency: FLUTTERWAVE_CHECKOUT_CURRENCY,
     webhookUrl: `${SITE_URL}/api/flutterwave/webhook`,
     // per purpose: open, or the exact reason it is closed (not_configured, amount_unit_unconfirmed, …)
@@ -77,6 +79,9 @@ const schema = z
     // a Flutterwave payment-plan id is digits; blank = that site plan is Paystack only
     sitePlanPro: z.string().trim().regex(/^(|\d{1,12})$/, "A Flutterwave plan id is a number.").optional(),
     sitePlanBusiness: z.string().trim().regex(/^(|\d{1,12})$/, "A Flutterwave plan id is a number.").optional(),
+    // 2026-10-24: naira plans for card renewals in Nigeria
+    sitePlanProNgn: z.string().trim().regex(/^(|\d{1,12})$/, "A Flutterwave plan id is a number.").optional(),
+    sitePlanBusinessNgn: z.string().trim().regex(/^(|\d{1,12})$/, "A Flutterwave plan id is a number.").optional(),
   })
   .strict();
 

@@ -25,6 +25,25 @@ export type PaymentProvider = TopupProviderId;
 export interface PaymentOptionsView {
   walletTopup: PaymentProvider[];
   plans: Record<"ai_pro" | "ai_max", PaymentProvider[]>;
+  /**
+   * Nigeria only (2026-10-24): the two plan buttons and what each charges — "renew" (card, monthly subscription) and
+   * "once" (one month in naira: bank transfer, USSD, card). null outside Nigeria. lib/payments/ng-plan-billing.ts.
+   */
+  ngBilling?: Record<"ai_pro" | "ai_max" | "pro" | "business", NgPlanButtons> | null;
+}
+export interface NgPlanButtons {
+  renew: { currency: string; amountMinor: number } | null;
+  once: { currency: string; amountMinor: number } | null;
+  /** Pro / Business: the 3-month bundle, paid once in naira (2026-10-24) */
+  quarter?: { currency: string; amountMinor: number } | null;
+}
+
+/** A plan button's price: "₦16,300" / "$10.00" — the amount the checkout will charge. */
+export function formatPlanPrice(p: { currency: string; amountMinor: number }): string {
+  const major = p.amountMinor / 100;
+  if (p.currency === "NGN") return `₦${Math.round(major).toLocaleString("en-US")}`;
+  if (p.currency === "USD") return `${major.toFixed(2)}`;
+  return `${p.currency} ${major.toFixed(2)}`;
 }
 
 const COPY: Record<PaymentProvider, { label: string; hint: string }> = {

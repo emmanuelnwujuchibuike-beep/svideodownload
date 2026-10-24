@@ -30,11 +30,15 @@ vi.mock("@/lib/analytics/events", () => ({ trackEvent: () => {} }));
 vi.mock("@/lib/monetization/promo", () => ({ isPromoActiveNow: async () => false }));
 // Part 6: the /pricing price members are SHOWN — a Flutterwave plan is sold only at exactly this amount
 let shown: { pro: string; business: string };
-vi.mock("@/lib/monetization/pricing", () => ({ getPricing: async () => ({ pro: { name: "Pro", price: shown.pro, period: "/mo" }, business: { name: "Business", price: shown.business, period: "/mo" } }) }));
+// the Nigeria 3-month bundles (2026-10-24), Admin → Pricing — the owner's $4.99 / $12.99
+let quarterPrices: { pro: string; business: string } = { pro: "$4.99", business: "$12.99" };
+vi.mock("@/lib/monetization/pricing", () => ({ getPricing: async () => ({ pro: { name: "Pro", price: shown.pro, period: "/mo" }, business: { name: "Business", price: shown.business, period: "/mo" }, ngQuarterly: quarterPrices }) }));
 vi.mock("@/lib/landing/settings", async () => {
   const { normalizeAiWalletConfig } = await import("@/lib/ai/credits/wallet-config");
-  return { getLandingSettings: async () => ({ frenzAiCurrency: "USD", frenzAiPlans: { enabled: true, wallet: normalizeAiWalletConfig(null), plans: {} } }) };
+  return { getLandingSettings: async () => ({ frenzAiCurrency: "USD", frenzAiPlans: { enabled: true, wallet: normalizeAiWalletConfig(null), plans: {} }, frenzAiCharacterReplace: { recharge: { checkoutCurrency: "NGN" } } }) };
 });
+// the live rate (2026-10-24 naira months): ₦1,600 per dollar
+vi.mock("@/lib/ai/character-replace/fx-rate-server", () => ({ resolveCheckoutRate: async () => ({ minorPerUsd: 160_000 }) }));
 vi.mock("@/lib/paystack/paystack", async (orig) => ({
   ...(await orig<typeof import("@/lib/paystack/paystack")>()),
   paystackEnabled: async () => true,
@@ -73,7 +77,7 @@ const { getLandingSettings } = await import("@/lib/landing/settings");
 const { scriptPlanBillingRpcs } = await import("@/lib/testing/plan-billing-model");
 const { FlutterwaveHttpError } = await import("@/lib/flutterwave/client");
 
-const checkout = (body: Record<string, unknown> = { plan: "pro" }) => CHECKOUT(new Request("https://frenzsave.com/api/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
+const checkout = (body: Record<string, unknown> = { plan: "pro" }, country?: string) => CHECKOUT(new Request("https://frenzsave.com/api/checkout", { method: "POST", headers: { "content-type": "application/json", ...(country ? { "cf-ipcountry": country } : {}) }, body: JSON.stringify(body) }));
 const portal = (body?: Record<string, unknown>) => PORTAL(new Request("https://frenzsave.com/api/billing/portal", { method: "POST", headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined }));
 const attempts = () => (db.tables.ai_topup_attempts ?? []).filter((r) => r.purpose === "site_subscription");
 const sub = () => (db.tables.subscriptions ?? [])[0];
@@ -328,5 +332,138 @@ describe("upgrades stay on the rail that bills the current plan (Part 3.3, M2 �
     db.tables.subscriptions!.push(fwRow());
     expect(await (await checkout({ plan: "business", provider: "paystack" })).json()).toMatchObject({ provider: "flutterwave" });
     expect(calls.some((c) => c.startsWith("paystack:"))).toBe(false);
+  });
+});
+
+/**
+ * Nigeria, two buttons (owner, 2026-10-24): "Bank transfer / USSD — 1 month" is ONE month paid once in naira (every naira
+ * method — no payment plan); "Card — renews monthly" is a real Flutterwave subscription, on the naira plan when one is set.
+ */
+describe("Nigeria — a one-off naira month, or a card subscription", () => {
+  const NAIRA_MONTH = 900 * 1600; // the shown $9.00 at ₦1,600/$ = ₦14,400 = 1,440,000 kobo
+  const settle = async () => {
+    for (const r of attempts()) {
+      r.created_at = ago(10 * 60_000);
+      r.updated_at = ago(10 * 60_000);
+    }
+    return reconcilePendingPlanAttempts(await config());
+  };
+  beforeEach(() => {
+    process.env.FLUTTERWAVE_VERIFIED_CURRENCIES = "USD,NGN";
+  });
+
+  it("the default button in Nigeria opens a NAIRA one-off checkout — no payment plan, so bank transfer / USSD show", async () => {
+    expect(await (await checkout({ plan: "pro" }, "NG")).json()).toMatchObject({ provider: "flutterwave" });
+    expect(calls).toEqual([`fw:checkout:undefined:${NAIRA_MONTH}:NGN:row-first`]);
+    expect(attempts()[0]).toMatchObject({ provider: "flutterwave", item_id: "pro", provider_amount: NAIRA_MONTH, provider_currency: "NGN", amount_cents: 900, currency: "USD", fx_minor_per_usd: 160_000, metadata: { one_off_period: "monthly" } });
+  });
+
+  it("a verified naira payment grants ONE month that ends on its own (no subscription, no renewal grace); a second run changes nothing", async () => {
+    await checkout({ plan: "pro", billing: "once" }, "NG");
+    fwVerify = (ref) => fwCharge(ref, { amountMinor: NAIRA_MONTH, currency: "NGN", channel: "bank_transfer" });
+    expect(await settle()).toMatchObject({ settled: 1 });
+    expect(sub()).toMatchObject({ plan: "pro", status: "active", provider: "flutterwave", subscription_ref: null, cancel_at_period_end: true, contract_amount_minor: null });
+    const end = Date.parse(String(sub()!.current_period_end));
+    expect(end - Date.now()).toBeGreaterThan(27 * DAY);
+    expect(end - Date.now()).toBeLessThan(32 * DAY);
+    expect(role()).toBe("pro");
+    expect(flutterwaveSitePlanCurrent({ ...sub()!, current_period_end: new Date(Date.now() - 60_000).toISOString() })).toBe(false);
+    expect(await settle()).toMatchObject({ examined: 0 });
+  });
+
+  it("a short naira payment, or one in dollars, grants nothing", async () => {
+    await checkout({ plan: "pro" }, "NG");
+    fwVerify = (ref) => fwCharge(ref, { amountMinor: NAIRA_MONTH - 10_000, currency: "NGN" });
+    expect(await settle()).toMatchObject({ mismatched: 1 });
+    expect(sub()).toBeUndefined();
+    expect(role()).toBe("user");
+  });
+
+  it("paying again for the SAME plan while it runs adds a month from its current end", async () => {
+    const { activateOneOffSitePlan: activate } = await import("./flutterwave-plans");
+    const runningEnd = new Date(Date.now() + 10 * DAY).toISOString();
+    db.tables.subscriptions = [{ user_id: USER, plan: "pro", status: "active", provider: "flutterwave", subscription_ref: null, cancel_at_period_end: true, current_period_end: runningEnd, last_reference: "frenz_site_fw_old" }];
+    expect(await activate({ userId: USER, plan: "pro", reference: "frenz_site_fw_new", charge: fwCharge("frenz_site_fw_new", { amountMinor: NAIRA_MONTH, currency: "NGN" }) })).toEqual({ ok: true });
+    const end = Date.parse(String(sub()!.current_period_end));
+    expect(end - Date.parse(runningEnd)).toBeGreaterThan(27 * DAY);
+    // the same reference again: nothing more
+    expect(await activate({ userId: USER, plan: "pro", reference: "frenz_site_fw_new", charge: fwCharge("frenz_site_fw_new", { amountMinor: NAIRA_MONTH, currency: "NGN" }) })).toEqual({ ok: true });
+    expect(Date.parse(String(sub()!.current_period_end))).toBe(end);
+  });
+
+  it("🔴 never beside an auto-renewing subscription: no one-off checkout, and a paid one is held for review, not applied", async () => {
+    const { openOneOffPlanCheckout } = await import("./plan-oneoff");
+    const { activateOneOffSitePlan: activate } = await import("./flutterwave-plans");
+    db.tables.subscriptions = [{ user_id: USER, plan: "pro", status: "active", provider: "flutterwave", subscription_ref: "55", cancel_at_period_end: false, current_period_end: new Date(Date.now() + 10 * DAY).toISOString() }];
+    expect(await openOneOffPlanCheckout({ market: "NG", purpose: "site_subscription", userId: USER, email: "a@b.co", plan: "business", shownUsdCents: 900, title: "x", callbackUrl: "https://x" })).toBeNull();
+    expect(await activate({ userId: USER, plan: "business", reference: "frenz_site_fw_x", charge: fwCharge("frenz_site_fw_x", { amountMinor: NAIRA_MONTH, currency: "NGN" }) })).toMatchObject({ ok: false });
+    expect(sub()).toMatchObject({ plan: "pro", subscription_ref: "55" });
+    expect(db.tables.plan_billing_reviews!.some((r) => String(r.reason).includes("one-off month was paid while an auto-renewing subscription"))).toBe(true);
+  });
+
+  it("'Card — renews monthly' without a naira plan: the USD subscription, exactly as outside Nigeria", async () => {
+    expect(await (await checkout({ plan: "pro", billing: "renew" }, "NG")).json()).toMatchObject({ provider: "flutterwave" });
+    expect(calls).toEqual(["fw:plan:501", "fw:checkout:501:900:USD:row-first"]);
+  });
+
+  it("'Card — renews monthly' with a naira plan set: that NGN subscription, at its own amount", async () => {
+    process.env.FLUTTERWAVE_PLAN_PRO_NGN = "601";
+    fwPlan = { id: "601", amountMinor: 1_450_000, currency: "NGN", interval: "monthly", active: true };
+    try {
+      expect(await (await checkout({ plan: "pro", billing: "renew" }, "NG")).json()).toMatchObject({ provider: "flutterwave" });
+      expect(calls).toEqual(["fw:plan:601", "fw:checkout:601:1450000:NGN:row-first"]);
+      expect(attempts()[0]).toMatchObject({ provider_currency: "NGN", provider_amount: 1_450_000, metadata: { provider_plan_id: "601" } });
+    } finally {
+      delete process.env.FLUTTERWAVE_PLAN_PRO_NGN;
+    }
+  });
+
+  it("outside Nigeria nothing changes: the USD subscription, whatever the body says", async () => {
+    expect(await (await checkout({ plan: "pro", billing: "once" }, "GB")).json()).toMatchObject({ provider: "flutterwave" });
+    expect(calls).toEqual(["fw:plan:501", "fw:checkout:501:900:USD:row-first"]);
+  });
+
+  it("the body can only name a button — a price or an unknown billing value is refused", async () => {
+    expect((await checkout({ plan: "pro", billing: "free" }, "NG")).status).toBe(400);
+    expect(calls).toEqual([]);
+  });
+});
+
+describe("Nigeria — the 3-month bundles (Pro $4.99, Business $12.99), paid once in naira", () => {
+  beforeEach(() => {
+    process.env.FLUTTERWAVE_VERIFIED_CURRENCIES = "USD,NGN";
+    quarterPrices = { pro: "$4.99", business: "$12.99" };
+  });
+  const settle = async () => {
+    for (const r of attempts()) {
+      r.created_at = ago(10 * 60_000);
+      r.updated_at = ago(10 * 60_000);
+    }
+    return reconcilePendingPlanAttempts(await config());
+  };
+
+  it("Pro 3 months: ONE naira checkout at $4.99 × ₦1,600 = ₦7,984 — no payment plan, every naira method", async () => {
+    expect(await (await checkout({ plan: "pro", billing: "quarter" }, "NG")).json()).toMatchObject({ provider: "flutterwave" });
+    expect(calls).toEqual(["fw:checkout:undefined:798400:NGN:row-first"]);
+    expect(attempts()[0]).toMatchObject({ provider_amount: 798_400, provider_currency: "NGN", amount_cents: 499, metadata: { one_off_period: "quarterly" } });
+  });
+
+  it("Business 3 months at $12.99; a verified payment grants THREE months that end on their own", async () => {
+    await checkout({ plan: "business", billing: "quarter" }, "NG");
+    expect(calls).toEqual(["fw:checkout:undefined:2078400:NGN:row-first"]);
+    fwVerify = (ref) => fwCharge(ref, { amountMinor: 2_078_400, currency: "NGN", channel: "ussd" });
+    expect(await settle()).toMatchObject({ settled: 1 });
+    expect(sub()).toMatchObject({ plan: "business", provider: "flutterwave", subscription_ref: null, cancel_at_period_end: true });
+    const days = (Date.parse(String(sub()!.current_period_end)) - Date.now()) / DAY;
+    expect(days).toBeGreaterThan(88);
+    expect(days).toBeLessThan(93);
+  });
+
+  it("outside Nigeria, or with no bundle price set, it is refused — and never falls back to a Paystack monthly plan", async () => {
+    expect((await checkout({ plan: "pro", billing: "quarter" }, "GB")).ok).toBe(false);
+    quarterPrices = { pro: "", business: "" };
+    expect((await checkout({ plan: "pro", billing: "quarter" }, "NG")).ok).toBe(false);
+    expect(calls.some((c) => c.startsWith("fw:checkout") || c.startsWith("paystack:"))).toBe(false);
+    expect(attempts()).toHaveLength(0);
   });
 });

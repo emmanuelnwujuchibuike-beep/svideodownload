@@ -12,7 +12,13 @@ const tier = z.object({
   price: z.string().trim().min(1).max(20),
   period: z.string().trim().max(10),
 });
-const schema = z.object({ pro: tier, business: tier });
+// the Nigeria 3-month bundles (2026-10-24): "" = off, else a plain dollar price — validated so the checkout can price it
+const bundlePrice = z
+  .string()
+  .trim()
+  .max(20)
+  .regex(/^(|\$?\d{1,6}(\.\d{1,2})?)$/, "A 3-month bundle price is a dollar amount like $4.99 (or empty for off).");
+const schema = z.object({ pro: tier, business: tier, ngQuarterly: z.object({ pro: bundlePrice, business: bundlePrice }).optional() });
 
 /** Admin-only: update the displayed pricing shown on /pricing. */
 export async function POST(request: Request) {
@@ -32,7 +38,7 @@ export async function POST(request: Request) {
   }
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Fill in both plans' name, price and period." }, { status: 400 });
+    return NextResponse.json({ error: parsed.error.issues.find((i) => i.path[0] === "ngQuarterly")?.message ?? "Fill in both plans' name, price and period." }, { status: 400 });
   }
 
   try {

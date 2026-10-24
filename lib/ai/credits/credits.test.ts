@@ -219,10 +219,14 @@ describe("the money order at /start — complimentary → included credits → t
     expect(checkout).toContain("planCode: c.plan.paystackPlanCode");
     expect(checkout).toContain("metadata: { purpose: AI_PLAN_PURPOSE, ai_plan: c.planId }");
     // Part 3: the only amount is the one READ FROM PAYSTACK for the plan (stored on the attempt) — the body has none
-    expect(checkout).toContain('const schema = z.object({ plan: z.enum(["ai_pro", "ai_max"]), returnTo: z.string().max(200).optional(), provider: z.string().max(20).optional() }).strict();');
+    // 2026-10-24: + billing — the pressed button in Nigeria ("renew" | "once"), never a price; still strict (no amount can be added)
+    expect(checkout).toContain('const schema = z.object({ plan: z.enum(["ai_pro", "ai_max"]), returnTo: z.string().max(200).optional(), provider: z.string().max(20).optional(), billing: z.enum(["renew", "once"]).optional() }).strict();');
     // the amounts are READ FROM THE PROVIDERS for the configured plan (Paystack's PLN_ code; Flutterwave's plan id)
     expect(checkout).toContain("facts = await readPaystackPlan(c.plan.paystackPlanCode);");
-    expect(checkout).toContain("facts = await readFlutterwavePlan(c.plan.flutterwavePlanId);");
+    // the Flutterwave plan read is one of the CONFIGURED ids (the naira card plan in Nigeria, else the USD plan)
+    expect(checkout).toContain("const fwPlanId = ngnPlan || c.plan.flutterwavePlanId;");
+    expect(checkout).toContain("const ngnPlan = c.market === \"NG\" && c.billing === \"renew\" ? c.plan.flutterwavePlanIdNgn : \"\";");
+    expect(checkout).toContain("facts = await readFlutterwavePlan(fwPlanId);");
     expect(checkout).not.toMatch(/parsed\.data\.amount|body\.amount/);
     const verify = code("app/api/ai/subscriptions/verify/route.ts");
     expect(verify).toContain("const charge = await verifyTransaction(reference);");

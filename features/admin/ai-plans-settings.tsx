@@ -54,9 +54,9 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
   const symbol = aiCurrencySymbol(settings.frenzAiCurrency);
 
   const [enabled, setEnabled] = useState(cfg.enabled);
-  const [plans, setPlans] = useState<Record<AiPlanId, { enabled: boolean; label: string; price: string; interval: "monthly" | "yearly"; daily: string; weekly: string; code: string; fwPlan: string; creditsPrice: string; blurb: string }>>({
-    ai_pro: { enabled: cfg.plans.ai_pro.enabled, label: cfg.plans.ai_pro.label, price: minorToMajorInput(cfg.plans.ai_pro.priceCents), interval: cfg.plans.ai_pro.interval, daily: String(cfg.plans.ai_pro.dailyCredits), weekly: String(cfg.plans.ai_pro.weeklyCredits), code: cfg.plans.ai_pro.paystackPlanCode, fwPlan: cfg.plans.ai_pro.flutterwavePlanId, creditsPrice: String(cfg.plans.ai_pro.creditsPrice || ""), blurb: cfg.plans.ai_pro.blurb },
-    ai_max: { enabled: cfg.plans.ai_max.enabled, label: cfg.plans.ai_max.label, price: minorToMajorInput(cfg.plans.ai_max.priceCents), interval: cfg.plans.ai_max.interval, daily: String(cfg.plans.ai_max.dailyCredits), weekly: String(cfg.plans.ai_max.weeklyCredits), code: cfg.plans.ai_max.paystackPlanCode, fwPlan: cfg.plans.ai_max.flutterwavePlanId, creditsPrice: String(cfg.plans.ai_max.creditsPrice || ""), blurb: cfg.plans.ai_max.blurb },
+  const [plans, setPlans] = useState<Record<AiPlanId, { enabled: boolean; label: string; price: string; interval: "monthly" | "yearly"; daily: string; weekly: string; code: string; fwPlan: string; fwPlanNgn: string; creditsPrice: string; blurb: string }>>({
+    ai_pro: { enabled: cfg.plans.ai_pro.enabled, label: cfg.plans.ai_pro.label, price: minorToMajorInput(cfg.plans.ai_pro.priceCents), interval: cfg.plans.ai_pro.interval, daily: String(cfg.plans.ai_pro.dailyCredits), weekly: String(cfg.plans.ai_pro.weeklyCredits), code: cfg.plans.ai_pro.paystackPlanCode, fwPlan: cfg.plans.ai_pro.flutterwavePlanId, fwPlanNgn: cfg.plans.ai_pro.flutterwavePlanIdNgn, creditsPrice: String(cfg.plans.ai_pro.creditsPrice || ""), blurb: cfg.plans.ai_pro.blurb },
+    ai_max: { enabled: cfg.plans.ai_max.enabled, label: cfg.plans.ai_max.label, price: minorToMajorInput(cfg.plans.ai_max.priceCents), interval: cfg.plans.ai_max.interval, daily: String(cfg.plans.ai_max.dailyCredits), weekly: String(cfg.plans.ai_max.weeklyCredits), code: cfg.plans.ai_max.paystackPlanCode, fwPlan: cfg.plans.ai_max.flutterwavePlanId, fwPlanNgn: cfg.plans.ai_max.flutterwavePlanIdNgn, creditsPrice: String(cfg.plans.ai_max.creditsPrice || ""), blurb: cfg.plans.ai_max.blurb },
   });
   const [freeEnabled, setFreeEnabled] = useState(cfg.freeCreations.enabled);
   const [freeCounts, setFreeCounts] = useState({ free: cfg.freeCreations.free === null ? "" : String(cfg.freeCreations.free), pro: cfg.freeCreations.pro === null ? "" : String(cfg.freeCreations.pro), business: cfg.freeCreations.business === null ? "" : String(cfg.freeCreations.business) });
@@ -150,6 +150,8 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
             weeklyCredits: int(plans[id].weekly, cfg.plans[id].weeklyCredits),
             paystackPlanCode: plans[id].code.trim(),
             flutterwavePlanId: plans[id].fwPlan.trim(),
+            // 2026-10-24: carried in every save, or a save would wipe it
+            flutterwavePlanIdNgn: plans[id].fwPlanNgn.trim(),
             creditsPrice: plans[id].creditsPrice.trim() === "" ? 0 : int(plans[id].creditsPrice, 0),
             blurb: plans[id].blurb.trim() || cfg.plans[id].blurb,
           },
@@ -328,6 +330,9 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
                         </button>
                       </div>
                       {fwCheck[id].text ? <span className={cn("mt-1 block text-[11px] leading-relaxed", fwCheck[id].ok ? "text-emerald-700 dark:text-emerald-300" : "text-rose-600")}>{fwCheck[id].text}</span> : null}
+                    </Field>
+                    <Field id={`${id}-fw-plan-ngn`} className="col-span-2" label="Flutterwave NAIRA plan id — card renewals in Nigeria" hint="A monthly NGN payment plan for members in Nigeria who pick “Card — renews monthly”. Its own amount is the naira price on that button. Empty = card renewals in Nigeria use the USD plan. Bank transfer / USSD is always a one-off month in naira at today’s rate.">
+                      <input id={`${id}-fw-plan-ngn`} inputMode="numeric" value={p.fwPlanNgn} onChange={(e) => set({ fwPlanNgn: e.target.value.replace(/[^0-9]/g, "") })} className={input} placeholder="e.g. 123457" />
                     </Field>
                     <Field id={`${id}-credits-price`} label="Price when paid with credits" hint="Credits for one period of this plan. Empty = the plan price at the normal credit rate.">
                       <input id={`${id}-credits-price`} inputMode="numeric" value={p.creditsPrice} onChange={(e) => set({ creditsPrice: e.target.value.replace(/[^0-9]/g, "") })} placeholder="Normal rate" className={small} />

@@ -15,12 +15,15 @@ interface Tier {
 interface Pricing {
   pro: Tier;
   business: Tier;
+  ngQuarterly?: { pro: string; business: string };
 }
 
 export function PricingEditor({ pricing }: { pricing: Pricing }) {
   const router = useRouter();
   const [pro, setPro] = useState<Tier>(pricing.pro);
   const [business, setBusiness] = useState<Tier>(pricing.business);
+  // the Nigeria 3-month bundles (2026-10-24): carried in every save
+  const [ngQuarterly, setNgQuarterly] = useState(pricing.ngQuarterly ?? { pro: "", business: "" });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   /*
@@ -39,7 +42,7 @@ export function PricingEditor({ pricing }: { pricing: Pricing }) {
       const res = await sensitiveFetch("/api/admin/pricing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pro, business }),
+        body: JSON.stringify({ pro, business, ngQuarterly }),
       });
       const json = await res.json();
       setMsg(
@@ -68,6 +71,27 @@ export function PricingEditor({ pricing }: { pricing: Pricing }) {
       <form onSubmit={save} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <TierFields label="Pro" tier={pro} onChange={setPro} />
         <TierFields label="Business" tier={business} onChange={setBusiness} />
+        <fieldset className="space-y-2 sm:col-span-2">
+          <legend className="text-sm font-semibold">Nigeria — 3-month bundles</legend>
+          <p className="text-xs text-muted-foreground">
+            Members in Nigeria can buy 3 months at once, paid in naira at today&apos;s rate (bank transfer, USSD or card). Nothing
+            renews. A dollar price like $4.99 — leave empty to not offer it.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {(["pro", "business"] as const).map((id) => (
+              <label key={id} className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-muted-foreground">{id === "pro" ? "Pro" : "Business"} — 3 months</span>
+                <input
+                  value={ngQuarterly[id]}
+                  onChange={(e) => setNgQuarterly((q) => ({ ...q, [id]: e.target.value }))}
+                  placeholder="Not offered"
+                  inputMode="decimal"
+                  className="h-10 w-full rounded-xl bg-background px-3 text-sm outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+                />
+              </label>
+            ))}
+          </div>
+        </fieldset>
         <div className="sm:col-span-2">
           <button
             type="submit"

@@ -309,6 +309,94 @@ export async function activateFlutterwaveSitePlan(i: { userId: string; plan: Sit
   return { ok: true };
 }
 
+/* ───────────────────── one-off naira months (Nigeria, 2026-10-24) ───────────────────── */
+
+/**
+ * A plan paid ONCE for one month (owner, 2026-10-24: "Nigeria: one-off naira month") — bank transfer, USSD or card in
+ * naira, so no Flutterwave subscription exists and nothing renews. The charge was already verified EXACTLY against the
+ * attempt row (amount and currency written at checkout). The period starts now — or, renewing the SAME plan while it is
+ * still running, at its current end — and the row is marked to end with it (`cancel_at_period_end`: no renewal grace,
+ * the existing expiry ends it). Idempotent on the reference. A member who still has an auto-renewing subscription is
+ * never overwritten (it would keep charging, untracked): a review, no plan change.
+ */
+type OneOffInput = { userId: string; reference: string; charge: VerifiedCharge; /** the prepaid period recorded at checkout (default one month) */ period?: "monthly" | "quarterly" };
+
+function oneOffWindow(existing: { plan: string | null; status: string | null; provider: string | null; current_period_end: string | null } | null, plan: string, charge: VerifiedCharge, period: "monthly" | "quarterly" = "monthly"): { start: string; end: string } {
+  const now = Date.now();
+  const runningEnd = existing?.current_period_end ? Date.parse(existing.current_period_end) : NaN;
+  const sameRunning = existing?.plan === plan && existing.provider === "flutterwave" && existing.status === "active" && Number.isFinite(runningEnd) && runningEnd > now;
+  const start = sameRunning ? new Date(runningEnd).toISOString() : paidStart(charge);
+  return { start, end: addFlutterwaveInterval(start, period) };
+}
+
+async function recurringStillActive(i: OneOffInput, target: PlanTarget, row: { provider: string | null; subscription_ref: string | null; cancel_at_period_end: boolean | null; status: string | null } | null): Promise<boolean> {
+  if (!(row?.provider === "flutterwave" && row.subscription_ref && !row.cancel_at_period_end && row.status === "active")) return false;
+  await queueBillingReview({ dedupeKey: `oneoff:${i.reference}`, kind: "activation", reason: "a one-off month was paid while an auto-renewing subscription is still active — not applied; settle by hand", transactionId: i.charge.externalId, target, userId: i.userId, subscriptionRef: row.subscription_ref, amountMinor: i.charge.amountMinor, currency: i.charge.currency });
+  return true;
+}
+
+export async function activateOneOffAiPlan(i: OneOffInput & { plan: AiPlanId; config: AiPlansConfig }): Promise<ActivationResult> {
+  const p = i.config.plans[i.plan];
+  if (!p?.enabled) return { ok: false, reason: "plan disabled" };
+  const { data } = await createAdminClient().from("ai_subscriptions").select("*").eq("user_id", i.userId).maybeSingle();
+  const existing = (data as AiSubscriptionRow | null) ?? null;
+  if (existing?.last_reference === i.reference) return { ok: true };
+  if (await recurringStillActive(i, "ai_subscription", existing)) return { ok: false, reason: "auto-renewing subscription still active" };
+  const w = oneOffWindow(existing, i.plan, i.charge, i.period);
+  const written = await upsertAiSubscription({
+    userId: i.userId,
+    plan: i.plan,
+    status: "active",
+    provider: "flutterwave",
+    planCode: null,
+    customerRef: i.charge.customerEmail ?? null,
+    subscriptionRef: null,
+    reference: i.reference,
+    currentPeriodStart: w.start,
+    currentPeriodEnd: w.end,
+    cancelAtPeriodEnd: true,
+    contractAmountMinor: null,
+    contractCurrency: null,
+    contractInterval: null,
+  });
+  if (written.written) after(() => welcomeAiPlan(i.userId, i.plan, i.config));
+  return { ok: true };
+}
+
+export async function activateOneOffSitePlan(i: OneOffInput & { plan: SitePlanId }): Promise<ActivationResult> {
+  const db = createAdminClient();
+  const { data } = await db.from("subscriptions").select("*").eq("user_id", i.userId).maybeSingle();
+  const existing = (data as SiteSubRow | null) ?? null;
+  if (existing?.last_reference === i.reference) return { ok: true };
+  if (await recurringStillActive(i, "site_subscription", existing)) return { ok: false, reason: "auto-renewing subscription still active" };
+  const w = oneOffWindow(existing, i.plan, i.charge, i.period);
+  const { error } = await db.from("subscriptions").upsert(
+    {
+      user_id: i.userId,
+      plan: i.plan,
+      status: "active",
+      provider: "flutterwave",
+      customer_ref: i.charge.customerEmail ?? null,
+      subscription_ref: null,
+      plan_code: null,
+      email_token: null,
+      current_period_end: w.end,
+      cancel_at_period_end: true,
+      last_reference: i.reference,
+      contract_amount_minor: null,
+      contract_currency: null,
+      contract_interval: null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
+  if (error) throw new Error("subscriptions write failed");
+  await setSiteRole(i.userId, true);
+  trackEvent("subscribe", { userId: i.userId, metadata: { plan: i.plan, status: "active", provider: "flutterwave", one_off: true } });
+  after(() => welcomeSitePlan(i.userId, i.plan));
+  return { ok: true };
+}
+
 /* ─────────────────────────────── renewals ─────────────────────────────── */
 
 /** `ack`: answer the provider 200; `final`: the delivery may be marked processed (false = a later delivery is still welcome). */

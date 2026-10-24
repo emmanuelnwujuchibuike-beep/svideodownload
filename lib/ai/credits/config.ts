@@ -57,6 +57,8 @@ export interface AiPlanConfig {
    * this plan. Card only (Flutterwave payment plans charge cards); a member paying another way uses Paystack.
    */
   flutterwavePlanId: string;
+  /** 2026-10-24: a NAIRA Flutterwave payment plan for members in Nigeria paying by card (renews monthly). "" = the USD plan. */
+  flutterwavePlanIdNgn: string;
   /**
    * 0194 (owner 2026-10-07: "credits used for subscription should not be calculated with the normal
    * rate — the credit price for a subscription can be set by admin"): what ONE period of this plan
@@ -125,8 +127,8 @@ export const AI_PLANS_BOUNDS = {
 export const AI_PLANS_DEFAULTS: AiPlansConfig = {
   enabled: true,
   plans: {
-    ai_pro: { enabled: true, label: "AI Pro", priceCents: 1000, interval: "monthly", dailyCredits: 15, weeklyCredits: 70, paystackPlanCode: "", flutterwavePlanId: "", creditsPrice: 0, blurb: "Every Frenz AI tool — video, audio, voice cloning and lip sync — with a daily allowance of credits." },
-    ai_max: { enabled: true, label: "AI Max", priceCents: 2000, interval: "monthly", dailyCredits: 50, weeklyCredits: 250, paystackPlanCode: "", flutterwavePlanId: "", creditsPrice: 0, blurb: "Everything in AI Pro with the largest allowance — the maximum AI usage tier." },
+    ai_pro: { enabled: true, label: "AI Pro", priceCents: 1000, interval: "monthly", dailyCredits: 15, weeklyCredits: 70, paystackPlanCode: "", flutterwavePlanId: "", flutterwavePlanIdNgn: "", creditsPrice: 0, blurb: "Every Frenz AI tool — video, audio, voice cloning and lip sync — with a daily allowance of credits." },
+    ai_max: { enabled: true, label: "AI Max", priceCents: 2000, interval: "monthly", dailyCredits: 50, weeklyCredits: 250, paystackPlanCode: "", flutterwavePlanId: "", flutterwavePlanIdNgn: "", creditsPrice: 0, blurb: "Everything in AI Pro with the largest allowance — the maximum AI usage tier." },
   },
   // null = the count on the Character Replace tab (`freeAccess.creationsPerAccount`) — one control until the operator sets a plan apart
   freeCreations: { enabled: true, free: null, pro: null, business: null },
@@ -219,6 +221,7 @@ function normalizePlan(raw: unknown, d: AiPlanConfig): AiPlanConfig {
     weeklyCredits: Math.max(daily, int(r.weeklyCredits, d.weeklyCredits, AI_PLANS_BOUNDS.weeklyCredits.min, AI_PLANS_BOUNDS.weeklyCredits.max)),
     paystackPlanCode: planCode(r.paystackPlanCode),
     flutterwavePlanId: typeof r.flutterwavePlanId === "string" && /^\d{1,12}$/.test(r.flutterwavePlanId.trim()) ? r.flutterwavePlanId.trim() : typeof r.flutterwavePlanId === "number" && Number.isInteger(r.flutterwavePlanId) && r.flutterwavePlanId > 0 ? String(r.flutterwavePlanId) : "",
+    flutterwavePlanIdNgn: typeof r.flutterwavePlanIdNgn === "string" && /^\d{1,12}$/.test(r.flutterwavePlanIdNgn.trim()) ? r.flutterwavePlanIdNgn.trim() : "",
     creditsPrice: int(r.creditsPrice, 0, 0, 10_000_000),
     blurb: text(r.blurb, d.blurb, 160),
   };

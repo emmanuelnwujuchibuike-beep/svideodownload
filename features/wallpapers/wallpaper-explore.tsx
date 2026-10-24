@@ -412,7 +412,9 @@ export function WallpaperExplore({
         <section className="relative h-[470px] overflow-hidden bg-frenz-ink" aria-label="Featured wallpaper">
           {featured ? (
             // eslint-disable-next-line @next/next/no-img-element -- public storage CDN; next/image 403s on these
-            <img src={featured.thumbUrl} alt={wallpaperAlt(featured)} fetchPriority="high" className="absolute inset-0 h-full w-full object-cover" />
+            // the ORIGINAL (2026-10-24, owner: wallpapers "should always be in high quality"): a full-width, 470 px tall
+            // header needs ~1170 px of width on a phone — more than the grid thumbnail carries
+            <img src={featured.url} alt={wallpaperAlt(featured)} fetchPriority="high" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
           ) : null}
           <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/45 to-transparent" />
           <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[300px] bg-gradient-to-t from-[rgba(10,6,30,0.82)] to-transparent" />

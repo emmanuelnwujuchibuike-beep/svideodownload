@@ -37,9 +37,12 @@ vi.mock("@/lib/landing/settings", async () => {
     getLandingSettings: async () => ({
       frenzAiCurrency: "USD",
       frenzAiPlans: { enabled: true, wallet: normalizeAiWalletConfig(null), plans: { ai_pro: { enabled: true, label: "AI Pro", priceCents: 1000, interval: "monthly", paystackPlanCode: "PLN_pro", flutterwavePlanId: mockAiProPlanId }, ai_max: { enabled: true, label: "AI Max", priceCents: 2000, interval: "monthly", paystackPlanCode: "PLN_max", flutterwavePlanId: "" } } },
+      frenzAiCharacterReplace: { recharge: { checkoutCurrency: "NGN" } },
     }),
   };
 });
+// the live rate for the naira months in Nigeria (2026-10-24): ₦1,600 per dollar
+vi.mock("@/lib/ai/character-replace/fx-rate-server", () => ({ resolveCheckoutRate: async () => ({ minorPerUsd: 160_000 }) }));
 vi.mock("@/lib/paystack/paystack", async (orig) => ({
   ...(await orig<typeof import("@/lib/paystack/paystack")>()),
   paystackEnabled: async () => true,
@@ -80,7 +83,7 @@ const { scriptPlanBillingRpcs } = await import("@/lib/testing/plan-billing-model
 const { getLandingSettings } = await import("@/lib/landing/settings");
 const { FlutterwaveHttpError } = await import("@/lib/flutterwave/client");
 
-const checkout = (body: Record<string, unknown> = { plan: "ai_pro" }) => POST(new Request("https://frenzsave.com/api/ai/subscriptions/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
+const checkout = (body: Record<string, unknown> = { plan: "ai_pro" }, country?: string) => POST(new Request("https://frenzsave.com/api/ai/subscriptions/checkout", { method: "POST", headers: { "content-type": "application/json", ...(country ? { "cf-ipcountry": country } : {}) }, body: JSON.stringify(body) }));
 const attempts = () => (db.tables.ai_topup_attempts ?? []).filter((r) => r.purpose === "ai_subscription");
 const subs = () => db.tables.ai_subscriptions ?? [];
 const config = async () => (await getLandingSettings()).frenzAiPlans as never;
@@ -678,5 +681,24 @@ describe("Part 3.3.2 — activation hardening (L1, L2, M1) and the trusted contr
     expect(await (await checkout()).json()).toMatchObject({ provider: "paystack" });
     expect(calls.some((c) => c.startsWith("fw:checkout"))).toBe(false);
     expect(attempts().some((a) => a.provider === "flutterwave")).toBe(false);
+  });
+});
+
+describe("Nigeria (2026-10-24) — AI plans: a one-off naira month, or a card subscription", () => {
+  beforeEach(() => {
+    process.env.FLUTTERWAVE_VERIFIED_CURRENCIES = "USD,NGN";
+  });
+  it("the default button: ONE month in naira ($10.00 at ₦1,600 = ₦16,000), no payment plan — every naira method shows", async () => {
+    expect(await (await checkout({ plan: "ai_pro" }, "NG")).json()).toMatchObject({ provider: "flutterwave" });
+    expect(calls).toEqual(["fw:checkout:undefined:1600000:NGN:row-first"]);
+    expect(attempts()[0]).toMatchObject({ provider_currency: "NGN", provider_amount: 1_600_000, metadata: { one_off_period: "monthly" } });
+  });
+  it("the card button (no naira plan set): the USD payment plan, as everywhere else", async () => {
+    expect(await (await checkout({ plan: "ai_pro", billing: "renew" }, "NG")).json()).toMatchObject({ provider: "flutterwave" });
+    expect(calls).toEqual(["fw:plan", "fw:checkout:123:1000:USD:row-first"]);
+  });
+  it("outside Nigeria the body cannot ask for a naira month", async () => {
+    await checkout({ plan: "ai_pro", billing: "once" }, "US");
+    expect(calls).toEqual(["fw:plan", "fw:checkout:123:1000:USD:row-first"]);
   });
 });

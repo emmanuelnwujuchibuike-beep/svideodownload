@@ -15,6 +15,12 @@ export interface PricingTier {
 export interface Pricing {
   pro: PricingTier;
   business: PricingTier;
+  /**
+   * 3-month prepaid bundles for members in NIGERIA (owner, 2026-10-24: "Nigeria users … 3months for 4.99 … 3 months
+   * business plan for 12.99"): paid once in naira at today's rate (bank transfer, USSD, card), three months, nothing
+   * renews. A plain US-dollar price ("$4.99"); "" = that bundle is not offered. Shown on its own button with the naira amount.
+   */
+  ngQuarterly?: { pro: string; business: string };
 }
 
 const hasSupabase =
@@ -63,11 +69,16 @@ export async function getPricing(): Promise<Pricing> {
       pro: { ...DEFAULT_PRICING.pro, ...(v.pro ?? {}) },
       business: { ...DEFAULT_PRICING.business, ...(v.business ?? {}) },
     };
+    const q = v.ngQuarterly;
     return {
       pro: { ...merged.pro, price: normalizePrice(merged.pro.price) },
       business: {
         ...merged.business,
         price: normalizePrice(merged.business.price),
+      },
+      ngQuarterly: {
+        pro: typeof q?.pro === "string" && q.pro.trim() ? normalizePrice(q.pro.trim()) : "",
+        business: typeof q?.business === "string" && q.business.trim() ? normalizePrice(q.business.trim()) : "",
       },
     };
   } catch {
@@ -77,7 +88,14 @@ export async function getPricing(): Promise<Pricing> {
 
 export async function setPricing(p: Pricing): Promise<void> {
   const db = createAdminClient();
+  // a save that does not name the Nigeria bundles keeps them (an older editor must never wipe them)
+  let value: Pricing = p;
+  if (p.ngQuarterly === undefined) {
+    const { data } = await db.from("settings").select("value").eq("key", "pricing").maybeSingle();
+    const kept = (data?.value as Partial<Pricing> | null)?.ngQuarterly;
+    if (kept) value = { ...p, ngQuarterly: kept };
+  }
   await db
     .from("settings")
-    .upsert({ key: "pricing", value: p }, { onConflict: "key" });
+    .upsert({ key: "pricing", value }, { onConflict: "key" });
 }

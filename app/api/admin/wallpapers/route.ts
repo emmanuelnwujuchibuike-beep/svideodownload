@@ -26,6 +26,8 @@ export const maxDuration = 60;
  * to, and the storage RLS policies never come into it.
  */
 
+/** The short edge below which a wallpaper can't look sharp on a phone (1080×1920 and up is the target). */
+const LOW_RES_SHORT_EDGE = 1080;
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
 const MAX_BYTES = 20 * 1024 * 1024;
 
@@ -56,6 +58,7 @@ export async function POST(request: Request) {
   const created: string[] = [];
   const warm: string[] = [];
   const failed: string[] = [];
+  const lowRes: string[] = [];
   let index = 0;
 
   for (const file of files) {
@@ -141,6 +144,8 @@ export async function POST(request: Request) {
       }
       created.push(title);
       warm.push(pub.publicUrl);
+      // 2026-10-24: too small to look sharp on a phone (1080×1920 is the floor for a Pro wallpaper) — stored, but the admin is told
+      if (size && Math.min(size.width, size.height) < LOW_RES_SHORT_EDGE) lowRes.push(`${title} (${size.width}×${size.height})`);
     } catch (e) {
       failed.push(`${file.name}: ${e instanceof Error ? e.message : "failed"}`);
     }
@@ -148,7 +153,7 @@ export async function POST(request: Request) {
 
   // 2026-10-09 landing speed test: the newest wallpaper is the landing LCP — warm its optimized variants now, not on a visitor's phone
   if (warm.length) after(() => Promise.all(warm.map(warmWallpaperImage)));
-  return NextResponse.json({ ok: true, created: created.length, failed });
+  return NextResponse.json({ ok: true, created: created.length, failed, lowRes });
 }
 
 export async function PATCH(request: Request) {

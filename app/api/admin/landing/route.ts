@@ -107,6 +107,8 @@ const aiPlanSchema = z
     paystackPlanCode: z.string().max(100).optional(),
     // the Flutterwave payment plan id (digits) — empty = not sold on Flutterwave
     flutterwavePlanId: z.string().trim().regex(/^(|\d{1,12})$/, "A Flutterwave plan id is a number").optional(),
+    // 2026-10-24: the naira plan for card renewals in Nigeria
+    flutterwavePlanIdNgn: z.string().trim().regex(/^(|\d{1,12})$/, "A Flutterwave plan id is a number").optional(),
     blurb: z.string().max(160).optional(),
   })
   .strict();

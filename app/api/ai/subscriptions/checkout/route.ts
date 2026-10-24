@@ -9,6 +9,8 @@ import { markPlanCheckout, newPlanReference, recordPlanAttempt, resolvePlanCheck
 import { createFlutterwaveCheckout, flutterwaveFailureIsDefinite, readFlutterwavePlan } from "@/lib/flutterwave/client";
 import { FLUTTERWAVE_CHECKOUT_CURRENCY, flutterwaveUsableFor, getFlutterwaveConfig } from "@/lib/flutterwave/config";
 import { initializeTransaction, isPaystackPlanNotFound, paystackEnabled, paystackRefusedForSure, readPaystackPlan } from "@/lib/paystack/paystack";
+import { openOneOffPlanCheckout } from "@/lib/ai/credits/plan-oneoff";
+import type { PaymentMarket } from "@/lib/ai/credits/wallet-config";
 import { aiPlanShownUsdCents, flutterwavePlanCompat } from "@/lib/payments/plan-compat";
 import { newFlutterwaveReference } from "@/lib/payments/references";
 import { firstRail, paymentMarket, routePayment, type RailAttempt } from "@/lib/payments/router";
@@ -30,7 +32,8 @@ export const dynamic = "force-dynamic";
  */
 // `provider` is only a preference the router may honour among what it offers (Flutterwave first, Paystack the backup);
 // a cached app still sending "bachs" is not refused — the preference is simply not offered
-const schema = z.object({ plan: z.enum(["ai_pro", "ai_max"]), returnTo: z.string().max(200).optional(), provider: z.string().max(20).optional() }).strict();
+// billing (2026-10-24): the button a member in Nigeria pressed — "renew" (card, monthly subscription) or "once" (one naira month). Never a price.
+const schema = z.object({ plan: z.enum(["ai_pro", "ai_max"]), returnTo: z.string().max(200).optional(), provider: z.string().max(20).optional(), billing: z.enum(["renew", "once"]).optional() }).strict();
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -95,7 +98,7 @@ export async function POST(request: Request) {
   if (open.kind === "activated") return NextResponse.json({ error: `You're already on ${plan.label}.`, alreadyOn: parsed.data.plan }, { status: 409 });
   if (open.kind === "held") return NextResponse.json({ error: "Your last payment is still being confirmed. Try again in a few minutes.", code: "PAYMENT_CONFIRMING" }, { status: 409 });
 
-  const ctx: PlanCheckoutCtx = { userId: user.id, email: user.email, planId: parsed.data.plan, plan, listCurrency: settings.frenzAiCurrency, callbackUrl: `${base}${returnTo}${returnTo.includes("?") ? "&" : "?"}ai_plan=${parsed.data.plan}` };
+  const ctx: PlanCheckoutCtx = { userId: user.id, email: user.email, planId: parsed.data.plan, plan, listCurrency: settings.frenzAiCurrency, market: paymentMarket(request.headers), billing: parsed.data.billing, callbackUrl: `${base}${returnTo}${returnTo.includes("?") ? "&" : "?"}ai_plan=${parsed.data.plan}` };
   const out = await firstRail(
     candidates,
     (p) => (p === "flutterwave" ? openFlutterwavePlan(ctx) : openPaystackPlan(ctx)),
@@ -116,6 +119,10 @@ interface PlanCheckoutCtx {
   planId: AiPlanId;
   plan: AiPlanConfig;
   listCurrency: string;
+  /** the member's market, from the edge (never the body) — Nigeria pays a one-off naira month (2026-10-24) */
+  market: PaymentMarket;
+  /** Nigeria only: the pressed button; absent = one naira month (bank transfer / USSD / card) */
+  billing?: "renew" | "once";
   callbackUrl: string;
 }
 type PlanRail = RailAttempt<{ url: string; provider: "flutterwave" | "paystack" }>;
@@ -125,9 +132,20 @@ const NOT_CONFIRMED = "We couldn't confirm the payment page opened. Try again in
 
 /** The Flutterwave rail: the plan read from Flutterwave (USD, active), the attempt written, then the hosted checkout on the payment plan. */
 async function openFlutterwavePlan(c: PlanCheckoutCtx): Promise<PlanRail> {
+  /*
+    Nigeria (2026-10-24), two buttons: "Bank transfer / USSD — 1 month" (the default) is one month paid once in naira;
+    "Card — renews monthly" is a real subscription, on the NAIRA payment plan when one is set (else the USD plan).
+    null from the one-off path = it does not apply → the subscription below.
+  */
+  if (c.billing !== "renew") {
+    const once = await openOneOffPlanCheckout({ market: c.market, purpose: "ai_subscription", userId: c.userId, email: c.email, plan: c.planId, shownUsdCents: aiPlanShownUsdCents(c.plan.priceCents, c.listCurrency), title: `Frenz ${c.plan.label}`, callbackUrl: c.callbackUrl });
+    if (once) return once;
+  }
+  const ngnPlan = c.market === "NG" && c.billing === "renew" ? c.plan.flutterwavePlanIdNgn : "";
+  const fwPlanId = ngnPlan || c.plan.flutterwavePlanId;
   let facts;
   try {
-    facts = await readFlutterwavePlan(c.plan.flutterwavePlanId);
+    facts = await readFlutterwavePlan(fwPlanId);
   } catch (e) {
     // a read creates nothing — Paystack may follow
     console.warn("[ai/plans] flutterwave plan unreadable", { plan: c.planId, error: e instanceof Error ? e.name : "unknown" });
@@ -140,18 +158,19 @@ async function openFlutterwavePlan(c: PlanCheckoutCtx): Promise<PlanRail> {
     nothing was started there and Paystack may follow.
   */
   // Part 6: and at EXACTLY the plan's list price members are shown (priceCents, when the AI prices are in USD) — never a silent other amount
-  const compat = flutterwavePlanCompat(facts, { amountMinor: aiPlanShownUsdCents(c.plan.priceCents, c.listCurrency), interval: c.plan.interval });
+  // the naira card plan: its own fixed amount IS the price shown on the "Card — renews monthly" button (lib/payments/options.ts)
+  const compat = ngnPlan ? flutterwavePlanCompat(facts, { amountMinor: facts.amountMinor ?? null, interval: c.plan.interval }, "NGN") : flutterwavePlanCompat(facts, { amountMinor: aiPlanShownUsdCents(c.plan.priceCents, c.listCurrency), interval: c.plan.interval });
   const amount = facts.amountMinor ?? 0;
   if (!compat.ok) {
     console.error("[ai/plans] flutterwave plan not usable", { plan: c.planId, reason: compat.reason, detail: compat.detail });
     return { ok: false, refusal: "definite", status: 503, error: NOT_STARTED };
   }
   const reference = newFlutterwaveReference("ai_subscription");
-  if (!(await recordPlanAttempt({ reference, userId: c.userId, plan: c.planId, listCents: c.plan.priceCents, listCurrency: c.listCurrency, providerAmount: amount, providerCurrency: FLUTTERWAVE_CHECKOUT_CURRENCY, provider: "flutterwave", providerPlanId: c.plan.flutterwavePlanId }))) {
+  if (!(await recordPlanAttempt({ reference, userId: c.userId, plan: c.planId, listCents: c.plan.priceCents, listCurrency: c.listCurrency, providerAmount: amount, providerCurrency: facts.currency, provider: "flutterwave", providerPlanId: fwPlanId }))) {
     return { ok: false, refusal: "definite", status: 503, error: NOT_STARTED };
   }
   try {
-    const url = await createFlutterwaveCheckout({ reference, amountMinor: amount, currency: FLUTTERWAVE_CHECKOUT_CURRENCY, email: c.email, redirectUrl: c.callbackUrl, title: `Frenz ${c.plan.label}`, paymentPlan: c.plan.flutterwavePlanId, meta: { ai_plan: c.planId } });
+    const url = await createFlutterwaveCheckout({ reference, amountMinor: amount, currency: facts.currency, email: c.email, redirectUrl: c.callbackUrl, title: `Frenz ${c.plan.label}`, paymentPlan: fwPlanId, meta: { ai_plan: c.planId } });
     await markPlanCheckout(reference, { url });
     return { ok: true, value: { url, provider: "flutterwave" } };
   } catch (e) {

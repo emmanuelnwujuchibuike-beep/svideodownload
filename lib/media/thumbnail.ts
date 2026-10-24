@@ -31,10 +31,15 @@ export interface Thumbnail {
   ext: "webp";
 }
 
-/** Long edge for a grid/deck thumbnail — comfortably sharp on a 2x phone
- *  card (~180px wide) without shipping desktop-wallpaper pixel counts. */
-const THUMB_MAX_EDGE = 640;
-const THUMB_QUALITY = 68;
+/**
+ * WIDTH of a grid/deck thumbnail, and its quality (owner, 2026-10-24: "Uploading Wallpapers … is reducing the image
+ * quality, it should never … the pro Wallpapers … should always be in high quality"). The old 640 px LONG edge at q68
+ * made a tall 9:16 wallpaper 360×640 — about half the pixels a 2-column phone tile needs (~195 css px × 3 dpr ≈ 585 px
+ * wide, ~1170 tall), so every tile looked soft. Width-bounded now: a tall image keeps its full height ratio.
+ * The full-screen viewer and every download use the untouched original; this is only the grid copy.
+ */
+export const THUMB_WIDTH = 720;
+export const THUMB_QUALITY = 82;
 
 export interface SizedThumbnail extends Thumbnail {
   width: number;
@@ -71,12 +76,7 @@ export async function makeThumbnail(bytes: Uint8Array): Promise<Thumbnail | null
     const sharp = sharpModule.default;
     const buffer = await sharp(Buffer.from(bytes))
       .rotate() // apply EXIF orientation before measuring/cropping
-      .resize({
-        width: THUMB_MAX_EDGE,
-        height: THUMB_MAX_EDGE,
-        fit: "inside",
-        withoutEnlargement: true,
-      })
+      .resize({ width: THUMB_WIDTH, withoutEnlargement: true })
       .webp({ quality: THUMB_QUALITY })
       .toBuffer();
     return { buffer, contentType: "image/webp", ext: "webp" };

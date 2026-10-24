@@ -66,6 +66,7 @@ export function AdSurface({
    * which carries no label of its own.
    */
   fullBleed = false,
+  feedFrame = false,
   onResolved,
 }: {
   zone: AdZone;
@@ -73,6 +74,8 @@ export function AdSurface({
   maxWidth?: string;
   label?: string | null;
   fullBleed?: boolean;
+  /** The feed (2026-10-24): a paid card spans the feed's full width like a post, its media in the post frame. */
+  feedFrame?: boolean;
   /**
    * Mirrors `AdSlot`'s own `onResolved` up to this surface's parent.
    *
@@ -127,7 +130,7 @@ export function AdSurface({
     if (paid) {
       return (
         <div data-ad-slot={slot.id} data-ad-provider="frenzsave" className={className}>
-          <SelfAdCard ads={paid.ads} rules={paid.rules} placement={slot.paidPlacement!} page={slot.pages?.[0] ?? "all_pages"} />
+          <SelfAdCard ads={paid.ads} rules={paid.rules} placement={slot.paidPlacement!} page={slot.pages?.[0] ?? "all_pages"} feedFrame={feedFrame} />
         </div>
       );
     }

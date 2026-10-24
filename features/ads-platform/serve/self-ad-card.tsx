@@ -18,18 +18,21 @@ export function SelfAdCard({
   rules,
   placement,
   page,
+  feedFrame = false,
   className,
 }: {
   ads: readonly EligibleAd[];
   rules: FormatRules | null;
   placement: string;
   page: string;
+  /** the feed: full width like a post (2026-10-24) — see SelfAdBanner's feedFrame */
+  feedFrame?: boolean;
   className?: string;
 }) {
   if (!ads.length) return null;
   return (
-    <aside className={cn("mx-auto w-full max-w-[320px]", className)} aria-label="Sponsored">
-      <SelfAdBanner ads={ads} rules={rules} placement={placement} page={page} variant="card" />
+    <aside className={cn(feedFrame ? "w-full" : "mx-auto w-full max-w-[320px]", className)} aria-label="Sponsored">
+      <SelfAdBanner ads={ads} rules={rules} placement={placement} page={page} variant="card" feedFrame={feedFrame} />
     </aside>
   );
 }

@@ -168,7 +168,7 @@ describe("TOP_BANNER — 10 ads, 5-second LOCAL rotation", () => {
     const banner = src("features/ads-platform/serve/self-ad-banner.tsx");
     expect(banner).toContain('style={variant === "strip" ? topStripStyle() : undefined}');
     // the strip FILLS its bar; every other variant still shows the creative whole
-    expect(banner).toContain('fit={variant === "strip" ? "cover" : "contain"}');
+    expect(banner).toContain('fit={variant === "strip" || feedFrame ? "cover" : "contain"}');
     // and draws no blurred bars
     expect(banner).toContain('backdrop: variant === "strip" ? false : undefined');
     expect(banner).not.toContain('"h-8 w-full"');

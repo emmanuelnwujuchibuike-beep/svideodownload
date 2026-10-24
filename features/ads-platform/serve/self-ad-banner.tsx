@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { EligibleAd, FormatRules } from "@/lib/ads-platform/eligibility";
+import { feedFrameStyle } from "@/features/media/feed-frame";
 import { cardMediaBox, RESULT_VIDEO_BOX, topStripStyle } from "@/lib/ads-platform/media-spec";
 import { dwellSeconds, VIDEO_MIN_DWELL_SECONDS, VIDEO_STALL_SECONDS } from "@/lib/ads-platform/rotation";
 
@@ -42,6 +43,7 @@ export function SelfAdBanner({
   page,
   variant,
   startAt = 0,
+  feedFrame = false,
   className,
 }: {
   ads: readonly EligibleAd[];
@@ -52,6 +54,12 @@ export function SelfAdBanner({
   variant: "strip" | "card" | "tile";
   /** where in the pool this unit starts, so several tiles on one page differ */
   startAt?: number;
+  /**
+   * The feed card (owner, 2026-10-24: "make the feed ads to be full width like posts"): the card is the feed's full
+   * width with square corners, and the creative sits in the SAME frame a post's media does (features/media/feed-frame.ts)
+   * — its own shape, a tall one capped at 7 : 6 and filling the frame like a post.
+   */
+  feedFrame?: boolean;
   className?: string;
 }) {
   const seconds = rules?.rotationSeconds ?? null;
@@ -188,7 +196,7 @@ export function SelfAdBanner({
       placement={placement}
       page={page}
       // 0208: every variant shows the creative whole (contain) — except the top strip, a 33 px bar the creative FILLS (2026-10-22)
-      fit={variant === "strip" ? "cover" : "contain"}
+      fit={variant === "strip" || feedFrame ? "cover" : "contain"}
       eager={variant === "strip"}
       backdrop={opts.backdrop}
       className={opts.className}
@@ -223,6 +231,7 @@ export function SelfAdBanner({
     */
     const fixedVideo = current.mediaType === "video" && placement === "download_result_banner";
     const box = fixedVideo ? RESULT_VIDEO_BOX : cardMediaBox(current.w, current.h);
+    const frame = feedFrame ? feedFrameStyle(current.w && current.h ? current.w / current.h : null) : null;
     return (
       <a
         ref={hostRef}
@@ -234,13 +243,15 @@ export function SelfAdBanner({
         visitAd(current, viewRef.current);
       }}
         aria-label={`Ad from ${current.sponsor}${current.headline ? `: ${current.headline}` : ""} (opens the advertiser's site)`}
-        style={{ width: box.width }}
+        style={frame ? undefined : { width: box.width }}
         className={cn(
-          "mx-auto block max-w-full touch-manipulation select-none overflow-hidden rounded-[1.25rem] bg-card ring-1 ring-inset ring-black/[0.06] outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:ring-white/10",
+          frame
+            ? "block w-full touch-manipulation select-none overflow-hidden bg-card outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
+            : "mx-auto block max-w-full touch-manipulation select-none overflow-hidden rounded-[1.25rem] bg-card ring-1 ring-inset ring-black/[0.06] outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:ring-white/10",
           className,
         )}
       >
-        <span className="relative block w-full bg-muted" style={{ aspectRatio: `${box.width} / ${box.height}` }}>
+        <span className="relative block w-full bg-muted" style={frame ?? { aspectRatio: `${box.width} / ${box.height}` }}>
           {/* 🔴 no "Ad" tag over the media (owner, 2026-10-14: "the ad label is covering the sponsored
               name") — it covered whatever the creative has in that corner, often the brand itself.
               The tag sits in the row below instead, where it covers nothing. */}

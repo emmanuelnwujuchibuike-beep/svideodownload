@@ -180,7 +180,7 @@ export function FeedAdSlot({
             caption, so the label is drawn here — an in-feed unit without one is an ad posing as a post.
           */}
           {filled ? <p className="m-0 px-4 py-2.5 text-[12px] font-semibold text-frenz-muted">Sponsored</p> : null}
-          <AdSurface zone="feed_inline" fullBleed onResolved={setFilled} />
+          <AdSurface zone="feed_inline" fullBleed feedFrame onResolved={setFilled} />
         </>
       ) : (
         /*

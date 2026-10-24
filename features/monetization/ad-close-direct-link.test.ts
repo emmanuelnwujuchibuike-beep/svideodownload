@@ -42,21 +42,28 @@ describe("the ad close control's direct link", () => {
     expect(rules(shell.replace("if (directLinkSpot && openDirectLink()) return;", "")).backdropOpens).toBe(false);
   });
 
-  it("is on for the Download complete and reward ads, and nowhere else by accident", () => {
-    expect(src("features/monetization/download-interstitial.tsx")).toContain('directLinkSpot="adClose"');
-    expect(src("features/monetization/wallpaper-reward-gate.tsx")).toContain('directLinkSpot="adClose"');
+  it("is on for the Download complete and reward ads — each its OWN spot (2026-10-24) — and nowhere else by accident", () => {
+    expect(src("features/monetization/download-interstitial.tsx")).toContain('directLinkSpot="downloadAdClose"');
+    expect(src("features/monetization/download-complete-ad.tsx")).toContain('useCloseViaDirectLink("downloadAdClose", close)');
+    expect(src("features/monetization/wallpaper-reward-gate.tsx")).toContain('directLinkSpot="rewardAdClose"');
+    // the self-serve full-screen ad: its reward video is the reward spot, the rest the download-complete spot
+    expect(src("features/ads-platform/serve/self-interstitial.tsx")).toContain("useCloseViaDirectLink(adCloseSpot(reward), onClose)");
     for (const other of ["features/monetization/idle-interstitial.tsx", "features/monetization/exit-intent.tsx"]) {
       expect(src(other)).not.toContain("directLinkSpot");
     }
   });
 
   it("the admin can switch it off — its own spot, saved and served like the others", () => {
-    expect(DIRECT_LINK_SPOTS).toContain("adClose");
-    expect(src("features/admin/monetization-settings.tsx")).toContain('{ id: "adClose", label: "Ad close button (Download complete & reward ads)"');
-    expect(src("app/api/admin/monetization/route.ts")).toContain("adClose: z.boolean().default(true)");
+    expect(DIRECT_LINK_SPOTS).toEqual(["download", "resultPreview", "wallpaper", "rewardAdClose", "downloadAdClose"]);
+    // the admin's switches are one per spot (SpotSwitches), the save validates every spot
+    expect(src("features/admin/monetization-settings.tsx")).toContain("{DIRECT_LINK_SPOTS.map((id) => (");
+    expect(src("app/api/admin/monetization/route.ts")).toContain("downloadAdClose: z.boolean().default(d.downloadAdClose)");
+    expect(src("app/api/admin/monetization/route.ts")).toContain("rewardAdClose: z.boolean().default(d.rewardAdClose)");
     const on = { enabled: true, url: "https://example.com/dl", spots: { ...DEFAULT_DIRECT_LINK.spots }, chancePercent: 100 };
-    expect(publicDirectLink(on, true)?.spots).toContain("adClose");
+    expect(publicDirectLink(on, true)?.spots).toContain("downloadAdClose");
     // switched off by the admin: the spot is not served, so the ring and backdrop just close
-    expect(publicDirectLink({ ...on, spots: { ...on.spots, adClose: false } }, true)?.spots).not.toContain("adClose");
+    expect(publicDirectLink({ ...on, spots: { ...on.spots, downloadAdClose: false } }, true)?.spots).not.toContain("downloadAdClose");
+    // each X separately: the reward ad's X can stay on while the download-complete X is off
+    expect(publicDirectLink({ ...on, spots: { ...on.spots, downloadAdClose: false } }, true)?.spots).toContain("rewardAdClose");
   });
 });

@@ -36,7 +36,7 @@ import {
   parseHilltopTag,
   parseHilltopVastUrl,
 } from "@/lib/monetization/hilltop";
-import { isValidDirectLinkUrl, type DirectLinkConfig, type SpotAdProvider } from "@/lib/monetization/direct-link";
+import { DEFAULT_ADSTERRA_SMARTLINK, DIRECT_LINK_SPOT_LABELS, DIRECT_LINK_SPOTS, isValidDirectLinkUrl, type AdsterraSmartlinkConfig, type DirectLinkConfig, type DirectLinkSpot, type SpotAdProvider } from "@/lib/monetization/direct-link";
 import { DEFAULT_SPOT_POPUNDER, parseAdsterraSnippet, POPUNDER_COOLDOWN_MAX_MINUTES, type SpotPopunderConfig } from "@/lib/monetization/spot-popunder";
 import type { MonetizationSettings } from "@/lib/monetization/settings";
 import {
@@ -1594,10 +1594,24 @@ export function MonetizationSettings({
               </p>
             </div>
 
-            <DirectLinkEditor
+            <LinkSpotEditor
+              idPrefix="monetag-direct-link"
+              title="Monetag direct link"
+              description="A backup when no pop-under opened on a tap: opens in a new tab at each chosen spot, by the chance below. The tap's own action (the download, the preview) still happens. Free plan only; needs the Monetag switch on."
+              urlLabel="Monetag direct link URL"
               value={state.monetagDirectLink}
               busy={busy}
               onChange={(monetagDirectLink) => setState((s) => ({ ...s, monetagDirectLink }))}
+            />
+
+            <LinkSpotEditor
+              idPrefix="adsterra-smartlink"
+              title="Adsterra Smartlink (separate backup)"
+              description="Tried after the Monetag link when neither the pop-under nor the Monetag link opened on that tap — at most one thing opens per tap. Its own chance and spots. Free plan only; needs only this switch (Adsterra banners stay off)."
+              urlLabel="Adsterra Smartlink URL"
+              value={state.adsterraSmartlink ?? DEFAULT_ADSTERRA_SMARTLINK}
+              busy={busy}
+              onChange={(adsterraSmartlink) => setState((s) => ({ ...s, adsterraSmartlink }))}
             />
 
             <SpotPopunderEditor
@@ -2747,11 +2761,6 @@ function SpotPopunderEditor({ value, busy, onChange }: { value: SpotPopunderConf
   const adsterra = value.provider === "adsterra";
   const snippetBad = value.snippet.trim() !== "" && !parseMonetagSnippet(value.snippet);
   const adsterraBad = value.adsterraSnippet.trim() !== "" && !parseAdsterraSnippet(value.adsterraSnippet);
-  const spots: { id: keyof SpotPopunderConfig["spots"]; label: string; hint: string }[] = [
-    { id: "adClose", label: "Ad close (X) button", hint: "The X / Skip of the Download complete, reward and full-screen ads" },
-    { id: "wallpaper", label: "Wallpapers", hint: "A tap around the wallpaper viewer's Download button" },
-    { id: "resultPreview", label: "Result card preview", hint: "A tap on the media preview at the top of the download result card" },
-  ];
   return (
     <div className="mt-4 space-y-3 border-t border-border/50 pt-4">
       <button
@@ -2764,8 +2773,8 @@ function SpotPopunderEditor({ value, busy, onChange }: { value: SpotPopunderConf
           <span className="block text-sm font-semibold">Pop-under (main at these spots)</span>
           <span className="block text-xs text-muted-foreground">
             Tried first on a tap at each chosen spot. The direct link above opens only when no pop-under opened (the tag didn&apos;t
-            load, the network skipped that tap, or the browser blocked it) — never both. Free plan only; needs the chosen
-            network&apos;s switch on (Monetag or Adsterra).
+            load, the network skipped that tap, or the browser blocked it) — never both. Free plan only. Monetag needs the
+            Monetag switch on; Adsterra needs only this switch and its code (Adsterra banners stay off).
           </span>
         </span>
         <Switch on={value.enabled} />
@@ -2813,23 +2822,7 @@ function SpotPopunderEditor({ value, busy, onChange }: { value: SpotPopunderConf
         {snippetBad ? <p className="mt-1 text-xs text-rose-500">Not a Monetag tag: it needs an https script src (and its zone).</p> : null}
         <p className="mt-1 text-xs text-muted-foreground">Only the script address and zone are read from it — it is never run as pasted.</p>
       </div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        {spots.map((spot) => (
-          <button
-            key={spot.id}
-            type="button"
-            disabled={busy}
-            onClick={() => onChange({ ...value, spots: { ...value.spots, [spot.id]: !value.spots[spot.id] } })}
-            className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3 text-left transition hover:border-foreground/20 disabled:opacity-70"
-          >
-            <span className="min-w-0">
-              <span className="block text-sm font-semibold">{spot.label}</span>
-              <span className="block text-xs text-muted-foreground">{spot.hint}</span>
-            </span>
-            <Switch on={value.spots[spot.id]} />
-          </button>
-        ))}
-      </div>
+      <SpotSwitches spots={value.spots} busy={busy} onChange={(spots) => onChange({ ...value, spots })} />
       <p className="text-xs font-semibold text-muted-foreground">Less aggressive</p>
       <button
         type="button"
@@ -2868,26 +2861,28 @@ function SpotPopunderEditor({ value, busy, onChange }: { value: SpotPopunderConf
 }
 
 /**
- * Monetag Direct Link (owner, 2026-10-16) — lib/monetization/direct-link.ts.
+ * A tap-opened link at the ad spots — the Monetag Direct Link (owner, 2026-10-16) and, separately, the Adsterra
+ * Smartlink (2026-10-24) — lib/monetization/direct-link.ts. Each has its own switch, URL, chance and five spot switches.
  * Part of the parent state, saved with the form's own Save button.
  */
-function DirectLinkEditor({
+function LinkSpotEditor({
+  idPrefix,
+  title,
+  description,
+  urlLabel,
   value,
   busy,
   onChange,
 }: {
-  value: DirectLinkConfig;
+  idPrefix: string;
+  title: string;
+  description: string;
+  urlLabel: string;
+  value: DirectLinkConfig | AdsterraSmartlinkConfig;
   busy: boolean;
   onChange: (next: DirectLinkConfig) => void;
 }) {
-  const adsterra = value.provider === "adsterra";
   const urlBad = value.url.trim() !== "" && !isValidDirectLinkUrl(value.url.trim());
-  const adsterraUrlBad = value.adsterraUrl.trim() !== "" && !isValidDirectLinkUrl(value.adsterraUrl.trim());
-  const spots: { id: keyof DirectLinkConfig["spots"]; label: string; hint: string }[] = [
-    { id: "wallpaper", label: "Wallpaper download", hint: "A tap anywhere around the wallpaper viewer's Download button" },
-    { id: "resultPreview", label: "Download result preview", hint: "A tap on the media preview at the top of the result card" },
-    { id: "adClose", label: "Ad close button (Download complete & reward ads)", hint: "A tap on the X / Skip button (its ring, circle or the dark backdrop too) opens the link in a new tab, and the ad closes when the member comes back" },
-  ];
   return (
     <div className="mt-4 space-y-3 border-t border-border/50 pt-4">
       <button
@@ -2897,42 +2892,17 @@ function DirectLinkEditor({
         className="flex w-full items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5 text-left transition hover:border-foreground/20 disabled:opacity-70"
       >
         <span className="min-w-0">
-          <span className="block text-sm font-semibold">Direct link</span>
-          <span className="block text-xs text-muted-foreground">
-            Opens in a new tab on a tap at each chosen spot, by the chance below (100% = every tap). The tap&apos;s own action
-            (the download, the preview) still happens. Free plan only; needs the chosen network&apos;s switch on (Monetag or
-            Adsterra).
-          </span>
+          <span className="block text-sm font-semibold">{title}</span>
+          <span className="block text-xs text-muted-foreground">{description}</span>
         </span>
         <Switch on={value.enabled} />
       </button>
-      <SpotProviderPicker id="direct-link-network" value={value.provider} busy={busy} onChange={(provider) => onChange({ ...value, provider })} />
-      {adsterra ? (
-        <div>
-          <label htmlFor="adsterra-direct-link" className="mb-1 block text-xs font-medium text-muted-foreground">
-            Adsterra Smartlink URL
-          </label>
-          <input
-            id="adsterra-direct-link"
-            value={value.adsterraUrl}
-            disabled={busy}
-            onChange={(e) => onChange({ ...value, adsterraUrl: e.target.value })}
-            placeholder="https://…"
-            inputMode="url"
-            className={cn(
-              "h-10 w-full rounded-xl bg-background px-3 font-mono text-sm outline-none ring-1 ring-inset focus:ring-2 focus:ring-primary",
-              adsterraUrlBad ? "ring-rose-500" : "ring-border",
-            )}
-          />
-          {adsterraUrlBad ? <p className="mt-1 text-xs text-rose-500">Must be a full https:// link.</p> : null}
-        </div>
-      ) : null}
-      <div className={adsterra ? "hidden" : undefined}>
-        <label htmlFor="monetag-direct-link" className="mb-1 block text-xs font-medium text-muted-foreground">
-          Monetag direct link URL
+      <div>
+        <label htmlFor={`${idPrefix}-url`} className="mb-1 block text-xs font-medium text-muted-foreground">
+          {urlLabel}
         </label>
         <input
-          id="monetag-direct-link"
+          id={`${idPrefix}-url`}
           value={value.url}
           disabled={busy}
           onChange={(e) => onChange({ ...value, url: e.target.value })}
@@ -2945,29 +2915,13 @@ function DirectLinkEditor({
         />
         {urlBad ? <p className="mt-1 text-xs text-rose-500">Must be a full https:// link.</p> : null}
       </div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {spots.map((spot) => (
-          <button
-            key={spot.id}
-            type="button"
-            disabled={busy}
-            onClick={() => onChange({ ...value, spots: { ...value.spots, [spot.id]: !value.spots[spot.id] } })}
-            className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3 text-left transition hover:border-foreground/20 disabled:opacity-70"
-          >
-            <span className="min-w-0">
-              <span className="block text-sm font-semibold">{spot.label}</span>
-              <span className="block text-xs text-muted-foreground">{spot.hint}</span>
-            </span>
-            <Switch on={value.spots[spot.id]} />
-          </button>
-        ))}
-      </div>
+      <SpotSwitches spots={value.spots} busy={busy} onChange={(spots) => onChange({ ...value, spots })} />
       <div className="space-y-1">
-        <label htmlFor="monetag-direct-link-chance" className="block text-xs font-medium text-muted-foreground">
+        <label htmlFor={`${idPrefix}-chance`} className="block text-xs font-medium text-muted-foreground">
           Chance a tap opens it (%)
         </label>
         <input
-          id="monetag-direct-link-chance"
+          id={`${idPrefix}-chance`}
           type="number"
           min={1}
           max={100}
@@ -2979,10 +2933,31 @@ function DirectLinkEditor({
           }
           className="w-32 rounded-xl border border-border/70 bg-background px-3 py-2 text-sm tabular-nums disabled:opacity-70"
         />
-        <p className="text-xs text-muted-foreground">
-          100 opens it on the first tap; lower spreads it over later taps. Either way it opens once per visit at each spot.
-        </p>
+        <p className="text-xs text-muted-foreground">100 opens it on every tap at an enabled spot; lower opens it on some taps only.</p>
       </div>
+    </div>
+  );
+}
+
+/** The five ad spots, each its own switch (owner, 2026-10-24: "so I can decide to turn off some … or add any when I want"). */
+function SpotSwitches({ spots, busy, onChange }: { spots: Record<DirectLinkSpot, boolean>; busy: boolean; onChange: (next: Record<DirectLinkSpot, boolean>) => void }) {
+  return (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      {DIRECT_LINK_SPOTS.map((id) => (
+        <button
+          key={id}
+          type="button"
+          disabled={busy}
+          onClick={() => onChange({ ...spots, [id]: !spots[id] })}
+          className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3 text-left transition hover:border-foreground/20 disabled:opacity-70"
+        >
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">{DIRECT_LINK_SPOT_LABELS[id].label}</span>
+            <span className="block text-xs text-muted-foreground">{DIRECT_LINK_SPOT_LABELS[id].hint}</span>
+          </span>
+          <Switch on={spots[id]} />
+        </button>
+      ))}
     </div>
   );
 }

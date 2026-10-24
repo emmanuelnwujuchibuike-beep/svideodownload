@@ -138,6 +138,15 @@ Flutterwave payment-plan id (a non-USD plan is refused and Paystack takes the ch
 existing Paystack subscriptions renew and cancel at Paystack, and a Flutterwave renewal waits in
 Admin → Flutterwave → Reviews until `FLUTTERWAVE_RENEWAL_TX_LOOKUP=confirmed`.
 
+**Naira in Nigeria (2026-10-24).** Flutterwave shows the methods of the currency charged — bank
+transfer, USSD, account and OPay exist only for NGN; a USD checkout offers card / PayPal. So a
+ONE-OFF Flutterwave checkout (top-up, SUB, verification, ads) for a member in Nigeria (the edge's
+country) is charged in NGN at the same live rate Paystack uses (`lib/payments/flutterwave-charge.ts`);
+everyone else pays USD. NGN is on by default (`DEFAULT_VERIFIED_CURRENCIES`); without NGN confirmed
+or a rate, Nigeria pays USD — never a closed checkout. The naira amount and rate are written on
+the attempt row first and every settle path matches the verified charge against the row (the
+credit / grant is still the USD price). Subscriptions stay USD, card only (a Flutterwave plan limit).
+
 **Plans are sold only at the price members are shown (Part 6).** `lib/payments/plan-compat.ts`,
 applied by both plan checkouts and by Admin → "Check with Flutterwave": a Flutterwave payment
 plan is used only when it is active, in USD, on the plan's interval, with a fixed amount EQUAL

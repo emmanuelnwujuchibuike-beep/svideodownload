@@ -68,6 +68,8 @@ export function FlutterwaveSettings() {
   const [secretKey, setSecretKey] = useState("");
   const [secretHash, setSecretHash] = useState("");
   const [usd, setUsd] = useState(false);
+  // 2026-10-24: naira for members in Nigeria (bank transfer, USSD…) — lib/payments/flutterwave-charge.ts
+  const [ngn, setNgn] = useState(false);
   const [unitConfirmed, setUnitConfirmed] = useState(false);
   const [purposes, setPurposes] = useState<Purpose[]>([]);
   const [sitePlanPro, setSitePlanPro] = useState("");
@@ -83,6 +85,7 @@ export function FlutterwaveSettings() {
       const d = (await res.json()) as Loaded;
       setLoaded(d);
       setUsd(d.verifiedCurrencies.includes(d.checkoutCurrency));
+      setNgn(d.verifiedCurrencies.includes("NGN"));
       setUnitConfirmed(d.amountUnitConfirmed);
       setPurposes(d.enabledPurposes);
       setSitePlanPro(d.sitePlanPro ?? "");
@@ -98,7 +101,7 @@ export function FlutterwaveSettings() {
     setMsg(null);
     try {
       const body: Record<string, unknown> = {
-        verifiedCurrencies: usd ? [loaded?.checkoutCurrency ?? "USD"] : [],
+        verifiedCurrencies: [...(usd ? [loaded?.checkoutCurrency ?? "USD"] : []), ...(ngn ? ["NGN"] : [])],
         enabledPurposes: purposes,
         // an explicit "unconfirmed" (not blank): blank now means the ON default (2026-10-24)
         amountUnit: unitConfirmed ? "major" : "unconfirmed",
@@ -192,6 +195,7 @@ export function FlutterwaveSettings() {
       <div className="mt-4 space-y-2">
         <p className="text-xs font-semibold text-muted-foreground">Account capability — tick only what Flutterwave has CONFIRMED</p>
         <Check checked={usd} onChange={setUsd} label="Flutterwave confirmed in writing that this account can collect USD" />
+        <Check checked={ngn} onChange={setNgn} label="Charge members in Nigeria in naira (NGN) — shows bank transfer, USSD and other local methods (one-off payments; plans stay USD card)" />
         <Check checked={unitConfirmed} onChange={setUnitConfirmed} label="A sandbox charge proved amounts are in dollars (major units), e.g. 5 = $5.00" />
       </div>
 

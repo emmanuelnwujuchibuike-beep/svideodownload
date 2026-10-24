@@ -77,7 +77,8 @@ export interface FlutterwaveConfig {
 }
 
 /** The ON defaults (owner, 2026-10-24): what an unset env var / unsaved dashboard means. */
-export const DEFAULT_VERIFIED_CURRENCIES: readonly string[] = [FLUTTERWAVE_CHECKOUT_CURRENCY];
+// NGN (2026-10-24): one-off checkouts in Nigeria charge naira so bank transfer / USSD show (lib/payments/flutterwave-charge.ts)
+export const DEFAULT_VERIFIED_CURRENCIES: readonly string[] = [FLUTTERWAVE_CHECKOUT_CURRENCY, "NGN"];
 export const DEFAULT_AMOUNT_UNIT = "major";
 
 const planId = (v: unknown): string => (typeof v === "string" && /^\d{1,12}$/.test(v.trim()) ? v.trim() : "");

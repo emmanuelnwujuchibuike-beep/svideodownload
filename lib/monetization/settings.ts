@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { DEFAULT_DIRECT_LINK, normalizeDirectLink, type DirectLinkConfig } from "./direct-link";
+import { DEFAULT_ADSTERRA_SMARTLINK, DEFAULT_DIRECT_LINK, normalizeAdsterraSmartlink, normalizeDirectLink, type AdsterraSmartlinkConfig, type DirectLinkConfig } from "./direct-link";
 import { DEFAULT_SPOT_POPUNDER, normalizeSpotPopunder, type SpotPopunderConfig } from "./spot-popunder";
 
 import { AD_ZONES, isExoClickZone, type AdZoneId } from "./ad-schema";
@@ -171,6 +171,9 @@ export interface MonetizationSettings {
   /** Monetag Pop-under at the same spots — the MAIN format there, the direct link its backup (owner, 2026-10-23).
    *  See lib/monetization/spot-popunder.ts. Pre-filled with the owner's tag. */
   monetagSpotPopunder: SpotPopunderConfig;
+  /** Adsterra Smartlink at the same spots — a SEPARATE backup with its own switch, chance and spots (owner, 2026-10-24).
+   *  See lib/monetization/direct-link.ts. Off until the admin sets it up. */
+  adsterraSmartlink: AdsterraSmartlinkConfig;
   /* ── Offerium (rewarded / offerwall) ──────────────────────────────────────
      Owner, 2026-08-23: "put a slot in admin dashboard where I can set up all
      Offerium API, SDK, and all."
@@ -748,6 +751,7 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   monetagInPagePushDailyLimit: 20,
   monetagDirectLink: DEFAULT_DIRECT_LINK,
   monetagSpotPopunder: DEFAULT_SPOT_POPUNDER,
+  adsterraSmartlink: DEFAULT_ADSTERRA_SMARTLINK,
   /* Offerium ships OFF and unconfigured. It stays off until an admin pastes
      real values AND the server-side secrets exist — see `offeriumConfigured`. */
   offerium: false,
@@ -1077,6 +1081,7 @@ export async function readMonetizationSettings(): Promise<MonetizationRead> {
     // A row saved before the direct link existed has no key; a hand edit may carry anything.
     merged.monetagDirectLink = normalizeDirectLink(merged.monetagDirectLink);
     merged.monetagSpotPopunder = normalizeSpotPopunder(merged.monetagSpotPopunder);
+    merged.adsterraSmartlink = normalizeAdsterraSmartlink(merged.adsterraSmartlink);
     /*
       Same reason as the line above: a settings row written before HilltopAds
       existed carries no `hilltop` key, and every consumer reads fields off it.

@@ -1,4 +1,4 @@
-import { DIRECT_LINK_SPOTS, normalizeSpotAdProvider, type DirectLinkSpot, type SpotAdProvider } from "./direct-link";
+import { DIRECT_LINK_SPOTS, normalizeSpotAdProvider, normalizeSpots, type DirectLinkSpot, type SpotAdProvider } from "./direct-link";
 import { parseMonetagSnippet } from "./monetag";
 
 /**
@@ -8,7 +8,7 @@ import { parseMonetagSnippet } from "./monetag";
  * under format … make the pop under the main, and the direct link to be backup that only works
  * when there's no pop under or if the browser blocked it. Both shouldn't show."
  *
- * - Where: the same three spots as the direct link (`DIRECT_LINK_SPOTS`), each with its own switch.
+ * - Where: the same spots as the direct link (`DIRECT_LINK_SPOTS`), each with its own switch.
  * - The tag loads on the FIRST PRESS at an enabled spot (Part 2.1) — a page merely carrying a spot loads
  *   nothing. Other scripts' windows are never blocked (lib/monetization/open-observer.ts only counts them).
  *   ⚠️ Once loaded, Monetag's own script decides its later clicks (its frequency cap applies); confining it
@@ -53,14 +53,13 @@ export const DEFAULT_SPOT_POPUNDER: SpotPopunderConfig = {
   provider: "monetag",
   snippet: OWNER_POPUNDER_SNIPPET,
   adsterraSnippet: "",
-  spots: { wallpaper: true, resultPreview: true, adClose: true },
+  spots: { download: false, resultPreview: true, wallpaper: true, rewardAdClose: true, downloadAdClose: true },
   spotsOnly: true,
   cooldownMinutes: 30,
 };
 
 export function normalizeSpotPopunder(raw: unknown): SpotPopunderConfig {
   const r = (raw && typeof raw === "object" ? raw : {}) as Partial<Record<keyof SpotPopunderConfig, unknown>>;
-  const spotsRaw = (r.spots && typeof r.spots === "object" ? r.spots : {}) as Record<string, unknown>;
   return {
     // ON only when an admin saved a literal true — missing, a string "true", anything else: off (Part 2.1)
     enabled: r.enabled === true,
@@ -68,7 +67,7 @@ export function normalizeSpotPopunder(raw: unknown): SpotPopunderConfig {
     provider: normalizeSpotAdProvider(r.provider),
     snippet: typeof r.snippet === "string" ? r.snippet.trim().slice(0, 4000) : DEFAULT_SPOT_POPUNDER.snippet,
     adsterraSnippet: typeof r.adsterraSnippet === "string" ? r.adsterraSnippet.trim().slice(0, 4000) : DEFAULT_SPOT_POPUNDER.adsterraSnippet,
-    spots: Object.fromEntries(DIRECT_LINK_SPOTS.map((id) => [id, typeof spotsRaw[id] === "boolean" ? spotsRaw[id] : DEFAULT_SPOT_POPUNDER.spots[id]])) as Record<DirectLinkSpot, boolean>,
+    spots: normalizeSpots(r.spots, DEFAULT_SPOT_POPUNDER.spots),
     // a row saved before these existed gets the gentle defaults
     spotsOnly: typeof r.spotsOnly === "boolean" ? r.spotsOnly : DEFAULT_SPOT_POPUNDER.spotsOnly,
     cooldownMinutes: Number.isFinite(r.cooldownMinutes) ? Math.max(0, Math.min(POPUNDER_COOLDOWN_MAX_MINUTES, Math.round(r.cooldownMinutes as number))) : DEFAULT_SPOT_POPUNDER.cooldownMinutes,
@@ -96,12 +95,12 @@ export function parseAdsterraSnippet(snippet: string | null | undefined): { src:
 }
 
 /**
- * What /api/ads/config serves: null unless it can actually load — the CHOSEN network's master switch on (Monetag or
- * Adsterra), switched on, a valid tag for that network, a spot.
+ * What /api/ads/config serves: null unless it can actually load — switched on, a valid tag for the chosen network, a
+ * spot, and for Monetag its master switch. Adsterra at a spot needs only its own switch + code — NOT the Adsterra banner switch, which would also turn on Adsterra banners (owner, 2026-10-24: "turn off monetag pop under and use adsterra pop under and use monetag direct link").
  */
-export function publicSpotPopunder(raw: unknown, monetagOn: boolean, adsterraOn = false): PublicSpotPopunder | null {
+export function publicSpotPopunder(raw: unknown, monetagOn: boolean): PublicSpotPopunder | null {
   const c = normalizeSpotPopunder(raw);
-  if (!c.enabled || !(c.provider === "adsterra" ? adsterraOn : monetagOn)) return null;
+  if (!c.enabled || (c.provider === "monetag" && !monetagOn)) return null;
   const adsterra = c.provider === "adsterra" ? parseAdsterraSnippet(c.adsterraSnippet) : null;
   const tag = c.provider === "adsterra" ? (adsterra ? { src: adsterra.src, zone: null, cfAsync: false } : null) : parseMonetagSnippet(c.snippet);
   if (!tag) return null;

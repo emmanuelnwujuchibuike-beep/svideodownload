@@ -48,8 +48,8 @@ vi.mock("@/lib/flutterwave/client", async (orig) => ({
 vi.mock("@/lib/sub/notify", () => ({ notifySubscribed: vi.fn() }));
 vi.mock("@/lib/sub/payout-account", () => ({ autoWithdrawSub: vi.fn() }));
 
-const { startSubCheckout } = await import("@/lib/sub/server");
-const { startVerificationCheckout } = await import("@/lib/social/paid-verification");
+const { startSubCheckout, confirmSubPayment } = await import("@/lib/sub/server");
+const { startVerificationCheckout, confirmVerificationPayment } = await import("@/lib/social/paid-verification");
 const { FlutterwaveHttpError } = await import("@/lib/flutterwave/client");
 const { PaystackHttpError, PaystackNotConfiguredError } = await import("@/lib/paystack/paystack");
 const { resolveUncertainAttempt } = await import("@/lib/ads-platform/payment-server");
@@ -529,6 +529,65 @@ describe.each(flows)("$name — simultaneous requests (0276 guard)", ({ table, s
       expect(await start()).toMatchObject({ ok: true, reused: false });
       expect(psCalls).toHaveLength(1);
     }
+  });
+});
+
+/**
+ * 2026-10-24 — naira on Flutterwave for members in Nigeria (bank transfer / USSD exist only for NGN checkouts). The row is
+ * written in naira at the live rate (₦1,600 per $ here), and a VERIFIED naira charge settles exactly once through the
+ * existing path, which matches the provider's charge against the row.
+ */
+describe("Flutterwave in naira for Nigeria — opened and settled", () => {
+  const seen: { currency?: string; amountMinor?: number; reference: string }[] = [];
+  const fwCharge = (reference: string, amountMinor: number, currency = "NGN") => ({ provider: "flutterwave" as const, reference, externalId: "77", status: "success" as const, amountMinor, currency, channel: "bank_transfer", paidAt: new Date().toISOString(), reason: null, customerEmail: "a@b.co" });
+  beforeEach(() => {
+    setFlutterwave(true);
+    process.env.FLUTTERWAVE_VERIFIED_CURRENCIES = "USD,NGN";
+    seen.length = 0;
+    fwCreate = async (o) => (seen.push(o as { currency?: string; amountMinor?: number; reference: string }), `https://checkout.flutterwave.com/${o.reference}`);
+    db.tables.verification_requests = [];
+    db.tables.verification_events = [];
+  });
+
+  it("SUB: a member in Nigeria gets a NAIRA checkout; a verified naira charge settles once at that amount", async () => {
+    expect(await startSubCheckout({ subscriberId: S, email: "a@b.co", creatorId: C, returnPath: "/x", market: "NG" })).toMatchObject({ ok: true });
+    const row = db.tables.sub_purchases![0]!;
+    expect(seen[0]).toMatchObject({ currency: "NGN" });
+    expect(row).toMatchObject({ provider: "flutterwave", charged_currency: "NGN", charged_minor: seen[0]!.amountMinor });
+    expect(Number(row.charged_minor)).toBe(Number(row.total_cents) * 1600);
+    const settle = vi.fn((_args: Record<string, unknown>) => ({ data: { ok: true }, error: null }));
+    db.rpc.settle_sub_purchase = settle;
+    const ref = String(row.reference);
+    expect(await confirmSubPayment(ref, { flutterwaveCharge: fwCharge(ref, Number(row.charged_minor)) })).toMatchObject({ ok: true, status: "paid" });
+    expect(settle).toHaveBeenCalledTimes(1);
+    expect(settle.mock.calls[0]![0]).toMatchObject({ p_reference: ref, p_paid_minor: Number(row.charged_minor), p_paid_currency: "NGN" });
+  });
+
+  it("SUB: a naira charge for the WRONG amount, or paid in dollars, never settles", async () => {
+    await startSubCheckout({ subscriberId: S, email: "a@b.co", creatorId: C, returnPath: "/x", market: "NG" });
+    const row = db.tables.sub_purchases![0]!;
+    const ref = String(row.reference);
+    const settle = vi.fn(() => ({ data: { ok: true }, error: null }));
+    db.rpc.settle_sub_purchase = settle;
+    expect(await confirmSubPayment(ref, { flutterwaveCharge: fwCharge(ref, Number(row.charged_minor) - 100) })).toMatchObject({ ok: false, status: "mismatch" });
+    expect(await confirmSubPayment(ref, { flutterwaveCharge: fwCharge(ref, Number(row.total_cents), "USD") })).toMatchObject({ ok: false, status: "mismatch" });
+    expect(settle).not.toHaveBeenCalled();
+  });
+
+  it("paid verification: naira in Nigeria; the verified naira charge grants the tick once", async () => {
+    expect(await startVerificationCheckout({ userId: S, email: "a@b.co", market: "NG" })).toMatchObject({ ok: true });
+    const row = db.tables.verification_purchases![0]!;
+    expect(row).toMatchObject({ provider: "flutterwave", price_cents: 500, charged_currency: "NGN", charged_minor: 500 * 1600, fx_minor_per_usd: 160_000 });
+    const ref = String(row.reference);
+    const charge = fwCharge(ref, 800_000);
+    expect(await confirmVerificationPayment(ref, { flutterwaveCharge: charge })).toBe("paid");
+    expect(await confirmVerificationPayment(ref, { flutterwaveCharge: charge })).toBe("paid");
+    expect(db.tables.verification_requests!.filter((r) => r.status === "approved")).toHaveLength(1);
+  });
+
+  it("outside Nigeria the same flows stay in USD", async () => {
+    await startVerificationCheckout({ userId: S, email: "a@b.co", market: "other" });
+    expect(db.tables.verification_purchases![0]).toMatchObject({ charged_currency: "USD", charged_minor: 500, fx_minor_per_usd: null });
   });
 });
 

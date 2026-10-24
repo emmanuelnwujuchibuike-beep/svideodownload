@@ -169,11 +169,15 @@ function onPress(e: PointerEvent): void {
 
 export async function loadDirectLinkOpener(spot: DirectLinkSpot): Promise<SpotOpener | null> {
   const d = (await loadAdsConfig()) as Record<string, unknown> | null;
-  const c = d?.monetagDirectLink as { url: string; spots: string[]; chancePercent: number } | null | undefined;
-  const direct = c && c.spots?.includes(spot) && isValidDirectLinkUrl(c.url) ? c : null;
+  type Link = { url: string; spots: string[]; chancePercent: number };
+  const usableHere = (c: Link | null | undefined) => (c && c.spots?.includes(spot) && isValidDirectLinkUrl(c.url) ? c : null);
+  const direct = usableHere(d?.monetagDirectLink as Link | null | undefined);
+  // the Adsterra Smartlink (2026-10-24): a SEPARATE backup, tried only when the Monetag link did not open on this tap
+  const smart = usableHere(d?.adsterraSmartlink as Link | null | undefined);
+  const links = [direct, smart].filter((l): l is Link => !!l);
   const pu = d?.monetagSpotPopunder as PublicSpotPopunder | null | undefined;
   const spotPopunder = pu && Array.isArray(pu.spots) && pu.spots.includes(spot) && typeof pu.src === "string" && /^https:\/\//.test(pu.src) ? pu : null;
-  if (!direct && !spotPopunder) return null;
+  if (!links.length && !spotPopunder) return null;
   if (spotPopunder) {
     popunder = spotPopunder;
     if (!pressListening) {
@@ -186,12 +190,18 @@ export async function loadDirectLinkOpener(spot: DirectLinkSpot): Promise<SpotOp
     window.setTimeout(() => watchForVisibleSpot(spotPopunder), POPUNDER_PRELOAD_MS);
   }
 
-  /** The backup: rolls the admin's chance, then opens in a new tab; a late pop-under is refused for a moment. */
+  /**
+   * The backups, in order: the Monetag link, then the Adsterra Smartlink — each rolls its own chance; the FIRST that wins
+   * opens in a new tab and nothing else does on this tap. A late pop-under is refused for a moment after.
+   */
   const openDirect = (): boolean => {
-    if (!direct || !directLinkRollWins(direct.chancePercent, Math.random())) return false;
-    openOwnWindow(direct.url);
-    suppressForeignOpens(LATE_POPUNDER_MS);
-    return true;
+    for (const link of links) {
+      if (!directLinkRollWins(link.chancePercent, Math.random())) continue;
+      openOwnWindow(link.url);
+      suppressForeignOpens(LATE_POPUNDER_MS);
+      return true;
+    }
+    return false;
   };
 
   return (onOutcome) => {
@@ -199,7 +209,7 @@ export async function loadDirectLinkOpener(spot: DirectLinkSpot): Promise<SpotOp
       // no pop-under here yet (not set up, the first press is loading it, or it was blocked): the direct link, in the tap
       const opened = openDirect();
       onOutcome?.(spotOutcome({ popunderOpened: false, directOpened: opened }));
-      return !!direct;
+      return links.length > 0;
     }
     if (coolingDown(spotPopunder)) {
       // a pop-under showed a short while ago: this tap opens nothing at all (the direct link included) — less aggressive

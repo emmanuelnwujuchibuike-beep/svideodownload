@@ -8,6 +8,7 @@ import { FLUTTERWAVE_CHECKOUT_CURRENCY } from "@/lib/flutterwave/config";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { chargeMatches, type VerifiedCharge } from "@/lib/payments/charge";
 import { usableRails } from "@/lib/payments/rails";
+import { flutterwaveChargeFor } from "@/lib/payments/flutterwave-charge";
 import { isFlutterwaveReference, newFlutterwaveReference } from "@/lib/payments/references";
 import { firstRail, routePayment, type RailAttempt } from "@/lib/payments/router";
 import { initializeVerificationCheckout, paystackFailureIsDefinite, paystackRefusedForSure, VERIFICATION_PURPOSE, verifyTransaction } from "@/lib/paystack/paystack";
@@ -205,7 +206,7 @@ async function openPaystackVerification(input: { userId: string; email: string }
 }
 
 /** The Flutterwave rail (Part 2): USD, the exact price. Needs migration 0271's `provider` column — without it, a definite refusal (Paystack takes it). */
-async function openFlutterwaveVerification(input: { userId: string; email: string }, cfg: PaidVerificationConfig): Promise<RailAttempt<string>> {
+async function openFlutterwaveVerification(input: { userId: string; email: string; market?: PaymentMarket }, cfg: PaidVerificationConfig): Promise<RailAttempt<string>> {
   const db = createAdminClient();
   // an earlier Flutterwave checkout whose creation outcome was unknown is resolved first — never two at once
   const { data: held, error: heldError } = await db.from("verification_purchases").select("reference").eq("user_id", input.userId).eq("status", "initiated").eq("provider", "flutterwave").is("checkout_url", null).limit(3);
@@ -216,10 +217,12 @@ async function openFlutterwaveVerification(input: { userId: string; email: strin
   }
 
   const reference = newFlutterwaveReference("verification");
-  const refused = await insertVerificationPurchase({ user_id: input.userId, reference, provider: "flutterwave", price_cents: cfg.priceCents, charged_currency: FLUTTERWAVE_CHECKOUT_CURRENCY, charged_minor: cfg.priceCents, fx_minor_per_usd: null, period_days: cfg.periodDays });
+  // 2026-10-24: naira in Nigeria (bank transfer, USSD…), USD elsewhere
+  const fw = await flutterwaveChargeFor(cfg.priceCents, input.market, "verification");
+  const refused = await insertVerificationPurchase({ user_id: input.userId, reference, provider: "flutterwave", price_cents: cfg.priceCents, charged_currency: fw.currency, charged_minor: fw.amountMinor, fx_minor_per_usd: fw.fxMinorPerUsd, period_days: cfg.periodDays });
   if (refused) return refused;
   try {
-    const url = await createFlutterwaveCheckout({ reference, amountMinor: cfg.priceCents, currency: FLUTTERWAVE_CHECKOUT_CURRENCY, email: input.email, redirectUrl: verificationCallback(reference), title: "Frenz verification" });
+    const url = await createFlutterwaveCheckout({ reference, amountMinor: fw.amountMinor, currency: fw.currency, email: input.email, redirectUrl: verificationCallback(reference), title: "Frenz verification" });
     await db.from("verification_purchases").update({ checkout_url: url, updated_at: new Date().toISOString() }).eq("reference", reference);
     return { ok: true, value: url };
   } catch (e) {

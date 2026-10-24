@@ -12,6 +12,7 @@ import { createFlutterwaveCheckout, flutterwaveFailureIsDefinite, verifyFlutterw
 import { FLUTTERWAVE_CHECKOUT_CURRENCY } from "@/lib/flutterwave/config";
 import { chargeMatches, type VerifiedCharge } from "@/lib/payments/charge";
 import { usableRails } from "@/lib/payments/rails";
+import { flutterwaveChargeFor } from "@/lib/payments/flutterwave-charge";
 import { newFlutterwaveReference } from "@/lib/payments/references";
 import { routePayment } from "@/lib/payments/router";
 import { initializeAdCheckout, paystackFailureIsDefinite, paystackRefusedForSure, verifyTransaction } from "@/lib/paystack/paystack";
@@ -271,18 +272,20 @@ async function beginPaystack(db: Db, input: { userId: string; email: string }, a
  * amount and currency against the row it wrote), same fallback rule. A row the database refuses
  * (a CHECK from before migration 0271) is a refusal before anything was created: Paystack may follow.
  */
-async function beginFlutterwave(db: Db, input: { userId: string; email: string }, applicationId: string, quoteId: string, totalUsd: number): Promise<PaymentStart> {
+async function beginFlutterwave(db: Db, input: { userId: string; email: string; market?: PaymentMarket }, applicationId: string, quoteId: string, totalUsd: number): Promise<PaymentStart> {
+  // 2026-10-24: naira in Nigeria (bank transfer, USSD…), USD elsewhere — ad_payment_settle checks the row's own currency
+  const fw = await flutterwaveChargeFor(totalUsd, input.market, "ad_campaign");
   const reference = newFlutterwaveReference("ad_campaign");
   let stop: PaymentStart | null;
   try {
-    stop = await begin(db, input, applicationId, quoteId, reference, "flutterwave", totalUsd, FLUTTERWAVE_CHECKOUT_CURRENCY, totalUsd, null, { quoted_usd_cents: totalUsd });
+    stop = await begin(db, input, applicationId, quoteId, reference, "flutterwave", totalUsd, fw.currency, fw.amountMinor, fw.fxMinorPerUsd, { quoted_usd_cents: totalUsd });
   } catch (e) {
     console.warn("[ads-pay] flutterwave attempt not recorded", { reference, error: String(e).slice(0, 200) });
     return { kind: "refused", code: "provider_refused", status: 503 };
   }
   if (stop) return stop;
   try {
-    const url = await createFlutterwaveCheckout({ reference, amountMinor: totalUsd, currency: FLUTTERWAVE_CHECKOUT_CURRENCY, email: input.email, redirectUrl: returnUrl(reference), title: "Frenz ad campaign", meta: { application_id: applicationId, quote_id: quoteId } });
+    const url = await createFlutterwaveCheckout({ reference, amountMinor: fw.amountMinor, currency: fw.currency, email: input.email, redirectUrl: returnUrl(reference), title: "Frenz ad campaign", meta: { application_id: applicationId, quote_id: quoteId } });
     await db.from("ai_topup_attempts").update({ checkout_url: url, updated_at: new Date().toISOString() }).eq("reference", reference);
     log("payment_session_created", { provider: "flutterwave", reference, applicationId, currency: FLUTTERWAVE_CHECKOUT_CURRENCY, amount: totalUsd });
     return { kind: "redirect", url, reference, provider: "flutterwave" };

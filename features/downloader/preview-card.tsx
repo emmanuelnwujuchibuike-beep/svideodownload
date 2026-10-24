@@ -145,6 +145,8 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
   const { showAds, ready: adsReady } = useShowAds();
   // Monetag direct link on the media preview (owner, 2026-10-16) — a tap anywhere on the cover, every tap, by the admin's chance.
   const openDirectLink = useDirectLink("resultPreview");
+  // 2026-10-24: the Download button is its own ad spot (pop-under / Monetag link / Adsterra Smartlink, each switchable) — the download still runs
+  const openDownloadSpot = useDirectLink("download");
   const isPremiumBatch = !adsReady || !showAds;
   useEffect(() => setSelected(new Set()), [metadata.id]);
 
@@ -1151,6 +1153,8 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         <button
           type="button"
           disabled={phase !== "idle"}
+          data-ad-spot="download"
+          onClickCapture={() => openDownloadSpot()}
           onClick={() => runDownload()}
           className={cn(
             "group relative mt-5 inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl px-4 py-4 text-base font-semibold shadow-lg transition-all active:scale-[0.99] disabled:active:scale-100",

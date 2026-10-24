@@ -107,7 +107,7 @@ export function DownloadCompleteAd({
     new tab inside the tap itself; the ad closes when this tab is visible again — or after 4 s if the tab
     never went hidden (a blocked pop-up), so the button can never leave the ad stuck.
   */
-  const closeViaLink = useCloseViaDirectLink("adClose", close);
+  const closeViaLink = useCloseViaDirectLink("downloadAdClose", close);
 
   useEffect(() => {
     if (open === wasOpen.current) return;
@@ -420,7 +420,7 @@ export function DownloadCompleteAd({
           <button
             type="button"
             onClick={closeViaLink}
-            data-ad-spot="adClose"
+            data-ad-spot="downloadAdClose"
             disabled={!canSkip}
             aria-label={canSkip ? "Close advertisement" : `Skip available in ${remaining} seconds`}
             aria-live={counting ? "off" : "polite"}

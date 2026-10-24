@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 
 import type { EligibleAd } from "@/lib/ads-platform/eligibility";
 import { useCloseViaDirectLink } from "@/features/monetization/use-direct-link";
+import { adCloseSpot } from "@/lib/monetization/direct-link";
 import { loadAdsConfig } from "@/lib/monetization/ads-config-client";
 import { DEFAULT_VAST_INTERSTITIAL, normalizeVastInterstitial } from "@/lib/monetization/vast-interstitial";
 import { cn } from "@/lib/utils";
@@ -135,7 +136,7 @@ export function SelfInterstitial({
     network panel (momentClaimed), and this full-screen ad's X only closed — the link was wired on the network
     panel alone. Same "Ad close button" spot and the same admin switch; no link set up → it just closes.
   */
-  const closeViaLink = useCloseViaDirectLink("adClose", onClose);
+  const closeViaLink = useCloseViaDirectLink(adCloseSpot(reward), onClose);
 
   if (typeof document === "undefined") return null;
 
@@ -166,7 +167,7 @@ export function SelfInterstitial({
         ref={closeBtn}
         type="button"
         onClick={closeViaLink}
-        data-ad-spot="adClose"
+        data-ad-spot={adCloseSpot(reward)}
         aria-label={reward ? "Close the sponsored video" : "Close the ad"}
         className={cn(
           "inline-flex h-9 w-9 items-center justify-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",

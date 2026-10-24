@@ -7,7 +7,7 @@
  * media preview section. Make admin can set up and configure the direct link
  * anytime."
  *
- * - Where: two spots (`DIRECT_LINK_SPOTS`), each with its own admin switch.
+ * - Where: the ad spots (`DIRECT_LINK_SPOTS`), each with its own admin switch.
  * - "Randomly": an eligible tap opens the link with `chancePercent` odds.
  * - Every tap (owner, 2026-10-16: "it should show everytime the selected area
  *   i told you is tapped"): no once-per-session lock; each tap at an enabled
@@ -17,29 +17,61 @@
  *
  * Lives in the `monetization` settings row, so no migration. Served through
  * /api/ads/config only when Monetag's master switch is on too.
+ *
+ * The Adsterra SMARTLINK (owner, 2026-10-24) is a SEPARATE backup with its own switch, chance and spots
+ * (`AdsterraSmartlinkConfig` below): "the smart link will be as a separate backup that show randomly … Not all part
+ * should be separated so I can decide to turn off some". At a tap: the pop-under first, then the Monetag link (its
+ * chance), then the Smartlink (its chance) — at most ONE of them per tap.
  */
 
-export const DIRECT_LINK_SPOTS = ["wallpaper", "resultPreview", "adClose"] as const;
+/**
+ * The ad spots (owner, 2026-10-24: "Download, reward ad X button, Download complete ad X button, Wallpaper Download
+ * button, the general result" — each separately switchable). Before, one `adClose` spot covered both ad X buttons and
+ * the result card's Download button was no spot at all; a saved `adClose` choice is read as both X spots.
+ */
+export const DIRECT_LINK_SPOTS = ["download", "resultPreview", "wallpaper", "rewardAdClose", "downloadAdClose"] as const;
 export type DirectLinkSpot = (typeof DIRECT_LINK_SPOTS)[number];
 
+/** What the admin reads for each spot. */
+export const DIRECT_LINK_SPOT_LABELS: Record<DirectLinkSpot, { label: string; hint: string }> = {
+  download: { label: "Download button", hint: "The Download button on the download result card" },
+  resultPreview: { label: "Result preview", hint: "A tap on the media preview at the top of the download result card" },
+  wallpaper: { label: "Wallpaper download", hint: "A tap around the wallpaper viewer's Download button" },
+  rewardAdClose: { label: "Reward ad X", hint: "The X / Skip of the reward ads (wallpaper reward, sponsor reward video)" },
+  downloadAdClose: { label: "Download-complete ad X", hint: "The X / Skip of the Download complete and other full-screen ads" },
+};
+
+/** The ad X spot a full-screen ad uses: the reward ads have their own switch. */
+export const adCloseSpot = (reward: boolean): DirectLinkSpot => (reward ? "rewardAdClose" : "downloadAdClose");
+
 /**
- * Which network fills a spot format (owner, 2026-10-24: "make the Monetag direct link and pop under to also use
- * adsterra pop under, smart link … I want to try adsterra out"). The admin picks ONE per format — the direct link and
- * the pop-under separately — and each network needs its own master switch on (Monetag / Adsterra). Same spots, same
- * tap rules: one physical spot, the provider is a setting.
+ * Which network fills the POP-UNDER (owner, 2026-10-24: "use adsterra pop under"). The admin picks one; the direct
+ * links are separate formats (Monetag's link, Adsterra's Smartlink), each with its own switch.
  */
 export const SPOT_AD_PROVIDERS = ["monetag", "adsterra"] as const;
 export type SpotAdProvider = (typeof SPOT_AD_PROVIDERS)[number];
 export const normalizeSpotAdProvider = (v: unknown): SpotAdProvider => (v === "adsterra" ? "adsterra" : "monetag");
 
+/**
+ * One spot map from a stored blob. A spot absent from the blob takes the default — except the two ad X spots, which
+ * take a saved legacy `adClose` choice first (before 2026-10-24 one switch covered both).
+ */
+export function normalizeSpots(raw: unknown, defaults: Record<DirectLinkSpot, boolean>): Record<DirectLinkSpot, boolean> {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const legacyClose = typeof r.adClose === "boolean" ? r.adClose : null;
+  return Object.fromEntries(
+    DIRECT_LINK_SPOTS.map((id) => {
+      if (typeof r[id] === "boolean") return [id, r[id]];
+      if ((id === "rewardAdClose" || id === "downloadAdClose") && legacyClose !== null) return [id, legacyClose];
+      return [id, defaults[id]];
+    }),
+  ) as Record<DirectLinkSpot, boolean>;
+}
+
 export interface DirectLinkConfig {
   enabled: boolean;
-  /** Which network's link a tap opens (2026-10-24). */
-  provider: SpotAdProvider;
   /** The Monetag direct link. */
   url: string;
-  /** The Adsterra Smartlink (its "Direct Link"). */
-  adsterraUrl: string;
   spots: Record<DirectLinkSpot, boolean>;
   /** 1–100: the odds an eligible tap opens the link. */
   chancePercent: number;
@@ -47,11 +79,10 @@ export interface DirectLinkConfig {
 
 export const DEFAULT_DIRECT_LINK: DirectLinkConfig = {
   enabled: false,
-  provider: "monetag",
   url: "",
-  adsterraUrl: "",
-  // adClose (owner, 2026-10-19): the Download complete and reward ads' close control — see FullscreenInterstitial
-  spots: { wallpaper: true, resultPreview: true, adClose: true },
+  // the ad X spots (owner, 2026-10-19): the Download complete and reward ads' close control — see FullscreenInterstitial.
+  // The result card's Download button (2026-10-24) starts OFF: it was never a spot before.
+  spots: { download: false, resultPreview: true, wallpaper: true, rewardAdClose: true, downloadAdClose: true },
   chancePercent: 50,
 };
 
@@ -66,43 +97,79 @@ export function isValidDirectLinkUrl(raw: unknown): raw is string {
   }
 }
 
+const chance = (v: unknown, fallback: number) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(100, Math.max(1, Math.round(n))) : fallback;
+};
+
 /** Clamp a stored (possibly hand-edited or partial) blob to a safe config. */
 export function normalizeDirectLink(raw: unknown): DirectLinkConfig {
   const r = (raw && typeof raw === "object" ? raw : {}) as Partial<Record<keyof DirectLinkConfig, unknown>>;
-  const spotsRaw = (r.spots && typeof r.spots === "object" ? r.spots : {}) as Record<string, unknown>;
-  const spots = Object.fromEntries(
-    DIRECT_LINK_SPOTS.map((id) => [id, typeof spotsRaw[id] === "boolean" ? spotsRaw[id] : DEFAULT_DIRECT_LINK.spots[id]]),
-  ) as Record<DirectLinkSpot, boolean>;
-  const n = Number(r.chancePercent);
   const url = typeof r.url === "string" ? r.url.trim() : "";
-  const adsterraUrl = typeof r.adsterraUrl === "string" ? r.adsterraUrl.trim() : "";
   return {
     // Must be literally true: a stored "false" string is truthy.
     enabled: r.enabled === true,
-    // a row saved before 2026-10-24 has no provider: Monetag, as it was
-    provider: normalizeSpotAdProvider(r.provider),
     url: isValidDirectLinkUrl(url) ? url : "",
-    adsterraUrl: isValidDirectLinkUrl(adsterraUrl) ? adsterraUrl : "",
-    spots,
-    chancePercent: Number.isFinite(n) ? Math.min(100, Math.max(1, Math.round(n))) : DEFAULT_DIRECT_LINK.chancePercent,
+    spots: normalizeSpots(r.spots, DEFAULT_DIRECT_LINK.spots),
+    chancePercent: chance(r.chancePercent, DEFAULT_DIRECT_LINK.chancePercent),
   };
+}
+
+export interface PublicDirectLink {
+  url: string;
+  spots: DirectLinkSpot[];
+  chancePercent: number;
 }
 
 /**
  * The public shape /api/ads/config serves: null unless it can actually open.
- * The chosen provider's master switch gates it (`monetagOn` / `adsterraOn`): turning that network off turns this off.
+ * `monetagOn` is Monetag's master switch: turning Monetag off turns this off.
  */
-export function publicDirectLink(
-  raw: unknown,
-  monetagOn: boolean,
-  adsterraOn = false,
-): { provider: SpotAdProvider; url: string; spots: DirectLinkSpot[]; chancePercent: number } | null {
+export function publicDirectLink(raw: unknown, monetagOn: boolean): PublicDirectLink | null {
   const c = normalizeDirectLink(raw);
-  const on = c.provider === "adsterra" ? adsterraOn : monetagOn;
-  const url = c.provider === "adsterra" ? c.adsterraUrl : c.url;
-  if (!on || !c.enabled || !url) return null;
+  if (!monetagOn || !c.enabled || !c.url) return null;
   const spots = DIRECT_LINK_SPOTS.filter((id) => c.spots[id]);
-  return spots.length ? { provider: c.provider, url, spots, chancePercent: c.chancePercent } : null;
+  return spots.length ? { url: c.url, spots, chancePercent: c.chancePercent } : null;
+}
+
+/* ───────────────────────── Adsterra Smartlink (a separate backup) ───────────────────────── */
+
+export interface AdsterraSmartlinkConfig {
+  enabled: boolean;
+  /** Adsterra's Smartlink ("Direct Link") URL. */
+  url: string;
+  spots: Record<DirectLinkSpot, boolean>;
+  /** 1–100: the odds an eligible tap opens it (when nothing else opened on that tap). */
+  chancePercent: number;
+}
+
+export const DEFAULT_ADSTERRA_SMARTLINK: AdsterraSmartlinkConfig = {
+  enabled: false,
+  url: "",
+  spots: { download: false, resultPreview: false, wallpaper: false, rewardAdClose: false, downloadAdClose: false },
+  chancePercent: 50,
+};
+
+export function normalizeAdsterraSmartlink(raw: unknown): AdsterraSmartlinkConfig {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Partial<Record<keyof AdsterraSmartlinkConfig, unknown>>;
+  const url = typeof r.url === "string" ? r.url.trim() : "";
+  return {
+    enabled: r.enabled === true,
+    url: isValidDirectLinkUrl(url) ? url : "",
+    spots: normalizeSpots(r.spots, DEFAULT_ADSTERRA_SMARTLINK.spots),
+    chancePercent: chance(r.chancePercent, DEFAULT_ADSTERRA_SMARTLINK.chancePercent),
+  };
+}
+
+/**
+ * Served on its OWN switch and URL — never the Adsterra banner switch (that would also turn Adsterra banners on) nor
+ * Monetag's. Null unless it can actually open.
+ */
+export function publicAdsterraSmartlink(raw: unknown): PublicDirectLink | null {
+  const c = normalizeAdsterraSmartlink(raw);
+  if (!c.enabled || !c.url) return null;
+  const spots = DIRECT_LINK_SPOTS.filter((id) => c.spots[id]);
+  return spots.length ? { url: c.url, spots, chancePercent: c.chancePercent } : null;
 }
 
 /** The roll: `random` is in [0, 1). */

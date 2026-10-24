@@ -25,7 +25,8 @@ describe("the capability gate — ON by default once the key and webhook hash ex
   });
   it("🟢 key + hash and NOTHING else set: every purpose is open in USD — 'working immediately after push'", () => {
     const keyAndHash = resolveFlutterwaveConfig({ FLUTTERWAVE_SECRET_KEY: "FLWSECK-live", FLUTTERWAVE_SECRET_HASH: "h" });
-    expect(keyAndHash).toMatchObject({ verifiedCurrencies: ["USD"], amountUnitConfirmed: true });
+    // NGN too (2026-10-24): naira one-off checkouts in Nigeria, for bank transfer / USSD
+    expect(keyAndHash).toMatchObject({ verifiedCurrencies: ["USD", "NGN"], amountUnitConfirmed: true });
     for (const p of ["wallet_topup", "sub_purchase", "verification", "ad_campaign", "ai_subscription", "site_subscription"]) expect(flutterwaveCheckoutGate(p, "USD", keyAndHash), p).toEqual({ ok: true });
     // blank env vars mean the same as unset
     expect(flutterwaveUsableFor("wallet_topup", resolveFlutterwaveConfig({ FLUTTERWAVE_SECRET_KEY: "FLWSECK-live", FLUTTERWAVE_SECRET_HASH: "h", FLUTTERWAVE_VERIFIED_CURRENCIES: "", FLUTTERWAVE_ENABLED_PURPOSES: " ", FLUTTERWAVE_AMOUNT_UNIT: "" }))).toBe(true);

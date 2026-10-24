@@ -260,7 +260,7 @@ export function WallpaperRewardGate({
     <FullscreenInterstitial
       zone="wallpaper_reward"
       // the owner's close-button direct link (2026-10-19) — ring and backdrop open it, the X closes
-      directLinkSpot="adClose"
+      directLinkSpot="rewardAdClose"
       /* Clears the wallpaper viewer (`fixed inset-0 z-[100]`), which is what
          `z-[60]` did not — and the same level the existing wallpaper reward ad
          already uses. */

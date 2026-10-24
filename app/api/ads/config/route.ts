@@ -10,7 +10,7 @@ import {
   parseHilltopTag,
   parseHilltopVastUrl,
 } from "@/lib/monetization/hilltop";
-import { publicDirectLink } from "@/lib/monetization/direct-link";
+import { publicAdsterraSmartlink, publicDirectLink } from "@/lib/monetization/direct-link";
 import { publicSpotPopunder } from "@/lib/monetization/spot-popunder";
 import { getMonetizationSettings, normalizeSkipSeconds } from "@/lib/monetization/settings";
 import { CDN_BUCKET_CACHE_CONTROL } from "@/lib/net/cdn-bucket";
@@ -245,12 +245,13 @@ export async function GET() {
       rewardNetworks,
       offeriumConfigured: capabilities.offeriumConfigured,
       interstitialSkipSeconds: normalizeSkipSeconds(settings.interstitialSkipSeconds),
-      // The spot Direct Link (Monetag direct link or Adsterra Smartlink, the admin's pick): null unless that network's
-      // switch is on and the admin set its URL. Public, like every tag here. The key keeps its old name for older clients.
-      monetagDirectLink: publicDirectLink(settings.monetagDirectLink, settings.monetag === true, settings.adsterra === true),
+      // Monetag Direct Link: null unless Monetag is on and the admin set a URL. Public, like every tag here.
+      monetagDirectLink: publicDirectLink(settings.monetagDirectLink, settings.monetag === true),
+      // Adsterra Smartlink (2026-10-24): a SEPARATE backup at the same spots, on its own switch (never the Adsterra banner switch).
+      adsterraSmartlink: publicAdsterraSmartlink(settings.adsterraSmartlink),
       // The spot pop-under (the main format at the direct-link spots; the link is its backup) — Monetag or Adsterra, the
-      // admin's pick: the parsed tag, null when off or when that network's switch is off.
-      monetagSpotPopunder: publicSpotPopunder(settings.monetagSpotPopunder, settings.monetag === true, settings.adsterra === true),
+      // admin's pick: the parsed tag, null when off (Monetag also needs its master switch; Adsterra never needs the banner switch).
+      monetagSpotPopunder: publicSpotPopunder(settings.monetagSpotPopunder, settings.monetag === true),
       // The per-moment switches (wallpaper downloads, history video watches).
       // Public and non-user-specific, like the skip delay — the client needs
       // them before an ad fills to know whether to arm the trigger at all.

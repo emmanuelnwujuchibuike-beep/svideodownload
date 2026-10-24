@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { getAdminUser } from "@/lib/admin/guard";
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
-import { DEFAULT_DIRECT_LINK, isValidDirectLinkUrl, SPOT_AD_PROVIDERS } from "@/lib/monetization/direct-link";
+import { DEFAULT_ADSTERRA_SMARTLINK, DEFAULT_DIRECT_LINK, isValidDirectLinkUrl, SPOT_AD_PROVIDERS, type DirectLinkSpot } from "@/lib/monetization/direct-link";
 import { DEFAULT_VAST_INTERSTITIAL } from "@/lib/monetization/vast-interstitial";
 import { MONETAG_AD_TYPE_IDS, MONETAG_PLACEMENT_IDS, MONETAG_SURFACE_IDS, parseMonetagSnippet } from "@/lib/monetization/monetag";
 import { DEFAULT_SPOT_POPUNDER, parseAdsterraSnippet, POPUNDER_COOLDOWN_MAX_MINUTES } from "@/lib/monetization/spot-popunder";
@@ -28,6 +28,18 @@ const HILLTOP_PLACEMENT_IDS = HILLTOP_PLACEMENTS.map((x) => x.id) as [
   (typeof HILLTOP_PLACEMENTS)[number]["id"],
   ...(typeof HILLTOP_PLACEMENTS)[number]["id"][],
 ];
+
+/** The ad spots (lib/monetization/direct-link.ts DIRECT_LINK_SPOTS), each separately switchable (owner, 2026-10-24). */
+const spotsSchema = (d: Record<DirectLinkSpot, boolean>) =>
+  z
+    .object({
+      download: z.boolean().default(d.download),
+      resultPreview: z.boolean().default(d.resultPreview),
+      wallpaper: z.boolean().default(d.wallpaper),
+      rewardAdClose: z.boolean().default(d.rewardAdClose),
+      downloadAdClose: z.boolean().default(d.downloadAdClose),
+    })
+    .default(d);
 
 const schema = z.object({
   adsense: z.boolean(),
@@ -73,27 +85,32 @@ const schema = z.object({
   monetagDirectLink: z
     .object({
       enabled: z.boolean().default(false),
-      // 2026-10-24: Monetag direct link or Adsterra Smartlink — one network per format, the admin's pick
-      provider: z.enum(SPOT_AD_PROVIDERS).default("monetag"),
       url: z
         .string()
         .trim()
         .max(2000)
         .refine((v) => v === "" || isValidDirectLinkUrl(v), { message: "Direct link must be a full https:// URL" })
         .default(""),
-      adsterraUrl: z
+      spots: spotsSchema(DEFAULT_DIRECT_LINK.spots),
+      chancePercent: z.number().int().min(1).max(100).default(50),
+    })
+    .refine((v) => !v.enabled || v.url !== "", { message: "Paste the direct link URL before switching it on" })
+    .default(DEFAULT_DIRECT_LINK),
+  // Adsterra Smartlink (2026-10-24): a SEPARATE backup at the same spots — its own switch, chance and spots
+  adsterraSmartlink: z
+    .object({
+      enabled: z.boolean().default(false),
+      url: z
         .string()
         .trim()
         .max(2000)
         .refine((v) => v === "" || isValidDirectLinkUrl(v), { message: "Adsterra Smartlink must be a full https:// URL" })
         .default(""),
-      spots: z
-        .object({ wallpaper: z.boolean().default(true), resultPreview: z.boolean().default(true), adClose: z.boolean().default(true) })
-        .default(DEFAULT_DIRECT_LINK.spots),
+      spots: spotsSchema(DEFAULT_ADSTERRA_SMARTLINK.spots),
       chancePercent: z.number().int().min(1).max(100).default(50),
     })
-    .refine((v) => !v.enabled || (v.provider === "adsterra" ? v.adsterraUrl : v.url) !== "", { message: "Paste the chosen network's direct link URL before switching it on" })
-    .default(DEFAULT_DIRECT_LINK),
+    .refine((v) => !v.enabled || v.url !== "", { message: "Paste the Adsterra Smartlink URL before switching it on" })
+    .default(DEFAULT_ADSTERRA_SMARTLINK),
   // Monetag Pop-under at the direct-link spots — the main format there, the link its backup (lib/monetization/spot-popunder.ts)
   monetagSpotPopunder: z
     .object({
@@ -111,9 +128,7 @@ const schema = z.object({
         .max(4000)
         .refine((v) => v === "" || parseAdsterraSnippet(v) !== null, { message: "Adsterra pop-under code must be a script with an https .js src" })
         .default(""),
-      spots: z
-        .object({ wallpaper: z.boolean().default(true), resultPreview: z.boolean().default(true), adClose: z.boolean().default(true) })
-        .default(DEFAULT_SPOT_POPUNDER.spots),
+      spots: spotsSchema(DEFAULT_SPOT_POPUNDER.spots),
       // less aggressive (owner 2026-10-23): only at spot taps, and at most one per N minutes per visitor
       spotsOnly: z.boolean().default(DEFAULT_SPOT_POPUNDER.spotsOnly),
       cooldownMinutes: z.number().int().min(0).max(POPUNDER_COOLDOWN_MAX_MINUTES).default(DEFAULT_SPOT_POPUNDER.cooldownMinutes),

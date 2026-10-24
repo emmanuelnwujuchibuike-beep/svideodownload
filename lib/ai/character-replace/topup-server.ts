@@ -11,6 +11,7 @@ import { resolveHeldTopups } from "@/lib/ai/wallet/reconcile-topups";
 import { createFlutterwaveCheckout, flutterwaveFailureIsDefinite } from "@/lib/flutterwave/client";
 import { FLUTTERWAVE_CHECKOUT_CURRENCY } from "@/lib/flutterwave/config";
 import { usableRails } from "@/lib/payments/rails";
+import { flutterwaveChargeFor } from "@/lib/payments/flutterwave-charge";
 import { newFlutterwaveReference } from "@/lib/payments/references";
 import { firstRail, routePayment, type RailAttempt } from "@/lib/payments/router";
 import { getLandingSettings } from "@/lib/landing/settings";
@@ -100,15 +101,17 @@ async function insertAttempt(row: Record<string, unknown>): Promise<boolean> {
  * The Flutterwave rail (Part 2): USD, the exact list price, no conversion. Opened only when the
  * capability gate allowed it (the router's `usable`).
  */
-async function beginFlutterwaveTopup(opts: { userId: string; email: string; returnTo: unknown }, purchase: Purchase): Promise<RailAttempt<TopupOk>> {
+async function beginFlutterwaveTopup(opts: { userId: string; email: string; returnTo: unknown; market?: PaymentMarket }, purchase: Purchase): Promise<RailAttempt<TopupOk>> {
   const unavailable = { ok: false as const, refusal: "definite" as const, status: 503, error: "Payments aren't available right now." };
 
   const amount = purchase.priceUsdCents;
+  // 2026-10-24: naira in Nigeria (bank transfer, USSD…), USD elsewhere — the credit stays the USD price on the row
+  const charge = await flutterwaveChargeFor(amount, opts.market, "wallet_topup");
   const reference = newFlutterwaveReference("wallet_topup");
-  const recorded = await insertAttempt({ reference, user_id: opts.userId, provider: "flutterwave", amount_cents: amount, currency: FLUTTERWAVE_CHECKOUT_CURRENCY, provider_amount: amount, provider_currency: FLUTTERWAVE_CHECKOUT_CURRENCY, fx_minor_per_usd: null, credits: purchase.credits, item_id: purchase.packId });
+  const recorded = await insertAttempt({ reference, user_id: opts.userId, provider: "flutterwave", amount_cents: amount, currency: FLUTTERWAVE_CHECKOUT_CURRENCY, provider_amount: charge.amountMinor, provider_currency: charge.currency, fx_minor_per_usd: charge.fxMinorPerUsd, credits: purchase.credits, item_id: purchase.packId });
   if (!recorded) return unavailable;
   try {
-    const url = await createFlutterwaveCheckout({ reference, amountMinor: amount, currency: FLUTTERWAVE_CHECKOUT_CURRENCY, email: opts.email, redirectUrl: `${SITE_URL}${safeReturnTo(opts.returnTo)}`, title: "Frenz AI credits", meta: { credits: purchase.credits } });
+    const url = await createFlutterwaveCheckout({ reference, amountMinor: charge.amountMinor, currency: charge.currency, email: opts.email, redirectUrl: `${SITE_URL}${safeReturnTo(opts.returnTo)}`, title: "Frenz AI credits", meta: { credits: purchase.credits } });
     await createAdminClient().from("ai_topup_attempts").update({ checkout_url: url, updated_at: new Date().toISOString() }).eq("reference", reference);
     console.info("[payments] checkout_created", { provider: "flutterwave", purpose: "wallet_topup", userId: opts.userId, reference });
     return { ok: true, value: { ok: true, url, credits: purchase.credits, bonusCredits: purchase.bonusCredits, priceUsdCents: amount, provider: "flutterwave" } };

@@ -31,7 +31,7 @@ function installDom() {
   browserBlocks = false;
   listeners = new Map();
   store = new Map();
-  spotEls = [visibleSpot("adClose"), visibleSpot("wallpaper"), visibleSpot("resultPreview")];
+  spotEls = [visibleSpot("downloadAdClose"), visibleSpot("wallpaper"), visibleSpot("resultPreview")];
   vi.stubGlobal("window", {
     open: (url: string) => {
       if (browserBlocks) return null;
@@ -61,11 +61,11 @@ const press = (spot: string | null) => fire("pointerdown", { target: { closest: 
 /** what the pop-under tag does on a click it handles: opens its window (a foreign open) */
 const monetagOpens = () => window.open("https://pop.example/ad", "_blank");
 
-const DIRECT = { url: "https://direct.example/go", spots: ["wallpaper", "resultPreview", "adClose"], chancePercent: 100 };
+const DIRECT = { url: "https://direct.example/go", spots: ["wallpaper", "resultPreview", "downloadAdClose"], chancePercent: 100 };
 const ON = { ...DEFAULT_SPOT_POPUNDER, enabled: true };
 const POP = publicSpotPopunder(ON, true)!;
 
-async function opener(spot: "wallpaper" | "resultPreview" | "adClose" = "adClose") {
+async function opener(spot: "wallpaper" | "resultPreview" | "downloadAdClose" = "downloadAdClose") {
   const m = await import("./direct-link-runtime");
   return (await m.loadDirectLinkOpener(spot))!;
 }
@@ -102,15 +102,20 @@ describe("Adsterra at the spots (owner, 2026-10-24: \"I want to try adsterra out
     expect(parseAdsterraSnippet("")).toBeNull();
   });
 
-  it("served as Adsterra (no zone) only with ADSTERRA's switch on — Monetag's switch does not count", () => {
-    expect(publicSpotPopunder(AON, false, true)).toEqual({ provider: "adsterra", src: "https://pl27012345.profitableratecpm.com/0a/1b/2c/0a1b2c3d4e5f.js", zone: null, cfAsync: false, spots: ["wallpaper", "resultPreview", "adClose"], spotsOnly: true, cooldownMinutes: 30 });
-    expect(publicSpotPopunder(AON, true, false)).toBeNull();
-    expect(publicSpotPopunder({ ...AON, adsterraSnippet: "" }, true, true)).toBeNull();
-    expect(publicSpotPopunder({ ...AON, enabled: false }, true, true)).toBeNull();
+  it("🔴 Adsterra is served on its OWN switch + code — never needs the Adsterra banner switch (that would turn banners on too) nor Monetag's", () => {
+    expect(publicSpotPopunder(AON, false)).toEqual({ provider: "adsterra", src: "https://pl27012345.profitableratecpm.com/0a/1b/2c/0a1b2c3d4e5f.js", zone: null, cfAsync: false, spots: ["resultPreview", "wallpaper", "rewardAdClose", "downloadAdClose"], spotsOnly: true, cooldownMinutes: 30 });
+    expect(publicSpotPopunder(AON, true)).toMatchObject({ provider: "adsterra" });
+    expect(publicSpotPopunder({ ...AON, adsterraSnippet: "" }, true)).toBeNull();
+    expect(publicSpotPopunder({ ...AON, enabled: false }, true)).toBeNull();
   });
 
-  it("Monetag stays the pick (and Adsterra's switch doesn't serve it) unless the admin chose Adsterra; a row saved before has no provider", () => {
-    expect(publicSpotPopunder(ON, false, true)).toBeNull();
+  it("the owner's mix (2026-10-24): Adsterra pop-under + Monetag direct link, Monetag's pop-under tag left unused", () => {
+    expect(publicSpotPopunder(AON, true)).toMatchObject({ provider: "adsterra", src: expect.stringContaining("profitableratecpm.com") });
+    expect(publicSpotPopunder(AON, true)!.src).not.toContain("al5sm.com");
+  });
+
+  it("Monetag stays the pick unless the admin chose Adsterra, and still needs Monetag's switch; a row saved before has no provider", () => {
+    expect(publicSpotPopunder(ON, false)).toBeNull();
     expect(normalizeSpotPopunder({ enabled: true }).provider).toBe("monetag");
     expect(normalizeSpotPopunder({ provider: "something" }).provider).toBe("monetag");
     expect(normalizeSpotPopunder({ provider: "adsterra" }).provider).toBe("adsterra");
@@ -120,7 +125,9 @@ describe("Adsterra at the spots (owner, 2026-10-24: \"I want to try adsterra out
     expect(src("features/monetization/direct-link-runtime.ts")).toContain('el.setAttribute(p.provider === "adsterra" ? "data-adsterra" : "data-monetag", "spot_popunder");');
     const admin = src("features/admin/monetization-settings.tsx");
     expect(admin).toContain('<SpotProviderPicker id="spot-popunder-network"');
-    expect(admin).toContain('<SpotProviderPicker id="direct-link-network"');
+    // the direct links are separate formats now (Monetag link + Adsterra Smartlink), not a network pick
+    expect(admin).not.toContain('<SpotProviderPicker id="direct-link-network"');
+    expect(admin).toContain('idPrefix="adsterra-smartlink"');
     const route = src("app/api/admin/monetization/route.ts");
     expect(route).toContain("parseAdsterraSnippet(v) !== null");
     expect(route).toContain('(v.provider === "adsterra" ? v.adsterraSnippet : v.snippet) !== ""');
@@ -129,7 +136,7 @@ describe("Adsterra at the spots (owner, 2026-10-24: \"I want to try adsterra out
 
 describe("the config — OFF unless an admin switched it on", () => {
   it("default OFF, the owner's zone still pre-filled; nothing is served while off", () => {
-    expect(DEFAULT_SPOT_POPUNDER).toEqual({ enabled: false, provider: "monetag", snippet: OWNER_POPUNDER_SNIPPET, adsterraSnippet: "", spots: { wallpaper: true, resultPreview: true, adClose: true }, spotsOnly: true, cooldownMinutes: 30 });
+    expect(DEFAULT_SPOT_POPUNDER).toEqual({ enabled: false, provider: "monetag", snippet: OWNER_POPUNDER_SNIPPET, adsterraSnippet: "", spots: { download: false, resultPreview: true, wallpaper: true, rewardAdClose: true, downloadAdClose: true }, spotsOnly: true, cooldownMinutes: 30 });
     expect(publicSpotPopunder(DEFAULT_SPOT_POPUNDER, true)).toBeNull();
     expect(publicSpotPopunder(undefined, true)).toBeNull();
   });
@@ -142,7 +149,7 @@ describe("the config — OFF unless an admin switched it on", () => {
     expect(normalizeSpotPopunder({ enabled: false }).enabled).toBe(false);
   });
   it("explicitly ON: served with the parsed tag — only with Monetag on, a valid tag and a spot", () => {
-    expect(POP).toEqual({ provider: "monetag", src: "https://al5sm.com/tag.min.js", zone: "12054432", cfAsync: false, spots: ["wallpaper", "resultPreview", "adClose"], spotsOnly: true, cooldownMinutes: 30 });
+    expect(POP).toEqual({ provider: "monetag", src: "https://al5sm.com/tag.min.js", zone: "12054432", cfAsync: false, spots: ["resultPreview", "wallpaper", "rewardAdClose", "downloadAdClose"], spotsOnly: true, cooldownMinutes: 30 });
     expect(publicSpotPopunder(ON, false)).toBeNull();
     expect(publicSpotPopunder({ ...ON, snippet: "<script>alert(1)</script>" }, true)).toBeNull();
     expect(publicSpotPopunder({ ...ON, snippet: "" }, true)).toBeNull();
@@ -166,13 +173,13 @@ describe("loading — preloaded once an ENABLED spot is shown, so the FIRST tap 
     expect(scripts[0]).toMatchObject({ src: "https://al5sm.com/tag.min.js", dataset: { zone: "12054432" } });
     await opener("wallpaper");
     vi.advanceTimersByTime(PRELOAD_MS);
-    press("adClose");
+    press("downloadAdClose");
     expect(scripts).toHaveLength(1);
   });
   it("the regression: a page's FIRST tap at the spot opens the pop-under (the tag is ready before it)", async () => {
     const open = await readyOpener();
     const outcome = vi.fn();
-    press("adClose");
+    press("downloadAdClose");
     open(outcome);
     monetagOpens();
     fire("click");
@@ -181,15 +188,15 @@ describe("loading — preloaded once an ENABLED spot is shown, so the FIRST tap 
   });
   it("a press before the preload ran still loads it (once)", async () => {
     await opener();
-    press("adClose");
+    press("downloadAdClose");
     vi.advanceTimersByTime(PRELOAD_MS);
     expect(scripts).toHaveLength(1);
   });
   it("a spot switched off for the pop-under never loads it there — preload or press", async () => {
     config = { monetagDirectLink: DIRECT, monetagSpotPopunder: { ...POP, spots: ["wallpaper"] } };
-    await opener("adClose");
+    await opener("downloadAdClose");
     vi.advanceTimersByTime(PRELOAD_MS);
-    press("adClose");
+    press("downloadAdClose");
     expect(scripts).toEqual([]);
   });
   it("no pop-under configured: nothing ever loads", async () => {
@@ -200,7 +207,7 @@ describe("loading — preloaded once an ENABLED spot is shown, so the FIRST tap 
   });
   it("the tap that loads the tag (not ready yet) gets the direct link — in the tap, as before", async () => {
     const open = await opener();
-    press("adClose");
+    press("downloadAdClose");
     const outcome = vi.fn();
     open(outcome);
     expect(outcome).toHaveBeenCalledWith("direct");
@@ -290,7 +297,7 @@ describe("a tap once the pop-under is ready", () => {
 
   it("the tag failed to load (an ad blocker) → the direct link alone, in the tap", async () => {
     const open = await opener();
-    press("adClose");
+    press("downloadAdClose");
     scripts[0]!.onerror!();
     const outcome = vi.fn();
     open(outcome);
@@ -310,7 +317,7 @@ describe("a tap once the pop-under is ready", () => {
   it("pop-under OFF (not served): the direct link exactly as before, and no tag ever loads", async () => {
     config = { monetagDirectLink: DIRECT, monetagSpotPopunder: null };
     const open = await opener();
-    press("adClose");
+    press("downloadAdClose");
     open();
     expect(scripts).toEqual([]);
     expect(opened).toEqual(["https://direct.example/go"]);
@@ -322,10 +329,15 @@ describe("wiring", () => {
   it("every spot element is marked, the config route serves it, settings normalize it, the admin can set it", () => {
     expect(src("features/downloader/preview-card.tsx")).toContain('data-ad-spot="resultPreview"');
     expect(src("features/wallpapers/wallpaper-reels.tsx")).toContain('data-ad-spot="wallpaper"');
-    expect(src("features/monetization/download-complete-ad.tsx")).toContain('data-ad-spot="adClose"');
-    expect(src("features/ads-platform/serve/self-interstitial.tsx")).toContain('data-ad-spot="adClose"');
+    expect(src("features/monetization/download-complete-ad.tsx")).toContain('data-ad-spot="downloadAdClose"');
+    expect(src("features/ads-platform/serve/self-interstitial.tsx")).toContain("data-ad-spot={adCloseSpot(reward)}");
+    // 2026-10-24: the result card's Download button is its own spot (the download still runs)
+    expect(src("features/downloader/preview-card.tsx")).toContain('data-ad-spot="download"');
+    expect(src("features/downloader/preview-card.tsx")).toContain('const openDownloadSpot = useDirectLink("download");');
     expect(src("features/monetization/fullscreen-interstitial.tsx")).toContain("data-ad-spot={directLinkSpot}");
-    expect(src("app/api/ads/config/route.ts")).toContain("monetagSpotPopunder: publicSpotPopunder(settings.monetagSpotPopunder, settings.monetag === true, settings.adsterra === true)");
+    expect(src("app/api/ads/config/route.ts")).toContain("monetagSpotPopunder: publicSpotPopunder(settings.monetagSpotPopunder, settings.monetag === true)");
+    // the spots never read the Adsterra BANNER switch
+    expect(src("app/api/ads/config/route.ts")).not.toMatch(/publicSpotPopunder\([^)]*settings\.adsterra/);
     expect(src("lib/monetization/settings.ts")).toContain("merged.monetagSpotPopunder = normalizeSpotPopunder(merged.monetagSpotPopunder)");
     expect(src("app/api/admin/monetization/route.ts")).toContain("monetagSpotPopunder: z");
     expect(src("features/admin/monetization-settings.tsx")).toContain("<SpotPopunderEditor");
@@ -368,7 +380,7 @@ describe("less aggressive (owner 2026-10-23) — fewer pop-unders, the ones that
     await readyOpener();
     expect(thirdPartyOpen("https://pop.example/elsewhere")).toBeNull();
     expect(opened).toEqual([]);
-    press("adClose");
+    press("downloadAdClose");
     expect(thirdPartyOpen("https://pop.example/spot")).not.toBeNull();
     expect(opened).toEqual(["https://pop.example/spot"]);
   });
@@ -383,7 +395,7 @@ describe("less aggressive (owner 2026-10-23) — fewer pop-unders, the ones that
     await readyOpener();
     expect(evalOpen("https://pop.example/eval")).toBeNull();
     expect(opened).toEqual([]);
-    press("adClose");
+    press("downloadAdClose");
     expect(evalOpen("https://pop.example/at-spot")).not.toBeNull();
   });
 
@@ -396,8 +408,8 @@ describe("less aggressive (owner 2026-10-23) — fewer pop-unders, the ones that
 
   it("a spot element that is mounted but not rendered (zero size, or below the screen) does not load it either", async () => {
     spotEls = [
-      { getAttribute: () => "adClose", getBoundingClientRect: () => ({ width: 0, height: 0, top: 0, left: 0, bottom: 0, right: 0 }) },
-      { getAttribute: () => "adClose", getBoundingClientRect: () => ({ width: 100, height: 40, top: 2000, left: 0, bottom: 2040, right: 100 }) },
+      { getAttribute: () => "downloadAdClose", getBoundingClientRect: () => ({ width: 0, height: 0, top: 0, left: 0, bottom: 0, right: 0 }) },
+      { getAttribute: () => "downloadAdClose", getBoundingClientRect: () => ({ width: 100, height: 40, top: 2000, left: 0, bottom: 2040, right: 100 }) },
     ];
     await opener();
     vi.advanceTimersByTime(PRELOAD_MS * 5);
@@ -406,7 +418,7 @@ describe("less aggressive (owner 2026-10-23) — fewer pop-unders, the ones that
 
   it("the cooldown: after a pop-under, the next 30 minutes open nothing at the spots (no direct link either); then again", async () => {
     const open = await readyOpener();
-    press("adClose");
+    press("downloadAdClose");
     const first = vi.fn();
     open(first);
     thirdPartyOpen("https://pop.example/1");
@@ -414,7 +426,7 @@ describe("less aggressive (owner 2026-10-23) — fewer pop-unders, the ones that
     expect(first).toHaveBeenCalledWith("popunder");
 
     vi.advanceTimersByTime(5 * 60_000);
-    press("adClose");
+    press("downloadAdClose");
     const second = vi.fn();
     open(second);
     expect(second).toHaveBeenCalledWith("none");
@@ -422,7 +434,7 @@ describe("less aggressive (owner 2026-10-23) — fewer pop-unders, the ones that
     expect(opened).toEqual(["https://pop.example/1"]);
 
     vi.advanceTimersByTime(26 * 60_000);
-    press("adClose");
+    press("downloadAdClose");
     const third = vi.fn();
     open(third);
     thirdPartyOpen("https://pop.example/3");

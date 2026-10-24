@@ -12,6 +12,7 @@ import { FLUTTERWAVE_CHECKOUT_CURRENCY } from "@/lib/flutterwave/config";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { chargeMatches, type VerifiedCharge } from "@/lib/payments/charge";
 import { usableRails } from "@/lib/payments/rails";
+import { flutterwaveChargeFor } from "@/lib/payments/flutterwave-charge";
 import { isFlutterwaveReference, newFlutterwaveReference } from "@/lib/payments/references";
 import { firstRail, routePayment, type RailAttempt } from "@/lib/payments/router";
 import { initializeSubCheckout, paystackFailureIsDefinite, paystackRefusedForSure, SUB_PURPOSE, verifyTransaction } from "@/lib/paystack/paystack";
@@ -238,7 +239,7 @@ export async function startSubCheckout(input: { subscriberId: string; email: str
 
 interface SubPair {
   db: ReturnType<typeof createAdminClient>;
-  input: { subscriberId: string; email: string; creatorId: string };
+  input: { subscriberId: string; email: string; creatorId: string; market?: PaymentMarket };
   charge: ReturnType<typeof subscriptionCharge>;
   cfg: SubConfig;
   safeReturn: string;
@@ -353,11 +354,13 @@ async function openFlutterwaveSub(p: SubPair): Promise<RailAttempt<string>> {
   }
 
   const reference = newFlutterwaveReference("sub_purchase");
-  const total = p.charge.totalCents;
-  const row = await insertPurchase(p, { reference, provider: "flutterwave", currency: FLUTTERWAVE_CHECKOUT_CURRENCY, minor: total, fx: null });
+  // 2026-10-24: naira in Nigeria (bank transfer, USSD…), USD elsewhere — the price in USD cents stays on the row
+  const fw = await flutterwaveChargeFor(p.charge.totalCents, p.input.market, "sub_purchase");
+  const total = fw.amountMinor;
+  const row = await insertPurchase(p, { reference, provider: "flutterwave", currency: fw.currency, minor: total, fx: fw.fxMinorPerUsd });
   if ("stop" in row) return row.stop;
   try {
-    const url = await createFlutterwaveCheckout({ reference, amountMinor: total, currency: FLUTTERWAVE_CHECKOUT_CURRENCY, email: p.input.email, redirectUrl: subCallback(reference, p.safeReturn), title: "Frenz subscription", meta: { purchase_id: row.id } });
+    const url = await createFlutterwaveCheckout({ reference, amountMinor: total, currency: fw.currency, email: p.input.email, redirectUrl: subCallback(reference, p.safeReturn), title: "Frenz subscription", meta: { purchase_id: row.id } });
     await p.db.from("sub_purchases").update({ checkout_url: url, updated_at: new Date().toISOString() }).eq("reference", reference);
     return { ok: true, value: url };
   } catch (e) {

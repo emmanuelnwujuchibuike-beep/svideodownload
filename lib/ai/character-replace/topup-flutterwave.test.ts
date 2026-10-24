@@ -75,6 +75,42 @@ beforeEach(() => {
   vi.spyOn(console, "info").mockImplementation(() => {});
 });
 
+describe("naira in Nigeria (2026-10-24: bank transfer / USSD only exist for NGN checkouts)", () => {
+  const seen: { currency?: string; amountMinor?: number }[] = [];
+  const capture = () => {
+    seen.length = 0;
+    fwCreate = async (o) => (seen.push(o as { currency?: string; amountMinor?: number }), `https://checkout.flutterwave.com/pay/${o.reference}`);
+  };
+
+  it("NGN confirmed + a member in Nigeria: the checkout is in NAIRA at the live rate; the row keeps the USD price for the credit", async () => {
+    setEnv(true);
+    process.env.FLUTTERWAVE_VERIFIED_CURRENCIES = "USD,NGN";
+    capture();
+    expect(await start()).toMatchObject({ ok: true, provider: "flutterwave", priceUsdCents: 1000 });
+    // $10.00 at ₦1,500 per dollar (the mocked live rate) = ₦15,000.00 = 1,500,000 kobo
+    expect(seen[0]).toMatchObject({ currency: "NGN", amountMinor: 1_500_000 });
+    expect(rows("flutterwave")[0]).toMatchObject({ amount_cents: 1000, currency: "USD", provider_amount: 1_500_000, provider_currency: "NGN", fx_minor_per_usd: 150_000 });
+  });
+
+  it("a member outside Nigeria still pays USD", async () => {
+    setEnv(true);
+    process.env.FLUTTERWAVE_VERIFIED_CURRENCIES = "USD,NGN";
+    capture();
+    const r = await beginCharacterReplaceTopup({ userId: USER, email: "a@b.co", packId: "pack_100", returnTo: "/ai/usage", market: "other" });
+    expect(r).toMatchObject({ ok: true, provider: "flutterwave" });
+    expect(seen[0]).toMatchObject({ currency: "USD", amountMinor: 1000 });
+    expect(rows("flutterwave")[0]).toMatchObject({ provider_amount: 1000, provider_currency: "USD", fx_minor_per_usd: null });
+  });
+
+  it("NGN not confirmed (switched off): Nigeria pays USD on Flutterwave as before — never a closed checkout", async () => {
+    setEnv(true);
+    process.env.FLUTTERWAVE_VERIFIED_CURRENCIES = "USD";
+    capture();
+    expect(await start()).toMatchObject({ ok: true, provider: "flutterwave" });
+    expect(seen[0]).toMatchObject({ currency: "USD", amountMinor: 1000 });
+  });
+});
+
 describe("wallet top-up, two rails (Part 2)", () => {
   it("capability unconfirmed (the default): Paystack only, exactly as before — and its attempt row is written FIRST", async () => {
     const r = await start();

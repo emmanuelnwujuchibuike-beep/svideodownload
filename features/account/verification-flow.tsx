@@ -30,7 +30,6 @@ import { createClient } from "@/lib/supabase/client";
 import {
   ID_DOCUMENT_TYPES,
   VERIFICATION_CATEGORIES,
-  type Eligibility,
   type IdDocumentType,
   type VerificationCategory,
   type VerificationState,
@@ -44,9 +43,7 @@ import { cn } from "@/lib/utils";
  * to be "professional and gated with identity verification", with the applicant's
  * name matching their ID and a security selfie for confirmation.
  *
- *   1. Eligibility. The checklist is computed server-side from real account data
- *      and shown in full — including the rows they haven't cleared — so nobody is
- *      turned away by an invisible rule. "Continue" is inert until every row is met.
+ *   1. (no eligibility checklist since 2026-10-24 — any member may apply or buy the tick)
  *   2. Who you are. Category + the legal name EXACTLY as printed on the document,
  *      with an explicit confirmation that it matches; the name they are verified
  *      UNDER is their display name, shown here so a mismatch is obvious before
@@ -61,8 +58,10 @@ import { cn } from "@/lib/utils";
  * submitted. Nothing here is ever publicly readable.
  */
 
-const STEPS = ["Eligibility", "Identity", "Document", "Selfie", "Review"] as const;
-type Step = 0 | 1 | 2 | 3 | 4;
+// 🔴 No Eligibility step (owner, 2026-10-24: "remove every eligibility there on the verification") — the form opens at
+// Identity. Step numbers keep their meaning (1 = Identity … 4 = Review); the rail shows these four.
+const STEPS = ["Identity", "Document", "Selfie", "Review"] as const;
+type Step = 1 | 2 | 3 | 4;
 
 type Slot = "front" | "back" | "selfie";
 
@@ -73,11 +72,9 @@ interface Uploaded {
 
 export function VerificationFlow({
   state,
-  eligibility,
   displayName,
 }: {
   state: VerificationState;
-  eligibility: Eligibility;
   displayName: string;
 }) {
   // An approved or in-flight application has nothing to fill in — show its state.
@@ -87,7 +84,6 @@ export function VerificationFlow({
   }
   return (
     <Application
-      eligibility={eligibility}
       displayName={displayName}
       previousRejection={
         state.request?.status === "rejected"
@@ -147,16 +143,14 @@ function PendingCard({ submittedAt }: { submittedAt: string | null }) {
 /* ───────────────────────────── Application ────────────────────────────── */
 
 function Application({
-  eligibility,
   displayName,
   previousRejection,
 }: {
-  eligibility: Eligibility;
   displayName: string;
   previousRejection: { code: string | null; reason: string | null } | null;
 }) {
   const router = useRouter();
-  const [step, setStep] = useState<Step>(0);
+  const [step, setStep] = useState<Step>(1);
 
   const [category, setCategory] = useState<VerificationCategory>("creator");
   const [legalName, setLegalName] = useState("");
@@ -224,9 +218,6 @@ function Application({
 
       <StepRail step={step} />
 
-      {step === 0 ? (
-        <EligibilityStep eligibility={eligibility} onNext={() => setStep(1)} />
-      ) : null}
 
       {step === 1 ? (
         <SettingsGroup label="WHO YOU ARE" description="This must match the government ID you're about to upload.">
@@ -363,9 +354,11 @@ function Application({
 
       {step > 0 ? (
         <div className="mt-6 flex items-center gap-3">
-          <button type="button" onClick={() => setStep((s) => (s - 1) as Step)} className="btn-lux btn-lux-secondary">
-            Back
-          </button>
+          {step > 1 ? (
+            <button type="button" onClick={() => setStep((s) => (s - 1) as Step)} className="btn-lux btn-lux-secondary">
+              Back
+            </button>
+          ) : null}
           {step < 4 ? (
             <button
               type="button"
@@ -394,8 +387,8 @@ function StepRail({ step }: { step: Step }) {
     <ol className="mb-5 flex items-center gap-1.5" aria-label="Progress">
       {STEPS.map((label, i) => (
         <li key={label} className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <span className={cn("h-1 rounded-full transition", i <= step ? "bg-primary" : "bg-border")} />
-          <span className={cn("truncate text-[10px] font-semibold uppercase tracking-wide", i === step ? "text-primary" : "text-muted-foreground/70")}>
+          <span className={cn("h-1 rounded-full transition", i + 1 <= step ? "bg-primary" : "bg-border")} />
+          <span className={cn("truncate text-[10px] font-semibold uppercase tracking-wide", i + 1 === step ? "text-primary" : "text-muted-foreground/70")}>
             {label}
           </span>
         </li>
@@ -439,53 +432,6 @@ function Summary({ label, value }: { label: string; value: string }) {
       <span className="text-sm text-muted-foreground">{label}</span>
       <span className="truncate text-sm font-semibold">{value || "—"}</span>
     </div>
-  );
-}
-
-function EligibilityStep({ eligibility, onNext }: { eligibility: Eligibility; onNext: () => void }) {
-  return (
-    <>
-      <SettingsGroup
-        label="ELIGIBILITY"
-        description={`${eligibility.metCount} of ${eligibility.requiredCount} requirements met. Every rule is shown — there is nothing hidden behind the decision.`}
-      >
-        {eligibility.criteria.map((c) => (
-          <div key={c.key} className="flex items-center gap-3 px-3.5 py-3">
-            <span
-              className={cn(
-                "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-                c.met ? "bg-emerald-500/15 text-emerald-500" : "bg-secondary text-muted-foreground",
-              )}
-            >
-              {c.met ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className={cn("block text-sm font-semibold", !c.met && "text-muted-foreground")}>{c.label}</span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">{c.detail}</span>
-            </span>
-          </div>
-        ))}
-      </SettingsGroup>
-
-      <div className="mt-6">
-        {eligibility.eligible ? (
-          <button type="button" onClick={onNext} className="btn-lux btn-lux-primary">
-            Start application <ChevronRight className="h-4 w-4" />
-          </button>
-        ) : (
-          <div className="rounded-2xl border border-border/70 bg-card p-4">
-            <p className="text-sm font-semibold">Not yet eligible</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Clear the remaining rows above and this page will let you apply — no waiting list, no invitation. If you
-              believe a rule is wrong for your account, contact support.
-            </p>
-            <Link href="/support" className="btn-lux btn-lux-secondary mt-3 inline-flex">
-              Contact support
-            </Link>
-          </div>
-        )}
-      </div>
-    </>
   );
 }
 

@@ -9,6 +9,9 @@ import { getLandingSettings } from "@/lib/landing/settings";
 import { claimProviderEventStrict, markProviderEvent } from "@/lib/payments/events";
 import { flutterwaveReferencePurpose } from "@/lib/payments/references";
 import { confirmVerificationPayment } from "@/lib/social/paid-verification";
+import { verifyFlutterwaveTransfer } from "@/lib/flutterwave/client";
+import { isFlutterwavePayoutRef } from "@/lib/rewards/payout-refs";
+import { settlePaystackTransfer } from "@/lib/rewards/paystack-payouts";
 import { confirmSubPayment } from "@/lib/sub/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -80,6 +83,24 @@ export async function POST(request: Request) {
       // recorded for the audit trail (no raw email in the key); the handling itself is idempotent
       if (out.eventKey && (await claimProviderEventStrict("flutterwave", out.eventKey, type, null)) !== "unavailable") await markProviderEvent("flutterwave", out.eventKey, out.outcome);
       return ACK({ outcome: out.outcome });
+    } catch {
+      return RETRY();
+    }
+  }
+
+  /*
+    2026-10-24 — a withdrawal payout (frenz_fwd_<id>). The body is never believed: Flutterwave is asked about the
+    reference, and only SUCCESSFUL / FAILED settle (the shared transfer rules in lib/rewards/paystack-payouts.ts, which
+    ask the rail that sent it). Anything unclear answers 500 so the delivery is retried; the reconcile cron also checks.
+  */
+  if (type === "transfer.completed") {
+    const tref = typeof (event.data as { reference?: unknown } | undefined)?.reference === "string" ? String((event.data as { reference: string }).reference) : "";
+    if (!isFlutterwavePayoutRef(tref)) return ACK({ ignored: "not a Frenz payout" });
+    const v = await verifyFlutterwaveTransfer(tref);
+    if (v.kind === "unknown") return RETRY();
+    if (v.kind === "not_found") return ACK({ ignored: "transfer not found" });
+    try {
+      return (await settlePaystackTransfer(v.kind === "success" ? "transfer.success" : "transfer.failed", tref)) ? ACK({ outcome: v.kind }) : RETRY();
     } catch {
       return RETRY();
     }

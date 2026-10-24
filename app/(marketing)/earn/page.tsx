@@ -96,7 +96,7 @@ export default async function EarnPage() {
     },
     {
       q: "How do I get paid?",
-      a: `Save a bank account once and withdraw from your private post balance. In Nigeria, payouts go straight to your bank through Paystack, and you can turn on automatic withdrawal so new earnings are sent as they arrive. Outside Nigeria, withdraw to a bank account (with its SWIFT code) or PayPal, and our team sends it after a quick review. The minimum withdrawal is ${usd(sub.minWithdrawalCents)}.`,
+      a: `Save a bank account once and withdraw from your private post balance. In Nigeria, payouts go straight to your bank through Paystack or Flutterwave, and you can turn on automatic withdrawal so new earnings are sent as they arrive. Outside Nigeria, withdraw to a bank account (with its SWIFT code) or PayPal, and our team sends it after a quick review. The minimum withdrawal is ${usd(sub.minWithdrawalCents)}.`,
     },
     {
       q: "Are subscription earnings guaranteed?",
@@ -113,7 +113,7 @@ export default async function EarnPage() {
     { icon: Wallet, title: "Your own monthly price", body: `Choose any price from ${usd(sub.minPriceCents)} to ${usd(sub.maxPriceCents)}. Each payment gives ${sub.periodDays} days of access.` },
     { icon: Link2, title: "A link to share", body: "Your subscribe link opens your private posts page on your profile. Share it anywhere you have followers." },
     { icon: Bell, title: "New-subscriber alerts", body: "A notification and an email each time someone subscribes or joins your community." },
-    { icon: Landmark, title: "Withdraw to your bank", body: "Paid out through Paystack to a saved account, with optional automatic withdrawal." },
+    { icon: Landmark, title: "Withdraw to your bank", body: "Paid out through Paystack or Flutterwave to a saved account, with optional automatic withdrawal." },
     { icon: Eye, title: "Deterrents against copying", body: "No saving or downloading, a cover when the app is hidden, and a watermark with the viewer's @handle." },
   ];
 
@@ -284,7 +284,7 @@ export default async function EarnPage() {
               ))}
             </ol>
             <p className="mt-4 flex items-start gap-2 text-[13px] leading-snug text-muted-foreground">
-              <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /> Nigerian banks are paid instantly through Paystack. Creators in other countries withdraw to a bank account or PayPal, paid by our team after a quick review.
+              <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /> Nigerian banks are paid through Paystack or Flutterwave, usually instantly. Creators in other countries withdraw to a bank account or PayPal, paid by our team after a quick review.
             </p>
           </section>
 

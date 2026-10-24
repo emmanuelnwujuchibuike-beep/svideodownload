@@ -192,10 +192,12 @@ describe("Flutterwave webhook — the hash proves the sender, the API proves the
     expect(creditCalls).toEqual([]);
   });
 
-  it("other event types are acknowledged and ignored (transfers and refunds are not integrated yet)", async () => {
-    const res = await deliver({ event: "transfer.completed" });
+  it("other event types are acknowledged and ignored; a transfer that isn't a Frenz payout is ignored unverified", async () => {
+    const res = await deliver({ event: "refund.completed" });
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ ignored: "transfer.completed" });
+    expect(await res.json()).toMatchObject({ ignored: "refund.completed" });
+    const t = await deliver({ event: "transfer.completed" });
+    expect(await t.json()).toMatchObject({ ignored: "not a Frenz payout" });
     expect(verifyCalls).toEqual([]);
   });
 

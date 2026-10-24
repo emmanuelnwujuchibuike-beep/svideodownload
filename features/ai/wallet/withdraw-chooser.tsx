@@ -63,7 +63,7 @@ export function WithdrawChooser({ onClose, creditsLabel }: { onClose: () => void
                 <span className="min-w-0 flex-1">
                   <span className="block text-[14.5px] font-semibold">Private post earnings</span>
                   <span className="block text-[12.5px] text-muted-foreground">
-                    {usd(e!.availableCents)} available · {data!.rules.withdrawalFeePercent}% fee · paid through Paystack
+                    {usd(e!.availableCents)} available · {data!.rules.withdrawalFeePercent}% fee · paid through Paystack or Flutterwave
                   </span>
                 </span>
                 <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />

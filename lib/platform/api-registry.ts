@@ -90,7 +90,9 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   /* ── Frenz Exclusive / SUB (session; money and access are decided on the server) ── */
   { method: "GET", path: "/api/sub/feed", auth: "session", category: "subscriptions", description: "The Exclusive feed: posts from creators the viewer subscribes to (keyset-paged) and locked previews to discover." },
   { method: "POST", path: "/api/sub/feed/previews", auth: "session", category: "subscriptions", description: "Fresh five-minute preview links for feed tiles whose links expired; access re-checked, unseen posts left out." },
-  { method: "POST", path: "/api/sub/checkout", auth: "session", category: "subscriptions", description: "Open (or reuse) a Paystack checkout for a creator subscription. Price and fee are the server's." },
+  { method: "POST", path: "/api/sub/checkout", auth: "session", category: "subscriptions", description: "Open (or reuse) a checkout for a creator subscription: 1, 3, 6 or 12 months prepaid, optionally a promotion (0277). The browser names the option; price and fee are the server's." },
+  { method: "GET", path: "/api/sub/promotions", auth: "session", category: "subscriptions", description: "The signed-in creator's own Exclusive promotions with status and redemption counts (0277)." },
+  { method: "POST", path: "/api/sub/promotions", auth: "session", category: "subscriptions", description: "Create, edit, pause or resume the creator's own promotion; used promotions keep their price, durations and start (0277)." },
   { method: "GET", path: "/api/sub/earnings", auth: "session", category: "subscriptions", description: "The signed-in creator's SUB balance, ledger and withdrawals." },
   { method: "GET", path: "/api/sub/notify", auth: "session-optional", category: "subscriptions", description: "How the viewer hears about a creator's new exclusive posts (off for signed-out)." },
   { method: "PUT", path: "/api/sub/notify", auth: "session", category: "subscriptions", description: "Set push / email / both / off for one creator's new exclusive posts." },
@@ -107,6 +109,8 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   { method: "GET", path: "/api/admin/memberships/search", auth: "admin", category: "subscriptions", description: "Bounded search of subscription purchases by creator, subscriber, reference part, status and date." },
   { method: "GET", path: "/api/admin/memberships/reviews", auth: "admin", category: "subscriptions", description: "Exclusive money reviews: refunds not applied automatically (partial or other currency) and disputed purchases." },
   { method: "POST", path: "/api/admin/memberships/reviews", auth: "admin", category: "subscriptions", description: "Mark a refund review as looked at (no money moves), or restore a dispute the platform won (0254, once)." },
+  { method: "GET", path: "/api/admin/memberships/promotions", auth: "admin", category: "subscriptions", description: "One creator's bundle prices, promotions with redemptions, and the verified purchases that used them (0277)." },
+  { method: "POST", path: "/api/admin/memberships/promotions", auth: "admin", category: "subscriptions", description: "Pause a creator's promotion (moderation; only the team lifts it). Audited with the admin's id and reason." },
   { method: "GET", path: "/api/admin/memberships/moderation", auth: "admin", category: "subscriptions", description: "Exclusive moderation by state (open, removed, restored, dismissed), paged." },
   { method: "GET", path: "/api/sub/favourites", auth: "session", category: "subscriptions", description: "The member's own favourite creators (a favourite_creators circle), paged; public profile facts only." },
   { method: "POST", path: "/api/sub/favourites", auth: "session", category: "subscriptions", description: "Add or remove a favourite creator (idempotent). Grants no access; never touches a subscription." },
@@ -142,6 +146,7 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   { method: "POST", path: "/api/admin/ratings/ban", auth: "admin", category: "security", description: "0267: ban the person behind an app rating — account (suspended, audited) and every device identifier the rating carried; the fetch route then refuses them." },
   { method: "DELETE", path: "/api/admin/ratings/ban", auth: "admin", category: "security", description: "0267: lift a rating ban (and the account suspension it made)." },
   // Flutterwave admin controls (Parts 2, 3.3, 5)
+  { method: "GET", path: "/api/pricing", auth: "session-optional", category: "payments", description: "The Pro and Business display prices (Admin → Pricing) for upgrade prompts; public, edge-cached 5 minutes. Never a charged amount." },
   { method: "GET", path: "/api/admin/flutterwave", auth: "admin", category: "payments", description: "Flutterwave settings: masks and sources of the key and hash (never the secrets), the capability gate per purpose, plan ids, the webhook URL." },
   { method: "POST", path: "/api/admin/flutterwave", auth: "admin", category: "payments", description: "Save Flutterwave settings to the private 0272 table (fresh password). Secrets are write-only." },
   { method: "GET", path: "/api/admin/flutterwave/reviews", auth: "admin", category: "payments", description: "Plan billing waiting for a person (0274 plan_billing_reviews)." },

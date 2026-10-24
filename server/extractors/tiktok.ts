@@ -291,15 +291,25 @@ export function buildFormats(item: TikTokItem, pageCookie: string | null = null)
     Height still breaks ties inside each group, so this is "the best H.264", not
     "any H.264".
   */
+  /*
+    🔴 2026-10-24 — BEST QUALITY FIRST (owner: "the Tiktok multiple Download always Download in low quality and single
+    post too … I have complained about this too many times"). Measured on production the same day: the native route now
+    answers, and for most videos TikTok's tall tier (720 × 1280) exists ONLY as HEVC while the H.264 copy is 576 × 1024 —
+    so the H.264-first order above handed every default download the smaller file. The same call was made for TikWM on
+    2026-10-16. An HEVC-capable device (iPhone) gets the HEVC tier byte for byte; other devices get it converted to
+    H.264; a failed conversion rescues with the H.264 sibling (download-service). AV1 stays below another codec at the
+    same height — the one codec a conversion is slow and fragile for.
+  */
   const ordered = [...byHeight.entries()].sort((a, b) => {
-    const aFast = a[1].codec === "h264" ? 1 : 0;
-    const bFast = b[1].codec === "h264" ? 1 : 0;
-    if (aFast !== bFast) return bFast - aFast;
-    return b[0] - a[0];
+    if (a[0] !== b[0]) return b[0] - a[0];
+    const aAv1 = a[1].codec === "av1" ? 1 : 0;
+    const bAv1 = b[1].codec === "av1" ? 1 : 0;
+    return aAv1 - bAv1;
   });
 
   for (const [height, tier] of ordered) {
     const fast = tier.codec === "h264";
+    const best = formats.length === 0;
     formats.push({
       formatId: `tt-${formats.length}`,
       kind: "video",
@@ -311,13 +321,17 @@ export function buildFormats(item: TikTokItem, pageCookie: string | null = null)
         It is better *pixels* and worse *everything else*, and the label is the
         only place that can be said.
       */
-      label: fast
+      label: best
         ? height
-          ? `${height}p`
-          : "HD"
-        : height
-          ? `${height}p · converts on download`
-          : "Best quality · converts on download",
+          ? `${height}p · Best quality`
+          : "HD · Best quality"
+        : fast
+          ? height
+            ? `${height}p`
+            : "HD"
+          : height
+            ? `${height}p · converts on download`
+            : "Best quality · converts on download",
       ext: "mp4",
       resolution: height ? `${height}p` : null,
       fps: null,

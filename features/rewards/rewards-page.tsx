@@ -476,7 +476,7 @@ function WithdrawForm({ enabled, max, min, creditsPerUsd, methods, withdrawable,
           <select value={method} onChange={(e) => setMethod(e.target.value)} className={field}>
             {methods.map((m) => (
               <option key={m} value={m}>
-                {m === "paystack" ? "Bank account, paid by Paystack (Nigeria)" : m === "bank_transfer" ? "Bank transfer, paid by hand" : m.replace(/_/g, " ")}
+                {m === "paystack" ? "Bank account, paid by Paystack or Flutterwave (Nigeria)" : m === "bank_transfer" ? "Bank transfer, paid by hand" : m.replace(/_/g, " ")}
               </option>
             ))}
           </select>

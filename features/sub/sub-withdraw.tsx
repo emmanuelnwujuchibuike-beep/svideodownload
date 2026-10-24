@@ -16,7 +16,7 @@ import { useSavedPayoutAccount } from "./payout-settings";
 
 /**
  * SUB withdrawal (0227, owner briefs 2026-10-11). The money a creator's paid
- * subscribers sent them, out to their bank through Paystack.
+ * subscribers sent them, out to their bank through Flutterwave or Paystack (the admin's payout provider).
  *
  * The browser sends three things: the amount, the bank and a replay key. The
  * balance, the fee, the account holder's name and every rule come from the
@@ -125,7 +125,7 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
       if (res.ok && j?.ok) {
         replay.current = null;
         setAmount("");
-        setMsg({ ok: true, text: where === "intl" ? `Requested. Our team will send ${usd(j.netCents ?? 0)} to your ${intl.rail === "paypal" ? "PayPal" : "bank"} after a quick review, and you'll be notified when it's paid.` : j.status === "completed" ? `${usd(j.netCents ?? 0)} is on its way to ${viaSaved ? savedAccount!.accountName : resolved.name}.` : j.paidOut ? `${usd(j.netCents ?? 0)} is being sent through Paystack.` : `Requested. ${usd(j.netCents ?? 0)} will be sent once it's reviewed.` });
+        setMsg({ ok: true, text: where === "intl" ? `Requested. Our team will send ${usd(j.netCents ?? 0)} to your ${intl.rail === "paypal" ? "PayPal" : "bank"} after a quick review, and you'll be notified when it's paid.` : j.status === "completed" ? `${usd(j.netCents ?? 0)} is on its way to ${viaSaved ? savedAccount!.accountName : resolved.name}.` : j.paidOut ? `${usd(j.netCents ?? 0)} is being sent through Paystack or Flutterwave.` : `Requested. ${usd(j.netCents ?? 0)} will be sent once it's reviewed.` });
         void reload();
         onDone?.();
       } else {
@@ -164,7 +164,7 @@ export function SubWithdrawSheet({ onClose, onDone }: { onClose: () => void; onD
               {e!.debtCents > 0 ? <Stat label="Owed back (refunds)" value={usd(e!.debtCents)} /> : null}
             </div>
             <p className="mt-2 text-[12.5px] text-muted-foreground">
-              Private post money is separate from AI credits. A {rules!.withdrawalFeePercent}% withdrawal fee applies{rules!.flatFees ? <>, plus a flat {usd(rules!.flatFees.underCents)} ({usd(rules!.flatFees.midCents)} from {usd(rules!.flatFees.midFromCents)}, {usd(rules!.flatFees.overCents)} above {usd(rules!.flatFees.overAboveCents)}) taken from your balance</> : null}. Minimum {usd(rules!.minWithdrawalCents)}. If a withdrawal is declined, or the bank returns it, the whole amount (fees included) comes back to your balance. {where === "intl" ? "Outside Nigeria, our team pays it after a quick review." : rules!.autoPayout ? "Paid out through Paystack straight away." : "Paid through Paystack after a quick review."}
+              Private post money is separate from AI credits. A {rules!.withdrawalFeePercent}% withdrawal fee applies{rules!.flatFees ? <>, plus a flat {usd(rules!.flatFees.underCents)} ({usd(rules!.flatFees.midCents)} from {usd(rules!.flatFees.midFromCents)}, {usd(rules!.flatFees.overCents)} above {usd(rules!.flatFees.overAboveCents)}) taken from your balance</> : null}. Minimum {usd(rules!.minWithdrawalCents)}. If a withdrawal is declined, or the bank returns it, the whole amount (fees included) comes back to your balance. {where === "intl" ? "Outside Nigeria, our team pays it after a quick review." : rules!.autoPayout ? "Paid out through Paystack or Flutterwave, usually straight away — a new bank account or a large amount first gets a quick safety check." : "Paid through Paystack or Flutterwave after a quick review."}
             </p>
 
             {!rules!.withdrawalsEnabled ? (

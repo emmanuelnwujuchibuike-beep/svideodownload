@@ -151,7 +151,7 @@ export function AnonymousProfile({ earn, cashOut, sub, wallpapers }: AnonymousPr
               Post subscriber-only photos and videos. Only paying subscribers can open them, and they can&apos;t be shared or linked.
             </Benefit>
             <Benefit icon={Wallet} title="Creator earnings">
-              Track your subscription earnings and withdraw to your bank through Paystack{sub.requireQualification ? " once your account is approved" : ""}. A {sub.withdrawalFeePercent}% withdrawal fee applies.
+              Track your subscription earnings and withdraw to your bank through Paystack or Flutterwave{sub.requireQualification ? " once your account is approved" : ""}. A {sub.withdrawalFeePercent}% withdrawal fee applies.
             </Benefit>
           </ul>
           <p className="mt-3 text-[12px] text-muted-foreground">Earnings depend on your subscribers; nothing is guaranteed. Payouts follow Frenzsave&apos;s payout rules.</p>
@@ -203,7 +203,7 @@ export function AnonymousProfile({ earn, cashOut, sub, wallpapers }: AnonymousPr
             <dl className="mt-2 grid gap-2 text-[13px] sm:grid-cols-3">
               <Kind icon={Coins} term="AI credits">Spend on any Frenz AI tool. Bought credits and rewards both land here.</Kind>
               <Kind icon={Coins} term="Cashable credits">{cashOut}</Kind>
-              <Kind icon={Crown} term="Private post earnings">Money your subscribers pay you. Kept apart from AI credits and paid out through Paystack.</Kind>
+              <Kind icon={Crown} term="Private post earnings">Money your subscribers pay you. Kept apart from AI credits and paid out through Paystack or Flutterwave.</Kind>
             </dl>
           </div>
           <Link prefetch={false} href="/rewards" className={cn(QUIET, "mt-4")}>

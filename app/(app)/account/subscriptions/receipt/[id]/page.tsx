@@ -71,7 +71,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
                 </div>
               ))}
             </dl>
-            <p className="mt-4 text-[11.5px] text-muted-foreground">Paid through Paystack. A subscription is one payment for its period and never renews automatically. Quote the reference above if you contact support.</p>
+            <p className="mt-4 text-[11.5px] text-muted-foreground">Paid through Flutterwave or Paystack. A subscription is one payment for its period and never renews automatically. Quote the reference above if you contact support.</p>
           </article>
 
           {tx.receipt ? <PrintButton className="mt-4 w-full justify-center print:hidden" /> : null}

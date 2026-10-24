@@ -10,6 +10,8 @@ import type { LandingSettings } from "@/lib/landing/settings";
 import { cn } from "@/lib/utils";
 
 // Part 7: overview, search and Exclusive moderation — loaded only when this panel is open
+// 0277: bundles and promotions per creator, with the audited pause — loaded only when this panel is open
+const SubAdminPromotions = dynamic(() => import("./sub-admin-promotions").then((m) => m.SubAdminPromotions), { ssr: false });
 const SubAdminInsights = dynamic(() => import("./sub-admin-insights").then((m) => m.SubAdminInsights), { ssr: false, loading: () => <div aria-hidden className="mt-6 h-40 animate-pulse rounded-2xl ex-skel motion-reduce:animate-none" /> });
 
 /**
@@ -87,6 +89,10 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
     feeOverAbove: (c.flatFees.overAboveCents / 100).toFixed(2),
     holdDays: String(c.holdDays),
     periodDays: String(c.periodDays),
+    payoutProvider: c.payoutProvider,
+    autoMax: (c.autoPayoutMaxCents / 100).toFixed(2),
+    autoDailyMax: (c.autoPayoutDailyMaxCents / 100).toFixed(2),
+    newAccountHours: String(c.newAccountHoldHours),
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<{ ok: boolean; text: string } | null>(null);
@@ -137,6 +143,10 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
       },
       holdDays: int(f.holdDays, c.holdDays, 0, 90),
       periodDays: int(f.periodDays, c.periodDays, 1, 366),
+      payoutProvider: f.payoutProvider,
+      autoPayoutMaxCents: cents(f.autoMax, c.autoPayoutMaxCents),
+      autoPayoutDailyMaxCents: cents(f.autoDailyMax, c.autoPayoutDailyMaxCents),
+      newAccountHoldHours: int(f.newAccountHours, c.newAccountHoldHours, 0, 720),
     };
     try {
       const res = await fetch("/api/admin/landing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ frenzRewards: { sub } }) });
@@ -176,12 +186,12 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
     <section className="ex-card px-3 py-6 sm:px-6">
       <h2 className="font-semibold">Private posts — paid subscriptions</h2>
       <SubAdminReviews />
-      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Real money through Paystack, separate from AI credits. The subscriber pays the creator&apos;s price plus the purchase fee; a private post withdrawal pays out less the withdrawal fee.</p>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Real money through Flutterwave or Paystack, separate from AI credits. The subscriber pays the creator&apos;s price plus the purchase fee; a private post withdrawal pays out less the withdrawal fee.</p>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
         <Switch k="purchasesEnabled" label="New subscriptions can be bought" />
         <Switch k="withdrawalsEnabled" label="Private post withdrawals are open" />
-        <Switch k="autoPayout" label="Pay withdrawals through Paystack at once (no admin step)" />
+        <Switch k="autoPayout" label="Pay withdrawals at once through Flutterwave or Paystack (no admin step — within the safety limits below)" />
         <Switch k="requireQualification" label="Require the reward qualification to withdraw private post earnings" />
         <Switch k="watermark" label="Watermark subscriber-only media with the viewer's @handle" />
       </div>
@@ -198,6 +208,15 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
         <label className="text-xs text-muted-foreground">Flat fee above the second limit ($)<input inputMode="decimal" value={f.feeOver} onChange={(e) => setF({ ...f, feeOver: e.target.value })} className={cn(input, "mt-1 block")} /></label>
         <label className="text-xs text-muted-foreground">Hold before withdrawable (days)<input inputMode="numeric" value={f.holdDays} onChange={(e) => setF({ ...f, holdDays: e.target.value })} className={cn(input, "mt-1 block")} /></label>
         <label className="text-xs text-muted-foreground">Access per payment (days)<input inputMode="numeric" value={f.periodDays} onChange={(e) => setF({ ...f, periodDays: e.target.value })} className={cn(input, "mt-1 block")} /></label>
+        <label className="text-xs text-muted-foreground">Payout provider (Nigerian banks)
+          <select value={f.payoutProvider} onChange={(e) => setF({ ...f, payoutProvider: e.target.value === "paystack" ? "paystack" : "flutterwave" })} className={cn(input, "mt-1 block w-full")}>
+            <option value="flutterwave">Flutterwave (Paystack as backup)</option>
+            <option value="paystack">Paystack</option>
+          </select>
+        </label>
+        <label className="text-xs text-muted-foreground">Instant payout: most per withdrawal ($)<input inputMode="decimal" value={f.autoMax} onChange={(e) => setF({ ...f, autoMax: e.target.value })} className={cn(input, "mt-1 block")} /></label>
+        <label className="text-xs text-muted-foreground">Instant payout: most per creator per 24 h ($)<input inputMode="decimal" value={f.autoDailyMax} onChange={(e) => setF({ ...f, autoDailyMax: e.target.value })} className={cn(input, "mt-1 block")} /></label>
+        <label className="text-xs text-muted-foreground">New bank account: wait before instant payout (hours)<input inputMode="numeric" value={f.newAccountHours} onChange={(e) => setF({ ...f, newAccountHours: e.target.value })} className={cn(input, "mt-1 block")} /></label>
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
         The flat fee applies to EVERY withdrawal (private-post money and AI credits), on top of the amount: the balance must cover both. Below the first limit the first fee; from the first limit up to and including the second, the middle fee; above the second, the last fee.
@@ -319,6 +338,7 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
         </>
       ) : null}
       <SubAdminInsights />
+      <SubAdminPromotions />
     </section>
   );
 }

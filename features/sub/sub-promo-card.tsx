@@ -88,7 +88,7 @@ export function SubPromoCard({ handle, live, onOpen, onClose }: { handle: string
       ) : (
         <>
           <h2 className="relative mt-4 text-[1.5rem] font-extrabold leading-tight tracking-[-0.03em]">Get paid for your content</h2>
-          <p className="relative mt-1.5 text-[14.5px] leading-relaxed text-white/85">Set a monthly price, post subscriber-only photos and videos, and withdraw your earnings through Paystack.</p>
+          <p className="relative mt-1.5 text-[14.5px] leading-relaxed text-white/85">Set a monthly price, post subscriber-only photos and videos, and withdraw your earnings through Paystack or Flutterwave.</p>
           <button type="button" onClick={onOpen} className="relative mt-4 inline-flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-full bg-white text-[15px] font-bold text-indigo-700 shadow-sm transition active:scale-[0.97]">
             Set up in 4 steps <ArrowRight className="h-[18px] w-[18px]" aria-hidden />
           </button>

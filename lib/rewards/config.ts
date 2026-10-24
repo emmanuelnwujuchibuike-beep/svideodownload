@@ -179,6 +179,20 @@ export interface SubConfig {
    * percentage fee. Tiered by the amount withdrawn in USD cents.
    */
   flatFees: WithdrawalFlatFees;
+  /**
+   * Which provider sends withdrawals to a Nigerian bank (owner, 2026-10-24: "they withdraw through Flutterwave or any I
+   * set by admin"). Flutterwave by default; Paystack is its backup only when Flutterwave definitely sent nothing.
+   */
+  payoutProvider: "flutterwave" | "paystack";
+  /**
+   * Fraud gates on the INSTANT payout (owner, 2026-10-24: "make sure the withdrawal is fully secured and gated"). A
+   * withdrawal that misses any of them is still accepted, but waits for an admin instead of leaving at once:
+   * the bank account must be verified at least `newAccountHoldHours` ago, one withdrawal at most
+   * `autoPayoutMaxCents`, and the last 24 hours' instant payouts at most `autoPayoutDailyMaxCents`.
+   */
+  autoPayoutMaxCents: number;
+  autoPayoutDailyMaxCents: number;
+  newAccountHoldHours: number;
 }
 
 /** The tiers: below `midFromCents` → `underCents`; up to and including `overAboveCents` → `midCents`; above → `overCents`. */
@@ -211,7 +225,7 @@ export function normalizeFlatFees(raw: unknown): WithdrawalFlatFees {
   };
 }
 
-export const SUB_DEFAULTS: SubConfig = { purchasesEnabled: true, withdrawalsEnabled: true, purchaseFeePercent: 10, withdrawalFeePercent: 10, minPriceCents: 100, maxPriceCents: 100_000, minWithdrawalCents: 500, holdDays: 0, periodDays: 30, autoPayout: true, requireQualification: false, watermark: true, flatFees: FLAT_FEE_DEFAULTS };
+export const SUB_DEFAULTS: SubConfig = { purchasesEnabled: true, withdrawalsEnabled: true, purchaseFeePercent: 10, withdrawalFeePercent: 10, minPriceCents: 100, maxPriceCents: 100_000, minWithdrawalCents: 500, holdDays: 0, periodDays: 30, autoPayout: true, requireQualification: false, watermark: true, flatFees: FLAT_FEE_DEFAULTS, payoutProvider: "flutterwave", autoPayoutMaxCents: 50_000, autoPayoutDailyMaxCents: 100_000, newAccountHoldHours: 24 };
 
 export function normalizeSubConfig(raw: unknown): SubConfig {
   const d = SUB_DEFAULTS;
@@ -232,6 +246,10 @@ export function normalizeSubConfig(raw: unknown): SubConfig {
     requireQualification: bool(r.requireQualification, d.requireQualification),
     watermark: bool(r.watermark, d.watermark),
     flatFees: normalizeFlatFees(r.flatFees),
+    payoutProvider: r.payoutProvider === "paystack" ? "paystack" : "flutterwave",
+    autoPayoutMaxCents: int(r.autoPayoutMaxCents, d.autoPayoutMaxCents, 0, 100_000_000),
+    autoPayoutDailyMaxCents: int(r.autoPayoutDailyMaxCents, d.autoPayoutDailyMaxCents, 0, 100_000_000),
+    newAccountHoldHours: int(r.newAccountHoldHours, d.newAccountHoldHours, 0, 720),
   };
 }
 

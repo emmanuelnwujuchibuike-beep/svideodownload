@@ -374,7 +374,7 @@ function RewardsActivity({ minAge, minEngagements }: { minAge: number; minEngage
                   {q.status === "pending" || q.status === "reviewing" ? <button type="button" onClick={() => void move(q.id, "approved")} className="rounded-lg border border-border px-2 py-1 text-xs">Approve</button> : null}
                   {q.method === "paystack" && ["pending", "reviewing", "approved"].includes(q.status) ? (
                     <button type="button" disabled={paying === q.id} onClick={() => void payPaystack(q.id)} className="rounded-lg bg-emerald-600 px-2 py-1 text-xs font-semibold text-white transition active:scale-95 disabled:opacity-60">
-                      {paying === q.id ? "Sending…" : "Pay with Paystack"}
+                      {paying === q.id ? "Sending…" : "Pay (Flutterwave or Paystack)"}
                     </button>
                   ) : null}
                   {q.method !== "paystack" && (q.status === "approved" || q.status === "processing") ? <button type="button" onClick={() => void move(q.id, "completed")} className="rounded-lg border border-emerald-500/50 px-2 py-1 text-xs text-emerald-700">Mark paid</button> : null}

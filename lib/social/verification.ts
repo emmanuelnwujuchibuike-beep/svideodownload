@@ -15,10 +15,8 @@ import type {
  *
  * Two ways to get it, and they are deliberately not the same shape:
  *
- *  1. APPLY. The member must first QUALIFY (see `checkEligibility`) — every
- *     criterion below is computed from data the platform already holds, so the
- *     checklist the member sees is the checklist the gate enforces; there is no
- *     hidden score. They then submit their legal name exactly as printed on a
+ *  1. APPLY. Any member may apply — there is no eligibility checklist (owner,
+ *     2026-10-24). They submit their legal name exactly as printed on a
  *     government ID, images of that ID, and a liveness selfie. An admin reviews it.
  *
  *  2. ADMIN ISSUE. An admin can grant the tick immediately, skipping all of the
@@ -31,9 +29,6 @@ import type {
  */
 
 export type {
-  Eligibility,
-  EligibilityCriterion,
-  EligibilityInput,
   IdDocumentType,
   VerificationCategory,
   VerificationRequest,
@@ -41,10 +36,7 @@ export type {
   VerificationStatus,
 } from "./verification-shared";
 export {
-  checkEligibility,
   ID_DOCUMENT_TYPES,
-  MIN_ACCOUNT_AGE_DAYS,
-  MIN_FOLLOWERS,
   REJECTION_CODES,
   VERIFICATION_CATEGORIES,
   verificationSummary,

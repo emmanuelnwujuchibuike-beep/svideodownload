@@ -485,6 +485,11 @@ const schema = z.object({
           holdDays: z.number().int().min(0).max(90).optional(),
           periodDays: z.number().int().min(1).max(366).optional(),
           autoPayout: z.boolean().optional(),
+          // 2026-10-24: the payout rail and the instant-payout fraud gates
+          payoutProvider: z.enum(["flutterwave", "paystack"]).optional(),
+          autoPayoutMaxCents: z.number().int().min(0).max(100_000_000).optional(),
+          autoPayoutDailyMaxCents: z.number().int().min(0).max(100_000_000).optional(),
+          newAccountHoldHours: z.number().int().min(0).max(720).optional(),
           requireQualification: z.boolean().optional(),
           watermark: z.boolean().optional(),
           // 0258 (owner 2026-10-17): the flat fee on every withdrawal, by tier — normalizeFlatFees clamps again

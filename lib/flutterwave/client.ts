@@ -330,3 +330,43 @@ export async function cancelFlutterwaveSubscription(id: string, deps: { cfg?: Fl
   if (!/^\d{1,20}$/.test(id)) throw new FlutterwaveLocalRefusal("bad subscription id");
   await request(`/subscriptions/${id}/cancel`, { method: "PUT" }, deps);
 }
+
+// ─── Transfers (payouts) — 2026-10-24, owner: Exclusive withdrawals go out through Flutterwave ─────────────────────
+
+/** The account holder Flutterwave's bank lookup names for an account (POST /v3/accounts/resolve). */
+export async function resolveFlutterwaveAccount(accountNumber: string, bankCode: string, deps: { cfg?: FlutterwaveConfig; fetch?: Fetch } = {}): Promise<string> {
+  const r = await request<{ data?: { account_name?: string } }>("/accounts/resolve", { method: "POST", body: { account_number: accountNumber, account_bank: bankCode } }, deps);
+  const name = r.data?.account_name;
+  if (typeof name !== "string" || !name.trim()) throw new FlutterwaveHttpError("No account name returned", 422);
+  return name.trim();
+}
+
+/**
+ * Send a naira bank transfer (POST /v3/transfers). `reference` is fixed per withdrawal: Flutterwave refuses a second
+ * transfer with it, so a retry can never pay twice. Answers Flutterwave's own status (NEW / PENDING / SUCCESSFUL / FAILED).
+ */
+export async function createFlutterwaveTransfer(input: { reference: string; amountMinor: number; bankCode: string; accountNumber: string; narration: string }, deps: { cfg?: FlutterwaveConfig; fetch?: Fetch } = {}): Promise<{ status: string; id: string | null }> {
+  const r = await request<{ data?: { id?: number | string; status?: string } }>(
+    "/transfers",
+    { method: "POST", body: { account_bank: input.bankCode, account_number: input.accountNumber, amount: minorToMajor(input.amountMinor, "NGN"), currency: "NGN", debit_currency: "NGN", narration: input.narration.slice(0, 80), reference: input.reference } },
+    deps,
+  );
+  return { status: String(r.data?.status ?? "NEW").toUpperCase(), id: r.data?.id !== undefined && r.data?.id !== null ? String(r.data.id) : null };
+}
+
+export type FlutterwaveTransferVerdict = { kind: "success" } | { kind: "failed"; status: string } | { kind: "not_found" } | { kind: "unknown"; status?: string };
+
+/** What Flutterwave says about a transfer reference right now (GET /v3/transfers?reference=). Only SUCCESSFUL / FAILED / none are verdicts. */
+export async function verifyFlutterwaveTransfer(reference: string, deps: { cfg?: FlutterwaveConfig; fetch?: Fetch } = {}): Promise<FlutterwaveTransferVerdict> {
+  try {
+    const r = await request<{ data?: { reference?: string; status?: string }[] }>(`/transfers?reference=${encodeURIComponent(reference)}`, {}, deps);
+    const mine = (r.data ?? []).filter((t) => t.reference === reference);
+    if (!mine.length) return { kind: "not_found" };
+    const st = String(mine[0]!.status ?? "").toUpperCase();
+    if (st === "SUCCESSFUL") return { kind: "success" };
+    if (st === "FAILED") return { kind: "failed", status: "failed" };
+    return { kind: "unknown", status: st.toLowerCase() || undefined };
+  } catch {
+    return { kind: "unknown" };
+  }
+}

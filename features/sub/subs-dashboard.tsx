@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Bell, Check, ChevronLeft, CirclePause, Loader2, Megaphone, Tag, Wallet } from "lucide-react";
+import { BadgePercent, BarChart3, Bell, Check, ChevronLeft, CirclePause, Loader2, Megaphone, Tag, Wallet } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -19,6 +19,10 @@ const SubPayoutSettings = dynamic(() => import("@/features/sub/payout-settings")
 const CreatorAnnouncements = dynamic(() => import("@/features/sub/announcements").then((m) => m.CreatorAnnouncements), { ssr: false });
 const CreatorNotifySettings = dynamic(() => import("@/features/sub/creator-notify-settings").then((m) => m.CreatorNotifySettings), { ssr: false });
 const SubWithdrawSheet = dynamic(() => import("@/features/sub/sub-withdraw").then((m) => m.SubWithdrawSheet), { ssr: false });
+// 0277: bundles and promotions — loaded only when their panel opens
+const SubBundleEditor = dynamic(() => import("@/features/sub/sub-bundle-editor").then((m) => m.SubBundleEditor), { ssr: false });
+const SubPromotions = dynamic(() => import("@/features/sub/sub-promotions").then((m) => m.SubPromotions), { ssr: false });
+const NO_BUNDLES = { 3: null, 6: null, 12: null } as const;
 
 /**
  * The Subscriptions dashboard (step 20, design/SubsDashboard.dc.html, owner 2026-10-19).
@@ -39,7 +43,7 @@ export function SubsDashboard({ creatorId, handle, settings: initial, bounds }: 
   const { data, failed, reload } = useSubEarnings(true);
   const e = data?.earnings;
   const [withdrawing, setWithdrawing] = useState(false);
-  const [panel, setPanel] = useState<"price" | "announce" | "notify" | null>(null);
+  const [panel, setPanel] = useState<"price" | "promotions" | "announce" | "notify" | null>(null);
   const [price, setPrice] = useState(settings.priceCents ? (settings.priceCents / 100).toFixed(2) : "");
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
@@ -47,7 +51,7 @@ export function SubsDashboard({ creatorId, handle, settings: initial, bounds }: 
   const priceOk = Number.isInteger(cents) && cents >= bounds.minPriceCents && cents <= bounds.maxPriceCents;
   const money = (v: number | undefined) => (v !== undefined ? usd(v) : failed ? "—" : "…");
 
-  const open = (p: "price" | "announce" | "notify") => {
+  const open = (p: "price" | "promotions" | "announce" | "notify") => {
     haptic("selection");
     setPanel((cur) => (cur === p ? null : p));
   };
@@ -154,8 +158,11 @@ export function SubsDashboard({ creatorId, handle, settings: initial, bounds }: 
               </button>
             </div>
             {!priceOk && price ? <p className="m-0 mt-1 text-[12.5px] text-rose-600 dark:text-rose-400">Choose from {usd(bounds.minPriceCents)} to {usd(bounds.maxPriceCents)}.</p> : null}
+            <SubBundleEditor monthlyCents={settings.priceCents} initial={settings.bundlePrices ?? NO_BUNDLES} bounds={bounds} ready={!!settings.bundlesReady} onSaved={(b) => setSettings({ ...settings, bundlePrices: b })} />
           </div>
         ) : null}
+        <Row icon={<BadgePercent className="h-[18px] w-[18px]" />} label="Promotions" expanded={panel === "promotions"} onClick={() => open("promotions")} />
+        {panel === "promotions" ? <SubPromotions monthlyCents={settings.priceCents} bundles={settings.bundlePrices ?? NO_BUNDLES} ready={!!settings.bundlesReady} /> : null}
         <div className="flex min-h-[64px] items-center gap-3 px-3.5 py-2.5">
           <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-frenz-violet/10 text-frenz-violet">
             <CirclePause className="h-[18px] w-[18px]" />

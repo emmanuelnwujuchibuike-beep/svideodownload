@@ -121,6 +121,14 @@ export interface AdCatalog {
 const n = (v: unknown): number => (typeof v === "number" ? v : Number(v));
 
 /** Validate and normalise (numerics arrive as strings from Postgres). Malformed ⇒ null ⇒ nothing is for sale. */
+/**
+ * Reserved for the platform's own promotions (owner, 2026-10-24: "there won't be a top banner ad — only admin can use top
+ * banner for platform promotion"; the admin runs it from Ad Manager's network zone). Never offered to an advertiser, so
+ * neither the wizard nor the server-side booking check (resolveChoice) can sell it. Campaigns already bought still serve.
+ */
+export const ADMIN_ONLY_FORMATS: readonly string[] = ["TOP_BANNER"];
+export const ADMIN_ONLY_PLACEMENTS: readonly string[] = ["global_top_banner"];
+
 export function parseCatalog(raw: unknown): AdCatalog | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
@@ -130,7 +138,7 @@ export function parseCatalog(raw: unknown): AdCatalog | null {
   return {
     v: 1,
     settings: { ...s, max_placements_per_application: n(s.max_placements_per_application), default_slot_count: n(s.default_slot_count) },
-    formats: (r.formats as CatalogFormat[]).map((f) => ({
+    formats: (r.formats as CatalogFormat[]).filter((f) => !ADMIN_ONLY_FORMATS.includes(f.code)).map((f) => ({
       ...f,
       max_file_bytes: n(f.max_file_bytes),
       aspect_ratio: f.aspect_ratio === null ? null : n(f.aspect_ratio),
@@ -139,7 +147,7 @@ export function parseCatalog(raw: unknown): AdCatalog | null {
       image_quality: f.image_quality == null ? SPEC_DEFAULTS.imageQuality : n(f.image_quality),
       max_upload_bytes: uploadBytesOf(f),
     })),
-    placements: r.placements as CatalogPlacement[],
+    placements: (r.placements as CatalogPlacement[]).filter((p) => !ADMIN_ONLY_PLACEMENTS.includes(p.code) && !ADMIN_ONLY_FORMATS.includes(p.format_code)),
     durations: (r.durations as CatalogDuration[]).map((d) => ({ ...d, days: n(d.days) })),
     prices: (r.prices as CatalogPrice[]).map((p) => ({ ...p, price_minor: n(p.price_minor) })),
     promotions: (r.promotions as CatalogPromotion[]).map((p) => ({ ...p, extra_days: n(p.extra_days), discount_percent: n(p.discount_percent) })),

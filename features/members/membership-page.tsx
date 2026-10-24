@@ -205,7 +205,7 @@ export function MembershipPage({ data }: { data: CreatorPage }) {
                 <p className="mt-2 text-[13.5px] text-foreground/80">
                   {c.displayName}&apos;s subscriber-only photos and videos. Private: they can&apos;t be shared, linked or downloaded.
                 </p>
-                <p className="mt-1.5 text-[12.5px] text-muted-foreground">Paid securely through Paystack. No automatic renewal.</p>
+                <p className="mt-1.5 text-[12.5px] text-muted-foreground">Paid securely through Flutterwave or Paystack. No automatic renewal.</p>
                 <div className="mt-3.5">
                   {data.viewer.isCreator ? null : !data.viewer.signedIn ? (
                     <Link href={`/login?next=${encodeURIComponent(`${profilePath(c.handle)}/membership`)}`} prefetch={false} className={exPrimary}>

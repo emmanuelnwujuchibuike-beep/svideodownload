@@ -106,7 +106,7 @@ describe("Monetag direct link (owner, 2026-10-16)", () => {
     expect(body).not.toContain("sessionStorage");
     // Part 2.1: through the open observer, which opens it in a new tab (noopener) — lib/monetization/open-observer.ts
     expect(body).toContain("openOwnWindow(link.url);");
-    expect(code("lib/monetization/open-observer.ts")).toContain('window.open(url, "_blank", "noopener,noreferrer");');
+    expect(code("lib/monetization/open-observer.ts")).toContain('window.open(url, "_blank", "noopener");');
   });
 
   it("Pro and Business never get it (owner, 2026-10-18) — the plain Free-only answer, no placement", () => {

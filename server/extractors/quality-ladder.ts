@@ -39,8 +39,14 @@ function heightOf(f: MediaFormat): number | null {
  * TikTok 1920p tier on production, 2026-10-08, against ~1 s for the H.264 one.
  * Unknown codec (yt-dlp formats) is not "converts": nothing is assumed.
  */
+/*
+  2026-10-24 (owner: TikTok "always Download in low quality"): HEVC is no longer held below H.264. TikTok's tall tier is
+  usually HEVC-only, so this rule handed out the 576 × 1024 copy. An HEVC-capable device takes it raw, others get it
+  converted, and a failed conversion rescues with an H.264 sibling (download-service). VP9 / AV1 — YouTube's 4K tiers,
+  minutes of encode — still wait below the streamable ones.
+*/
 function convertsOnDownload(f: MediaFormat): boolean {
-  return !!f.vcodec && /^(bytevc1|hevc|h265|hvc1|hev1|vp0?9|av0?1)/i.test(f.vcodec);
+  return !!f.vcodec && /^(vp0?9|av0?1)/i.test(f.vcodec);
 }
 
 function bestFirst(videos: MediaFormat[]): MediaFormat[] {

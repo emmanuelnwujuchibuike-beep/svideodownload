@@ -184,6 +184,7 @@ export const DATA_DOMAINS: DataDomain[] = [
       "sub_fanout_jobs",
       "sub_fanout_deliveries",
       "sub_purchases",
+      "sub_promotions",
       "sub_balances",
       "sub_ledger",
       "sub_payout_accounts",

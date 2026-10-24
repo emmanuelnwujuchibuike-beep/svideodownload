@@ -16,6 +16,7 @@ import { claimOpening, fresh, type Opened, openedCache } from "./opened-cache";
 import { forgetSubPosts, loadSubPosts } from "./sub-posts-cache";
 import { CreatorSubscribeCard } from "./subscribe-card";
 import { profilePath } from "@/lib/social/profile-url";
+import type { SubOption } from "@/lib/sub/pricing";
 
 // reporting exclusive content (Frenz Exclusive Part 2): the shared sheet, loaded only when opened
 const ReportSheet = dynamic(() => import("@/features/social/report-sheet").then((m) => m.ReportSheet), { ssr: false });
@@ -74,6 +75,8 @@ export interface SubQuoteView {
   totalCents: number;
   feePercent: number;
   periodDays: number;
+  /** 0277: the prepaid durations on offer, each with its promotion (lib/sub/pricing.ts subOptions) */
+  options?: SubOption[];
 }
 
 export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext, onCompose, onAccess }: { creatorId: string; creatorName: string; quote: SubQuoteView | null; signedIn: boolean; loginNext: string; onCompose?: () => void; onAccess?: (subscribed: boolean) => void }) {

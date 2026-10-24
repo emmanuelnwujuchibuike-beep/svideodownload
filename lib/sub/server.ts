@@ -18,14 +18,17 @@ import { firstRail, routePayment, type RailAttempt } from "@/lib/payments/router
 import { initializeSubCheckout, paystackFailureIsDefinite, paystackRefusedForSure, SUB_PURPOSE, verifyTransaction } from "@/lib/paystack/paystack";
 import { withdrawalFlatFeeCents, type SubConfig } from "@/lib/rewards/config";
 import { resolveAccount } from "@/lib/rewards/paystack-banks";
-import { payWithdrawalViaPaystack } from "@/lib/rewards/paystack-payouts";
+import { payWithdrawal } from "@/lib/rewards/flutterwave-payouts";
 import { validatePayoutDetails } from "@/lib/rewards/withdrawals";
 import { SITE_URL } from "@/lib/site";
 import { flagsOf, isAccountVisibleTo } from "@/lib/social/account-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { classifyVerification, isSubReference, isUuid, subReturnPath } from "./guards";
+import { HOLD_REASON_LABEL, payoutHoldReasons, type PayoutHoldReason } from "./payout-risk";
 import { checkoutBlockedByActive, RENEW_WINDOW_DAYS } from "./lifecycle";
+import { BUNDLE_MONTHS, isSubMonths, parseBundlePrices, periodDaysFor, promotionEligible, promotionPriceCents, regularPriceFor, subOptions, validateBundlePrice, type BundlePrices, type SubMonths, type SubOption } from "./pricing";
+import { activePromotions, promotionCounts, promotionForCheckout } from "./promotions";
 import { profilePath } from "@/lib/social/profile-url";
 
 /**
@@ -69,6 +72,10 @@ export interface SubSettings {
   promoDismissed: boolean;
   /** 0251: how the creator hears about a new subscriber (default both: what is sent today) */
   notifySubscribed: NotifyMode;
+  /** 0277: the 3 / 6 / 12-month bundle totals (null = off). The monthly price stays `priceCents`. */
+  bundlePrices: BundlePrices;
+  /** 0277 has run: bundles and promotions can be saved and sold */
+  bundlesReady: boolean;
 }
 
 export type NotifyMode = "off" | "push" | "email" | "both";
@@ -78,17 +85,24 @@ export const isNotifyMode = (v: unknown): v is NotifyMode => typeof v === "strin
 export async function getSubSettings(creatorId: string): Promise<SubSettings & { ready: boolean }> {
   const db = createAdminClient();
   const base = "sub_price_cents, sub_active, setup_step, setup_completed_at, open, welcome";
-  // 0231's and 0251's columns, with each older shape as the answer before those migrations run
-  let res = await db.from("creator_membership_settings").select(`${base}, promo_dismissed_at, notify_subscribed`).eq("creator_id", creatorId).maybeSingle();
+  // 0231's, 0251's and 0277's columns, with each older shape as the answer before those migrations run
+  let bundlesReady = true;
+  let res = await db.from("creator_membership_settings").select(`${base}, promo_dismissed_at, notify_subscribed, bundle_prices`).eq("creator_id", creatorId).maybeSingle();
+  if (res.error && MISSING(res.error.message)) {
+    bundlesReady = false;
+    res = (await db.from("creator_membership_settings").select(`${base}, promo_dismissed_at, notify_subscribed`).eq("creator_id", creatorId).maybeSingle()) as typeof res;
+  }
   if (res.error && MISSING(res.error.message)) res = (await db.from("creator_membership_settings").select(`${base}, promo_dismissed_at`).eq("creator_id", creatorId).maybeSingle()) as typeof res;
   if (res.error && MISSING(res.error.message)) res = (await db.from("creator_membership_settings").select(base).eq("creator_id", creatorId).maybeSingle()) as typeof res;
   const { data, error } = res;
   const r = (data ?? {}) as Row;
-  return { priceCents: (r.sub_price_cents as number | null) ?? null, active: !!r.sub_active, setupStep: Number(r.setup_step ?? 0), setupCompleted: !!r.setup_completed_at, open: !!r.open, welcome: (r.welcome as string | null) ?? null, promoDismissed: !!r.promo_dismissed_at, notifySubscribed: isNotifyMode(r.notify_subscribed) ? r.notify_subscribed : "both", ready: !error };
+  return { priceCents: (r.sub_price_cents as number | null) ?? null, active: !!r.sub_active, setupStep: Number(r.setup_step ?? 0), setupCompleted: !!r.setup_completed_at, open: !!r.open, welcome: (r.welcome as string | null) ?? null, promoDismissed: !!r.promo_dismissed_at, notifySubscribed: isNotifyMode(r.notify_subscribed) ? r.notify_subscribed : "both", bundlePrices: parseBundlePrices(r.bundle_prices), bundlesReady: bundlesReady && !error, ready: !error };
 }
 
+export type BundlePricesPatch = Partial<Record<"3" | "6" | "12", number | null>>;
+
 /** Saves setup progress and the price. Completing setup needs a valid price; it never grants payout eligibility. */
-export async function saveSubSettings(creatorId: string, patch: { priceCents?: number; step?: number; complete?: boolean; active?: boolean; open?: boolean; welcome?: string | null; dismissPromo?: boolean; notifySubscribed?: string }): Promise<Result<{ settings: SubSettings }>> {
+export async function saveSubSettings(creatorId: string, patch: { priceCents?: number; step?: number; complete?: boolean; active?: boolean; open?: boolean; welcome?: string | null; dismissPromo?: boolean; notifySubscribed?: string; bundlePrices?: BundlePricesPatch }): Promise<Result<{ settings: SubSettings }>> {
   const cfg = await subConfig();
   const db = createAdminClient();
   const current = await getSubSettings(creatorId);
@@ -115,6 +129,26 @@ export async function saveSubSettings(creatorId: string, patch: { priceCents?: n
   if (patch.notifySubscribed !== undefined) {
     if (!isNotifyMode(patch.notifySubscribed)) return fail("Choose off, push, email or both.");
     cols.notify_subscribed = patch.notifySubscribed;
+  }
+  /*
+    0277 bundles: only the totals named in the patch change; null turns one off. Each is held to the admin's price
+    bounds scaled by its months (pricing.ts validateBundlePrice). Saving a bundle needs the monthly price, which stays
+    in sub_price_cents and is never copied here.
+  */
+  if (patch.bundlePrices !== undefined) {
+    if (!current.bundlesReady) return fail("Bundles arrive with the next update.", 503);
+    if (!price) return fail("Set your monthly price first.");
+    const next: Record<string, number | null> = { "3": current.bundlePrices[3], "6": current.bundlePrices[6], "12": current.bundlePrices[12] };
+    for (const m of BUNDLE_MONTHS) {
+      const v = patch.bundlePrices[String(m) as "3" | "6" | "12"];
+      if (v === undefined) continue;
+      if (v !== null) {
+        const ok = validateBundlePrice(v, m, cfg);
+        if (!ok.ok) return fail(ok.error);
+      }
+      next[String(m)] = v;
+    }
+    cols.bundle_prices = next;
   }
   if (patch.dismissPromo !== undefined) cols.promo_dismissed_at = patch.dismissPromo ? new Date().toISOString() : null;
   if (patch.welcome !== undefined) {
@@ -176,8 +210,54 @@ export async function quoteSub(creatorId: string): Promise<SubQuote | null> {
   return { priceCents: c.priceCents, feeCents: c.feeCents, totalCents: c.totalCents, feePercent: cfg.purchaseFeePercent, periodDays: cfg.periodDays };
 }
 
-/** Opens (or reuses) a Paystack checkout for a subscription. `returnPath` is where the subscriber lands after paying. */
-export async function startSubCheckout(input: { subscriberId: string; email: string; creatorId: string; returnPath: string; market?: PaymentMarket }): Promise<Result<{ url: string; reused: boolean }>> {
+/**
+ * 0277: every duration the creator offers right now — 1 month and each enabled bundle — each with its best eligible
+ * promotion, the platform fee on top, the effective monthly price and an honest saving (pricing.ts subOptions). The
+ * same numbers startSubCheckout charges. Before 0277 runs: the monthly option alone.
+ */
+export async function subOffers(creatorId: string, now = Date.now()): Promise<SubOption[]> {
+  const [cfg, s] = await Promise.all([subConfig(), getSubSettings(creatorId)]);
+  if (!s.active || !s.priceCents) return [];
+  const promos = s.bundlesReady ? await activePromotions(creatorId, now) : { rules: [], live: {}, names: {} };
+  return subOptions({ monthlyCents: s.priceCents, bundles: s.bundlesReady ? s.bundlePrices : { 3: null, 6: null, 12: null }, periodDays: cfg.periodDays, feePercent: cfg.purchaseFeePercent, promotions: promos.rules, live: promos.live, promotionNames: promos.names, now });
+}
+
+/** What one checkout buys: the duration, its access days, the price the creator receives, and the promotion it used. */
+interface SubChoice {
+  months: SubMonths;
+  periodDays: number;
+  priceCents: number;
+  promotionId: string | null;
+}
+
+/**
+ * The server's price for the option the member chose — re-read now, never taken from the browser. A promotion must
+ * belong to this creator, be inside its window and not paused at server time, cover the duration and still have
+ * room (the database checks the room again, atomically, when the purchase row is written).
+ */
+async function priceChoice(creatorId: string, s: SubSettings, cfg: SubConfig, months: number, promotionId: string | null): Promise<SubChoice | { error: string; status: number }> {
+  if (!isSubMonths(months)) return { error: "Choose 1, 3, 6 or 12 months.", status: 400 };
+  if ((months !== 1 || promotionId) && !s.bundlesReady) return { error: "Bundles and promotions arrive with the next update.", status: 503 };
+  const regular = regularPriceFor(months, s.priceCents, s.bundlePrices);
+  if (regular === null) return { error: "This creator doesn't offer that option right now.", status: 409 };
+  const periodDays = periodDaysFor(months, cfg.periodDays);
+  if (!promotionId) return { months, periodDays, priceCents: regular, promotionId: null };
+  const promo = await promotionForCheckout(creatorId, promotionId);
+  if (promo === "unavailable") return { error: "Bundles and promotions arrive with the next update.", status: 503 };
+  if (!promo) return { error: "This offer isn't available.", status: 409 };
+  const live = (await promotionCounts(createAdminClient(), [promo.id]).catch(() => null))?.get(promo.id)?.live;
+  if (!promotionEligible(promo, months, Date.now(), live)) return { error: "This offer has ended or is fully redeemed. The regular price is still available.", status: 409 };
+  const price = promotionPriceCents(promo, regular);
+  if (price === null) return { error: "This offer isn't available.", status: 409 };
+  return { months, periodDays, priceCents: price, promotionId: promo.id };
+}
+
+/**
+ * Opens (or reuses) a checkout for a subscription. `returnPath` is where the subscriber lands after paying.
+ * 0277: `months` (1 / 3 / 6 / 12, default 1) and an optional `promotionId` — the browser names an option, the server
+ * prices it. Everything stays prepaid: one payment, `periodDays` of access, nothing renews.
+ */
+export async function startSubCheckout(input: { subscriberId: string; email: string; creatorId: string; returnPath: string; market?: PaymentMarket; months?: number; promotionId?: string | null }): Promise<Result<{ url: string; reused: boolean }>> {
   const cfg = await subConfig();
   if (!cfg.purchasesEnabled) return fail("Subscriptions are paused right now.", 503, "paused");
   if (!isUuid(input.subscriberId) || !isUuid(input.creatorId)) return fail("Invalid request.", 400, "invalid");
@@ -205,19 +285,25 @@ export async function startSubCheckout(input: { subscriberId: string; email: str
   if (!s.active || !s.priceCents) return fail("This creator isn't taking subscriptions right now.", 409);
   const price = validatePrice(s.priceCents, cfg);
   if (!price.ok) return fail("This creator's price is outside what Frenz allows. They need to update it.", 409);
+  const choice = await priceChoice(input.creatorId, s, cfg, input.months ?? 1, input.promotionId ?? null);
+  if ("error" in choice) return fail(choice.error, choice.status, "option_unavailable");
 
-  // an open checkout for the same pair, under 30 minutes old, is reused: one intent, one payment
+  // an open checkout for the same pair AND the same option, under 30 minutes old, is reused: one intent, one payment
   const since = new Date(Date.now() - 30 * 60_000).toISOString();
-  const { data: open } = await db.from("sub_purchases").select("checkout_url").eq("subscriber_id", input.subscriberId).eq("creator_id", input.creatorId).eq("status", "initiated").gte("created_at", since).not("checkout_url", "is", null).order("created_at", { ascending: false }).limit(1).maybeSingle();
-  if ((open as Row | null)?.checkout_url) return { ok: true, url: (open as Row).checkout_url as string, reused: true };
+  // a row from before 0277 has no months / promotion: it is a plain month at its own price
+  const openQ = (cols: string) => db.from("sub_purchases").select(cols).eq("subscriber_id", input.subscriberId).eq("creator_id", input.creatorId).eq("status", "initiated").gte("created_at", since).not("checkout_url", "is", null).order("created_at", { ascending: false }).limit(10);
+  let openR = await openQ("checkout_url, months, promotion_id, price_cents");
+  if (openR.error && MISSING(openR.error.message)) openR = await openQ("checkout_url, price_cents");
+  const open = ((openR.data ?? []) as unknown as Row[]).find((r) => Number(r.months ?? 1) === choice.months && ((r.promotion_id as string | null | undefined) ?? null) === choice.promotionId && (r.price_cents == null || Number(r.price_cents) === choice.priceCents));
+  if (open?.checkout_url) return { ok: true, url: open.checkout_url as string, reused: true };
   // Part 4.2: a Paystack checkout whose creation outcome was unknown is resolved before a new one on EITHER rail
   const held = await resolveHeldPaystackSub(db, input.subscriberId, input.creatorId);
   if (held) return held;
 
-  const charge = subscriptionCharge(s.priceCents, cfg.purchaseFeePercent);
+  const charge = subscriptionCharge(choice.priceCents, cfg.purchaseFeePercent);
   const landing = await getLandingSettings();
   const safeReturn = subReturnPath(input.returnPath, `${profilePath(creator.handle as string)}`);
-  const pair = { db, input, charge, cfg, safeReturn };
+  const pair = { db, input, charge, cfg, safeReturn, choice };
 
   /*
     ── WHICH RAIL (Part 2) ────────────────────────────────────────────────────
@@ -243,7 +329,15 @@ interface SubPair {
   charge: ReturnType<typeof subscriptionCharge>;
   cfg: SubConfig;
   safeReturn: string;
+  /** 0277: the duration bought, its access days and the promotion used */
+  choice: SubChoice;
 }
+
+const BEGIN_REFUSALS: Record<string, string> = {
+  promotion_exhausted: "This offer has just been fully redeemed. The regular price is still available.",
+  promotion_unavailable: "This offer has ended. The regular price is still available.",
+  invalid_duration: "Choose 1, 3, 6 or 12 months.",
+};
 
 /**
  * Insert the purchase row FIRST (the immutable record: who, what, how much, which provider) — through
@@ -252,23 +346,33 @@ interface SubPair {
  * Before 0276 is applied: the plain insert, as before (no protection against simultaneous requests).
  */
 async function insertPurchase(p: SubPair, row: { reference: string; provider: "paystack" | "flutterwave"; currency: string; minor: number; fx: number | null }): Promise<{ id: string } | { stop: RailAttempt<string> }> {
-  const begun = await p.db.rpc("begin_sub_purchase", {
+  const args = {
     p_subscriber: p.input.subscriberId, p_creator: p.input.creatorId, p_reference: row.reference, p_provider: row.provider,
     p_price_cents: p.charge.priceCents, p_fee_cents: p.charge.feeCents, p_total_cents: p.charge.totalCents, p_fee_bp: p.charge.feeBp,
-    p_charged_currency: row.currency, p_charged_minor: row.minor, p_fx_minor_per_usd: row.fx, p_period_days: p.cfg.periodDays, p_hold_days: p.cfg.holdDays,
-  });
+    p_charged_currency: row.currency, p_charged_minor: row.minor, p_fx_minor_per_usd: row.fx, p_period_days: p.choice.periodDays, p_hold_days: p.cfg.holdDays,
+  };
+  const plainMonthly = p.choice.months === 1 && !p.choice.promotionId;
+  // 0277's function: the duration and the promotion, with the promotion's limit checked under its own lock
+  let begun = await p.db.rpc("begin_sub_purchase", { ...args, p_months: p.choice.months, p_promotion: p.choice.promotionId });
+  if (begun.error && MISSING(begun.error.message)) {
+    // before 0277: a plain month still sells through 0276's function; a bundle or promotion never does
+    if (!plainMonthly) return { stop: { ok: false, refusal: "definite", status: 503, error: "Bundles and promotions arrive with the next update." } };
+    begun = await p.db.rpc("begin_sub_purchase", args);
+  }
   if (!begun.error) {
     const r = begun.data as { ok?: boolean; id?: string; reason?: string; checkout_url?: string | null } | null;
     if (r?.ok && r.id) return { id: r.id };
     // another request for this pair opened one a moment ago: its link, or "being confirmed" — `unknown` so no other rail is tried
     if (r?.reason === "open" && r.checkout_url) return { stop: { ok: true, value: r.checkout_url } };
+    // the promotion ended or filled up between the quote and the insert: nothing was created, no other rail would differ
+    if (r?.reason && BEGIN_REFUSALS[r.reason]) return { stop: { ok: false, refusal: "unknown", status: 409, error: BEGIN_REFUSALS[r.reason]! } };
     return { stop: { ok: false, refusal: "unknown", status: 409, error: "Your last payment is still being confirmed. Try again in a few minutes." } };
   }
   if (!MISSING(begun.error.message)) return { stop: { ok: false, refusal: "definite", status: 500, error: "Couldn't start the payment." } };
   console.warn("[sub] begin_sub_purchase missing (migration 0276) — plain insert, no simultaneous-request guard");
   const { data, error } = await p.db
     .from("sub_purchases")
-    .insert({ creator_id: p.input.creatorId, subscriber_id: p.input.subscriberId, price_cents: p.charge.priceCents, fee_cents: p.charge.feeCents, total_cents: p.charge.totalCents, fee_bp: p.charge.feeBp, charged_currency: row.currency, charged_minor: row.minor, fx_minor_per_usd: row.fx, reference: row.reference, provider: row.provider, period_days: p.cfg.periodDays, hold_days: p.cfg.holdDays })
+    .insert({ creator_id: p.input.creatorId, subscriber_id: p.input.subscriberId, price_cents: p.charge.priceCents, fee_cents: p.charge.feeCents, total_cents: p.charge.totalCents, fee_bp: p.charge.feeBp, charged_currency: row.currency, charged_minor: row.minor, fx_minor_per_usd: row.fx, reference: row.reference, provider: row.provider, period_days: p.choice.periodDays, hold_days: p.cfg.holdDays })
     .select("id")
     .single();
   if (error) return { stop: { ok: false, refusal: "definite", status: MISSING(error.message) ? 503 : 500, error: MISSING(error.message) ? "Subscriptions arrive with the next update." : "Couldn't start the payment." } };
@@ -330,7 +434,7 @@ async function openPaystackSub(p: SubPair, landing: Awaited<ReturnType<typeof ge
       currency: q.currency,
       reference,
       callbackUrl: subCallback(reference, p.safeReturn),
-      metadata: { purchase_id: row.id, creator_id: p.input.creatorId, price_cents: p.charge.priceCents, fee_cents: p.charge.feeCents, total_cents: p.charge.totalCents },
+      metadata: { purchase_id: row.id, creator_id: p.input.creatorId, price_cents: p.charge.priceCents, fee_cents: p.charge.feeCents, total_cents: p.charge.totalCents, months: p.choice.months, promotion_id: p.choice.promotionId },
     });
     await p.db.from("sub_purchases").update({ checkout_url: url, updated_at: new Date().toISOString() }).eq("reference", reference);
     return { ok: true, value: url };
@@ -360,7 +464,7 @@ async function openFlutterwaveSub(p: SubPair): Promise<RailAttempt<string>> {
   const row = await insertPurchase(p, { reference, provider: "flutterwave", currency: fw.currency, minor: total, fx: fw.fxMinorPerUsd });
   if ("stop" in row) return row.stop;
   try {
-    const url = await createFlutterwaveCheckout({ reference, amountMinor: total, currency: fw.currency, email: p.input.email, redirectUrl: subCallback(reference, p.safeReturn), title: "Frenz subscription", meta: { purchase_id: row.id } });
+    const url = await createFlutterwaveCheckout({ reference, amountMinor: total, currency: fw.currency, email: p.input.email, redirectUrl: subCallback(reference, p.safeReturn), title: "Frenz subscription", meta: { purchase_id: row.id, months: p.choice.months } });
     await p.db.from("sub_purchases").update({ checkout_url: url, updated_at: new Date().toISOString() }).eq("reference", reference);
     return { ok: true, value: url };
   } catch (e) {
@@ -722,14 +826,50 @@ export async function requestSubWithdrawal(input: { userId: string; grossCents: 
     return fail(msg[r?.reason ?? ""] ?? "Couldn't request that withdrawal.", 409, r?.reason);
   }
   if (r.duplicate) return { ok: true, id: r.id!, status: r.status ?? "pending", netCents: split.netCents, feeCents: split.feeCents, paidOut: false };
-  // owner: "withdraw instantly" — straight to Paystack Transfers, no admin step
+  /*
+    owner: "withdraw instantly" — through the admin's payout provider (Flutterwave by default, Paystack its backup;
+    lib/rewards/flutterwave-payouts.ts), no admin step — but ONLY past the fraud gates (2026-10-24, lib/sub/payout-risk.ts):
+    a new bank account, a large or fast-repeating amount, a bank account shared with another creator or an unconfirmed
+    email keeps it PENDING for an admin, with the reasons on the financial audit log. It is never refused for it.
+  */
   let paidOut = false;
   let status = "pending";
-  // only a Paystack (Nigerian bank) withdrawal can leave automatically; international ones wait for the team
+  // only a Nigerian bank withdrawal can leave automatically; international ones wait for the team
   if (cfg.autoPayout && method === "paystack") {
-    const out = await payWithdrawalViaPaystack(r.id!, null);
-    paidOut = out.ok;
-    status = out.ok ? (out.status === "success" ? "completed" : "processing") : "pending";
+    const hold = await payoutHolds(input.userId, r.id!, split.grossCents, details, cfg);
+    if (hold.length) {
+      await createAdminClient().from("financial_audit_log").insert({ actor_id: null, action: "withdrawal_held_for_review", target_type: "withdrawal", target_id: r.id!, reference: null, details: { reasons: hold, labels: hold.map((h) => HOLD_REASON_LABEL[h]), gross_cents: split.grossCents } });
+      console.warn("[sub/withdraw] held for review", { userId: input.userId, id: r.id, reasons: hold });
+    } else {
+      const out = await payWithdrawal(r.id!, null);
+      paidOut = out.ok;
+      status = out.ok ? (out.status === "success" || out.status === "successful" ? "completed" : "processing") : "pending";
+    }
   }
   return { ok: true, id: r.id!, status, netCents: Number(r.net ?? split.netCents), feeCents: Number(r.fee ?? split.feeCents), paidOut };
+}
+
+/**
+ * The facts the instant-payout gate needs, read fresh. Any read that fails answers "unknown", which HOLDS the payout
+ * (fail closed). The withdrawal itself already exists and its money is held either way.
+ */
+async function payoutHolds(userId: string, withdrawalId: string, grossCents: number, details: { bankCode?: string; accountNumber?: string }, cfg: SubConfig): Promise<PayoutHoldReason[]> {
+  const db = createAdminClient();
+  const since = new Date(Date.now() - 86_400_000).toISOString();
+  const [acct, recent, shared, who] = await Promise.all([
+    db.from("sub_payout_accounts").select("bank_code, account_number, verified_at").eq("creator_id", userId).maybeSingle(),
+    db.from("withdrawal_requests").select("id, gross_cents, status").eq("user_id", userId).eq("source", "sub").gte("created_at", since).in("status", ["approved", "processing", "completed"]).limit(100),
+    details.accountNumber && details.bankCode ? db.from("sub_payout_accounts").select("creator_id").eq("account_number", details.accountNumber).eq("bank_code", details.bankCode).neq("creator_id", userId).limit(1) : Promise.resolve({ data: [], error: null }),
+    (async () => db.auth.admin.getUserById(userId))().catch(() => ({ data: { user: null }, error: new Error("auth") })),
+  ]);
+  const a = acct.data as { bank_code?: string; account_number?: string; verified_at?: string | null } | null;
+  // the request must be to the SAVED, verified account; inline details for a different account count as new
+  const saved = !acct.error && a && a.bank_code === details.bankCode && a.account_number === details.accountNumber ? (a.verified_at ?? null) : null;
+  const last24h = recent.error ? null : ((recent.data ?? []) as Row[]).filter((w) => w.id !== withdrawalId).reduce((t, w) => t + Number(w.gross_cents ?? 0), 0);
+  const user = (who as { data?: { user?: { email_confirmed_at?: string | null } | null }; error?: unknown }).data?.user;
+  return payoutHoldReasons(
+    { amountCents: grossCents, accountVerifiedAt: saved, last24hCents: last24h, sharedAccount: shared.error ? null : (shared.data ?? []).length > 0, emailConfirmed: (who as { error?: unknown }).error || !user ? null : !!user.email_confirmed_at },
+    cfg,
+    Date.now(),
+  );
 }

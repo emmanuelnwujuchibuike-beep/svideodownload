@@ -80,7 +80,9 @@ beforeEach(() => {
 describe("the profile's Exclusive tab", () => {
   it("a creator with subscriptions on: visitors get the server's price + fee; the owner gets their settings", async () => {
     const visitor = await subTabFor(CREATOR, "Amaka", STRANGER, false);
-    expect(visitor?.quote).toEqual({ priceCents: 1000, feeCents: 100, totalCents: 1100, feePercent: 10, periodDays: 30 });
+    expect(visitor?.quote).toMatchObject({ priceCents: 1000, feeCents: 100, totalCents: 1100, feePercent: 10, periodDays: 30 });
+    // 0277: the options list — with no bundles or promotions, just the month at the same numbers
+    expect(visitor?.quote?.options?.map((o) => [o.months, o.priceCents, o.totalCents, o.periodDays])).toEqual([[1, 1000, 1100, 30]]);
     expect(visitor?.settings).toBeNull();
     const owner = await subTabFor(CREATOR, "Amaka", CREATOR, true);
     expect(owner?.settings).toMatchObject({ priceCents: 1000, active: true, setupCompleted: true });

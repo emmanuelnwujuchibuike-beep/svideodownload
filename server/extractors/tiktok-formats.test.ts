@@ -35,30 +35,28 @@ const MIXED = [
   { Bitrate: 900_000, CodecType: "h264", GearName: "normal_540p_900", PlayAddr: { Height: 540, UrlList: ["https://v/540-h264.mp4"] } },
 ];
 
-describe("native TikTok formats — the default must not need a re-encode", () => {
+describe("native TikTok formats — the default is the BEST quality (owner, 2026-10-24)", () => {
   const formats = buildFormats(item(MIXED)).filter((f) => f.kind === "video");
 
-  it("leads with an H.264 stream, not the taller bytevc1 one", () => {
-    expect(formats[0]?.vcodec, "the default pick still forces a transcode").toBe("h264");
-    expect(formats[0]?.directUrl).toBe("https://v/720-h264.mp4");
+  it("leads with the tallest tier even when it is HEVC — the H.264-first order handed out the smaller copy", () => {
+    expect(formats[0]?.directUrl, "the default pick is not the best quality").toBe("https://v/1080-hevc.mp4");
+    expect(formats[0]?.resolution).toBe("1080p");
+    expect(formats[0]?.label).toBe("1080p · Best quality");
   });
 
-  it("picks the BEST H.264, not merely any of them", () => {
-    // 720p beats 540p inside the fast group.
-    expect(formats[0]?.resolution).toBe("720p");
+  it("keeps the H.264 tiers right below — the rescue a failed conversion falls back to", () => {
+    expect(formats.slice(1).map((f) => f.directUrl)).toEqual(["https://v/720-h264.mp4", "https://v/540-h264.mp4"]);
+    expect(formats.slice(1).every((f) => f.vcodec === "h264" && !/converts/i.test(f.label))).toBe(true);
   });
 
-  it("still offers the taller bytevc1 tier — nothing is taken away", () => {
-    const hevc = formats.find((f) => f.directUrl === "https://v/1080-hevc.mp4");
-    expect(hevc).toBeDefined();
-    expect(hevc?.vcodec).toBe("hevc");
-  });
-
-  it("says what the slow tier costs, so it is chosen on purpose", () => {
-    const hevc = formats.find((f) => f.vcodec === "hevc");
-    expect(hevc?.label).toMatch(/converts on download/i);
-    // …and the fast one makes no such claim.
-    expect(formats[0]?.label).not.toMatch(/converts/i);
+  it("at one height, H.264 still wins over HEVC — same pixels, no conversion", () => {
+    const same = buildFormats(
+      item([
+        { Bitrate: 3_000_000, CodecType: "h265", GearName: "bytevc1_720p", PlayAddr: { Height: 720, UrlList: ["https://v/720-hevc.mp4"] } },
+        { Bitrate: 2_000_000, CodecType: "h264", GearName: "normal_720p", PlayAddr: { Height: 720, UrlList: ["https://v/720-h264.mp4"] } },
+      ]),
+    ).filter((f) => f.kind === "video");
+    expect(same.map((f) => f.directUrl)).toEqual(["https://v/720-h264.mp4"]);
   });
 
   it("orders by height when every tier is already H.264", () => {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getVerificationState, recordVerificationEvent } from "@/lib/social/verification";
-import { checkEligibility, ID_DOCUMENT_TYPES, VERIFICATION_CATEGORIES } from "@/lib/social/verification-shared";
+import { ID_DOCUMENT_TYPES, VERIFICATION_CATEGORIES } from "@/lib/social/verification-shared";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -12,9 +12,9 @@ export const dynamic = "force-dynamic";
  * POST /api/verification — submit a verification application.
  * DELETE /api/verification — withdraw the one in flight.
  *
- * The eligibility gate is re-checked HERE, server-side, against the same
- * `checkEligibility` the form renders. The client checklist is a courtesy; this
- * is the rule. A crafted POST from an account that doesn't qualify is refused.
+ * 🔴 No eligibility rules (owner, 2026-10-24: "users should be able to pay for verification not being eligible …
+ * remove every eligibility there on the verification"). Any signed-in member may apply; only a suspended account is
+ * refused (the same rule paid checkout applies). The decision is the reviewer's.
  *
  * Document paths are validated to live inside the caller's OWN folder in the
  * private bucket before they are stored — otherwise an applicant could submit a
@@ -41,40 +41,6 @@ function bad(error: string, status = 400) {
   return NextResponse.json({ ok: false, error }, { status });
 }
 
-/** Eligibility inputs, read from the same tables the profile itself uses. */
-async function eligibilityFor(userId: string, emailConfirmed: boolean) {
-  const admin = createAdminClient();
-  const [{ data: profile }, { data: sub }, posts] = await Promise.all([
-    admin
-      .from("profiles")
-      .select("handle, display_name, bio, avatar_url, followers_count, is_suspended, created_at")
-      .eq("id", userId)
-      .maybeSingle(),
-    admin.from("subscriptions").select("plan, status").eq("user_id", userId).maybeSingle(),
-    admin
-      .from("posts")
-      .select("id", { head: true, count: "exact" })
-      .eq("publisher_id", userId)
-      .eq("status", "published"),
-  ]);
-
-  const paidPlan =
-    (sub?.status === "active" || sub?.status === "trialing") && (sub?.plan as string | undefined) !== "free";
-
-  return checkEligibility({
-    createdAt: (profile?.created_at as string) ?? new Date().toISOString(),
-    handle: (profile?.handle as string | null) ?? null,
-    displayName: (profile?.display_name as string | null) ?? null,
-    bio: (profile?.bio as string | null) ?? null,
-    avatarUrl: (profile?.avatar_url as string | null) ?? null,
-    followers: (profile?.followers_count as number | null) ?? 0,
-    posts: posts.count ?? 0,
-    emailConfirmed,
-    suspended: Boolean(profile?.is_suspended),
-    paidPlan: Boolean(paidPlan),
-  });
-}
-
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
@@ -88,11 +54,8 @@ export async function POST(request: Request) {
     return bad("You already have an application under review.");
   }
 
-  const eligibility = await eligibilityFor(user.id, !!user.email_confirmed_at);
-  if (!eligibility.eligible) {
-    const missing = eligibility.criteria.filter((c) => !c.met).map((c) => c.label);
-    return bad(`Not eligible yet: ${missing.join(", ")}.`, 403);
-  }
+  const { data: who } = await createAdminClient().from("profiles").select("is_suspended").eq("id", user.id).maybeSingle();
+  if ((who as { is_suspended?: boolean } | null)?.is_suspended) return bad("This account can't be verified.", 403);
 
   let body: Body;
   try {

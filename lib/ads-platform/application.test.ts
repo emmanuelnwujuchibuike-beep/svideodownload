@@ -122,10 +122,11 @@ describe("the menu: only admin-enabled, PRICED options", () => {
   it("parseCatalog normalises Postgres numerics and refuses junk", () => {
     const raw = JSON.parse(JSON.stringify(catalog()));
     raw.prices[0].price_minor = "500";
-    raw.formats[0].aspect_ratio = "10.0000";
+    // REWARD_VIDEO: TOP_BANNER is admin-only (2026-10-24) and never reaches the advertiser catalog
+    raw.formats.find((f: { code: string }) => f.code === "REWARD_VIDEO").aspect_ratio = "10.0000";
     const c = parseCatalog(raw)!;
     expect(c.prices[0]!.price_minor).toBe(500);
-    expect(c.formats[0]!.aspect_ratio).toBe(10);
+    expect(c.formats.find((f) => f.code === "REWARD_VIDEO")!.aspect_ratio).toBe(10);
     expect(parseCatalog(null)).toBeNull();
     expect(parseCatalog({ v: 2 })).toBeNull();
     expect(parseCatalog({ ...raw, prices: "x" })).toBeNull();

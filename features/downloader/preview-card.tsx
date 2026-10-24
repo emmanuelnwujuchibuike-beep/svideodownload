@@ -27,6 +27,7 @@ import { MONETAG_MOMENT_EVENTS } from "@/lib/monetization/monetag-events";
 import { BatchAdGate, type BatchAuthorization } from "@/features/downloader/batch-ad-gate";
 import { startDownload as enqueueDownload } from "@/features/downloads/manager";
 import { ResultAd } from "@/features/monetization/result-ad";
+import { ResultProBanner } from "@/features/monetization/result-pro-banner";
 import { RewardConsentSheet } from "@/features/monetization/reward-consent-sheet";
 import { RewardedAdGate } from "@/features/monetization/rewarded-ad";
 import { useRewardFlow } from "@/features/monetization/use-reward-flow";
@@ -1268,6 +1269,9 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
             </span>
           ))}
         </div>
+
+        {/* the Upgrade-to-Pro banner, last on the card (owner, 2026-10-24) — free visitors only, see result-pro-banner.tsx */}
+        <ResultProBanner className="mt-4" />
 
         {/*
           The "Pro & Above — unlimited batch downloads" upsell is gone (owner,

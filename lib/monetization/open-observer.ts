@@ -132,7 +132,14 @@ export function openOwnWindow(url: string): void {
   state.own = true;
   try {
     allowWindowOpen();
-    window.open(url, "_blank", "noopener,noreferrer");
+    /*
+      2026-10-24 (owner: Adsterra Smartlink stats): "noopener" only — NOT "noreferrer". With noreferrer the ad network got
+      no referring site at all, so the visit could not be attributed to frenzsave.com (Domain stats) and reads as
+      direct / unknown-source traffic, which networks value lower. The site's Referrer-Policy
+      (strict-origin-when-cross-origin, next.config.ts) still sends only the ORIGIN — never a path or query — and
+      noopener still keeps the ad page from reaching back into ours.
+    */
+    window.open(url, "_blank", "noopener");
   } finally {
     state.own = false;
   }

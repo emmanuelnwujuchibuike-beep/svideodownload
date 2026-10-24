@@ -1,10 +1,12 @@
 import "server-only";
 
 import { marketRate } from "@/lib/ai/character-replace/fx-rate-server";
+import { verifyFlutterwaveTransfer } from "@/lib/flutterwave/client";
 import { PaystackHttpError, paystackRefusedForSure, paystackRequest } from "@/lib/paystack/paystack";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { koboFor } from "./paystack-banks";
+import { isFlutterwavePayoutRef, isPayoutRef, PAYSTACK_REF } from "./payout-refs";
 import { resolveWithdrawal } from "./withdrawals";
 
 /**
@@ -40,7 +42,8 @@ import { resolveWithdrawal } from "./withdrawals";
  */
 
 export const PAYSTACK_METHOD = "paystack";
-const REF = (withdrawalId: string) => `frenz_wd_${withdrawalId.replace(/-/g, "")}`;
+const REF = PAYSTACK_REF;
+const railName = (reference: string) => (isFlutterwavePayoutRef(reference) ? "Flutterwave" : "Paystack");
 
 type Row = Record<string, unknown>;
 
@@ -115,8 +118,12 @@ export async function payWithdrawalViaPaystack(withdrawalId: string, adminId: st
 
 type TransferVerdict = { kind: "success" } | { kind: "failed"; status: string } | { kind: "not_found" } | { kind: "unknown"; status?: string };
 
-/** What Paystack says about a transfer reference, right now. Only success / failed / reversed / a 404 are verdicts. */
+/**
+ * What the PROVIDER THAT SENT IT says about a transfer reference, right now (2026-10-24: a frenz_fwd_ reference is a
+ * Flutterwave transfer). Only success / failed / reversed / not found are verdicts.
+ */
 export async function verifyTransferReference(reference: string): Promise<TransferVerdict> {
+  if (isFlutterwavePayoutRef(reference)) return verifyFlutterwaveTransfer(reference);
   try {
     const r = await paystackRequest<{ data: { status: string } }>(`/transfer/verify/${encodeURIComponent(reference)}`);
     const st = r.data?.status;
@@ -156,20 +163,22 @@ export async function rejectPaystackWithdrawal(input: { id: string; status: "rej
   if (error) return { ok: false, error: "Couldn't read the withdrawal. Nothing was changed.", reason: "error" };
   const w = data as { id: string; status: string; payout_method: string | null; payout_reference: string | null; updated_at: string | null } | null;
   if (!w) return { ok: false, error: "Not found.", reason: "not_found" };
-  const recorded = w.payout_reference?.startsWith("frenz_wd_") ? w.payout_reference : null;
+  const recorded = isPayoutRef(w.payout_reference) ? w.payout_reference : null;
   const maybeSent = !recorded && w.payout_method === PAYSTACK_METHOD && (w.status === "approved" || w.status === "processing");
   if (!recorded && !maybeSent) {
     const out = await resolveWithdrawal({ id: input.id, status: input.status, adminId: input.adminId, note: input.note });
     return out.ok ? { ok: true, outcome: "rejected" } : { ok: false, error: "Couldn't update it.", reason: out.reason ?? "error" };
   }
   const reference = recorded ?? REF(w.id);
+  // a Flutterwave payout records its frenz_fwd_ reference BEFORE sending (flutterwave-payouts.ts), so an unrecorded one
+  // can only ever have been a Paystack attempt — asked by Paystack's fixed reference, as before
   const v = await verifyTransferReference(reference);
   if (v.kind === "success") {
-    const out = await resolveWithdrawal({ id: input.id, status: "completed", adminId: input.adminId, note: "Paystack confirms this transfer was paid, so it can't be rejected", payoutReference: reference });
+    const out = await resolveWithdrawal({ id: input.id, status: "completed", adminId: input.adminId, note: `${railName(reference)} confirms this transfer was paid, so it can't be rejected`, payoutReference: reference });
     return out.ok ? { ok: true, outcome: "completed_instead" } : { ok: false, error: "Paystack says it was paid, but the withdrawal didn't update.", reason: out.reason ?? "error" };
   }
   if (v.kind === "failed") {
-    const out = await resolveWithdrawal({ id: input.id, status: "rejected", adminId: input.adminId, note: `${input.note ?? "Rejected"} (Paystack: ${v.status})`, payoutReference: recorded ?? undefined });
+    const out = await resolveWithdrawal({ id: input.id, status: "rejected", adminId: input.adminId, note: `${input.note ?? "Rejected"} (${railName(reference)}: ${v.status})`, payoutReference: recorded ?? undefined });
     return out.ok ? { ok: true, outcome: "rejected" } : { ok: false, error: "Couldn't update it.", reason: out.reason ?? "error" };
   }
   if (v.kind === "not_found") {
@@ -182,15 +191,16 @@ export async function rejectPaystackWithdrawal(input: { id: string; status: "rej
       const { error: auditError } = await db.from("financial_audit_log").insert({ actor_id: input.adminId, action: "withdrawal_transfer_not_found_confirmed", target_type: "withdrawal", target_id: input.id, reference, details: { note: why, from: w.status, checked_at: new Date().toISOString() } });
       if (auditError) return { ok: false, error: "The audit record couldn't be written, so nothing was released.", reason: "audit_failed" };
     }
-    const out = await resolveWithdrawal({ id: input.id, status: "rejected", adminId: input.adminId, note: recorded ? `${(input.note ?? "").trim()} (Paystack has no transfer with this reference; confirmed by an admin)` : `${input.note ?? "Rejected"} (Paystack has no transfer with reference ${reference})`, payoutReference: recorded ?? undefined });
+    const out = await resolveWithdrawal({ id: input.id, status: "rejected", adminId: input.adminId, note: recorded ? `${(input.note ?? "").trim()} (${railName(reference)} has no transfer with this reference; confirmed by an admin)` : `${input.note ?? "Rejected"} (${railName(reference)} has no transfer with reference ${reference})`, payoutReference: recorded ?? undefined });
     return out.ok ? { ok: true, outcome: "rejected" } : { ok: false, error: out.reason === "final" ? "This withdrawal is already finished." : "Couldn't update it.", reason: out.reason ?? "error" };
   }
-  return { ok: false, error: `Paystack hasn't settled this transfer yet${v.status ? ` (${v.status})` : ""}. It stays held until Paystack confirms.`, reason: "outcome_unknown" };
+  return { ok: false, error: `${railName(reference)} hasn't settled this transfer yet${v.status ? ` (${v.status})` : ""}. It stays held until ${railName(reference)} confirms.`, reason: "outcome_unknown" };
 }
 
 /** Paystack's webhook: a transfer landed, failed or came back. */
 export async function settlePaystackTransfer(event: "transfer.success" | "transfer.failed" | "transfer.reversed", reference: string | undefined): Promise<boolean> {
-  if (!reference?.startsWith("frenz_wd_")) return false;
+  // 2026-10-24: Flutterwave transfers (frenz_fwd_) settle through the same rules; every check asks the rail that sent it
+  if (!isPayoutRef(reference)) return false;
   const db = createAdminClient();
   const { data } = await db.from("withdrawal_requests").select("id, status").eq("payout_reference", reference).maybeSingle();
   const w = data as { id: string; status: string } | null;
@@ -204,7 +214,7 @@ export async function settlePaystackTransfer(event: "transfer.success" | "transf
   if (w && w.status === "completed" && event === "transfer.reversed") {
     const v = await verifyTransferReference(reference);
     if (!(v.kind === "failed" && v.status === "reversed")) throw new Error("reversal not confirmed by Paystack yet");
-    const { data: r, error } = await db.rpc("reverse_paid_withdrawal", { p_id: w.id, p_actor: null, p_note: "Paystack: the transfer was reversed (verified)" });
+    const { data: r, error } = await db.rpc("reverse_paid_withdrawal", { p_id: w.id, p_actor: null, p_note: `${railName(reference)}: the transfer was reversed (verified)` });
     if (error) throw new Error("reverse_paid_withdrawal failed");
     const out = r as { ok?: boolean; reason?: string } | null;
     // 'manual' = an AI-credit payout: audited for an admin, nothing more to do here
@@ -231,7 +241,7 @@ export async function settlePaystackTransfer(event: "transfer.success" | "transf
   }
   if (!w || ["completed", "rejected", "cancelled", "reversed"].includes(w.status)) return true;
   const to = event === "transfer.success" ? "completed" : "rejected";
-  const out = await resolveWithdrawal({ id: w.id, status: to, adminId: null, note: event === "transfer.success" ? "Paystack confirmed the transfer" : `Paystack: ${event.replace("transfer.", "")}. The credits were returned.` });
+  const out = await resolveWithdrawal({ id: w.id, status: to, adminId: null, note: event === "transfer.success" ? `${railName(reference)} confirmed the transfer` : `${railName(reference)}: ${event.replace("transfer.", "")}. The credits were returned.` });
   return out.ok;
 }
 
@@ -244,10 +254,10 @@ export async function verifyProcessingPayouts(limit = 20): Promise<{ checked: nu
   for (const w of data as { payout_reference: string | null }[]) {
     if (!w.payout_reference) continue;
     try {
-      const r = await paystackRequest<{ data: { status: string } }>(`/transfer/verify/${encodeURIComponent(w.payout_reference)}`);
-      const s = r.data?.status;
-      if (s === "success" || s === "failed" || s === "reversed") {
-        if (await settlePaystackTransfer(s === "success" ? "transfer.success" : s === "failed" ? "transfer.failed" : "transfer.reversed", w.payout_reference)) settled++;
+      const v = await verifyTransferReference(w.payout_reference);
+      if (v.kind === "success" || v.kind === "failed") {
+        const ev = v.kind === "success" ? "transfer.success" : v.status === "reversed" ? "transfer.reversed" : "transfer.failed";
+        if (await settlePaystackTransfer(ev, w.payout_reference)) settled++;
       }
     } catch {
       /* the next run tries again */

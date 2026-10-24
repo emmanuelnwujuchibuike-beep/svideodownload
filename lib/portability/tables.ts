@@ -330,6 +330,7 @@ export const OWNER_COLUMN: Record<string, string> = {
   memory_collections: "owner_id", // 0229: your memory collections
   memory_reminder_dismissals: "owner_id", // 0229: "on this day" cards and suggestions you dismissed
   sub_purchases: "subscriber_id", // 0227: SUB subscriptions you bought, with price, fee and total
+  sub_promotions: "creator_id", // 0277: the promotions you ran on your Exclusive subscription
   sub_ledger: "creator_id", // 0227: every change to your private post earnings
   sub_payout_accounts: "creator_id", // 0227: your saved payout account and auto-withdrawal setting
   sub_posts: "creator_id", // 0227: your subscriber-only posts (captions and dates; files stay in private storage)

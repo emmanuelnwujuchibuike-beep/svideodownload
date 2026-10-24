@@ -11,6 +11,7 @@ import { forgetSubPosts } from "@/features/sub/sub-posts-cache";
 import { EX_CARD, EX_WELL, exPrimary, exQuiet } from "@/features/sub/ui";
 import { subscriptionCharge, usd } from "@/lib/creator/membership/engine";
 import { haptic } from "@/lib/motion/haptics";
+import type { BundlePrices } from "@/lib/sub/pricing";
 import { cn } from "@/lib/utils";
 import { profilePath } from "@/lib/social/profile-url";
 import { saveSubSettings as saveSettings } from "@/features/sub/sub-settings-client";
@@ -44,6 +45,10 @@ export interface SubOwnerSettings {
   setupCompleted: boolean;
   /** Part 6 (0251): how the creator hears about a new subscriber */
   notifySubscribed?: "off" | "push" | "email" | "both";
+  /** 0277: the 3 / 6 / 12-month bundle totals (null = off) */
+  bundlePrices?: BundlePrices;
+  /** 0277 has run: bundles and promotions can be saved */
+  bundlesReady?: boolean;
 }
 
 export interface SubBounds {
@@ -337,7 +342,7 @@ function GetPaidSetup({ settings, bounds, onChange }: { settings: SubOwnerSettin
             <>
               <h3 className="text-[17px] font-bold tracking-[-0.015em]">Getting paid</h3>
               <ul className="mt-3 space-y-3">
-                <Feature icon={Landmark} title="Straight to your bank" body="Withdraw your private post balance through Paystack." />
+                <Feature icon={Landmark} title="Straight to your bank" body="Withdraw your private post balance through Paystack or Flutterwave." />
                 <Feature icon={BadgeCheck} title="Name-checked first" body="Paystack confirms the account holder's name before anything is sent." />
                 <Feature icon={Receipt} title="No surprises" body={`A ${bounds.withdrawalFeePercent}% withdrawal fee applies. You see exactly what reaches your bank before you confirm.`} />
                 <Feature icon={Undo2} title="Refunds are fair" body="If a payment is refunded or disputed, that subscription ends and the amount comes off your balance." />

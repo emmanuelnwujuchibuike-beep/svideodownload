@@ -75,6 +75,25 @@ export async function savePayoutAccount(creatorId: string, input: { bankCode: st
     .from("financial_audit_log")
     .insert({ actor_id: creatorId, action: prev ? "payout_account_changed" : "payout_account_added", target_type: "sub_payout_account", target_id: creatorId, details: { bank: d.bankCode, last4: d.accountNumber.slice(-4), previous_last4: prev ? String(prev.account_number).slice(-4) : null, auto_withdraw: auto } })
     .then(undefined, () => {});
+  /*
+    2026-10-24 (fraud): the REAL owner hears about every new or changed payout account at once — a stolen session's
+    first move is to point payouts somewhere else. Transactional (never silenced), and a new account also waits
+    `newAccountHoldHours` before any instant payout can use it (lib/sub/payout-risk.ts).
+  */
+  if (!prev || prev.account_number !== d.accountNumber || prev.bank_code !== d.bankCode) {
+    const { emailMember } = await import("@/lib/email/member-email");
+    await emailMember(
+      creatorId,
+      {
+        subject: "Your payout bank account was changed",
+        heading: "New payout account",
+        intro: `Your Frenz withdrawals will now go to ${d.bankName || "your bank"} account ending ${d.accountNumber.slice(-4)}. Instant payouts to it start after a short safety wait.`,
+        body: "If this wasn't you, change your password now and contact support — no payout leaves to a new account during the safety wait.",
+        ctaLabel: "Review payout settings",
+        ctaPath: "/exclusive/dashboard",
+      },
+      "withdrawal_update").catch(() => "failed");
+  }
   return { ok: true, account: view(data as Row) };
 }
 

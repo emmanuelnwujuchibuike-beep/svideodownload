@@ -594,7 +594,7 @@ function DashboardPanel({
           <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
             {busy
               ? "Opening secure checkout…"
-              : `Any amount from ${formatCents(state.minTopupCents, state.symbol)} to ${formatCents(state.maxTopupCents, state.symbol)}. Paid securely through Paystack.`}
+              : `Any amount from ${formatCents(state.minTopupCents, state.symbol)} to ${formatCents(state.maxTopupCents, state.symbol)}. Paid securely through Flutterwave or Paystack.`}
           </p>
           {error ? (
             <p role="alert" className="mt-1.5 text-[12px] font-medium text-amber-600 dark:text-amber-400">

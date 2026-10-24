@@ -59,8 +59,8 @@ describe("withQualityLadder — enforces best-first ordering unconditionally", (
     expect(out.map((f) => f.formatId)).toEqual(["high-tbr", "low-tbr", "filler", "no-height"]);
   });
 
-  it("puts a streamable tier ahead of one that converts on download (production TikTok shape, 2026-10-08)", () => {
-    // native TikTok: bytevc1 1920p + 1280p, H.264 1024p — the default pick was the 16 s re-encode
+  it("HEVC is quality, not a penalty: the tallest TikTok tier leads even when it is HEVC (owner, 2026-10-24)", () => {
+    // production TikTok on 2026-10-24: HEVC 1280p, H.264 1024p / 720p — the default was the 1024p copy
     const formats = [
       video({ formatId: "tt-0", resolution: "1024p", vcodec: "h264" }),
       video({ formatId: "tt-1", resolution: "1920p", vcodec: "hevc" }),
@@ -68,7 +68,17 @@ describe("withQualityLadder — enforces best-first ordering unconditionally", (
       video({ formatId: "tt-3", resolution: "540p", vcodec: "av1" }),
     ];
     const out = withQualityLadder(formats).filter((f) => f.kind === "video");
-    expect(out.map((f) => f.formatId)).toEqual(["tt-0", "tt-1", "tt-2", "tt-3"]);
+    expect(out.map((f) => f.formatId)).toEqual(["tt-1", "tt-2", "tt-0", "tt-3"]);
+  });
+
+  it("VP9 / AV1 still wait below a streamable tier (YouTube's 4K encodes take minutes)", () => {
+    const formats = [
+      video({ formatId: "av1-2160", resolution: "2160p", vcodec: "av01.0.12M.08" }),
+      video({ formatId: "vp9-1440", resolution: "1440p", vcodec: "vp9" }),
+      video({ formatId: "h264-1080", resolution: "1080p", vcodec: "h264" }),
+    ];
+    const out = withQualityLadder(formats).filter((f) => f.kind === "video");
+    expect(out[0]?.formatId).toBe("h264-1080");
   });
 
   it("an unknown codec is not assumed to convert (yt-dlp formats keep the height order)", () => {

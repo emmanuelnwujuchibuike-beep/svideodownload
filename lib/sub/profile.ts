@@ -6,6 +6,8 @@ import { flagsOf, isAccountVisibleTo } from "@/lib/social/account-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { isUuid } from "./guards";
+import { subOptions } from "./pricing";
+import { activePromotions } from "./promotions";
 import { getSubSettings, subConfig } from "./server";
 
 /**
@@ -47,11 +49,14 @@ export async function subTabFor(creatorId: string, creatorName: string, viewerId
       if (!creator || creator.is_suspended) return null;
       const offering = isAccountVisibleTo(flagsOf(creator), "stranger");
       const c = offering && settings.priceCents ? subscriptionCharge(settings.priceCents, cfg.purchaseFeePercent) : null;
+      // 0277: every duration on offer with its best live promotion — the same numbers checkout charges
+      const promos = c && settings.bundlesReady ? await activePromotions(creatorId) : { rules: [], live: {}, names: {} };
+      const options = c ? subOptions({ monthlyCents: settings.priceCents, bundles: settings.bundlePrices, periodDays: cfg.periodDays, feePercent: cfg.purchaseFeePercent, promotions: promos.rules, live: promos.live, promotionNames: promos.names, now: Date.now() }) : [];
       return {
         creatorName,
         signedIn: !!viewerId,
         bounds,
-        quote: c ? { priceCents: c.priceCents, feeCents: c.feeCents, totalCents: c.totalCents, feePercent: cfg.purchaseFeePercent, periodDays: cfg.periodDays } : null,
+        quote: c ? { priceCents: c.priceCents, feeCents: c.feeCents, totalCents: c.totalCents, feePercent: cfg.purchaseFeePercent, periodDays: cfg.periodDays, options } : null,
         settings: null,
       };
     }
@@ -61,7 +66,7 @@ export async function subTabFor(creatorId: string, creatorName: string, viewerId
       signedIn: !!viewerId,
       bounds,
       quote: c ? { priceCents: c.priceCents, feeCents: c.feeCents, totalCents: c.totalCents, feePercent: cfg.purchaseFeePercent, periodDays: cfg.periodDays } : null,
-      settings: { priceCents: settings.priceCents, active: settings.active, setupStep: settings.setupStep, setupCompleted: settings.setupCompleted, promoDismissed: settings.promoDismissed, notifySubscribed: settings.notifySubscribed },
+      settings: { priceCents: settings.priceCents, active: settings.active, setupStep: settings.setupStep, setupCompleted: settings.setupCompleted, promoDismissed: settings.promoDismissed, notifySubscribed: settings.notifySubscribed, bundlePrices: { 3: settings.bundlePrices[3], 6: settings.bundlePrices[6], 12: settings.bundlePrices[12] }, bundlesReady: settings.bundlesReady },
     };
   } catch {
     // a non-critical read: no tab beats a broken profile

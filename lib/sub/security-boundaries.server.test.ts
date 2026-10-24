@@ -20,7 +20,9 @@ const paystackSecret = "sk_test_local_only";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/server")>()), after: () => {} }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => db.client() }));
+// 2026-10-24: the instant-payout fraud gate reads the member's email state from auth (lib/sub/payout-risk.ts)
+let emailConfirmedAt: string | null = "2026-01-01T00:00:00Z";
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => Object.assign(db.client() as object, { auth: { admin: { getUserById: async () => ({ data: { user: { email_confirmed_at: emailConfirmedAt } }, error: null }) } } }) }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: async () => ({ data: { user: sessionUser } }) }, from: (t: string) => (db.client() as { from: (t: string) => unknown }).from(t) }) }));
 vi.mock("@/lib/storage/r2", () => ({ hasPrivateR2: true, presignPrivateGet: (k: string) => presignGet(k), presignPrivatePut: (k: string) => presignPut(k), deletePrivate: vi.fn(), readPrivatePrefix: vi.fn(async () => ({ prefix: new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0]), size: 1000, contentType: "image/jpeg" })) }));
 vi.mock("@/lib/rate-limit", () => ({ trackLimiter: { limit: async () => ({ success: true }) }, clientId: () => "ip" }));
@@ -39,6 +41,8 @@ const resolveAccount = vi.fn(async () => "ACCOUNT HOLDER");
 vi.mock("@/lib/rewards/paystack-banks", async (orig) => ({ ...(await orig<typeof import("@/lib/rewards/paystack-banks")>()), resolveAccount: () => resolveAccount() }));
 const payWithdrawalViaPaystack = vi.fn(async () => ({ ok: true, status: "pending" }));
 vi.mock("@/lib/rewards/paystack-payouts", async (orig) => ({ ...(await orig<typeof import("@/lib/rewards/paystack-payouts")>()), payWithdrawalViaPaystack: () => payWithdrawalViaPaystack() }));
+// the payout dispatcher (Flutterwave first, 2026-10-24) — the same spy: "a payout was sent"
+vi.mock("@/lib/rewards/flutterwave-payouts", () => ({ payWithdrawal: () => payWithdrawalViaPaystack() }));
 
 const U = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const A = U(1); // a creator
@@ -62,7 +66,8 @@ beforeEach(() => {
     creator_notes: [{ id: NOTE_B, creator_id: B, audience: "subscribers", title: "t", body: "for subscribers", deleted_at: null, created_at: "2026-10-10T10:00:00Z" }],
     sub_balances: [{ creator_id: B, available_cents: 5000, pending_cents: 0, held_cents: 0, debt_cents: 0, lifetime_cents: 5000, withdrawn_cents: 0 }],
     sub_ledger: [{ id: 1, creator_id: B, kind: "earning", amount_cents: 5000, reference: "purchase:x" }],
-    sub_payout_accounts: [{ creator_id: B, bank_code: "058", bank_name: "Guaranty Trust Bank", account_number: "0123456789", account_name: "B", auto_withdraw: true }],
+    // verified long ago: past the new-account safety wait
+    sub_payout_accounts: [{ creator_id: B, bank_code: "058", bank_name: "Guaranty Trust Bank", account_number: "0123456789", account_name: "B", auto_withdraw: true, verified_at: "2026-01-01T00:00:00Z" }],
     sub_purchases: [],
     sub_post_comments: [],
     sub_post_likes: [],
@@ -283,6 +288,32 @@ describe("Part 13 fix: a SUSPENDED creator moves no money out", () => {
     expect(out).toMatchObject({ requested: false, reason: "suspended" });
     expect(db.rpc.request_sub_withdrawal).not.toHaveBeenCalled();
     expect(payWithdrawalViaPaystack).not.toHaveBeenCalled();
+  });
+
+  it("fraud gate: a NEW bank account, an over-limit amount, a shared account or an unconfirmed email is HELD for an admin, never paid at once", async () => {
+    const { requestSubWithdrawal } = await import("./server");
+    const acct = db.tables.sub_payout_accounts![0]!;
+    const cases: [string, () => void, () => void, number][] = [
+      ["new account", () => (acct.verified_at = new Date().toISOString()), () => (acct.verified_at = "2026-01-01T00:00:00Z"), 5000],
+      ["over the single limit", () => {}, () => {}, 60_000],
+      ["shared with another creator", () => db.tables.sub_payout_accounts!.push({ creator_id: U(55), bank_code: "058", account_number: "0123456789", account_name: "B", auto_withdraw: false, verified_at: "2026-01-01T00:00:00Z" }), () => db.tables.sub_payout_accounts!.pop(), 5000],
+      ["email not confirmed", () => (emailConfirmedAt = null), () => (emailConfirmedAt = "2026-01-01T00:00:00Z"), 5000],
+    ];
+    let n = 0;
+    for (const [label, arrange, restore, gross] of cases) {
+      arrange();
+      payWithdrawalViaPaystack.mockClear();
+      const out = await requestSubWithdrawal({ userId: B, grossCents: gross, details: { bankCode: "058", bankName: "Guaranty Trust Bank", accountNumber: "0123456789" }, idempotencyKey: `k-gate-${n++}` });
+      restore();
+      expect(out, `${label}: ${JSON.stringify(out)}`).toMatchObject({ ok: true, status: "pending", paidOut: false });
+      expect(payWithdrawalViaPaystack, label).not.toHaveBeenCalled();
+    }
+    expect((db.tables.financial_audit_log ?? []).filter((a) => a.action === "withdrawal_held_for_review").length).toBeGreaterThanOrEqual(4);
+    // control: the same request with every gate passing IS paid at once
+    payWithdrawalViaPaystack.mockClear();
+    const ok = await requestSubWithdrawal({ userId: B, grossCents: 5000, details: { bankCode: "058", bankName: "Guaranty Trust Bank", accountNumber: "0123456789" }, idempotencyKey: "k-gate-pass" });
+    expect(ok).toMatchObject({ ok: true });
+    expect(payWithdrawalViaPaystack).toHaveBeenCalledTimes(1);
   });
 
   it("no profile row, or a failed read: fail CLOSED", async () => {

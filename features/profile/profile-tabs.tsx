@@ -12,6 +12,7 @@ import { useStickyState } from "@/features/ui/use-sticky-state";
 import type { PostCard } from "@/lib/social/posts";
 import { cn } from "@/lib/utils";
 import { profilePath } from "@/lib/social/profile-url";
+import type { BundlePrices, SubOption } from "@/lib/sub/pricing";
 
 // These tabs render only when selected, so defer their chunks off first load.
 const CollectionsTab = dynamic(() => import("@/features/profile/collections-tab").then((m) => m.CollectionsTab), { ssr: false });
@@ -26,8 +27,9 @@ export const SUB_TAB_KEY = "sub";
 export interface SubTabData {
   creatorName: string;
   signedIn: boolean;
-  quote: { priceCents: number; feeCents: number; totalCents: number; feePercent: number; periodDays: number } | null;
-  settings: { priceCents: number | null; active: boolean; setupStep: number; setupCompleted: boolean; promoDismissed?: boolean; notifySubscribed?: "off" | "push" | "email" | "both" } | null;
+  /** 0277: `options` — every prepaid duration on offer (1 / 3 / 6 / 12 months) with its promotion, from the server */
+  quote: { priceCents: number; feeCents: number; totalCents: number; feePercent: number; periodDays: number; options?: SubOption[] } | null;
+  settings: { priceCents: number | null; active: boolean; setupStep: number; setupCompleted: boolean; promoDismissed?: boolean; notifySubscribed?: "off" | "push" | "email" | "both"; bundlePrices?: BundlePrices; bundlesReady?: boolean } | null;
   bounds: { minPriceCents: number; maxPriceCents: number; purchaseFeePercent: number; withdrawalFeePercent: number };
 }
 

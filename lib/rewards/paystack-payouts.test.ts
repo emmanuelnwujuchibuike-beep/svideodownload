@@ -34,7 +34,8 @@ describe("Paystack payouts", () => {
 
   it("one fixed reference per withdrawal, so a retry can never pay twice", () => {
     const p = src("lib/rewards/paystack-payouts.ts");
-    expect(p).toContain("const REF = (withdrawalId: string) => `frenz_wd_${withdrawalId.replace(/-/g, \"\")}`;");
+    expect(p).toContain("const REF = PAYSTACK_REF;");
+    expect(src("lib/rewards/payout-refs.ts")).toContain("export const PAYSTACK_REF = (withdrawalId: string) => `frenz_wd_${withdrawalId.replace(/-/g, \"\")}`;");
     expect(p).toContain("reference, reason: \"Frenz withdrawal\"");
   });
 
@@ -42,7 +43,9 @@ describe("Paystack payouts", () => {
     const hook = src("app/api/paystack/webhook/route.ts");
     for (const e of ["transfer.success", "transfer.failed", "transfer.reversed"]) expect(hook).toContain(`"${e}"`);
     expect(hook).toContain("await settlePaystackTransfer(event.event, event.data?.reference ?? undefined);");
-    expect(src("lib/rewards/paystack-payouts.ts")).toContain('if (!reference?.startsWith("frenz_wd_")) return false;');
+    // 2026-10-24: our Paystack (frenz_wd_) and Flutterwave (frenz_fwd_) payout references only
+    expect(src("lib/rewards/paystack-payouts.ts")).toContain("if (!isPayoutRef(reference)) return false;");
+    expect(src("lib/rewards/payout-refs.ts")).toContain('(r.startsWith("frenz_wd_") || r.startsWith("frenz_fwd_"))');
   });
 
   it("a failed or reversed transfer returns the credits (rejected), a success completes", () => {

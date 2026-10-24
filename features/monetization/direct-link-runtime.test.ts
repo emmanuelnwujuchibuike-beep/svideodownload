@@ -30,7 +30,7 @@ describe("Monetag direct link", () => {
     expect(open).toBeTypeOf("function");
     open!();
     expect(nativeOpen).toHaveBeenCalledTimes(1);
-    expect(nativeOpen).toHaveBeenCalledWith("https://example-direct.link/abc", "_blank", "noopener,noreferrer");
+    expect(nativeOpen).toHaveBeenCalledWith("https://example-direct.link/abc", "_blank", "noopener");
     expect(guard.popunderGuardStats()).toMatchObject({ allowed: 1, blocked: 0 });
   });
 

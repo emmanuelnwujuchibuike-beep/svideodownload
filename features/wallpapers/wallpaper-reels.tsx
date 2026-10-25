@@ -769,7 +769,7 @@ export function WallpaperReels({
           <button
             type="button"
             onClick={() => setPendingDownload(current)}
-            className="pointer-events-auto mt-3 flex w-full items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-[#2563FF] to-[#6D5CFF] px-5 py-3.5 text-base font-bold text-white shadow-[0_10px_30px_-10px_rgba(37,99,255,0.9)] ring-1 ring-inset ring-white/20 transition active:scale-[0.98]"
+            className="pointer-events-auto relative mt-3 flex w-full items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-[#2563FF] to-[#6D5CFF] px-5 py-3.5 text-base font-bold text-white shadow-[0_10px_30px_-10px_rgba(37,99,255,0.9)] ring-1 ring-inset ring-white/20 transition active:scale-[0.98]"
           >
             <Download className="h-5 w-5" />
             Download
@@ -780,6 +780,12 @@ export function WallpaperReels({
               {planReady && !isPremium ? <Crown className="h-3 w-3" /> : null}
               Free
             </span>
+            {/* Owner, 2026-10-24: the same small "Ad" tag as the result card's Download button — free users (ads on) only. */}
+            {adsReady && showAds ? (
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-white/40 bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none tracking-wider text-white/90">
+                Ad
+              </span>
+            ) : null}
           </button>
         )}
       </div>

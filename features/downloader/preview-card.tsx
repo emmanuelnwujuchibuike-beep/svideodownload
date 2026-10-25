@@ -1170,6 +1170,12 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         >
           {/* shimmer sweep */}
           <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+          {/* Owner, 2026-10-24: this button is an ad spot, so it says so — a small "Ad" tag on the right, only while ads are on and the button is idle. */}
+          {adsReady && showAds && phase === "idle" ? (
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-white/40 bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none tracking-wider text-white/90">
+              Ad
+            </span>
+          ) : null}
           {phase === "working" ? (
             <>
               <Loader2 className="h-5 w-5 animate-spin" /> Preparing your file…

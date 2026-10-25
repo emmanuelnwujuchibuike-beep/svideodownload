@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Exclusive feed</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#3D5AFE}a:hover{color:#7B3FE4}
+</style>
+</helmet>
+<div style="width: 390px; height: 1300px; box-sizing: border-box; position: relative; overflow: hidden; background: #FFFFFF; font-family: 'Hanken Grotesk', sans-serif; color: #12111A">
+
+<header style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 0 16px">
+<div style="width: 36px; height: 36px; border-radius: 11px; background: linear-gradient(135deg, #3D5AFE, #7B3FE4 55%, #C23FD1); display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 16px rgba(123,63,228,0.35)">
+<span style="font-family: Sora, sans-serif; font-weight: 800; font-size: 19px; color: #FFFFFF">F</span>
+</div>
+<div style="display: flex; align-items: center; gap: 4px">
+<button aria-label="Create post" style="width: 44px; height: 44px; border-radius: 50%; border: none; background: transparent; color: #12111A; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"></rect><path d="M12 8v8"></path><path d="M8 12h8"></path></svg>
+</button>
+<button aria-label="Search" style="width: 44px; height: 44px; border-radius: 50%; border: none; background: transparent; color: #12111A; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg>
+</button>
+<button aria-label="Notifications, 1 new" style="position: relative; width: 44px; height: 44px; border-radius: 50%; border: none; background: transparent; color: #12111A; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9z"></path><path d="M10 20a2 2 0 0 0 4 0"></path></svg>
+<span style="position: absolute; top: 6px; right: 5px; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 9px; border: 2px solid #FFFFFF; background: #C23FD1; color: #FFFFFF; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center">1</span>
+</button>
+</div>
+</header>
+
+<nav aria-label="Feed type" style="display: flex; gap: 20px; padding: 6px 20px 0 20px; border-bottom: 1px solid #ECE9F7">
+<a href="Feed.dc.html" style="padding: 10px 0 12px 0; font-family: Sora, sans-serif; font-weight: 600; font-size: 15px; color: #6E6A85; text-decoration: none">For You</a>
+<a href="#" style="padding: 10px 0 12px 0; font-family: Sora, sans-serif; font-weight: 600; font-size: 15px; color: #6E6A85; text-decoration: none">Following</a>
+<a href="#" style="padding: 10px 0 12px 0; font-family: Sora, sans-serif; font-weight: 600; font-size: 15px; color: #6E6A85; text-decoration: none">Reels</a>
+<a href="#" aria-current="page" style="position: relative; padding: 10px 0 12px 0; font-family: Sora, sans-serif; font-weight: 700; font-size: 15px; color: #12111A; text-decoration: none; display: flex; align-items: center; gap: 5px">
+<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>
+Exclusive<span style="position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; border-radius: 3px; background: linear-gradient(90deg, #3D5AFE, #7B3FE4)"></span></a>
+</nav>
+
+<div style="display: flex; align-items: baseline; justify-content: space-between; padding: 16px 20px 10px 20px">
+<span style="font-size: 13px; font-weight: 700; color: #6E6A85">Your subscriptions</span>
+<a href="#" style="font-size: 13px; font-weight: 700; text-decoration: none">Manage</a>
+</div>
+<div style="display: flex; gap: 14px; padding: 0 16px 14px 16px; overflow: hidden">
+<sc-for list="{{subs}}" as="s" hint-placeholder-count="3">
+<a href="Exclusive.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 6px; width: 64px; flex: none; text-decoration: none">
+<span style="position: relative; width: 60px; height: 60px; border-radius: 50%; padding: 2.5px; box-sizing: border-box; background: linear-gradient(135deg, #3D5AFE, #7B3FE4 55%, #C23FD1); display: flex">
+<span style="flex: 1; border-radius: 50%; border: 2.5px solid #FFFFFF; background: {{s.bg}}; display: flex; align-items: center; justify-content: center; font-family: Sora, sans-serif; font-weight: 700; font-size: 18px; color: #FFFFFF">{{s.initial}}</span>
+<sc-if value="{{s.fresh}}" hint-placeholder-val="{{ false }}"><span style="position: absolute; right: -2px; top: -2px; min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box; border-radius: 10px; border: 2px solid #FFFFFF; background: #12111A; color: #FFFFFF; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center">{{s.fresh}}</span></sc-if>
+</span>
+<span style="font-size: 12px; font-weight: 600; color: #12111A; max-width: 64px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{s.name}}</span>
+</a>
+</sc-for>
+<a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 6px; width: 64px; flex: none; text-decoration: none">
+<span style="width: 60px; height: 60px; border-radius: 50%; border: 2px dashed #CFC8F2; box-sizing: border-box; color: #5B3FD8; display: flex; align-items: center; justify-content: center" aria-hidden="true">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg>
+</span>
+<span style="font-size: 12px; font-weight: 600; color: #5B3FD8">Discover</span>
+</a>
+</div>
+
+<article style="border-top: 8px solid #F4F3F9">
+<div style="display: flex; align-items: center; gap: 10px; padding: 12px 8px 12px 16px">
+<span style="width: 40px; height: 40px; flex: none; border-radius: 50%; background: linear-gradient(160deg, #D9A441, #8A5A1E); display: flex; align-items: center; justify-content: center; font-family: Sora, sans-serif; font-weight: 700; color: #FFFFFF">J</span>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+<div style="display: flex; align-items: center; gap: 5px">
+<span style="font-weight: 700; font-size: 15px">Julie Ngozi</span>
+<svg width="15" height="15" viewBox="0 0 24 24" role="img" aria-label="Verified"><path d="M12 2l2.4 1.8 3-.2.9 2.9 2.5 1.7-1 2.8 1 2.8-2.5 1.7-.9 2.9-3-.2L12 22l-2.4-1.8-3 .2-.9-2.9-2.5-1.7 1-2.8-1-2.8 2.5-1.7.9-2.9 3 .2z" fill="#3D5AFE"></path><path d="M8 12.2l2.6 2.6L16 9.4" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span style="font-size: 13px; color: #6E6A85">· 2h</span>
+</div>
+<span style="display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: #1F7A47">
+<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
+Subscribed</span>
+</div>
+<button aria-label="Post options" style="width: 44px; height: 44px; border: none; background: transparent; color: #4A4760; display: flex; align-items: center; justify-content: center">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg>
+</button>
+</div>
+<div style="position: relative; height: 400px; background: radial-gradient(circle at 60% 35%, #5C6FD6, #2B2E78 55%, #0E0B1F)">
+<span style="position: absolute; left: 0; right: 0; top: 190px; text-align: center; font-size: 12px; font-weight: 600; color: #E3E1FF">[Exclusive video]</span>
+<span style="position: absolute; top: 12px; left: 12px; display: flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; background: rgba(15,12,30,0.5); font-size: 12px; font-weight: 700; color: #FFFFFF">
+<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>
+Exclusive</span>
+<button aria-label="Unmute" style="position: absolute; right: 10px; bottom: 10px; width: 40px; height: 40px; border-radius: 50%; border: none; background: rgba(14,11,31,0.55); color: #FFFFFF; display: flex; align-items: center; justify-content: center">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"></path><path d="M17 9l4 6"></path><path d="M21 9l-4 6"></path></svg>
+</button>
+</div>
+<div style="display: flex; align-items: center; padding: 4px 8px">
+<button aria-label="Like" style="width: 44px; height: 44px; border: none; background: transparent; color: #12111A; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.5s-8-4.7-8-10.6A4.4 4.4 0 0 1 12 7.3a4.4 4.4 0 0 1 8 2.6c0 5.9-8 10.6-8 10.6z"></path></svg>
+</button>
+<button aria-label="Comment" style="width: 44px; height: 44px; border: none; background: transparent; color: #12111A; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"></path></svg>
+</button>
+<button aria-label="Share" style="width: 44px; height: 44px; border: none; background: transparent; color: #12111A; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4z"></path></svg>
+</button>
+<span style="flex: 1"></span>
+<button aria-label="Save" style="width: 44px; height: 44px; border: none; background: transparent; color: #12111A; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"></path></svg>
+</button>
+</div>
+</article>
+
+<article style="border-top: 8px solid #F4F3F9">
+<div style="display: flex; align-items: center; gap: 10px; padding: 12px 8px 12px 16px">
+<span style="width: 40px; height: 40px; flex: none; border-radius: 50%; background: linear-gradient(135deg, #7B3FE4, #3D1F8A); display: flex; align-items: center; justify-content: center; font-family: Sora, sans-serif; font-weight: 700; color: #FFFFFF">P</span>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+<span style="font-weight: 700; font-size: 15px">Peace 🍹</span>
+<span style="font-size: 12px; font-weight: 600; color: #5A5770">3 exclusive posts</span>
+</div>
+<a href="Exclusive.dc.html" style="height: 34px; padding: 0 12px; margin-right: 8px; border-radius: 17px; background: #F1F0F6; color: #3D2BB8; font-size: 13px; font-weight: 700; text-decoration: none; display: flex; align-items: center">View profile</a>
+</div>
+<div style="position: relative; height: 340px; overflow: hidden; background: #1A1430">
+<span style="position: absolute; inset: -30px; background: radial-gradient(circle at 65% 40%, #C23FD1, #4A145A 55%, #12081A); filter: blur(24px)" aria-hidden="true"></span>
+<div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px">
+<span style="width: 60px; height: 60px; border-radius: 50%; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.35); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); color: #FFFFFF; display: flex; align-items: center; justify-content: center" aria-hidden="true">
+<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>
+</span>
+<span style="font-family: Sora, sans-serif; font-weight: 700; font-size: 18px; color: #FFFFFF">Subscribers only</span>
+<span style="font-size: 14px; color: rgba(255,255,255,0.85)">Video · 1 of 3 posts</span>
+</div>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; padding: 14px 16px">
+<span style="flex: 1; display: flex; flex-direction: column; gap: 1px">
+<span style="font-family: Sora, sans-serif; font-weight: 700; font-size: 18px">$5.50</span>
+<span style="font-size: 13px; color: #5A5770">for 30 days of access</span>
+</span>
+<button style="height: 48px; padding: 0 22px; border-radius: 16px; border: none; background: linear-gradient(90deg, #3D5AFE, #7B3FE4); box-shadow: 0 12px 24px -12px rgba(91,63,240,0.7); font-family: Sora, sans-serif; font-weight: 700; font-size: 15px; color: #FFFFFF; display: flex; align-items: center; gap: 8px">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>
+Subscribe</button>
+</div>
+</article>
+
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 130px; background: linear-gradient(0deg, rgba(255,255,255,1) 35%, rgba(255,255,255,0))" aria-hidden="true"></div>
+<nav aria-label="Main" style="position: absolute; left: 12px; right: 12px; bottom: 24px; display: flex; align-items: center; gap: 8px">
+<div style="flex: 1; height: 68px; padding: 6px; box-sizing: border-box; border-radius: 26px; background: rgba(255,255,255,0.92); border: 1px solid #E6E2F5; box-shadow: 0 16px 36px -12px rgba(30,20,80,0.32); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px">
+<a href="Main.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: #4A4760; font-size: 12px; font-weight: 600">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path></svg>
+Home</a>
+<a href="Feed.dc.html" aria-current="page" style="border-radius: 20px; background: #EEEBFD; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: #3D2BB8; font-size: 12px; font-weight: 700">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><path d="M10 9.5v5l4.5-2.5z"></path></svg>
+Feed</a>
+<a href="History.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: #4A4760; font-size: 12px; font-weight: 600">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path><path d="M12 8v4l3 2"></path></svg>
+History</a>
+<a href="Messages.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: #4A4760; font-size: 12px; font-weight: 600">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"></path></svg>
+Chats</a>
+</div>
+<a href="Profile.dc.html" aria-label="Your profile" style="width: 68px; height: 68px; flex: none; border-radius: 26px; padding: 3px; box-sizing: border-box; background: linear-gradient(135deg, #3D5AFE, #7B3FE4 55%, #C23FD1); box-shadow: 0 16px 30px -10px rgba(123,63,228,0.6); display: flex">
+<span style="flex: 1; border-radius: 23px; border: 2px solid #FFFFFF; background: linear-gradient(160deg, #2F6B4F, #1E3D2E)"></span>
+</a>
+</nav>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1300}}'>
+class Component extends DCLogic {
+renderVals() {
+return {
+subs: [
+{ name: 'Julie', initial: 'J', bg: 'linear-gradient(160deg, #D9A441, #8A5A1E)', fresh: 2 },
+{ name: 'Chris', initial: 'C', bg: 'linear-gradient(160deg, #2F6B4F, #1E3D2E)' },
+{ name: 'Sanelly', initial: 'S', bg: 'linear-gradient(135deg, #C23FD1, #7A1F8A)', fresh: 1 }
+]
+};
+}
+}
+</script>
+</body>
+</html>

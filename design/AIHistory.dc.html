@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AI History</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#3D5AFE}a:hover{color:#7B3FE4}
+</style>
+</helmet>
+<div style="width: 390px; height: 1180px; box-sizing: border-box; position: relative; overflow: hidden; background: #FFFFFF; font-family: 'Hanken Grotesk', sans-serif; color: #12111A">
+
+<header style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 0 8px">
+<a href="AIExplore.dc.html" style="height: 44px; display: flex; align-items: center; gap: 2px; padding: 0 8px; font-size: 16px; font-weight: 600; color: #3D2BB8; text-decoration: none">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+Frenz AI</a>
+<button style="height: 36px; padding: 0 14px; border-radius: 18px; border: none; background: #E7E4F6; color: #3D2BB8; font-family: 'Hanken Grotesk', sans-serif; font-size: 14px; font-weight: 700">Select</button>
+</header>
+<h1 style="margin: 2px 20px 0 20px; font-family: Sora, sans-serif; font-weight: 800; font-size: 32px; letter-spacing: -1.1px">AI History</h1>
+<p style="margin: 2px 20px 0 20px; font-size: 14px; color: #5A5770">10 creations · pull down to refresh</p>
+
+<div role="tablist" aria-label="Type" style="margin: 14px 16px 0 16px; padding: 3px; border-radius: 12px; background: #F1F0F6; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px">
+<button role="tab" aria-selected="true" style="height: 34px; border-radius: 9px; border: none; background: #FFFFFF; box-shadow: 0 1px 4px rgba(30,20,80,0.18); font-family: 'Hanken Grotesk', sans-serif; font-size: 14px; font-weight: 700; color: #12111A">All</button>
+<button role="tab" aria-selected="false" style="height: 34px; border-radius: 9px; border: none; background: transparent; font-family: 'Hanken Grotesk', sans-serif; font-size: 14px; font-weight: 600; color: #3E3B52">Videos</button>
+<button role="tab" aria-selected="false" style="height: 34px; border-radius: 9px; border: none; background: transparent; font-family: 'Hanken Grotesk', sans-serif; font-size: 14px; font-weight: 600; color: #3E3B52">Audio</button>
+</div>
+
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="2">
+<div style="display: flex; align-items: baseline; justify-content: space-between; padding: 20px 20px 8px 20px">
+<h2 style="margin: 0; font-family: Sora, sans-serif; font-weight: 700; font-size: 17px; color: {{g.color}}">{{g.label}}</h2>
+<span style="font-size: 13px; font-weight: 600; color: #6E6A85">{{g.count}}</span>
+</div>
+<div style="margin: 0 16px; border-radius: 22px; border: 1px solid #ECE9F7; overflow: hidden">
+<sc-for list="{{g.items}}" as="it" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; gap: 12px; padding: 10px 6px 10px 10px; border-top: {{it.divider}}; opacity: {{it.opacity}}">
+<button aria-label="{{it.playLabel}}" style="position: relative; width: 76px; height: 76px; flex: none; border-radius: 16px; border: none; padding: 0; overflow: hidden; background: {{it.bg}}">
+<sc-if value="{{it.live}}" hint-placeholder-val="{{ true }}">
+<span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center">
+<span style="width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,0.22); border: 1px solid rgba(255,255,255,0.45); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #FFFFFF; display: flex; align-items: center; justify-content: center" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l12 7-12 7z"></path></svg></span>
+</span>
+<span style="position: absolute; right: 5px; bottom: 5px; padding: 1px 6px; border-radius: 6px; background: rgba(15,12,30,0.5); font-size: 10px; font-weight: 700; color: #FFFFFF">{{it.length}}</span>
+</sc-if>
+<sc-if value="{{it.expired}}" hint-placeholder-val="{{ false }}">
+<span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #8A879C" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></span>
+</sc-if>
+</button>
+<span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+<span style="display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; color: #5B3FD8">
+<sc-if value="{{it.ic.audio}}" hint-placeholder-val="{{ true }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 10v4"></path><path d="M8 6v12"></path><path d="M12 3v18"></path><path d="M16 7v10"></path><path d="M20 10v4"></path></svg></sc-if>
+<sc-if value="{{it.ic.voice}}" hint-placeholder-val="{{ false }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path></svg></sc-if>
+<sc-if value="{{it.ic.video}}" hint-placeholder-val="{{ false }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="3"></rect><path d="M16 10.5l5-3v9l-5-3"></path></svg></sc-if>
+{{it.type}}</span>
+<span style="font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{it.title}}</span>
+<span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #6E6A85">
+<span>{{it.when}}</span>
+<span style="padding: 1px 7px; border-radius: 999px; background: {{it.chipBg}}; color: {{it.chipInk}}; font-weight: 700">{{it.status}}</span>
+</span>
+</span>
+<button aria-label="More actions" style="width: 40px; height: 44px; flex: none; border: none; background: transparent; color: #6E6A85; display: flex; align-items: center; justify-content: center">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg>
+</button>
+</div>
+</sc-for>
+</div>
+</sc-for>
+
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 130px; background: linear-gradient(0deg, rgba(255,255,255,1) 35%, rgba(255,255,255,0))" aria-hidden="true"></div>
+<nav aria-label="Main" style="position: absolute; left: 12px; right: 12px; bottom: 24px; display: flex; align-items: center; gap: 8px">
+<div style="flex: 1; height: 68px; padding: 6px; box-sizing: border-box; border-radius: 26px; background: rgba(255,255,255,0.86); border: 1px solid #E6E2F5; backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); box-shadow: 0 16px 36px -12px rgba(30,20,80,0.32); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px">
+<a href="Main.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: #4A4760; font-size: 12px; font-weight: 600">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path></svg>
+Home</a>
+<a href="Feed.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: #4A4760; font-size: 12px; font-weight: 600">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><path d="M10 9.5v5l4.5-2.5z"></path></svg>
+Feed</a>
+<a href="History.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: #4A4760; font-size: 12px; font-weight: 600">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path><path d="M12 8v4l3 2"></path></svg>
+History</a>
+<a href="Messages.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: #4A4760; font-size: 12px; font-weight: 600">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"></path></svg>
+Chats</a>
+</div>
+<a href="AIStudio.dc.html" aria-label="Frenz AI" aria-current="page" style="width: 68px; height: 68px; flex: none; border-radius: 26px; padding: 3px; box-sizing: border-box; background: linear-gradient(135deg, #3D5AFE, #7B3FE4 55%, #C23FD1); box-shadow: 0 16px 30px -10px rgba(123,63,228,0.6); display: flex">
+<span style="flex: 1; border-radius: 23px; border: 2px solid #FFFFFF; background: #FFFFFF; display: flex; align-items: center; justify-content: center; font-family: Sora, sans-serif; font-weight: 800; font-size: 26px; color: #5B3FD8">F</span>
+</a>
+</nav>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1180}}'>
+class Component extends DCLogic {
+renderVals() {
+const prep = (items) => items.map((it, i) => ({
+...it,
+live: !it.expired,
+expired: !!it.expired,
+playLabel: it.expired ? 'Expired' : 'Play ' + it.title,
+opacity: it.expired ? 0.6 : 1,
+chipBg: it.expired ? '#F1F0F6' : '#E9F7EF',
+chipInk: it.expired ? '#6E6A85' : '#1F7A47',
+divider: i === 0 ? 'none' : '1px solid #F0EEF8'
+}));
+return {
+groups: [
+{ label: 'Earlier', count: '3', color: '#12111A', items: prep([
+{ type: 'Text to Audio', title: '[Creation title]', when: '3 weeks ago', status: '342 days left', length: '0:08', ic: { audio: true }, bg: 'radial-gradient(circle at 70% 20%, #7B3FE4, #3D5AFE 60%, #1A2470)' },
+{ type: 'Text to Audio', title: '[Creation title]', when: '3 weeks ago', status: '342 days left', length: '0:06', ic: { audio: true }, bg: 'radial-gradient(circle at 30% 20%, #C23FD1, #7B3FE4 60%, #2A1466)' },
+{ type: 'Voice clone', title: 'Message for my son from…', when: '3 weeks ago', status: '342 days left', length: '0:12', ic: { voice: true }, bg: 'radial-gradient(circle at 60% 30%, #6C8CFF, #5B3FD8 60%, #1E1460)' }
+]) },
+{ label: 'Expired', count: '1', color: '#6E6A85', items: prep([
+{ type: 'Cleaned video', title: 'okkurrrr_realtor_idc.mp4', when: 'Last month', status: 'Expired', expired: true, ic: { video: true }, bg: '#F1F0F6' }
+]) }
+]
+};
+}
+}
+</script>
+</body>
+</html>

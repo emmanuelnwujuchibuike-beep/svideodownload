@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Frenz AI Studio</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#3D5AFE}a:hover{color:#7B3FE4}
+</style>
+</helmet>
+<div style="width: 390px; height: 1720px; box-sizing: border-box; position: relative; overflow: hidden; background: #FFFFFF; font-family: 'Hanken Grotesk', sans-serif; color: #12111A">
+
+<header style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 0 8px">
+<a href="AIStudio.dc.html" style="height: 44px; display: flex; align-items: center; gap: 2px; padding: 0 8px; font-size: 16px; font-weight: 600; color: #3D2BB8; text-decoration: none">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+Frenz AI</a>
+<a href="#" aria-label="12 AI credits, Business member — view" style="display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 18px; background: #F1F0F6; text-decoration: none; color: #12111A; font-size: 14px; font-weight: 800">
+<svg width="15" height="15" viewBox="0 0 24 24" fill="#7B3FE4" aria-hidden="true"><path d="M12 2l2.2 6.1L20.5 10l-6.3 1.9L12 18l-2.2-6.1L3.5 10l6.3-1.9z"></path></svg>
+12
+</a>
+</header>
+
+<div style="padding: 4px 20px 0 20px; display: flex; flex-direction: column; gap: 8px">
+<h1 style="margin: 0; font-family: Sora, sans-serif; font-weight: 800; font-size: 32px; letter-spacing: -1.1px">AI Studio</h1>
+<p style="margin: 0; display: flex; gap: 8px; font-size: 14px; line-height: 1.45; color: #5A5770">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5B3FD8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; margin-top: 2px"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>
+Your photos and videos stay on your device until you press Create. Nothing is charged before that.</p>
+</div>
+
+<nav aria-label="Tool categories" style="display: flex; gap: 8px; padding: 16px 16px 0 16px">
+<a href="#" aria-current="page" style="height: 36px; padding: 0 14px; border-radius: 18px; background: #12111A; color: #FFFFFF; font-size: 14px; font-weight: 700; text-decoration: none; display: flex; align-items: center">All</a>
+<a href="#video" style="height: 36px; padding: 0 14px; box-sizing: border-box; border-radius: 18px; border: 1px solid #E6E2F5; color: #3E3B52; font-size: 14px; font-weight: 600; text-decoration: none; display: flex; align-items: center">Video</a>
+<a href="#audio" style="height: 36px; padding: 0 14px; box-sizing: border-box; border-radius: 18px; border: 1px solid #E6E2F5; color: #3E3B52; font-size: 14px; font-weight: 600; text-decoration: none; display: flex; align-items: center">Audio</a>
+<a href="#yours" style="height: 36px; padding: 0 14px; box-sizing: border-box; border-radius: 18px; border: 1px solid #E6E2F5; color: #3E3B52; font-size: 14px; font-weight: 600; text-decoration: none; display: flex; align-items: center">Yours</a>
+<a href="#models" style="height: 36px; padding: 0 14px; box-sizing: border-box; border-radius: 18px; border: 1px solid #E6E2F5; color: #3E3B52; font-size: 14px; font-weight: 600; text-decoration: none; display: flex; align-items: center">Models</a>
+</nav>
+
+<div id="video" style="padding: 22px 20px 10px 20px; display: flex; flex-direction: column; gap: 2px">
+<h2 style="margin: 0; font-family: Sora, sans-serif; font-weight: 700; font-size: 19px; letter-spacing: -0.4px">Create video</h2>
+<span style="font-size: 13px; color: #5A5770">From a description or a photo</span>
+</div>
+<div style="margin: 0 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<sc-for list="{{createVideo}}" as="t" hint-placeholder-count="2">
+<a href="#" style="position: relative; height: 200px; border-radius: 22px; overflow: hidden; text-decoration: none; background: {{t.bg}}; display: flex; flex-direction: column; justify-content: space-between; padding: 14px; box-sizing: border-box; box-shadow: 0 14px 28px -20px rgba(30,20,80,0.6)">
+<span style="width: 42px; height: 42px; border-radius: 13px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); color: #FFFFFF; display: flex; align-items: center; justify-content: center" aria-hidden="true">
+<sc-if value="{{t.ic.video}}" hint-placeholder-val="{{ false }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="3"></rect><path d="M16 10.5l5-3v9l-5-3"></path></svg></sc-if>
+<sc-if value="{{t.ic.image}}" hint-placeholder-val="{{ false }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"></rect><circle cx="9" cy="10" r="2"></circle><path d="M21 16l-5-5-9 9"></path></svg></sc-if>
+</span>
+<span style="display: flex; flex-direction: column; gap: 3px">
+<span style="font-family: Sora, sans-serif; font-weight: 700; font-size: 17px; color: #FFFFFF">{{t.name}}</span>
+<span style="font-size: 13px; line-height: 1.35; color: rgba(255,255,255,0.86)">{{t.sub}}</span>
+</span>
+</a>
+</sc-for>
+</div>
+
+<div style="padding: 22px 20px 10px 20px; display: flex; flex-direction: column; gap: 2px">
+<h2 style="margin: 0; font-family: Sora, sans-serif; font-weight: 700; font-size: 19px; letter-spacing: -0.4px">Transform video</h2>
+<span style="font-size: 13px; color: #5A5770">One change to a video you already have</span>
+</div>
+<a href="#" style="margin: 0 16px; display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 22px; border: 1px solid #ECE9F7; text-decoration: none; color: #12111A">
+<span style="width: 56px; height: 56px; flex: none; border-radius: 17px; background: linear-gradient(135deg, #3D5AFE, #7B3FE4); color: #FFFFFF; display: flex; align-items: center; justify-content: center" aria-hidden="true">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21v-4a6 6 0 1 1 7-5.9V13h2l-1 3h-3"></path><path d="M18.5 7.5a4 4 0 0 1 0 5"></path></svg>
+</span>
+<span style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+<span style="display: flex; align-items: center; gap: 6px"><span style="font-family: Sora, sans-serif; font-weight: 700; font-size: 16px">Lip Sync Pro</span></span>
+<span style="font-size: 13px; line-height: 1.35; color: #5A5770">Natural lip sync on any video, using any audio</span>
+</span>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A879C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+</a>
+
+<div id="audio" style="padding: 22px 20px 10px 20px; display: flex; flex-direction: column; gap: 2px">
+<h2 style="margin: 0; font-family: Sora, sans-serif; font-weight: 700; font-size: 19px; letter-spacing: -0.4px">Create audio</h2>
+<span style="font-size: 13px; color: #5A5770">Sound only — your video isn't touched</span>
+</div>
+<div style="margin: 0 16px; border-radius: 22px; border: 1px solid #ECE9F7; overflow: hidden">
+<sc-for list="{{audio}}" as="t" hint-placeholder-count="3">
+<a href="#" style="display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-top: {{t.divider}}; text-decoration: none; color: #12111A">
+<span style="width: 44px; height: 44px; flex: none; border-radius: 13px; background: {{t.bg}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center" aria-hidden="true">
+<sc-if value="{{t.ic.wave}}" hint-placeholder-val="{{ false }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 10v4"></path><path d="M8 6v12"></path><path d="M12 3v18"></path><path d="M16 7v10"></path><path d="M20 10v4"></path></svg></sc-if>
+<sc-if value="{{t.ic.mic}}" hint-placeholder-val="{{ false }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg></sc-if>
+<sc-if value="{{t.ic.more}}" hint-placeholder-val="{{ false }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10"></path><path d="M4 12h10"></path><path d="M4 17h6"></path><path d="M18 9v8"></path><path d="M15 14l3 3 3-3"></path></svg></sc-if>
+</span>
+<span style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+<span style="font-family: Sora, sans-serif; font-weight: 700; font-size: 16px">{{t.name}}</span>
+<span style="font-size: 13px; line-height: 1.35; color: #5A5770">{{t.sub}}</span>
+</span>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A879C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+</a>
+</sc-for>
+</div>
+
+<div id="models" style="padding: 22px 20px 10px 20px; display: flex; align-items: baseline; justify-content: space-between">
+<span style="display: flex; flex-direction: column; gap: 2px">
+<h2 style="margin: 0; font-family: Sora, sans-serif; font-weight: 700; font-size: 19px; letter-spacing: -0.4px">AI models</h2>
+<span style="font-size: 13px; color: #5A5770">The models behind your creations</span>
+</span>
+</div>
+<div style="display: flex; gap: 10px; padding: 0 16px; overflow: hidden">
+<sc-for list="{{models}}" as="m" hint-placeholder-count="5">
+<a href="#" style="position: relative; width: 136px; height: 128px; flex: none; border-radius: 20px; overflow: hidden; background: {{m.bg}}; text-decoration: none; display: flex; flex-direction: column; justify-content: space-between; padding: 12px; box-sizing: border-box">
+<span style="align-self: flex-start; padding: 3px 8px; border-radius: 999px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.35); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); font-size: 11px; font-weight: 700; color: #FFFFFF">{{m.tag}}</span>
+<span style="display: flex; flex-direction: column; gap: 1px">
+<span style="font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.8)">Kling</span>
+<span style="font-family: Sora, sans-serif; font-weight: 800; font-size: 20px; letter-spacing: -0.5px; color: #FFFFFF">{{m.version}}</span>
+</span>
+</a>
+</sc-for>
+</div>
+
+<div id="yours" style="padding: 22px 20px 10px 20px; display: flex; flex-direction: column; gap: 2px">
+<h2 style="margin: 0; font-family: Sora, sans-serif; font-weight: 700; font-size: 19px; letter-spacing: -0.4px">Yours</h2>
+<span style="font-size: 13px; color: #5A5770">Everything you've made</span>
+</div>
+<div style="margin: 0 16px; border-radius: 22px; border: 1px solid #ECE9F7; overflow: hidden">
+<a href="#" style="display: flex; align-items: center; gap: 14px; padding: 12px 14px; text-decoration: none; color: #12111A">
+<span style="width: 44px; height: 44px; flex: none; border-radius: 13px; background: #EEEBFD; color: #3D2BB8; display: flex; align-items: center; justify-content: center" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="M7 3v18"></path><path d="M17 3v18"></path><path d="M3 8h4"></path><path d="M3 16h4"></path><path d="M17 8h4"></path><path d="M17 16h4"></path></svg></span>
+<span style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-family: Sora, sans-serif; font-weight: 700; font-size: 16px">Your AI videos</span><span style="font-size: 13px; color: #5A5770">Everything you've created</span></span>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A879C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+</a>
+<a href="#" style="display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-top: 1px solid #F0EEF8; text-decoration: none; color: #12111A">
+<span style="width: 44px; height: 44px; flex: none; border-radius: 13px; background: #EEEBFD; color: #3D2BB8; display: flex; align-items: center; justify-content: center" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg></span>
+<span style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-family: Sora, sans-serif; font-weight: 700; font-size: 16px">Your voices</span><span style="font-size: 13px; color: #5A5770">Cloned voices, ready to speak</span></span>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A879C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+</a>
+</div>
+
+<div style="margin: 22px 16px 0 16px; border-radius: 22px; background: #F7F6FB; padding: 14px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="width: 40px; height: 40px; flex: none; border-radius: 12px; background: linear-gradient(135deg, #3D5AFE, #7B3FE4 55%, #C23FD1); color: #FFFFFF; display: flex; align-items: center; justify-content: center" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.2 6.1L20.5 10l-6.3 1.9L12 18l-2.2-6.1L3.5 10l6.3-1.9z"></path></svg></span>
+<span style="flex: 1; display: flex; flex-direction: column; gap: 1px">
+<span style="display: flex; align-items: center; gap: 8px"><span style="font-family: Sora, sans-serif; font-weight: 700; font-size: 17px">12 credits</span><span style="padding: 2px 7px; border-radius: 6px; background: #12111A; color: #FFFFFF; font-size: 10px; font-weight: 800; letter-spacing: 0.4px">BUSINESS</span></span>
+<span style="font-size: 12px; color: #5A5770">Each tool uses credits based on processing</span>
+</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+<a href="#" style="height: 40px; border-radius: 12px; background: #FFFFFF; border: 1px solid #E6E2F5; box-sizing: border-box; color: #3D2BB8; font-size: 14px; font-weight: 700; text-decoration: none; display: flex; align-items: center; justify-content: center">Earn credits</a>
+<a href="#" style="height: 40px; border-radius: 12px; background: #FFFFFF; border: 1px solid #E6E2F5; box-sizing: border-box; color: #12111A; font-size: 14px; font-weight: 700; text-decoration: none; display: flex; align-items: center; justify-content: center">Usage &amp; history</a>
+</div>
+<span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #6E6A85">
+<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5"></path><path d="M12 16h.01"></path></svg>
+Complimentary creations aren't available on this account.</span>
+</div>
+
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 130px; background: linear-gradient(0deg, rgba(255,255,255,1) 35%, rgba(255,255,255,0))" aria-hidden="true"></div>
+<nav aria-label="Main" style="position: absolute; left: 12px; right: 12px; bottom: 24px; display: flex; align-items: center; gap: 8px">
+<div style="flex: 1; height: 68px; padding: 6px; box-sizing: border-box; border-radius: 26px; background: rgba(255,255,255,0.86); border: 1px solid #E6E2F5; backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); box-shadow: 0 16px 36px -12px rgba(30,20,80,0.32); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px">
+<a href="Main.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: #4A4760; font-size: 12px; font-weight: 600">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path></svg>
+Home</a>
+<a href="Feed.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: #4A4760; font-size: 12px; font-weight: 600">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><path d="M10 9.5v5l4.5-2.5z"></path></svg>
+Feed</a>
+<a href="History.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: #4A4760; font-size: 12px; font-weight: 600">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path><path d="M12 8v4l3 2"></path></svg>
+History</a>
+<a href="Messages.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: #4A4760; font-size: 12px; font-weight: 600">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"></path></svg>
+Chats</a>
+</div>
+<a href="AIStudio.dc.html" aria-label="Frenz AI" aria-current="page" style="width: 68px; height: 68px; flex: none; border-radius: 26px; padding: 3px; box-sizing: border-box; background: linear-gradient(135deg, #3D5AFE, #7B3FE4 55%, #C23FD1); box-shadow: 0 16px 30px -10px rgba(123,63,228,0.6); display: flex">
+<span style="flex: 1; border-radius: 23px; border: 2px solid #FFFFFF; background: #FFFFFF; display: flex; align-items: center; justify-content: center; font-family: Sora, sans-serif; font-weight: 800; font-size: 26px; color: #5B3FD8">F</span>
+</a>
+</nav>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1720}}'>
+class Component extends DCLogic {
+renderVals() {
+const audio = [
+{ name: 'Text to Audio', sub: 'Turn your words into natural AI audio', ic: { wave: true }, bg: 'linear-gradient(135deg, #7B3FE4, #5B3FD8)' },
+{ name: 'Voice Cloning', sub: 'Clone a voice you own and type with it', ic: { mic: true }, bg: 'linear-gradient(135deg, #C23FD1, #8A2AA0)' },
+{ name: '[Third audio tool]', sub: '[Description]', ic: { more: true }, bg: 'linear-gradient(135deg, #3D5AFE, #2A3BB0)' }
+].map((t, i) => ({ ...t, divider: i === 0 ? 'none' : '1px solid #F0EEF8' }));
+return {
+createVideo: [
+{ name: 'Text to Video', sub: 'Describe it and watch it filmed, in any style', ic: { video: true }, bg: 'radial-gradient(circle at 85% 10%, #C23FD1, #7B3FE4 45%, #2A1466)' },
+{ name: 'Image to Video', sub: 'Bring a photo to life, however you describe it', ic: { image: true }, bg: 'radial-gradient(circle at 85% 10%, #6C8CFF, #3D5AFE 45%, #13206E)' }
+],
+audio,
+models: [
+{ version: '4.0', tag: 'Video', bg: 'linear-gradient(150deg, #3D5AFE, #7B3FE4 60%, #C23FD1)' },
+{ version: '3.0 Omni', tag: 'Video', bg: 'linear-gradient(150deg, #5B3FD8, #2A1466)' },
+{ version: '2.6', tag: 'Video', bg: 'linear-gradient(150deg, #3D5AFE, #13206E)' },
+{ version: 'O3', tag: 'Video', bg: 'linear-gradient(150deg, #7B3FE4, #3D1F8A)' },
+{ version: 'O1', tag: 'Video', bg: 'linear-gradient(150deg, #2A2740, #12111A)' }
+]
+};
+}
+}
+</script>
+</body>
+</html>

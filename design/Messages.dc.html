@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Frenzsave messages</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F4F3FA}
+a{color:#3D5AFE}a:hover{color:#7B3FE4}
+input::placeholder{color:#8A879C}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; position: relative; overflow: hidden; background: #F7F6FC; font-family: 'Hanken Grotesk', sans-serif; color: #12111A">
+
+<header style="display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 4px 20px">
+<h1 style="margin: 0; font-family: Sora, sans-serif; font-weight: 800; font-size: 30px; letter-spacing: -1px">Messages</h1>
+<div style="display: flex; align-items: center; gap: 8px">
+<a href="#" aria-label="Add friends" style="width: 44px; height: 44px; box-sizing: border-box; border-radius: 50%; border: 1px solid #E6E2F5; background: #FFFFFF; color: #12111A; display: flex; align-items: center; justify-content: center">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><path d="M19 8v6"></path><path d="M16 11h6"></path></svg>
+</a>
+<button aria-label="More options" style="width: 44px; height: 44px; border-radius: 50%; border: 1px solid #E6E2F5; background: #FFFFFF; color: #12111A; display: flex; align-items: center; justify-content: center">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg>
+</button>
+<button aria-label="New message" style="width: 44px; height: 44px; border-radius: 50%; border: none; background: linear-gradient(135deg, #3D5AFE, #7B3FE4); color: #FFFFFF; box-shadow: 0 10px 20px -8px rgba(91,63,240,0.6); display: flex; align-items: center; justify-content: center">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg>
+</button>
+</div>
+</header>
+
+<div style="padding: 10px 16px 0 16px">
+<label for="msgsearch" style="display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 14px; border-radius: 16px; background: #FFFFFF; border: 1px solid #E6E2F5">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6E6A85" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg>
+<span style="position: absolute; left: -9999px">Search messages</span>
+<input id="msgsearch" type="search" placeholder="Search people and messages" style="flex: 1; min-width: 0; border: none; outline: none; background: transparent; font-family: 'Hanken Grotesk', sans-serif; font-size: 15px; color: #12111A">
+</label>
+</div>
+
+<nav aria-label="Message filters" style="display: flex; gap: 8px; padding: 14px 16px 10px 16px; overflow: hidden">
+<a href="#" aria-current="page" style="flex: none; height: 36px; padding: 0 14px; border-radius: 999px; background: #12111A; color: #FFFFFF; font-size: 14px; font-weight: 700; text-decoration: none; display: flex; align-items: center; gap: 6px">All<span style="padding: 1px 6px; border-radius: 999px; background: rgba(255,255,255,0.18); font-size: 11px">11</span></a>
+<a href="#" style="flex: none; height: 36px; padding: 0 14px; border-radius: 999px; background: #FFFFFF; border: 1px solid #E6E2F5; box-sizing: border-box; color: #3E3B52; font-size: 14px; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 6px">Unread<span style="padding: 1px 6px; border-radius: 999px; background: #EEEBFD; color: #3D2BB8; font-size: 11px; font-weight: 700">2</span></a>
+<a href="#" style="flex: none; height: 36px; padding: 0 14px; border-radius: 999px; background: #FFFFFF; border: 1px solid #E6E2F5; box-sizing: border-box; color: #3E3B52; font-size: 14px; font-weight: 600; text-decoration: none; display: flex; align-items: center">Groups</a>
+<a href="#" style="flex: none; height: 36px; padding: 0 14px; border-radius: 999px; background: #FFFFFF; border: 1px solid #E6E2F5; box-sizing: border-box; color: #3E3B52; font-size: 14px; font-weight: 600; text-decoration: none; display: flex; align-items: center">Requests</a>
+<a href="#" style="flex: none; height: 36px; padding: 0 14px; border-radius: 999px; background: #FFFFFF; border: 1px solid #E6E2F5; box-sizing: border-box; color: #3E3B52; font-size: 14px; font-weight: 600; text-decoration: none; display: flex; align-items: center">Channels</a>
+</nav>
+
+<div style="margin: 4px 12px 0 12px; border-radius: 22px; background: #FFFFFF; border: 1px solid #ECE9F7; overflow: hidden">
+<sc-for list="{{chats}}" as="c" hint-placeholder-count="6">
+<a href="{{c.href}}" style="display: flex; align-items: center; gap: 12px; height: 74px; padding: 0 14px; text-decoration: none; color: #12111A; border-top: {{c.divider}}">
+<span style="position: relative; width: 50px; height: 50px; flex: none; border-radius: 50%; background: {{c.bg}}; display: flex; align-items: center; justify-content: center; font-family: Sora, sans-serif; font-weight: 700; font-size: 18px; color: #FFFFFF">{{c.initial}}
+<sc-if value="{{c.online}}" hint-placeholder-val="{{ false }}"><span style="position: absolute; right: 1px; bottom: 1px; width: 13px; height: 13px; border-radius: 50%; background: #2FB36B; border: 2.5px solid #FFFFFF"></span></sc-if>
+</span>
+<span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+<span style="display: flex; align-items: center; gap: 5px">
+<span style="font-size: 16px; font-weight: {{c.nameWeight}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.name}}</span>
+<sc-if value="{{c.verified}}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" role="img" aria-label="Verified" style="flex: none"><path d="M12 2l2.4 1.8 3-.2.9 2.9 2.5 1.7-1 2.8 1 2.8-2.5 1.7-.9 2.9-3-.2L12 22l-2.4-1.8-3 .2-.9-2.9-2.5-1.7 1-2.8-1-2.8 2.5-1.7.9-2.9 3 .2z" fill="#3D5AFE"></path><path d="M8 12.2l2.6 2.6L16 9.4" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+<sc-if value="{{c.official}}" hint-placeholder-val="{{ false }}"><span style="padding: 1px 6px; border-radius: 6px; background: #EEEBFD; color: #3D2BB8; font-size: 10px; font-weight: 800; letter-spacing: 0.4px">OFFICIAL</span></sc-if>
+</span>
+<span style="font-size: 14px; color: {{c.previewColor}}; font-weight: {{c.previewWeight}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.preview}}</span>
+</span>
+<span style="flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 6px">
+<span style="font-size: 12px; font-weight: 600; color: {{c.timeColor}}">{{c.time}}</span>
+<sc-if value="{{c.unread}}" hint-placeholder-val="{{ false }}"><span style="min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; background: linear-gradient(135deg, #3D5AFE, #7B3FE4); color: #FFFFFF; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center">{{c.unread}}</span></sc-if>
+<sc-if value="{{c.pinned}}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6E6A85" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Pinned"><path d="M9 3h6l-1 6 4 4H6l4-4z"></path><path d="M12 13v8"></path></svg></sc-if>
+</span>
+</a>
+</sc-for>
+</div>
+
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 130px; background: linear-gradient(0deg, rgba(247,246,252,1) 35%, rgba(247,246,252,0))" aria-hidden="true"></div>
+
+<nav aria-label="Main" style="position: absolute; left: 12px; right: 12px; bottom: 24px; display: flex; align-items: center; gap: 8px">
+<div style="flex: 1; height: 68px; padding: 6px; box-sizing: border-box; border-radius: 26px; background: rgba(255,255,255,0.92); border: 1px solid #E6E2F5; box-shadow: 0 16px 36px -12px rgba(30,20,80,0.32); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px">
+<a href="Main.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: #4A4760; font-size: 12px; font-weight: 600">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path></svg>
+Home</a>
+<a href="Feed.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: #4A4760; font-size: 12px; font-weight: 600">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><path d="M10 9.5v5l4.5-2.5z"></path></svg>
+Feed</a>
+<a href="#" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: #4A4760; font-size: 12px; font-weight: 600">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path><path d="M12 8v4l3 2"></path></svg>
+History</a>
+<a href="Messages.dc.html" aria-current="page" style="border-radius: 20px; background: #EEEBFD; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: #3D2BB8; font-size: 12px; font-weight: 700">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"></path></svg>
+Chats</a>
+</div>
+<a href="Profile.dc.html" aria-label="Your profile" style="width: 68px; height: 68px; flex: none; border-radius: 26px; padding: 3px; box-sizing: border-box; background: linear-gradient(135deg, #3D5AFE, #7B3FE4 55%, #C23FD1); box-shadow: 0 16px 30px -10px rgba(123,63,228,0.6); display: flex">
+<span style="flex: 1; border-radius: 23px; border: 2px solid #FFFFFF; background: linear-gradient(160deg, #2F6B4F, #1E3D2E)"></span>
+</a>
+</nav>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+const rows = [
+{ name: 'Frenz', initial: 'F', bg: 'linear-gradient(135deg, #3D5AFE, #7B3FE4 55%, #C23FD1)', preview: 'Replied to your story 😍', time: '15 Oct', verified: true, official: true, pinned: true, href: 'Chat.dc.html' },
+{ name: 'maid27846', initial: 'M', bg: 'linear-gradient(135deg, #3D5AFE, #2A3BB0)', preview: 'Same', time: '3h', unread: 2, online: true },
+{ name: 'Sanelly ❤️', initial: 'S', bg: 'linear-gradient(135deg, #C23FD1, #7A1F8A)', preview: 'typing…', time: '10 Oct', typing: true, online: true },
+{ name: 'Julie Ngozi', initial: 'J', bg: 'linear-gradient(160deg, #D9A441, #8A5A1E)', preview: 'Emma', time: '27 Jul', verified: true },
+{ name: 'Peace 🍹', initial: 'P', bg: 'linear-gradient(135deg, #7B3FE4, #3D1F8A)', preview: 'afa', time: '27 Jul' }
+];
+return {
+chats: rows.map((r, i) => ({
+...r,
+href: r.href || '#',
+divider: i === 0 ? 'none' : '1px solid #F0EEF8',
+nameWeight: r.unread ? 800 : 700,
+previewWeight: r.unread || r.typing ? 700 : 500,
+previewColor: r.typing ? '#5B3FD8' : (r.unread ? '#12111A' : '#5A5770'),
+timeColor: r.unread ? '#3D2BB8' : '#6E6A85'
+}))
+};
+}
+}
+</script>
+</body>
+</html>

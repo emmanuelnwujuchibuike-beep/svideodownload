@@ -8,6 +8,7 @@ import { PressIcon } from "@/components/motion/press-icon";
 import { StoryViewer } from "@/features/app-shell/dashboard/stories-row";
 import { useQuery } from "@/features/data";
 import type { StoryGroup } from "@/lib/social/stories";
+import { useStoryDeepLink } from "@/features/app-shell/dashboard/use-story-deep-link";
 import { isGroupSeen, useSeenOverlay } from "@/lib/social/story-seen";
 import { cn } from "@/lib/utils";
 
@@ -51,7 +52,13 @@ export function FriendsStories({
   const groups = (scope === "friends" ? friends.data : following.data) ?? [];
   const otherGroups = viewerHandle ? groups.filter((g) => g.handle !== viewerHandle) : groups;
   const [start, setStart] = useState<number | null>(null);
+  const [startStory, setStartStory] = useState<string | undefined>(undefined);
   const initial = (viewerName ?? "").charAt(0).toUpperCase() || "+";
+  // Back from a Frenz Coin gift opened inside a story returns here with ?story=<id> (2026-10-26)
+  useStoryDeepLink(scope === "friends" ? friends.data : following.data, (gi, id) => {
+    setStartStory(id);
+    setStart(gi);
+  });
 
   // the server's per-story `seen` plus this session's confirmed views (Stories Part 3, lib/social/story-seen.ts)
   const seen = useSeenOverlay();
@@ -186,7 +193,15 @@ export function FriendsStories({
       </div>
 
       {start !== null ? (
-        <StoryViewer groups={groups} startGroup={start} onClose={() => setStart(null)} />
+        <StoryViewer
+          groups={groups}
+          startGroup={start}
+          startStoryId={startStory}
+          onClose={() => {
+            setStart(null);
+            setStartStory(undefined);
+          }}
+        />
       ) : null}
     </div>
   );

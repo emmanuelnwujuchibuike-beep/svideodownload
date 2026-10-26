@@ -46,12 +46,15 @@ function installDom() {
     innerHeight: 844,
     localStorage: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) },
   });
+  hints = [];
   vi.stubGlobal("document", {
-    head: { appendChild: (el: FakeScript) => void scripts.push(el) },
-    createElement: (): FakeScript => ({ dataset: {}, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } }),
+    // <script> tags and the connection hints (<link rel=preconnect>, 2026-10-26) are kept apart
+    head: { appendChild: (el: FakeScript & { tag?: string; rel?: string; href?: string }) => void (el.tag === "link" ? hints.push({ rel: el.rel ?? "", href: el.href ?? "" }) : scripts.push(el)) },
+    createElement: (tag: string): FakeScript & { tag: string } => ({ tag, dataset: {}, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } }),
     querySelectorAll: () => spotEls,
   });
 }
+let hints: { rel: string; href: string }[];
 /** the spot elements rendered on the page (visible, inside the viewport); [] = a page with no spot on screen */
 let spotEls: { getAttribute: () => string; getBoundingClientRect: () => { width: number; height: number; top: number; left: number; bottom: number; right: number } }[];
 const visibleSpot = (spot: string) => ({ getAttribute: () => spot, getBoundingClientRect: () => ({ width: 120, height: 40, top: 300, left: 20, bottom: 340, right: 140 }) });
@@ -159,6 +162,25 @@ describe("the config — OFF unless an admin switched it on", () => {
     expect(spotOutcome({ popunderOpened: true, directOpened: true })).toBe("popunder");
     expect(spotOutcome({ popunderOpened: false, directOpened: true })).toBe("direct");
     expect(spotOutcome({ popunderOpened: false, directOpened: false })).toBe("none");
+  });
+});
+
+describe("connection warm-up (owner, 2026-10-26: 'prefetch the adsterra smartlink and pop under … opens instantly')", () => {
+  it("the HOSTS are preconnected before any tap — the direct link's and the pop-under script's — once each", async () => {
+    await opener();
+    await opener("wallpaper");
+    expect(hints).toEqual([
+      { rel: "dns-prefetch", href: "https://direct.example" },
+      { rel: "preconnect", href: "https://direct.example" },
+      { rel: "dns-prefetch", href: "https://al5sm.com" },
+      { rel: "preconnect", href: "https://al5sm.com" },
+    ]);
+  });
+  it("🔴 never the ad itself: no request to the link's URL, nothing opened, no script loaded before a tap", async () => {
+    await opener();
+    expect(hints.every((h) => !h.href.includes("/go"))).toBe(true);
+    expect(opened).toEqual([]);
+    expect(scripts).toEqual([]);
   });
 });
 

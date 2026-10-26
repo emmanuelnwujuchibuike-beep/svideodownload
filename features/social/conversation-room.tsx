@@ -85,6 +85,7 @@ import {
 } from "@/lib/social/message-media";
 import type { AttachmentInput, ConversationMember, ConversationTheme, ConversationType, MemberRole, MessageAttachment, MessageItem } from "@/lib/social/messages";
 import type { StoryGroup } from "@/lib/social/stories";
+import { storyReplyText } from "@/lib/social/story-reply-text";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { useVisualViewport } from "@/lib/pwa/use-visual-viewport";
 import { createClient } from "@/lib/supabase/client";
@@ -190,6 +191,17 @@ function receiptLabel(m: MessageItem): { label: string; read: boolean; delivered
  * The soft dark gradient in the bottom-right corner of a frameless photo or
  * video, so the time and ticks read on any picture — WhatsApp's own device.
  */
+/** The story-reply label's icon: a story ring with a reply arrow (2026-10-26 — in place of the ↩️ emoji). */
+function StoryReplyIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="shrink-0">
+      <path d="M12 3a9 9 0 1 1-8.2 5.3" strokeDasharray="3 2.6" />
+      <path d="M15 9.5h-4.5a2.5 2.5 0 0 0 0 5H15" />
+      <path d="M12.5 7l-2.5 2.5L12.5 12" />
+    </svg>
+  );
+}
+
 function MediaMetaScrim({ children }: { children: ReactNode }) {
   return (
     <span className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-end bg-gradient-to-t from-black/55 to-transparent px-2.5 pb-1.5 pt-6">
@@ -2343,8 +2355,15 @@ export function ConversationRoom({
                           // bubble edge. The meta floats at the end of the last
                           // line, inside this same box (see `inlineMeta`).
                           <span className={cn("block", hasAttachmentFrame && "px-2.5 pb-1 pt-0.5")}>
+                            {/* a story reply: the label with its icon, then only the reply (2026-10-26 — no emoji prefix) */}
+                            {storyReplyText(m.body, m.metadata) !== null ? (
+                              <span className={cn("mb-0.5 flex items-center gap-1.5 text-[12px] font-semibold", m.mine && !skinned ? "text-white/80" : "text-frenz-violet")}>
+                                <StoryReplyIcon />
+                                {m.mine ? "You replied to their story" : "Replied to your story"}
+                              </span>
+                            ) : null}
                             <RichText
-                              text={m.body}
+                              text={storyReplyText(m.body, m.metadata) ?? m.body}
                               linkClassName={cn("font-semibold underline underline-offset-2", skinned ? "text-current" : m.mine ? "text-white" : "text-primary")}
                             />
                             {inlineMeta}

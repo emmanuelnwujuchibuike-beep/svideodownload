@@ -154,9 +154,11 @@ export function SupportInbox() {
   const active = threads.find((t) => t.id === activeId) ?? null;
 
   return (
-    <div className="grid gap-4 md:grid-cols-[300px_1fr]">
+    // minmax(0, …): a grid track is as wide as its widest unbreakable line by default — a long subject in a
+    // conversation preview stretched the whole inbox past the phone's edge (owner, 2026-10-26, with a screenshot)
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[300px_minmax(0,1fr)]">
       {/* Thread list */}
-      <div className="rounded-2xl border border-border/60 bg-card">
+      <div className="min-w-0 rounded-2xl border border-border/60 bg-card">
         <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold">Conversations</p>
@@ -222,7 +224,7 @@ export function SupportInbox() {
       </div>
 
       {/* Conversation */}
-      <div className="flex h-[36rem] flex-col rounded-2xl border border-border/60 bg-card">
+      <div className="flex h-[36rem] min-w-0 flex-col rounded-2xl border border-border/60 bg-card">
         {composing ? (
           <SupportCompose
             onClose={() => setComposing(false)}

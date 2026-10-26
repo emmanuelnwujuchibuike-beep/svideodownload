@@ -4,13 +4,15 @@ import { Plus } from "lucide-react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
 import { seed, useQuery } from "@/features/data";
 import { fetchStoryGroups, readCachedStories } from "@/lib/social/story-cache";
 import type { StoryGroup } from "@/lib/social/stories";
 import { isGroupSeen, useSeenOverlay } from "@/lib/social/story-seen";
+
+import { useStoryDeepLink } from "./use-story-deep-link";
 import { cn } from "@/lib/utils";
 
 /*
@@ -161,29 +163,11 @@ export function StoriesRow({
   const [startStory, setStartStory] = useState<string | undefined>(undefined);
   const initial = (viewerName ?? "").charAt(0).toUpperCase() || "+";
 
-  /*
-    `?story=<id>` opens that one story (2026-10-26) — where a "sent you Frenz Coin
-    for your story" notification lands (lib/coin/story-gift.ts). Read once the rings
-    hold it, then dropped from the address so a refresh or back does not reopen it.
-    An ended story says so instead of opening something else.
-  */
-  const wanted = useRef<string | null | undefined>(undefined);
-  useEffect(() => {
-    if (wanted.current === undefined) wanted.current = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("story");
-    const id = wanted.current;
-    if (!id || data === undefined) return;
-    wanted.current = null;
-    const url = new URL(window.location.href);
-    url.searchParams.delete("story");
-    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
-    const gi = (data ?? []).findIndex((g) => g.stories.some((s) => s.id === id));
-    if (gi === -1) {
-      void import("@/features/ui/toast").then(({ toast }) => toast("That story has ended.", "info"));
-      return;
-    }
+  // `?story=<id>` opens that one story — a "Frenz Coin for your story" notification, or Back from the coin transfer
+  useStoryDeepLink(data, (gi, id) => {
     setStartStory(id);
     setStart(gi);
-  }, [data]);
+  });
 
   // Server groups sort the viewer's own stories first when present — surfaced
   // once as a dedicated "Your Story" card, not a second time in the row below.

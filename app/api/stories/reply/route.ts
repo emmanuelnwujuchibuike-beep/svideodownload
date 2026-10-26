@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import { getOrCreateConversation, sendMessage } from "@/lib/social/messages";
+import { STORY_REPLY_PREFIX } from "@/lib/social/story-reply-text";
 import { SITE_URL } from "@/lib/site";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -91,7 +92,8 @@ export async function POST(request: Request) {
   if (!conv.ok) return NextResponse.json({ error: "Couldn't send." }, { status: 403 });
 
   // SAVED first. A retry with the same clientId returns this same message (duplicate: true).
-  const sent = await sendMessage(user.id, conv.id, `↩️ Replied to your story: ${text}`, {
+  // no emoji in the text (2026-10-26): the chat draws the "Replied to your story" label with its own icon (lib/social/story-reply-text.ts)
+  const sent = await sendMessage(user.id, conv.id, `${STORY_REPLY_PREFIX}${text}`, {
     ...(clientId ? { clientId } : {}),
     ...(storyId ? { metadata: { kind: "story_reply", storyId } } : {}),
   });

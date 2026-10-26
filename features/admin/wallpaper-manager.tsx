@@ -56,23 +56,24 @@ export function WallpaperManager({ wallpapers }: { wallpapers: AdminWallpaper[] 
     setBusy(true);
     setMsg(null);
     try {
-      const form = new FormData();
-      form.append("category", category);
-      form.append("name", name);
-      for (const f of Array.from(files)) form.append("files", f);
-      const res = await fetch("/api/admin/wallpapers", { method: "POST", body: form });
-      const json = (await res.json()) as { ok?: boolean; created?: number; failed?: string[]; lowRes?: string[]; error?: string };
-      if (!res.ok || !json.ok) {
-        setMsg({ ok: false, text: json.error ?? "Upload failed." });
+      // straight to storage, one file at a time (2026-10-26): a batch through a Vercel function hit its ~4.5 MB body limit
+      const { uploadWallpapersDirect } = await import("@/features/wallpapers/direct-upload");
+      const json = await uploadWallpapersDirect("/api/admin/wallpapers/upload", Array.from(files), {
+        name,
+        category,
+        onProgress: (done, total) => setMsg({ ok: true, text: `Uploading ${done} of ${total}…` }),
+      });
+      if (json.error) {
+        setMsg({ ok: false, text: json.error });
         return;
       }
       setMsg({
-        ok: (json.created ?? 0) > 0,
+        ok: json.created > 0,
         text:
-          `${json.created ?? 0} uploaded.` +
-          (json.failed?.length ? ` ${json.failed.length} skipped: ${json.failed.join("; ")}` : "") +
+          `${json.created} uploaded.` +
+          (json.failed.length ? ` ${json.failed.length} skipped: ${json.failed.join("; ")}` : "") +
           // stored as uploaded — but too small to look sharp: no code can add detail the file doesn't have
-          (json.lowRes?.length ? ` Low resolution — will look soft on phones: ${json.lowRes.join("; ")}. Upload at least 1080×1920 for sharp Pro wallpapers.` : ""),
+          (json.lowRes.length ? ` Low resolution — will look soft on phones: ${json.lowRes.join("; ")}. Upload at least 1080×1920 for sharp Pro wallpapers.` : ""),
       });
       setName("");
       router.refresh();

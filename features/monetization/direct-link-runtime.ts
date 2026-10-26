@@ -167,6 +167,35 @@ function onPress(e: PointerEvent): void {
   if (tagState === "ready") arm();
 }
 
+/**
+ * Warm the CONNECTION to an ad's first hop before the tap (owner, 2026-10-26: "prefetch the adsterra smartlink and pop
+ * under … so it opens the page instantly"): a DNS lookup + TLS handshake to the link's own host, done once per origin,
+ * so the tap's new tab skips the slowest part of its first request.
+ *
+ * 🔴 Deliberately NOT the link itself. Fetching or prerendering a Smartlink before anyone taps it is a visit nobody
+ * made — the network sees an impression without a person, which is exactly what invalid-traffic filters (and account
+ * bans) look for, and it would burn the click the member is about to make. A preconnect sends no request to the ad.
+ */
+const warmed = new Set<string>();
+function preconnect(url: string | null | undefined): void {
+  // a hint only: nothing here may ever stand between a tap and its ad
+  try {
+    if (!url || typeof document === "undefined" || !document.head) return;
+    const origin = new URL(url, window.location.href).origin;
+    if (!origin.startsWith("https://") || warmed.has(origin) || origin === window.location.origin) return;
+    warmed.add(origin);
+    for (const rel of ["dns-prefetch", "preconnect"]) {
+      const link = document.createElement("link");
+      link.rel = rel;
+      link.href = origin;
+      if (rel === "preconnect") link.crossOrigin = "anonymous";
+      document.head.appendChild(link);
+    }
+  } catch {
+    /* no hint, same ad */
+  }
+}
+
 export async function loadDirectLinkOpener(spot: DirectLinkSpot): Promise<SpotOpener | null> {
   const d = (await loadAdsConfig()) as Record<string, unknown> | null;
   type Link = { url: string; spots: string[]; chancePercent: number };
@@ -178,6 +207,9 @@ export async function loadDirectLinkOpener(spot: DirectLinkSpot): Promise<SpotOp
   const pu = d?.monetagSpotPopunder as PublicSpotPopunder | null | undefined;
   const spotPopunder = pu && Array.isArray(pu.spots) && pu.spots.includes(spot) && typeof pu.src === "string" && /^https:\/\//.test(pu.src) ? pu : null;
   if (!links.length && !spotPopunder) return null;
+  // the connections are ready before the tap — the link's host and the pop-under script's host (no request to either ad)
+  for (const l of links) preconnect(l.url);
+  preconnect(spotPopunder?.src);
   if (spotPopunder) {
     popunder = spotPopunder;
     if (!pressListening) {

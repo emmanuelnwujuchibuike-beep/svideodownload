@@ -4,7 +4,8 @@ import { motion } from "framer-motion";
 import { ReelsAdSlide } from "@/features/monetization/reels-ad-slide";
 import { WallpaperRewardGate } from "@/features/monetization/wallpaper-reward-gate";
 import { useDirectLink } from "@/features/monetization/use-direct-link";
-import { Bookmark, Crown, Download, Heart, Loader2, MessageCircle, Send, X } from "lucide-react";
+import { Bookmark, Crown, Download, Heart, Loader2, MessageCircle, Send, Trash2, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
@@ -318,13 +319,32 @@ export function WallpaperReels({
       else onClose();
     };
     window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflowY;
-    document.body.style.overflowY = "hidden";
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflowY = prev;
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [onClose, comments, upgradeOpen]);
+
+  /*
+    🔴 THE PAGE BEHIND IS PINNED, NOT JUST "overflow: hidden" (owner, 2026-10-26: "sometimes scrolling in Wallpapers
+    reels get stuck in a particular picture while the bottom Wallpapers gallery keep scrolling"). iOS Safari ignores
+    `overflow: hidden` on <body> for touch scrolling: a swipe that starts on the fixed chrome, or runs past the end of a
+    snap, scrolled the GALLERY underneath while the viewer sat still. Pinning the body in place (position: fixed at
+    its own offset) leaves nothing behind to scroll; the offset is put back exactly when the viewer closes. Mount
+    and unmount only — a comment sheet opening must not unpin and re-pin it.
+  */
+  useEffect(() => {
+    const body = document.body;
+    const y = window.scrollY;
+    const prev = { position: body.style.position, top: body.style.top, left: body.style.left, right: body.style.right, width: body.style.width, overflowY: body.style.overflowY };
+    body.style.position = "fixed";
+    body.style.top = `-${y}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    body.style.overflowY = "hidden";
+    return () => {
+      Object.assign(body.style, prev);
+      window.scrollTo(0, y);
+    };
+  }, []);
 
   const engage = useCallback(
     async (wallpaper: Wallpaper, action: "like" | "unlike" | "save" | "unsave") => {
@@ -402,7 +422,7 @@ export function WallpaperReels({
   return (
     <div
       data-media-protected
-      className="fixed inset-0 z-[100] bg-black"
+      className="fixed inset-0 z-[100] overscroll-none bg-black"
       onTouchStart={(e) => {
         // Only from the top, and only a single finger — a pinch is a zoom.
         const atTop = (scroller.current?.scrollTop ?? 0) <= 0;
@@ -628,6 +648,8 @@ export function WallpaperReels({
       >
         <X className="h-5 w-5" />
       </button>
+      {/* your own share can be deleted (owner, 2026-10-26) — the route checks ownership again */}
+      {current.mine ? <DeleteOwnWallpaper wallpaper={current} onDeleted={onClose} /> : null}
       <span
         className="absolute right-4 z-10 rounded-full bg-black/40 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-md"
         style={{ top: "calc(var(--frenz-safe-top, 0px) + 0.9rem)" }}
@@ -883,6 +905,41 @@ function UpgradeSheet({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Delete a wallpaper you shared (owner, 2026-10-26: "let users be able to delete their Wallpapers they posted"). Asks
+ * once, shows a spinner on the tap, then closes the viewer and refreshes the library; a refusal says so.
+ */
+function DeleteOwnWallpaper({ wallpaper, onDeleted }: { wallpaper: Wallpaper; onDeleted: () => void }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const remove = async () => {
+    if (busy || !window.confirm("Delete this wallpaper? It's removed from the library for everyone.")) return;
+    setBusy(true);
+    haptic("medium");
+    try {
+      const res = await fetch(`/api/wallpapers/upload?id=${encodeURIComponent(wallpaper.id)}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      onDeleted();
+      router.refresh();
+    } catch {
+      setBusy(false);
+      window.alert("Couldn't delete it. Try again.");
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={() => void remove()}
+      aria-label="Delete your wallpaper"
+      disabled={busy}
+      className="absolute left-16 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition active:scale-90 disabled:opacity-70"
+      style={{ top: "calc(var(--frenz-safe-top, 0px) + 0.75rem)" }}
+    >
+      {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Trash2 className="h-5 w-5" />}
+    </button>
   );
 }
 

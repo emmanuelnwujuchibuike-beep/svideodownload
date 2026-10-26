@@ -154,7 +154,7 @@ export function StoryViewersSheet({
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search viewers"
             data-large-text
-            className="min-w-0 flex-1 border-none bg-transparent !text-[15px] text-[#12111A] outline-none placeholder:text-[#6E6A85]"
+            className="min-w-0 flex-1 border-none bg-transparent !text-[16px] text-[#12111A] outline-none placeholder:text-[#6E6A85]"
           />
         </label>
 

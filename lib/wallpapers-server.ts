@@ -187,7 +187,9 @@ async function selectWallpapers(
  * (which currently assumes the full set is in memory for its client-side
  * filter/sort/search) — a larger, separate change from closing this ceiling.
  */
-export async function listWallpapers(viewerId?: string | null, limit = 600): Promise<Wallpaper[]> {
+// 2026-10-26: 600 → 1000 — the library is at 579; past the limit the OLDEST silently disappear (see above). Real
+// cursor pagination in wallpaper-explore.tsx is the lasting answer once it nears this.
+export async function listWallpapers(viewerId?: string | null, limit = 1000): Promise<Wallpaper[]> {
   const rows = await selectWallpapers((columns) =>
     createAdminClient()
       .from("wallpapers")
@@ -206,6 +208,10 @@ export async function listWallpapers(viewerId?: string | null, limit = 600): Pro
   const wallpapers = rows.map(toWallpaper);
   await attachUploaders(rows, wallpapers);
   if (!viewerId) return wallpapers;
+  // the viewer's own shares carry a Delete (2026-10-26) — the route checks ownership again
+  rows.forEach((row, i) => {
+    if (row.source === "member" && row.uploaded_by === viewerId && wallpapers[i]) wallpapers[i]!.mine = true;
+  });
 
   try {
     const admin = createAdminClient();
@@ -287,8 +293,11 @@ export async function listWallpaperComments(wallpaperId: string, limit = 50): Pr
   }
 }
 
-/** Admin view — every wallpaper, including hidden ones. */
-export async function listAllWallpapers(limit = 300) {
+/**
+ * Admin view — every wallpaper, including hidden ones. 2026-10-26: was 300 — the library passed it (579), so the
+ * newest uploads beyond it never appeared in the dashboard ("refusing to upload … as it reached 300").
+ */
+export async function listAllWallpapers(limit = 2000) {
   const rows = await selectWallpapers((columns) =>
     createAdminClient()
       .from("wallpapers")

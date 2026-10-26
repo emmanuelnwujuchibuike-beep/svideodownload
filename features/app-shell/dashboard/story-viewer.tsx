@@ -10,6 +10,7 @@ import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 
 import { FastForward, Loader2, Rewind, Send } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -18,6 +19,7 @@ import type { EligibleAd } from "@/lib/ads-platform/eligibility";
 import { getEntry, mutate } from "@/features/data";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { faceGradient, useStoryViewers, viewersLine } from "@/features/social/story-viewers-data";
+import { TapPending } from "@/features/wallet/tap-pending";
 import { toast } from "@/features/ui/toast";
 import { fireWowFeedback, WowBurst } from "@/features/ui/wow-burst";
 
@@ -1093,6 +1095,7 @@ function StoryReplyBar({
   /** the reply was one emoji: the viewer plays its rise */
   onEmoji?: (emoji: string) => void;
 }) {
+  const router = useRouter();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -1150,7 +1153,8 @@ function StoryReplyBar({
               maxLength={500}
               placeholder={`Reply to ${name}…`}
               data-large-text
-              className="h-full min-w-0 flex-1 border-none bg-transparent !text-[15px] text-white outline-none placeholder:text-white/[0.78]"
+              // 16 px, never less: iOS Safari ZOOMS the page into any input under 16 px when it is focused (2026-10-26)
+              className="h-full min-w-0 flex-1 border-none bg-transparent !text-[16px] text-white outline-none placeholder:text-white/[0.78]"
             />
           ) : (
             <span className="min-w-0 flex-1 truncate text-[15px] text-white/60">Replies are off</span>
@@ -1160,13 +1164,28 @@ function StoryReplyBar({
               href={coinGift}
               prefetch={false}
               aria-label={`Send Frenz Coin to ${name} for this story`}
+              // the screen starts loading as the finger lands — a tap's ~100 ms head start (2026-10-26: "open faster")
+              onPointerDown={() => router.prefetch(coinGift)}
+              onClick={() => {
+                // Back from the transfer comes back to THIS story: the page's address names it (stories-row.tsx reads ?story=)
+                try {
+                  const url = new URL(window.location.href);
+                  url.searchParams.set("story", storyId);
+                  window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+                } catch {
+                  /* the transfer still opens */
+                }
+              }}
               className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-white/[0.12] text-white transition active:scale-95"
             >
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <circle cx="12" cy="12" r="9" />
-                <path d="M12 7v10" />
-                <path d="M15 9.5c-.6-1-1.7-1.5-3-1.5-1.7 0-3 .8-3 2s1.3 1.7 3 2 3 .8 3 2-1.3 2-3 2c-1.3 0-2.4-.5-3-1.5" />
-              </svg>
+              {/* the spinner answers the tap on the same frame, until the transfer screen opens */}
+              <TapPending size={17}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 7v10" />
+                  <path d="M15 9.5c-.6-1-1.7-1.5-3-1.5-1.7 0-3 .8-3 2s1.3 1.7 3 2 3 .8 3 2-1.3 2-3 2c-1.3 0-2.4-.5-3-1.5" />
+                </svg>
+              </TapPending>
             </Link>
           ) : null}
         </label>

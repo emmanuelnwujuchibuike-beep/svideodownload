@@ -66,6 +66,8 @@ export interface Wallpaper {
    * rendering an empty byline.
    */
   uploader?: { handle: string | null; displayName: string | null } | null;
+  /** The VIEWER shared this one (2026-10-26) — they may delete it. Set on the server for a signed-in viewer only. */
+  mine?: boolean;
 }
 
 /**

@@ -273,7 +273,13 @@ export function ProfileTabs({
         The content region: the current section in the page's flow, the others it has shown kept mounted
         and hidden, and — while a finger drags — the next one drawn beside it on the same track.
       */}
-      <div ref={region} className="relative overflow-x-clip">
+      {/*
+        Full width (out over the page gutter, like the tab row above) with the gutter put back as padding (owner,
+        2026-10-26, a screenshot: "white border edge in the profile page"). The clip is at the padding edge, so the
+        post grid's own edge-to-edge bleed (-mx-4, profile-media-grid.tsx) is no longer cut off on both sides — which
+        left a white strip each side and clipped the first and last columns. Every other section keeps its gutter.
+      */}
+      <div ref={region} className="relative -mx-4 overflow-x-clip px-4 sm:-mx-6 sm:px-6">
         {/* no will-change: a standing transform would trap the Exclusive tab's fixed sheets inside the track */}
         <div ref={trackEl} className="relative">
           {(peek && !mounted.includes(peek.key) ? [...mounted, peek.key] : mounted).map((k) => (

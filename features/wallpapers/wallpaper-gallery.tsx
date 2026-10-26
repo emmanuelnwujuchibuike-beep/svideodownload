@@ -185,16 +185,15 @@ function ShareYourOwn() {
     setBusy(true);
     setMsg(null);
     try {
-      const form = new FormData();
-      for (const f of files) form.append("files", f);
-      const res = await fetch("/api/wallpapers/share", { method: "POST", body: form });
-      const json = (await res.json()) as { ok?: boolean; created?: number; error?: string };
-      if (res.ok && json.ok) {
-        const n = json.created ?? files.length;
-        setMsg({ ok: true, text: n > 1 ? `${n} wallpapers shared — they're in the library now.` : "Shared — it's in the library now." });
+      // straight to storage, one file at a time (2026-10-26): a batch through a Vercel function hit its ~4.5 MB body limit
+      const { uploadWallpapersDirect } = await import("./direct-upload");
+      const out = await uploadWallpapersDirect("/api/wallpapers/upload", files);
+      if (out.created > 0) {
+        const n = out.created;
+        setMsg({ ok: true, text: (n > 1 ? `${n} wallpapers shared — they're in the library now.` : "Shared — it's in the library now.") + (out.failed.length ? ` ${out.failed.length} couldn't upload.` : "") });
         router.refresh();
       } else {
-        setMsg({ ok: false, text: json.error ?? "Couldn't share that." });
+        setMsg({ ok: false, text: out.error ?? out.failed[0] ?? "Couldn't share that." });
       }
     } catch {
       setMsg({ ok: false, text: "Network error." });

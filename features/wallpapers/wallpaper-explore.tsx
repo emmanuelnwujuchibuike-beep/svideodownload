@@ -217,23 +217,21 @@ export function WallpaperExplore({
       setUploading(true);
       setUploadMsg(null);
       try {
-        const form = new FormData();
-        for (const f of files) form.append("files", f);
-        const res = await fetch("/api/wallpapers/share", { method: "POST", body: form });
-        const json = (await res.json()) as { ok?: boolean; created?: number; failed?: string[]; error?: string };
-        if (res.ok && json.ok) {
-          const n = json.created ?? files.length;
+        // straight to storage, one file at a time (2026-10-26): a batch through a Vercel function hit its ~4.5 MB body limit
+        const { uploadWallpapersDirect } = await import("./direct-upload");
+        const out = await uploadWallpapersDirect("/api/wallpapers/upload", files);
+        if (out.created > 0) {
+          const n = out.created;
           haptic("medium");
           setUploadMsg({
             ok: true,
             text:
-              n > 1
-                ? `${n} wallpapers uploaded — live in the library now.`
-                : "Uploaded — it's live in the library now.",
+              (n > 1 ? `${n} wallpapers uploaded — live in the library now.` : "Uploaded — it's live in the library now.") +
+              (out.failed.length ? ` ${out.failed.length} couldn't upload.` : ""),
           });
           router.refresh();
         } else {
-          setUploadMsg({ ok: false, text: json.error ?? "Couldn't upload that." });
+          setUploadMsg({ ok: false, text: out.error ?? out.failed[0] ?? "Couldn't upload that." });
         }
       } catch {
         setUploadMsg({ ok: false, text: "Network error — try again." });

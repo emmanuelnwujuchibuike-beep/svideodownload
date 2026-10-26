@@ -77,7 +77,39 @@ export function validatePayoutDetails(method: string, raw: unknown): PayoutDetai
   return d;
 }
 
-export async function requestWithdrawal(input: { userId: string; credits: number; method: string; details: unknown; config: RewardsConfig }): Promise<{ ok: true; id: string; status: WithdrawalStatus; usdCents: number } | { ok: false; status: number; error: string }> {
+/** The database's refusals, in the member's words (0278 adds the eligibility and limit reasons). */
+const REFUSED: Record<string, [number, string]> = {
+  restricted: [403, "Withdrawals are paused on this account. Contact support."],
+  suspended: [403, "Withdrawals are paused on this account. Contact support."],
+  recovery_due: [403, "Withdrawals are paused while a refunded payment is settled. Contact support."],
+  not_qualified: [403, "Your account isn't approved for withdrawals yet."],
+  day_limit: [429, "You've reached today's withdrawal limit."],
+  month_limit: [429, "That would pass this month's withdrawal limit."],
+  open_exists: [409, "You already have a withdrawal in progress."],
+};
+
+const MISSING_FN = (m: string) => /request_credit_withdrawal|schema cache|does not exist/i.test(m);
+
+/**
+ * Part 2 (0278, M1/M2): the facts the database re-checks under the wallet lock, read here too so a refusal is
+ * immediate and worded. Fails CLOSED — an unreadable profile is not an eligible one.
+ */
+async function withdrawalEligibility(userId: string): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const db = createAdminClient();
+  const [who, prof] = await Promise.all([
+    db.from("profiles").select("is_suspended").eq("id", userId).maybeSingle(),
+    db.from("reward_profiles").select("qualified_at, qualification_status, restricted").eq("user_id", userId).maybeSingle(),
+  ]);
+  if (who.error || prof.error || !who.data) return { ok: false, status: 503, error: "Couldn't submit that. Try again in a moment." };
+  if ((who.data as { is_suspended?: boolean }).is_suspended) return { ok: false, status: 403, error: REFUSED.suspended![1] };
+  const p = prof.data as { qualified_at: string | null; qualification_status: string | null; restricted: boolean } | null;
+  if (p?.restricted) return { ok: false, status: 403, error: REFUSED.restricted![1] };
+  // the rewards page's rule (features/rewards/rewards-page.tsx): approved = qualified_at set OR status approved
+  if (!p || !(p.qualified_at || p.qualification_status === "approved")) return { ok: false, status: 403, error: REFUSED.not_qualified![1] };
+  return { ok: true };
+}
+
+export async function requestWithdrawal(input: { userId: string; credits: number; method: string; details: unknown; config: RewardsConfig; idempotencyKey?: string | null }): Promise<{ ok: true; id: string; status: WithdrawalStatus; usdCents: number } | { ok: false; status: number; error: string }> {
   const w = input.config.withdrawals;
   if (!input.config.enabled || !w.enabled) return { ok: false, status: 503, error: "Withdrawals aren't open right now." };
   const credits = Math.floor(input.credits);
@@ -85,6 +117,10 @@ export async function requestWithdrawal(input: { userId: string; credits: number
   if (!w.methods.includes(input.method)) return { ok: false, status: 400, error: "That payout method isn't available." };
   const details = validatePayoutDetails(input.method, input.details);
   if (!details) return { ok: false, status: 400, error: "Check your payout details." };
+  const idempotencyKey = input.idempotencyKey ?? null;
+  if (idempotencyKey !== null && !/^[A-Za-z0-9_-]{8,80}$/.test(idempotencyKey)) return { ok: false, status: 400, error: "Invalid request." };
+  const eligible = await withdrawalEligibility(input.userId);
+  if (!eligible.ok) return eligible;
   if (input.method === "paystack") {
     // the money goes where Paystack says the account is: the holder name comes from the bank, not from the form
     const name = await resolveAccount(details.accountNumber, details.bankCode ?? "");
@@ -93,9 +129,10 @@ export async function requestWithdrawal(input: { userId: string; credits: number
   }
 
   const db = createAdminClient();
+  // early, worded answers only: 0278's request_credit_withdrawal re-counts both limits under the wallet lock
   const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
   const monthAgo = new Date(Date.now() - 30 * 86_400_000).toISOString();
-  const { data: recent } = await db.from("withdrawal_requests").select("credits, created_at, status").eq("user_id", input.userId).gte("created_at", monthAgo).limit(500);
+  const { data: recent } = await db.from("withdrawal_requests").select("credits, created_at, status").eq("user_id", input.userId).eq("source", "credits").gte("created_at", monthAgo).limit(500);
   const live = ((recent ?? []) as { credits: number; created_at: string; status: string }[]).filter((r) => r.status !== "rejected" && r.status !== "cancelled");
   if (live.filter((r) => r.created_at >= dayAgo).length >= w.maxRequestsPerDay) return { ok: false, status: 429, error: "You've reached today's withdrawal limit." };
   if (live.reduce((a, r) => a + r.credits, 0) + credits > w.maxCreditsPerMonth) return { ok: false, status: 429, error: "That would pass this month's withdrawal limit." };
@@ -114,16 +151,28 @@ export async function requestWithdrawal(input: { userId: string; credits: number
   */
   const flatFeeUsdCents = withdrawalFlatFeeCents(usdCents, input.config.sub.flatFees);
   const flatFeeCredits = Math.ceil((flatFeeUsdCents * w.creditsPerUsd) / 100);
-  const { data, error } = await db.rpc("request_withdrawal", { p_user_id: input.userId, p_credits: credits + flatFeeCredits, p_usd_cents: usdCents, p_method: input.method, p_details: details, p_snapshot: { creditsPerUsd: w.creditsPerUsd, version: input.config.version, depositedPart: split?.depositedPart ?? 0, deposited: w.deposited, requestedCredits: credits, flatFeeCredits, flatFeeUsdCents }, p_status: status });
+  const base = { p_user_id: input.userId, p_credits: credits + flatFeeCredits, p_usd_cents: usdCents, p_method: input.method, p_details: details, p_snapshot: { creditsPerUsd: w.creditsPerUsd, version: input.config.version, depositedPart: split?.depositedPart ?? 0, deposited: w.deposited, requestedCredits: credits, flatFeeCredits, flatFeeUsdCents }, p_status: status };
+  /*
+    0278 (M1-M3): the eligibility, the suspension and both limits are decided in the SAME transaction as the hold, under
+    the wallet's row lock, so two simultaneous requests cannot both pass a limit. Before 0278 runs, the live 0187
+    function is called as before (the checks above still apply).
+  */
+  let { data, error } = await db.rpc("request_credit_withdrawal", { ...base, p_count_credits: credits, p_idempotency: idempotencyKey, p_max_per_day: w.maxRequestsPerDay, p_max_credits_month: w.maxCreditsPerMonth });
+  if (error && MISSING_FN(error.message)) {
+    console.warn("[rewards/withdraw] 0278 not applied yet: limits checked in the app only", { userId: input.userId });
+    ({ data, error } = await db.rpc("request_withdrawal", base));
+  }
   if (error) {
     console.error("[rewards/withdraw] request failed", { userId: input.userId, message: error.message });
     return { ok: false, status: 503, error: "Couldn't submit that. Try again in a moment." };
   }
-  const out = (data ?? {}) as { ok?: boolean; reason?: string; id?: string };
+  const out = (data ?? {}) as { ok?: boolean; reason?: string; id?: string; duplicate?: boolean; status?: WithdrawalStatus };
   if (!out.ok || !out.id) {
-    const msg = out.reason === "insufficient_withdrawable" ? `You don't have that many withdrawable credits (the amount plus the ${flatFeeCredits}-credit withdrawal fee).` : out.reason === "restricted" ? "Withdrawals are paused on this account. Contact support." : "Couldn't submit that.";
-    return { ok: false, status: 409, error: msg };
+    if (out.reason === "insufficient_withdrawable") return { ok: false, status: 409, error: `You don't have that many withdrawable credits (the amount plus the ${flatFeeCredits}-credit withdrawal fee).` };
+    const [code, msg] = REFUSED[out.reason ?? ""] ?? [409, "Couldn't submit that."];
+    return { ok: false, status: code, error: msg };
   }
+  if (out.duplicate) return { ok: true, id: out.id, status: out.status ?? status, usdCents };
   console.info("[rewards/withdraw] requested", { userId: input.userId, id: out.id, credits, usdCents, status });
   return { ok: true, id: out.id, status, usdCents };
 }

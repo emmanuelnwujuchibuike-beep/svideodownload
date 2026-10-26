@@ -4,6 +4,8 @@ import { handleFlutterwaveAdCharge } from "@/lib/ads-platform/payment-server";
 import { handleFlutterwaveRenewal, handleFlutterwaveSubscriptionCancelled } from "@/lib/ai/credits/flutterwave-plans";
 import { settleFlutterwavePlanTransaction } from "@/lib/ai/credits/plan-webhook";
 import { settleFlutterwaveTopup } from "@/lib/ai/wallet/flutterwave-settle";
+import { noteFlutterwaveTopupEvent } from "@/lib/ai/wallet/topup-reversals";
+import { noteFlutterwaveCoinDepositEvent, settleCoinDeposit } from "@/lib/coin/deposits";
 import { verifyFlutterwaveById, verifyFlutterwaveWebhook } from "@/lib/flutterwave/client";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { claimProviderEventStrict, markProviderEvent } from "@/lib/payments/events";
@@ -108,7 +110,22 @@ export async function POST(request: Request) {
 
   const id = event.data?.id !== undefined && event.data?.id !== null ? String(event.data.id) : "";
   const ref = typeof event.data?.tx_ref === "string" ? event.data.tx_ref : "";
-  // transfers and refunds are not integrated — acknowledged so they are not retried forever
+  /*
+    0278 (Frenz Coin Part 2): this integration has no documented refund or chargeback contract with Flutterwave, so
+    nothing here reverses credits on its own. Anything refund-, chargeback- or dispute-shaped about one of our wallet
+    top-ups is put on the financial audit log for an admin (who records the reversal after checking the dashboard;
+    lib/ai/wallet/topup-reversals.ts). A failed audit write asks for a retry, so the signal is never dropped.
+  */
+  if (type !== "charge.completed" && /refund|chargeback|dispute/i.test(type)) {
+    const noted = await noteFlutterwaveTopupEvent(type, (event.data ?? {}) as Record<string, unknown>).catch(() => false);
+    if (noted === false) return RETRY();
+    if (noted) return ACK({ outcome: "review" });
+    // Frenz Coin Part 4: the same for a coin deposit — logged for an admin, never applied by code
+    const coinNoted = await noteFlutterwaveCoinDepositEvent(type, (event.data ?? {}) as Record<string, unknown>).catch(() => false);
+    if (coinNoted === false) return RETRY();
+    if (coinNoted) return ACK({ outcome: "review" });
+  }
+  // other transfers and refunds are not integrated — acknowledged so they are not retried forever
   if (type !== "charge.completed") return ACK({ ignored: type || "unknown" });
   if (!/^\d{1,20}$/.test(id)) return ACK({ ignored: "no transaction id" });
   const purpose = flutterwaveReferencePurpose(ref);
@@ -186,6 +203,13 @@ export async function POST(request: Request) {
       }
       case "ad_campaign": {
         outcome = await handleFlutterwaveAdCharge(createAdminClient(), charge);
+        break;
+      }
+      // Frenz Coin Part 4 (0280): a coin deposit, settled into the coin wallet only, pending for its hold
+      case "coin_deposit": {
+        const out = await settleCoinDeposit(ref, { charge });
+        outcome = out.kind;
+        final = out.kind !== "pending" && out.kind !== "error";
         break;
       }
       case "ai_subscription":

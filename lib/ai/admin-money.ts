@@ -23,6 +23,8 @@ export async function loadAiMoney(centsPerCredit: number): Promise<AiMoneySummar
           db
             .from("ai_product_ledger")
             .select("user_id, kind, status, delta_cents, currency, created_at, paid_cents:metadata->>paid_cents, tool:snapshot->>product, feature:snapshot->>feature")
+            // Frenz Coin Part 3: coin rows (product frenz_coin, US cents) are not AI money
+            .eq("product", "character_replace")
             .gte("created_at", since)
             .order("created_at", { ascending: false })
             .range(from, to) as unknown as PromiseLike<{ data: MoneyLedgerRow[] | null; error: { message: string } | null }>,

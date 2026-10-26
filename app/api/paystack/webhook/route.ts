@@ -12,6 +12,7 @@ import { handleAiPlanWebhook } from "@/lib/ai/credits/plan-webhook";
 import { syncPaystackEvent } from "@/lib/paystack/sync";
 import { handlePaystackAdCharge, handlePaystackAdReversal } from "@/lib/ads-platform/payment-server";
 import { claimProviderEvent, markProviderEvent } from "@/lib/payments/events";
+import { handlePaystackTopupReversal } from "@/lib/ai/wallet/topup-reversals";
 import { settlePaystackTransfer } from "@/lib/rewards/paystack-payouts";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -95,6 +96,25 @@ export async function POST(request: Request) {
     if (out === "pending") return NextResponse.json({ error: "Retry" }, { status: 500 });
     await markProviderEvent("paystack", key, out);
     return NextResponse.json({ received: true });
+  }
+  /*
+    ── A WALLET TOP-UP REFUNDED OR DISPUTED (Frenz Coin Part 2, 0278) ─────────
+    A paid deposit is withdrawable credit (0202), so its refund or chargeback takes the credits back — once per
+    event, never more than the top-up credited, never below zero (a shortfall restricts the account for review).
+    The original charge is re-verified with Paystack first (lib/ai/wallet/topup-reversals.ts). Not a wallet
+    top-up → null, and the branches below carry on exactly as before.
+  */
+  if (event.event === "refund.processed" || event.event.startsWith("charge.dispute.")) {
+    try {
+      const out = await handlePaystackTopupReversal(event.event, (event.data ?? {}) as unknown as Record<string, unknown>);
+      if (out) {
+        if (out.retry) return NextResponse.json({ error: "Retry" }, { status: 500 });
+        return NextResponse.json({ received: true, outcome: out.outcome });
+      }
+    } catch (e) {
+      console.error("[paystack] wallet top-up reversal failed, asking for a retry", { event: event.event, error: e instanceof Error ? e.name : "unknown" });
+      return NextResponse.json({ error: "Retry" }, { status: 500 });
+    }
   }
   if (event.event === "refund.processed" || event.event === "charge.dispute.create") {
     const ref = event.data?.transaction_reference ?? event.data?.transaction?.reference ?? event.data?.reference ?? "";

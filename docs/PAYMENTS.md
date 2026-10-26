@@ -340,3 +340,260 @@ charge. Also confirm (4) the `subscription.cancelled` payload shape and (5) the 
 - **Activation** requires both customer emails, and is held to the Flutterwave plan id stored with the attempt at
   checkout (`ai_topup_attempts.metadata.provider_plan_id`); an attempt without one goes to review.
 - **AI plans** need a fixed amount on the Flutterwave plan, like Pro / Business — no list-price substitute.
+
+## Frenz Coin Part 2 (2026-10-25) — financial safety prerequisites (migration 0278)
+
+Hardening of the money that already exists, before any new wallet is built on it. The live money functions (0187
+`request_withdrawal`, 0202 `transfer_credits`, 0256 `resolve_withdrawal`) are unchanged: the new rules live in new
+functions that take the same locks and then call them. Before 0278 runs the app falls back to the live functions.
+**Migration 0278 must be applied by hand, after 0277.**
+
+- **Top-up refunds and chargebacks (H1).** `wallet_topup_reversals` + `reverse_wallet_topup`: once per provider event,
+  never more than the top-up credited (recharge + pack bonus) in total, taken only from what is still in the wallet —
+  deposited credits first, then other withdrawable credits, then tokens. What was already spent or sent is a
+  SHORTFALL: recorded on the row, the account restricted (`reward_profiles.restricted`, reason
+  `wallet_topup_shortfall`), the audit row lists the transfers since the top-up and any open withdrawal. Balances never
+  go negative and no ledger row is rewritten. A dispute HOLDS the credits (a `reserved` reversal row) until an admin
+  records the outcome: lost → settled, won → restored exactly as it left. Paystack `refund.processed` /
+  `charge.dispute.create` apply on their own after the ORIGINAL charge is re-verified (`/transaction/verify`); a
+  partial refund takes back its share, rounded up; another currency changes nothing and goes to review;
+  `charge.dispute.resolve` is logged, not trusted. Flutterwave: this integration has no refund/chargeback event
+  contract, so refund-, chargeback- or dispute-shaped events about a top-up are logged for an admin, who records the
+  reversal in Admin → Rewards → Top-up refunds & chargebacks (the original charge is re-verified with Flutterwave).
+  Anything uncertain is a 500 retry, never a guess.
+- **Eligibility and suspension (M1, M2).** `request_credit_withdrawal` requires the admin-approved qualification
+  (`qualified_at` set or status `approved`, the rewards page's own rule) and refuses a suspended or restricted member
+  or one with an open shortfall — under the wallet lock. `transfer_credits_checked` refuses a suspended / restricted
+  sender, an open shortfall, and a suspended RECIPIENT (owner decision to confirm: receiving was not restricted before).
+- **Limits in the transaction (M3).** The rolling 24-hour transfer limit and the credit withdrawal per-day count and
+  30-day sum are counted under the wallet row lock. A replay (same idempotency key) is answered, never counted twice.
+  The withdraw form now sends a stable replay key. The per-day count now covers credit withdrawals only (the app
+  counted SUB withdrawals too).
+- **Retention (H3).** The ledger, transfers, withdrawals, SUB ledger and purchases, top-up attempts, verification
+  purchases and plan renewals no longer CASCADE with `auth.users`; the user id stays as a stable pseudonymous key.
+  A deletion request is refused while withdrawable credits, SUB money or debt, an open withdrawal, a payment in flight
+  or a recovery is open. The purge calls `retain_financial_records` first (re-check, bank details redacted to bank +
+  last four, token-only balance closed with a ledger row, audited) and skips the account on anything but a clean answer.
+- **Fresh password for money (M4).** `lib/admin/financial-gate.ts`: withdrawal moves and payouts, wallet credits and
+  adjustments, SUB reversals and dispute restores, top-up reversals, and `/api/admin/landing` saves that CHANGE a
+  money setting. Refusals and outcomes go to `financial_audit_log`. The dashboard prompts through `sensitiveFetch`.
+- **Settings audit (M5).** `frenzRewards` (surface `rewards`) and `frenzAiPlans.wallet` + the deposit minimum
+  (surface `ai_wallet`) are written to `config_audit_log` BEFORE the save, awaited; no audit row → nothing saved. A
+  failed save is now an error (it used to be ignored), with a `settings.update.failed` row. SUB settings count in the
+  rewards version.
+- **Ledger integrity.** `platform_fee_ledger` is the counter-entry of every transfer fee (trigger + backfill).
+  `ai_product_ledger` allows only its legitimate in-place changes (same-transaction fill-in, the once-only
+  `notified_at`, reserved → settled | refunded | reversed, settled → refunded, FK set-null) and no deletes;
+  `sub_ledger`, `financial_audit_log`, `credit_transfers` and `platform_fee_ledger` are append-only. An operator
+  correction needs `set local frenz.ledger_maintenance = 'on'` and is audited by the guard.
+- **Tests.** `supabase/tests/0278_financial_safety.pglite.mjs` (logic, 9 mutants) and
+  `supabase/tests/credit_wallet_concurrency.pg.mjs` (a real local PostgreSQL, separate connections, forced overlap,
+  mutant `no-lock`), both built from the migrations by `credit_wallet.shared.mjs`.
+
+**Still open:** withdrawal fees have no counter-entry yet (only transfer fees); a bank-returned AI-credit payout is still
+restored by hand (0254); a Flutterwave payout reversed after success is not handled (needs a sandbox check of its
+events); Paystack's dispute-resolution wording and whether `refund.processed` amounts are per refund (assumed) need
+sandbox confirmation; a deleted member's later notifications (e.g. a bank return after deletion) would fail on the
+notifications foreign key.
+
+## Frenz Coin Part 3 (2026-10-25) — schema and accounting foundation (migration 0279)
+
+Frenz Coin is a **separate wallet product** on the existing wallet tables: product `frenz_coin` in
+`ai_product_balances` / `ai_product_ledger`, unit `USD` (integer cents). AI Credits are not converted, read or changed.
+Config: `frenzCoin` in the landing settings (lib/coin/config.ts), **off by default**, audited first and versioned like
+every money setting (surface `frenz_coin`). No UI, checkout, PIN or payout call yet. **Migration 0279 runs by hand after
+0278.**
+
+- **Balance model.** `balance_cents` = Σ coin ledger deltas; `pending_cents` = reserved positive rows (on hold, not
+  spendable); `held_cents` = reserved negative rows (reserved for a withdrawal, outside the balance).
+  available = balance − pending; total owned = balance + held = available + pending + held. `withdrawable_cents` /
+  `deposited_cents` stay 0 on a coin row (constraint). Pending / held are 0 on every other product (constraint).
+- **Only the coin functions write a coin wallet** (`frenz.coin_writer`, trigger `coin_wallet_guard`): an AI-credit
+  charge, refund, recharge or adjustment naming `frenz_coin` is refused.
+- **Transfers** (`transfer_coins`, record in `coin_transfers`): both coin wallets locked in user-id order; standing
+  (suspended / restricted / open shortfall sender, suspended recipient) and the rolling 24-hour limit under the lock; the
+  sender pays amount + fee from AVAILABLE coins, the recipient gets the amount. Fee = ceil(amount × 10%) + $1 below
+  $100, + $0 from $100 to $500 inclusive, + $5 above $500 (all configurable). The rules are stored on the transfer.
+- **Withdrawals** (`withdrawal_requests.source = 'coin'`, `request_coin_withdrawal`): available → held; fee =
+  ceil(gross × 6%) + flat (0) taken FROM the amount, net = gross − fee (owner to confirm); NGN payout amount stored when
+  a rate is configured. Resolution via `resolve_withdrawal` (coin dispatch → `resolve_coin_withdrawal`): completed
+  settles the hold and posts the fee; rejected / cancelled returns it; bank return → `reverse_coin_paid_withdrawal`
+  restores the gross and posts a fee reversal. Credits and sub run 0256 / 0254's code word for word.
+- **Fee income.** `platform_fee_ledger` sources `coin_transfer_fee`, `coin_withdrawal_fee`,
+  `coin_withdrawal_fee_reversal` (fee income given back), each unique per ledger row. Conservation, proven in tests:
+  funded = in wallets (balance + held) + paid out (completed net) + fee income.
+- **Tests.** `supabase/tests/0279_frenz_coin.pglite.mjs` (7 mutants), `supabase/tests/coin_concurrency.pg.mjs` (real
+  PostgreSQL, mutant `no-lock`); the Part 2 suites also run with 0279 on top (`APPLY_0279=1`).
+
+**Open for Part 4:** deposits (the `recharge` ledger kind fires 0187's reward trigger for any product — a coin deposit
+needs its own kind or a product filter there); the coin payout path through `payWithdrawal` (compatible:
+`amount_usd_cents` = net) is not exposed; transfer-fee refunds have no reversal path yet (a correction is an audited
+`adjust_coin_balance`).
+
+## Frenz Coin Part 4 (2026-10-25) — deposits, the 72-hour hold, transfers fail closed (migration 0280)
+
+Run 0280 by hand AFTER 0279. Frenz Coin stays **off** (`frenzCoin.enabled` and `frenzCoin.deposits.enabled` are false by default).
+
+**Deposits** ride the existing Flutterwave collection (`lib/coin/deposits.ts`), on the same attempt ledger (`ai_topup_attempts`, purpose `coin_deposit`, reference `frenz_coin_dep_fw_<uuid>`). USD only: one coin is $1 (100 cents) and a naira checkout for coins would need an exchange-rate / markup policy nobody has decided.
+
+1. `POST /api/coin/deposits` → `begin_coin_deposit` writes the attempt (member, amount, provider amount and currency, the hold, the audited rules) BEFORE the checkout. One open deposit per member (advisory lock); a replayed idempotency key returns the attempt it made.
+2. Settlement: the webhook (verified by transaction id), `POST /api/coin/deposits/verify` (the member's own reference, asked of Flutterwave) and the ai-reconcile cron all call `settleCoinDeposit` → `chargeMatches` (exact amount, currency, reference) → `settle_coin_deposit` (re-checks the paid amount and currency against the attempt under its row lock; once per reference). A redirect is never proof of payment.
+3. The coins land **pending**: a ledger row of the new kind `deposit` (status reserved) and `pending_cents` rise with the balance. `coin_deposits.release_at` = the database's `now()` at settlement + the hold the attempt was opened with — never under 72 hours (constraint, SQL clamp, config clamp, admin schema). Pending coins cannot be sent or withdrawn (0279 spends `balance − pending` only).
+4. Release: only `release_coin_deposit` / `release_due_coin_deposits`, at or after `release_at` by the database clock, once. Called by the cron and before a member's own wallet read. `release_coin_pending` refuses a deposit row; the `coin_deposits` guard refuses rewriting the hold or marking a deposit released early.
+
+**Rewards.** 0187's `reward_on_topup_trg` fired on every `recharge` row. A coin deposit is `deposit` (never `recharge`), and the trigger is restated with `new.product <> 'frenz_coin'`. 0255's affiliate trigger only lists AI purposes. Coin deposits are also left out of collected revenue (members' money, owed back to them) and labelled "Frenz Coin deposit" in the admin payment alert.
+
+**Refunds and chargebacks** (`coin_deposit_reversals`). Flutterwave sends no documented refund or chargeback event to this integration: such events are logged for review, and an admin records the reversal (`/api/admin/wallet/coin-deposit-reversals`, fresh password) after the original charge is re-verified. `reverse_coin_deposit` is once per event and never more than the deposit in total:
+- on hold → taken back whole from its own pending coins (no shortfall possible); a dispute freezes the release until an admin records the outcome;
+- released → recovered from available coins only; the rest is a shortfall, the account is restricted (`coin_deposit_shortfall`), recipients are never clawed back; a dispute holds what it can (`held_cents`) until won (returned) or lost (gone);
+- a partial refund is recorded for review and applied by no code (an admin uses the audited `adjust_coin_balance`).
+
+**Transfers fail closed.** `POST /api/coin/transfers` needs a financial transaction authorization (`lib/coin/authorization.ts`). None exists — the messaging quick-lock PIN is not one — so every request is refused with 403 before the database. Enabling transfers needs a financial PIN (setup, slow hash, attempt limits and lockout, an email-verified reset, audit) wired into `authorizeCoinTransfer`. The database path is unchanged from 0279 except that a replayed idempotency key naming another amount or recipient is refused (`idempotency_conflict`). After a transfer commits, the recipient is told once (claim on the ledger row's `notified_at`).
+
+**Wallet reads.** `GET /api/coin/wallet` (available, pending, held, total, deposits on hold with release times, what the wallet can do) and `GET /api/coin/history` (the member's coin ledger, keyset pages of 20, 50 at most, public handle of the other member of a transfer, no metadata or admin notes).
+
+**Tests.** `supabase/tests/0280_coin_deposits.pglite.mjs` (logic + 5 mutants), `supabase/tests/coin_deposits_concurrency.pg.mjs` (real PostgreSQL + no-lock mutant); `APPLY_0280=1` re-runs the Part 2 and Part 3 suites with 0280 on top.
+
+### The Frenz Coin designs (design/frenz-coin-wallet-design.zip — reference for the UI part, not changed)
+
+| Screen | Purpose | Backend in Part 4 |
+|---|---|---|
+| Main.dc.html | Wallet: balance card, wallet number, Deposit / Withdraw / Transfer / Save, auto-save rule, savings vault, monthly in/out, activity grouped by day with pending rows | `GET /api/coin/wallet`, `GET /api/coin/history` (vault, auto-save, monthly totals: not built) |
+| Deposit.dc.html | Amount, quick amounts, payment method (card, Apple Pay, bank transfer), summary with a card fee | `POST /api/coin/deposits` (card fee and method choice: not built) |
+| Transfer.dc.html | Recipient (recent, wallet number, QR), amount, note, fee line | `POST /api/coin/transfers` (fails closed), the existing wallet-number lookup |
+| TransferReview.dc.html | Confirm: recipient, note, fee, wallet after, "confirm with Face ID / passcode" | needs the financial authorization dependency |
+| Receipt.dc.html | Transfer receipt: status, date, parties, note, fee, reference | `GET /api/coin/history` entries (a receipt reference format: not built) |
+| Vault.dc.html, AutoRules.dc.html | Savings vault, auto-save / auto-withdraw rules | not in scope (no backend) |
+| Withdraw.dc.html | Withdraw from wallet or vault, instant (1%) vs standard (free) speed | not in Part 4 (coin withdrawals and NGN payouts excluded) |
+
+Where the designs and the confirmed rules differ (owner to settle before the UI part): the designs show **1 FC = $0.01** (rules: 1 coin = $1), **"coins land instantly"** on deposit (rules: 72-hour hold), a **0.00 FC transfer fee** (rules: 10% + bracket flat fee), withdrawal speeds of **1% / free** (Part 3 setting: 6%), and a **card fee** on deposits (no deposit fee is configured).
+
+## Frenz Coin Part 4.1 (2026-10-25) — restrictions scoped to their product, coin deposits in Admin → Payments (migration 0281)
+
+Run 0281 by hand AFTER 0280 (and again after re-running any of 0278–0280).
+
+**Restrictions.** Before 0281 an automatic shortfall wrote the account flag `reward_profiles.restricted`, which every money path reads (AI-credit transfers and withdrawals, SUB withdrawals, affiliate payouts, coins, and the public trust signal). So an AI-credit chargeback froze coins and SUB earnings, and a coin chargeback froze AI credits and SUB earnings. Now:
+
+| Kind | Where it lives | Set by | Pauses |
+|---|---|---|---|
+| Suspension | `profiles.is_suspended` | moderation | everything |
+| Account-wide restriction | `reward_profiles.restricted` | an administrator only (Admin → Rewards → Restrict: fresh password, `financial_audit_log`) | AI credits, coins, SUB withdrawals, rewards, affiliate payouts |
+| AI-credit shortfall | open row in `wallet_topup_reversals` | `reverse_wallet_topup` | AI-credit transfers and withdrawals (`credit_wallet_block_reason`) |
+| Frenz Coin shortfall | open row in `coin_deposit_reversals` | `reverse_coin_deposit` | coin transfers and withdrawals (`coin_wallet_block_reason`) |
+
+Clearing a product shortfall touches nothing else. `reward_profiles_restriction_explicit_chk` forbids the two automatic reasons on the account flag. 0281 moves any already written off the account, one audit row each (`restriction_rescoped_to_product`).
+
+Consequence (owner to note): a member with an open AI-credit shortfall can now still withdraw SUB earnings and use coins (and the reverse). If a case calls for it, an administrator restricts the account explicitly.
+
+**Admin → Payments.** Coin deposits are listed under their own purpose, "Frenz Coin deposits", instead of "unknown". **Recheck** runs `reconcileCoinDepositAttempt`, the same leased path as the cron:
+- the attempt row decides the member, amount, currency and provider; Flutterwave is asked about that reference;
+- the charge must match exactly; settlement is once per reference in SQL, and the coins land on hold;
+- a closed attempt is answered from the database; another provider's coin row answers `unsupported`;
+- every recheck is audited (`admin_payment_recheck`), and mismatches separately (`coin_deposit_mismatch`).
+
+## Frenz Coin Part 4.2 (2026-10-25) — the transaction PIN (migration 0282)
+
+Run 0282 by hand AFTER 0281, and again after re-running 0279–0281, because those grant `transfer_coins` back. Set `FRENZ_COIN_PIN_PEPPER` (server-only, ≥ 32 random characters) first. Without it, PINs and transfers fail closed. Frenz Coin itself still ships off.
+
+**The PIN.** Six digits, typed twice; not one repeated digit or a straight run. Never the messaging quick-lock PIN.
+- Stored as `scrypt(HMAC-SHA256(pepper, user + PIN), 16-byte salt)` (N 2¹⁵, r 8, p 1, 32 bytes; parameters stored per PIN).
+- Node's built-in scrypt is used; no new dependency.
+- The hash never leaves the database: no API role (service role included) can read `coin_pins`, and the comparison happens in SQL.
+
+**A transfer** (`POST /api/coin/transfers` with `pin`):
+1. `begin_coin_pin_attempt` counts the attempt now, under the PIN row lock, and returns a single-use attempt (2 minutes) with the salt.
+2. The server derives the key.
+3. `transfer_coins_with_pin` consumes the attempt, compares the key, then runs `transfer_coins`, all in one transaction.
+
+There is no reusable token. The attempt, PIN, recipient, amount, idempotency key and the server's fee rules are bound by being one call. `transfer_coins` is revoked from every API role, so this is the only way in. Every PIN failure (wrong, locked, not set, replayed) gives the same 403.
+
+**Limits** (`frenzCoin.pin`, audited settings, clamped again in SQL):
+
+| Setting | Default | Bounds |
+|---|---|---|
+| Attempts before a lock (`maxAttempts`) | 5 | 3–10 |
+| First lock (`lockMinutes`) | 15 min, doubling each time | 5–1440; max 24 h, never permanent |
+| Reset code lifetime (`resetTtlMinutes`) | 10 min | 5–30 |
+| Reset codes per hour (`resetMaxPerHour`) | 3 | 1–10 |
+| Wrong tries per code (`resetCodeMaxAttempts`) | 5 | 3–10 |
+
+- Per-member and per-IP limiters in front (Upstash, or in-memory without it).
+- The database counter is the durable limit across instances.
+
+**Change** (`/api/coin/pin/change`): the current PIN through the same counted attempt, then the new one, in one transaction.
+
+**Reset** (`/api/coin/pin/reset`, then `/reset/confirm`):
+- Needs the signed-in session **and** the confirmed email.
+- The code is 8 CSPRNG digits; only its HMAC is stored. 10 minutes, single use; a new code supersedes the old (one live code per member); a few wrong tries kill it.
+- Completing it sets the new PIN, clears the locks and voids open attempts, atomically.
+- The request always gives the same answer.
+
+**Audit** (`financial_audit_log`; never a PIN, key, hash or code): `coin_pin_set`, `coin_pin_changed`, `coin_pin_failed`, `coin_pin_locked`, `coin_pin_reset_requested`, `coin_pin_reset_throttled`, `coin_pin_reset_failed`, `coin_pin_reset_completed`, `coin_transfer_authorized`, `coin_transfer_refused`.
+
+**Tests:**
+- `supabase/tests/0282_coin_pin.pglite.mjs` (logic plus 5 mutants);
+- `supabase/tests/coin_pin_concurrency.pg.mjs` (real PostgreSQL plus a no-lock mutant);
+- `lib/coin/pin.server.test.ts`, `lib/coin/authorization.test.ts`, `app/api/coin/coin-routes.test.ts`, `app/api/coin/pin/pin-routes.test.ts`;
+- `APPLY_0282=1` stacks 0282 under the earlier suites.
+
+## Frenz Coin closeout (2026-10-25) — withdrawals, corrections, notifications (migration 0283)
+
+Run order (by hand, each after the one before): **0278 → 0279 → 0280 → 0281 → 0282 → 0283**. Re-running an earlier one restores its grants and bodies, so re-run everything after it as well. Frenz Coin stays **off**.
+
+**Withdrawals.**
+1. `POST /api/coin/withdrawals` checks the session, the confirmed email and the bank details. The bank names the account holder (Paystack account lookup). Only then is the transaction PIN taken.
+2. `request_coin_withdrawal_with_pin` checks the PIN and holds the full gross in one transaction. The fee (6% by default) comes **from** the gross: $100 → $6 fee → $94 net. `request_coin_withdrawal` is revoked from every API role.
+3. An admin reviews, approves and pays through the existing routes (`/api/admin/rewards/withdrawals/[id]`, `/[id]/paystack`), with a fresh password and an audit row. `GET /api/admin/wallet/coin-withdrawals` lists coin withdrawals. The rewards queue now labels them "Frenz Coin" (it said "credits" before).
+4. The payout amount uses `frenzCoin.withdrawals.payoutRateSource`, which defaults to `none`, meaning **no coin payout can be sent**:
+   - `fixed` uses `payoutMinorPerUsd`;
+   - `market` uses the live market rate the AI-credit and SUB payouts already use, with no markup.
+   The amount and how it was worked out (`payout_fx`) are recorded once (`record_coin_payout_quote`) before anything is sent; a retry pays the recorded amount.
+5. Provider outcomes use the existing rails:
+   - a provider-verified success settles the hold and posts the fee once;
+   - a failure or rejection returns the gross, with no fee;
+   - a late success after release is refused by the ledger and flagged for review;
+   - a bank return restores the full gross and reverses the fee income, once;
+   - the 10-minute cron verifies stuck payouts by reference.
+
+**Corrections.**
+- `POST /api/admin/wallet/coin-transfers/[id]/correct` (admins, fresh password, reason, replay key):
+  - `fee_refund`: the transfer's fee goes back to the sender, once per transfer, and the fee income is reversed;
+  - `sender_credit`: a platform-funded credit to the sender, never more than the transfer in total.
+  The recipient is never debited, and members cannot reverse transfers.
+- Partial deposit refunds held for review are applied with `action: "apply_partial"`: only their share, rounded up, once, and only after the hold.
+
+**Notifications** (types `coin_deposit_update`, `coin_transfer_received`, `coin_transfer_sent`, `coin_withdrawal_update`, `coin_pin_security`). Each is sent after the money moved and once, keyed in `coin_notification_claims`.
+
+| Event | How it is sent |
+|---|---|
+| Deposit held / released | the cron sweep |
+| Transfer received / sent | right after the transfer |
+| Withdrawal requested | right after the request |
+| Withdrawal approved / rejected / paid / returned | in-app row written by the database in the same transaction; push added once by the sweep |
+| PIN changed / reset | in-app, plus an email to the confirmed address; never the PIN or a code |
+
+**Hardening.**
+- PIN keys and reset-code hashes are compared over every byte (`coin_pin_bytes_equal`).
+- Internal helpers are closed to the service role. Supabase's default privileges would otherwise grant them (found by `supabase/tests/coin_supabase_integration.pg.mjs`).
+
+### Deployment prerequisites (no secrets here)
+
+| Item | What is needed |
+|---|---|
+| `FRENZ_COIN_PIN_PEPPER` | ≥ 32 random characters (e.g. `openssl rand -base64 48`), server-only env (Vercel encrypted env, production + preview separately), never in the database or the client. Changing it invalidates every PIN: members must reset by email. There is no rotation scheme; plan any rotation with a forced-reset notice. |
+| Flutterwave collection | Secret key, webhook secret hash (`verif-hash`, checked in constant time), USD verified, amount unit confirmed; the webhook URL `/api/flutterwave/webhook`. |
+| Flutterwave / Paystack payouts | Transfers enabled, funded NGN balance, server IP whitelisted if IP whitelisting is on, Paystack "OTP for transfers" off. |
+| Naira payout rate | An owner decision: `payoutRateSource` `fixed` (with `payoutMinorPerUsd`) or `market` (live, no markup). Until then coin payouts refuse. Any markup is unapproved and not implemented. |
+| Admins | Every money action needs a fresh password (`requireFinancialAdmin`); account-wide restriction too. |
+| Regulatory | Holding and transferring stored value, the payout of members' funds and Flutterwave's acceptance of the use case are unconfirmed. |
+
+### Wallet mockups that need correcting before the UI part (design/frenz-coin-wallet-design.zip, not modified)
+
+| Screen | Mockup says | Approved rule |
+|---|---|---|
+| Main, Deposit, Transfer, Vault, Withdraw | 1 FC = $0.01 (24,850 FC ≈ $248.50) | 1 coin = $1 |
+| Deposit | "Coins land instantly"; a card fee line ($1.25) | 72-hour hold; no deposit fee approved |
+| Transfer, TransferReview, Receipt | Fee 0.00 FC; "Arrives instantly" | 10% + $1 (< $100), 10% ($100–$500), 10% + $5 (> $500), paid by the sender on top |
+| TransferReview | "Confirm with Face ID / passcode" | the 6-digit transaction PIN (device biometrics are not a server-verified factor) |
+| Withdraw | Instant (1%) / Standard (free) speeds; $120.00 → $118.80 | 6% from the gross ($100 → $94); one speed; an admin pays |
+| Vault, AutoRules | savings vault, auto-save, auto-withdraw | not built (no backend) |

@@ -24,6 +24,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export function fundingSource(purpose: string): string {
   if (purpose === "ad_campaign") return "Advertiser payment";
   if (purpose === "ai_subscription") return "AI subscription";
+  // Frenz Coin Part 4: a member's coin deposit — their money on hold in their wallet, not AI-credit funding
+  if (purpose === "coin_deposit") return "Frenz Coin deposit";
   return "AI credit funding";
 }
 

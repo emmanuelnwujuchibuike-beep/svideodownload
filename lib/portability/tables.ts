@@ -40,6 +40,10 @@ import { exportableDomains } from "./registry";
 export const SECRET_TABLES: Record<string, string> = {
   mfa_recovery_codes: "One-time codes that bypass two-factor sign-in. Exporting them would put working account keys in a file.",
   security_pin: "Your PIN material. The same reasoning as recovery codes.",
+  coin_pins: "Your Frenz Coin transaction PIN material (0282). The same reasoning as recovery codes.",
+  coin_pin_attempts: "Frenz Coin PIN attempt records (0282): security counters, short-lived and meaningless outside a live check.",
+  coin_pin_resets: "Frenz Coin PIN reset codes (0282): one-time secrets, even hashed — the same reasoning as recovery codes.",
+  coin_notification_claims: "Frenz Coin notification keys (0283): bookkeeping that stops a notification being sent twice — no content, nothing about you.",
   user_encryption_keys: "Private keys for end-to-end encrypted chats. Exporting them would let anyone holding the file read those conversations.",
   webauthn_credentials: "Passkey material, which is bound to the device that holds it and is meaningless — and dangerous — anywhere else.",
   webauthn_challenges: "Short-lived sign-in challenges. They expire in minutes and mean nothing outside a live sign-in.",
@@ -123,6 +127,8 @@ export const NOT_EXPORTED: Record<string, string> = {
   /* 0274: the renewal ledger and the admin review queue for Flutterwave plans. The plan itself (period, status) is exported with the member's subscription. */
   plan_renewals: "Renewal ledger keyed by the provider's transaction id; the member's plan and period are exported with their subscription.",
   plan_billing_reviews: "Operator review queue for plan billing (reasons, ids, amounts) — an internal work list, not the member's data.",
+  /* 0278: the counter-entry of every transfer fee — the platform's fee income. The fee itself is on the member's own ledger (ai_product_ledger, kind transfer_fee), which is exported. */
+  platform_fee_ledger: "The platform's fee-income ledger (0278). Each fee you paid is exported on your own wallet ledger.",
   reward_config: "The operator's reward rules (one row, a mirror of the admin settings) - about nobody.",
   poll_options: "Options belonging to a poll; the poll itself is exported.",
   /* Rows belonging to a streak, keyed by `streak_id` rather than by a person —
@@ -254,6 +260,15 @@ export const OWNER_COLUMN: Record<string, string> = {
   // 0193: your wallet number, and the transfers you sent (received ones are on your statement)
   wallet_accounts: "user_id",
   credit_transfers: "sender_id",
+  // 0278: a refund or chargeback of one of your top-ups, and what it took back from your wallet
+  wallet_topup_reversals: "user_id",
+  // 0279: the Frenz Coin transfers you sent (received ones are on your wallet ledger)
+  coin_transfers: "sender_id",
+  // 0280: your Frenz Coin deposits and their holds, and any refund or chargeback of one
+  coin_deposits: "user_id",
+  coin_deposit_reversals: "user_id",
+  // 0283: corrections an administrator made to a transfer you sent
+  coin_transfer_corrections: "sender_id",
   /*
     Voice Cloning (0171). An export carries the member's own facts — the names,
     the dates, the rights record they signed, how much audio each voice was built

@@ -193,12 +193,26 @@ describe("Flutterwave webhook — the hash proves the sender, the API proves the
   });
 
   it("other event types are acknowledged and ignored; a transfer that isn't a Frenz payout is ignored unverified", async () => {
-    const res = await deliver({ event: "refund.completed" });
+    // a refund-shaped event about something that is not one of our top-ups: ignored as before
+    const res = await deliver({ event: "refund.completed", ref: "someone-elses-ref-123" });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ ignored: "refund.completed" });
     const t = await deliver({ event: "transfer.completed" });
     expect(await t.json()).toMatchObject({ ignored: "not a Frenz payout" });
     expect(verifyCalls).toEqual([]);
+  });
+
+  it("0278: a refund- or chargeback-shaped event about one of our TOP-UPS is logged for an admin, never applied on its own", async () => {
+    for (const event of ["refund.completed", "chargeback.created"]) {
+      const res = await deliver({ event });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ outcome: "review" });
+    }
+    const rows = (db.tables.financial_audit_log ?? []).filter((r) => r.action === "wallet_topup_provider_event_review" && r.reference === REF);
+    expect(rows).toHaveLength(2);
+    // nothing was verified, credited or reversed — the Flutterwave contract is not relied on
+    expect(verifyCalls).toEqual([]);
+    expect(creditCalls).toEqual([]);
   });
 
   it("SUB, verification and ad references are routed to their own settle — with the API-verified charge", async () => {

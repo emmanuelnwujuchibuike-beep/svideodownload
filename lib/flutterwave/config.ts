@@ -206,10 +206,20 @@ export type FlutterwaveGate = { ok: true } | { ok: false; reason: "not_configure
  * The one gate every checkout asks before it writes an attempt. Pure over the config.
  */
 export function flutterwaveCheckoutGate(purpose: string, currency: string, cfg: FlutterwaveConfig): FlutterwaveGate {
+  const rail = flutterwaveCollectionGate(currency, cfg);
+  if (!rail.ok && rail.reason !== "currency_not_verified") return rail;
+  if (!(cfg.enabledPurposes as readonly string[]).includes(purpose)) return { ok: false, reason: "purpose_disabled" };
+  return rail;
+}
+
+/**
+ * The rail half of the gate: key, webhook hash, the confirmed amount unit and the currency — without the purpose list.
+ * Frenz Coin Part 4: a coin deposit's purpose switch is the audited `frenzCoin` setting, not this list (lib/coin/deposits.ts).
+ */
+export function flutterwaveCollectionGate(currency: string, cfg: FlutterwaveConfig): FlutterwaveGate {
   if (!cfg.secretKey) return { ok: false, reason: "not_configured" };
   if (!cfg.secretHash) return { ok: false, reason: "webhook_secret_missing" };
   if (!cfg.amountUnitConfirmed) return { ok: false, reason: "amount_unit_unconfirmed" };
-  if (!(cfg.enabledPurposes as readonly string[]).includes(purpose)) return { ok: false, reason: "purpose_disabled" };
   if (!cfg.verifiedCurrencies.includes(currency.toUpperCase())) return { ok: false, reason: "currency_not_verified" };
   return { ok: true };
 }

@@ -32,6 +32,7 @@ import { AdDeliveryMonitorLazy } from "@/features/admin/ad-delivery-monitor-lazy
 import { AdPlatformControlsLazy } from "@/features/admin/ad-platform-controls-lazy";
 import { AdSafetyCenterLazy } from "@/features/admin/ad-safety-center-lazy";
 import { AdminPanel, AdminShell } from "@/features/admin/admin-shell";
+import { FrenzCoinAdminLazy } from "@/features/admin/frenz-coin-admin-lazy";
 import { AdminSubsections } from "@/features/admin/section-tabs";
 import { SupportInbox } from "@/features/admin/support-inbox";
 import { RatingsSection } from "@/features/admin/ratings-section";
@@ -393,6 +394,13 @@ export default async function AdminPage() {
               <RevenueSection revenue={revenue} analytics={analytics} />
             </Suspense>
             <DigestPanel />
+          </AdminPanel>
+
+          {/* Frenz Coin Part 6: the coin console — its own chunk, fetched only when this panel renders */}
+          <AdminPanel id="frenz-coin">
+            <Suspense fallback={<PanelSkeleton />}>
+              <FrenzCoinSection />
+            </Suspense>
           </AdminPanel>
 
           {/*
@@ -907,6 +915,12 @@ async function ModerationSection() {
 async function PlatformStatusSection() {
   const statuses = await getPlatformStatus();
   return <PlatformStatusEditor initial={statuses} />;
+}
+
+/** Frenz Coin Part 6: the console, given the current audited coin settings (read here, streamed with the panel). */
+async function FrenzCoinSection() {
+  const landing = await getLandingSettings();
+  return <FrenzCoinAdminLazy config={landing.frenzCoin} />;
 }
 
 async function LandingSection() {

@@ -18,6 +18,8 @@ import { useTopbarCenter } from "@/features/app-shell/topbar-slot";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { UserMenu } from "@/features/auth/user-menu";
 import { CreateActionSheet } from "@/features/create/create-action-sheet";
+import { useCoinGlance } from "@/features/wallet/coin-glance";
+import { CoinHeaderPillLazy as CoinHeaderPill } from "@/features/wallet/coin-entry-lazy";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { useTopAdPresent } from "@/lib/dom/top-ad-present";
@@ -33,6 +35,8 @@ export function AppTopbar() {
     no mode to consult.
   */
   const { handle } = useEntitlements();
+  // Frenz Coin Part 5: the /downloads header carries the wallet balance (null — and no request — while Frenz Coin is off)
+  const coin = useCoinGlance();
   /*
     🔴 THIS BAR STANDS DOWN ON /search, BELOW `lg` (owner, 2026-08-24: "on the
     search page the search icon shouldnt be there, only the search placeholder
@@ -463,7 +467,8 @@ export function AppTopbar() {
           app is installed or running standalone, so it can never be a dead
           control, and it hides while the search field has the row.
         */}
-        {pathname === "/downloads" && !searchActive ? <InstallHeaderCta className="h-9 px-3 text-[13px] max-[374px]:hidden sm:px-3.5" label="Install" /> : null}
+        {/* with the coin pill in the bar, Install steps out below 430 px so the cluster stays one tidy row */}
+        {pathname === "/downloads" && !searchActive ? <InstallHeaderCta className={cn("h-9 px-3 text-[13px] max-[374px]:hidden sm:px-3.5", coin && "max-[429px]:hidden")} label="Install" /> : null}
         {/* No Earn or Add friend in the top bar on /downloads (owner, 2026-10-16); Friends is in the bottom nav. */}
         {/*
           "My ads" — the megaphone and the words on a glass pill, set into this bar (owner 2026-10-15:
@@ -472,6 +477,12 @@ export function AppTopbar() {
           fit from 375 px; on a narrower phone in a browser tab, Install steps out of this bar.
         */}
         {pathname === "/downloads" && !searchActive ? <PromoteButton /> : null}
+
+        {/*
+          Frenz Coin Part 5 ("Where the wallet lives", Entry 1, owner 2026-10-25): the balance pill beside the bell on
+          /downloads — renders nothing until the member's real balance is known, and nothing at all while Frenz Coin is off.
+        */}
+        {pathname === "/downloads" && !searchActive ? <CoinHeaderPill /> : null}
 
         <span className={searchActive ? "hidden" : "lg:hidden"}>
           {searchActive ? null : <NotificationBell glass={glassBar} />}

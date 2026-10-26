@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ACCOUNT_DELETION_GRACE_DAYS } from "@/lib/account/deletion";
+import { accountFinancialBlockers, BLOCKER_COPY } from "@/lib/account/financial-retention";
 import { writeAuditLog } from "@/lib/security/audit-log";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -29,6 +30,16 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+
+  /*
+    Frenz Coin Part 2 (H3): money first. An account that still holds withdrawable credits or earnings, or has a
+    withdrawal or payment in flight, is not scheduled — the member would lose the money. The purge checks again before
+    it runs (cron/purge-deleted-accounts). A check that cannot run does not block the REQUEST; it blocks the purge.
+  */
+  const money = await accountFinancialBlockers(user.id);
+  if (money && !money.ok && money.reasons.length) {
+    return NextResponse.json({ error: "Settle your money before deleting your account.", reasons: money.reasons.map((r) => BLOCKER_COPY[r]) }, { status: 409 });
+  }
 
   const now = new Date().toISOString();
   const { error } = await supabase.from("profiles").update({ deletion_requested_at: now }).eq("id", user.id);

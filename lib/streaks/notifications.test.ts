@@ -31,8 +31,9 @@ const MIGRATION = readFileSync("supabase/migrations/0132_streak_notifications.sq
   is the one the registry is checked against. Bump this when the next
   migration restates the list.
 */
-// 0187 (2026-10-07) restated it for the reward, referral and withdrawal types.
-const LATEST_TYPE_CHECK = readFileSync("supabase/migrations/0227_sub_monetization.sql", "utf8");
+// 0187 (2026-10-07) restated it for the reward, referral and withdrawal types; 0227 for memberships and SUB.
+// Frenz Coin closeout: 0283 restated it (0227's list whole) for the five coin types.
+const LATEST_TYPE_CHECK = readFileSync("supabase/migrations/0283_frenz_coin_closeout.sql", "utf8");
 const STREAK_TYPES = ["streak_reminder", "streak_milestone", "streak_lost"] as const;
 const META = readFileSync("features/notifications/meta.tsx", "utf8");
 

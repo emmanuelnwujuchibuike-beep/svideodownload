@@ -37,6 +37,9 @@ vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/ser
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => db.client() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: async () => ({ data: { user: sessionUser } }) }, from: (t: string) => (db.client() as { from: (t: string) => unknown }).from(t) }) }));
 vi.mock("@/lib/admin/guard", () => ({ getAdminUser: async () => adminUser }));
+// Frenz Coin Part 2 (M4): money routes also need a recent password; always fresh here (the stale case is in app/api/admin/financial-step-up.test.ts)
+const reauthed = true;
+vi.mock("@/lib/admin/reauth", () => ({ hasRecentReauth: async () => reauthed }));
 vi.mock("@/lib/storage/r2", () => ({ hasPrivateR2: true, presignPrivateGet: (k: string) => presignGet(k), presignPrivatePut: vi.fn(async (k: string) => `https://put.example/${k}`), deletePrivate: vi.fn(), readPrivatePrefix: vi.fn(async () => ({ prefix: new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0]), size: 1000, contentType: "image/jpeg" })) }));
 vi.mock("@/lib/rate-limit", () => ({ trackLimiter: { limit: async () => ({ success: true }) }, clientId: () => "ip" }));
 vi.mock("@/lib/security/audit-log", () => ({ writeAuditLog: vi.fn(async () => {}) }));

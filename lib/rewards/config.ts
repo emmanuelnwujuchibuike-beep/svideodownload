@@ -367,7 +367,8 @@ export function normalizeRewardsConfig(raw: unknown): RewardsConfig {
 
 /** A save that changes any amount or rule bumps the version stamped on every reward after it. */
 export function versionRewardsConfig(previous: RewardsConfig, next: RewardsConfig, now: Date = new Date()): RewardsConfig {
-  const fp = (c: RewardsConfig) => JSON.stringify({ e: c.enabled, ev: c.events, q: c.qualification, a: c.attribution, w: c.withdrawals, qs: c.quests, f: c.followers, af: c.affiliate, wp: c.weeklyPrizes });
+  // Frenz Coin Part 2 (M5): the SUB money settings (fees, flat-fee tiers, payout provider, automatic payout, fraud limits) count too
+  const fp = (c: RewardsConfig) => JSON.stringify({ e: c.enabled, ev: c.events, q: c.qualification, a: c.attribution, w: c.withdrawals, qs: c.quests, f: c.followers, af: c.affiliate, wp: c.weeklyPrizes, s: c.sub });
   if (fp(previous) === fp(next)) return { ...next, version: previous.version, updatedAt: previous.updatedAt };
   return { ...next, version: previous.version + 1, updatedAt: now.toISOString() };
 }

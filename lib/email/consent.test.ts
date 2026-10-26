@@ -183,14 +183,16 @@ describe("every email is classified (no optional email bypasses the switch)", ()
     const direct = files.filter((f) => /sendProductEmail\(|sendTopupReceiptEmail\(|sendOtpEmail\(/.test(readFileSync(f, "utf8")) && !f.endsWith(join("email", "resend.ts")) && !f.endsWith(join("email", "member-email.ts")));
     const rel = direct.map((f) => f.slice(process.cwd().length + 1).replace(/\\/g, "/")).sort();
     // sign_in_code, topup_receipt, ad_campaign_notice (paid campaigns), support_reply, password_code (admin + member),
-    // admin_ai_failure — see consent.ts
+    // admin_ai_failure, coin_pin_reset (Part 4.2), coin_pin_security (closeout) — see consent.ts
     expect(rel).toEqual([
       "app/api/admin/auth/password-code/route.ts",
       "app/api/auth/otp/route.ts",
+      "app/api/coin/pin/reset/route.ts",
       "app/api/v1/app/security/password/code/route.ts",
       "lib/ads-platform/ad-notify.ts",
       "lib/ai/failure-alert.ts",
       "lib/ai/topup-notify.ts",
+      "lib/coin/notify.ts",
       "lib/support/chat.ts",
     ]);
     // and the ad file's only direct send is the PAID campaign notice; the waitlist goes through emailMember

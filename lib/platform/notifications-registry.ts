@@ -132,6 +132,15 @@ export const NOTIFICATIONS = [
   { id: "referral_reward", label: "Referral reward", category: "premium" },
   { id: "withdrawal_update", label: "Withdrawal update", category: "premium" },
   { id: "ai_deposit_failed", label: "AI deposit failed", category: "premium" },
+  /*
+    Frenz Coin (closeout, migration 0283 adds them to the notifications type check). Their OWN types for the same
+    reason the AI deposits have theirs: a borrowed type inherits another product's label and destination.
+  */
+  { id: "coin_deposit_update", label: "Frenz Coin deposit", category: "premium" },
+  { id: "coin_transfer_received", label: "Frenz Coin received", category: "premium" },
+  { id: "coin_transfer_sent", label: "Frenz Coin sent", category: "premium" },
+  { id: "coin_withdrawal_update", label: "Frenz Coin withdrawal", category: "premium" },
+  { id: "coin_pin_security", label: "Transaction PIN changed", category: "security" },
   { id: "renewal_reminder", label: "Renewal reminder", category: "premium" },
   { id: "premium_expiring", label: "Premium expiring", category: "premium" },
   /* ── security ── */

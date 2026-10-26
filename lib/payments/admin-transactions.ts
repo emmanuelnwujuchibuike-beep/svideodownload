@@ -1,9 +1,11 @@
 import "server-only";
 
-import { PAYMENT_PURPOSES, type PaymentPurpose } from "@/lib/ai/credits/wallet-config";
+import type { PaymentPurpose } from "@/lib/ai/credits/wallet-config";
+import { ADMIN_PAYMENT_PURPOSES, type AdminPaymentPurpose } from "@/lib/payments/admin-purposes";
 import { PLAN_ATTEMPT_COLUMNS, reconcilePlanAttempt, type PlanAttemptRow } from "@/lib/ai/credits/plan-attempts";
 import { reconcileTopupAttempt, TOPUP_ATTEMPT_COLUMNS, type TopupAttemptRow } from "@/lib/ai/wallet/reconcile-topups";
 import { reconcileAdAttempt } from "@/lib/ads-platform/payment-server";
+import { reconcileCoinDepositAttempt } from "@/lib/coin/deposits";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { confirmVerificationPayment } from "@/lib/social/paid-verification";
 import { confirmSubPayment } from "@/lib/sub/server";
@@ -23,6 +25,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * written to `financial_audit_log` with the admin, the reference and the before/after status.
  */
 
+export { ADMIN_PAYMENT_PURPOSES, type AdminPaymentPurpose } from "@/lib/payments/admin-purposes";
+
 export type LedgerSource = "ai_topup_attempts" | "sub_purchases" | "verification_purchases";
 export type ReconciliationState = "settled" | "open" | "needs_check" | "review" | "closed";
 export const RECONCILIATION_STATES: readonly ReconciliationState[] = ["settled", "open", "needs_check", "review", "closed"];
@@ -31,7 +35,7 @@ export interface AdminPaymentRow {
   source: LedgerSource;
   reference: string;
   provider: string;
-  purpose: PaymentPurpose | "unknown";
+  purpose: AdminPaymentPurpose | "unknown";
   status: string;
   state: ReconciliationState;
   amountMinor: number | null;
@@ -68,8 +72,8 @@ export function reconciliationState(status: string, hasLink: boolean, createdAt:
   return "closed";
 }
 
-const PURPOSE_SET = new Set<string>(PAYMENT_PURPOSES);
-const purposeOf = (v: unknown): PaymentPurpose | "unknown" => (typeof v === "string" && PURPOSE_SET.has(v) ? (v as PaymentPurpose) : "unknown");
+const PURPOSE_SET = new Set<string>(ADMIN_PAYMENT_PURPOSES);
+const purposeOf = (v: unknown): AdminPaymentPurpose | "unknown" => (typeof v === "string" && PURPOSE_SET.has(v) ? (v as AdminPaymentPurpose) : "unknown");
 const num = (v: unknown): number | null => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 type Row = Record<string, unknown>;
 /** The few PostgREST calls the list makes, typed structurally (the generated builder types are too deep to compose). */
@@ -82,7 +86,7 @@ const table = (name: string, columns: string): Query => createAdminClient().from
 
 export interface TransactionFilter {
   provider?: "flutterwave" | "paystack";
-  purpose?: PaymentPurpose;
+  purpose?: AdminPaymentPurpose;
   state?: ReconciliationState;
   /** an exact reference */
   reference?: string;
@@ -105,7 +109,7 @@ export async function listAdminTransactions(f: TransactionFilter = {}, now = Dat
   const rows: AdminPaymentRow[] = [];
 
   // the attempt ledger: wallet top-ups, ads, AI plans, site plans
-  if (!f.purpose || ["wallet_topup", "ad_campaign", "ai_subscription", "site_subscription"].includes(f.purpose)) {
+  if (!f.purpose || ["wallet_topup", "ad_campaign", "ai_subscription", "site_subscription", "coin_deposit"].includes(f.purpose)) {
     let q = narrow(table("ai_topup_attempts", "reference, user_id, provider, status, purpose, amount_cents, currency, provider_amount, provider_currency, status_reason, checkout_url, created_at, updated_at"));
     if (f.purpose) q = q.eq("purpose", f.purpose);
     const { data, error } = await q.order("created_at", { ascending: false }).limit(limit);
@@ -184,7 +188,7 @@ export async function listAdminTransactions(f: TransactionFilter = {}, now = Dat
 /* ───────────────────────────── recheck ───────────────────────────── */
 
 export type RecheckResult =
-  | { ok: true; source: LedgerSource; purpose: PaymentPurpose | "unknown"; before: string; after: string; outcome: string }
+  | { ok: true; source: LedgerSource; purpose: AdminPaymentPurpose | "unknown"; before: string; after: string; outcome: string }
   | { ok: false; code: "bad_reference" | "not_found" | "unsupported"; message: string };
 
 const OPEN = new Set(["pending", "verification_required", "initiated"]);
@@ -203,7 +207,7 @@ export async function adminRecheckPayment(reference: string, adminId: string): P
   const db = createAdminClient();
 
   let source: LedgerSource | null = null;
-  let purpose: PaymentPurpose | "unknown" = "unknown";
+  let purpose: AdminPaymentPurpose | "unknown" = "unknown";
   let before = "";
   let outcome = "";
 
@@ -222,6 +226,9 @@ export async function adminRecheckPayment(reference: string, adminId: string): P
       outcome = data ? await reconcilePlanAttempt(data as unknown as PlanAttemptRow, config) : "not_found";
     } else if (purpose === "ad_campaign") {
       outcome = await reconcileAdAttempt(db as never, reference);
+    } else if (purpose === "coin_deposit") {
+      // Part 4.1: the coin settle path (Flutterwave asked about OUR reference, matched to the row, once in SQL, on hold)
+      outcome = await reconcileCoinDepositAttempt(reference);
     } else {
       return { ok: false, code: "unsupported", message: "This attempt's purpose has no recheck path." };
     }

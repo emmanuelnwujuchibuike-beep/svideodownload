@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { requireAdminApi } from "@/lib/admin/require-admin";
 import { requireSensitiveAdmin } from "@/lib/admin/reauth";
-import { PAYMENT_PURPOSES, type PaymentPurpose } from "@/lib/ai/credits/wallet-config";
+import { ADMIN_PAYMENT_PURPOSES, type AdminPaymentPurpose } from "@/lib/payments/admin-purposes";
 import { adminRecheckPayment, listAdminTransactions, RECONCILIATION_STATES, type ReconciliationState } from "@/lib/payments/admin-transactions";
 import { subVerifyLimiter } from "@/lib/rate-limit";
 
@@ -23,7 +23,7 @@ export const dynamic = "force-dynamic";
 const query = z
   .object({
     provider: z.enum(["flutterwave", "paystack"]).optional(),
-    purpose: z.enum(PAYMENT_PURPOSES as unknown as [PaymentPurpose, ...PaymentPurpose[]]).optional(),
+    purpose: z.enum(ADMIN_PAYMENT_PURPOSES as unknown as [AdminPaymentPurpose, ...AdminPaymentPurpose[]]).optional(),
     state: z.enum(RECONCILIATION_STATES as unknown as [ReconciliationState, ...ReconciliationState[]]).optional(),
     reference: z.string().trim().max(110).regex(/^frenz_[A-Za-z0-9_-]{4,100}$/, "Search by a Frenz reference (frenz_…).").optional(),
     limit: z.coerce.number().int().min(1).max(100).optional(),

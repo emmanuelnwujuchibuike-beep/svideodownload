@@ -9,7 +9,8 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const schema = z.object({ credits: z.number().int().positive().max(100_000_000), method: z.string().max(30), details: z.record(z.string().max(30), z.string().max(200)) }).strict();
+// `idempotencyKey` (0278) is optional so a page that has not updated yet keeps working: the one-open-withdrawal index still stops a double hold
+const schema = z.object({ credits: z.number().int().positive().max(100_000_000), method: z.string().max(30), details: z.record(z.string().max(30), z.string().max(200)), idempotencyKey: z.string().min(8).max(80).optional() }).strict();
 
 /**
  * POST /api/rewards/withdrawals — ask to cash out WITHDRAWABLE credits (brief
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   const settings = await getLandingSettings();
-  const out = await requestWithdrawal({ userId: user.id, credits: parsed.data.credits, method: parsed.data.method, details: parsed.data.details, config: settings.frenzRewards });
+  const out = await requestWithdrawal({ userId: user.id, credits: parsed.data.credits, method: parsed.data.method, details: parsed.data.details, config: settings.frenzRewards, idempotencyKey: parsed.data.idempotencyKey ?? null });
   if (!out.ok) return NextResponse.json({ error: out.error }, { status: out.status });
   return NextResponse.json({ ok: true, id: out.id, status: out.status, usdCents: out.usdCents });
 }

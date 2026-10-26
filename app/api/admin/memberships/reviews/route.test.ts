@@ -9,6 +9,9 @@ let admin: { id: string } | null = { id: "admin-1" };
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => db.client() }));
 vi.mock("@/lib/admin/guard", () => ({ getAdminUser: async () => admin }));
+// Frenz Coin Part 2 (M4): money routes also need a recent password; `reauthed = false` is a stale admin
+let reauthed = true;
+vi.mock("@/lib/admin/reauth", () => ({ hasRecentReauth: async () => reauthed }));
 
 const route = await import("./route");
 const REF = `frenz_sub_${"ab".repeat(16)}`;
@@ -71,6 +74,19 @@ describe("admin money reviews", () => {
     const res = await post({ action: "restore_dispute", reference: REF, note: "Won: Paystack dispute 9" });
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({ reason: "nothing_clawed_back" });
+  });
+
+  it("Frenz Coin Part 2 (M4): restoring a dispute gives money back, so a stale admin is asked for the password again; closing a review moves nothing and is not gated", async () => {
+    reauthed = false;
+    try {
+      const res = await post({ action: "restore_dispute", reference: REF, note: "Won: Paystack dispute 123" });
+      expect(res.status).toBe(403);
+      expect(await res.json()).toMatchObject({ code: "REAUTH_REQUIRED" });
+      expect(db.rpc.restore_disputed_sub_purchase).not.toHaveBeenCalled();
+      expect((await post({ action: "close_refund_review", id: "41", note: "Refunded the fee by hand" })).status).toBe(200);
+    } finally {
+      reauthed = true;
+    }
   });
 
   it("'Dispute won' calls the restore with the ADMIN's id and their note; a short note is refused", async () => {

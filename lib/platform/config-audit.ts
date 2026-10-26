@@ -13,7 +13,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  */
 
 /** Part 8 §22: Character Replace settings changes ride the same log. */
-export type ConfigSurface = "flag" | "experiment" | "character_replace" | "ai_plans" | "ai_providers" | "lip_sync" | "text_to_audio" | "voice_clone" | "ai_showcase" | "ai_promo" | "ad_pricing";
+// Frenz Coin Part 2 (M5): "rewards" = the reward rules, withdrawal rates and SUB money settings; "ai_wallet" = deposits, transfer fees, payment routing; "frenz_coin" = the coin wallet (Part 3)
+export type ConfigSurface = "flag" | "experiment" | "character_replace" | "ai_plans" | "ai_providers" | "lip_sync" | "text_to_audio" | "voice_clone" | "ai_showcase" | "ai_promo" | "ad_pricing" | "rewards" | "ai_wallet" | "frenz_coin";
 
 export interface ConfigChange {
   id: string;
@@ -54,6 +55,28 @@ export function recordConfigChange(input: {
       /* audit is best-effort — must never break the change it records */
     }
   })();
+}
+
+/**
+ * Frenz Coin Part 2 (M5): the same record, but AWAITED and reported — for FINANCIAL settings (fees, rates, payout
+ * controls), where a change without its audit row must not look like a successful change. The caller writes this
+ * BEFORE it persists the change and refuses the save when it answers false. Same table, same columns.
+ */
+export async function recordConfigChangeStrict(input: { actorId: string | null; surface: ConfigSurface; targetId: string; action?: string; before: unknown; after: unknown }): Promise<boolean> {
+  if (!hasSupabase) return false;
+  try {
+    const { error } = await createAdminClient().from("config_audit_log").insert({
+      actor_id: input.actorId,
+      surface: input.surface,
+      target_id: input.targetId,
+      action: input.action ?? "settings.update",
+      before: input.before ?? null,
+      after: input.after ?? null,
+    });
+    return !error;
+  } catch {
+    return false;
+  }
 }
 
 /** Recent config changes, newest first — for the admin history view. `[]` on any error. */

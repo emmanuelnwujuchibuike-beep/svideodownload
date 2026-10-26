@@ -1,6 +1,7 @@
-import { recordConfigChange } from "@/lib/platform/config-audit";
+import { recordConfigChange, recordConfigChangeStrict, type ConfigSurface } from "@/lib/platform/config-audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizeRewardsConfig, versionRewardsConfig, type RewardsConfig } from "@/lib/rewards/config";
+import { normalizeCoinConfig, versionCoinConfig, type FrenzCoinConfig } from "@/lib/coin/config";
 import {
   normalizeCharacterReplaceConfig,
   versionCharacterReplacePricing,
@@ -335,6 +336,8 @@ export interface LandingSettings {
   frenzAiVoiceClone: VoiceCloneConfig;
   /** 0187: the reward rules — events, qualification, withdrawals (lib/rewards/config.ts). Read by the SQL engine. */
   frenzRewards: RewardsConfig;
+  /** Frenz Coin Part 3 (0279): the coin wallet's rates, fees, limits and placeholders — lib/coin/config.ts. Off by default. */
+  frenzCoin: FrenzCoinConfig;
 }
 
 /** The two engines, as a value the settings row can hold. */
@@ -396,6 +399,7 @@ export const DEFAULT_LANDING: LandingSettings = {
   frenzAiTextToAudio: normalizeTextToAudioConfig(null),
   frenzAiVoiceClone: normalizeVoiceCloneConfig(null),
   frenzRewards: normalizeRewardsConfig(null),
+  frenzCoin: normalizeCoinConfig(null),
 };
 
 /** Anything that is not exactly "propainter" is the safe, cheap engine. */
@@ -548,6 +552,7 @@ export async function getLandingSettings(): Promise<LandingSettings> {
       frenzAiTextToAudio: normalizeTextToAudioConfig(raw.frenzAiTextToAudio),
       frenzAiVoiceClone: normalizeVoiceCloneConfig(raw.frenzAiVoiceClone),
       frenzRewards: normalizeRewardsConfig(raw.frenzRewards),
+      frenzCoin: normalizeCoinConfig((raw as { frenzCoin?: unknown }).frenzCoin),
     };
     cache = { at: Date.now(), value };
     return value;
@@ -586,10 +591,12 @@ export async function getLandingSettings(): Promise<LandingSettings> {
  * What a caller may send: any flat field, and for the nested Character Replace
  * object a PARTIAL of it — the admin panel posts only the knobs it shows.
  */
-export type LandingSettingsPatch = Partial<Omit<LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiKlingPricing" | "frenzAiLipSync" | "frenzAiTextToAudio" | "frenzAiVoiceClone" | "frenzRewards">> & {
+export type LandingSettingsPatch = Partial<Omit<LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiKlingPricing" | "frenzAiLipSync" | "frenzAiTextToAudio" | "frenzAiVoiceClone" | "frenzRewards" | "frenzCoin">> & {
   /** Voice Cloning: the same deep merge — the panel posts the slots without erasing the sample limits. */
   frenzAiVoiceClone?: Record<string, unknown>;
   frenzRewards?: Record<string, unknown>;
+  /** merged one level deeper, like frenzRewards */
+  frenzCoin?: Record<string, unknown>;
   /** Lip Sync Pro: the same deep merge. */
   frenzAiLipSync?: Record<string, unknown>;
   /** Text to Audio: the same deep merge. */
@@ -623,11 +630,69 @@ function mergeCharacterReplacePatch(current: Record<string, unknown>, patch: Rec
   return out;
 }
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  WHICH FINANCIAL SETTINGS A SAVE CHANGES (Frenz Coin Part 2, M4 / M5)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Money settings ride in the same "landing" row as everything else, so the admin route and the writer both need to
+ * know whether THIS save changes one: the route asks for a fresh password only then (an unrelated panel is not
+ * affected), and the writer records the change BEFORE persisting it (a change without its audit row is refused).
+ *
+ *   rewards    frenzRewards — the reward rules, withdrawal rates, limits and fees, and every SUB money setting
+ *              (fees, flat-fee tiers, payout provider, automatic payout, fraud limits)
+ *   ai_wallet  frenzAiPlans.wallet (packs, custom deposits, transfer fees, payment routing) and the deposit minimum
+ *   frenz_coin frenzCoin — every coin rate, fee, limit and switch (Frenz Coin Part 3)
+ *
+ * Compared after normalisation, so a panel re-posting what is already stored changes nothing. Bookkeeping fields
+ * (version, updatedAt) never count. No secret lives in either section.
+ */
+export interface FinancialChange {
+  surface: Extract<ConfigSurface, "rewards" | "ai_wallet" | "frenz_coin">;
+  keys: string[];
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+}
+
+const BOOKKEEPING = new Set(["version", "updatedAt"]);
+function diffKeys(before: Record<string, unknown>, after: Record<string, unknown>): { keys: string[]; before: Record<string, unknown>; after: Record<string, unknown> } {
+  const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((k) => !BOOKKEEPING.has(k) && JSON.stringify(before[k]) !== JSON.stringify(after[k]));
+  return { keys, before: Object.fromEntries(keys.map((k) => [k, before[k]])), after: Object.fromEntries(keys.map((k) => [k, after[k]])) };
+}
+
+/** Pure: the financial sections that differ between two full settings values. */
+type MoneySections = Pick<LandingSettings, "frenzRewards" | "frenzAiPlans" | "frenzAiMinTopupCents"> & Partial<Pick<LandingSettings, "frenzCoin">>;
+export function financialChanges(current: MoneySections, next: MoneySections): FinancialChange[] {
+  const out: FinancialChange[] = [];
+  const r = diffKeys(current.frenzRewards as unknown as Record<string, unknown>, next.frenzRewards as unknown as Record<string, unknown>);
+  if (r.keys.length) out.push({ surface: "rewards", ...r });
+  const w = diffKeys(
+    { ...(current.frenzAiPlans.wallet as unknown as Record<string, unknown>), minTopupCents: current.frenzAiMinTopupCents },
+    { ...(next.frenzAiPlans.wallet as unknown as Record<string, unknown>), minTopupCents: next.frenzAiMinTopupCents },
+  );
+  if (w.keys.length) out.push({ surface: "ai_wallet", ...w });
+  const c = diffKeys((current.frenzCoin ?? {}) as unknown as Record<string, unknown>, (next.frenzCoin ?? current.frenzCoin ?? {}) as unknown as Record<string, unknown>);
+  if (c.keys.length) out.push({ surface: "frenz_coin", ...c });
+  return out;
+}
+
+/** What a patch WOULD change financially, against the stored settings (normalised exactly as the writer does). */
+export async function financialChangesFor(s: LandingSettingsPatch): Promise<FinancialChange[]> {
+  if (s.frenzRewards === undefined && s.frenzAiPlans === undefined && s.frenzAiMinTopupCents === undefined && s.frenzCoin === undefined) return [];
+  const current = await getLandingSettings();
+  return financialChanges(current, {
+    frenzRewards: versionRewardsConfig(current.frenzRewards, normalizeRewardsConfig(mergeCharacterReplacePatch(current.frenzRewards as unknown as Record<string, unknown>, (s.frenzRewards ?? {}) as Record<string, unknown>))),
+    frenzAiPlans: normalizeAiPlansConfig(mergeCharacterReplacePatch(current.frenzAiPlans as unknown as Record<string, unknown>, (s.frenzAiPlans ?? {}) as Record<string, unknown>)),
+    frenzAiMinTopupCents: s.frenzAiMinTopupCents === undefined ? current.frenzAiMinTopupCents : normalizeMinTopup(s.frenzAiMinTopupCents),
+    frenzCoin: versionCoinConfig(current.frenzCoin, normalizeCoinConfig(mergeCharacterReplacePatch(current.frenzCoin as unknown as Record<string, unknown>, (s.frenzCoin ?? {}) as Record<string, unknown>))),
+  });
+}
+
 export async function setLandingSettings(s: LandingSettingsPatch, audit: { changedBy?: string | null; reason?: string | null } = {}): Promise<void> {
   const db = createAdminClient();
   const current = await getLandingSettings();
 
-  const pick = <K extends Exclude<keyof LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiKlingPricing" | "frenzAiLipSync" | "frenzAiTextToAudio" | "frenzAiVoiceClone" | "frenzRewards">>(key: K): LandingSettings[K] =>
+  const pick = <K extends Exclude<keyof LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiKlingPricing" | "frenzAiLipSync" | "frenzAiTextToAudio" | "frenzAiVoiceClone" | "frenzRewards" | "frenzCoin">>(key: K): LandingSettings[K] =>
     s[key] === undefined ? current[key] : (s[key] as unknown as LandingSettings[K]);
 
   const value: LandingSettings = {
@@ -706,8 +771,25 @@ export async function setLandingSettings(s: LandingSettingsPatch, audit: { chang
     ),
     // 0187: the reward rules — merged, normalised, versioned (the version is stamped on every reward after it)
     frenzRewards: versionRewardsConfig(current.frenzRewards, normalizeRewardsConfig(mergeCharacterReplacePatch(current.frenzRewards as unknown as Record<string, unknown>, (s.frenzRewards ?? {}) as Record<string, unknown>))),
+    // 0279: the coin settings — merged, normalised, versioned (the version is stamped on every coin operation's snapshot)
+    frenzCoin: versionCoinConfig(current.frenzCoin, normalizeCoinConfig(mergeCharacterReplacePatch(current.frenzCoin as unknown as Record<string, unknown>, (s.frenzCoin ?? {}) as Record<string, unknown>))),
   };
-  await db.from("settings").upsert({ key: "landing", value }, { onConflict: "key" });
+  /*
+    Frenz Coin Part 2 (M5): a FINANCIAL change is recorded first, awaited, with the admin's id and the before/after of
+    every changed key. If that record cannot be written, nothing is saved (the caller answers 500). The two writes are
+    not one transaction (config_audit_log and settings are separate PostgREST calls): if the save fails AFTER its
+    record, a "settings.update.failed" row follows, so the log never shows an applied change that is not stored.
+  */
+  const money = financialChanges(current, value);
+  for (const c of money) {
+    const recorded = await recordConfigChangeStrict({ actorId: audit.changedBy ?? null, surface: c.surface, targetId: "settings", action: "settings.update", before: c.before, after: { ...c.after, ...(audit.reason ? { _reason: audit.reason } : {}) } });
+    if (!recorded) throw new Error(`financial settings audit could not be written (${c.surface}) — nothing was saved`);
+  }
+  const { error: saveError } = await db.from("settings").upsert({ key: "landing", value }, { onConflict: "key" });
+  if (saveError) {
+    for (const c of money) await recordConfigChangeStrict({ actorId: audit.changedBy ?? null, surface: c.surface, targetId: "settings", action: "settings.update.failed", before: null, after: { keys: c.keys } });
+    throw new Error("settings could not be saved");
+  }
   cache = null;
 
   /*

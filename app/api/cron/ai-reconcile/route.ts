@@ -5,6 +5,8 @@ import { reconcilePendingAdPayments } from "@/lib/ads-platform/payment-server";
 import { expireFlutterwaveSitePlans, reconcileFlutterwaveRenewals } from "@/lib/ai/credits/flutterwave-plans";
 import { reconcilePendingPlanAttempts } from "@/lib/ai/credits/plan-attempts";
 import { reconcilePendingTopups } from "@/lib/ai/wallet/reconcile-topups";
+import { reconcileCoinDeposits } from "@/lib/coin/deposits";
+import { sweepCoinNotifications } from "@/lib/coin/notify";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { sweepAiJobs } from "@/lib/ai/recovery";
 import { awardClosedWeek } from "@/lib/ai/weekly-top";
@@ -50,7 +52,7 @@ async function run(request: Request) {
     claimed (compare-and-set) before its provider is asked, and settling is idempotent on the reference, so an overlap
     with a webhook, a return page or another run credits once. Aggregate counts only in the response.
   */
-  const [ai, adPayments, subPurchases, walletTopups, aiPlanPurchases] = await Promise.all([
+  const [ai, adPayments, subPurchases, walletTopups, aiPlanPurchases, coinDeposits] = await Promise.all([
     sweepAiJobs(),
     reconcilePendingAdPayments(createAdminClient()).catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
     reconcilePendingSubPurchases().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
@@ -58,9 +60,11 @@ async function run(request: Request) {
     getLandingSettings()
       .then((s) => reconcilePendingPlanAttempts(s.frenzAiPlans, { limit: 10, budgetMs: 30_000 }))
       .catch(() => ({ error: "AI plan sweep failed" })),
+    // Frenz Coin Part 4 (0280): coin deposits whose webhook never came, then every deposit whose hold is over
+    reconcileCoinDeposits({ limit: 10, budgetMs: 20_000 }).catch(() => ({ error: "coin deposit sweep failed" })),
   ]);
   // 0218: any payment alert a webhook did not send yet; and the weekly AI prizes once a week has closed
-  const [fundingAlerts, weeklyAwards, payouts, autoWithdrawals, privacyExpiry, subReminders, subFanout, followerMilestones, affiliateCommissions, sitePlanExpiry, flutterwaveRenewals] = await Promise.all([
+  const [fundingAlerts, weeklyAwards, payouts, autoWithdrawals, privacyExpiry, subReminders, subFanout, followerMilestones, affiliateCommissions, sitePlanExpiry, flutterwaveRenewals, coinNotifications] = await Promise.all([
     flushFundingAlerts().catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
     awardClosedWeek(createAdminClient()).catch((e: unknown) => ({ error: String(e).slice(0, 160) })),
     // Paystack payouts still processing whose webhook never came
@@ -80,8 +84,10 @@ async function run(request: Request) {
     expireFlutterwaveSitePlans().catch(() => ({ error: "site plan expiry failed" })),
     // Part 3.3: Flutterwave renewals a webhook may have missed — listed, re-verified by id, through the one renewal ledger
     reconcileFlutterwaveRenewals({ limit: 10, budgetMs: 20_000 }).catch(() => ({ error: "flutterwave renewal sweep failed" })),
+    // Frenz Coin closeout: deposit held / released and withdrawal updates, each pushed once (claims) — after the deposit sweep above
+    sweepCoinNotifications(50).catch(() => ({ error: "coin notification sweep failed" })),
   ]);
-  return NextResponse.json({ ...ai, adPayments, subPurchases, walletTopups, aiPlanPurchases, fundingAlerts, weeklyAwards, payouts, autoWithdrawals, privacyExpiry, subReminders, subFanout, followerMilestones, affiliateCommissions, sitePlanExpiry, flutterwaveRenewals });
+  return NextResponse.json({ ...ai, adPayments, subPurchases, walletTopups, aiPlanPurchases, coinDeposits, fundingAlerts, weeklyAwards, payouts, autoWithdrawals, privacyExpiry, subReminders, subFanout, followerMilestones, affiliateCommissions, sitePlanExpiry, flutterwaveRenewals, coinNotifications });
 }
 
 export const GET = run;

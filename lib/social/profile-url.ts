@@ -39,7 +39,7 @@ export const RESERVED_HANDLES: ReadonlySet<string> = new Set([
   "glossary", "help", "history", "home", "learn", "library", "login", "members", "memories", "messages",
   "network", "notifications", "p", "pricing", "privacy", "profile", "quests", "r", "reels", "rewards",
   "saved", "search", "sound", "sounds", "studio", "sub", "support", "terms", "topics", "trust", "u",
-  "unsubscribe", "wallpapers", "welcome",
+  "unsubscribe", "wallet", "wallpapers", "welcome",
   // category hubs (served by the downloader route)
   ...CATEGORIES,
   // public/ folders and special files

@@ -77,6 +77,9 @@ export const MEMBER_EMAIL_KINDS = {
   withdrawal_decision: "transactional",
   withdrawal_update: "transactional",
   ai_video_ready: "transactional",
+  // Frenz Coin Part 5 (owner, 2026-10-25): a receipt for every coin money movement — deposit, transfer sent / received,
+  // withdrawal — to the member it belongs to (lib/coin/notify.ts). Money receipts are never optional.
+  coin_transaction: "transactional",
 } as const satisfies Record<string, EmailCategory>;
 export type MemberEmailKind = keyof typeof MEMBER_EMAIL_KINDS;
 
@@ -88,6 +91,10 @@ export const DIRECT_EMAIL_KINDS = {
   support_reply: "transactional",
   // 2026-10-23: a code to change your own password (admin dashboard, Account → Password) — never optional
   password_code: "security",
+  // Part 4.2: a code to reset your Frenz Coin transaction PIN (app/api/coin/pin/reset) — never optional
+  coin_pin_reset: "security",
+  // closeout: "your transaction PIN was changed / reset" (lib/coin/notify.ts) — never optional, never the PIN
+  coin_pin_security: "security",
   // 2026-10-23: a failed AI job, to the administrators only (lib/ai/failure-alert.ts)
   admin_ai_failure: "transactional",
 } as const satisfies Record<string, EmailCategory>;

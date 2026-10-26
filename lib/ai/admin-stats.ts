@@ -290,7 +290,7 @@ export async function getCharacterReplaceFreeAccessStats(currency: string): Prom
       admin.from("ai_free_entitlements").select("user_id, granted, used, restored, eligibility"),
       admin.from("ai_free_uses").select("user_id, status, normal_price_cents").limit(5000),
       admin.from("ai_device_associations").select("device_hash, risk_state").eq("risk_state", "limit_reached"),
-      admin.from("ai_product_ledger").select("user_id, kind, status, delta_cents").in("kind", ["recharge", "processing_charge"]).limit(5000),
+      admin.from("ai_product_ledger").select("user_id, kind, status, delta_cents").eq("product", "character_replace").in("kind", ["recharge", "processing_charge"]).limit(5000),
       admin.from("ai_jobs").select("metadata").eq("feature", "ai_character_replace").eq("status", "completed").not("metadata->provider_cost_estimate", "is", null).limit(2000),
     ]);
     const rows = (ent.data ?? []) as { user_id: string; granted: number; used: number; restored: number; eligibility: string }[];

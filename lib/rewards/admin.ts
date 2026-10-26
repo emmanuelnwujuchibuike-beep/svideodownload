@@ -32,8 +32,8 @@ export interface RewardsAdminView {
   };
   withdrawals: { pending: number; reviewing: number; approved: number; processing: number; completedCredits: number; completedUsdCents: number };
   recentReferrals: { at: string; referrer: string; referred: string | null; event: string; amount: number; creditClass: string; contentType: string | null }[];
-  /** source: "credits" (AI wallet) or "sub" (0227 — SUB money; credits 0, gross − fee = net) */
-  queue: { id: string; user: string; userId: string; credits: number; usdCents: number; status: string; method: string; details: Record<string, string>; createdAt: string; source: "credits" | "sub"; grossCents: number | null; feeCents: number | null }[];
+  /** source: "credits" (AI wallet), "sub" (0227 — SUB money) or "coin" (Frenz Coin, 0279); for sub / coin credits are 0 and gross − fee = net */
+  queue: { id: string; user: string; userId: string; credits: number; usdCents: number; status: string; method: string; details: Record<string, string>; createdAt: string; source: "credits" | "sub" | "coin"; grossCents: number | null; feeCents: number | null }[];
   /**
    * 0191 (owner 2026-10-07: "admin can track users if they reach the requirement, account activity per day, week and month, and show progress"):
    * each member's application status, progress against the thresholds, and rewarded activity over a day, a week and a month — computed in SQL
@@ -127,7 +127,7 @@ export async function loadRewardsAdmin(): Promise<RewardsAdminView> {
       completedUsdCents: n(t.withdrawals?.completedUsdCents),
     },
     recentReferrals: ev.map((e) => ({ at: e.created_at, referrer: name(e.beneficiary_id) ?? "?", referred: name(e.referred_user_id), event: e.event_type, amount: e.amount, creditClass: e.credit_class, contentType: e.referred_user_id ? (contentOf.get(e.referred_user_id) ?? null) : null })),
-    queue: queue.map((w) => ({ id: w.id, user: name(w.user_id) ?? w.user_id.slice(0, 8), userId: w.user_id, credits: w.credits, usdCents: w.amount_usd_cents, status: w.status, method: w.payout_method, details: w.payout_details ?? {}, createdAt: w.created_at, source: w.source === "sub" ? ("sub" as const) : ("credits" as const), grossCents: w.gross_cents ?? null, feeCents: w.fee_cents ?? null })),
+    queue: queue.map((w) => ({ id: w.id, user: name(w.user_id) ?? w.user_id.slice(0, 8), userId: w.user_id, credits: w.credits, usdCents: w.amount_usd_cents, status: w.status, method: w.payout_method, details: w.payout_details ?? {}, createdAt: w.created_at, source: w.source === "sub" ? ("sub" as const) : w.source === "coin" ? ("coin" as const) : ("credits" as const), grossCents: w.gross_cents ?? null, feeCents: w.fee_cents ?? null })),
     members: memberRows.map((m) => ({
       userId: String(m.user_id),
       user: name(String(m.user_id)) ?? String(m.user_id).slice(0, 8),

@@ -6,6 +6,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { formatCredits } from "@/lib/ai/credits/units";
 import type { LandingSettings } from "@/lib/landing/settings";
 import { cn } from "@/lib/utils";
+import { useSensitiveAction } from "@/features/admin/use-sensitive-action";
 
 export function AiBalanceAdjustPanel({ settings }: { settings: LandingSettings }) {
   return (
@@ -25,6 +26,8 @@ export function AiBalanceAdjustPanel({ settings }: { settings: LandingSettings }
  * below zero is refused by the database function, and the message says so.
  */
 function AdjustBalance({ centsPerCredit }: { centsPerCredit: number }) {
+  // Frenz Coin Part 2 (M4): money routes answer REAUTH_REQUIRED when the last password entry is stale — prompt, then replay
+  const { sensitiveFetch, reauthPrompt } = useSensitiveAction();
   const [email, setEmail] = useState("");
   const [amount, setAmount] = useState("");
   const [direction, setDirection] = useState<"credit" | "debit">("credit");
@@ -51,7 +54,7 @@ function AdjustBalance({ centsPerCredit }: { centsPerCredit: number }) {
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/admin/ai/character-replace/adjust", {
+      const res = await sensitiveFetch("/api/admin/ai/character-replace/adjust", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), amountCents: direction === "credit" ? cents : -cents, note: note.trim() }),
@@ -79,6 +82,7 @@ function AdjustBalance({ centsPerCredit }: { centsPerCredit: number }) {
 
   return (
     <form onSubmit={submit} className="rounded-2xl border border-border/70 bg-background/60 p-4 sm:p-5">
+      {reauthPrompt}
       <p className="flex items-center gap-2 text-sm font-semibold">
         <UserRound className="h-4 w-4 text-primary" aria-hidden /> Adjust a member&apos;s Frenz AI credits
       </p>

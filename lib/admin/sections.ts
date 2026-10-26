@@ -116,6 +116,14 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     blurb: "Every slot on the site, what fills it, and how each one is performing.",
   },
   {
+    // Frenz Coin Part 6 (2026-10-25): settings, withdrawals, transfer corrections, deposit reversals
+    id: "frenz-coin",
+    label: "Frenz Coin",
+    category: "monetization",
+    icon: "Wallet",
+    blurb: "The coin wallet's switches, fees, limits and payout rate; withdrawals to pay; transfer corrections; deposit refunds and chargebacks.",
+  },
+  {
     id: "affiliates",
     label: "Affiliates & tools",
     category: "monetization",

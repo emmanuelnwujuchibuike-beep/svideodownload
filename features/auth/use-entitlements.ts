@@ -23,6 +23,8 @@ export interface Entitlements {
   displayName: string | null;
   /** profiles.is_verified — the blue tick, cosmetic only; never an authorization signal. */
   verified: boolean;
+  /** Frenz Coin is switched on (Part 5) — shows the wallet entry points. Display only; every coin route checks again. */
+  frenzCoin: boolean;
   ready: boolean;
 }
 
@@ -35,6 +37,7 @@ const FREE: Omit<Entitlements, "ready"> = {
   avatarUrl: null,
   displayName: null,
   verified: false,
+  frenzCoin: false,
 };
 
 let cache: Omit<Entitlements, "ready"> | null = null;
@@ -130,6 +133,7 @@ export function useEntitlements(): Entitlements {
           avatarUrl: (d?.avatarUrl as string | null) ?? null,
           displayName: (d?.displayName as string | null) ?? null,
           verified: Boolean(d?.verified),
+          frenzCoin: d?.frenzCoin === true,
         };
         // Persist identity for the next cold start's first frame.
         writeIdentity({ handle: cache.handle, avatarUrl: cache.avatarUrl, displayName: cache.displayName });

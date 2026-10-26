@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { auditAdminAction, requireFinancialAdmin } from "@/lib/admin/financial-gate";
 import { getAdminUser } from "@/lib/admin/guard";
 import { restoreDisputedSub } from "@/lib/sub/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -89,7 +90,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  // SENSITIVE (Frenz Coin Part 2, M4): restoring a dispute gives earnings back — a fresh password (closing a review moves nothing)
+  const gate = await requireFinancialAdmin("sub.restore_dispute", parsed.data.reference);
+  if (!gate.ok) return gate.response;
   const out = await restoreDisputedSub(parsed.data.reference, admin.id, parsed.data.note);
   console.info("[admin/sub] dispute restore", { admin: admin.id, reference: parsed.data.reference, ok: out.ok });
+  await auditAdminAction(admin.id, out.ok ? "admin_sub_dispute_restored" : "admin_sub_dispute_restore_refused", "sub.restore_dispute", parsed.data.reference, {});
   return out.ok ? NextResponse.json(out) : NextResponse.json({ error: out.error, reason: out.reason }, { status: out.status });
 }

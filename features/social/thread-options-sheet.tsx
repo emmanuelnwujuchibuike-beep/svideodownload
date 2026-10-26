@@ -17,6 +17,8 @@ import { ReportSheet } from "@/features/social/report-sheet";
 import { Avatar, VerifiedBadge } from "@/features/frenz-ui/primitives";
 import { setChatAppearance, useChatAppearance } from "@/features/social/use-chat-appearance";
 import { toast } from "@/features/ui/toast";
+import { CoinChatSendLazy as CoinChatSend } from "@/features/wallet/coin-entry-lazy";
+import { useCoinGlance } from "@/features/wallet/coin-glance";
 import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
 import {
@@ -176,6 +178,8 @@ export function ThreadOptionsSheet({
   }, [open, otherUserId]);
   // the real balance on the Send AI credits button — the same kept read the send sheet uses, so no second request
   const [balance, setBalance] = useState<number | null>(null);
+  // Part 5: Frenz Coin on (and its balance known) → Send Frenz Coin leads and Send AI credits steps down to a quiet row
+  const coin = useCoinGlance();
   useEffect(() => {
     if (!open || !otherUserId) return;
     let live = true;
@@ -361,7 +365,12 @@ export function ThreadOptionsSheet({
                 </button>
               </div>
 
-              {/* ── send AI credits ── */}
+              {/*
+                ── send money ── Frenz Coin Part 5 (owner, 2026-10-25: "add it in chat option where send AI credit lives and
+                move send AI credit below … so it doesn't duplicate and crowd"): Send Frenz Coin takes the one gradient
+                action; Send AI credits moves under it as a quiet row. While Frenz Coin is off, nothing changes here.
+              */}
+              {otherUserId ? <CoinChatSend recipientId={otherUserId} name={name} onNavigate={onClose} /> : null}
               {otherUserId ? (
                 <button
                   type="button"
@@ -370,19 +379,22 @@ export function ThreadOptionsSheet({
                     haptic("light");
                     setSendCreditsOpen(true);
                   }}
-                  // the design's one full-width gradient action (a primary action — the gradient earns its place)
-                  className="mt-4 flex w-full items-center gap-3 rounded-[20px] bg-frenz-gradient-x p-3.5 text-left text-white shadow-frenz-card transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2"
+                  // the design's one full-width gradient action — unless Send Frenz Coin holds that place (then a quiet row below it)
+                  className={cn(
+                    "flex w-full items-center gap-3 text-left transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2",
+                    coin ? "mt-2 min-h-[56px] rounded-[18px] border border-frenz-line bg-frenz-card px-3.5 py-2.5 text-frenz-ink" : "mt-4 rounded-[20px] bg-frenz-gradient-x p-3.5 text-white shadow-frenz-card",
+                  )}
                 >
-                  <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/20">
+                  <span aria-hidden className={cn("flex shrink-0 items-center justify-center rounded-xl", coin ? "h-9 w-9 bg-frenz-fill text-frenz-violet" : "h-10 w-10 bg-white/20")}>
                     <Coins className="h-5 w-5" />
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="font-heading text-[15px] font-bold">Send AI credits</span>
-                    <span className="truncate text-[13px] text-white/85">Gift credits to {name}</span>
+                    <span className={cn("font-heading font-bold", coin ? "text-[14px]" : "text-[15px]")}>Send AI credits</span>
+                    <span className={cn("truncate text-[13px]", coin ? "text-frenz-muted" : "text-white/85")}>Gift credits to {name}</span>
                   </span>
-                  <span className="shrink-0 text-right text-[12px] leading-tight text-white/85">
+                  <span className={cn("shrink-0 text-right text-[12px] leading-tight", coin ? "text-frenz-muted" : "text-white/85")}>
                     Your balance
-                    <span className="block text-[14px] font-bold tabular-nums text-white">{balance === null ? "—" : formatCredits(balance)}</span>
+                    <span className={cn("block text-[14px] font-bold tabular-nums", coin ? "text-frenz-ink" : "text-white")}>{balance === null ? "—" : formatCredits(balance)}</span>
                   </span>
                 </button>
               ) : null}

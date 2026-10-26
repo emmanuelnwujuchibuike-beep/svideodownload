@@ -2,7 +2,7 @@
 
 import { ArrowLeft, Check, Clock, Coins, Gift, Lock, Share2 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { KindSymbol } from "@/features/ai/wallet/wallet-kinds";
 import { TapOnceLink } from "@/features/ui/tap-once-link";
@@ -381,6 +381,8 @@ function WithdrawForm({ enabled, max, min, creditsPerUsd, methods, withdrawable,
   const [details, setDetails] = useState({ accountName: "", accountNumber: "", bankName: "" });
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
   const [error, setError] = useState<string | null>(null);
+  // 0278: the same request keeps the same replay key (a retried tap is a replay, never a second hold)
+  const replay = useRef<{ sig: string; key: string } | null>(null);
   // owner 2026-10-11: payouts through Paystack - a bank from Paystack's list, and the holder name Paystack confirms
   const [banks, setBanks] = useState<{ name: string; code: string }[] | null>(null);
   const [bankCode, setBankCode] = useState("");
@@ -429,13 +431,17 @@ function WithdrawForm({ enabled, max, min, creditsPerUsd, methods, withdrawable,
     setState("sending");
     setError(null);
     try {
-      const res = await fetch("/api/rewards/withdrawals", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ credits: n, method, details: paystack ? { bankCode, bankName: banks?.find((b) => b.code === bankCode)?.name ?? "", accountNumber: acct } : details }) });
+      const payload = { credits: n, method, details: paystack ? { bankCode, bankName: banks?.find((b) => b.code === bankCode)?.name ?? "", accountNumber: acct } : details };
+      const sig = JSON.stringify(payload);
+      if (replay.current?.sig !== sig) replay.current = { sig, key: `rw_${crypto.randomUUID().replace(/-/g, "")}` };
+      const res = await fetch("/api/rewards/withdrawals", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...payload, idempotencyKey: replay.current.key }) });
       const json = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
         setError(json.error ?? "Couldn't request that withdrawal.");
         setState("idle");
         return;
       }
+      replay.current = null;
       setState("sent");
       haptic("medium");
     } catch {

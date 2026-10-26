@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -10,8 +11,12 @@ import { REWARD_EVENT_LABELS, REWARD_EVENT_SOURCE, REWARD_EVENTS, type RewardEve
 import type { RewardsAdminView } from "@/lib/rewards/admin";
 import { QUEST_EVENT_LABELS, QUEST_EVENTS, QUEST_PERIOD_LABELS, questId, type Quest, type QuestEvent, type QuestPeriod } from "@/lib/rewards/quests";
 import { cn } from "@/lib/utils";
+import { useSensitiveAction } from "@/features/admin/use-sensitive-action";
 
 import { SubAdmin } from "./sub-admin";
+
+// 0278: loaded with the panel's own chunk, only when the Rewards tab opens
+const TopupReversals = dynamic(() => import("./topup-reversals").then((m) => m.TopupReversals));
 
 /**
  * Admin → Frenz AI → Rewards (rewards brief §15, §19; 2026-10-07).
@@ -23,6 +28,8 @@ import { SubAdmin } from "./sub-admin";
 type RuleRow = { enabled: boolean; actor: string; referrer: string; repeatable: boolean; once: boolean; minSeconds: string; includeFree: boolean };
 
 export function RewardsPanel({ settings }: { settings: LandingSettings }) {
+  // Frenz Coin Part 2 (M4): money routes answer REAUTH_REQUIRED when the last password entry is stale — prompt, then replay
+  const { sensitiveFetch, reauthPrompt } = useSensitiveAction();
   const router = useRouter();
   const cfg = settings.frenzRewards;
   const [enabled, setEnabled] = useState(cfg.enabled);
@@ -71,7 +78,7 @@ export function RewardsPanel({ settings }: { settings: LandingSettings }) {
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/admin/landing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ frenzRewards: payload }) });
+      const res = await sensitiveFetch("/api/admin/landing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ frenzRewards: payload }) });
       const json = await res.json().catch(() => ({}));
       setMsg(res.ok ? { ok: true, text: "Saved. The next reward uses these rules; past rewards keep theirs." } : { ok: false, text: json.error ?? "Failed to save." });
       if (res.ok) router.refresh();
@@ -85,6 +92,7 @@ export function RewardsPanel({ settings }: { settings: LandingSettings }) {
   const input = "w-20 rounded-lg border border-border bg-background px-2 py-1 text-sm tabular-nums";
   return (
     <div className="space-y-6">
+      {reauthPrompt}
       <section className="rounded-3xl border border-border bg-card px-3 py-6 shadow-card sm:px-6">
         <h2 className="font-semibold">Rewards &amp; referrals — the rules</h2>
         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -197,12 +205,15 @@ export function RewardsPanel({ settings }: { settings: LandingSettings }) {
       </section>
       <RewardsActivity minAge={cfg.qualification.minAccountAgeDays} minEngagements={cfg.qualification.minEngagements} />
       {/* 0227: SUB — the rules, every purchase with its fee, creator balances, reversal and the audit log */}
+      <TopupReversals />
       <SubAdmin settings={settings} />
     </div>
   );
 }
 
 function RewardsActivity({ minAge, minEngagements }: { minAge: number; minEngagements: number }) {
+  // Frenz Coin Part 2 (M4): money routes answer REAUTH_REQUIRED when the last password entry is stale — prompt, then replay
+  const { sensitiveFetch, reauthPrompt } = useSensitiveAction();
   const [view, setView] = useState<RewardsAdminView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [restrict, setRestrict] = useState({ email: "", reason: "", restricted: true });
@@ -220,7 +231,7 @@ function RewardsActivity({ minAge, minEngagements }: { minAge: number; minEngage
   const move = async (id: string, status: string) => {
     const payoutReference = status === "completed" ? window.prompt("Payout reference (the bank transfer id):")?.trim() : undefined;
     if (status === "completed" && !payoutReference) return;
-    const send = (extra: Record<string, unknown>) => fetch(`/api/admin/rewards/withdrawals/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status, ...(payoutReference ? { payoutReference } : {}), ...extra }) });
+    const send = (extra: Record<string, unknown>) => sensitiveFetch(`/api/admin/rewards/withdrawals/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status, ...(payoutReference ? { payoutReference } : {}), ...extra }) });
     let res = await send({});
     let json = await res.json().catch(() => ({}));
     // Part 12: Paystack has no transfer with this reference — release only with a written reason, audited
@@ -238,7 +249,7 @@ function RewardsActivity({ minAge, minEngagements }: { minAge: number; minEngage
   const payPaystack = async (id: string) => {
     if (!window.confirm("Send this withdrawal through Paystack now? The amount goes to the bank account Paystack confirmed.")) return;
     setPaying(id);
-    const res = await fetch(`/api/admin/rewards/withdrawals/${id}/paystack`, { method: "POST" }).catch(() => null);
+    const res = await sensitiveFetch(`/api/admin/rewards/withdrawals/${id}/paystack`, { method: "POST" }).catch(() => null);
     const json = (await res?.json().catch(() => ({}))) as { error?: string; status?: string };
     setPaying(null);
     setNote(res?.ok ? (json.status === "otp" ? "Sent to Paystack. It is waiting for the OTP in your Paystack dashboard." : "Sent through Paystack. It completes when Paystack confirms.") : (json.error ?? "Failed."));
@@ -253,7 +264,8 @@ function RewardsActivity({ minAge, minEngagements }: { minAge: number; minEngage
     if (res.ok) void load();
   };
   const submitRestrict = async () => {
-    const res = await fetch("/api/admin/rewards/restrict", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: restrict.email, restricted: restrict.restricted, reason: restrict.reason || undefined }) });
+    // Part 4.1: an account-wide financial restriction — a fresh password, like every money action
+    const res = await sensitiveFetch("/api/admin/rewards/restrict", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: restrict.email, restricted: restrict.restricted, reason: restrict.reason || undefined }) });
     const json = await res.json().catch(() => ({}));
     setNote(res.ok ? (restrict.restricted ? "Restricted." : "Restriction cleared.") : (json.error ?? "Failed."));
     if (res.ok) void load();
@@ -280,6 +292,7 @@ function RewardsActivity({ minAge, minEngagements }: { minAge: number; minEngage
   ];
   return (
     <section className="rounded-3xl border border-border bg-card px-3 py-6 shadow-card sm:px-6">
+      {reauthPrompt}
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="font-semibold">Referrals, rewards &amp; withdrawals · last {view.windowDays} days</h2>
         <button type="button" onClick={() => void load()} className="text-xs font-semibold text-primary">Refresh</button>
@@ -358,9 +371,9 @@ function RewardsActivity({ minAge, minEngagements }: { minAge: number; minEngage
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span>
                   <strong>{q.user}</strong> ·{" "}
-                  {q.source === "sub" ? (
+                  {q.source === "sub" || q.source === "coin" ? (
                     <>
-                      <span className="rounded bg-indigo-500/10 px-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300">Private</span> {formatCents(q.grossCents ?? q.usdCents, "$")} − {formatCents(q.feeCents ?? 0, "$")} fee → {formatCents(q.usdCents, "$")}
+                      <span className="rounded bg-indigo-500/10 px-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300">{q.source === "coin" ? "Frenz Coin" : "Private"}</span> {formatCents(q.grossCents ?? q.usdCents, "$")} − {formatCents(q.feeCents ?? 0, "$")} fee → {formatCents(q.usdCents, "$")}
                     </>
                   ) : (
                     <>
@@ -378,7 +391,7 @@ function RewardsActivity({ minAge, minEngagements }: { minAge: number; minEngage
                     </button>
                   ) : null}
                   {q.method !== "paystack" && (q.status === "approved" || q.status === "processing") ? <button type="button" onClick={() => void move(q.id, "completed")} className="rounded-lg border border-emerald-500/50 px-2 py-1 text-xs text-emerald-700">Mark paid</button> : null}
-                  <button type="button" onClick={() => void move(q.id, "rejected")} className="rounded-lg border border-rose-500/50 px-2 py-1 text-xs text-rose-600">{q.source === "sub" ? "Reject (return to private post balance)" : "Reject (return credits)"}</button>
+                  <button type="button" onClick={() => void move(q.id, "rejected")} className="rounded-lg border border-rose-500/50 px-2 py-1 text-xs text-rose-600">{q.source === "sub" ? "Reject (return to private post balance)" : q.source === "coin" ? "Reject (return coins)" : "Reject (return credits)"}</button>
                 </span>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">

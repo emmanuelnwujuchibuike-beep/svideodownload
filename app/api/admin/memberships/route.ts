@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getAdminUser } from "@/lib/admin/guard";
+import { auditAdminAction, requireFinancialAdmin } from "@/lib/admin/financial-gate";
 import { reverseSub } from "@/lib/sub/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -26,11 +27,14 @@ const body = z.object({ reference: z.string().min(10).max(80), status: z.enum(["
 
 /** POST — reverse one SUB payment (refund, dispute or admin reversal). The access it bought ends; money already withdrawn becomes the creator's debt. Logged with the admin's id. */
 export async function POST(req: Request) {
-  const admin = await getAdminUser();
-  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // SENSITIVE (Frenz Coin Part 2, M4): this moves money — a fresh password on top of the session (lib/admin/financial-gate.ts)
+  const gate = await requireFinancialAdmin("sub.reverse", null);
+  if (!gate.ok) return gate.response;
+  const admin = gate.user;
   const parsed = body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Give a reason of at least 3 characters." }, { status: 400 });
   const out = await reverseSub(parsed.data.reference, parsed.data.status, admin.id, parsed.data.note);
   console.info("[admin/sub] reversal", { admin: admin.id, reference: parsed.data.reference, ok: out.ok });
+  await auditAdminAction(admin.id, out.ok ? "admin_sub_reversed" : "admin_sub_reverse_refused", "sub.reverse", parsed.data.reference, { status: parsed.data.status });
   return out.ok ? NextResponse.json(out) : NextResponse.json({ error: out.error }, { status: out.status });
 }

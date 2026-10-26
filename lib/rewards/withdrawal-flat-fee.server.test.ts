@@ -27,7 +27,8 @@ const U = "00000000-0000-4000-8000-000000000001";
 const details = { bankCode: "058", bankName: "Guaranty Trust Bank", accountNumber: "0123456789" };
 
 beforeEach(() => {
-  db = fakeDb({ profiles: [{ id: U, is_suspended: false }], withdrawal_requests: [], ai_product_balances: [{ user_id: U, product: "character_replace", withdrawable_cents: 100_000, deposited_cents: 0 }] });
+  // Frenz Coin Part 2 (M1): the server enforces the withdrawal approval, so the member here is approved
+  db = fakeDb({ profiles: [{ id: U, is_suspended: false }], reward_profiles: [{ user_id: U, qualified_at: "2026-10-01T00:00:00.000Z", qualification_status: "approved", restricted: false }], withdrawal_requests: [], ai_product_balances: [{ user_id: U, product: "character_replace", withdrawable_cents: 100_000, deposited_cents: 0 }] });
   db.rpc.request_sub_withdrawal = vi.fn(() => ({ data: { ok: true, id: "w1", net: 1, fee: 1 }, error: null }));
   db.rpc.request_withdrawal = vi.fn(() => ({ data: { ok: true, id: "w2" }, error: null }));
 });

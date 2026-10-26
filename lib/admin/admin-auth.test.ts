@@ -109,8 +109,9 @@ describe("server-side authorization is the boundary, not the middleware", () => 
       if (rel.includes("/api/admin/auth/")) return false;
       const src = strip(readFileSync(f, "utf8"));
       // `requireSensitiveAdmin` is the STRICTER gate (admin + recent password),
-      // so a route using it is guarded by more than this test demands.
-      return !/getAdminUser|requireAdminApi|requireAdminAction|requireSensitiveAdmin/.test(src);
+      // so a route using it is guarded by more than this test demands. `requireFinancialAdmin`
+      // (Frenz Coin Part 2) is the same gate for money routes (lib/admin/financial-gate.ts).
+      return !/getAdminUser|requireAdminApi|requireAdminAction|requireSensitiveAdmin|requireFinancialAdmin/.test(src);
     });
 
     expect(

@@ -159,6 +159,14 @@ export const ADMIN_SETTING_ENTRIES: AdminSearchEntry[] = [
     keywords: ["limit", "quota", "batch", "cap", "free plan", "20", "restriction"],
   },
 
+  {
+    id: "frenz-coin",
+    label: "Frenz Coin — settings, withdrawals, corrections, reversals",
+    section: "frenz-coin",
+    hint: "Frenz Coin",
+    keywords: ["coin", "frenz coin", "wallet", "withdrawal", "payout", "naira rate", "exchange rate", "transfer fee", "correction", "refund", "chargeback", "deposit hold", "admin alerts"],
+  },
+
   /* ── Content and visitors ── */
   {
     id: "landing",

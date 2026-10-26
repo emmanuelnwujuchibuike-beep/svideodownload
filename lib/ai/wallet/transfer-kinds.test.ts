@@ -28,7 +28,7 @@ describe("the kind travels with the credits", () => {
   });
 
   it("the server passes the kind; both field names are accepted; the default is tokens", () => {
-    expect(src("lib/ai/wallet/transfers.ts")).toContain("p_note: note, p_class: input.kind });");
+    expect(src("lib/ai/wallet/transfers.ts")).toContain("p_note: note, p_class: input.kind };");
     expect(src("app/api/ai/wallet/transfer/route.ts")).toContain('kind: parsed.data.kind ?? parsed.data.creditClass ?? "usable",');
   });
 

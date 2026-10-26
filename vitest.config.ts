@@ -10,6 +10,9 @@ import { defineConfig } from "vitest/config";
  * docs/PROJECT_NOTES.md's Testing Strategy entry for why).
  */
 export default defineConfig({
+  // tsconfig keeps JSX for Next ("preserve"); a test that renders a component's first-paint markup
+  // (react-dom/server, no DOM — features/wallet/wallet.test.ts) needs it compiled.
+  oxc: { jsx: { runtime: "automatic" } },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "."),

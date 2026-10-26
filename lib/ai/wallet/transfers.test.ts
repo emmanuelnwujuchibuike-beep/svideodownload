@@ -105,8 +105,15 @@ describe("🔴 0199 — the kind sent is the kind received", () => {
     expect(m99).toContain("revoke all on function public.transfer_credits(uuid, text, integer, integer, text, text, text) from public, anon, authenticated");
     expect(m99).toContain("drop function if exists public.transfer_credits(uuid, text, integer, integer, text, text);");
   });
+  it("0278: the transfer goes through transfer_credits_checked (limits and standing in the transaction), the live function only before 0278", () => {
+    const t = code("lib/ai/wallet/transfers.ts");
+    expect(t).toContain('db.rpc("transfer_credits_checked", { ...args, p_daily_max: c.dailyMaxCredits })');
+    expect(t).toContain("if (error && /transfer_credits_checked|schema cache|does not exist/i.test(error.message)) {");
+    expect(t).toContain('({ data, error } = await db.rpc("transfer_credits", args));');
+    for (const reason of ["suspended", "recovery_due", "recipient_unavailable", "daily_limit"]) expect(t).toContain(`${reason}: [`);
+  });
   it("the server passes the member's choice; the sheet offers both kinds and checks the chosen one", () => {
-    expect(code("lib/ai/wallet/transfers.ts")).toContain("p_note: note, p_class: input.kind });");
+    expect(code("lib/ai/wallet/transfers.ts")).toContain("p_note: note, p_class: input.kind };");
     expect(code("app/api/ai/wallet/transfer/route.ts")).toContain('kind: parsed.data.kind ?? parsed.data.creditClass ?? "usable",');
     const p = code("features/ai/wallet/transfer-panel.tsx");
     expect(p).toContain("credits: n, kind, idempotencyKey: key.current");

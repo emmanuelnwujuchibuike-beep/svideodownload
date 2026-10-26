@@ -8,6 +8,7 @@ import { SubAdminReviews } from "@/features/admin/sub-admin-reviews";
 import { usd } from "@/lib/creator/membership/engine";
 import type { LandingSettings } from "@/lib/landing/settings";
 import { cn } from "@/lib/utils";
+import { useSensitiveAction } from "@/features/admin/use-sensitive-action";
 
 // Part 7: overview, search and Exclusive moderation — loaded only when this panel is open
 // 0277: bundles and promotions per creator, with the audited pause — loaded only when this panel is open
@@ -68,6 +69,8 @@ interface Audit {
 const input = "w-28 rounded-lg border border-black/[0.08] bg-white/70 px-2 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:border-white/10 dark:bg-white/[0.06]";
 
 export function SubAdmin({ settings }: { settings: LandingSettings }) {
+  // Frenz Coin Part 2 (M4): money routes answer REAUTH_REQUIRED when the last password entry is stale — prompt, then replay
+  const { sensitiveFetch, reauthPrompt } = useSensitiveAction();
   const router = useRouter();
   const c = settings.frenzRewards.sub;
   const [f, setF] = useState({
@@ -149,7 +152,7 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
       newAccountHoldHours: int(f.newAccountHours, c.newAccountHoldHours, 0, 720),
     };
     try {
-      const res = await fetch("/api/admin/landing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ frenzRewards: { sub } }) });
+      const res = await sensitiveFetch("/api/admin/landing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ frenzRewards: { sub } }) });
       const j = (await res.json().catch(() => ({}))) as { error?: string };
       setSaved(res.ok ? { ok: true, text: "Saved. New purchases and withdrawals use these rules; past ones keep theirs." } : { ok: false, text: j.error ?? "Failed to save." });
       if (res.ok) router.refresh();
@@ -166,7 +169,7 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
     setBusy(p.id);
     setNote(null);
     const status = kind[p.id] ?? "reversed";
-    const res = await fetch("/api/admin/memberships", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reference: p.reference, status, note: why }) }).catch(() => null);
+    const res = await sensitiveFetch("/api/admin/memberships", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reference: p.reference, status, note: why }) }).catch(() => null);
     const j = (await res?.json().catch(() => null)) as { error?: string; debtAfter?: number } | null;
     setBusy(null);
     if (!res?.ok) return setNote(j?.error ?? "Couldn't reverse it.");
@@ -184,6 +187,7 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
 
   return (
     <section className="ex-card px-3 py-6 sm:px-6">
+      {reauthPrompt}
       <h2 className="font-semibold">Private posts — paid subscriptions</h2>
       <SubAdminReviews />
       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Real money through Flutterwave or Paystack, separate from AI credits. The subscriber pays the creator&apos;s price plus the purchase fee; a private post withdrawal pays out less the withdrawal fee.</p>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { usd } from "@/lib/creator/membership/engine";
+import { useSensitiveAction } from "@/features/admin/use-sensitive-action";
 
 /**
  * Exclusive money reviews (Part 12 follow-up) — inside the admin SUB panel.
@@ -45,6 +46,8 @@ const money = (minor: number | null, cur: string | null) => (minor != null && cu
 const field = "w-40 rounded-lg border border-black/[0.08] bg-white/70 px-2 py-1 dark:border-white/10 dark:bg-white/[0.06]";
 
 export function SubAdminReviews() {
+  // Frenz Coin Part 2 (M4): money routes answer REAUTH_REQUIRED when the last password entry is stale — prompt, then replay
+  const { sensitiveFetch, reauthPrompt } = useSensitiveAction();
   const [data, setData] = useState<{ refundReviews: RefundReview[]; disputes: Dispute[]; payoutAlerts?: PayoutAlert[]; ready: boolean } | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [confirmed, setConfirmed] = useState<Record<string, boolean>>({});
@@ -65,7 +68,7 @@ export function SubAdminReviews() {
     if (note.length < 3) return setMsg({ ok: false, text: "Write a note of at least 3 characters first." });
     setBusy(key);
     setMsg(null);
-    const res = await fetch("/api/admin/memberships/reviews", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, note }) }).catch(() => null);
+    const res = await sensitiveFetch("/api/admin/memberships/reviews", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, note }) }).catch(() => null);
     const j = (await res?.json().catch(() => null)) as { error?: string; duplicate?: boolean } | null;
     setBusy(null);
     if (!res?.ok) return setMsg({ ok: false, text: j?.error ?? "Couldn't save it." });
@@ -76,6 +79,7 @@ export function SubAdminReviews() {
   const open = (data?.refundReviews ?? []).filter((r) => !r.reviewed);
   return (
     <div className="mt-6">
+      {reauthPrompt}
       <h3 className="text-sm font-semibold">Needs review</h3>
       {!data ? (
         <p className="mt-2 text-sm text-muted-foreground">Loading…</p>

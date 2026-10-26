@@ -41,6 +41,8 @@ interface ProviderEvent {
 const PURPOSES: { id: string; label: string }[] = [
   { id: "", label: "All purposes" },
   { id: "wallet_topup", label: "AI credit top-ups" },
+  // Part 4.1: a member's Frenz Coin deposit (their money on hold in their wallet — not AI credits, not revenue)
+  { id: "coin_deposit", label: "Frenz Coin deposits" },
   { id: "ai_subscription", label: "AI plans" },
   { id: "site_subscription", label: "Pro / Business" },
   { id: "ad_campaign", label: "Ad campaigns" },

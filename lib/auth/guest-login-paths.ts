@@ -30,6 +30,7 @@ export const GUEST_LOGIN_PREFIXES = [
   "/notifications",
   "/rewards",
   "/saved",
+  "/wallet", // Frenz Coin Part 5: the member's own wallet
   "/welcome",
 ] as const;
 

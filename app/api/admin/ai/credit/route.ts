@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getAdminUser } from "@/lib/admin/guard";
+import { auditAdminAction, requireFinancialAdmin } from "@/lib/admin/financial-gate";
 import { adjustCharacterReplaceBalance } from "@/lib/ai/character-replace/wallet";
 import { formatCredits } from "@/lib/ai/credits/units";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -37,8 +37,10 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
-  const admin = await getAdminUser();
-  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // SENSITIVE (Frenz Coin Part 2, M4): this moves money — a fresh password on top of the session (lib/admin/financial-gate.ts)
+  const gate = await requireFinancialAdmin("wallet.credit", null);
+  if (!gate.ok) return gate.response;
+  const admin = gate.user;
 
   let body: unknown;
   try {
@@ -72,6 +74,7 @@ export async function POST(request: Request) {
       adminId: admin.id,
     });
     console.info("[admin/ai-credit] credited", { admin: admin.id, user: profile.id, amountCents });
+    await auditAdminAction(admin.id, "admin_wallet_credited", "wallet.credit", profile.id as string, { credits: amountCents });
     return NextResponse.json({
       ok: true,
       email: profile.email,

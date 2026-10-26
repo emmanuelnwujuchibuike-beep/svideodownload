@@ -18,6 +18,9 @@ const calls: string[] = [];
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => db.client() }));
 vi.mock("@/lib/admin/guard", () => ({ getAdminUser: async () => admin }));
+// Frenz Coin Part 2 (M4): money routes also need a recent password; `reauthed = false` is a stale admin
+let reauthed = true;
+vi.mock("@/lib/admin/reauth", () => ({ hasRecentReauth: async () => reauthed }));
 vi.mock("@/lib/ai/character-replace/fx-rate-server", () => ({ marketRate: async () => ({ rate: { perUsd: 1500 }, source: "stored" }) }));
 vi.mock("@/lib/notifications/smart-delivery", () => ({ sendSmartPush: async () => {} }));
 vi.mock("@/lib/email/member-email", () => ({ emailMember: async () => "sent" }));
@@ -47,6 +50,9 @@ const LEGAL: Record<string, string[]> = {
   approved: ["processing", "completed", "rejected", "cancelled"],
   processing: ["completed", "rejected"],
 };
+
+/** The release / settle audit rows, without the admin-action rows the money gate adds (Frenz Coin Part 2). */
+const moneyAudit = () => (db.tables.financial_audit_log ?? []).filter((r) => r.target_type !== "admin_action");
 
 beforeEach(() => {
   admin = { id: "admin-1" };
@@ -182,7 +188,7 @@ describe("an admin can't release held money without Paystack's word", () => {
     const second = await reject({ confirmNotSent: true, note: "Checked the Paystack dashboard: no such transfer" });
     expect(second.status).toBe(200);
     expect(row().status).toBe("rejected");
-    expect(db.tables.financial_audit_log).toEqual([expect.objectContaining({ action: "withdrawal_transfer_not_found_confirmed", actor_id: "admin-1", reference: REF, details: expect.objectContaining({ note: "Checked the Paystack dashboard: no such transfer", from: "processing", checked_at: expect.any(String) }) })]);
+    expect(moneyAudit()).toEqual([expect.objectContaining({ action: "withdrawal_transfer_not_found_confirmed", actor_id: "admin-1", reference: REF, details: expect.objectContaining({ note: "Checked the Paystack dashboard: no such transfer", from: "processing", checked_at: expect.any(String) }) })]);
   });
 
   it("a withdrawal never sent (never approved, no reference) is rejected as before, without asking Paystack", async () => {
@@ -203,7 +209,7 @@ describe("an admin can't release held money without Paystack's word", () => {
     const res = await reject({ confirmNotSent: true, note: "looks failed" });
     expect(await res.json()).toMatchObject({ reason: "too_soon" });
     expect(row().status).toBe("processing");
-    expect(db.tables.financial_audit_log).toHaveLength(0);
+    expect(moneyAudit()).toHaveLength(0);
   });
 
   it("a 404 that isn't Paystack's own JSON answer (a proxy page, a dropped body) is ambiguous: held", async () => {
@@ -262,6 +268,20 @@ describe("an admin can't release held money without Paystack's word", () => {
     expect((await reject()).status).toBe(403);
     expect(row().status).toBe("processing");
   });
+
+  it("Frenz Coin Part 2 (M4): an admin whose password entry is stale is asked for it again — nothing changes, the refusal is audited", async () => {
+    reauthed = false;
+    try {
+      held();
+      const res = await reject();
+      expect(res.status).toBe(403);
+      expect(await res.json()).toMatchObject({ code: "REAUTH_REQUIRED" });
+      expect(row().status).toBe("processing");
+      expect(db.tables.financial_audit_log).toEqual([expect.objectContaining({ action: "admin_step_up_required", actor_id: "admin-1", target_type: "admin_action", reference: "withdrawal.resolve" })]);
+    } finally {
+      reauthed = true;
+    }
+  });
 });
 
 describe("a paid transfer that came back (transfer.reversed)", () => {
@@ -293,7 +313,7 @@ describe("a paid transfer that came back (transfer.reversed)", () => {
     paystack = () => ok({ status: "reversed" });
     await payouts.settlePaystackTransfer("transfer.success", REF);
     expect(row().status).toBe("rejected");
-    expect(db.tables.financial_audit_log).toHaveLength(0);
+    expect(moneyAudit()).toHaveLength(0);
   });
 
   it("a transfer that LANDS after the money was released is recorded once for an admin (never silently ignored)", async () => {
@@ -301,7 +321,7 @@ describe("a paid transfer that came back (transfer.reversed)", () => {
     paystack = () => ok({ status: "success" });
     expect(await payouts.settlePaystackTransfer("transfer.success", REF)).toBe(true);
     expect(await payouts.settlePaystackTransfer("transfer.success", REF)).toBe(true);
-    expect(db.tables.financial_audit_log).toEqual([expect.objectContaining({ action: "withdrawal_paid_after_release", target_id: ID, reference: REF })]);
+    expect(moneyAudit()).toEqual([expect.objectContaining({ action: "withdrawal_paid_after_release", target_id: ID, reference: REF })]);
     expect(row().status).toBe("rejected");
   });
 
@@ -311,7 +331,7 @@ describe("a paid transfer that came back (transfer.reversed)", () => {
       throw timeout();
     };
     await expect(payouts.settlePaystackTransfer("transfer.success", REF)).rejects.toThrow();
-    expect(db.tables.financial_audit_log).toHaveLength(0);
+    expect(moneyAudit()).toHaveLength(0);
   });
 
   it("a reference that isn't ours is ignored", async () => {

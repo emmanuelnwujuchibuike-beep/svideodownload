@@ -17,6 +17,7 @@ import { formatCents } from "@/lib/ai/economy";
 import { aiCurrencySymbol, majorInputToMinor, minorToMajorInput } from "@/lib/landing/bounds";
 import type { LandingSettings } from "@/lib/landing/settings";
 import { cn } from "@/lib/utils";
+import { useSensitiveAction } from "@/features/admin/use-sensitive-action";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -48,6 +49,8 @@ const mult = (raw: string) => {
 };
 
 export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }) {
+  // Frenz Coin Part 2 (M4): money routes answer REAUTH_REQUIRED when the last password entry is stale — prompt, then replay
+  const { sensitiveFetch, reauthPrompt } = useSensitiveAction();
   const router = useRouter();
   const cfg = settings.frenzAiPlans;
   const cr = settings.frenzAiCharacterReplace;
@@ -267,7 +270,7 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/admin/landing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ frenzAiPlans: payload }) });
+      const res = await sensitiveFetch("/api/admin/landing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ frenzAiPlans: payload }) });
       const json = await res.json().catch(() => ({}));
       setMsg(res.ok ? { ok: true, text: "Saved. Applies to the next quote and the next reservation; past transactions keep the version they were made under." } : { ok: false, text: json.error ?? "Failed to save." });
       if (res.ok) router.refresh();
@@ -283,6 +286,7 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
 
   return (
     <section className="rounded-3xl border border-border bg-card px-3 py-6 shadow-card sm:px-6">
+      {reauthPrompt}
       <h2 className="mb-1 font-semibold">AI Plans &amp; Credits</h2>
       <p className="mb-5 text-sm text-muted-foreground">
         AI Pro and AI Max are subscriptions apart from Pro/Business: a member may hold both. A plan includes a daily and a weekly allowance of credits; a generation costs credits by its

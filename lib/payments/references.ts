@@ -20,6 +20,8 @@ export const FLUTTERWAVE_REFERENCE_PREFIX = {
   ai_subscription: "frenz_ai_plan_fw_",
   // 2026-10-23: a Pro / Business site plan's FIRST charge on a Flutterwave payment plan
   site_subscription: "frenz_site_fw_",
+  // Frenz Coin Part 4 (0280): a Frenz Coin deposit — settled only by lib/coin/deposits.ts, never as an AI-credit top-up
+  coin_deposit: "frenz_coin_dep_fw_",
 } as const;
 
 export type FlutterwaveReferencePurpose = keyof typeof FLUTTERWAVE_REFERENCE_PREFIX;
@@ -36,6 +38,7 @@ const SHAPES: Record<FlutterwaveReferencePurpose, RegExp> = {
   ad_campaign: /^frenz_ad_fw_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
   ai_subscription: /^frenz_ai_plan_fw_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
   site_subscription: /^frenz_site_fw_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+  coin_deposit: /^frenz_coin_dep_fw_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
 };
 
 /** Which purpose a Flutterwave reference we minted is for — null for anything else (a Paystack reference, a forgery). */

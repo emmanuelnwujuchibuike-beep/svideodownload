@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/api/cors";
 import { bearerToken, verifyApiKey } from "@/lib/api/keys";
 import { selectAffiliateOffer } from "@/lib/monetization/affiliates";
+import { getLandingSettings } from "@/lib/landing/settings";
 import { buildRequestContext } from "@/lib/monetization/context";
 import { getPlanLimits, getUserPlan } from "@/lib/monetization/plan";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -42,7 +43,13 @@ export async function GET(request: Request) {
     }
   }
 
-  const plan = await getUserPlan(userId);
+  /*
+    Frenz Coin Part 5: whether the signed-in member's wallet entry points (the /downloads header balance, the profile
+    menu card, the chat's Send Frenz Coin) should exist at all. Carried here — a read every member already makes once
+    a session — so that while Frenz Coin is off nobody pays a wallet request just to learn it. A display switch only:
+    every coin route checks the setting again. The settings read is in memory for 10 s (lib/landing/settings.ts).
+  */
+  const [plan, frenzCoin] = await Promise.all([getUserPlan(userId), userId ? getLandingSettings().then((s) => s.frenzCoin.enabled, () => false) : Promise.resolve(false)]);
   const limits = (await getPlanLimits())[plan];
   const ctx = buildRequestContext(request, plan);
 
@@ -110,6 +117,7 @@ export async function GET(request: Request) {
       avatarUrl,
       displayName,
       verified,
+      frenzCoin,
       isPremium: plan !== "free",
       showAds: limits.ads,
       limits: {

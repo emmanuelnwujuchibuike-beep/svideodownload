@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { auditAdminAction, requireFinancialAdmin } from "@/lib/admin/financial-gate";
 import { getAdminUser } from "@/lib/admin/guard";
 import {
   FEED_GRID_SLOTS,
@@ -13,6 +14,7 @@ import {
   FRENZ_AI_MIN_TOPUP_CEILING,
   FRENZ_AI_MIN_TOPUP_FLOOR,
   FRENZ_AI_MIN_PAID_CREDITS,
+  financialChangesFor,
   setLandingSettings,
 } from "@/lib/landing/settings";
 import { PAYMENT_PURPOSES, paymentRoutingProblem, type PaymentPurpose } from "@/lib/ai/credits/wallet-config";
@@ -438,6 +440,25 @@ const schema = z.object({
    * limits, the rights confirmation. Bounds mirror VOICE_CLONE_BOUNDS; the
    * normaliser clamps again and refuses an unknown format.
    */
+  /**
+   * Frenz Coin Part 3 (0279): the coin wallet's rates, fees and limits (lib/coin/config.ts normalises and clamps again; the
+   * database re-checks every rule it is handed). A change asks for a fresh password and is audited first (surface frenz_coin).
+   * version / updatedAt are the server's and are refused here.
+   */
+  frenzCoin: z
+    .object({
+      enabled: z.boolean().optional(),
+      centsPerCoin: z.number().int().min(1).max(100_000).optional(),
+      transfers: z.object({ enabled: z.boolean().optional(), percentBp: z.number().int().min(0).max(5_000).optional(), lowThresholdCents: z.number().int().min(0).max(100_000_000).optional(), highThresholdCents: z.number().int().min(0).max(100_000_000).optional(), flatBelowCents: z.number().int().min(0).max(100_000).optional(), flatMidCents: z.number().int().min(0).max(100_000).optional(), flatAboveCents: z.number().int().min(0).max(100_000).optional(), minCents: z.number().int().min(0).max(100_000_000).optional(), maxCents: z.number().int().min(0).max(100_000_000).optional(), dailyMaxCents: z.number().int().min(0).max(100_000_000).optional() }).strict().optional(),
+      withdrawals: z.object({ enabled: z.boolean().optional(), percentBp: z.number().int().min(0).max(5_000).optional(), flatCents: z.number().int().min(0).max(100_000).optional(), minCents: z.number().int().min(0).max(100_000_000).optional(), maxCents: z.number().int().min(0).max(100_000_000).optional(), maxPerDay: z.number().int().min(1).max(100).optional(), maxMonthCents: z.number().int().min(0).max(100_000_000).optional(), requireQualification: z.boolean().optional(), requireEmailConfirmed: z.boolean().optional(), payoutMinorPerUsd: z.number().int().min(1).max(999_999_999).nullable().optional(), payoutRateSource: z.enum(["none", "fixed", "market"]).optional() }).strict().optional(),
+      deposits: z.object({ enabled: z.boolean().optional(), holdHours: z.number().int().min(0).max(2_160).optional(), minCents: z.number().int().min(0).max(100_000_000).optional(), maxCents: z.number().int().min(0).max(100_000_000).optional() }).strict().optional(),
+      // Part 4.2: the transaction PIN limits (0282 clamps them again)
+      pin: z.object({ maxAttempts: z.number().int().min(3).max(10).optional(), lockMinutes: z.number().int().min(5).max(1_440).optional(), resetTtlMinutes: z.number().int().min(5).max(30).optional(), resetMaxPerHour: z.number().int().min(1).max(10).optional(), resetCodeMaxAttempts: z.number().int().min(3).max(10).optional() }).strict().optional(),
+      // Part 5: how admins hear about each coin transfer / withdrawal and its fee
+      adminAlerts: z.enum(["both", "push", "email", "off"]).optional(),
+    })
+    .strict()
+    .optional(),
   /** 0187: the reward rules (lib/rewards/config.ts normalises again). */
   frenzRewards: z
     .object({
@@ -793,12 +814,28 @@ export async function POST(request: Request) {
     );
   }
 
+  // Part 6 §27: the reason rides beside the config, not inside it; the settings writer records it with the admin's id.
+  const { pricingChangeReason, ...crPatch } = parsed.data.frenzAiCharacterReplace ?? {};
+  const patch = parsed.data.frenzAiCharacterReplace ? { ...parsed.data, frenzAiCharacterReplace: crPatch } : parsed.data;
+  /*
+    Frenz Coin Part 2 (M4): this one route saves every panel's settings, so a fresh password is asked for only when THIS
+    save changes a money setting (fees, withdrawal rates and limits, payout provider and automatic payout, deposit packs,
+    transfer fees, payment routing) — lib/landing/settings.ts financialChangesFor. Every other panel saves as before.
+  */
+  let money: Awaited<ReturnType<typeof financialChangesFor>>;
   try {
-    // Part 6 §27: the reason rides beside the config, not inside it; the settings writer records it with the admin's id.
-    const { pricingChangeReason, ...crPatch } = parsed.data.frenzAiCharacterReplace ?? {};
-    const patch = parsed.data.frenzAiCharacterReplace ? { ...parsed.data, frenzAiCharacterReplace: crPatch } : parsed.data;
+    money = await financialChangesFor(patch);
+  } catch {
+    return NextResponse.json({ error: "Couldn't save settings." }, { status: 500 });
+  }
+  if (money.length) {
+    const gate = await requireFinancialAdmin("settings.financial", money.map((c) => c.surface).join(","));
+    if (!gate.ok) return gate.response;
+  }
+  try {
     await setLandingSettings(patch, { changedBy: admin.id, reason: pricingChangeReason ?? null });
   } catch {
+    if (money.length) await auditAdminAction(admin.id, "admin_financial_settings_refused", "settings.financial", null, { keys: money.flatMap((c) => c.keys.map((k) => `${c.surface}.${k}`)) });
     return NextResponse.json({ error: "Couldn't save settings." }, { status: 500 });
   }
 

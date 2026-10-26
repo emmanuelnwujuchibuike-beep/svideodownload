@@ -1,14 +1,13 @@
 import "server-only";
 
-import { marketRate } from "@/lib/ai/character-replace/fx-rate-server";
 import { createFlutterwaveTransfer, flutterwaveFailureIsDefinite, resolveFlutterwaveAccount } from "@/lib/flutterwave/client";
 import { getFlutterwaveConfig } from "@/lib/flutterwave/config";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { koboFor } from "./paystack-banks";
 import { FLUTTERWAVE_REF } from "./payout-refs";
 import { PAYSTACK_METHOD, payWithdrawalViaPaystack } from "./paystack-payouts";
+import { payoutQuote } from "./payout-quote";
 import { resolveWithdrawal } from "./withdrawals";
 
 /**
@@ -87,9 +86,10 @@ export async function payWithdrawalViaFlutterwave(withdrawalId: string, adminId:
   const cfg = await getFlutterwaveConfig();
   if (!cfg.secretKey) return { ok: false, error: "Flutterwave isn't configured.", fallback: true };
 
-  const rate = await marketRate("NGN");
-  if (!rate) return { ok: false, error: "No naira rate is available right now. Try again shortly.", fallback: false };
-  const kobo = koboFor(Number(w.amount_usd_cents ?? 0), rate.rate.perUsd);
+  // closeout: credits / SUB at the live market rate as before; a Frenz Coin payout at its approved, recorded rate
+  const quote = await payoutQuote(w);
+  if (!quote.ok) return { ok: false, error: quote.error, fallback: false };
+  const kobo = quote.kobo;
   if (kobo < 10_000) return { ok: false, error: "The payout is below the minimum transfer.", fallback: false };
 
   // the account Flutterwave would pay must be the one the member confirmed — never a different bank under the same code
@@ -143,7 +143,7 @@ export async function payWithdrawalViaFlutterwave(withdrawalId: string, adminId:
   const done = status === "SUCCESSFUL" && !uncertain;
   const note = uncertain
     ? `Outcome unknown: the transfer request to Flutterwave didn't get a clear answer. Held until Flutterwave confirms by reference ${reference}.`
-    : `Flutterwave transfer of NGN ${(kobo / 100).toFixed(2)} at ${rate.rate.perUsd} per USD (${rate.source})`;
+    : `Flutterwave transfer of NGN ${(kobo / 100).toFixed(2)} at ${quote.label}`;
   const out = await resolveWithdrawal({ id: withdrawalId, status: done ? "completed" : "processing", adminId, note, payoutReference: reference });
   if (uncertain) return out.ok ? { ok: true, status: "unknown" } : { ok: false, error: "The transfer's outcome is unknown and the withdrawal didn't update. Don't pay it again: check the reference in Flutterwave.", fallback: false };
   return out.ok ? { ok: true, status: status.toLowerCase() } : { ok: false, error: "Sent, but the withdrawal didn't update. The webhook will finish it.", fallback: false };

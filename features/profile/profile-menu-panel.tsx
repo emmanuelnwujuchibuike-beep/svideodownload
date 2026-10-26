@@ -10,6 +10,7 @@ import { LanguageSettingRow } from "@/components/i18n/language-setting-row";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { BookmarkIcon, ChevronRightIcon, CompassIcon, DownloadIcon, MegaphoneIcon } from "@/features/frenz-ui/icons";
 import { Avatar, VerifiedBadge } from "@/features/frenz-ui/primitives";
+import { CoinMenuCardLazy as CoinMenuCard } from "@/features/wallet/coin-entry-lazy";
 import { signOutClient } from "@/lib/auth/sign-out";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { cn } from "@/lib/utils";
@@ -123,6 +124,9 @@ export function ProfileMenuPanel({
           </span>
           <ChevronRightIcon size={18} className="shrink-0 text-frenz-muted" />
         </Link>
+
+        {/* Frenz Coin Part 5 ("Where the wallet lives", Entry 2): the wallet card under the profile — nothing while Frenz Coin is off */}
+        <CoinMenuCard onNavigate={onNavigate} />
 
         <h3 className="m-0 px-5 pb-2.5 pt-5 text-[13px] font-bold text-frenz-muted">Shortcuts</h3>
         <ul className="mx-4 grid grid-cols-4 gap-x-2 gap-y-3.5">

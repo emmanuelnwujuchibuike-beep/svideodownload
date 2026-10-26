@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getAdminUser } from "@/lib/admin/guard";
+import { auditAdminAction, requireFinancialAdmin } from "@/lib/admin/financial-gate";
 import { rejectPaystackWithdrawal } from "@/lib/rewards/paystack-payouts";
 import { resolveWithdrawal } from "@/lib/rewards/withdrawals";
 
@@ -17,10 +17,12 @@ const schema = z.object({ status: z.enum(["reviewing", "approved", "processing",
  * is the admin's statement that they PAID it — record the payout reference.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getAdminUser();
-  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  // SENSITIVE (Frenz Coin Part 2, M4): this releases or settles held money — a fresh password on top of the session
+  const gate = await requireFinancialAdmin("withdrawal.resolve", id);
+  if (!gate.ok) return gate.response;
+  const admin = gate.user;
   let body: unknown;
   try {
     body = await request.json();
@@ -37,10 +39,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (parsed.data.status === "rejected" || parsed.data.status === "cancelled") {
     const r = await rejectPaystackWithdrawal({ id, status: parsed.data.status, adminId: admin.id, note: parsed.data.note ?? null, confirmNotSent: parsed.data.confirmNotSent === true });
     console.info("[admin/rewards] withdrawal release", { admin: admin.id, id, ok: r.ok, outcome: r.ok ? r.outcome : r.reason });
+    await auditAdminAction(admin.id, r.ok ? "admin_withdrawal_released" : "admin_withdrawal_release_refused", "withdrawal.resolve", id, { to: parsed.data.status, outcome: r.ok ? r.outcome : r.reason });
     if (!r.ok) return NextResponse.json({ error: r.error, reason: r.reason }, { status: 409 });
     return NextResponse.json({ ok: true, outcome: r.outcome });
   }
   const out = await resolveWithdrawal({ id, status: parsed.data.status, adminId: admin.id, note: parsed.data.note ?? null, payoutReference: parsed.data.payoutReference ?? null });
+  // a success is also audited by resolve_withdrawal itself (with the admin id); a refusal is recorded here
+  if (!out.ok) await auditAdminAction(admin.id, "admin_withdrawal_move_refused", "withdrawal.resolve", id, { to: parsed.data.status, reason: out.reason ?? null });
   if (!out.ok) return NextResponse.json({ error: out.reason === "invalid_transition" ? "That move isn't allowed from its current state." : out.reason === "final" ? "This withdrawal is already finished." : "Couldn't update it." }, { status: 409 });
   console.info("[admin/rewards] withdrawal moved", { admin: admin.id, id, to: parsed.data.status });
   return NextResponse.json({ ok: true });

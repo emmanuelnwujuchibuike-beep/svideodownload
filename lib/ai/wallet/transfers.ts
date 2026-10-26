@@ -87,7 +87,17 @@ export async function sendCredits(input: { senderId: string; accountNumber: stri
 
   const fee = transferFeeFor(amount, input.kind, input.kind === "withdrawable" ? await getWalletKinds(input.senderId) : null, c);
   const note = input.note ? input.note.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120) || null : null;
-  const { data, error } = await db.rpc("transfer_credits", { p_sender: input.senderId, p_account_number: input.accountNumber, p_amount: amount, p_fee: fee, p_idempotency: input.idempotencyKey, p_note: note, p_class: input.kind });
+  const args = { p_sender: input.senderId, p_account_number: input.accountNumber, p_amount: amount, p_fee: fee, p_idempotency: input.idempotencyKey, p_note: note, p_class: input.kind };
+  /*
+    0278 (M2/M3): the sender's and the recipient's standing and the rolling 24-hour limit are decided in the SAME
+    transaction as the transfer, under both wallet locks, so simultaneous sends cannot pass the limit together.
+    Before 0278 runs, the live 0202 function is called as before (the app-level limit above still applies).
+  */
+  let { data, error } = await db.rpc("transfer_credits_checked", { ...args, p_daily_max: c.dailyMaxCredits });
+  if (error && /transfer_credits_checked|schema cache|does not exist/i.test(error.message)) {
+    console.warn("[wallet/transfer] 0278 not applied yet: the daily limit is checked in the app only", { sender: input.senderId });
+    ({ data, error } = await db.rpc("transfer_credits", args));
+  }
   if (error) {
     console.error("[wallet/transfer] failed", { sender: input.senderId, message: error.message });
     return { ok: false, status: 503, error: "Couldn't send that right now. Nothing was taken." };
@@ -100,6 +110,12 @@ export async function sendCredits(input: { senderId: string; accountNumber: stri
       restricted: [403, "Transfers are paused on this account."],
       insufficient: [402, `Not enough ${input.kind === "withdrawable" ? "credits" : "tokens"} — this needs ${Number(out.needed ?? amount + fee).toLocaleString("en-US")} (${amount.toLocaleString("en-US")} + ${fee.toLocaleString("en-US")} fee), you have ${Number(out.available ?? 0).toLocaleString("en-US")}.`],
       no_wallet: [409, "That wallet can't receive credits yet."],
+      // 0278
+      suspended: [403, "Transfers are paused on this account."],
+      recovery_due: [403, "Transfers are paused while a refunded payment is settled. Contact support."],
+      recipient_unavailable: [409, "That wallet can't receive credits right now."],
+      daily_limit: [429, `That would pass the daily limit of ${c.dailyMaxCredits.toLocaleString("en-US")} credits.`],
+      invalid: [400, "That transfer couldn't be made."],
     };
     const [status, error] = map[out.reason ?? ""] ?? [400, "That transfer couldn't be made."];
     return { ok: false, status, error, reason: out.reason };

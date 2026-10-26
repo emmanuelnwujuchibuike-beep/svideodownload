@@ -34,6 +34,7 @@ import {
   Telescope,
   UserCheck,
   Users,
+  Wallet,
   Wrench,
   type LucideIcon,
   BrainCircuit,
@@ -84,6 +85,8 @@ import { cn } from "@/lib/utils";
  */
 
 const ICONS: Record<string, LucideIcon> = {
+  // Frenz Coin Part 6: the coin console
+  Wallet,
   // 🔴 Frenz AI's own mark. `lib/platform/constitution.test.ts` requires every
   // section icon to be registered here, which is what caught this the moment
   // the AI section was added — a nav entry with an unresolvable icon silently

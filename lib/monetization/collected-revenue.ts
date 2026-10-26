@@ -43,6 +43,8 @@ export function aggregateCollected(rows: readonly { amount_cents: number; curren
   const today = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
   const out: CollectedRevenue = { currencies: {} };
   for (const r of rows) {
+    // Frenz Coin Part 4: a coin deposit is the member's money held in their wallet (owed back to them), not revenue
+    if (r.purpose === "coin_deposit") continue;
     const cur = (r.currency || "?").toUpperCase();
     const c = (out.currencies[cur] ??= { today: empty(), d7: empty(), d30: empty(), all: empty() });
     const t = Date.parse(r.created_at);

@@ -1,12 +1,11 @@
 import "server-only";
 
-import { marketRate } from "@/lib/ai/character-replace/fx-rate-server";
 import { verifyFlutterwaveTransfer } from "@/lib/flutterwave/client";
 import { PaystackHttpError, paystackRefusedForSure, paystackRequest } from "@/lib/paystack/paystack";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { koboFor } from "./paystack-banks";
 import { isFlutterwavePayoutRef, isPayoutRef, PAYSTACK_REF } from "./payout-refs";
+import { payoutQuote } from "./payout-quote";
 import { resolveWithdrawal } from "./withdrawals";
 
 /**
@@ -64,9 +63,10 @@ export async function payWithdrawalViaPaystack(withdrawalId: string, adminId: st
   const accountName = String(details.accountName ?? "");
   if (!bankCode || !accountNumber || !accountName) return { ok: false, error: "The bank details are incomplete." };
 
-  const rate = await marketRate("NGN");
-  if (!rate) return { ok: false, error: "No naira rate is available right now. Try again shortly." };
-  const kobo = koboFor(Number(w.amount_usd_cents ?? 0), rate.rate.perUsd);
+  // closeout: credits / SUB at the live market rate as before; a Frenz Coin payout at its approved, recorded rate
+  const quote = await payoutQuote(w);
+  if (!quote.ok) return { ok: false, error: quote.error };
+  const kobo = quote.kobo;
   if (kobo < 10_000) return { ok: false, error: "The payout is below Paystack's minimum transfer." };
 
   // approved first, so a failure from here on is a withdrawal waiting to be paid, never lost credits
@@ -110,7 +110,7 @@ export async function payWithdrawalViaPaystack(withdrawalId: string, adminId: st
   }
   const note = uncertain
     ? `Outcome unknown: the transfer request to Paystack didn't get a clear answer. Held until Paystack confirms by reference ${reference}.`
-    : `Paystack transfer of NGN ${(kobo / 100).toFixed(2)} at ${rate.rate.perUsd} per USD (${rate.source})${status === "otp" ? " - waiting for the OTP in the Paystack dashboard" : ""}`;
+    : `Paystack transfer of NGN ${(kobo / 100).toFixed(2)} at ${quote.label}${status === "otp" ? " - waiting for the OTP in the Paystack dashboard" : ""}`;
   const out = await resolveWithdrawal({ id: withdrawalId, status: status === "success" && !uncertain ? "completed" : "processing", adminId, note, payoutReference: reference });
   if (uncertain) return out.ok ? { ok: true, status: "unknown" } : { ok: false, error: "The transfer's outcome is unknown and the withdrawal didn't update. Don't pay it again: check the reference in Paystack." };
   return out.ok ? { ok: true, status } : { ok: false, error: "Sent, but the withdrawal didn't update. The webhook will finish it." };

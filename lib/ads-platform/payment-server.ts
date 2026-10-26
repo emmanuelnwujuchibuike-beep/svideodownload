@@ -128,7 +128,7 @@ const returnUrl = (reference: string) => `${SITE_URL}/advertise/payment?referenc
  */
 export async function createAdCampaignPayment(
   db: Db,
-  input: { userId: string; email: string; campaignId: string; quoteId: string; market: PaymentMarket; preferredProvider?: unknown; extension?: boolean },
+  input: { userId: string; email: string; campaignId: string; quoteId: string; market: PaymentMarket; country?: string | null; preferredProvider?: unknown; extension?: boolean },
 ): Promise<PaymentStart> {
   const { data: settings } = await db.from("ad_platform_settings").select("payments_enabled").limit(1);
   if (settings?.[0]?.payments_enabled !== true) return { kind: "refused", code: "payments_disabled", status: 503 };
@@ -272,9 +272,9 @@ async function beginPaystack(db: Db, input: { userId: string; email: string }, a
  * amount and currency against the row it wrote), same fallback rule. A row the database refuses
  * (a CHECK from before migration 0271) is a refusal before anything was created: Paystack may follow.
  */
-async function beginFlutterwave(db: Db, input: { userId: string; email: string; market?: PaymentMarket }, applicationId: string, quoteId: string, totalUsd: number): Promise<PaymentStart> {
+async function beginFlutterwave(db: Db, input: { userId: string; email: string; market?: PaymentMarket; country?: string | null }, applicationId: string, quoteId: string, totalUsd: number): Promise<PaymentStart> {
   // 2026-10-24: naira in Nigeria (bank transfer, USSD…), USD elsewhere — ad_payment_settle checks the row's own currency
-  const fw = await flutterwaveChargeFor(totalUsd, input.market, "ad_campaign");
+  const fw = await flutterwaveChargeFor(totalUsd, input.market, "ad_campaign", input.country);
   const reference = newFlutterwaveReference("ad_campaign");
   let stop: PaymentStart | null;
   try {

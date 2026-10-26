@@ -257,7 +257,7 @@ async function priceChoice(creatorId: string, s: SubSettings, cfg: SubConfig, mo
  * 0277: `months` (1 / 3 / 6 / 12, default 1) and an optional `promotionId` — the browser names an option, the server
  * prices it. Everything stays prepaid: one payment, `periodDays` of access, nothing renews.
  */
-export async function startSubCheckout(input: { subscriberId: string; email: string; creatorId: string; returnPath: string; market?: PaymentMarket; months?: number; promotionId?: string | null }): Promise<Result<{ url: string; reused: boolean }>> {
+export async function startSubCheckout(input: { subscriberId: string; email: string; creatorId: string; returnPath: string; market?: PaymentMarket; country?: string | null; months?: number; promotionId?: string | null }): Promise<Result<{ url: string; reused: boolean }>> {
   const cfg = await subConfig();
   if (!cfg.purchasesEnabled) return fail("Subscriptions are paused right now.", 503, "paused");
   if (!isUuid(input.subscriberId) || !isUuid(input.creatorId)) return fail("Invalid request.", 400, "invalid");
@@ -325,7 +325,7 @@ export async function startSubCheckout(input: { subscriberId: string; email: str
 
 interface SubPair {
   db: ReturnType<typeof createAdminClient>;
-  input: { subscriberId: string; email: string; creatorId: string; market?: PaymentMarket };
+  input: { subscriberId: string; email: string; creatorId: string; market?: PaymentMarket; country?: string | null };
   charge: ReturnType<typeof subscriptionCharge>;
   cfg: SubConfig;
   safeReturn: string;
@@ -458,8 +458,8 @@ async function openFlutterwaveSub(p: SubPair): Promise<RailAttempt<string>> {
   }
 
   const reference = newFlutterwaveReference("sub_purchase");
-  // 2026-10-24: naira in Nigeria (bank transfer, USSD…), USD elsewhere — the price in USD cents stays on the row
-  const fw = await flutterwaveChargeFor(p.charge.totalCents, p.input.market, "sub_purchase");
+  // 2026-10-24: naira in Nigeria (bank transfer, USSD…); 2026-10-26: cedis / shillings / rand in Ghana, Kenya, South Africa; USD elsewhere — the price in USD cents stays on the row
+  const fw = await flutterwaveChargeFor(p.charge.totalCents, p.input.market, "sub_purchase", p.input.country);
   const total = fw.amountMinor;
   const row = await insertPurchase(p, { reference, provider: "flutterwave", currency: fw.currency, minor: total, fx: fw.fxMinorPerUsd });
   if ("stop" in row) return row.stop;

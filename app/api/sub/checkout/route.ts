@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { paymentMarket } from "@/lib/payments/router";
+import { paymentCountry, paymentMarket } from "@/lib/payments/router";
 import { trackLimiter } from "@/lib/rate-limit";
 import { startSubCheckout } from "@/lib/sub/server";
 import { createClient } from "@/lib/supabase/server";
@@ -23,6 +23,6 @@ export async function POST(req: Request) {
   if (!success) return NextResponse.json({ ok: false, error: "Too many requests." }, { status: 429 });
   const parsed = body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ ok: false, error: "Invalid request." }, { status: 400 });
-  const out = await startSubCheckout({ subscriberId: user.id, email: user.email ?? "", creatorId: parsed.data.creatorId, returnPath: parsed.data.returnPath, market: paymentMarket(req.headers), months: parsed.data.months, promotionId: parsed.data.promotionId ?? null });
+  const out = await startSubCheckout({ subscriberId: user.id, email: user.email ?? "", creatorId: parsed.data.creatorId, returnPath: parsed.data.returnPath, market: paymentMarket(req.headers), country: paymentCountry(req.headers), months: parsed.data.months, promotionId: parsed.data.promotionId ?? null });
   return out.ok ? NextResponse.json(out, { headers: { "Cache-Control": "private, no-store" } }) : NextResponse.json({ ok: false, error: out.error }, { status: out.status });
 }

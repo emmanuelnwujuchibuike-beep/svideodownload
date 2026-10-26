@@ -4,7 +4,7 @@ import { markPlanCheckout, recordPlanAttempt, type OneOffPeriod, type SitePlanId
 import type { AiPlanId } from "@/lib/ai/credits/config";
 import type { PaymentMarket } from "@/lib/ai/credits/wallet-config";
 import { createFlutterwaveCheckout, flutterwaveFailureIsDefinite } from "@/lib/flutterwave/client";
-import { FLUTTERWAVE_LOCAL_CURRENCY, flutterwaveChargeFor } from "@/lib/payments/flutterwave-charge";
+import { FLUTTERWAVE_LOCAL_CURRENCY, flutterwaveChargeFor, localCurrencyFor } from "@/lib/payments/flutterwave-charge";
 import { newFlutterwaveReference } from "@/lib/payments/references";
 import type { RailAttempt } from "@/lib/payments/router";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -21,6 +21,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *
  * The attempt is written BEFORE Flutterwave is called, with the naira amount, the rate and `one_off_period`; activation
  * (plan-attempts → activateOneOff…) grants one month only on a verified charge matching that row exactly.
+ *
+ * Ghana, Kenya, South Africa (2026-10-26): the same one-off month in GHS / KES / ZAR — their cards often refuse a dollar
+ * subscription (lib/payments/flutterwave-charge.ts). Should Flutterwave refuse to OPEN a checkout in one of those
+ * currencies, this answers null and the caller opens the USD subscription instead: the member is never left stuck.
  */
 type Rail = RailAttempt<{ url: string; provider: "flutterwave" | "paystack" }>;
 
@@ -29,6 +33,8 @@ const NOT_CONFIRMED = "We couldn't confirm the payment page opened. Try again in
 
 export async function openOneOffPlanCheckout(i: {
   market: PaymentMarket | undefined;
+  /** the edge's country (cf-ipcountry): Ghana, Kenya and South Africa pay in their own currency too */
+  country?: string | null;
   purpose: "ai_subscription" | "site_subscription";
   userId: string;
   email: string;
@@ -41,14 +47,15 @@ export async function openOneOffPlanCheckout(i: {
   period?: OneOffPeriod;
 }): Promise<Rail | null> {
   const period = i.period ?? "monthly";
-  if (i.market !== "NG" || !i.shownUsdCents) return null;
+  const local = localCurrencyFor(i.market, i.country);
+  if (!local || !i.shownUsdCents) return null;
   const table = i.purpose === "site_subscription" ? "subscriptions" : "ai_subscriptions";
   const { data } = await createAdminClient().from(table).select("provider, subscription_ref, cancel_at_period_end, status").eq("user_id", i.userId).maybeSingle();
   const row = data as { provider?: string | null; subscription_ref?: string | null; cancel_at_period_end?: boolean | null; status?: string | null } | null;
   if (row?.provider === "flutterwave" && row.subscription_ref && !row.cancel_at_period_end && row.status === "active") return null;
 
-  const charge = await flutterwaveChargeFor(i.shownUsdCents, "NG", i.purpose);
-  if (charge.currency !== FLUTTERWAVE_LOCAL_CURRENCY) return null;
+  const charge = await flutterwaveChargeFor(i.shownUsdCents, i.market, i.purpose, i.country);
+  if (charge.currency !== local) return null;
 
   const reference = newFlutterwaveReference(i.purpose);
   const recorded = await recordPlanAttempt({ reference, userId: i.userId, plan: i.plan, listCents: i.shownUsdCents, listCurrency: "USD", providerAmount: charge.amountMinor, providerCurrency: charge.currency, provider: "flutterwave", purpose: i.purpose, oneOffPeriod: period, fxMinorPerUsd: charge.fxMinorPerUsd });
@@ -61,7 +68,9 @@ export async function openOneOffPlanCheckout(i: {
   } catch (e) {
     const definite = flutterwaveFailureIsDefinite(e);
     await markPlanCheckout(reference, { refused: definite });
-    console.error("[plans] one-off month checkout failed", { purpose: i.purpose, definite, error: e instanceof Error ? e.name : "unknown" });
+    console.error("[plans] one-off month checkout failed", { purpose: i.purpose, currency: charge.currency, definite, error: e instanceof Error ? e.name : "unknown" });
+    // a currency newer than naira refused for sure: nothing was created — the USD subscription opens instead
+    if (definite && charge.currency !== FLUTTERWAVE_LOCAL_CURRENCY) return null;
     return definite ? { ok: false, refusal: "definite", status: 503, error: NOT_STARTED } : { ok: false, refusal: "unknown", status: 503, error: NOT_CONFIRMED };
   }
 }

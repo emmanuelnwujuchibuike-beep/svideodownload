@@ -82,6 +82,31 @@ async function request<T>(path: string, init: { method?: "GET" | "POST" | "PUT";
   return json;
 }
 
+/**
+ * How many minor units of `currency` one US dollar costs today, from Flutterwave's own rate (GET /v3/transfers/rates —
+ * "source_currency" is what is paid, so `data.source.amount` is the price of 1 USD in it). Used to charge a member in
+ * their local currency (lib/payments/flutterwave-charge.ts). Cached 10 minutes; null when Flutterwave gives no usable
+ * rate — never a guessed one.
+ */
+const rateCache = new Map<string, { at: number; minorPerUsd: number | null }>();
+const RATE_TTL_MS = 10 * 60_000;
+export async function readFlutterwaveUsdRate(currency: string, deps: { cfg?: FlutterwaveConfig; fetch?: Fetch } = {}): Promise<number | null> {
+  const cur = currency.toUpperCase();
+  if (!TWO_DECIMAL.has(cur) || cur === "USD") return null;
+  const hit = rateCache.get(cur);
+  if (hit && Date.now() - hit.at < RATE_TTL_MS) return hit.minorPerUsd;
+  let minorPerUsd: number | null = null;
+  try {
+    const out = await request<{ data?: { source?: { amount?: number | string } } }>(`/transfers/rates?amount=1&destination_currency=USD&source_currency=${cur}`, {}, deps);
+    const major = Number(out.data?.source?.amount);
+    minorPerUsd = Number.isFinite(major) && major > 0 ? Math.round(major * 100) : null;
+  } catch {
+    minorPerUsd = null;
+  }
+  rateCache.set(cur, { at: Date.now(), minorPerUsd });
+  return minorPerUsd;
+}
+
 export function minorToMajor(minor: number, currency: string): number {
   if (!TWO_DECIMAL.has(currency.toUpperCase())) throw new FlutterwaveLocalRefusal(`unsupported currency ${currency}`);
   if (!Number.isInteger(minor) || minor <= 0) throw new FlutterwaveLocalRefusal("amount must be a positive whole number of minor units");

@@ -1,7 +1,7 @@
 import { advertiserRoute, str } from "@/lib/ads-platform/advertiser-route";
 import { AdApplicationError } from "@/lib/ads-platform/advertiser-server";
 import { createAdCampaignPayment } from "@/lib/ads-platform/payment-server";
-import { paymentMarket } from "@/lib/payments/router";
+import { paymentCountry, paymentMarket } from "@/lib/payments/router";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +25,7 @@ export function POST(request: Request) {
       campaignId: str(body.campaignId, 64),
       quoteId: str(body.quoteId, 64),
       market: paymentMarket(request.headers),
+      country: paymentCountry(request.headers),
       preferredProvider: body.provider,
       // Part 6: an extension of a running campaign - the quote says so and the database re-checks it
       extension: body.extension === true,

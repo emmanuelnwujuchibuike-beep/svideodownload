@@ -72,7 +72,7 @@ export async function paidVerificationOffer(userId: string): Promise<{ config: P
 
 type StartResult = { ok: true; url: string; reused: boolean } | { ok: false; error: string; status: number };
 
-export async function startVerificationCheckout(input: { userId: string; email: string; market?: PaymentMarket }): Promise<StartResult> {
+export async function startVerificationCheckout(input: { userId: string; email: string; market?: PaymentMarket; country?: string | null }): Promise<StartResult> {
   const cfg = await getPaidVerificationConfig();
   if (!cfg.enabled) return { ok: false, error: "Paid verification isn't available right now.", status: 409 };
   if (!input.email) return { ok: false, error: "Add an email to your account to pay.", status: 400 };
@@ -206,7 +206,7 @@ async function openPaystackVerification(input: { userId: string; email: string }
 }
 
 /** The Flutterwave rail (Part 2): USD, the exact price. Needs migration 0271's `provider` column — without it, a definite refusal (Paystack takes it). */
-async function openFlutterwaveVerification(input: { userId: string; email: string; market?: PaymentMarket }, cfg: PaidVerificationConfig): Promise<RailAttempt<string>> {
+async function openFlutterwaveVerification(input: { userId: string; email: string; market?: PaymentMarket; country?: string | null }, cfg: PaidVerificationConfig): Promise<RailAttempt<string>> {
   const db = createAdminClient();
   // an earlier Flutterwave checkout whose creation outcome was unknown is resolved first — never two at once
   const { data: held, error: heldError } = await db.from("verification_purchases").select("reference").eq("user_id", input.userId).eq("status", "initiated").eq("provider", "flutterwave").is("checkout_url", null).limit(3);
@@ -218,7 +218,7 @@ async function openFlutterwaveVerification(input: { userId: string; email: strin
 
   const reference = newFlutterwaveReference("verification");
   // 2026-10-24: naira in Nigeria (bank transfer, USSD…), USD elsewhere
-  const fw = await flutterwaveChargeFor(cfg.priceCents, input.market, "verification");
+  const fw = await flutterwaveChargeFor(cfg.priceCents, input.market, "verification", input.country);
   const refused = await insertVerificationPurchase({ user_id: input.userId, reference, provider: "flutterwave", price_cents: cfg.priceCents, charged_currency: fw.currency, charged_minor: fw.amountMinor, fx_minor_per_usd: fw.fxMinorPerUsd, period_days: cfg.periodDays });
   if (refused) return refused;
   try {

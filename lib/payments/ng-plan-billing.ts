@@ -4,7 +4,8 @@ import { AI_PLAN_IDS, type AiPlanId, type AiPlansConfig } from "@/lib/ai/credits
 import { readFlutterwavePlan } from "@/lib/flutterwave/client";
 import { flutterwaveUsableFor, getFlutterwaveConfig } from "@/lib/flutterwave/config";
 import { getPricing } from "@/lib/monetization/pricing";
-import { FLUTTERWAVE_LOCAL_CURRENCY, flutterwaveChargeFor } from "@/lib/payments/flutterwave-charge";
+import type { PaymentMarket } from "@/lib/ai/credits/wallet-config";
+import { FLUTTERWAVE_LOCAL_CURRENCY, flutterwaveChargeFor, localCurrencyFor } from "@/lib/payments/flutterwave-charge";
 import { aiPlanShownUsdCents, displayPriceUsdCents, flutterwavePlanCompat } from "@/lib/payments/plan-compat";
 
 /**
@@ -45,18 +46,25 @@ async function ngnPlanPrice(id: string, interval: "monthly" | "yearly"): Promise
   return price;
 }
 
-export async function ngPlanBilling(plans: AiPlansConfig, listCurrency: string): Promise<NgPlanBilling> {
+/**
+ * Ghana, Kenya and South Africa (2026-10-26) get the same two buttons in their own currency — "Card — $…/month" (the USD
+ * subscription) and a one-off month in GHS / KES / ZAR (lib/payments/flutterwave-charge.ts); the naira card plan and the
+ * 3-month bundle stay Nigeria's. `market` / `country` are the edge's.
+ */
+export async function ngPlanBilling(plans: AiPlansConfig, listCurrency: string, market: PaymentMarket = "NG", country = "NG"): Promise<NgPlanBilling> {
   const cfg = await getFlutterwaveConfig();
   const aiOk = flutterwaveUsableFor("ai_subscription", cfg);
   const siteOk = flutterwaveUsableFor("site_subscription", cfg);
   const pricing = siteOk ? await getPricing() : null;
+  const nigeria = market === "NG";
+  const local = localCurrencyFor(market, country);
 
   const entry = async (purpose: "ai_subscription" | "site_subscription", usable: boolean, usdPlanId: string, ngnPlanId: string, shownUsd: number | null, interval: "monthly" | "yearly") => {
-    if (!usable || !usdPlanId || !shownUsd) return { renew: null, once: null };
-    const once = await flutterwaveChargeFor(shownUsd, "NG", purpose);
+    if (!usable || !usdPlanId || !shownUsd || !local) return { renew: null, once: null };
+    const once = await flutterwaveChargeFor(shownUsd, market, purpose, country);
     return {
-      renew: (await ngnPlanPrice(ngnPlanId, interval)) ?? { currency: "USD", amountMinor: shownUsd },
-      once: once.currency === FLUTTERWAVE_LOCAL_CURRENCY ? { currency: once.currency, amountMinor: once.amountMinor } : null,
+      renew: (nigeria ? await ngnPlanPrice(ngnPlanId, interval) : null) ?? { currency: "USD", amountMinor: shownUsd },
+      once: once.currency === local ? { currency: once.currency, amountMinor: once.amountMinor } : null,
     };
   };
 
@@ -66,7 +74,7 @@ export async function ngPlanBilling(plans: AiPlansConfig, listCurrency: string):
     out[id] = await entry("ai_subscription", aiOk && p.enabled, p.flutterwavePlanId, p.flutterwavePlanIdNgn, aiPlanShownUsdCents(p.priceCents, listCurrency), p.interval);
   }
   const quarter = async (usd: number | null): Promise<NgPlanPrice | null> => {
-    if (!siteOk || !usd) return null;
+    if (!siteOk || !usd || !nigeria) return null;
     const c = await flutterwaveChargeFor(usd, "NG", "site_subscription");
     return c.currency === FLUTTERWAVE_LOCAL_CURRENCY ? { currency: c.currency, amountMinor: c.amountMinor } : null;
   };

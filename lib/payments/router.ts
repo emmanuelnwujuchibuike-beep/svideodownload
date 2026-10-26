@@ -34,8 +34,13 @@ import type { PaymentMarket, PaymentPurpose, PaymentRouting, TopupProviderId } f
  * and the credits are the server's either way.
  */
 export function paymentMarket(headers: Headers): PaymentMarket {
+  return paymentCountry(headers) === "NG" ? "NG" : "other";
+}
+
+/** The edge's two-letter country, the same trust as `paymentMarket` ("" when the edge sent none). */
+export function paymentCountry(headers: Headers): string {
   const c = (headers.get("cf-ipcountry") || headers.get("x-vercel-ip-country") || "").trim().toUpperCase();
-  return c === "NG" ? "NG" : "other";
+  return /^[A-Z]{2}$/.test(c) ? c : "";
 }
 
 export function routePayment(input: {

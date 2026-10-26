@@ -30,6 +30,8 @@ export interface PaymentOptionsView {
    * "once" (one month in naira: bank transfer, USSD, card). null outside Nigeria. lib/payments/ng-plan-billing.ts.
    */
   ngBilling?: Record<"ai_pro" | "ai_max" | "pro" | "business", NgPlanButtons> | null;
+  /** the edge's market ("NG" | "other") — the naira-only Paystack link shows in Nigeria alone */
+  market?: "NG" | "other";
 }
 export interface NgPlanButtons {
   renew: { currency: string; amountMinor: number } | null;
@@ -42,8 +44,24 @@ export interface NgPlanButtons {
 export function formatPlanPrice(p: { currency: string; amountMinor: number }): string {
   const major = p.amountMinor / 100;
   if (p.currency === "NGN") return `₦${Math.round(major).toLocaleString("en-US")}`;
-  if (p.currency === "USD") return `${major.toFixed(2)}`;
+  // 2026-10-26: the dollar sign was missing ("Card — 1.99/month")
+  if (p.currency === "USD") return `$${major.toFixed(2)}`;
+  if (p.currency === "GHS") return `GH₵${major.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (p.currency === "KES") return `KSh ${Math.round(major).toLocaleString("en-US")}`;
+  if (p.currency === "ZAR") return `R${major.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   return `${p.currency} ${major.toFixed(2)}`;
+}
+
+/**
+ * The one-off month button's name — what that currency's checkout actually offers (Flutterwave shows the methods of the
+ * currency charged): naira = bank transfer / USSD; cedi / shilling = mobile money; rand = a local card.
+ */
+export function oncePayLabel(currency: string): string {
+  if (currency === "NGN") return "Bank transfer / USSD";
+  if (currency === "GHS") return "Mobile money / card";
+  if (currency === "KES") return "M-Pesa / card";
+  if (currency === "ZAR") return "Card in rand";
+  return "Pay once";
 }
 
 const COPY: Record<PaymentProvider, { label: string; hint: string }> = {

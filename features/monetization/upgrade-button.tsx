@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
 import { useState } from "react";
 
 import { useUser } from "@/features/auth/use-user";
-import { formatPlanPrice, usePaymentOptions } from "@/features/ai/wallet/payment-provider-picker";
+import { formatPlanPrice, oncePayLabel, usePaymentOptions } from "@/features/ai/wallet/payment-provider-picker";
 
 /**
  * Starts a subscription upgrade. Anyone can click it (signed in or not):
@@ -74,7 +74,7 @@ export function UpgradeButton({
         ) : null}
         {ngButtons.once ? (
           <button type="button" onClick={() => go(undefined, "once")} disabled={loading} className={ngButtons.renew ? "mt-2 block w-full rounded-xl border border-border px-3 py-2.5 text-center text-sm font-semibold transition hover:bg-secondary disabled:opacity-60" : className}>
-            Bank transfer / USSD — {formatPlanPrice(ngButtons.once)}
+            {oncePayLabel(ngButtons.once.currency)} — {formatPlanPrice(ngButtons.once)}
             <span className="block text-[11px] font-medium text-muted-foreground">1 month · doesn&apos;t renew</span>
           </button>
         ) : null}
@@ -94,7 +94,8 @@ export function UpgradeButton({
       <button type="button" onClick={() => go()} disabled={loading} className={className}>
         {loading ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : children}
       </button>
-      {user ? (
+      {/* Paystack (naira): only where naira is the member's money — a "bank transfer or USSD (NGN)" link meant nothing in Ghana or London */}
+      {user && options?.market === "NG" ? (
         <button type="button" onClick={() => go("paystack")} disabled={loading} className="mt-2 block w-full text-center text-xs text-muted-foreground underline">
           Pay by bank transfer or USSD (NGN)
         </button>

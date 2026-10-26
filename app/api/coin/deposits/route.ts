@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { beginCoinDeposit } from "@/lib/coin/deposits";
 import { getLandingSettings } from "@/lib/landing/settings";
+import { paymentCountry, paymentMarket } from "@/lib/payments/router";
 import { aiJobCreateLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
@@ -29,7 +30,8 @@ export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   const settings = await getLandingSettings();
-  const out = await beginCoinDeposit({ userId: user.id, email: user.email, amountCents: parsed.data.amountCents, idempotencyKey: parsed.data.idempotencyKey, config: settings.frenzCoin });
+  // the edge's country, never the browser's: Nigeria pays in naira, Ghana / Kenya / South Africa in their own currency (2026-10-26)
+  const out = await beginCoinDeposit({ userId: user.id, email: user.email, amountCents: parsed.data.amountCents, idempotencyKey: parsed.data.idempotencyKey, config: settings.frenzCoin, market: paymentMarket(request.headers), country: paymentCountry(request.headers) });
   if (!out.ok) return NextResponse.json({ error: out.error, reason: out.reason }, { status: out.status });
   return NextResponse.json(out, { headers: { "cache-control": "no-store" } });
 }

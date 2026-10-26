@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { paymentMarket } from "@/lib/payments/router";
+import { paymentCountry, paymentMarket } from "@/lib/payments/router";
 import { trackLimiter } from "@/lib/rate-limit";
 import { startVerificationCheckout } from "@/lib/social/paid-verification";
 import { createClient } from "@/lib/supabase/server";
@@ -20,6 +20,6 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ ok: false, error: "Sign in to get verified." }, { status: 401 });
   const { success } = await trackLimiter.limit(`verification-checkout:${user.id}`);
   if (!success) return NextResponse.json({ ok: false, error: "Too many requests." }, { status: 429 });
-  const out = await startVerificationCheckout({ userId: user.id, email: user.email ?? "", market: paymentMarket(request.headers) });
+  const out = await startVerificationCheckout({ userId: user.id, email: user.email ?? "", market: paymentMarket(request.headers), country: paymentCountry(request.headers) });
   return out.ok ? NextResponse.json(out, { headers: { "Cache-Control": "private, no-store" } }) : NextResponse.json({ ok: false, error: out.error }, { status: out.status });
 }

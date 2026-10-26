@@ -47,6 +47,8 @@ export async function beginCharacterReplaceTopup(opts: {
   returnTo: unknown;
   /** The member's market, from the edge (lib/payments/router.ts `paymentMarket`) — never from the body. Absent = "other". */
   market?: PaymentMarket;
+  /** The edge's country (2026-10-26): Ghana, Kenya, South Africa pay in their own currency. */
+  country?: string | null;
   /** The member's pick of provider (2026-10-07) — honoured only when the admin allows a choice, and only among what the route offers. */
   provider?: unknown;
 }): Promise<TopupStart> {
@@ -101,12 +103,12 @@ async function insertAttempt(row: Record<string, unknown>): Promise<boolean> {
  * The Flutterwave rail (Part 2): USD, the exact list price, no conversion. Opened only when the
  * capability gate allowed it (the router's `usable`).
  */
-async function beginFlutterwaveTopup(opts: { userId: string; email: string; returnTo: unknown; market?: PaymentMarket }, purchase: Purchase): Promise<RailAttempt<TopupOk>> {
+async function beginFlutterwaveTopup(opts: { userId: string; email: string; returnTo: unknown; market?: PaymentMarket; country?: string | null }, purchase: Purchase): Promise<RailAttempt<TopupOk>> {
   const unavailable = { ok: false as const, refusal: "definite" as const, status: 503, error: "Payments aren't available right now." };
 
   const amount = purchase.priceUsdCents;
-  // 2026-10-24: naira in Nigeria (bank transfer, USSD…), USD elsewhere — the credit stays the USD price on the row
-  const charge = await flutterwaveChargeFor(amount, opts.market, "wallet_topup");
+  // 2026-10-24: naira in Nigeria (bank transfer, USSD…); 2026-10-26: Ghana / Kenya / South Africa in their own currency; USD elsewhere — the credit stays the USD price on the row
+  const charge = await flutterwaveChargeFor(amount, opts.market, "wallet_topup", opts.country);
   const reference = newFlutterwaveReference("wallet_topup");
   const recorded = await insertAttempt({ reference, user_id: opts.userId, provider: "flutterwave", amount_cents: amount, currency: FLUTTERWAVE_CHECKOUT_CURRENCY, provider_amount: charge.amountMinor, provider_currency: charge.currency, fx_minor_per_usd: charge.fxMinorPerUsd, credits: purchase.credits, item_id: purchase.packId });
   if (!recorded) return unavailable;

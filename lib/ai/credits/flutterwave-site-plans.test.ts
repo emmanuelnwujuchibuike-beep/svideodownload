@@ -20,6 +20,7 @@ let fwPlan: { id: string; amountMinor: number | null; currency: string; interval
 let fwCheckout: (o: { reference: string }) => Promise<string>;
 let fwVerify: (ref: string) => VerifiedCharge;
 let fwSubs: { id: string; status: string; plan: string; email: string; amount: number | null; tx?: string; renewalTxs?: string[] }[];
+let ghsRate: number | null = 1221;
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/server")>()), after: () => {} }));
@@ -51,6 +52,8 @@ vi.mock("@/lib/flutterwave/client", async (orig) => ({
   readFlutterwavePlan: async (id: string) => (calls.push(`fw:plan:${id}`), fwPlan),
   createFlutterwaveCheckout: async (o: { reference: string; paymentPlan?: string; amountMinor: number; currency: string }) => (calls.push(`fw:checkout:${o.paymentPlan}:${o.amountMinor}:${o.currency}:${db.tables.ai_topup_attempts?.some((r) => r.reference === o.reference) ? "row-first" : "NO-ROW"}`), fwCheckout(o)),
   verifyFlutterwaveByReference: async (ref: string) => fwVerify(ref),
+  // Flutterwave's own live rate (2026-10-26): GH₵12.21 per dollar
+  readFlutterwaveUsdRate: async (cur: string) => (cur === "GHS" ? ghsRate : null),
   findFlutterwaveSubscriptions: async (q: { email?: string; plan?: string; transactionId?: string }) =>
     fwSubs.filter((s) => (!q.transactionId || s.tx === q.transactionId || (s.renewalTxs ?? []).includes(q.transactionId)) && (!q.email || s.email === q.email) && (!q.plan || s.plan === q.plan)),
   cancelFlutterwaveSubscription: async (id: string) => {
@@ -332,6 +335,71 @@ describe("upgrades stay on the rail that bills the current plan (Part 3.3, M2 �
     db.tables.subscriptions!.push(fwRow());
     expect(await (await checkout({ plan: "business", provider: "paystack" })).json()).toMatchObject({ provider: "flutterwave" });
     expect(calls.some((c) => c.startsWith("paystack:"))).toBe(false);
+  });
+});
+
+/**
+ * 2026-10-26 — the first Pro purchase from outside Nigeria: a Visa issued in GHANA, refused by its bank on the dollar plan
+ * ("Restricted Card … bank restrictions"). Ghana, Kenya and South Africa now get Nigeria's shape in their own currency.
+ */
+describe("Ghana — a one-off cedi month (mobile money / local card), or the dollar card subscription", () => {
+  const CEDI_MONTH = Math.round((900 * 1221) / 100); // the shown $9.00 at GH₵12.21/$ = GH₵109.89 = 10,989 pesewas
+  beforeEach(() => {
+    process.env.FLUTTERWAVE_VERIFIED_CURRENCIES = "USD,NGN,GHS";
+    ghsRate = 1221;
+  });
+
+  it("the default button in Ghana opens a CEDI one-off checkout — no payment plan, so mobile money shows", async () => {
+    expect(await (await checkout({ plan: "pro" }, "GH")).json()).toMatchObject({ provider: "flutterwave" });
+    expect(calls).toEqual([`fw:checkout:undefined:${CEDI_MONTH}:GHS:row-first`]);
+    expect(attempts()[0]).toMatchObject({ provider_amount: CEDI_MONTH, provider_currency: "GHS", amount_cents: 900, currency: "USD", fx_minor_per_usd: 1221, metadata: { one_off_period: "monthly" } });
+  });
+
+  it("a verified cedi payment grants one month; a short one grants nothing", async () => {
+    await checkout({ plan: "pro" }, "GH");
+    for (const r of attempts()) r.created_at = r.updated_at = ago(10 * 60_000);
+    fwVerify = (ref) => fwCharge(ref, { amountMinor: CEDI_MONTH - 1, currency: "GHS", channel: "mobilemoneygh" });
+    expect(await reconcilePendingPlanAttempts(await config())).toMatchObject({ mismatched: 1 });
+    expect(sub()).toBeUndefined();
+    db.tables.ai_topup_attempts = [];
+    calls.length = 0;
+    await checkout({ plan: "pro" }, "GH");
+    for (const r of attempts()) r.created_at = r.updated_at = ago(10 * 60_000);
+    fwVerify = (ref) => fwCharge(ref, { amountMinor: CEDI_MONTH, currency: "GHS", channel: "mobilemoneygh" });
+    expect(await reconcilePendingPlanAttempts(await config())).toMatchObject({ settled: 1 });
+    expect(sub()).toMatchObject({ plan: "pro", status: "active", provider: "flutterwave", subscription_ref: null });
+  });
+
+  it("'Card — renews monthly' in Ghana is the dollar subscription, as before", async () => {
+    await checkout({ plan: "pro", billing: "renew" }, "GH");
+    expect(calls).toEqual(["fw:plan:501", "fw:checkout:501:900:USD:row-first"]);
+  });
+
+  it("🔴 Flutterwave refuses to open a cedi checkout: the dollar subscription opens instead — never a dead end", async () => {
+    let n = 0;
+    fwCheckout = async (o) => {
+      if (n++ === 0) throw new FlutterwaveHttpError("currency not enabled", 400);
+      return `https://checkout.flutterwave.com/pay/${o.reference}`;
+    };
+    expect(await (await checkout({ plan: "pro" }, "GH")).json()).toMatchObject({ provider: "flutterwave", url: expect.stringContaining("checkout.flutterwave.com") });
+    expect(calls).toEqual([`fw:checkout:undefined:${CEDI_MONTH}:GHS:row-first`, "fw:plan:501", "fw:checkout:501:900:USD:row-first"]);
+  });
+
+  it("no rate from Flutterwave, or GHS not allowed: the dollar subscription — never a guessed rate", async () => {
+    ghsRate = null;
+    await checkout({ plan: "pro" }, "GH");
+    expect(calls).toEqual(["fw:plan:501", "fw:checkout:501:900:USD:row-first"]);
+    calls.length = 0;
+    db.tables.ai_topup_attempts = [];
+    ghsRate = 1221;
+    process.env.FLUTTERWAVE_VERIFIED_CURRENCIES = "USD,NGN";
+    await checkout({ plan: "pro" }, "GH");
+    expect(calls).toEqual(["fw:plan:501", "fw:checkout:501:900:USD:row-first"]);
+  });
+
+  it("a country with no local currency here (the US) is unchanged: the dollar subscription", async () => {
+    await checkout({ plan: "pro" }, "US");
+    expect(calls).toEqual(["fw:plan:501", "fw:checkout:501:900:USD:row-first"]);
   });
 });
 

@@ -1,9 +1,11 @@
 import "server-only";
 
+import type { PaymentMarket } from "@/lib/ai/credits/wallet-config";
 import { depositRulesForDb, type FrenzCoinConfig } from "@/lib/coin/config";
 import { createFlutterwaveCheckout, flutterwaveFailureIsDefinite, verifyFlutterwaveByReference } from "@/lib/flutterwave/client";
 import { FLUTTERWAVE_CHECKOUT_CURRENCY, flutterwaveCollectionGate, flutterwaveConfigured, getFlutterwaveConfig } from "@/lib/flutterwave/config";
 import { chargeMatches, type VerifiedCharge } from "@/lib/payments/charge";
+import { flutterwaveChargeFor } from "@/lib/payments/flutterwave-charge";
 import { flutterwaveReferencePurpose, newFlutterwaveReference } from "@/lib/payments/references";
 import { SITE_URL } from "@/lib/site";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -18,8 +20,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *   · it credits the FRENZ COIN wallet only (settle_coin_deposit), never AI Credits, and never through
  *     credit_product_balance — so no AI top-up reward, bonus or affiliate commission can follow it;
  *   · the coins land PENDING for the admin's hold (1 hour by default, 0 to 2160 - 0284), by the database clock;
- *   · USD only, the amount being the coins (1 coin = $1 = 100 cents): a naira checkout needs an exchange-rate and markup
- *     policy for coins that the owner has not decided, so none is assumed.
+ *   · the amount is the coins (1 coin = $1 = 100 cents). Charged in USD — or, since 2026-10-26 (owner: "it should also
+ *     take effect for the Frenz coin deposit"), in the member's own currency in Nigeria, Ghana, Kenya and South Africa, at
+ *     the same rate every other one-off checkout uses (lib/payments/flutterwave-charge.ts). The coins credited are still
+ *     the USD amount; the row pins the local amount Flutterwave must collect.
  *
  *   beginCoinDeposit     the attempt row (begin_coin_deposit) BEFORE the checkout, then the checkout. One open deposit
  *                        per member; a replayed idempotency key returns the attempt it made.
@@ -55,7 +59,7 @@ export const coinDepositReturnUrl = (reference: string) => `${SITE_URL}/wallet?d
  * Open a Frenz Coin deposit for the signed-in member. `amountCents` and `idempotencyKey` come from the request and are
  * validated here and again in SQL; everything else is the server's.
  */
-export async function beginCoinDeposit(opts: { userId: string; email: string; amountCents: unknown; idempotencyKey: unknown; config: FrenzCoinConfig }): Promise<CoinDepositStart> {
+export async function beginCoinDeposit(opts: { userId: string; email: string; amountCents: unknown; idempotencyKey: unknown; config: FrenzCoinConfig; market?: PaymentMarket; country?: string | null }): Promise<CoinDepositStart> {
   const c = opts.config;
   if (!c.enabled || !c.deposits.enabled) return fail(503, "disabled", "Frenz Coin deposits aren't available right now.");
   const amount = opts.amountCents;
@@ -64,6 +68,13 @@ export async function beginCoinDeposit(opts: { userId: string; email: string; am
   const gate = flutterwaveCollectionGate(FLUTTERWAVE_CHECKOUT_CURRENCY, await getFlutterwaveConfig());
   if (!gate.ok) return fail(503, "rail_unavailable", "Deposits aren't available right now.");
 
+  /*
+    The member's own currency (2026-10-26, owner: "it should also take effect for the Frenz coin deposit"): in Nigeria
+    naira, in Ghana / Kenya / South Africa cedis, shillings or rand — their cards often refuse dollars, and the local
+    currency brings bank transfer, USSD, mobile money. The wallet is still credited the USD amount asked for; the row
+    pins what Flutterwave must collect, and settle_coin_deposit settles only on exactly that amount in that currency.
+  */
+  const charge = await flutterwaveChargeFor(amount, opts.market, "coin_deposit", opts.country);
   const reference = newFlutterwaveReference("coin_deposit");
   const db = createAdminClient();
   // 🔴 written BEFORE the provider is called: a checkout never exists without its attempt row
@@ -72,8 +83,8 @@ export async function beginCoinDeposit(opts: { userId: string; email: string; am
     p_reference: reference,
     p_amount_cents: amount,
     p_provider: "flutterwave",
-    p_provider_amount: amount,
-    p_provider_currency: FLUTTERWAVE_CHECKOUT_CURRENCY,
+    p_provider_amount: charge.amountMinor,
+    p_provider_currency: charge.currency,
     p_idempotency: opts.idempotencyKey,
     p_rules: depositRulesForDb(c),
   });
@@ -103,7 +114,7 @@ export async function beginCoinDeposit(opts: { userId: string; email: string; am
   }
 
   try {
-    const url = await createFlutterwaveCheckout({ reference, amountMinor: amount, currency: FLUTTERWAVE_CHECKOUT_CURRENCY, email: opts.email, redirectUrl: coinDepositReturnUrl(reference), title: "Frenz Coin", meta: { purpose: "coin_deposit" } });
+    const url = await createFlutterwaveCheckout({ reference, amountMinor: charge.amountMinor, currency: charge.currency, email: opts.email, redirectUrl: coinDepositReturnUrl(reference), title: "Frenz Coin", meta: { purpose: "coin_deposit" } });
     await db.from("ai_topup_attempts").update({ checkout_url: url, updated_at: new Date().toISOString() }).eq("reference", reference);
     console.info("[payments] checkout_created", { provider: "flutterwave", purpose: "coin_deposit", userId: opts.userId, reference });
     return { ok: true, url, reference, amountCents: amount, holdHours: Number(r.hold_hours ?? c.deposits.holdHours), reused: false };

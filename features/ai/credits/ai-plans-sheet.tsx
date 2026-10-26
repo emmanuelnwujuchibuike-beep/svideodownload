@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useState } from "react";
 
 import { aiButtonClass } from "@/features/ai/design/ai-button";
-import { defaultProvider, formatPlanPrice, PaymentProviderPicker, usePaymentOptions, type PaymentProvider } from "@/features/ai/wallet/payment-provider-picker";
+import { defaultProvider, formatPlanPrice, oncePayLabel, PaymentProviderPicker, usePaymentOptions, type PaymentProvider } from "@/features/ai/wallet/payment-provider-picker";
 import type { CharacterReplaceCreditsView } from "@/lib/ai/character-replace/types";
 import { beginAiPlanCheckout, buyAiPlanWithCredits } from "@/lib/ai/credits/client";
 import type { AiPlansPublic } from "@/lib/ai/credits/config";
@@ -290,7 +290,7 @@ function NgPlanButtons({ buttons, busy, disabled, top, onPick }: { buttons: { re
       ) : null}
       {buttons.once ? (
         <button type="button" disabled={disabled} onClick={() => onPick("once")} className={buttons.renew ? secondary : primary}>
-          <span className="text-[13px] font-semibold">{busy ? "Opening checkout…" : `Bank transfer / USSD — ${formatPlanPrice(buttons.once)}`}</span>
+          <span className="text-[13px] font-semibold">{busy ? "Opening checkout…" : `${oncePayLabel(buttons.once.currency)} — ${formatPlanPrice(buttons.once)}`}</span>
           <span className="text-[11px] font-medium opacity-80">1 month · doesn&apos;t renew</span>
         </button>
       ) : null}

@@ -13,7 +13,7 @@ import { openOneOffPlanCheckout } from "@/lib/ai/credits/plan-oneoff";
 import type { PaymentMarket } from "@/lib/ai/credits/wallet-config";
 import { aiPlanShownUsdCents, flutterwavePlanCompat } from "@/lib/payments/plan-compat";
 import { newFlutterwaveReference } from "@/lib/payments/references";
-import { firstRail, paymentMarket, routePayment, type RailAttempt } from "@/lib/payments/router";
+import { firstRail, paymentCountry, paymentMarket, routePayment, type RailAttempt } from "@/lib/payments/router";
 import { aiJobCreateLimiter } from "@/lib/rate-limit";
 import { SITE_URL } from "@/lib/site";
 import { createClient } from "@/lib/supabase/server";
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
   if (open.kind === "activated") return NextResponse.json({ error: `You're already on ${plan.label}.`, alreadyOn: parsed.data.plan }, { status: 409 });
   if (open.kind === "held") return NextResponse.json({ error: "Your last payment is still being confirmed. Try again in a few minutes.", code: "PAYMENT_CONFIRMING" }, { status: 409 });
 
-  const ctx: PlanCheckoutCtx = { userId: user.id, email: user.email, planId: parsed.data.plan, plan, listCurrency: settings.frenzAiCurrency, market: paymentMarket(request.headers), billing: parsed.data.billing, callbackUrl: `${base}${returnTo}${returnTo.includes("?") ? "&" : "?"}ai_plan=${parsed.data.plan}` };
+  const ctx: PlanCheckoutCtx = { userId: user.id, email: user.email, planId: parsed.data.plan, plan, listCurrency: settings.frenzAiCurrency, market: paymentMarket(request.headers), country: paymentCountry(request.headers), billing: parsed.data.billing, callbackUrl: `${base}${returnTo}${returnTo.includes("?") ? "&" : "?"}ai_plan=${parsed.data.plan}` };
   const out = await firstRail(
     candidates,
     (p) => (p === "flutterwave" ? openFlutterwavePlan(ctx) : openPaystackPlan(ctx)),
@@ -121,7 +121,9 @@ interface PlanCheckoutCtx {
   listCurrency: string;
   /** the member's market, from the edge (never the body) — Nigeria pays a one-off naira month (2026-10-24) */
   market: PaymentMarket;
-  /** Nigeria only: the pressed button; absent = one naira month (bank transfer / USSD / card) */
+  /** the edge's country — Ghana, Kenya, South Africa pay a one-off month in their own currency (2026-10-26) */
+  country: string;
+  /** Nigeria (and the local-currency countries): the pressed button; absent = one local-currency month */
   billing?: "renew" | "once";
   callbackUrl: string;
 }
@@ -138,7 +140,7 @@ async function openFlutterwavePlan(c: PlanCheckoutCtx): Promise<PlanRail> {
     null from the one-off path = it does not apply → the subscription below.
   */
   if (c.billing !== "renew") {
-    const once = await openOneOffPlanCheckout({ market: c.market, purpose: "ai_subscription", userId: c.userId, email: c.email, plan: c.planId, shownUsdCents: aiPlanShownUsdCents(c.plan.priceCents, c.listCurrency), title: `Frenz ${c.plan.label}`, callbackUrl: c.callbackUrl });
+    const once = await openOneOffPlanCheckout({ market: c.market, country: c.country, purpose: "ai_subscription", userId: c.userId, email: c.email, plan: c.planId, shownUsdCents: aiPlanShownUsdCents(c.plan.priceCents, c.listCurrency), title: `Frenz ${c.plan.label}`, callbackUrl: c.callbackUrl });
     if (once) return once;
   }
   const ngnPlan = c.market === "NG" && c.billing === "renew" ? c.plan.flutterwavePlanIdNgn : "";

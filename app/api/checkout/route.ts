@@ -11,7 +11,7 @@ import { openOneOffPlanCheckout } from "@/lib/ai/credits/plan-oneoff";
 import type { PaymentMarket } from "@/lib/ai/credits/wallet-config";
 import { displayPriceUsdCents, flutterwavePlanCompat } from "@/lib/payments/plan-compat";
 import { newFlutterwaveReference } from "@/lib/payments/references";
-import { firstRail, paymentMarket, routePayment, type RailAttempt } from "@/lib/payments/router";
+import { firstRail, paymentCountry, paymentMarket, routePayment, type RailAttempt } from "@/lib/payments/router";
 import { initializeTransaction, paystackEnabled, paystackRefusedForSure, planCodeForPlan } from "@/lib/paystack/paystack";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
   const pricingNow = flutterwaveOk ? await getPricing() : null;
   const shownCents = pricingNow ? displayPriceUsdCents(pricingNow[planId].price) : null;
   const quarterCents = pricingNow ? displayPriceUsdCents(pricingNow.ngQuarterly?.[planId] ?? "") : null;
-  const ctx: SiteCheckoutCtx = { userId: user.id, email: user.email, planId, fwPlanId, paystackPlanCode, shownCents, market: paymentMarket(request.headers), billing: parsed.data.billing, fwPlanIdNgn, quarterCents, callbackUrl: `${base}/account?upgraded=1` };
+  const ctx: SiteCheckoutCtx = { userId: user.id, email: user.email, planId, fwPlanId, paystackPlanCode, shownCents, market: paymentMarket(request.headers), country: paymentCountry(request.headers), billing: parsed.data.billing, fwPlanIdNgn, quarterCents, callbackUrl: `${base}/account?upgraded=1` };
   const out = await firstRail(
     candidates,
     (p) => (p === "flutterwave" ? openFlutterwaveSitePlan(ctx) : openPaystackSitePlan(ctx)),
@@ -112,7 +112,9 @@ interface SiteCheckoutCtx {
   shownCents: number | null;
   /** the member's market, from the edge (never the body) — Nigeria pays a one-off naira month (2026-10-24) */
   market: PaymentMarket;
-  /** Nigeria only: the pressed button; absent = one naira month (bank transfer / USSD / card) */
+  /** the edge's country — Ghana, Kenya, South Africa pay a one-off month in their own currency (2026-10-26) */
+  country: string;
+  /** Nigeria (and the local-currency countries): the pressed button; absent = one local-currency month */
   billing?: "renew" | "once" | "quarter";
   fwPlanIdNgn: string;
   /** the 3-month bundle price for Nigeria in US cents (Admin → Pricing); null = not offered */
@@ -136,7 +138,8 @@ async function openFlutterwaveSitePlan(c: SiteCheckoutCtx): Promise<SiteRail> {
     return bundle ?? { ok: false, refusal: "definite", status: 409, error: "The 3-month bundle isn't available right now." };
   }
   if (c.billing !== "renew") {
-    const once = await openOneOffPlanCheckout({ market: c.market, purpose: "site_subscription", userId: c.userId, email: c.email, plan: c.planId, shownUsdCents: c.shownCents, title, callbackUrl: c.callbackUrl });
+    // Nigeria in naira; Ghana / Kenya / South Africa in their own currency (their cards often refuse a dollar subscription)
+    const once = await openOneOffPlanCheckout({ market: c.market, country: c.country, purpose: "site_subscription", userId: c.userId, email: c.email, plan: c.planId, shownUsdCents: c.shownCents, title, callbackUrl: c.callbackUrl });
     if (once) return once;
   }
   const ngnPlan = c.market === "NG" && c.billing === "renew" ? c.fwPlanIdNgn : "";

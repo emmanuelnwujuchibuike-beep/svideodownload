@@ -19,7 +19,10 @@ vi.mock("@/lib/flutterwave/client", async (orig) => ({
   ...(await orig<typeof import("@/lib/flutterwave/client")>()),
   createFlutterwaveCheckout: async (input: Record<string, unknown>) => (checkouts.push(input), checkout(input)),
   verifyFlutterwaveByReference: async (ref: string) => byReference(ref),
+  // Flutterwave's live rate (2026-10-26): GH₵12.21 per dollar
+  readFlutterwaveUsdRate: async (cur: string) => (cur === "GHS" ? 1221 : null),
 }));
+vi.mock("@/lib/landing/settings", () => ({ getLandingSettings: async () => ({ frenzAiCharacterReplace: { recharge: { checkoutCurrency: "NGN" } } }) }));
 process.env.FLUTTERWAVE_SECRET_HASH = "the-secret-hash";
 process.env.FLUTTERWAVE_SECRET_KEY = "FLWSECK_TEST-k";
 
@@ -51,6 +54,30 @@ beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "info").mockImplementation(() => {});
+});
+
+/*
+  Owner, 2026-10-26: "It should also take effect for the Frenz coin deposit". A member in Ghana deposits in cedis — the
+  coins credited stay the dollar amount asked for; the row pins exactly what Flutterwave must collect.
+*/
+describe("beginCoinDeposit — the member's own currency", () => {
+  it("Ghana: a cedi checkout for the dollar amount at Flutterwave's rate; the coins are still $50.00", async () => {
+    const out = await begin({ market: "other", country: "GH" });
+    expect(out).toMatchObject({ ok: true, amountCents: 5_000 });
+    const args = (db.rpc.begin_coin_deposit as ReturnType<typeof vi.fn>).mock.calls[0]![0] as Record<string, unknown>;
+    expect(args).toMatchObject({ p_amount_cents: 5_000, p_provider_amount: 61_050, p_provider_currency: "GHS" });
+    expect(checkouts[0]).toMatchObject({ amountMinor: 61_050, currency: "GHS" });
+  });
+  it("a deposit paid in cedis settles only on exactly that cedi amount", async () => {
+    db.tables.ai_topup_attempts = [attempt({ id: REF, provider_amount: 61_050, provider_currency: "GHS" })];
+    byReference = async () => charge({ amountMinor: 61_050, currency: "GHS", channel: "mobilemoneygh" });
+    await dep.settleCoinDeposit(REF);
+    expect(db.rpc.settle_coin_deposit).toHaveBeenCalledWith(expect.objectContaining({ p_paid_minor: 61_050, p_paid_currency: "GHS" }));
+  });
+  it("anywhere without a local currency here: dollars, exactly as before", async () => {
+    await begin({ market: "other", country: "US" });
+    expect(checkouts[0]).toMatchObject({ amountMinor: 5_000, currency: "USD" });
+  });
 });
 
 describe("beginCoinDeposit", () => {

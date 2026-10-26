@@ -81,7 +81,9 @@ export interface FlutterwaveConfig {
 
 /** The ON defaults (owner, 2026-10-24): what an unset env var / unsaved dashboard means. */
 // NGN (2026-10-24): one-off checkouts in Nigeria charge naira so bank transfer / USSD show (lib/payments/flutterwave-charge.ts)
-export const DEFAULT_VERIFIED_CURRENCIES: readonly string[] = [FLUTTERWAVE_CHECKOUT_CURRENCY, "NGN"];
+// GHS / KES / ZAR (2026-10-26): one-off plan months in Ghana, Kenya and South Africa, whose cards often refuse dollars
+// (lib/payments/flutterwave-charge.ts). A checkout Flutterwave refuses in one of them falls back to the USD plan.
+export const DEFAULT_VERIFIED_CURRENCIES: readonly string[] = [FLUTTERWAVE_CHECKOUT_CURRENCY, "NGN", "GHS", "KES", "ZAR"];
 export const DEFAULT_AMOUNT_UNIT = "major";
 
 const planId = (v: unknown): string => (typeof v === "string" && /^\d{1,12}$/.test(v.trim()) ? v.trim() : "");

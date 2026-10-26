@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { beginCharacterReplaceTopup } from "@/lib/ai/character-replace/topup-server";
-import { paymentMarket } from "@/lib/payments/router";
+import { paymentCountry, paymentMarket } from "@/lib/payments/router";
 import { aiJobCreateLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
 
   // 0184: a pack id or a number of credits (a cached older app may still send amountCents)
   const b = (body ?? {}) as { packId?: unknown; credits?: unknown; amountCents?: unknown; returnTo?: unknown; provider?: unknown };
-  const started = await beginCharacterReplaceTopup({ userId: user.id, email: user.email, packId: b.packId, credits: b.credits, amountCents: b.amountCents, returnTo: typeof b.returnTo === "string" ? b.returnTo : "/ai/usage", market: paymentMarket(request.headers), provider: b.provider });
+  const started = await beginCharacterReplaceTopup({ userId: user.id, email: user.email, packId: b.packId, credits: b.credits, amountCents: b.amountCents, returnTo: typeof b.returnTo === "string" ? b.returnTo : "/ai/usage", market: paymentMarket(request.headers), country: paymentCountry(request.headers), provider: b.provider });
   if (!started.ok) return NextResponse.json({ error: started.error }, { status: started.status });
   return NextResponse.json({ url: started.url, credits: started.credits, bonusCredits: started.bonusCredits, priceUsdCents: started.priceUsdCents });
 }

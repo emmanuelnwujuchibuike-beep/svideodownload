@@ -15,7 +15,7 @@ import { depositVerifyView } from "./state";
 import { invalidateCoinGlance } from "./coin-glance";
 import { TapPending } from "./tap-pending";
 import { useRefreshOnLongReturn, whenVisible } from "./use-wallet-runtime";
-import { BankIcon, CheckIcon, ClockIcon, CopyIcon, DepositIcon, EyeIcon, EyeOffIcon, KeyIcon, LockIcon, SendIcon, ShieldCheckIcon } from "./wallet-icons";
+import { BankIcon, CheckIcon, ClockIcon, CopyIcon, DepositIcon, EyeIcon, EyeOffIcon, LockIcon, SendIcon, SettingsIcon, ShieldCheckIcon } from "./wallet-icons";
 import { CoinMark, HeroCard, Notice, SectionTitle, Unavailable, WalletScreen } from "./wallet-ui";
 
 type VerifyState = "on_hold" | "pending" | "failed" | "review" | "not_found" | "error";
@@ -130,7 +130,8 @@ function ActionButton({ href, label, primary, children, disabled }: { href: stri
  * what is allowed. Disabled → a plain "not available" panel and no money controls.
  */
 export function WalletOverview({ summary, history, depositRef, loadedAt }: { summary: WalletSummary; history: HistoryPage | null; depositRef: string | null; loadedAt: number }) {
-  const [hidden, setHidden] = useStickyState<boolean>("frenz-coin-hide-balance", 0, false);
+  // opens as the member chose in Wallet settings; the eye still toggles for this visit
+  const [hidden, setHidden] = useStickyState<boolean>("frenz-coin-hide-balance", 0, summary.hideBalance);
   const [copied, setCopied] = useState(false);
   useRefreshOnLongReturn();
 
@@ -165,9 +166,11 @@ export function WalletOverview({ summary, history, depositRef, loadedAt }: { sum
           <button type="button" onClick={() => setHidden(!hidden)} aria-pressed={hidden} aria-label={hidden ? "Show balance" : "Hide balance"} className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-full bg-frenz-fill text-frenz-ink outline-none transition active:scale-90 focus-visible:ring-2 focus-visible:ring-frenz-blue motion-reduce:transition-none">
             {hidden ? <EyeOffIcon size={20} /> : <EyeIcon size={20} />}
           </button>
-          <Link href="/wallet/security" prefetch={false} aria-label="PIN and security" className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-full bg-frenz-fill text-frenz-ink outline-none transition active:scale-90 focus-visible:ring-2 focus-visible:ring-frenz-blue motion-reduce:transition-none">
+          {/* Wallet settings (owner, 2026-10-26: "there is no users wallet settings to change pin, and notification settings"):
+              PIN first, then notifications, privacy, saved banks and recipients. The key icon led to the PIN alone and was not found. */}
+          <Link href="/wallet/settings" prefetch={false} aria-label="Wallet settings" title="Wallet settings" className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-full bg-frenz-fill text-frenz-ink outline-none transition active:scale-90 focus-visible:ring-2 focus-visible:ring-frenz-blue motion-reduce:transition-none">
             <TapPending>
-              <KeyIcon size={19} />
+              <SettingsIcon size={20} />
             </TapPending>
           </Link>
         </div>

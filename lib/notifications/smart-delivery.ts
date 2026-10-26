@@ -194,11 +194,16 @@ export async function sendSmartPush(
   priority: PushPriority,
   category: NotificationCategory,
   record: NotificationRecord,
+  /**
+   * `push: false` — the member switched this kind of alert off somewhere more specific than a category
+   * (Wallet settings, 2026-10-26). It is still recorded in-app, as `category_off`, and never pushed.
+   */
+  opts: { push?: boolean } = {},
 ): Promise<void> {
   const settings = await getNotificationSettings(userId);
   const actorId = (typeof record === "object" && "recorded" in record ? record.recorded.actorId : typeof record === "object" ? record.actorId : null) ?? payload.actorId ?? null;
   const type = typeof record === "object" ? ("recorded" in record ? record.recorded.type : record.type) : null;
-  const outcome = await decideFor(userId, priority, category, actorId, settings, new Date(), type);
+  const outcome = opts.push === false ? ({ decision: "in_app", reasons: ["category_off"] } as Awaited<ReturnType<typeof decideFor>>) : await decideFor(userId, priority, category, actorId, settings, new Date(), type);
 
   /*
     NOTIFICATION AUTHENTICITY (Feature 20 Part 7): every security notification carries a

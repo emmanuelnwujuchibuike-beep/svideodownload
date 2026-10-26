@@ -11,6 +11,8 @@ import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import { SITE_URL } from "@/lib/site";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { getWalletPrefs, walletPushAllowed } from "./wallet-prefs";
+
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  *  FRENZ COIN NOTIFICATIONS (closeout, 0283)
@@ -59,7 +61,9 @@ export async function claimCoinNotification(key: string, userId: string): Promis
 export async function notifyCoin(userId: string, key: string, type: CoinNotificationType, push: { title: string; body: string; genericBody: string }, opts: { priority?: PushPriority; recorded?: boolean; email?: CoinEmail } = {}): Promise<boolean> {
   try {
     if (!(await claimCoinNotification(key, userId))) return false;
-    await sendSmartPush(userId, { ...push, url: `${SITE_URL}${COIN_WALLET_PATH}`, tag: key.slice(0, 120) }, opts.priority ?? "high", type === "coin_pin_security" ? "security" : "premium", opts.recorded ? "already-recorded" : { type });
+    // Wallet settings (2026-10-26): the member's own push switches. The in-app row and the emailed receipt below are kept either way.
+    const pushAllowed = walletPushAllowed(type, await getWalletPrefs(userId));
+    await sendSmartPush(userId, { ...push, url: `${SITE_URL}${COIN_WALLET_PATH}`, tag: key.slice(0, 120) }, opts.priority ?? "high", type === "coin_pin_security" ? "security" : "premium", opts.recorded ? "already-recorded" : { type }, { push: pushAllowed });
     // Part 5: the receipt by email, under the same claim (a failed push still sends it; a failed email changes nothing)
     if (opts.email) await emailCoinReceipt(userId, opts.email);
     return true;

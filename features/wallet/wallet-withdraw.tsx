@@ -7,9 +7,9 @@ import { GlassSheetShell } from "@/features/ui/glass-sheet-shell";
 import { useStickyState } from "@/features/ui/use-sticky-state";
 import { cn } from "@/lib/utils";
 
-import { type CoinWithdrawal, type WalletSummary, type WithdrawalQuote, walletApi } from "./api";
+import { type CoinWithdrawal, type SavedBank, type WalletSummary, type WithdrawalQuote, walletApi } from "./api";
 import { CoinAmount } from "./coin-amount";
-import { coins, dateTimeLabel, fc, newKey, parseCoinInput } from "./money";
+import { coins, dateTimeLabel, fc, newKey, parseCoinInput, payoutRateLine, withdrawalFeeRule } from "./money";
 import { amountProblem, failMessage, withdrawGate, withdrawalStatusView } from "./state";
 import { invalidateCoinGlance } from "./coin-glance";
 import { loadBanksOnce, useLatestRequest } from "./use-wallet-runtime";
@@ -62,6 +62,9 @@ export function WalletWithdraw({ summary, withdrawals }: { summary: WalletSummar
   const [account, setAccount] = useStickyState("wallet-withdraw-account", 0, "");
   const [banks, setBanks] = useState<Bank[] | null>(null);
   const [banksError, setBanksError] = useState<Fail | null>(null);
+  // Wallet setup (2026-10-26): the member's saved accounts (last four digits only); one chosen = sent by id, the server fills the number in
+  const [saved, setSaved] = useState<SavedBank[]>([]);
+  const [savedId, setSavedId] = useStickyState("wallet-withdraw-saved", 0, "");
   const [touched, setTouched] = useState(false);
   const [quote, setQuote] = useState<WithdrawalQuote | null>(null);
   const [quoting, setQuoting] = useState(false);
@@ -82,6 +85,10 @@ export function WalletWithdraw({ summary, withdrawals }: { summary: WalletSummar
       if (!live) return;
       if (r.ok) setBanks(r.data.banks);
       else setBanksError({ msg: r.status === 503 ? "The bank list isn't available right now. Try again in a moment." : failMessage(r, "load"), expired: r.session === "expired" });
+    });
+    // saved accounts: best effort — none means the member types the account, exactly as before
+    void walletApi.savedBanks().then((r) => {
+      if (live && r.ok) setSaved(r.data.banks);
     });
     return () => {
       live = false;
@@ -111,13 +118,17 @@ export function WalletWithdraw({ summary, withdrawals }: { summary: WalletSummar
   const cents = parseCoinInput(raw);
   const problem = amountProblem(cents, w, summary.availableCents);
   const maxCents = Math.min(summary.availableCents, w.maxCents);
+  const savedBank = saved.find((s) => s.id === savedId) ?? null;
   const bank = banks?.find((b) => b.code === bankCode) ?? null;
   const accountOk = /^\d{10}$/.test(account);
+  // where the money goes: a saved account, or the bank + number typed below
+  const destinationOk = !!savedBank || (!!bank && accountOk);
+  const destinationLabel = savedBank ? `${savedBank.bankName} ••${savedBank.last4}` : bank ? `${bank.name} ••${account.slice(-4)}` : "";
   const openOne = history.find((x) => OPEN.has(x.status));
 
   const review = async () => {
     setTouched(true);
-    if (problem || cents == null || !bank || !accountOk || quoting || openOne) return;
+    if (problem || cents == null || !destinationOk || quoting || openOne) return;
     setQuoting(true);
     setQuoteError(null);
     const r = await latest((signal) => walletApi.quote("withdrawal", cents, signal));
@@ -125,7 +136,7 @@ export function WalletWithdraw({ summary, withdrawals }: { summary: WalletSummar
     setQuoting(false);
     if (!r.ok || r.data.kind !== "withdrawal") return setQuoteError({ msg: r.ok ? "Couldn't price this withdrawal." : failMessage(r, "withdrawal"), expired: !r.ok && r.session === "expired" });
     if (!r.data.payoutRateApproved) return setQuoteError({ msg: "Withdrawals aren't open yet — no payout rate is approved. Nothing was held.", expired: false });
-    const sig = `${cents}:${bank.code}:${account}`;
+    const sig = savedBank ? `${cents}:saved:${savedBank.id}` : `${cents}:${bank?.code}:${account}`;
     if (!key.current || key.current.sig !== sig) key.current = { sig, key: newKey("cwd") };
     setPin("");
     setSendError(null);
@@ -133,10 +144,14 @@ export function WalletWithdraw({ summary, withdrawals }: { summary: WalletSummar
   };
 
   const confirm = async () => {
-    if (!quote || !bank || !key.current || sending || pin.length !== 6) return;
+    if (!quote || !destinationOk || !key.current || sending || pin.length !== 6) return;
     setSending(true);
     setSendError(null);
-    const r = await walletApi.withdraw({ grossCents: quote.grossCents, bankCode: bank.code, bankName: bank.name, accountNumber: account, idempotencyKey: key.current.key, pin });
+    const r = await walletApi.withdraw(
+      savedBank
+        ? { grossCents: quote.grossCents, bankCode: "", bankName: "", accountNumber: "", savedAccount: savedBank.id, idempotencyKey: key.current.key, pin }
+        : { grossCents: quote.grossCents, bankCode: bank?.code ?? "", bankName: bank?.name ?? "", accountNumber: account, idempotencyKey: key.current.key, pin },
+    );
     setSending(false);
     setPin("");
     if (!r.ok) return setSendError({ msg: failMessage(r, "withdrawal"), expired: r.session === "expired" });
@@ -184,6 +199,28 @@ export function WalletWithdraw({ summary, withdrawals }: { summary: WalletSummar
       ) : null}
 
       <SectionTitle>To</SectionTitle>
+      {saved.length ? (
+        <div role="radiogroup" aria-label="Saved accounts" className="mx-4 mb-3 flex flex-col gap-2">
+          {saved.map((s) => (
+            <button key={s.id} type="button" role="radio" aria-checked={savedId === s.id} onClick={() => setSavedId(savedId === s.id ? "" : s.id)} className={cn("flex min-h-[52px] touch-manipulation items-center gap-3 rounded-[18px] border px-3.5 py-2.5 text-left outline-none transition active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-frenz-blue", savedId === s.id ? "border-frenz-violet bg-frenz-violet/5" : "border-frenz-line")}>
+              <BankIcon size={18} className="shrink-0 text-frenz-muted" />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-[15px] font-semibold text-frenz-ink">
+                  {s.bankName} ••{s.last4}
+                </span>
+                {s.accountName ? <span className="truncate text-[12.5px] text-frenz-muted">{s.accountName}</span> : null}
+              </span>
+              {savedId === s.id ? <CheckIcon size={18} className="shrink-0 text-frenz-violet" /> : null}
+            </button>
+          ))}
+          {savedBank ? (
+            <button type="button" onClick={() => setSavedId("")} className="self-start px-1 text-[13px] font-semibold text-frenz-violet outline-none focus-visible:underline">
+              Use another account
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {savedBank ? null : (
       <div className="mx-4 flex flex-col gap-3 rounded-[22px] border border-frenz-line p-3.5">
         <div className="flex items-center gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-frenz-ink text-frenz-page">
@@ -207,8 +244,9 @@ export function WalletWithdraw({ summary, withdrawals }: { summary: WalletSummar
         </label>
         <span className="text-[12px] text-frenz-muted">The account holder&apos;s name is confirmed with the bank before anything is held.</span>
       </div>
-      {banksError ? <div className="mt-3">{banksError.expired ? <SessionExpired next="/wallet/withdraw" /> : <Notice tone="error">{banksError.msg}</Notice>}</div> : null}
-      {touched && (!bank || !accountOk) ? (
+      )}
+      {banksError && !savedBank ? <div className="mt-3">{banksError.expired ? <SessionExpired next="/wallet/withdraw" /> : <Notice tone="error">{banksError.msg}</Notice>}</div> : null}
+      {touched && !destinationOk ? (
         <p role="alert" className="mx-5 mt-2 text-[13px] font-semibold text-rose-700 dark:text-rose-300">
           {!bank ? "Choose your bank." : "Enter your 10-digit account number."}
         </p>
@@ -236,7 +274,7 @@ export function WalletWithdraw({ summary, withdrawals }: { summary: WalletSummar
       </ActionBar>
 
       <GlassSheetShell open={!!quote} onClose={() => (sending ? undefined : setQuote(null))} title="Review withdrawal" fitContent defaultHeightVh={88}>
-        {quote && bank ? (
+        {quote && destinationOk ? (
           <form
             className="frenz-ui flex flex-col gap-4 px-1 pb-8 pt-1"
             onSubmit={(e) => {
@@ -251,15 +289,20 @@ export function WalletWithdraw({ summary, withdrawals }: { summary: WalletSummar
             <DetailList
               className="mx-0"
               rows={[
-                ["To", `${bank.name} ••${account.slice(-4)}`],
+                ["To", destinationLabel],
                 ["Amount", `${fc(quote.grossCents)}`],
-                ["Fee", `${fc(quote.feeCents)}`],
+                ["Fee", `${fc(quote.feeCents)}${quote.percentBp !== undefined ? ` (${withdrawalFeeRule(quote.percentBp, quote.flatCents ?? 0)})` : ""}`],
+                ...(quote.payout ? ([["Rate", payoutRateLine(quote.payout)]] as [string, string][]) : []),
                 ["Wallet after", `${fc(summary.availableCents - quote.grossCents)}`],
               ]}
-              total={["You receive", `$${coins(quote.netCents)}`]}
+              total={["You receive", quote.payout ? `${quote.payout.exact ? "" : "≈ "}${NAIRA.format(quote.payout.estimatedMinor / 100)}` : `$${coins(quote.netCents)}`]}
             />
             <p className="flex items-start gap-2 text-[12.5px] text-frenz-muted">
-              <CheckIcon size={16} className="mt-px shrink-0" /> Paid in naira at the approved rate. The coins are held while the request is reviewed; if the bank sends the payment back, they return to your wallet.
+              <CheckIcon size={16} className="mt-px shrink-0" />
+              {quote.payout && !quote.payout.exact
+                ? `$${coins(quote.netCents)} after the fee, paid in naira at the market rate on the day it's paid — the amount is fixed then, so it can differ a little from this estimate. `
+                : `$${coins(quote.netCents)} after the fee, paid in naira at the approved rate. `}
+              The coins are held while the request is reviewed; if the bank sends the payment back, they return to your wallet.
             </p>
             <PinField id="withdraw-pin" label="Your 6-digit transaction PIN" value={pin} onChange={setPin} autoFocus disabled={sending} />
             {sendError ? sendError.expired ? <SessionExpired next="/wallet/withdraw" /> : <Notice tone="error" className="mx-0">{sendError.msg}</Notice> : null}

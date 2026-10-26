@@ -31,6 +31,7 @@ export function disabledSummary(): CoinWalletSummary {
     pendingDeposits: [],
     nextReleaseAt: null,
     deposits: { enabled: false, holdHours: 1, minCents: 0, maxCents: 0 },
+    hideBalance: false,
     transfers: { enabled: false, canSend: false, blockedBy: "disabled", pin: { set: false, lockedUntil: null }, minCents: 0, maxCents: 0, dailyMaxCents: 0, feeExamples: [], fee: { percentBp: 0, lowThresholdCents: 0, highThresholdCents: 0, flatBelowCents: 0, flatMidCents: 0, flatAboveCents: 0 } },
     withdrawals: { enabled: false, percentBp: 0, flatCents: 0, minCents: 0, maxCents: 0, payoutRateApproved: false, example: { grossCents: 0, feeCents: 0, netCents: 0 } },
   };

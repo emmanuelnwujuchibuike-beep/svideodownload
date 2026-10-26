@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { authorizeCoinWithdrawal } from "@/lib/coin/authorization";
 import { coinMemberLabel, notifyCoin, notifyCoinAdmins } from "@/lib/coin/notify";
+import { resolveSavedBank } from "@/lib/coin/saved-banks";
 import { requestCoinWithdrawal } from "@/lib/coin/server";
 import { memberCoinWithdrawals } from "@/lib/coin/withdrawals";
 import { getLandingSettings } from "@/lib/landing/settings";
@@ -32,6 +33,11 @@ const schema = z
     bankCode: z.string().max(10),
     bankName: z.string().max(120),
     accountNumber: z.string().max(10),
+    /**
+     * Wallet setup (2026-10-26): one of the member's saved accounts (lib/coin/saved-banks.ts), by id. The server puts
+     * the full number back from THEIR records; the three fields above are then ignored. Everything after is unchanged.
+     */
+    savedAccount: z.string().max(60).optional(),
     idempotencyKey: z.string().max(80),
     // the member's six-digit TRANSACTION PIN. Never logged, never stored, never echoed.
     pin: z.string().max(12),
@@ -60,7 +66,13 @@ export async function POST(request: Request) {
   const settings = await getLandingSettings();
   const c = settings.frenzCoin;
   if (!c.enabled || !c.withdrawals.enabled) return NextResponse.json({ error: "Frenz Coin withdrawals aren't available right now.", reason: "disabled" }, { status: 503 });
-  const details = validatePayoutDetails("paystack", { bankCode: parsed.data.bankCode, bankName: parsed.data.bankName, accountNumber: parsed.data.accountNumber });
+  let typed = { bankCode: parsed.data.bankCode, bankName: parsed.data.bankName, accountNumber: parsed.data.accountNumber };
+  if (parsed.data.savedAccount) {
+    const saved = await resolveSavedBank(user.id, parsed.data.savedAccount);
+    if (!saved) return NextResponse.json({ error: "That saved account isn't available any more. Choose your bank again.", reason: "invalid_details" }, { status: 400 });
+    typed = saved;
+  }
+  const details = validatePayoutDetails("paystack", typed);
   if (!details) return NextResponse.json({ error: "Check your bank details.", reason: "invalid_details" }, { status: 400 });
   // the money goes where the bank says the account is: the holder name comes from the bank, not from the form
   const accountName = await resolveAccount(details.accountNumber, details.bankCode ?? "");

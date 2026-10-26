@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fakeDb, type FakeDb } from "@/lib/testing/fake-supabase";
@@ -98,6 +101,21 @@ describe("Frenz Coin settings (Part 3)", () => {
     expect(await s.financialChangesFor({ frenzCoin: { withdrawals: { percentBp: 600 } } })).toEqual([]);
     expect(await s.financialChangesFor({ frenzCoin: { withdrawals: { percentBp: 700 } } })).toEqual([expect.objectContaining({ surface: "frenz_coin" })]);
   });
+  it("Wallet setup (2026-10-26): a payout-rate change is audited with the OLD and NEW rate, by the admin, before it is saved", async () => {
+    const s = await load();
+    await s.setLandingSettings({ frenzCoin: { withdrawals: { payoutRateSource: "fixed", payoutMinorPerUsd: 155_000 } } }, { changedBy: "admin-1" });
+    expect(db.writes.find((w) => w.table === "config_audit_log" || w.table === "settings")?.table).toBe("config_audit_log");
+    const row = db.tables.config_audit_log!.find((r) => r.surface === "frenz_coin")!;
+    expect(row).toMatchObject({ actor_id: "admin-1", before: { withdrawals: { payoutRateSource: "none", payoutMinorPerUsd: null } }, after: { withdrawals: { payoutRateSource: "fixed", payoutMinorPerUsd: 155_000 } } });
+    // server-side bounds: a rate that is not a positive whole number of kobo is never stored — it fails CLOSED to "no
+    // approved rate" (payouts refused), never to a usable number. The admin route's own schema refuses it first (min 1).
+    await s.setLandingSettings({ frenzCoin: { withdrawals: { payoutMinorPerUsd: -5 } } }, { changedBy: "admin-1" });
+    const saved = (db.tables.settings![0]!.value as { frenzCoin: { withdrawals: { payoutMinorPerUsd: number | null } } }).frenzCoin.withdrawals;
+    expect(saved.payoutMinorPerUsd).toBeNull();
+    const route = readFileSync(join(process.cwd(), "app/api/admin/landing/route.ts"), "utf8");
+    expect(route).toContain("payoutMinorPerUsd: z.number().int().min(1).max(999_999_999).nullable().optional()");
+  });
+
   it("a coin change is audited FIRST and bumps the coin version; no audit → not saved", async () => {
     const s = await load();
     await s.setLandingSettings({ frenzCoin: { enabled: true } }, { changedBy: "admin-1" });

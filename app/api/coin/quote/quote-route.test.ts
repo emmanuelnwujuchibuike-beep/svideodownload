@@ -13,6 +13,8 @@ let coin: FrenzCoinConfig;
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: async () => ({ data: { user: sessionUser } }) } }) }));
 vi.mock("@/lib/landing/settings", () => ({ getLandingSettings: async () => ({ frenzCoin: coin }) }));
+// the live market rate is a network read — never from a test
+vi.mock("@/lib/ai/character-replace/fx-rate-server", () => ({ marketRate: async () => ({ rate: { perUsd: 1548.2 }, source: "live" }) }));
 
 const { GET } = await import("./route");
 const q = (qs: string) => GET(new Request(`https://frenzsave.com/api/coin/quote?${qs}`));
@@ -72,7 +74,8 @@ describe("GET /api/coin/quote", () => {
   it("withdrawal: 6% taken FROM the gross; no approved rate is said plainly", async () => {
     const r = await q("kind=withdrawal&amountCents=10000");
     expect(r.status).toBe(200);
-    expect(await r.json()).toEqual({ kind: "withdrawal", grossCents: 10_000, feeCents: 600, netCents: 9_400, payoutRateApproved: false });
+    // Wallet setup (2026-10-26) adds the admin's fee rule and the payout preview (null: no approved rate)
+    expect(await r.json()).toEqual({ kind: "withdrawal", grossCents: 10_000, feeCents: 600, netCents: 9_400, percentBp: 600, flatCents: 0, payoutRateApproved: false, payout: null });
   });
 
   it("withdrawal: an approved fixed or market rate → payoutRateApproved true; 'fixed' with no rate stays false", async () => {
@@ -91,5 +94,39 @@ describe("GET /api/coin/quote", () => {
   it("answers are private, never stored by a cache", async () => {
     const r = await q("kind=transfer&amountCents=5000");
     expect(r.headers.get("cache-control")).toBe("private, no-store");
+  });
+});
+
+/*
+  Wallet setup (2026-10-26): the rate and the naira the member receives, shown BEFORE they confirm — worked out on the
+  server from the admin's settings. A fixed rate is the exact amount the database will hold (the same integer rule as
+  0279); a market rate is an estimate, fixed when paid.
+*/
+describe("GET /api/coin/quote — the payout preview", () => {
+  it("fixed rate: the admin's naira per $1, and EXACTLY floor(net × kobo per USD / 100)", async () => {
+    coin = { ...COIN_DEFAULTS, enabled: true, withdrawals: { ...COIN_DEFAULTS.withdrawals, payoutRateSource: "fixed", payoutMinorPerUsd: 155_050 } };
+    const j = await (await q("kind=withdrawal&amountCents=10000")).json();
+    expect(j).toMatchObject({ netCents: 9_400, percentBp: 600, flatCents: 0, payoutRateApproved: true });
+    expect(j.payout).toEqual({ currency: "NGN", source: "fixed", nairaPerUsd: 1550.5, estimatedMinor: Math.floor((9_400 * 155_050) / 100), exact: true });
+  });
+
+  it("an admin's new fee and rate are what the member sees — nothing hard-coded", async () => {
+    coin = { ...COIN_DEFAULTS, enabled: true, withdrawals: { ...COIN_DEFAULTS.withdrawals, percentBp: 250, flatCents: 50, payoutRateSource: "fixed", payoutMinorPerUsd: 100_000 } };
+    const j = await (await q("kind=withdrawal&amountCents=10000")).json();
+    expect(j).toMatchObject({ feeCents: 300, netCents: 9_700, percentBp: 250, flatCents: 50 });
+    expect(j.payout.estimatedMinor).toBe(9_700_000);
+  });
+
+  it("market rate: today's rate, an ESTIMATE in the payout rail's own rule (fixed when paid)", async () => {
+    coin = { ...COIN_DEFAULTS, enabled: true, withdrawals: { ...COIN_DEFAULTS.withdrawals, payoutRateSource: "market" } };
+    const j = await (await q("kind=withdrawal&amountCents=10000")).json();
+    expect(j.payout).toEqual({ currency: "NGN", source: "market", nairaPerUsd: 1548.2, estimatedMinor: Math.floor(9_400 * 1548.2), exact: false });
+  });
+
+  it("no approved rate: no payout figure (and payoutRateApproved false)", async () => {
+    coin = { ...COIN_DEFAULTS, enabled: true, withdrawals: { ...COIN_DEFAULTS.withdrawals, payoutRateSource: "none" } };
+    const j = await (await q("kind=withdrawal&amountCents=10000")).json();
+    expect(j.payoutRateApproved).toBe(false);
+    expect(j.payout).toBeNull();
   });
 });

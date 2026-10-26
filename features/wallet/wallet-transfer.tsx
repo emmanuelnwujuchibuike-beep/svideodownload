@@ -88,7 +88,7 @@ function TransferReceipt({ sent }: { sent: Sent }) {
  * ever send it once. The receipt shows what the server says it did. The draft (recipient, amount, note — never the PIN)
  * survives leaving and coming back (useStickyState), and is cleared once the transfer is confirmed.
  */
-export function WalletTransfer({ summary, preset = null }: { summary: WalletSummary; preset?: Recipient | null }) {
+export function WalletTransfer({ summary, preset = null, recents = [] }: { summary: WalletSummary; preset?: Recipient | null; recents?: { id: string; name: string; avatarUrl: string | null }[] }) {
   const router = useRouter();
   // a chat's "Send Frenz Coin" arrives with the person chosen (a different preset starts a fresh draft)
   const draft = preset?.number ?? 0;
@@ -200,6 +200,19 @@ export function WalletTransfer({ summary, preset = null }: { summary: WalletSumm
           </button>
         </section>
       ) : (
+        <>
+        {recents.length ? (
+          /* Recent recipients (Wallet setup, 2026-10-26) — from the member's own transfers. A tap opens the existing
+             ?to= pre-fill, which resolves the wallet number on the server under the lookup's rate limit. */
+          <nav aria-label="Recent recipients" className="mx-4 mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {recents.map((r) => (
+              <Link key={r.id} href={`/wallet/transfer?to=${encodeURIComponent(r.id)}`} prefetch={false} className="flex h-10 shrink-0 touch-manipulation items-center gap-2 rounded-full bg-frenz-fill pl-1 pr-3.5 text-[13.5px] font-semibold text-frenz-ink outline-none active:scale-95 focus-visible:ring-2 focus-visible:ring-frenz-blue">
+                <Avatar src={r.avatarUrl} name={r.name} size={32} />
+                <span className="max-w-[9rem] truncate">{r.name}</span>
+              </Link>
+            ))}
+          </nav>
+        ) : null}
         <form onSubmit={(e) => void find(e)} className="mx-4 mt-4 flex flex-col gap-2">
           <label htmlFor="transfer-number" className="text-[13px] font-semibold text-frenz-muted">
             Recipient&apos;s wallet number
@@ -234,6 +247,7 @@ export function WalletTransfer({ summary, preset = null }: { summary: WalletSumm
             <p className="text-[12.5px] text-frenz-muted">Ask them for the number on their Wallet screen. You&apos;ll see their name before anything is sent.</p>
           )}
         </form>
+        </>
       )}
 
       <div className="mt-8">

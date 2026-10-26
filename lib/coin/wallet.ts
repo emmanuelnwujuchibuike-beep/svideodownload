@@ -3,6 +3,7 @@ import "server-only";
 import { coinTransferFee, coinWithdrawalFee, type FrenzCoinConfig } from "@/lib/coin/config";
 import { releaseDueCoinDeposits } from "@/lib/coin/deposits";
 import { coinPinStatus, pinPepper } from "@/lib/coin/pin";
+import { getWalletPrefs } from "@/lib/coin/wallet-prefs";
 import { decodeSubCursor, encodeSubCursor, isUuid } from "@/lib/sub/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -30,6 +31,8 @@ export interface CoinWalletSummary {
   currency: "USD";
   centsPerCoin: number;
   walletNumber: string | null;
+  /** Wallet settings (2026-10-26): the member's own "open with the balance hidden" — the eye still toggles per visit */
+  hideBalance: boolean;
   availableCents: number;
   pendingCents: number;
   heldCents: number;
@@ -67,11 +70,12 @@ const n = (v: unknown) => Number(v ?? 0);
 export async function coinWalletSummary(userId: string, config: FrenzCoinConfig): Promise<CoinWalletSummary | null> {
   await releaseDueCoinDeposits(userId, 50);
   const db = createAdminClient();
-  const [bal, deps, acct, pin] = await Promise.all([
+  const [bal, deps, acct, pin, prefs] = await Promise.all([
     db.from("ai_product_balances").select("balance_cents, pending_cents, held_cents").eq("user_id", userId).eq("product", "frenz_coin").maybeSingle(),
     db.from("coin_deposits").select("amount_cents, settled_at, release_at, status").eq("user_id", userId).in("status", ["held", "disputed"]).order("release_at", { ascending: true }).limit(20),
     db.from("wallet_accounts").select("account_number").eq("user_id", userId).maybeSingle(),
     pinPepper() ? coinPinStatus(userId) : Promise.resolve(null),
+    getWalletPrefs(userId),
   ]);
   if (bal.error) return null;
   const r = bal.data as { balance_cents?: number; pending_cents?: number; held_cents?: number } | null;
@@ -87,6 +91,7 @@ export async function coinWalletSummary(userId: string, config: FrenzCoinConfig)
     currency: "USD",
     centsPerCoin: config.centsPerCoin,
     walletNumber: ((acct.data as { account_number?: string } | null)?.account_number ?? null) || null,
+    hideBalance: prefs.hideBalance,
     availableCents: b - p,
     pendingCents: p,
     heldCents: h,

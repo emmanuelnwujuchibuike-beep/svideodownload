@@ -145,6 +145,11 @@ describe("coin settings are money settings (the settings API asks for a fresh pa
   const changed = (patch: Record<string, unknown>) => financialChanges({ ...cur } as never, { ...cur, frenzCoin: normalizeCoinConfig({ ...COIN_DEFAULTS, ...patch }) } as never);
   it.each([
     ["the payout rate source", { withdrawals: { ...COIN_DEFAULTS.withdrawals, payoutRateSource: "market" } }],
+    // Wallet setup (2026-10-26): the approved naira rate itself, the withdrawal flat fee and the minimum
+    ["the approved naira rate", { withdrawals: { ...COIN_DEFAULTS.withdrawals, payoutRateSource: "fixed", payoutMinorPerUsd: 155_000 } }],
+    ["a withdrawal flat fee", { withdrawals: { ...COIN_DEFAULTS.withdrawals, flatCents: 50 } }],
+    ["the smallest withdrawal", { withdrawals: { ...COIN_DEFAULTS.withdrawals, minCents: 1_000 } }],
+    ["withdrawals switched off", { withdrawals: { ...COIN_DEFAULTS.withdrawals, enabled: false } }],
     ["a transfer fee", { transfers: { ...COIN_DEFAULTS.transfers, percentBp: 900 } }],
     ["the deposit hold", { deposits: { ...COIN_DEFAULTS.deposits, holdHours: 5 } }],
     ["the admin alert channel", { adminAlerts: "email" }],

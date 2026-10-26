@@ -42,6 +42,8 @@ export interface WalletSummary {
   currency: "USD";
   centsPerCoin: number;
   walletNumber: string | null;
+  /** the member's own "open with the balance hidden" (Wallet settings) */
+  hideBalance: boolean;
   availableCents: number;
   pendingCents: number;
   heldCents: number;
@@ -103,8 +105,29 @@ export interface WithdrawalQuote {
   grossCents: number;
   feeCents: number;
   netCents: number;
+  /** the admin's fee rule, for the review line ("6% + $0.50") */
+  percentBp?: number;
+  flatCents?: number;
   payoutRateApproved: boolean;
+  /** the rate and the naira the member receives, from the server; `exact` false = an estimate fixed at payout */
+  payout?: { currency: "NGN"; source: "fixed" | "market"; nairaPerUsd: number; estimatedMinor: number; exact: boolean } | null;
 }
+
+/** Wallet settings (2026-10-26). */
+export interface WalletPrefs {
+  notifyReceived: boolean;
+  notifySent: boolean;
+  notifyWithdrawals: boolean;
+  hideBalance: boolean;
+}
+export interface SavedBank {
+  id: string;
+  bankName: string;
+  last4: string;
+  accountName: string | null;
+}
+
+const patch = <T>(url: string, body: unknown) => call<T>(url, { method: "PATCH", body: JSON.stringify(body) });
 
 // ── calls ───────────────────────────────────────────────────────────────────
 
@@ -118,7 +141,7 @@ export const walletApi = {
   deposit: (b: { amountCents: number; idempotencyKey: string }) => post<{ ok: true; url: string; reference: string; amountCents: number; holdHours: number; reused: boolean }>("/api/coin/deposits", b),
   verifyDeposit: (reference: string, signal?: AbortSignal) => post<{ status: "on_hold" | "pending" | "failed" | "review"; amountCents?: number; releaseAt?: string }>("/api/coin/deposits/verify", { reference }, signal),
   withdrawals: (signal?: AbortSignal) => get<{ items: CoinWithdrawal[] }>("/api/coin/withdrawals", signal),
-  withdraw: (b: { grossCents: number; bankCode: string; bankName: string; accountNumber: string; idempotencyKey: string; pin: string }) =>
+  withdraw: (b: { grossCents: number; bankCode: string; bankName: string; accountNumber: string; savedAccount?: string; idempotencyKey: string; pin: string }) =>
     post<{ ok: true; id: string; grossCents: number; feeCents: number; netCents: number; duplicate: boolean }>("/api/coin/withdrawals", b),
   banks: (signal?: AbortSignal) => get<{ banks: { name: string; code: string }[] }>("/api/rewards/banks", signal),
   pinState: (signal?: AbortSignal) => get<PinState>("/api/coin/pin", signal),
@@ -126,4 +149,7 @@ export const walletApi = {
   changePin: (currentPin: string, pin: string, confirm: string) => post<{ ok: true }>("/api/coin/pin/change", { currentPin, pin, confirm }),
   requestReset: () => post<{ ok: true; message: string }>("/api/coin/pin/reset", {}),
   confirmReset: (code: string, pin: string, confirm: string) => post<{ ok: true }>("/api/coin/pin/reset/confirm", { code, pin, confirm }),
+  prefs: (signal?: AbortSignal) => get<{ prefs: WalletPrefs }>("/api/coin/preferences", signal),
+  savePrefs: (p: Partial<WalletPrefs>) => patch<{ ok: true; prefs: WalletPrefs }>("/api/coin/preferences", p),
+  savedBanks: (signal?: AbortSignal) => get<{ banks: SavedBank[] }>("/api/coin/saved-banks", signal),
 };

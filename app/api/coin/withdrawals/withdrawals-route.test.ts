@@ -103,3 +103,51 @@ describe("GET /api/coin/withdrawals", () => {
     expect(JSON.stringify(json)).not.toContain("0123456789");
   });
 });
+
+/*
+  Wallet setup (2026-10-26): a SAVED account. The browser names it by id; the server puts the full number back from the
+  member's OWN records (lib/coin/saved-banks.ts), then everything runs exactly as for a typed account.
+*/
+describe("POST /api/coin/withdrawals — a saved account", () => {
+  const saved = (savedAccount: string) => post({ ...body, bankCode: "", bankName: "", accountNumber: "", savedAccount });
+  beforeEach(() => {
+    db.tables.withdrawal_requests!.push(
+      { id: "aaaaaaaa-0000-4000-8000-000000000001", user_id: ME, source: "credits", status: "completed", payout_method: "paystack", payout_details: { bankCode: "044", bankName: "Access Bank", accountNumber: "1234567890", accountName: "ADA OBI" }, created_at: "2026-10-01T00:00:00Z" },
+      { id: "aaaaaaaa-0000-4000-8000-000000000002", user_id: "someone-else", source: "coin", status: "completed", payout_method: "paystack", payout_details: { bankCode: "058", bankName: "GTBank", accountNumber: "9999999999" }, created_at: "2026-10-01T00:00:00Z" },
+      { id: "aaaaaaaa-0000-4000-8000-000000000003", user_id: ME, source: "coin", status: "reversed", payout_method: "paystack", payout_details: { bankCode: "057", bankName: "Zenith", accountNumber: "5555555555" }, created_at: "2026-10-01T00:00:00Z" },
+    );
+    db.tables.sub_payout_accounts = [{ creator_id: ME, bank_code: "033", bank_name: "UBA", account_number: "2222222222", account_name: "ADA OBI" }];
+  });
+
+  it("an earlier withdrawal's bank: the SERVER fills in the full number, then the PIN holds it as usual", async () => {
+    const res = await route.POST(saved("w:aaaaaaaa-0000-4000-8000-000000000001"));
+    expect(res.status).toBe(200);
+    const args = (db.rpc.request_coin_withdrawal_with_pin as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(args).toMatchObject({ p_user: ME, p_details: { bankCode: "044", bankName: "Access Bank", accountNumber: "1234567890", accountName: "ADA OBI" } });
+  });
+
+  it("the creator's verified SUB payout account", async () => {
+    expect((await route.POST(saved("sub"))).status).toBe(200);
+    const args = (db.rpc.request_coin_withdrawal_with_pin as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(args).toMatchObject({ p_details: { bankCode: "033", accountNumber: "2222222222" } });
+  });
+
+  it.each([
+    ["🔴 another member's withdrawal id", "w:aaaaaaaa-0000-4000-8000-000000000002"],
+    ["a withdrawal the bank sent back (reversed)", "w:aaaaaaaa-0000-4000-8000-000000000003"],
+    ["an unknown id", "w:aaaaaaaa-0000-4000-8000-0000000000ff"],
+    ["a malformed id", "w:not-a-uuid"],
+  ])("%s → 400, no PIN attempt spent, nothing held", async (_label, id) => {
+    const res = await route.POST(saved(id));
+    expect(res.status).toBe(400);
+    expect(db.rpc.begin_coin_pin_attempt).not.toHaveBeenCalled();
+    expect(db.rpc.request_coin_withdrawal_with_pin).not.toHaveBeenCalled();
+  });
+
+  it("the bank still names the holder for a saved account (a closed account is refused)", async () => {
+    bankName = null;
+    const res = await route.POST(saved("sub"));
+    expect(res.status).toBe(400);
+    expect(db.rpc.request_coin_withdrawal_with_pin).not.toHaveBeenCalled();
+  });
+});

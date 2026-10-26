@@ -18,7 +18,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }), usePathname: () => "/wallet" }));
 
-const { coins, fc, signedFc, parseCoinInput, signedCoins, walletNumber, groupByDay, newKey, coinParts, releaseLabel, transferFeeNotice, transferFeeWords } = await import("./money");
+const { coins, fc, signedFc, parseCoinInput, signedCoins, walletNumber, groupByDay, newKey, coinParts, releaseLabel, transferFeeNotice, transferFeeWords, withdrawalFeeRule, payoutRateLine } = await import("./money");
+const { WalletSettings } = await import("./wallet-settings");
 const code = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 const { CoinAmount } = await import("./coin-amount");
 const { transferGate, withdrawGate, depositGate, amountProblem, depositVerifyView, withdrawalStatusView, entryDirection, failMessage } = await import("./state");
@@ -35,6 +36,7 @@ type Summary = import("./api").WalletSummary;
 function summary(over: Partial<Summary> = {}, t: Partial<Summary["transfers"]> = {}, w: Partial<Summary["withdrawals"]> = {}): Summary {
   const base: Summary = {
     enabled: true,
+    hideBalance: false,
     currency: "USD",
     centsPerCoin: 100,
     walletNumber: "1203682058",
@@ -364,5 +366,61 @@ describe("the wallet entry points' shared balance read (coin-glance)", () => {
     expect(renderToStaticMarkup(createElement(CoinHeaderPillLazy))).toBe("");
     expect(renderToStaticMarkup(createElement(CoinMenuCard))).toBe("");
     expect(renderToStaticMarkup(createElement(CoinChatSend, { recipientId: "x", name: "Bo" }))).toBe("");
+  });
+});
+
+/*
+  Wallet setup (owner, 2026-10-26): the settings entry on the Wallet screen, the Settings screen itself, the balance
+  hidden by default, and the review step's fee rule and payout rate — all from the server's numbers.
+*/
+describe("Wallet settings", () => {
+  const base = {
+    pin: { available: true, set: true, lockedUntil: null },
+    prefs: { notifyReceived: true, notifySent: false, notifyWithdrawals: true, hideBalance: false },
+    banks: [{ id: "sub", bankName: "UBA", last4: "2222", accountName: "ADA OBI" }],
+    recipients: [{ id: "22222222-2222-4222-8222-222222222222", name: "Ben", handle: "ben" }],
+  };
+
+  it("the Wallet screen has a clear 'Wallet settings' entry (and no longer a bare key icon)", () => {
+    const o = html(createElement(WalletOverview, { summary: summary(), history: { items: [], next: null }, depositRef: null, loadedAt: 1 }));
+    expect(o).toContain('href="/wallet/settings"');
+    expect(o).toContain('aria-label="Wallet settings"');
+  });
+
+  it("the balance opens hidden when the member chose that", () => {
+    const shown = html(createElement(WalletOverview, { summary: summary(), history: { items: [], next: null }, depositRef: null, loadedAt: 2 }));
+    const hidden = html(createElement(WalletOverview, { summary: summary({ hideBalance: true }), history: { items: [], next: null }, depositRef: null, loadedAt: 3 }));
+    expect(shown).not.toContain("Balance hidden");
+    expect(hidden).toContain("Balance hidden");
+  });
+
+  it("PIN first — the EXISTING screen, change or reset — then the three alerts as real switches", () => {
+    const s = html(createElement(WalletSettings, base));
+    expect(s.indexOf('href="/wallet/security"')).toBeLessThan(s.indexOf('role="switch"'));
+    expect(s).toContain("Change or reset");
+    expect(s.match(/role="switch"/g)).toHaveLength(4);
+    expect(s).toMatch(/aria-checked="false"[^>]*>[\s\S]*?Money out/);
+    expect(s).toContain("security alerts are always on");
+  });
+
+  it("a member with no PIN is told to set one up", () => {
+    const s = html(createElement(WalletSettings, { ...base, pin: { available: true, set: false, lockedUntil: null } }));
+    expect(s).toContain("Set up");
+    expect(s).toContain("needed to send or withdraw");
+  });
+
+  it("saved banks masked; recipients open the existing ?to= pre-fill", () => {
+    const s = html(createElement(WalletSettings, base));
+    expect(s).toContain("UBA ••2222");
+    expect(s).toContain('href="/wallet/transfer?to=22222222-2222-4222-8222-222222222222"');
+  });
+
+  it("the review step's words come from the admin's numbers", () => {
+    expect(withdrawalFeeRule(600, 0)).toBe("6%");
+    expect(withdrawalFeeRule(250, 50)).toBe("2.5% + $0.50");
+    expect(withdrawalFeeRule(0, 100)).toBe("$1");
+    expect(withdrawalFeeRule(0, 0)).toBe("no fee");
+    expect(payoutRateLine({ source: "fixed", nairaPerUsd: 1550.5 })).toMatch(/^₦1,550\.50 per \$1$/);
+    expect(payoutRateLine({ source: "market", nairaPerUsd: 1548.2 })).toMatch(/^≈ ₦1,548\.20 per \$1, today's market rate$/);
   });
 });

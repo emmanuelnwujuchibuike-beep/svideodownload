@@ -15,6 +15,8 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => db.client() }));
 vi.mock("@/lib/notifications/smart-delivery", () => ({ sendSmartPush: (...a: unknown[]) => push(...a) }));
 vi.mock("@/lib/email/resend", () => ({ hasResend: true, sendProductEmail: vi.fn(async (to: string, o: Record<string, string>) => (emails.push({ to, text: JSON.stringify(o) }), true)) }));
+const { memberMail } = vi.hoisted(() => ({ memberMail: vi.fn(async (..._a: unknown[]) => true) }));
+vi.mock("@/lib/email/member-email", () => ({ emailMember: (...a: unknown[]) => memberMail(...a) }));
 const notify = await import("./notify");
 const U = "11111111-1111-4111-8111-111111111111";
 const recent = new Date(Date.now() - 3_600_000).toISOString();
@@ -76,5 +78,54 @@ describe("coin notifications", () => {
     await notify.announceCoinPinChange({ id: U, email: "me@t.test", email_confirmed_at: null }, "change", "evt-2");
     expect(emails).toEqual([]);
     expect(push).toHaveBeenCalledTimes(1);
+  });
+});
+
+/*
+  Wallet settings (2026-10-26): the member's own push switches. A switched-off kind is still RECORDED in-app (sendSmartPush
+  is called with push: false) and still emailed as a receipt; PIN / security alerts ignore the switches entirely.
+*/
+describe("coin notifications follow the member's wallet push switches", () => {
+  const off = (prefs: Record<string, boolean>) => {
+    db.tables.notification_settings = [{ user_id: U, wallet_prefs: prefs }];
+  };
+  const pushFlag = () => (push.mock.calls[0]![5] as { push?: boolean } | undefined)?.push;
+
+  it("all on by default (no row): pushed", async () => {
+    await notify.notifyCoin(U, "k-in", "coin_transfer_received", { title: "t", body: "b", genericBody: "g" });
+    expect(pushFlag()).toBe(true);
+  });
+
+  it.each([
+    ["coin_transfer_received", { notifyReceived: false }],
+    ["coin_deposit_update", { notifyReceived: false }],
+    ["coin_transfer_sent", { notifySent: false }],
+    ["coin_withdrawal_update", { notifyWithdrawals: false }],
+  ] as const)("%s switched off: recorded in-app, NOT pushed", async (type, prefs) => {
+    off(prefs);
+    expect(await notify.notifyCoin(U, `k-${type}`, type, { title: "t", body: "b", genericBody: "g" })).toBe(true);
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(pushFlag()).toBe(false);
+    expect(push.mock.calls[0]![4]).toEqual({ type });
+  });
+
+  it("the receipt email is still sent with the push switched off", async () => {
+    off({ notifySent: false });
+    memberMail.mockClear();
+    await notify.notifyCoin(U, "k-sent-mail", "coin_transfer_sent", { title: "t", body: "b", genericBody: "g" }, { email: { subject: "s", heading: "h", intro: "i" } });
+    expect(pushFlag()).toBe(false);
+    expect(memberMail).toHaveBeenCalledWith(U, expect.objectContaining({ subject: "s" }), "coin_transaction");
+  });
+
+  it("🔴 security alerts can never be switched off", async () => {
+    off({ notifyReceived: false, notifySent: false, notifyWithdrawals: false });
+    await notify.notifyCoin(U, "k-pin", "coin_pin_security", { title: "t", body: "b", genericBody: "g" }, { priority: "critical" });
+    expect(pushFlag()).toBe(true);
+  });
+
+  it("an unrelated switch leaves this kind on", async () => {
+    off({ notifySent: false });
+    await notify.notifyCoin(U, "k-in2", "coin_transfer_received", { title: "t", body: "b", genericBody: "g" });
+    expect(pushFlag()).toBe(true);
   });
 });

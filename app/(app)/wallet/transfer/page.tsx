@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { WalletLoadError } from "@/features/wallet/wallet-load-error";
 import { WalletTransfer } from "@/features/wallet/wallet-transfer";
+import { recentCoinRecipients } from "@/lib/coin/recipients";
 import { resolveTransferPreset } from "@/lib/coin/transfer-preset";
 import { walletPageData } from "@/lib/coin/wallet-page";
 import { createClient } from "@/lib/supabase/server";
@@ -25,5 +26,7 @@ export default async function WalletTransferPage({ searchParams }: { searchParam
   const [{ summary }, sp] = await Promise.all([walletPageData(user.id), searchParams]);
   if (!summary) return <WalletLoadError title="Transfer" />;
   const preset = summary.enabled ? await resolveTransferPreset(user.id, typeof sp.to === "string" ? sp.to : null) : null;
-  return <WalletTransfer summary={summary} preset={preset} />;
+  // recent recipients (2026-10-26): only when the form will show them — nobody pre-chosen and sending is open
+  const recents = summary.transfers.canSend && !preset ? await recentCoinRecipients(user.id) : [];
+  return <WalletTransfer summary={summary} preset={preset} recents={recents.map((r) => ({ id: r.id, name: r.name, avatarUrl: r.avatarUrl }))} />;
 }

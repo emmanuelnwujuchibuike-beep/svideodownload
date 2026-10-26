@@ -63,6 +63,24 @@ export function transferFeeWords(f: TransferFeeRules): string {
   return `${below} under ${low}, ${middle}, and ${above} above ${high}`;
 }
 
+/** A withdrawal fee rule in words, from the admin's numbers: "6%", "6% + $0.50", "$1", "no fee". */
+export function withdrawalFeeRule(percentBp: number, flatCents: number): string {
+  const pct = percentBp > 0 ? `${Number((percentBp / 100).toFixed(2))}%` : "";
+  if (pct && flatCents > 0) return `${pct} + ${dollars(flatCents)}`;
+  return pct || (flatCents > 0 ? dollars(flatCents) : "no fee");
+}
+
+const NAIRA_RATE = new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
+ * The payout rate on the review step, from the server's preview: a fixed rate is THE rate ("₦1,550.00 per $1"); a
+ * market rate is today's, re-read when paid ("≈ ₦1,548.20 per $1, today's market rate").
+ */
+export function payoutRateLine(p: { source: "fixed" | "market"; nairaPerUsd: number }): string {
+  const rate = `${NAIRA_RATE.format(p.nairaPerUsd)} per $1`;
+  return p.source === "fixed" ? rate : `≈ ${rate}, today's market rate`;
+}
+
 /** The whole notice: how the fee works, or that there is none. */
 export function transferFeeNotice(f: TransferFeeRules): string {
   const free = f.percentBp <= 0 && f.flatBelowCents <= 0 && f.flatMidCents <= 0 && f.flatAboveCents <= 0;

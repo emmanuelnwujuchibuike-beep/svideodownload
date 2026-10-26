@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { marketRate } from "@/lib/ai/character-replace/fx-rate-server";
 import { coinTransferFee, coinWithdrawalFee } from "@/lib/coin/config";
+import { payoutPreview } from "@/lib/coin/payout-preview";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { createClient } from "@/lib/supabase/server";
 
@@ -40,5 +42,12 @@ export async function GET(request: Request) {
   const f = coinWithdrawalFee(amount, w);
   if (f.netCents <= 0) return NextResponse.json({ error: "That amount is too small to cover the withdrawal fee.", reason: "below_fee" }, { status: 400 });
   const payoutRateApproved = w.payoutRateSource !== "none" && (w.payoutRateSource !== "fixed" || !!w.payoutMinorPerUsd);
-  return NextResponse.json({ kind, grossCents: amount, feeCents: f.feeCents, netCents: f.netCents, payoutRateApproved }, { headers });
+  /*
+    Wallet setup (2026-10-26): the rate and the naira the member will receive, BEFORE they confirm — from the admin's
+    audited settings (lib/coin/payout-preview.ts). A fixed rate is the exact amount the database will hold; a market
+    rate (cached an hour) is an estimate, fixed when the payout is sent. Null when no rate is approved or available.
+  */
+  const market = payoutRateApproved && w.payoutRateSource === "market" ? await marketRate("NGN").catch(() => null) : null;
+  const payout = payoutRateApproved ? payoutPreview(f.netCents, w, market?.rate.perUsd ?? null) : null;
+  return NextResponse.json({ kind, grossCents: amount, feeCents: f.feeCents, netCents: f.netCents, percentBp: w.percentBp, flatCents: w.flatCents, payoutRateApproved, payout }, { headers });
 }

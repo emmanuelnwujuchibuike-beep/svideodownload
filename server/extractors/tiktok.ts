@@ -19,6 +19,19 @@ const DESKTOP_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
   "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
+/*
+  🔴 PHOTO POSTS LEFT THE DESKTOP PAGE (owner, 2026-10-25: "this TikTok link is failing to fetch … I have come across
+  so many like that recently"). Measured that day on a /photo/ post (8 slides): TikTok's DESKTOP page for a photo post
+  now renders without the post's data (no `webapp.video-detail` in the rehydration state), so native failed with
+  "item missing" on every photo post; TikWM — the only other route — is rate-limited from the worker's shared IP, and
+  yt-dlp can't read photo posts: the member waited ~18 s for a 422. The MOBILE page still carries the post, in a
+  separate `api-data` script (`videoDetail.itemInfo.itemStruct`, the same item shape). So: parse both places, and
+  when the desktop page has no item, ask once more as mobile Safari (nativeExtract).
+*/
+const MOBILE_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 " +
+  "(KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+
 const FETCH_HEADERS = {
   "User-Agent": DESKTOP_UA,
   Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -127,6 +140,38 @@ function extractStateJson(html: string): unknown {
   } catch {
     throw new ExtractionError("TikTok state not parseable");
   }
+}
+
+/** A `<script id="…">` block's JSON, or null (absent / not JSON). */
+function scriptJsonById(html: string, id: string): unknown {
+  const open = html.indexOf(`<script id="${id}"`);
+  if (open === -1) return null;
+  const start = html.indexOf(">", open) + 1;
+  const end = html.indexOf("</script>", start);
+  if (start <= 0 || end === -1) return null;
+  try {
+    return JSON.parse(html.slice(start, end));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The post on a TikTok page, wherever this page keeps it: the rehydration state's `webapp.video-detail` (desktop
+ * video pages), or the `api-data` script's `videoDetail` (the mobile page — the only place a photo post's slides are
+ * served since 2026-10-25). Throws the first reason when neither has it. Exported for the test.
+ */
+export function findItemInPage(html: string): TikTokItem {
+  let first: unknown;
+  try {
+    return findItemStruct(extractStateJson(html));
+  } catch (e) {
+    first = e;
+  }
+  const api = scriptJsonById(html, "api-data") as { videoDetail?: { itemInfo?: { itemStruct?: TikTokItem } } } | null;
+  const item = api?.videoDetail?.itemInfo?.itemStruct;
+  if (item?.video || item?.imagePost?.images?.length) return item;
+  throw first;
 }
 
 function findItemStruct(state: unknown): TikTokItem {
@@ -810,28 +855,37 @@ async function nativeExtract(
 ): Promise<VideoMetadata> {
   const resolved = await resolveUrl(url);
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIKTOK_TIMEOUT_MS);
-  let html: string;
-  let pageCookie: string | null = null;
-  try {
-    const res = await extractorFetch(
-      resolved,
-      { headers: FETCH_HEADERS, redirect: "follow", signal: controller.signal },
-      "tiktok",
-    );
-    if (!res.ok) throw new ExtractionError(`TikTok responded ${res.status}`);
-    html = await res.text();
-    pageCookie = cookieFromSetCookie(res.headers.getSetCookie?.() ?? []);
-  } catch (e) {
-    // our own deadline, named — a bare "This operation was aborted" hid it
-    if (controller.signal.aborted) throw new ExtractionError(`TikTok page timed out after ${TIKTOK_TIMEOUT_MS}ms`);
-    throw e;
-  } finally {
-    clearTimeout(timer);
-  }
+  const fetchPage = async (headers: Record<string, string>): Promise<{ html: string; pageCookie: string | null }> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIKTOK_TIMEOUT_MS);
+    try {
+      const res = await extractorFetch(resolved, { headers, redirect: "follow", signal: controller.signal }, "tiktok");
+      if (!res.ok) throw new ExtractionError(`TikTok responded ${res.status}`);
+      return { html: await res.text(), pageCookie: cookieFromSetCookie(res.headers.getSetCookie?.() ?? []) };
+    } catch (e) {
+      // our own deadline, named — a bare "This operation was aborted" hid it
+      if (controller.signal.aborted) throw new ExtractionError(`TikTok page timed out after ${TIKTOK_TIMEOUT_MS}ms`);
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
 
-  const item = findItemStruct(extractStateJson(html));
+  let { html, pageCookie } = await fetchPage(FETCH_HEADERS);
+  let item: TikTokItem;
+  try {
+    item = findItemInPage(html);
+  } catch (desktopErr) {
+    // the desktop page answered without the post (a photo post since 2026-10-25): ask once more as mobile Safari
+    const mobile = await fetchPage({ ...FETCH_HEADERS, "User-Agent": MOBILE_UA }).catch(() => null);
+    if (!mobile) throw desktopErr;
+    try {
+      item = findItemInPage(mobile.html);
+    } catch {
+      throw desktopErr;
+    }
+    ({ html, pageCookie } = mobile);
+  }
     const isPhoto = !item.video && !!item.imagePost?.images?.length;
     const video = item.video;
     const createTime = item.createTime ? Number(item.createTime) : null;

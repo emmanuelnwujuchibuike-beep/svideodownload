@@ -44,7 +44,8 @@ describe("TikTok native formats carry the page's cookies", () => {
 
   it("the native extraction reads the page's Set-Cookie and hands it to the builders", () => {
     const src = readFileSync(join(process.cwd(), "server/extractors/tiktok.ts"), "utf8");
-    expect(src).toContain("pageCookie = cookieFromSetCookie(res.headers.getSetCookie?.() ?? []);");
+    // 2026-10-25: read inside fetchPage (desktop, then mobile Safari for photo posts) — same call, returned with the html
+    expect(src).toContain("pageCookie: cookieFromSetCookie(res.headers.getSetCookie?.() ?? []) };");
     expect(src).toContain("formats: isPhoto ? buildImageFormats(item, pageCookie) : buildFormats(item, pageCookie),");
   });
 });

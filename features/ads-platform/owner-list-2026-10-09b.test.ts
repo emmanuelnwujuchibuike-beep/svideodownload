@@ -57,7 +57,8 @@ describe("the My ads button (was Promote) has fixed homes — no dragging, no fl
       topbar.includes('{pathname === "/downloads" && !searchActive ? <PromoteButton /> : null}') &&
       (header.match(/\{landing \? <PromoteButton size="header" \/> : null\}/g) ?? []).length === 2 &&
       !/drag|createPortal|pointermove|position: fixed|\bfixed\b/.test(button) &&
-      /\n\s*My ads\n/.test(button)
+      // 2026-10-25 (owner): "just the ad icon" — "My ads" is the accessible name, no longer visible text
+      button.includes('aria-label="My ads"')
     );
   }
   const core = code("features/downloads/download-page-core.tsx");
@@ -73,10 +74,11 @@ describe("the My ads button (was Promote) has fixed homes — no dragging, no fl
     expect(fixedHomes(core, header, button, TOPBAR.replace('{pathname === "/downloads" && !searchActive ? <PromoteButton /> : null}', ""))).toBe(false);
     expect(fixedHomes(core, header.replace('{landing ? <PromoteButton size="header" /> : null}', ""), button)).toBe(false);
   });
-  it("a glass text pill, no circle, and the floating bubble is gone (owner, 2026-10-15)", () => {
-    expect(button).toContain("backdrop-blur-xl");
-    expect(button).toContain("rounded-full px-3 text-[12.5px] sm:px-3.5");
-    expect(button).not.toMatch(/\bh-(9|10) w-(9|10)\b/);
+  it("just the ad icon, set into the header like its other icons (owner, 2026-10-25), and the floating bubble is gone", () => {
+    // the shared header icon tile and target — not a pill with words
+    expect(button).toContain("<IconTile>");
+    expect(button).toContain("inline-flex h-11 w-11");
+    expect(button).not.toMatch(/>\s*My ads\s*</);
     // the megaphone stays, with no disc behind it (owner, 2026-10-15)
     expect(button).toContain("<Megaphone");
     expect(button).not.toContain("bg-gradient-to-br from-violet-100");

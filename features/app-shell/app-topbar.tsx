@@ -33,9 +33,7 @@ export function AppTopbar() {
     do not (owner, 2026-08-18). Since the Full Bleed merge (2026-10-09) there is
     no mode to consult.
   */
-  const { handle, frenzCoin } = useEntitlements();
-  // Frenz Coin Part 5: the /downloads header carries the wallet balance (null — and no request — while Frenz Coin is off)
-  const coin = frenzCoin;
+  const { handle } = useEntitlements();
   /*
     🔴 THIS BAR STANDS DOWN ON /search, BELOW `lg` (owner, 2026-08-24: "on the
     search page the search icon shouldnt be there, only the search placeholder
@@ -466,8 +464,8 @@ export function AppTopbar() {
           app is installed or running standalone, so it can never be a dead
           control, and it hides while the search field has the row.
         */}
-        {/* with the coin pill in the bar, Install steps out below 430 px so the cluster stays one tidy row */}
-        {pathname === "/downloads" && !searchActive ? <InstallHeaderCta className={cn("h-9 px-3 text-[13px] max-[374px]:hidden sm:px-3.5", coin && "max-[429px]:hidden")} label="Install" /> : null}
+        {/* one row at every phone width (owner, 2026-10-25: "arrange and organise both buttons"): Install, then three equal 44 px icons — My ads, Wallet, the bell */}
+        {pathname === "/downloads" && !searchActive ? <InstallHeaderCta className="h-9 px-3 text-[13px] max-[374px]:hidden sm:px-3.5" label="Install" /> : null}
         {/* No Earn or Add friend in the top bar on /downloads (owner, 2026-10-16); Friends is in the bottom nav. */}
         {/*
           "My ads" — the megaphone and the words on a glass pill, set into this bar (owner 2026-10-15:

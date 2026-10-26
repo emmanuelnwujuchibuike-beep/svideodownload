@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { IconTile } from "@/components/icons/icon-tile";
 import { cn } from "@/lib/utils";
 
 import { CoinAmount } from "./coin-amount";
@@ -20,9 +21,8 @@ const INK_GLOW =
   "radial-gradient(80% 120% at 100% 0%, hsl(var(--frenz-magenta) / 0.55) 0%, hsl(var(--frenz-magenta) / 0) 60%), radial-gradient(70% 120% at 0% 100%, hsl(var(--frenz-blue) / 0.7) 0%, hsl(var(--frenz-blue) / 0) 62%), hsl(247 21% 8%)";
 
 /**
- * Entry 1 — the /downloads header. Owner, 2026-10-25: "only the button with a premium glass wallet icon, the balance
- * shouldn't show on the Download page". A frosted round button — a faint brand tint, a bright rim — with the wallet glyph
- * drawn in the brand blue→violet. No balance, so it needs no balance read: it shows whenever Frenz Coin is on.
+ * Entry 1 — the /downloads header. Owner, 2026-10-25: no balance on the Download page, then "make the wallet button
+ * embed on the header": the wallet glyph in the brand blue→violet, set into the bar like the search and bell icons. No balance, so it needs no balance read: it shows whenever Frenz Coin is on.
  */
 export function CoinHeaderPill({ className }: { className?: string }) {
   return (
@@ -30,13 +30,12 @@ export function CoinHeaderPill({ className }: { className?: string }) {
       href="/wallet"
       prefetch={false}
       aria-label="Frenz Coin wallet"
-      className={cn(
-        "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/80 bg-gradient-to-br from-white/90 via-frenz-blue/[0.06] to-frenz-violet/[0.14] shadow-[0_6px_18px_-8px_hsl(var(--frenz-violet)/0.55),inset_0_1px_0_rgba(255,255,255,0.9)] outline-none backdrop-blur-xl transition active:scale-95 focus-visible:ring-2 focus-visible:ring-frenz-blue motion-reduce:transition-none",
-        className,
-      )}
+      // set INTO the header like the search and bell icons (owner, 2026-10-25: "make the wallet button embed on the header")
+      className={cn("inline-flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full outline-none transition active:scale-90 focus-visible:ring-2 focus-visible:ring-frenz-blue motion-reduce:transition-none", className)}
     >
+      <IconTile>
       <TapPending size={18} className="text-frenz-violet">
-      <svg aria-hidden width="22" height="22" viewBox="0 0 24 24" fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <svg aria-hidden width="24" height="24" viewBox="0 0 24 24" fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
         {/* userSpaceOnUse: a gradient on straight strokes paints nothing in objectBoundingBox units */}
         <defs>
           <linearGradient id="frenz-wallet-glyph" x1="3" y1="4" x2="21" y2="20" gradientUnits="userSpaceOnUse">
@@ -50,6 +49,7 @@ export function CoinHeaderPill({ className }: { className?: string }) {
         <circle cx="17.4" cy="13.75" r="0.9" fill="hsl(var(--frenz-violet))" />
       </svg>
       </TapPending>
+      </IconTile>
     </Link>
   );
 }

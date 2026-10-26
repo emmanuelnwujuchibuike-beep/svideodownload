@@ -99,7 +99,8 @@ export function writeCachedStories(groups: StoryGroup[]): void {
     // Cap what we persist: this runs on every stories fetch, and localStorage
     // is synchronous — a huge blob here would block the main thread on a page
     // that's meant to feel instant.
-    const stored: Stored = { owner, groups: groups.slice(0, 24) };
+    // as many rings as Home shows (Stories Part 2: 50), so a cold start paints the same row the network returns
+    const stored: Stored = { owner, groups: groups.slice(0, 50) };
     localStorage.setItem(KEY, JSON.stringify(stored));
   } catch {
     /* storage unavailable/full — the row just falls back to fetching */

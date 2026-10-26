@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 /** Owner, 2026-10-08 — Stories: the PWA bottom band, and History-style options. */
 const src = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
-const viewer = () => src("features/app-shell/dashboard/stories-row.tsx");
+const viewer = () => src("features/app-shell/dashboard/story-viewer.tsx"); // the viewer moved out of stories-row.tsx (Stories Part 2)
 const options = () => src("features/social/story-options.tsx");
 
 describe("the installed app keeps a bottom band for reply and reactions", () => {
@@ -83,7 +83,7 @@ describe("DELETE /api/stories/:id", () => {
 });
 
 describe("story gestures (owner, 2026-10-15)", () => {
-  const v = readFileSync(join(process.cwd(), "features/app-shell/dashboard/stories-row.tsx"), "utf8");
+  const v = readFileSync(join(process.cwd(), "features/app-shell/dashboard/story-viewer.tsx"), "utf8");
   it("hold right = 2x forward, hold left = 2x backward", () => {
     expect(v).toContain('onPointerDown={() => startHold("back")}');
     expect(v).toContain('onPointerDown={() => startHold("forward")}');

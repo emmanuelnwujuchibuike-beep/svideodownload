@@ -335,7 +335,7 @@ describe("cost: nothing until a campaign is live", () => {
     expect(reels).toMatch(/const PaidReelsSlide = dynamic\(/);
     expect(reels).not.toMatch(/from "@\/features\/ads-platform\/serve\/|from "@\/lib\/ads-platform\/serving-state"/);
     for (const f of ["features/monetization/top-page-banner-ad.tsx", "features/monetization/sticky-top-ad.tsx"]) expect(src(f), f).toMatch(/const SelfTopCreative = dynamic\(/);
-    expect(src("features/app-shell/dashboard/stories-row.tsx")).toMatch(/const SelfStoryCard = dynamic\(/);
+    expect(src("features/app-shell/dashboard/story-viewer.tsx")).toMatch(/const SelfStoryCard = dynamic\(/);
   });
 
   it("media comes straight from the storage CDN — no next/image proxy, no API route", () => {
@@ -437,7 +437,7 @@ describe("ONE physical slot → ONE provider (slots addendum)", () => {
     expect(src("features/feed/reel-viewer.tsx")).toContain('useSlotProvider("reels_interstitial", adPage)');
     expect(src("features/reels/reels-feed.tsx")).toContain('adPage={tab === "ai" ? "ai_reels" : "reels"}');
     expect(src("features/ai/frenz-ai-welcome.tsx")).toContain('<SelfAdSlot slot="ai_hub_card" placement="ai_banner" page="ai"');
-    expect(src("features/app-shell/dashboard/stories-row.tsx")).toContain('useSelfAdPool("stories_card", "stories")');
+    expect(src("features/app-shell/dashboard/story-viewer.tsx")).toContain('useSelfAdPool("stories_card", "stories")');
     // History grid: a square paid tile after every 3 downloads, in both grid views
     const hg = src("features/history/history-grid-self-ads.tsx");
     expect(hg).toContain('useSlotProvider("history_grid", "history")');
@@ -447,7 +447,7 @@ describe("ONE physical slot → ONE provider (slots addendum)", () => {
   });
 
   it("a story card only between two people's stories, within the gap", () => {
-    const s = src("features/app-shell/dashboard/stories-row.tsx");
+    const s = src("features/app-shell/dashboard/story-viewer.tsx");
     expect(s).toMatch(/else if \(gi < groups\.length - 1\) \{[\s\S]{0,160}const ad = storyAds\.status === "ready" \? storyAds\.take\(\) : null;/);
     expect(s).toContain("replying || paidCard || optionsOpen"); // a hold plays at 2x since 2026-10-15
     // take() = within the admin gap, never the last one, recorded as shown
@@ -458,7 +458,7 @@ describe("ONE physical slot → ONE provider (slots addendum)", () => {
   });
 
   it("COST: the slot hooks import no engine — it is fetched only when a paid campaign is live", () => {
-    for (const f of ["features/ads-platform/serve/use-slot-provider.ts", "features/ads-platform/serve/use-self-ad-pool.ts", "features/app-shell/dashboard/stories-row.tsx", "features/monetization/top-page-banner-ad.tsx", "features/monetization/ad-surface.tsx"]) {
+    for (const f of ["features/ads-platform/serve/use-slot-provider.ts", "features/ads-platform/serve/use-self-ad-pool.ts", "features/app-shell/dashboard/stories-row.tsx", "features/app-shell/dashboard/story-viewer.tsx", "features/monetization/top-page-banner-ad.tsx", "features/monetization/ad-surface.tsx"]) {
       const c = src(f);
       expect(c, f).not.toMatch(/^import (?!type)[^;]*ads-platform\/(serving-state|serving-payload|eligibility|serving-client)"/m);
       expect(c, f).not.toMatch(/^import (?!type)[^;]*"\.\.\/serving-client"/m);

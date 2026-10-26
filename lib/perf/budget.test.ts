@@ -794,6 +794,10 @@ describe.skipIf(!buildExists())("route weight budget", () => {
     const stories = src("features/app-shell/dashboard/stories-row.tsx");
     expect(staticImport(stories, "@/features/social/reshare-sheet")).toBe(false);
     expect(staticImport(stories, "@/features/social/story-viewers-sheet")).toBe(false);
+    // Stories Part 2 (2026-10-26): the rings carry neither the viewer nor framer-motion — the viewer is a dynamic import
+    expect(staticImport(stories, "framer-motion")).toBe(false);
+    expect(staticImport(stories, "./story-viewer")).toBe(false);
+    expect(stories).toContain('export const StoryViewer = dynamic(() => import("./story-viewer")');
     // Teeth: the guard does see a static import when there is one.
     expect(staticImport(`import { ReelsFeed } from "@/features/reels/reels-feed";`, "@/features/reels/reels-feed")).toBe(true);
   });

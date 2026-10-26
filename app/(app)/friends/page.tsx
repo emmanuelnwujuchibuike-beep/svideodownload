@@ -55,8 +55,8 @@ export default async function FriendsPage() {
 
   const [fullOverview, allFriendStories, followingStories, discovery, allActivity, archived] = await Promise.all([
     friendsOverview(user.id),
-    getActiveStories(user.id, 24, "friends"),
-    getActiveStories(user.id, 24, "following"),
+    getActiveStories(user.id, 100, "friends"),
+    getActiveStories(user.id, 100, "following"),
     getDiscoveryFeed(user.id, { viewerLocation }),
     getFriendActivity(user.id, 12),
     archivedFriendIds(user.id),

@@ -43,8 +43,10 @@ export async function GET(request: Request) {
   //
   // 20s, not longer: a story you just posted must show up on your next look.
   // bustStoryCache() below clears the poster's own key immediately on publish.
+  // Stories Part 2 (2026-10-26): 50 rings for Home/Messages (everyone the viewer is tied to first, then public
+  // discovery), 100 for a Friends tab — 24 cut off people the viewer knows once enough of them had a story up.
   const groups = await getCached(`stories:${viewerId ?? "anon"}:${scope}`, 20, () =>
-    getActiveStories(viewerId, 24, scope),
+    getActiveStories(viewerId, scope === "all" ? 50 : 100, scope),
   );
   return NextResponse.json({ groups }, { headers: { "Cache-Control": "private, no-store" } });
 }

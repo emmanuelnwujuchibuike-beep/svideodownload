@@ -30,7 +30,7 @@ const src = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 
 const VIEWERS = [
   "features/downloads/download-player.tsx",
-  "features/app-shell/dashboard/stories-row.tsx",
+  "features/app-shell/dashboard/story-viewer.tsx",
 ];
 
 describe("both viewers fill the frame for portrait media", () => {
@@ -63,7 +63,7 @@ describe("both viewers fill the frame for portrait media", () => {
       top inset; the chrome floats on the picture instead.
     */
     expect(src("features/downloads/download-player.tsx")).toContain("pt-[var(--frenz-safe-top)]");
-    expect(src("features/app-shell/dashboard/stories-row.tsx")).toContain('top: "var(--frenz-safe-top, 0px)"');
+    expect(src("features/app-shell/dashboard/story-viewer.tsx")).toContain('top: "var(--frenz-safe-top, 0px)"');
   });
 });
 

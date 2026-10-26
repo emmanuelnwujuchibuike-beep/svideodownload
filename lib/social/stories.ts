@@ -1,6 +1,6 @@
-import { flagsOf, isAccountVisibleTo, relationTo } from "@/lib/social/account-visibility";
-import { friendIdSet } from "@/lib/social/friend-ids";
+import { NO_TIES, rankStoryGroups, storyTier, storyVisibleTo, type StoryAuthorFacts, type StoryTier, type ViewerTies } from "@/lib/social/story-audience";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { paginatedSelect } from "@/lib/supabase/paginate";
 import { withTimeout } from "@/lib/utils";
 
 const hasSupabase =
@@ -39,44 +39,71 @@ export interface StoryGroup {
 /** Who a story feed is scoped to: everyone (default), just friends, or people you follow. */
 export type StoryScope = "all" | "friends" | "following";
 
+type Db = ReturnType<typeof createAdminClient>;
+
 /**
- * The set of author ids a scoped feed is allowed to show (plus the viewer's own,
- * so your story always leads). Returns null for "all" (no restriction). Degrades
- * gracefully — if the friends/follows tables error, the scope simply resolves empty.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  STORIES PART 2 (2026-10-26) — who sees whose, and in what order
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ *   B1  WHO   one rule for every surface — lib/social/story-audience.ts — the
+ *             SQL twin of story_view_access (0285, followers added in 0287), which
+ *             guards views and reshares. This file only gathers the facts it needs.
+ *   B2  WHICH the people the viewer is tied to (friends, follows, direct chats) are
+ *             read BY AUTHOR, so their stories can never be crowded out by strangers
+ *             posting more recently. The global "newest" read is now only DISCOVERY
+ *             for Home, filling the space that is left with public stories.
+ *   B3  ORDER yourself, friends, then follows and chats, then everyone else; within
+ *             each, an unwatched story before a watched one (the viewer's own
+ *             story_views rows), then the most recent.
+ *
+ * Every read is bounded and paged (PostgREST answers at most 1000 rows, with no
+ * error — lib/supabase/paginate.ts), runs on the service role, and the result is
+ * cached per VIEWER by /api/stories — never shared between people.
  */
-async function audienceForScopeUnbounded(
-  db: ReturnType<typeof createAdminClient>,
-  viewerId: string,
-  scope: Exclude<StoryScope, "all">,
-): Promise<Set<string>> {
-  const ids = new Set<string>([viewerId]);
-  try {
-    if (scope === "following") {
-      const { data } = await db.from("follows").select("following_id").eq("follower_id", viewerId);
-      for (const f of ((data ?? []) as { following_id: string }[])) ids.add(f.following_id);
-    } else {
-      const { data } = await db
-        .from("friendships")
-        .select("user_low, user_high")
-        .or(`user_low.eq.${viewerId},user_high.eq.${viewerId}`);
-      for (const r of ((data ?? []) as { user_low: string; user_high: string }[])) {
-        ids.add(r.user_low === viewerId ? r.user_high : r.user_low);
-      }
-    }
-  } catch {
-    /* table missing / error — leave scope as just the viewer */
-  }
-  return ids;
+
+/** Ties beyond this many people are not read in one feed — a backstop, far above any real friend/follow list here. */
+const TIE_CAP = 5_000;
+/** Authors per `.in()` query: keeps the request URL well under any proxy limit. */
+const ID_CHUNK = 150;
+/** Discovery for Home: the newest active stories platform-wide, before visibility. Only fills space after ties. */
+const DISCOVERY_ROWS = 200;
+/** Active stories read per chunk of tied authors (a member rarely has more than a handful live). */
+const STORIES_PER_CHUNK = 1_000;
+
+const chunks = <T,>(xs: readonly T[], n = ID_CHUNK): T[][] => {
+  const out: T[][] = [];
+  for (let i = 0; i < xs.length; i += n) out.push(xs.slice(i, i + n));
+  return out;
+};
+
+/* ─────────────────────────── the viewer's ties ──────────────────────────── */
+
+interface Ties {
+  friends: Set<string>;
+  following: Set<string>;
+  chats: Set<string>;
 }
 
-/** Same real hang risk as `excludedStoryAuthors` below (pre-existing, not
- *  new today) — closed the same way, at the source, while already here. */
-async function audienceForScope(
-  db: ReturnType<typeof createAdminClient>,
-  viewerId: string,
-  scope: Exclude<StoryScope, "all">,
-): Promise<Set<string>> {
-  return withTimeout(audienceForScopeUnbounded(db, viewerId, scope), 4000, new Set<string>([viewerId]));
+async function viewerTiesUnbounded(db: Db, viewerId: string): Promise<Ties> {
+  const [fr, fo, ch] = await Promise.all([
+    paginatedSelect<{ user_low: string; user_high: string }>((a, b) => db.from("friendships").select("user_low, user_high").or(`user_low.eq.${viewerId},user_high.eq.${viewerId}`).order("user_low").order("user_high").range(a, b), TIE_CAP),
+    paginatedSelect<{ following_id: string }>((a, b) => db.from("follows").select("following_id").eq("follower_id", viewerId).order("following_id").range(a, b), TIE_CAP),
+    paginatedSelect<{ user_low: string; user_high: string }>((a, b) => db.from("conversations").select("user_low, user_high").eq("type", "direct").or(`user_low.eq.${viewerId},user_high.eq.${viewerId}`).order("user_low").order("user_high").range(a, b), TIE_CAP),
+  ]);
+  const other = (r: { user_low: string; user_high: string }) => (r.user_low === viewerId ? r.user_high : r.user_low);
+  return {
+    friends: new Set(fr.rows.map(other)),
+    following: new Set(fo.rows.map((r) => r.following_id)),
+    chats: new Set(ch.rows.map(other).filter(Boolean)),
+  };
+}
+
+/** A failed or slow read is "no ties" — the viewer then sees only public stories, never more. */
+async function viewerTies(db: Db, viewerId: string | null): Promise<Ties> {
+  const none: Ties = { friends: new Set(), following: new Set(), chats: new Set() };
+  if (!viewerId) return none;
+  return withTimeout(viewerTiesUnbounded(db, viewerId).catch(() => none), 4000, none);
 }
 
 /**
@@ -86,241 +113,227 @@ async function audienceForScope(
  * Real gap fixed 2026-07-14: every other content surface (feed, comments,
  * discovery, profile RLS) already filters by `blocks`; Stories never did, so
  * a blocked user could still see and reply to your Stories and vice versa.
+ *
+ * 🔴 Stories Part 2: it fails CLOSED. `null` = the read failed or timed out, and
+ * the caller then shows nobody's stories but the viewer's own. Before, a failure
+ * meant "no exclusions" — a blocked member's story could show on a slow read.
  */
-async function excludedStoryAuthorsUnbounded(db: ReturnType<typeof createAdminClient>, viewerId: string): Promise<Set<string>> {
+async function excludedStoryAuthorsUnbounded(db: Db, viewerId: string): Promise<Set<string> | null> {
   const excluded = new Set<string>();
-  try {
-    const [{ data: blockedByMe }, { data: blockedMe }, { data: restrictedByMe }, { data: restrictedMe }] = await Promise.all([
-      db.from("blocks").select("blocked_id").eq("blocker_id", viewerId),
-      db.from("blocks").select("blocker_id").eq("blocked_id", viewerId),
-      db.from("user_restrictions").select("restricted_id").eq("restrictor_id", viewerId).eq("scope", "status"),
-      db.from("user_restrictions").select("restrictor_id").eq("restricted_id", viewerId).eq("scope", "status"),
-    ]);
-    for (const r of (blockedByMe ?? []) as { blocked_id: string }[]) excluded.add(r.blocked_id);
-    for (const r of (blockedMe ?? []) as { blocker_id: string }[]) excluded.add(r.blocker_id);
-    for (const r of (restrictedByMe ?? []) as { restricted_id: string }[]) excluded.add(r.restricted_id);
-    for (const r of (restrictedMe ?? []) as { restrictor_id: string }[]) excluded.add(r.restrictor_id);
-  } catch {
-    /* table missing / error — no exclusions, same fail-open posture as audienceForScope */
-  }
+  const [blockedByMe, blockedMe, restrictedByMe, restrictedMe] = await Promise.all([
+    db.from("blocks").select("blocked_id").eq("blocker_id", viewerId),
+    db.from("blocks").select("blocker_id").eq("blocked_id", viewerId),
+    db.from("user_restrictions").select("restricted_id").eq("restrictor_id", viewerId).eq("scope", "status"),
+    db.from("user_restrictions").select("restrictor_id").eq("restricted_id", viewerId).eq("scope", "status"),
+  ]);
+  if (blockedByMe.error || blockedMe.error || restrictedByMe.error || restrictedMe.error) return null;
+  for (const r of (blockedByMe.data ?? []) as { blocked_id: string }[]) excluded.add(r.blocked_id);
+  for (const r of (blockedMe.data ?? []) as { blocker_id: string }[]) excluded.add(r.blocker_id);
+  for (const r of (restrictedByMe.data ?? []) as { restricted_id: string }[]) excluded.add(r.restricted_id);
+  for (const r of (restrictedMe.data ?? []) as { restrictor_id: string }[]) excluded.add(r.restrictor_id);
   return excluded;
 }
 
 /**
- * Real bug found 2026-07-14, same day this was added: neither this function
- * nor its callers (`getActiveStories` on Home's stories rail — every logged-
- * in user's most common landing page — and `getActiveStoryForUser` on an
- * open chat thread) were ever time-boxed, despite `getActiveStories`'s own
- * doc comment already claiming a failed fetch "just means no strip." A
- * genuine hang (not just an error) in ANY of the 4 queries above — a network
- * stall, a slow connection — doesn't throw, so the try/catch above can't
- * help; it just leaves the caller's `await` pending forever, which read live
- * as "stuck on loading" on both Home and an open thread. `withTimeout` here,
- * at the source, protects every current AND future caller at once instead of
- * needing the same fix repeated at every call site.
+ * Real bug found 2026-07-14: a genuine hang (not an error) in any of the four
+ * queries above left the caller's `await` pending for ever — "stuck on loading"
+ * on Home and an open thread. Time-boxed at the source, for every caller.
  */
-async function excludedStoryAuthors(db: ReturnType<typeof createAdminClient>, viewerId: string): Promise<Set<string>> {
-  return withTimeout(excludedStoryAuthorsUnbounded(db, viewerId), 4000, new Set<string>());
+async function excludedStoryAuthors(db: Db, viewerId: string | null): Promise<Set<string> | null> {
+  if (!viewerId) return new Set<string>();
+  return withTimeout(excludedStoryAuthorsUnbounded(db, viewerId).catch(() => null), 4000, null);
 }
 
-/** Active (non-expired) stories grouped by author, most recent author first.
- *  Public profiles only; the viewer's own group is surfaced first when present.
- *  `scope` narrows to just friends or people you follow (signed-in viewers). */
-export async function getActiveStories(
-  viewerId: string | null,
-  limit = 20,
-  scope: StoryScope = "all",
-): Promise<StoryGroup[]> {
+function tiesFor(authorId: string, ties: Ties, excluded: ReadonlySet<string>): ViewerTies {
+  return { friend: ties.friends.has(authorId), follows: ties.following.has(authorId), chat: ties.chats.has(authorId), excluded: excluded.has(authorId) };
+}
+
+/* ─────────────────────────── the reads ──────────────────────────── */
+
+type StoryRow = {
+  id: string;
+  user_id: string;
+  media_url: string;
+  media_kind: "image" | "video";
+  caption: string | null;
+  created_at: string;
+  allow_reshare?: boolean | null;
+  thumbnail_url?: string | null;
+};
+type ProfileRow = { id: string; handle: string | null; display_name: string | null; avatar_url: string | null; is_verified: boolean | null; visibility: string | null; is_suspended: boolean | null; is_hidden: boolean | null };
+
+const STORY_COLS = "id, user_id, media_url, media_kind, caption, created_at";
+
+/** Whose active stories to read: some authors, one author, or the newest of everyone's (discovery). */
+type Authors = { in: readonly string[] } | { one: string } | "everyone";
+
+/**
+ * Active stories, newest first. `allow_reshare` (0081) and `thumbnail_url` (0083)
+ * ride in an optional group: supabase-js fails the WHOLE select on a missing
+ * column (42703), so an unapplied migration costs only those two fields.
+ */
+async function activeStories(db: Db, authors: Authors, limit: number): Promise<StoryRow[]> {
+  const now = new Date().toISOString();
+  const run = (cols: string) =>
+    paginatedSelect<StoryRow>((a, b) => {
+      let q = db.from("stories").select(cols).gt("expires_at", now);
+      if (authors !== "everyone") q = "one" in authors ? q.eq("user_id", authors.one) : q.in("user_id", [...authors.in]);
+      return q.order("created_at", { ascending: false }).order("id", { ascending: false }).range(a, b) as unknown as PromiseLike<{ data: StoryRow[] | null; error: { message: string } | null }>;
+    }, limit);
+  const first = await run(`${STORY_COLS}, allow_reshare, thumbnail_url`);
+  if (/allow_reshare|thumbnail_url|42703|does not exist/.test(first.error?.message ?? "")) return (await run(STORY_COLS)).rows;
+  return first.rows;
+}
+
+async function profilesFor(db: Db, ids: readonly string[]): Promise<Map<string, ProfileRow>> {
+  const out = new Map<string, ProfileRow>();
+  const parts = await Promise.all(
+    chunks(ids).map((c) => db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, visibility, is_suspended, is_hidden").in("id", c)),
+  );
+  for (const p of parts) for (const r of (p.data ?? []) as ProfileRow[]) out.set(r.id, r);
+  return out;
+}
+
+/** Which of these stories the viewer has already opened (their own story_views rows, 0181). */
+async function watchedBy(db: Db, viewerId: string | null, storyIds: readonly string[]): Promise<Set<string>> {
+  const seen = new Set<string>();
+  if (!viewerId || storyIds.length === 0) return seen;
+  try {
+    const parts = await Promise.all(chunks(storyIds, 200).map((c) => db.from("story_views").select("story_id").eq("viewer_id", viewerId).in("story_id", c)));
+    for (const p of parts) for (const r of (p.data ?? []) as { story_id: string }[]) seen.add(r.story_id);
+  } catch {
+    /* unknown = unwatched: ordering only, never access */
+  }
+  return seen;
+}
+
+const facts = (p: ProfileRow): StoryAuthorFacts => ({ id: p.id, handle: p.handle, visibility: p.visibility, isSuspended: !!p.is_suspended, isHidden: !!p.is_hidden });
+
+const toItem = (r: StoryRow): StoryItem => ({
+  id: r.id,
+  mediaUrl: r.media_url,
+  mediaKind: r.media_kind,
+  caption: r.caption,
+  createdAt: r.created_at,
+  // Absent column (0081 unapplied) === the column's own default.
+  allowReshare: r.allow_reshare ?? true,
+  thumbnailUrl: r.thumbnail_url ?? null,
+});
+
+function groupOf(p: ProfileRow, stories: StoryItem[]): StoryGroup {
+  return {
+    userId: p.id,
+    handle: p.handle as string,
+    displayName: p.display_name || `@${p.handle as string}`,
+    avatarUrl: p.avatar_url ?? null,
+    isVerified: !!p.is_verified,
+    stories,
+  };
+}
+
+/**
+ * Active stories grouped by author, for one viewer — Home and Messages (`all`),
+ * and the Friends page's two tabs (`friends`, `following`). One ring per author,
+ * their stories newest first, the viewer's own ring first.
+ *
+ *   all        everyone the viewer is tied to, then public discovery to fill
+ *   friends    the viewer's friends (and the viewer)
+ *   following  the people the viewer follows (and the viewer)
+ *
+ * Every author passes `storyVisibleTo` (story-audience.ts) before anything about
+ * them leaves this function. A failure reads as fewer rings, never as more.
+ */
+export async function getActiveStories(viewerId: string | null, limit = 50, scope: StoryScope = "all"): Promise<StoryGroup[]> {
   if (!hasSupabase) return [];
   try {
     const db = createAdminClient();
+    const [ties, excluded] = await Promise.all([viewerTies(db, viewerId), excludedStoryAuthors(db, viewerId)]);
 
-    // Resolve the allowed author set for scoped feeds up front.
-    const audience = viewerId && scope !== "all" ? await audienceForScope(db, viewerId, scope) : null;
-    const excluded = viewerId ? await excludedStoryAuthors(db, viewerId) : new Set<string>();
+    // 🔴 Fail closed on the block list: only the viewer's own stories (Stories Part 2).
+    const blocksUnknown = excluded === null;
+    const exclude = excluded ?? new Set<string>();
 
-    // `allow_reshare` arrives with migration 0081. supabase-js fails the WHOLE
-    // select if any named column is missing, so an unapplied 0081 must not take
-    // the stories row down with it — fall back to the pre-0081 shape and treat
-    // resharing as allowed (the column's own default).
-    type StoryRow = {
-      id: string;
-      user_id: string;
-      media_url: string;
-      media_kind: "image" | "video";
-      caption: string | null;
-      created_at: string;
-      allow_reshare?: boolean | null;
-      thumbnail_url?: string | null;
-    };
-    const base = "id, user_id, media_url, media_kind, caption, created_at";
-    const activeAfter = new Date().toISOString();
-    // `thumbnail_url` rides along with `allow_reshare` in the optional group so
-    // the existing 42703 fallback covers 0083 not being applied yet too.
-    const first = await db
-      .from("stories")
-      .select(`${base}, allow_reshare, thumbnail_url`)
-      .gt("expires_at", activeAfter)
-      .order("created_at", { ascending: false })
-      .limit(200);
-    let data: unknown = first.data;
-    if (first.error?.code === "42703") {
-      const legacy = await db
-        .from("stories")
-        .select(base)
-        .gt("expires_at", activeAfter)
-        .order("created_at", { ascending: false })
-        .limit(200);
-      data = legacy.data;
-    }
-    let rows = (data as StoryRow[] | null) ?? [];
-    if (audience) rows = rows.filter((r) => audience.has(r.user_id));
-    if (excluded.size > 0) rows = rows.filter((r) => !excluded.has(r.user_id));
+    const tied = new Set<string>(
+      blocksUnknown ? [] : scope === "friends" ? ties.friends : scope === "following" ? ties.following : [...ties.friends, ...ties.following, ...ties.chats],
+    );
+    if (viewerId) tied.add(viewerId);
+    for (const id of exclude) tied.delete(id);
+
+    // B2: the tied authors' stories, read by author — never crowded out by anyone else's
+    const tiedIds = [...tied];
+    const tiedRows = (await Promise.all(chunks(tiedIds).map((c) => activeStories(db, { in: c }, STORIES_PER_CHUNK)))).flat();
+    // Home only: public discovery fills the space that is left (signed out, this is all there is)
+    const discovery = scope === "all" && !blocksUnknown ? await activeStories(db, "everyone", DISCOVERY_ROWS) : [];
+
+    const byId = new Map<string, StoryRow>();
+    for (const r of [...tiedRows, ...discovery]) if (!exclude.has(r.user_id)) byId.set(r.id, r);
+    const rows = [...byId.values()];
     if (rows.length === 0) return [];
 
-    const userIds = [...new Set(rows.map((r) => r.user_id))];
-    // Both in one batch — `friendIdSet` only needs viewerId, so awaiting it after
-    // the profiles query was a free extra round trip (owner's 2s page budget).
-    const [{ data: profs }, friends] = await Promise.all([
-      db
-        .from("profiles")
-        .select("id, handle, display_name, avatar_url, is_verified, visibility, is_suspended, is_hidden")
-        .in("id", userIds),
-      friendIdSet(viewerId),
-    ]);
-    const profById = new Map<string, Record<string, unknown>>();
-    for (const p of (profs ?? []) as Record<string, unknown>[]) profById.set(p.id as string, p);
+    const authors = [...new Set(rows.map((r) => r.user_id))];
+    const [profiles, watched] = await Promise.all([profilesFor(db, authors), watchedBy(db, viewerId, rows.map((r) => r.id))]);
 
-    const groups = new Map<string, StoryGroup>();
-    for (const r of rows) {
-      const p = profById.get(r.user_id);
-      if (!p || !p.handle) continue;
-      // An admin-hidden author's story still reaches their friends (0082) — a
-      // hide narrows the audience to friends, it doesn't silence the account.
-      if (!isAccountVisibleTo(flagsOf(p), relationTo(r.user_id, viewerId, friends))) continue;
-      if (p.visibility !== "public" && r.user_id !== viewerId) continue;
-      let g = groups.get(r.user_id);
+    const grouped = new Map<string, { group: StoryGroup; tier: StoryTier; unwatched: boolean; newestAt: string }>();
+    for (const r of rows.sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0))) {
+      const p = profiles.get(r.user_id);
+      if (!p) continue;
+      const t = viewerId ? tiesFor(r.user_id, ties, exclude) : NO_TIES;
+      if (!storyVisibleTo(facts(p), viewerId, t)) continue;
+      let g = grouped.get(r.user_id);
       if (!g) {
-        g = {
-          userId: r.user_id,
-          handle: p.handle as string,
-          displayName: (p.display_name as string) || `@${p.handle as string}`,
-          avatarUrl: (p.avatar_url as string) ?? null,
-          isVerified: (p.is_verified as boolean) ?? false,
-          stories: [],
-        };
-        groups.set(r.user_id, g);
+        g = { group: groupOf(p, []), tier: storyTier(r.user_id, viewerId, t), unwatched: false, newestAt: r.created_at };
+        grouped.set(r.user_id, g);
       }
-      g.stories.push({
-        id: r.id,
-        mediaUrl: r.media_url,
-        mediaKind: r.media_kind,
-        caption: r.caption,
-        createdAt: r.created_at,
-        // Absent column (0081 unapplied) === the column's own default.
-        allowReshare: r.allow_reshare ?? true,
-        thumbnailUrl: r.thumbnail_url ?? null,
-      });
+      g.group.stories.push(toItem(r));
+      if (!watched.has(r.id)) g.unwatched = true;
     }
 
-    const list = [...groups.entries()];
-    // Viewer's own stories first, then by recency.
-    list.sort((a, b) => (a[0] === viewerId ? -1 : b[0] === viewerId ? 1 : 0));
-    return list.map(([, g]) => g).slice(0, limit);
+    // B3: you, friends, follows/chats, everyone else — unwatched before watched — most recent first
+    return rankStoryGroups([...grouped.values()])
+      .slice(0, Math.max(1, limit))
+      .map((g) => g.group);
   } catch {
     return [];
   }
 }
 
 /**
- * A single person's active stories, for the "N stories" strip embedded at the
- * top of a DIRECT message thread (owner mockup) — deliberately NOT
- * `getActiveStories()` with a narrow scope. That function is documented
- * "public profiles only": it hides a story from anyone whose profile
- * visibility isn't literally `'public'`, which is the right call for a
- * discovery-style feed (Home's stories reel) but silently broke the mockup's
- * in-thread strip for the (likely majority of) accounts that keep their
- * profile non-public — the two people are ALREADY in a direct conversation
- * together at this point, a strictly more intimate context than "anyone
- * browsing the app," so gating on general profile visibility here was wrong.
- * Confirmed by reading `getActiveStories`'s own doc comment, not assumed.
- *
- * `viewerId` (added 2026-07-14 alongside the blocking pass): when given,
- * hides the strip entirely if either party has blocked or status-restricted
- * the other — the same gap `getActiveStories` had, closed there via
- * `excludedStoryAuthors`. Optional (not `null`-defaulted) because a couple of
- * call sites don't yet have a viewer in scope; those keep today's behavior.
+ * A single person's active stories, for the "N stories" strip at the top of a
+ * DIRECT message thread. Since Stories Part 2 it answers by the SAME rule as every
+ * other surface (story-audience.ts) — before, it skipped the profile-visibility
+ * check entirely, which happened to match the chat rule only because the two
+ * people are, by definition, in a direct chat.
  */
 export async function getActiveStoryForUser(userId: string, viewerId?: string | null): Promise<StoryGroup | null> {
   if (!hasSupabase) return null;
   try {
     const db = createAdminClient();
-    if (viewerId && viewerId !== userId) {
-      const excluded = await excludedStoryAuthors(db, viewerId);
-      if (excluded.has(userId)) return null;
-    }
-    // Same 0081 tolerance as getActiveStories above — a missing `allow_reshare`
-    // must cost only the reshare switch, never the whole strip.
-    type Row = {
-      id: string;
-      user_id: string;
-      media_url: string;
-      media_kind: "image" | "video";
-      caption: string | null;
-      created_at: string;
-      allow_reshare?: boolean | null;
-      thumbnail_url?: string | null;
-    };
-    const base = "id, user_id, media_url, media_kind, caption, created_at";
-    const activeAfter = new Date().toISOString();
-    const first = await db
-      .from("stories")
-      .select(`${base}, allow_reshare, thumbnail_url`)
-      .eq("user_id", userId)
-      .gt("expires_at", activeAfter)
-      .order("created_at", { ascending: false })
-      .limit(50);
-    let data: unknown = first.data;
-    if (first.error?.code === "42703") {
-      const legacy = await db
-        .from("stories")
-        .select(base)
-        .eq("user_id", userId)
-        .gt("expires_at", activeAfter)
-        .order("created_at", { ascending: false })
-        .limit(50);
-      data = legacy.data;
-    }
-    const rows = (data as Row[] | null) ?? [];
-    if (rows.length === 0) return null;
+    const viewer = viewerId ?? null;
+    const excluded = await excludedStoryAuthors(db, viewer);
+    if (excluded === null || excluded.has(userId)) return null; // 🔴 fails closed
 
-    const { data: prof } = await db
-      .from("profiles")
-      .select("handle, display_name, avatar_url, is_verified, is_suspended, is_hidden")
-      .eq("id", userId)
-      .maybeSingle();
-    if (!prof || !prof.handle) return null;
-    // Friends of an admin-hidden author still open their story ring (0082).
-    if (!isAccountVisibleTo(flagsOf(prof), relationTo(userId, viewerId ?? null, await friendIdSet(viewerId ?? null))))
-      return null;
-
-    return {
-      userId,
-      handle: prof.handle as string,
-      displayName: (prof.display_name as string) || `@${prof.handle as string}`,
-      avatarUrl: (prof.avatar_url as string) ?? null,
-      isVerified: (prof.is_verified as boolean) ?? false,
-      stories: rows.map((r) => ({
-        id: r.id,
-        mediaUrl: r.media_url,
-        mediaKind: r.media_kind,
-        caption: r.caption,
-        createdAt: r.created_at,
-        allowReshare: r.allow_reshare ?? true,
-        thumbnailUrl: r.thumbnail_url ?? null,
-      })),
-    };
+    const [rows, profiles, ties] = await Promise.all([
+      activeStories(db, { one: userId }, 50),
+      profilesFor(db, [userId]),
+      viewer && viewer !== userId ? pairTies(db, viewer, userId) : Promise.resolve(NO_TIES),
+    ]);
+    const p = profiles.get(userId);
+    if (!p || rows.length === 0) return null;
+    if (!storyVisibleTo(facts(p), viewer, { ...ties, excluded: false })) return null;
+    return groupOf(p, rows.map(toItem));
   } catch {
     return null;
   }
+}
+
+/** The viewer's ties to ONE author — three point reads instead of their whole lists. */
+async function pairTies(db: Db, viewerId: string, authorId: string): Promise<ViewerTies> {
+  const [lo, hi] = viewerId < authorId ? [viewerId, authorId] : [authorId, viewerId];
+  // both tables keep a pair as (lower id, higher id) — lib/social/friends.ts and messages.ts `pair`
+  const read = Promise.all([
+    db.from("friendships").select("user_low").eq("user_low", lo).eq("user_high", hi).limit(1),
+    db.from("follows").select("follower_id").eq("follower_id", viewerId).eq("following_id", authorId).limit(1),
+    db.from("conversations").select("id").eq("type", "direct").eq("user_low", lo).eq("user_high", hi).limit(1),
+  ]).then(([f, fo, c]) => ({ friend: (f.data ?? []).length > 0, follows: (fo.data ?? []).length > 0, chat: (c.data ?? []).length > 0, excluded: false }));
+  return withTimeout(read.catch(() => NO_TIES), 4000, NO_TIES);
 }

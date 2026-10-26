@@ -1,0 +1,26 @@
+{
+  "_": "Stories Part 2 (2026-10-26): ONE case table for who sees whose story. Read by lib/social/story-audience.test.ts (the TypeScript rule every surface uses) and by supabase/tests/0287_story_followers.pglite.mjs (story_view_access, which guards views and reshares). Both must give these answers. ties: friend = a friendships row, follows = viewer follows author (accepted), chat = a direct conversation, blockedBy = author blocked viewer, blocks = viewer blocked author, restricted = a status restriction either way, msgRestricted = a messaging-only restriction.",
+  "cases": [
+    { "label": "public author, stranger", "author": { "visibility": "public" }, "ties": {}, "visible": true },
+    { "label": "public author, follower", "author": { "visibility": "public" }, "ties": { "follows": true }, "visible": true },
+    { "label": "followers-only author, accepted follower", "author": { "visibility": "followers" }, "ties": { "follows": true }, "visible": true },
+    { "label": "followers-only author, non-follower stranger", "author": { "visibility": "followers" }, "ties": {}, "visible": false },
+    { "label": "followers-only author, friend who does not follow", "author": { "visibility": "followers" }, "ties": { "friend": true }, "visible": false },
+    { "label": "followers-only author, shares a direct chat", "author": { "visibility": "followers" }, "ties": { "chat": true }, "visible": true },
+    { "label": "private author, stranger", "author": { "visibility": "private" }, "ties": {}, "visible": false },
+    { "label": "private author, follower", "author": { "visibility": "private" }, "ties": { "follows": true }, "visible": false },
+    { "label": "private author, friend", "author": { "visibility": "private" }, "ties": { "friend": true }, "visible": false },
+    { "label": "private author, shares a direct chat", "author": { "visibility": "private" }, "ties": { "chat": true }, "visible": true },
+    { "label": "public author blocked the viewer", "author": { "visibility": "public" }, "ties": { "blockedBy": true }, "visible": false },
+    { "label": "viewer blocked the public author", "author": { "visibility": "public" }, "ties": { "blocks": true }, "visible": false },
+    { "label": "blocked even with a follow and a chat", "author": { "visibility": "followers" }, "ties": { "follows": true, "chat": true, "blockedBy": true }, "visible": false },
+    { "label": "status restriction, public author", "author": { "visibility": "public" }, "ties": { "restricted": true }, "visible": false },
+    { "label": "messaging-only restriction does not hide a story", "author": { "visibility": "public" }, "ties": { "msgRestricted": true }, "visible": true },
+    { "label": "suspended public author, follower", "author": { "visibility": "public", "suspended": true }, "ties": { "follows": true }, "visible": false },
+    { "label": "hidden public author, stranger", "author": { "visibility": "public", "hidden": true }, "ties": {}, "visible": false },
+    { "label": "hidden public author, friend", "author": { "visibility": "public", "hidden": true }, "ties": { "friend": true }, "visible": true },
+    { "label": "hidden followers-only author, friend who follows", "author": { "visibility": "followers", "hidden": true }, "ties": { "friend": true, "follows": true }, "visible": true },
+    { "label": "hidden followers-only author, follower who is not a friend", "author": { "visibility": "followers", "hidden": true }, "ties": { "follows": true }, "visible": false },
+    { "label": "author with no handle", "author": { "visibility": "public", "handle": null }, "ties": { "follows": true }, "visible": false }
+  ]
+}

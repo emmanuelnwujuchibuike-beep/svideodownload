@@ -2,7 +2,6 @@
 
 import { X } from "lucide-react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { RotatingWallpaperLayers } from "@/components/wallpapers/wallpaper-cta-rotator";
@@ -219,9 +218,16 @@ export function HomeTools({ aiPromo, rotateUrls }: { aiPromo: AiPromo | null; ro
         </h2>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        {/* Frenz AI keeps Next's viewport prefetch (owner, 2026-09-09: it must open on one tap) and its promotion media. */}
-        <Link
+        {/*
+          Frenz AI must open on one tap (owner, 2026-09-09), and so must Wallpapers. Both are warmed once the page has
+          LOADED and again on press, never by Next's viewport prefetch: that ran while the landing was still loading
+          and held its load event back (2026-10-26, see tap-once-link.tsx).
+        */}
+        <TapOnceLink
           href="/ai"
+          prefetch={false}
+          warmOnIdle
+          spinner={false}
           data-track="ai_clicked"
           className={cn(SHOWCASE, "bg-[radial-gradient(circle_at_75%_20%,hsl(var(--frenz-magenta)),hsl(var(--frenz-violet))_40%,hsl(var(--frenz-ink))_92%)]")}
         >
@@ -229,9 +235,12 @@ export function HomeTools({ aiPromo, rotateUrls }: { aiPromo: AiPromo | null; ro
           <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/55 to-transparent" />
           <span className="relative font-heading text-[17px] font-bold">Frenz AI</span>
           <span className="relative text-[13px] leading-snug text-white/85">Create amazing videos with AI</span>
-        </Link>
-        <Link
+        </TapOnceLink>
+        <TapOnceLink
           href="/wallpapers"
+          prefetch={false}
+          warmOnIdle
+          spinner={false}
           data-track="wallpapers_clicked"
           className={cn(SHOWCASE, "bg-[radial-gradient(circle_at_30%_20%,hsl(var(--frenz-blue)),hsl(var(--frenz-violet))_45%,hsl(var(--frenz-ink))_92%)]")}
         >
@@ -239,7 +248,7 @@ export function HomeTools({ aiPromo, rotateUrls }: { aiPromo: AiPromo | null; ro
           <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/60 to-transparent" />
           <span className="relative font-heading text-[17px] font-bold">Wallpapers</span>
           <span className="relative text-[13px] leading-snug text-white/85">HD wallpapers for your screen</span>
-        </Link>
+        </TapOnceLink>
         <ToolCard href="/quests" warm icon={<CoinIcon size={18} />} title="Earn" sub="Turn activity into rewards" />
         {/*
           Exclusive (owner, 2026-10-22): open to signed-out visitors too, so its route is warmed once the page is

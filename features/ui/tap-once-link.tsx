@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { createPortal } from "react-dom";
 
+import { afterPageLoad } from "@/features/app-shell/warm-routes";
+
 /**
  * A link that goes ONCE (owner, 2026-10-07: "when I click on the earn button
  * it delays and clicks twice, opening a second quest page instead of the home
@@ -45,7 +47,7 @@ export function TapOnceLink({
   /** false for an icon-only circle: the spinner would push the icon off-centre, so its `data-pending` style shows the press instead. */
   spinner?: boolean;
   /**
-   * Also fetch the route once the page is idle (2026-10-09, owner: the AI History button
+   * Also fetch the route once the page has loaded and is idle (2026-10-09, owner: the AI History button
    * "doesn't respond on first tap"). For one important door per page only - each warm is
    * one server render.
    */
@@ -77,15 +79,16 @@ export function TapOnceLink({
     }
   };
 
+  /*
+    🔴 Only after the page's `load` event (2026-10-26, owner: "the download page and landing page are taking time
+    to load"). A bare requestIdleCallback fires in the gaps WHILE the page is still loading: measured cold on the
+    landing (Pixel 7, 4x CPU, 1.6 Mbps), /quests, /exclusive and /advertise/campaigns each pulled their route
+    payload and a dozen JS chunks from 10 s, holding the load event to 17.7 s and parsing other pages' code on
+    the main thread. The tap itself still warms on pointer-down, so nothing loses its head start.
+  */
   useEffect(() => {
     if (!warmOnIdle) return;
-    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
-    if (w.requestIdleCallback) {
-      const id = w.requestIdleCallback(warm, { timeout: 4000 });
-      return () => w.cancelIdleCallback?.(id);
-    }
-    const t = window.setTimeout(warm, 2000);
-    return () => window.clearTimeout(t);
+    return afterPageLoad(warm);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per door
   }, [warmOnIdle, href]);
 

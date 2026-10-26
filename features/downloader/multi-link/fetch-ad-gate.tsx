@@ -120,6 +120,8 @@ export function FetchAdGate({
     <FullscreenInterstitial
       key={session}
       zone="multilink_fetch_gate"
+      /* owner, 2026-10-25: a reward ad — its X is the "Reward ad X" direct-link spot */
+      directLinkSpot="rewardAdClose"
       /* `=== true`, never `!== false`: `hasAd` is three-state, and testing
          "not false" would flash the interstitial before the slot has
          reported anything. */

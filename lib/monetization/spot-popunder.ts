@@ -53,7 +53,7 @@ export const DEFAULT_SPOT_POPUNDER: SpotPopunderConfig = {
   provider: "monetag",
   snippet: OWNER_POPUNDER_SNIPPET,
   adsterraSnippet: "",
-  spots: { download: false, resultPreview: true, wallpaper: true, rewardAdClose: true, downloadAdClose: true },
+  spots: { download: false, resultPreview: true, wallpaper: true, rewardAdClose: true, downloadAdClose: true, batchSave: false },
   spotsOnly: true,
   cooldownMinutes: 30,
 };

@@ -16,6 +16,8 @@ import { Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState
 
 import { BatchAdGate, type BatchAuthorization } from "@/features/downloader/batch-ad-gate";
 import { AdSurface } from "@/features/monetization/ad-surface";
+import { useDirectLink } from "@/features/monetization/use-direct-link";
+import { useShowAds } from "@/features/monetization/use-show-ads";
 
 import { FetchAdGate } from "./fetch-ad-gate";
 import { startDownload as enqueueDownload } from "@/features/downloads/manager";
@@ -93,6 +95,12 @@ export function MultiLinkPanel({
     [state.sources],
   );
   const running = state.phase === "downloading";
+  /*
+    Owner, 2026-10-25: the free batch's save buttons are an ad spot ("batchSave": the pop-under / Monetag link / Adsterra
+    Smartlink, each with its own admin switch) — the download still runs; the link opens beside it, for members who see ads.
+  */
+  const openBatchSpot = useDirectLink("batchSave");
+  const { showAds: batchShowsAds, ready: batchAdsReady } = useShowAds();
   useBatchDownloadWatcher(dispatch, ownedTaskIds, running);
 
   // ── Open with one empty slot, and announce the open once ────────────────
@@ -511,6 +519,7 @@ export function MultiLinkPanel({
             }}
             onSelectAll={(selected) => dispatch({ type: "setSourceSelection", sourceId: source.id, selected })}
             onDownloadSource={() => void authorizeAndStart(source.items.filter((i2) => i2.selected))}
+            onSaveSpot={openBatchSpot}
             onRetrySource={() => retryFailed(source.id)}
           />
           </Fragment>
@@ -642,6 +651,10 @@ export function MultiLinkPanel({
           <div className="mt-3 flex flex-col gap-2">
             <button
               type="button"
+              data-ad-spot="batchSave"
+              onClickCapture={() => {
+                if (canDownload && !outOfBatches) openBatchSpot();
+              }}
               onClick={() => void authorizeAndStart(selectedItems(state))}
               disabled={!canDownload || outOfBatches}
               /*
@@ -666,7 +679,7 @@ export function MultiLinkPanel({
                    rather than a damaged version of on.
               */
               className={cn(
-                "inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl px-6 text-base font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+                "inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl px-6 text-base font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 relative",
                 !canDownload || outOfBatches
                   ? "cursor-not-allowed bg-secondary text-muted-foreground"
                   : "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-lg shadow-violet-600/25 hover:opacity-95 active:scale-[0.99]",
@@ -687,11 +700,21 @@ export function MultiLinkPanel({
                   {selectedCount > 0 ? ` · ${selectedCount}` : ""}
                 </>
               )}
+              {/* Owner, 2026-10-25: this button is an ad spot, so it says so — the same quiet "Ad" tag as the result card's Download button, only while ads are on and the button is ready. */}
+              {batchAdsReady && batchShowsAds && canDownload && !outOfBatches && !running && state.phase !== "authorizing" && state.phase !== "awaiting-reward" ? (
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-white/40 bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none tracking-wider text-white/90">
+                  Ad
+                </span>
+              ) : null}
             </button>
 
             {zipEligible(state) && !running ? (
               <button
                 type="button"
+                data-ad-spot="batchSave"
+                onClickCapture={() => {
+                  if (!zipping) openBatchSpot();
+                }}
                 onClick={() => void downloadZip()}
                 disabled={zipping}
                 /* Secondary, and now genuinely secondary: full width under the

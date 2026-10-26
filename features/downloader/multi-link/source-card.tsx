@@ -62,6 +62,7 @@ export const SourceCard = memo(function SourceCard({
   onSelectAll,
   onDownloadSource,
   onRetrySource,
+  onSaveSpot,
 }: {
   source: BatchSource;
   index: number;
@@ -76,6 +77,8 @@ export const SourceCard = memo(function SourceCard({
   onSelectAll: (selected: boolean) => void;
   onDownloadSource: () => void;
   onRetrySource: () => void;
+  /** 2026-10-25: the "batchSave" ad spot (the panel's opener); the download still runs. */
+  onSaveSpot?: () => void;
 }) {
   const label = `Source ${index + 1}`;
   const selected = source.items.filter((i) => i.selected).length;
@@ -281,6 +284,10 @@ export const SourceCard = memo(function SourceCard({
             </span>
             <button
               type="button"
+              data-ad-spot="batchSave"
+              onClickCapture={() => {
+                if (!disabled && selected > 0) onSaveSpot?.();
+              }}
               onClick={onDownloadSource}
               disabled={disabled || selected === 0}
               className="text-xs font-semibold text-foreground transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:opacity-40"

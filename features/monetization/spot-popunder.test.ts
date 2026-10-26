@@ -136,7 +136,7 @@ describe("Adsterra at the spots (owner, 2026-10-24: \"I want to try adsterra out
 
 describe("the config — OFF unless an admin switched it on", () => {
   it("default OFF, the owner's zone still pre-filled; nothing is served while off", () => {
-    expect(DEFAULT_SPOT_POPUNDER).toEqual({ enabled: false, provider: "monetag", snippet: OWNER_POPUNDER_SNIPPET, adsterraSnippet: "", spots: { download: false, resultPreview: true, wallpaper: true, rewardAdClose: true, downloadAdClose: true }, spotsOnly: true, cooldownMinutes: 30 });
+    expect(DEFAULT_SPOT_POPUNDER).toEqual({ enabled: false, provider: "monetag", snippet: OWNER_POPUNDER_SNIPPET, adsterraSnippet: "", spots: { download: false, resultPreview: true, wallpaper: true, rewardAdClose: true, downloadAdClose: true, batchSave: false }, spotsOnly: true, cooldownMinutes: 30 });
     expect(publicSpotPopunder(DEFAULT_SPOT_POPUNDER, true)).toBeNull();
     expect(publicSpotPopunder(undefined, true)).toBeNull();
   });

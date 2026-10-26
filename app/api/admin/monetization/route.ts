@@ -38,6 +38,7 @@ const spotsSchema = (d: Record<DirectLinkSpot, boolean>) =>
       wallpaper: z.boolean().default(d.wallpaper),
       rewardAdClose: z.boolean().default(d.rewardAdClose),
       downloadAdClose: z.boolean().default(d.downloadAdClose),
+      batchSave: z.boolean().default(d.batchSave),
     })
     .default(d);
 

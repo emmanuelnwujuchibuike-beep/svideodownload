@@ -29,7 +29,7 @@
  * button, the general result" — each separately switchable). Before, one `adClose` spot covered both ad X buttons and
  * the result card's Download button was no spot at all; a saved `adClose` choice is read as both X spots.
  */
-export const DIRECT_LINK_SPOTS = ["download", "resultPreview", "wallpaper", "rewardAdClose", "downloadAdClose"] as const;
+export const DIRECT_LINK_SPOTS = ["download", "resultPreview", "wallpaper", "rewardAdClose", "downloadAdClose", "batchSave"] as const;
 export type DirectLinkSpot = (typeof DIRECT_LINK_SPOTS)[number];
 
 /** What the admin reads for each spot. */
@@ -39,6 +39,8 @@ export const DIRECT_LINK_SPOT_LABELS: Record<DirectLinkSpot, { label: string; hi
   wallpaper: { label: "Wallpaper download", hint: "A tap around the wallpaper viewer's Download button" },
   rewardAdClose: { label: "Reward ad X", hint: "The X / Skip of the reward ads (wallpaper reward, sponsor reward video)" },
   downloadAdClose: { label: "Download-complete ad X", hint: "The X / Skip of the Download complete and other full-screen ads" },
+  // owner, 2026-10-25: the free Batch download save buttons (Download selected, Save as ZIP, Download source)
+  batchSave: { label: "Batch download save", hint: "The Download selected, Save as ZIP and Download source buttons of the free Batch download" },
 };
 
 /** The ad X spot a full-screen ad uses: the reward ads have their own switch. */
@@ -82,7 +84,8 @@ export const DEFAULT_DIRECT_LINK: DirectLinkConfig = {
   url: "",
   // the ad X spots (owner, 2026-10-19): the Download complete and reward ads' close control — see FullscreenInterstitial.
   // The result card's Download button (2026-10-24) starts OFF: it was never a spot before.
-  spots: { download: false, resultPreview: true, wallpaper: true, rewardAdClose: true, downloadAdClose: true },
+  // batchSave (2026-10-25) is new, so it starts OFF for the Monetag link — the owner asked for the Smartlink there
+  spots: { download: false, resultPreview: true, wallpaper: true, rewardAdClose: true, downloadAdClose: true, batchSave: false },
   chancePercent: 50,
 };
 
@@ -146,7 +149,9 @@ export interface AdsterraSmartlinkConfig {
 export const DEFAULT_ADSTERRA_SMARTLINK: AdsterraSmartlinkConfig = {
   enabled: false,
   url: "",
-  spots: { download: false, resultPreview: false, wallpaper: false, rewardAdClose: false, downloadAdClose: false },
+  // owner, 2026-10-25: "put the adsterra smartlink on the free batch downloads save buttons" — ON by default (a stored
+  // config without the key gets this; the admin switch still turns it off)
+  spots: { download: false, resultPreview: false, wallpaper: false, rewardAdClose: false, downloadAdClose: false, batchSave: true },
   chancePercent: 50,
 };
 

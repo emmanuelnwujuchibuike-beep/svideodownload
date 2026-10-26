@@ -53,8 +53,22 @@ describe("the ad close control's direct link", () => {
     }
   });
 
+  it("owner, 2026-10-25: the free batch — its reward gates' X and its save buttons are spots; the save button says 'Ad'", () => {
+    // the batch gate is a reward ad, the after-batch ad a download-complete ad; the multi-link fetch gate a reward ad
+    expect(src("features/downloader/batch-ad-gate.tsx")).toContain('directLinkSpot={isGate ? "rewardAdClose" : "downloadAdClose"}');
+    expect(src("features/downloader/multi-link/fetch-ad-gate.tsx")).toContain('directLinkSpot="rewardAdClose"');
+    // Download selected + Save as ZIP in the panel, Download source on each card — all the "batchSave" spot
+    const panel = src("features/downloader/multi-link/multi-link-panel.tsx");
+    expect(panel).toContain('const openBatchSpot = useDirectLink("batchSave");');
+    expect(panel.match(/data-ad-spot="batchSave"/g)).toHaveLength(2);
+    expect(panel).toContain("onSaveSpot={openBatchSpot}");
+    expect(src("features/downloader/multi-link/source-card.tsx")).toContain('data-ad-spot="batchSave"');
+    // the quiet "Ad" tag on Download selected, only while ads are on (never for a member who doesn't see ads)
+    expect(panel).toMatch(/batchAdsReady && batchShowsAds && canDownload[\s\S]{0,400}>\s*Ad\s*</);
+  });
+
   it("the admin can switch it off — its own spot, saved and served like the others", () => {
-    expect(DIRECT_LINK_SPOTS).toEqual(["download", "resultPreview", "wallpaper", "rewardAdClose", "downloadAdClose"]);
+    expect(DIRECT_LINK_SPOTS).toEqual(["download", "resultPreview", "wallpaper", "rewardAdClose", "downloadAdClose", "batchSave"]);
     // the admin's switches are one per spot (SpotSwitches), the save validates every spot
     expect(src("features/admin/monetization-settings.tsx")).toContain("{DIRECT_LINK_SPOTS.map((id) => (");
     expect(src("app/api/admin/monetization/route.ts")).toContain("downloadAdClose: z.boolean().default(d.downloadAdClose)");

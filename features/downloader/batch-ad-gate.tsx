@@ -401,6 +401,8 @@ export function BatchAdGate({
   return (
     <FullscreenInterstitial
       zone={isGate ? "batch_download_gate" : "batch_download_complete"}
+      /* owner, 2026-10-25: the X of the batch ads is a direct-link spot too — the gate is a reward ad, the after-batch ad a download-complete ad (each with its own admin switch) */
+      directLinkSpot={isGate ? "rewardAdClose" : "downloadAdClose"}
       /*
         ── `=== true`, NEVER `!== false` (owner, 2026-08-09) ─────────────────
         `hasAd` is THREE-STATE: `null` = the slot has not answered yet, `false`

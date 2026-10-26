@@ -10,7 +10,7 @@ import { useStickyState } from "@/features/ui/use-sticky-state";
 
 import { type TransferQuote, type WalletSummary, walletApi } from "./api";
 import { CoinAmount } from "./coin-amount";
-import { dateTimeLabel, fc, newKey, parseCoinInput, walletDigits, walletNumber } from "./money";
+import { dateTimeLabel, fc, newKey, parseCoinInput, transferFeeNotice, walletDigits, walletNumber } from "./money";
 import { amountProblem, failMessage, transferGate } from "./state";
 import { invalidateCoinGlance } from "./coin-glance";
 import { TapPending } from "./tap-pending";
@@ -256,7 +256,7 @@ export function WalletTransfer({ summary, preset = null }: { summary: WalletSumm
       </label>
 
       <Notice tone="info" className="mt-4">
-        Fees are worked out when you review: 10% plus $1 under $100, 10% from $100 to $500, and 10% plus $5 above $500. The fee is added on top — they receive the full amount.
+        {transferFeeNotice(summary.transfers.fee)}
       </Notice>
 
       {quoteError ? <div className="mt-3">{quoteError.expired ? <SessionExpired next="/wallet/transfer" /> : <Notice tone="error">{quoteError.msg}</Notice>}</div> : null}

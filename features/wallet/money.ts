@@ -31,6 +31,45 @@ export function usd(cents: number): string {
   return `${sign}$${COIN_FMT.format(Math.abs(Math.trunc(cents)) / 100)}`;
 }
 
+/** "$1" / "$1.50" / "$1,000" — a fee or a threshold in a sentence: no ".00" on whole dollars. */
+export function dollars(cents: number): string {
+  const c = Math.abs(Math.trunc(cents));
+  return `$${c % 100 === 0 ? (c / 100).toLocaleString("en-US") : COIN_FMT.format(c / 100)}`;
+}
+
+/** The transfer fee rules the admin set (frenzCoin.transfers), as the wallet summary sends them. */
+export interface TransferFeeRules {
+  percentBp: number;
+  lowThresholdCents: number;
+  highThresholdCents: number;
+  flatBelowCents: number;
+  flatMidCents: number;
+  flatAboveCents: number;
+}
+
+/**
+ * The transfer fee rule in words, built from the ADMIN'S numbers (owner, 2026-10-26: the fee card "should not be
+ * hardcoded, it should change with whatever is set in admin dashboard"). Words only — the figure a member pays is
+ * still priced by the server at review. "10% plus $1 under $100, 10% from $100 to $500, and 10% plus $5 above $500".
+ */
+export function transferFeeWords(f: TransferFeeRules): string {
+  const pct = f.percentBp > 0 ? `${Number((f.percentBp / 100).toFixed(2))}%` : "";
+  const part = (flat: number) => (pct && flat > 0 ? `${pct} plus ${dollars(flat)}` : pct || (flat > 0 ? dollars(flat) : "no fee"));
+  const [below, mid, above] = [part(f.flatBelowCents), part(f.flatMidCents), part(f.flatAboveCents)];
+  if (below === mid && mid === above) return `${below} on every transfer`;
+  const low = dollars(f.lowThresholdCents);
+  const high = dollars(f.highThresholdCents);
+  const middle = f.lowThresholdCents === f.highThresholdCents ? `${mid} at ${low}` : `${mid} from ${low} to ${high}`;
+  return `${below} under ${low}, ${middle}, and ${above} above ${high}`;
+}
+
+/** The whole notice: how the fee works, or that there is none. */
+export function transferFeeNotice(f: TransferFeeRules): string {
+  const free = f.percentBp <= 0 && f.flatBelowCents <= 0 && f.flatMidCents <= 0 && f.flatAboveCents <= 0;
+  if (free) return "Transfers are free — they receive the full amount.";
+  return `Fees are worked out when you review: ${transferFeeWords(f)}. The fee is added on top — they receive the full amount.`;
+}
+
 /** "+50.00" / "−56.00" — a signed coin amount for activity rows. */
 export function signedCoins(cents: number, centsPerCoin = 100): string {
   if (cents === 0) return "0.00";

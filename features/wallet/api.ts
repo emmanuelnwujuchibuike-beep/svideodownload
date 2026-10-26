@@ -7,6 +7,8 @@
  * screen can offer "sign in again" instead of a generic error. `error` is the server's own wording when it sent one.
  */
 
+import type { TransferFeeRules } from "./money";
+
 export type ApiFail = { ok: false; status: number; reason: string | null; error: string; session?: "expired" };
 export type ApiResult<T> = { ok: true; data: T } | ApiFail;
 
@@ -47,7 +49,7 @@ export interface WalletSummary {
   pendingDeposits: { amountCents: number; settledAt: string; releaseAt: string; status: "held" | "disputed" }[];
   nextReleaseAt: string | null;
   deposits: { enabled: boolean; holdHours: number; minCents: number; maxCents: number };
-  transfers: { enabled: boolean; canSend: boolean; blockedBy: "disabled" | "authorization_unavailable" | "pin_not_set" | "pin_locked" | null; pin: { set: boolean; lockedUntil: string | null }; minCents: number; maxCents: number; dailyMaxCents: number; feeExamples: { amountCents: number; feeCents: number; totalCents: number }[] };
+  transfers: { enabled: boolean; canSend: boolean; blockedBy: "disabled" | "authorization_unavailable" | "pin_not_set" | "pin_locked" | null; pin: { set: boolean; lockedUntil: string | null }; minCents: number; maxCents: number; dailyMaxCents: number; feeExamples: { amountCents: number; feeCents: number; totalCents: number }[]; fee: TransferFeeRules };
   withdrawals: { enabled: boolean; percentBp: number; flatCents: number; minCents: number; maxCents: number; payoutRateApproved: boolean; example: { grossCents: number; feeCents: number; netCents: number } };
 }
 

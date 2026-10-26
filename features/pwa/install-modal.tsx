@@ -2,6 +2,7 @@
 
 import { Check, ChevronRight, Compass, Download, ExternalLink, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { ANDROID_APK_PATH, apkAvailable } from "@/lib/pwa/android-apk";
@@ -283,7 +284,16 @@ export function InstallModal({ onClose }: { onClose: () => void }) {
     // steps already on screen rather than closing on a dead end.
   };
 
-  return (
+  /*
+    Portalled to <body> (owner, 2026-10-26, with a screenshot: the bottom nav covered the sheet's
+    "Got it"). The sheet is opened from the header, whose blurred chrome is a containing block — a
+    `fixed` layer inside it is trapped in the header's stacking context, so its own z-[120] lost to
+    the nav. SYNCHRONOUSLY, not through components/ui/portal.tsx: that one renders nothing until its
+    own effect, and the focus effect above runs on the first render — it would find no dialog to
+    focus. This sheet only ever mounts after a tap, so `document` always exists here.
+  */
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
       className={cn(
         "fixed inset-0 z-[120] flex items-end justify-center sm:items-center",
@@ -508,6 +518,7 @@ export function InstallModal({ onClose }: { onClose: () => void }) {
           </p>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

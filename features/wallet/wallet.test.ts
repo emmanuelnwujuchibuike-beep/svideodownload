@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,7 +18,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }), usePathname: () => "/wallet" }));
 
-const { coins, fc, signedFc, parseCoinInput, signedCoins, walletNumber, groupByDay, newKey, coinParts, releaseLabel } = await import("./money");
+const { coins, fc, signedFc, parseCoinInput, signedCoins, walletNumber, groupByDay, newKey, coinParts, releaseLabel, transferFeeNotice, transferFeeWords } = await import("./money");
+const code = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 const { CoinAmount } = await import("./coin-amount");
 const { transferGate, withdrawGate, depositGate, amountProblem, depositVerifyView, withdrawalStatusView, entryDirection, failMessage } = await import("./state");
 const { walletApi, wasAborted } = await import("./api");
@@ -41,7 +45,7 @@ function summary(over: Partial<Summary> = {}, t: Partial<Summary["transfers"]> =
     pendingDeposits: [{ amountCents: 5_000, settledAt: "2026-10-24T10:00:00Z", releaseAt: "2026-10-27T10:00:00Z", status: "held" }],
     nextReleaseAt: "2026-10-27T10:00:00Z",
     deposits: { enabled: true, holdHours: 1, minCents: 100, maxCents: 500_000 },
-    transfers: { enabled: true, canSend: true, blockedBy: null, pin: { set: true, lockedUntil: null }, minCents: 100, maxCents: 500_000, dailyMaxCents: 1_000_000, feeExamples: [] },
+    transfers: { enabled: true, canSend: true, blockedBy: null, pin: { set: true, lockedUntil: null }, minCents: 100, maxCents: 500_000, dailyMaxCents: 1_000_000, feeExamples: [], fee: { percentBp: 1_000, lowThresholdCents: 10_000, highThresholdCents: 50_000, flatBelowCents: 100, flatMidCents: 0, flatAboveCents: 500 } },
     withdrawals: { enabled: true, percentBp: 600, flatCents: 0, minCents: 500, maxCents: 500_000, payoutRateApproved: true, example: { grossCents: 10_000, feeCents: 600, netCents: 9_400 } },
   };
   return { ...base, ...over, transfers: { ...base.transfers, ...t }, withdrawals: { ...base.withdrawals, ...w } };
@@ -246,8 +250,22 @@ describe("first paint of each screen (server-rendered markup)", () => {
   it("transfer allowed: the form, the fee rule in words, and NO client-computed fee figure", () => {
     const t = html(createElement(WalletTransfer, { summary: summary() }));
     expect(t).toContain("Review transfer");
-    expect(t).toContain("10% plus $1 under $100");
+    expect(t).toContain("10% plus $1 under $100, 10% from $100 to $500, and 10% plus $5 above $500");
     expect(t).not.toMatch(/Fee<\/dt><dd[^>]*>\d/);
+  });
+
+  it("🔴 the fee notice follows the ADMIN's numbers, never a hard-coded sentence (owner, 2026-10-26)", () => {
+    const fee = { percentBp: 250, lowThresholdCents: 5_000, highThresholdCents: 20_000, flatBelowCents: 50, flatMidCents: 0, flatAboveCents: 1_000 };
+    const t = html(createElement(WalletTransfer, { summary: summary({}, { fee }) }));
+    expect(t).toContain("2.5% plus $0.50 under $50, 2.5% from $50 to $200, and 2.5% plus $10 above $200");
+    expect(t).not.toContain("10%");
+    expect(code("features/wallet/wallet-transfer.tsx")).not.toMatch(/\d+% plus \$\d/);
+  });
+
+  it("the fee notice in its edge cases: one rule for every amount, flat only, and free", () => {
+    expect(transferFeeNotice({ percentBp: 1_000, lowThresholdCents: 10_000, highThresholdCents: 50_000, flatBelowCents: 100, flatMidCents: 100, flatAboveCents: 100 })).toContain("10% plus $1 on every transfer");
+    expect(transferFeeWords({ percentBp: 0, lowThresholdCents: 10_000, highThresholdCents: 50_000, flatBelowCents: 100, flatMidCents: 200, flatAboveCents: 300 })).toBe("$1 under $100, $2 from $100 to $500, and $3 above $500");
+    expect(transferFeeNotice({ percentBp: 0, lowThresholdCents: 10_000, highThresholdCents: 50_000, flatBelowCents: 0, flatMidCents: 0, flatAboveCents: 0 })).toBe("Transfers are free — they receive the full amount.");
   });
 
   it("withdraw with no approved payout rate: unavailable, past requests still listed, bank returns explained", () => {

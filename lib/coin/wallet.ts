@@ -47,6 +47,8 @@ export interface CoinWalletSummary {
     maxCents: number;
     dailyMaxCents: number;
     feeExamples: { amountCents: number; feeCents: number; totalCents: number }[];
+    /** The admin's fee rules, so the transfer screen describes the fee it will be quoted (2026-10-26). */
+    fee: { percentBp: number; lowThresholdCents: number; highThresholdCents: number; flatBelowCents: number; flatMidCents: number; flatAboveCents: number };
   };
   /** closeout: withdrawals — the fee is taken FROM the gross; payouts need an approved naira rate (an owner decision) */
   withdrawals: {
@@ -104,6 +106,7 @@ export async function coinWalletSummary(userId: string, config: FrenzCoinConfig)
         const f = coinTransferFee(a, t);
         return { amountCents: a, feeCents: f.feeCents, totalCents: f.totalDebitCents };
       }),
+      fee: { percentBp: t.percentBp, lowThresholdCents: t.lowThresholdCents, highThresholdCents: t.highThresholdCents, flatBelowCents: t.flatBelowCents, flatMidCents: t.flatMidCents, flatAboveCents: t.flatAboveCents },
     },
     withdrawals: (() => {
       const wd = config.withdrawals;

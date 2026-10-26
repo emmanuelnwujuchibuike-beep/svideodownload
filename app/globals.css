@@ -704,6 +704,32 @@
     .shimmer::after { animation: none; }
   }
 
+  /* PressIcon (components/motion/press-icon.tsx) — a glyph that presses INTO the surface on tap and pops when
+     its tab becomes active. CSS, not framer-motion (2026-10-26): the bottom nav is on every marketing page, and
+     the 121 kB motion library it pulled was in the landing's and every downloader page's first scripts. A CSS
+     press also answers before the page's JavaScript has arrived. */
+  .frenz-press-icon {
+    transition: transform var(--dur-fast) var(--ease-spring);
+  }
+  .frenz-press-icon:active {
+    transform: translateY(1px) scale(0.78);
+  }
+  .frenz-press-icon[data-active] {
+    animation: frenz-press-pop var(--dur-slow) var(--ease-out);
+  }
+  @keyframes frenz-press-pop {
+    0%   { transform: scale(1); }
+    25%  { transform: translateY(-2px) scale(1.22); }
+    50%  { transform: scale(0.96); }
+    75%  { transform: scale(1.04); }
+    100% { transform: scale(1); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .frenz-press-icon { transition: none; }
+    .frenz-press-icon[data-active] { animation: none; }
+    .frenz-press-icon:active { transform: none; }
+  }
+
   /* ══════════════════════════════════════════════════════════════════════
      FRENZ AI — the environment's motion vocabulary
      ══════════════════════════════════════════════════════════════════════

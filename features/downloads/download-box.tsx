@@ -16,6 +16,7 @@ import { useGatewayMemory } from "@/features/download-hub/use-gateway-memory";
 import { useDownloader } from "@/features/downloader/use-downloader";
 import { useScrollToResult } from "@/features/downloader/use-result-scroll";
 import { onDownloadCompleted, startDownload } from "@/features/downloads/manager";
+import { useHasDownloadActivity, warmFloatingProgress } from "@/features/downloads/use-download-activity";
 import { useHistory } from "@/features/history/use-history";
 import { limitForPlan, totalUsedBytes } from "@/features/history/usage";
 import { getAutoDownload, getPreferredQuality } from "@/lib/download-hub/auto-download";
@@ -25,7 +26,7 @@ import { pickFormat } from "@/lib/download-hub/context";
    `detectPlatform` is still needed, for the live "Detected …" line. */
 import { detectPlatform, platformLinkPhrase } from "@/lib/platforms";
 import { cn } from "@/lib/utils";
-import { sourceUrlSchema } from "@/lib/validation";
+import { checkSourceUrl } from "@/lib/source-url";
 import type { MediaKind, PlatformId } from "@/types";
 
 /*
@@ -173,6 +174,7 @@ export function DownloadBox({
   useEffect(() => onDownloadCompleted(() => setCompleteAdOpen(true)), []);
 
   const isBusy = status === "fetching";
+  const hasDownloadActivity = useHasDownloadActivity();
 
   /*
     A resolved fetch now TAKES the user to the result card (owner, 2026-08-25).
@@ -186,13 +188,14 @@ export function DownloadBox({
   useScrollToResult(resultRef, metadata?.id);
 
   const startFetch = () => {
-    const parsed = sourceUrlSchema.safeParse(url);
-    if (!parsed.success) {
-      setValidationError(parsed.error.issues[0]?.message ?? "Invalid URL.");
+    const checked = checkSourceUrl(url);
+    if (!checked.ok) {
+      setValidationError(checked.message);
       return;
     }
     setValidationError(null);
-    void fetchMetadata(parsed.data);
+    warmFloatingProgress();
+    void fetchMetadata(checked.url);
   };
 
   // Prefill + auto-fetch from a ?u= link (the home Download bars route here).
@@ -200,8 +203,10 @@ export function DownloadBox({
     const u = new URLSearchParams(window.location.search).get("u");
     if (!u) return;
     setUrl(u);
-    const parsed = sourceUrlSchema.safeParse(u);
-    if (parsed.success) void fetchMetadata(parsed.data);
+    const checked = checkSourceUrl(u);
+    if (!checked.ok) return;
+    warmFloatingProgress();
+    void fetchMetadata(checked.url);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -617,24 +622,29 @@ export function DownloadBox({
       ) : null}
 
       {/* Live progress / completion card (singleton — no-op if the app shell
-          already mounted one). */}
-      <FloatingDownloadProgress />
+          already mounted one). Mounted only once this tab has a download: rendering it
+          fetches its code, and framer-motion with it, on every visit (2026-10-26). */}
+      {hasDownloadActivity ? <FloatingDownloadProgress /> : null}
 
       {/* After-download ad — renders nothing until a transfer completes AND the
           download_complete zone is filled. */}
       <DownloadCompleteAd open={completeAdOpen} onClose={() => setCompleteAdOpen(false)} />
 
-      {/* Plan storage gate — upgrade or clear when over the ceiling. */}
-      <QuotaGate
-        open={gate.open}
-        usedBytes={gate.usedBytes}
-        count={gate.count}
-        limitBytes={gate.limitBytes}
-        plan={plan}
-        signedIn={!!user}
-        onClearHistory={clearHistory}
-        onClose={() => setGate((g) => ({ ...g, open: false }))}
-      />
+      {/* Plan storage gate — upgrade or clear when over the ceiling. Mounted on its first open, as the
+          public downloader does: rendering it fetched its code and framer-motion on every visit (2026-10-26).
+          `limitBytes` is 0 until the gate has opened once, and stays set so a close can animate. */}
+      {gate.open || gate.limitBytes > 0 ? (
+        <QuotaGate
+          open={gate.open}
+          usedBytes={gate.usedBytes}
+          count={gate.count}
+          limitBytes={gate.limitBytes}
+          plan={plan}
+          signedIn={!!user}
+          onClearHistory={clearHistory}
+          onClose={() => setGate((g) => ({ ...g, open: false }))}
+        />
+      ) : null}
     </div>
   );
 }

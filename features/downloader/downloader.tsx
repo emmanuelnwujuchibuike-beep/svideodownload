@@ -34,7 +34,8 @@ import { ResultOffer } from "@/features/monetization/result-offer";
 import { useUser } from "@/features/auth/use-user";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { PLATFORMS, detectPlatform } from "@/lib/platforms";
-import { sourceUrlSchema } from "@/lib/validation";
+import { useHasDownloadActivity, warmFloatingProgress } from "@/features/downloads/use-download-activity";
+import { checkSourceUrl } from "@/lib/source-url";
 import type { MediaKind, PlatformId } from "@/types";
 
 import type { DownloadOptions } from "./preview-card";
@@ -150,6 +151,7 @@ export function Downloader({
   // a single tick, so nothing is missed.
   const [chromeReady, setChromeReady] = useState(false);
   useEffect(() => setChromeReady(true), []);
+  const hasDownloadActivity = useHasDownloadActivity();
 
   const isBusy = status === "fetching";
   const detected = url ? detectPlatform(url) : null;
@@ -356,13 +358,14 @@ export function Downloader({
   };
 
   const startFetch = () => {
-    const parsed = sourceUrlSchema.safeParse(url);
-    if (!parsed.success) {
-      setValidationError(parsed.error.issues[0]?.message ?? "Invalid URL.");
+    const checked = checkSourceUrl(url);
+    if (!checked.ok) {
+      setValidationError(checked.message);
       return;
     }
     setValidationError(null);
-    void fetchMetadata(parsed.data);
+    warmFloatingProgress();
+    void fetchMetadata(checked.url);
   };
 
   const handleSubmit = (e: FormEvent) => {
@@ -738,7 +741,9 @@ export function Downloader({
           mount alongside the app shell's own copy; first mount wins). Needed
           here since Downloader also renders on public pages outside the
           signed-in app shell, which is the only place AppOverlays mounts it. */}
-      {chromeReady ? <FloatingDownloadProgress /> : null}
+      {/* …and only once this tab has a download: rendering it fetched its code and framer-motion on
+          every visit while the page was still loading (2026-10-26, use-download-activity.ts). */}
+      {chromeReady && hasDownloadActivity ? <FloatingDownloadProgress /> : null}
 
       {/* In-browser review player — loads after hydration, renders only when a
           download is opened for review (see ReviewPlayerMount).

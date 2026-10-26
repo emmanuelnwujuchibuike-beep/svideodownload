@@ -1,9 +1,6 @@
-"use client";
-
-import { motion, useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
 
-import { springs } from "@/lib/motion/springs";
+import { cn } from "@/lib/utils";
 
 /**
  * Frenz Motion wrapper for interactive glyphs: a physical "press into the
@@ -12,6 +9,11 @@ import { springs } from "@/lib/motion/springs";
  * whenever `active` flips on (a lift, not just a resize — reads as the icon
  * becoming raised/selected rather than merely growing). Respects
  * prefers-reduced-motion by disabling both.
+ *
+ * Pure CSS (`.frenz-press-icon` in globals.css) since 2026-10-26: this sits in the
+ * bottom nav on every marketing page, and as a framer-motion component it put the
+ * whole motion library into the landing's first scripts. The pop replays because
+ * `data-active` is newly set when the tab becomes active.
  */
 export function PressIcon({
   active = false,
@@ -22,19 +24,12 @@ export function PressIcon({
   className?: string;
   children: ReactNode;
 }) {
-  const reduceMotion = useReducedMotion();
-
   return (
-    <motion.span
-      // No default `display` here on purpose: an inline style would beat any
-      // `hidden`/`sm:*` visibility class a caller passes in `className` (inline
-      // styles always win over classes), silently breaking responsive show/hide.
-      className={className}
-      whileTap={reduceMotion ? undefined : { scale: 0.78, y: 1 }}
-      animate={reduceMotion ? undefined : active ? { scale: [1, 1.22, 0.96, 1.04, 1], y: [0, -2, 0, 0, 0] } : { scale: 1, y: 0 }}
-      transition={reduceMotion ? { duration: 0 } : springs.bounce}
-    >
+    // No default `display` here on purpose: a display class or inline style could beat a
+    // `hidden`/`sm:*` visibility class a caller passes in `className`, silently breaking
+    // responsive show/hide.
+    <span className={cn("frenz-press-icon", className)} data-active={active ? "" : undefined}>
       {children}
-    </motion.span>
+    </span>
   );
 }

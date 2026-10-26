@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef } from "react";
 
 import { getPreferredQuality } from "@/lib/download-hub/auto-download";
-import { sourceUrlSchema } from "@/lib/validation";
+import { checkSourceUrl } from "@/lib/source-url";
 import type { ApiError, VideoMetadata } from "@/types";
 
 import type { BatchAction, BatchSource } from "./state";
@@ -67,16 +67,16 @@ export function useBatchFetch(
 
   const fetchSource = useCallback(
     async (source: BatchSource): Promise<void> => {
-      const parsed = sourceUrlSchema.safeParse(source.url);
-      if (!parsed.success) {
+      const checked = checkSourceUrl(source.url);
+      if (!checked.ok) {
         dispatch({
           type: "fetchError",
           sourceId: source.id,
-          message: parsed.error.issues[0]?.message ?? "Please enter a valid supported link.",
+          message: checked.message,
         });
         return;
       }
-      const url = parsed.data;
+      const url = checked.url;
 
       // Already extracted this exact link in this session — reuse it rather
       // than paying for the same extraction twice.

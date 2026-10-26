@@ -12,9 +12,13 @@ import {
   markThreadReadByAdmin,
   postAdminReply,
   postUserMessage,
+  searchSupportRecipients,
+  startSupportEmail,
   type AdminSupportThread,
   type MySupportThread,
+  type StartSupportEmailResult,
   type SupportMessage,
+  type SupportRecipient,
 } from "@/lib/support/chat";
 import { createClient } from "@/lib/supabase/server";
 
@@ -89,6 +93,25 @@ export async function adminClearThread(threadId: string): Promise<{ ok: boolean 
   if (!admin) return { ok: false };
   await deleteThreadById(threadId);
   return { ok: true };
+}
+
+/** Admin: members matching a handle, name or email — the "New email" picker. */
+export async function adminFindRecipients(query: string): Promise<SupportRecipient[]> {
+  const admin = await getAdminUser();
+  if (!admin) return [];
+  return searchSupportRecipients(String(query ?? ""));
+}
+
+/** Admin: email a member (or any address) from support@frenzsave.com — they never had to write first. */
+export async function adminStartSupportEmail(input: { userId?: string | null; email?: string | null; subject: string; body: string }): Promise<StartSupportEmailResult> {
+  const admin = await getAdminUser();
+  if (!admin) return { ok: false, error: "Not authorised." };
+  return startSupportEmail(admin.id, {
+    userId: typeof input?.userId === "string" ? input.userId : null,
+    email: typeof input?.email === "string" ? input.email : null,
+    subject: String(input?.subject ?? ""),
+    body: String(input?.body ?? ""),
+  });
 }
 
 /** Admin: reply to a thread. */

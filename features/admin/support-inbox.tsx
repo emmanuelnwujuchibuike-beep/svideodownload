@@ -1,6 +1,7 @@
 "use client";
 
-import { Headset, Send, Trash2 } from "lucide-react";
+import { Headset, Mail, Send, Trash2 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -13,6 +14,9 @@ import type { AdminSupportThread, SupportMessage } from "@/lib/support/chat";
 import { cn } from "@/lib/utils";
 
 import { useAdminLive } from "./live/use-admin-live";
+
+// "New email" (2026-10-26) — fetched the first time an admin opens it
+const SupportCompose = dynamic(() => import("./support-compose").then((m) => m.SupportCompose), { ssr: false });
 
 /**
  * The admin side of Support Chat — a two-pane inbox: threads on the left (newest
@@ -60,6 +64,7 @@ export function SupportInbox() {
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [composing, setComposing] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
 
   const refreshThreads = useCallback(async () => {
@@ -152,11 +157,21 @@ export function SupportInbox() {
     <div className="grid gap-4 md:grid-cols-[300px_1fr]">
       {/* Thread list */}
       <div className="rounded-2xl border border-border/60 bg-card">
-        <div className="border-b border-border/60 px-4 py-3">
-          <p className="text-sm font-bold">Conversations</p>
-          <p className="text-xs text-muted-foreground">
-            {loaded ? `${threads.length} total` : "Loading…"}
-          </p>
+        <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold">Conversations</p>
+            <p className="text-xs text-muted-foreground">
+              {loaded ? `${threads.length} total` : "Loading…"}
+            </p>
+          </div>
+          {/* email anyone from support@ — they don't have to have written first */}
+          <button
+            type="button"
+            onClick={() => setComposing(true)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-br from-blue-600 to-violet-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition active:scale-95"
+          >
+            <Mail className="h-3.5 w-3.5" /> New email
+          </button>
         </div>
         <div className="max-h-[32rem] overflow-y-auto">
           {loaded && threads.length === 0 ? (
@@ -208,7 +223,16 @@ export function SupportInbox() {
 
       {/* Conversation */}
       <div className="flex h-[36rem] flex-col rounded-2xl border border-border/60 bg-card">
-        {active ? (
+        {composing ? (
+          <SupportCompose
+            onClose={() => setComposing(false)}
+            onSent={(threadId) => {
+              // a member's email opened (or added to) their conversation: it joins the list
+              void refreshThreads();
+              if (threadId) setActiveId(threadId);
+            }}
+          />
+        ) : active ? (
           <>
             <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-xs font-bold text-white">

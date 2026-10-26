@@ -13,12 +13,15 @@ import { SITE_URL } from "@/lib/site";
 const API_KEY = process.env.RESEND_API_KEY;
 const FROM = process.env.RESEND_FROM || "Frenz <login@frenzsave.com>";
 const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "support@frenzsave.com";
+// The support desk's own sender (2026-10-26, owner: "send them an email with the support@frenzsave.com mail") — the same
+// verified frenzsave.com domain as RESEND_FROM, so Resend accepts it without another domain.
+const SUPPORT_FROM = process.env.SUPPORT_FROM || `Frenz Support <${SUPPORT_EMAIL}>`;
 // Keep in sync with Supabase Auth's "Email OTP expiration" setting.
 const EXPIRY_MINUTES = Number(process.env.OTP_EXPIRY_MINUTES || 60);
 
 export const hasResend = !!API_KEY;
 
-async function send(to: string, subject: string, html: string, text: string, headers?: Record<string, string>): Promise<boolean> {
+async function send(to: string, subject: string, html: string, text: string, headers?: Record<string, string>, from: string = FROM): Promise<boolean> {
   if (!API_KEY) return false;
   try {
     const res = await fetch("https://api.resend.com/emails", {
@@ -27,7 +30,7 @@ async function send(to: string, subject: string, html: string, text: string, hea
       // A real reply_to (instead of a dead-end noreply) and a from display
       // name that matches the subject's brand mention both read as more
       // trustworthy to spam filters than a bare transactional blast.
-      body: JSON.stringify({ from: FROM, to: [to], subject, html, text, reply_to: SUPPORT_EMAIL, ...(headers ? { headers } : {}) }),
+      body: JSON.stringify({ from, to: [to], subject, html, text, reply_to: SUPPORT_EMAIL, ...(headers ? { headers } : {}) }),
     });
     return res.ok;
   } catch {
@@ -147,6 +150,8 @@ export function sendProductEmail(
      * security email never carries it. Must be an https URL on this site.
      */
     unsubscribeUrl?: string;
+    /** "support": sent from the support desk (Frenz Support <support@frenzsave.com>) — an admin's own email to a member. */
+    sender?: "support";
   },
 ): Promise<boolean> {
   const year = new Date().getFullYear();
@@ -211,7 +216,7 @@ export function sendProductEmail(
 
   const text = `${opts.heading}\n\n${opts.intro}${opts.body ? `\n\n${opts.body}` : ""}${opts.ctaHref ? `\n\n${opts.ctaLabel ?? "Open"}: ${opts.ctaHref}` : ""}\n\nNeed more help? ${SUPPORT_EMAIL}\n(c) ${year} Frenz.${unsub ? `\nUnsubscribe from optional emails: ${unsub}` : ""}`;
 
-  return send(to, opts.subject, html, text, unsub ? { "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } : undefined);
+  return send(to, opts.subject, html, text, unsub ? { "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } : undefined, opts.sender === "support" ? SUPPORT_FROM : FROM);
 }
 
 /* ────────────────────────────────────────────────────────────────────────────

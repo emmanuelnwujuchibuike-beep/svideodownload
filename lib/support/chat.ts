@@ -209,6 +209,116 @@ export async function postAdminReply(adminId: string, threadId: string, body: st
   return msg ? (mapMessages([msg])[0] ?? null) : null;
 }
 
+/* ────────────────────────────────────────────────────────────────────────────
+ *  An admin starts the conversation (owner, 2026-10-26: "make admin can send
+ *  support email to users even if they didn't start a support message … with
+ *  the support@frenzsave.com mail and the Frenz support template")
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export interface SupportRecipient {
+  id: string;
+  handle: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  email: string | null;
+}
+
+const EMAIL_RE = /^[^\s@<>"']{1,64}@[^\s@<>"']{1,190}\.[A-Za-z]{2,24}$/;
+const MAX_SUBJECT = 150;
+
+/** Members matching a handle, a name or an email — for the admin's "New email" picker (8 at most). */
+export async function searchSupportRecipients(query: string): Promise<SupportRecipient[]> {
+  if (!hasSupabase) return [];
+  const q = query.trim().replace(/^@/, "").slice(0, 80);
+  if (q.length < 2) return [];
+  // PostgREST's `or` takes commas and parentheses as syntax, and ilike takes % and _ as wildcards: none may pass
+  const safe = q.replace(/[%_,()*\\]/g, "");
+  if (safe.length < 2) return [];
+  const { data } = await createAdminClient()
+    .from("profiles")
+    .select("id, handle, display_name, avatar_url, email")
+    .or(`handle.ilike.%${safe}%,display_name.ilike.%${safe}%,email.ilike.%${safe}%`)
+    .limit(8);
+  return ((data ?? []) as Record<string, unknown>[]).map((p) => ({
+    id: p.id as string,
+    handle: (p.handle as string) ?? null,
+    displayName: (p.display_name as string) ?? null,
+    avatarUrl: (p.avatar_url as string) ?? null,
+    email: (p.email as string) ?? null,
+  }));
+}
+
+export type StartSupportEmailResult = { ok: true; delivered: "email"; threadId: string | null; to: string } | { ok: false; error: string };
+
+/**
+ * Email a member (or any address) from the support desk, in the Frenz email template. To a MEMBER it is also the
+ * first message of their Support conversation — so they can read it in the app and answer there, and the admin's
+ * reply box picks it up like any thread — plus a push. To an address that is not a member it is email only; their
+ * reply reaches the support mailbox (reply-to). The email is sent before answering, so "sent" means Resend accepted it.
+ */
+export async function startSupportEmail(adminId: string, input: { userId?: string | null; email?: string | null; subject: string; body: string }): Promise<StartSupportEmailResult> {
+  if (!hasSupabase) return { ok: false, error: "Support isn't available here." };
+  const subject = input.subject.replace(/\s+/g, " ").trim().slice(0, MAX_SUBJECT);
+  const body = cleanBody(input.body);
+  if (!subject) return { ok: false, error: "Add a subject." };
+  if (!body) return { ok: false, error: "Write a message." };
+  const db = createAdminClient();
+
+  // the member: by id, or by the email typed (an exact, case-insensitive match)
+  let member: { id: string; email: string | null; name: string | null } | null = null;
+  if (input.userId) {
+    const { data } = await db.from("profiles").select("id, email, display_name, handle").eq("id", input.userId).maybeSingle();
+    const p = data as { id: string; email: string | null; display_name: string | null; handle: string | null } | null;
+    if (!p) return { ok: false, error: "That member doesn't exist." };
+    member = { id: p.id, email: p.email, name: p.display_name || (p.handle ? `@${p.handle}` : null) };
+  } else {
+    const typed = (input.email ?? "").trim().toLowerCase();
+    if (!EMAIL_RE.test(typed)) return { ok: false, error: "Enter a valid email address." };
+    const { data } = await db.from("profiles").select("id, email, display_name, handle").ilike("email", typed.replace(/[%_\\]/g, "\\$&")).limit(1);
+    const p = ((data ?? []) as { id: string; email: string | null; display_name: string | null; handle: string | null }[])[0];
+    member = p ? { id: p.id, email: p.email, name: p.display_name || (p.handle ? `@${p.handle}` : null) } : null;
+    if (!member) {
+      const sent = await sendSupportDeskEmail(typed, null, subject, body, false);
+      console.info("[support] admin email", { adminId, member: false, sent });
+      return sent ? { ok: true, delivered: "email", threadId: null, to: typed } : { ok: false, error: "The email couldn't be sent. Try again." };
+    }
+  }
+  const to = member.email;
+  if (!to || !EMAIL_RE.test(to)) return { ok: false, error: "This member has no email address on file." };
+
+  // the email first: an admin is told the truth about it, and nothing is recorded as sent that was not
+  const sent = await sendSupportDeskEmail(to, member.name, subject, body, true);
+  if (!sent) return { ok: false, error: "The email couldn't be sent. Try again." };
+
+  // then their Support conversation carries it, so they can answer in the app
+  const threadId = await ensureThread(member.id);
+  const recorded = `${subject}\n\n${body}`.slice(0, MAX_BODY);
+  await db.from("support_messages").insert({ thread_id: threadId, sender_id: adminId, sender_role: "admin", body: recorded });
+  const { data: t } = await db.from("support_threads").select("user_unread").eq("id", threadId).single();
+  await db
+    .from("support_threads")
+    .update({ last_message: recorded.slice(0, 200), last_message_at: new Date().toISOString(), last_sender: "admin", status: "open", user_unread: ((t?.user_unread as number) ?? 0) + 1 })
+    .eq("id", threadId);
+  const memberId = member.id;
+  after(async () => {
+    await sendSmartPush(memberId, { title: "Message from Frenz Support", body: subject, url: `${SITE_URL}/support`, tag: "support-reply" }, "high", "system", { type: "system" }).catch(() => {});
+  });
+  console.info("[support] admin email", { adminId, member: true, threadId });
+  return { ok: true, delivered: "email", threadId, to };
+}
+
+/** The Frenz template, from support@frenzsave.com. Every admin-typed string is escaped. */
+function sendSupportDeskEmail(to: string, name: string | null, subject: string, body: string, member: boolean): Promise<boolean> {
+  return sendProductEmail(to, {
+    sender: "support",
+    subject,
+    heading: escapeHtml(subject),
+    intro: escapeHtml(name ? `Hi ${name.replace(/^@/, "")}, a message from the Frenz Support team.` : "A message from the Frenz Support team."),
+    body: escapeHtml(body),
+    ...(member ? { ctaLabel: "Reply in Frenz Support", ctaHref: `${SITE_URL}/support` } : {}),
+  });
+}
+
 /** Member clears (deletes) their OWN finished conversation + its messages, so the
  *  1:1 support center starts fresh next time. */
 export async function clearThreadForUser(userId: string): Promise<void> {

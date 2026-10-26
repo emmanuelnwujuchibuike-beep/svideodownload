@@ -163,7 +163,7 @@ export const ADMIN_SETTING_ENTRIES: AdminSearchEntry[] = [
     id: "frenz-coin",
     label: "Frenz Coin — settings, withdrawals, corrections, reversals",
     section: "frenz-coin",
-    hint: "Frenz Coin",
+    hint: "Wallet → Frenz Coin Wallet",
     keywords: ["coin", "frenz coin", "wallet", "withdrawal", "payout", "naira rate", "exchange rate", "transfer fee", "correction", "refund", "chargeback", "deposit hold", "admin alerts"],
   },
 

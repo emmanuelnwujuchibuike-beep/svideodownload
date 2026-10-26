@@ -18,7 +18,6 @@ import { useTopbarCenter } from "@/features/app-shell/topbar-slot";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { UserMenu } from "@/features/auth/user-menu";
 import { CreateActionSheet } from "@/features/create/create-action-sheet";
-import { useCoinGlance } from "@/features/wallet/coin-glance";
 import { CoinHeaderPillLazy as CoinHeaderPill } from "@/features/wallet/coin-entry-lazy";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
@@ -34,9 +33,9 @@ export function AppTopbar() {
     do not (owner, 2026-08-18). Since the Full Bleed merge (2026-10-09) there is
     no mode to consult.
   */
-  const { handle } = useEntitlements();
+  const { handle, frenzCoin } = useEntitlements();
   // Frenz Coin Part 5: the /downloads header carries the wallet balance (null — and no request — while Frenz Coin is off)
-  const coin = useCoinGlance();
+  const coin = frenzCoin;
   /*
     🔴 THIS BAR STANDS DOWN ON /search, BELOW `lg` (owner, 2026-08-24: "on the
     search page the search icon shouldnt be there, only the search placeholder

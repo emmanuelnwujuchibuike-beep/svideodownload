@@ -63,6 +63,9 @@ export async function postMoney<T>(sensitiveFetch: SensitiveFetch, url: string, 
   const json = (await res.json().catch(() => null)) as (T & { error?: string; reason?: string; code?: string }) | null;
   if (res.ok) return { ok: true, data: json as T };
   if (json?.code === "REAUTH_REQUIRED") return { ok: false, error: "Password not confirmed — nothing was changed.", reason: "reauth", status: res.status };
+  // a bare 403 means the request arrived without an admin session — e.g. the admin password was just changed, which
+  // signs out every other session (owner, 2026-10-25: "forbidden … because I changed admin password")
+  if (res.status === 403 && (json?.error === "Forbidden" || !json?.error)) return { ok: false, error: "Your admin session changed (for example after a password change). Refresh the page, sign in again, and save once more — nothing was changed.", reason: "session", status: 403 };
   return { ok: false, error: json?.error ?? "Couldn't complete that. Nothing was changed.", reason: json?.reason ?? null, status: res.status };
 }
 

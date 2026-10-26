@@ -4,6 +4,7 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 import type { EntryStatus } from "./api";
+import { TapPending } from "./tap-pending";
 import { ChevronLeftIcon, InfoIcon, LockIcon } from "./wallet-icons";
 
 /*
@@ -14,8 +15,9 @@ import { ChevronLeftIcon, InfoIcon, LockIcon } from "./wallet-icons";
 
 /** The screen root: the design's column, centred on wide screens. */
 export function WalletScreen({ children, label }: { children: ReactNode; label: string }) {
+  // the floating bottom nav covers the last ~5rem on phones: reserve it, or the page bottom is cut off (owner, 2026-10-25)
   return (
-    <div className="frenz-ui mx-auto w-full max-w-[560px] bg-frenz-page pb-6 [font-variant-numeric:tabular-nums]" aria-label={label}>
+    <div className="frenz-ui mx-auto w-full max-w-[560px] bg-frenz-page pb-[calc(var(--frenz-nav-clearance,5rem)+1.5rem)] [font-variant-numeric:tabular-nums] lg:pb-6" aria-label={label}>
       {children}
     </div>
   );
@@ -25,8 +27,10 @@ export function WalletScreen({ children, label }: { children: ReactNode; label: 
 export function SubHeader({ title, back = "/wallet", backLabel = "Wallet" }: { title: string; back?: string; backLabel?: string }) {
   return (
     <header className="grid grid-cols-[1fr_auto_1fr] items-center pl-2 pr-4 pt-3">
-      <Link href={back} prefetch={false} className="flex h-11 items-center gap-0.5 justify-self-start rounded-full px-2 text-base font-semibold text-frenz-violet outline-none focus-visible:ring-2 focus-visible:ring-frenz-blue">
-        <ChevronLeftIcon size={20} strokeWidth={2.6} />
+      <Link href={back} prefetch={false} className="flex h-11 touch-manipulation items-center gap-0.5 justify-self-start rounded-full px-2 text-base font-semibold text-frenz-violet outline-none transition active:opacity-60 focus-visible:ring-2 focus-visible:ring-frenz-blue">
+        <TapPending size={16} className="mx-0.5">
+          <ChevronLeftIcon size={20} strokeWidth={2.6} />
+        </TapPending>
         {backLabel}
       </Link>
       <h1 className="font-heading text-[17px] font-bold tracking-[-0.3px] text-frenz-ink">{title}</h1>
@@ -174,11 +178,13 @@ export function Unavailable({ title, children, action }: { title: string; childr
       <h2 className="font-heading text-lg font-bold text-frenz-ink">{title}</h2>
       <p className="max-w-[34ch] text-sm text-frenz-muted">{children}</p>
       {action ? (
-        <Link href={action.href} prefetch={false} className="mt-2 flex h-12 items-center rounded-full bg-frenz-gradient-x px-6 font-heading text-[15px] font-bold text-white outline-none focus-visible:ring-2 focus-visible:ring-frenz-blue focus-visible:ring-offset-2">
+        <Link href={action.href} prefetch={false} className="mt-2 flex h-12 touch-manipulation items-center gap-2 rounded-full bg-frenz-gradient-x px-6 font-heading text-[15px] font-bold text-white outline-none transition active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-frenz-blue focus-visible:ring-offset-2 motion-reduce:transition-none">
+          <TapPending size={16}>{null}</TapPending>
           {action.label}
         </Link>
       ) : null}
-      <Link href="/wallet" prefetch={false} className="mt-1 text-sm font-bold text-frenz-violet underline-offset-4 hover:underline">
+      <Link href="/wallet" prefetch={false} className="mt-1 flex min-h-11 touch-manipulation items-center gap-1.5 text-sm font-bold text-frenz-violet underline-offset-4 active:opacity-60 hover:underline">
+        <TapPending size={14}>{null}</TapPending>
         Back to wallet
       </Link>
     </div>

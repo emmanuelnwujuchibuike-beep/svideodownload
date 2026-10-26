@@ -2,6 +2,8 @@
 
 import dynamic from "next/dynamic";
 
+import { useEntitlements } from "@/features/auth/use-entitlements";
+
 import { useCoinGlance } from "./coin-glance";
 
 /*
@@ -14,8 +16,10 @@ const Pill = dynamic(() => import("./coin-entry").then((m) => m.CoinHeaderPill))
 const MenuCard = dynamic(() => import("./coin-entry").then((m) => m.CoinMenuCard));
 const ChatSend = dynamic(() => import("./coin-entry").then((m) => m.CoinChatSend));
 
+/** The /downloads header button: no balance (owner, 2026-10-25), so it needs only the "Frenz Coin is on" flag from /api/me — no wallet request. */
 export function CoinHeaderPillLazy(props: { className?: string }) {
-  return useCoinGlance() ? <Pill {...props} /> : null;
+  const { frenzCoin, ready } = useEntitlements();
+  return ready && frenzCoin ? <Pill {...props} /> : null;
 }
 export function CoinMenuCardLazy(props: { onNavigate?: () => void }) {
   return useCoinGlance() ? <MenuCard {...props} /> : null;

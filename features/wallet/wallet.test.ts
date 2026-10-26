@@ -335,7 +335,15 @@ describe("the wallet entry points' shared balance read (coin-glance)", () => {
   });
   it("the entry points render nothing on first paint (before the member's balance is known)", async () => {
     const { CoinHeaderPill, CoinMenuCard, CoinChatSend } = await import("./coin-entry");
-    expect(renderToStaticMarkup(createElement(CoinHeaderPill))).toBe("");
+    // the /downloads header button (owner, 2026-10-25): the wallet icon only — NEVER a balance on the Download page
+    const pill = renderToStaticMarkup(createElement(CoinHeaderPill));
+    expect(pill).toContain('href="/wallet"');
+    expect(pill).toContain('aria-label="Frenz Coin wallet"');
+    expect(pill).not.toContain(">FC<");
+    expect(pill).not.toMatch(/>[0-9][0-9,]*(\.[0-9]{2})?</);
+    // and while Frenz Coin is off (first paint: entitlements not ready) the header shows nothing at all
+    const { CoinHeaderPillLazy } = await import("./coin-entry-lazy");
+    expect(renderToStaticMarkup(createElement(CoinHeaderPillLazy))).toBe("");
     expect(renderToStaticMarkup(createElement(CoinMenuCard))).toBe("");
     expect(renderToStaticMarkup(createElement(CoinChatSend, { recipientId: "x", name: "Bo" }))).toBe("");
   });

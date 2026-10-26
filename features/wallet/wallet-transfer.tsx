@@ -13,6 +13,7 @@ import { CoinAmount } from "./coin-amount";
 import { dateTimeLabel, fc, newKey, parseCoinInput, walletDigits, walletNumber } from "./money";
 import { amountProblem, failMessage, transferGate } from "./state";
 import { invalidateCoinGlance } from "./coin-glance";
+import { TapPending } from "./tap-pending";
 import { useLatestRequest } from "./use-wallet-runtime";
 import { CheckIcon, CloseIcon, CopyIcon, InfoIcon, LockIcon, SearchIcon } from "./wallet-icons";
 import { ActionBar, AmountEntry, DetailList, Notice, PillButton, PinField, SessionExpired, StatusBadge, SubHeader, Unavailable, WalletScreen } from "./wallet-ui";
@@ -27,8 +28,10 @@ function TransferReceipt({ sent }: { sent: Sent }) {
   return (
     <WalletScreen label="Transfer receipt">
       <header className="flex justify-end px-4 pt-3">
-        <Link href="/wallet" prefetch={false} aria-label="Close" className="flex h-11 w-11 items-center justify-center rounded-full bg-frenz-fill text-frenz-ink outline-none focus-visible:ring-2 focus-visible:ring-frenz-blue">
-          <CloseIcon size={20} />
+        <Link href="/wallet" prefetch={false} aria-label="Close" className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-full bg-frenz-fill text-frenz-ink outline-none transition active:scale-90 focus-visible:ring-2 focus-visible:ring-frenz-blue motion-reduce:transition-none">
+          <TapPending>
+            <CloseIcon size={20} />
+          </TapPending>
         </Link>
       </header>
       <div className="flex flex-col items-center gap-2 px-5 pt-2 text-center" role="status">
@@ -69,7 +72,8 @@ function TransferReceipt({ sent }: { sent: Sent }) {
         </button>
       </div>
       <ActionBar>
-        <Link href="/wallet" prefetch={false} className="flex h-14 w-full items-center justify-center rounded-full bg-frenz-gradient-x font-heading text-base font-bold text-white outline-none focus-visible:ring-2 focus-visible:ring-frenz-blue focus-visible:ring-offset-2">
+        <Link href="/wallet" prefetch={false} className="flex h-14 w-full touch-manipulation items-center justify-center gap-2 rounded-full bg-frenz-gradient-x font-heading text-base font-bold text-white outline-none transition active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-frenz-blue focus-visible:ring-offset-2 motion-reduce:transition-none">
+          <TapPending>{null}</TapPending>
           Done
         </Link>
       </ActionBar>

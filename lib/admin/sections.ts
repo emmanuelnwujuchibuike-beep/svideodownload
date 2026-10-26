@@ -63,6 +63,7 @@ export type AdminCategoryId =
   | "wallpaper"
   | "downloader"
   | "ai"
+  | "wallet"
   | "platform"
   | "monetization"
   | "insight";
@@ -83,6 +84,8 @@ export const ADMIN_CATEGORIES: AdminCategory[] = [
   { id: "wallpaper", label: "Wallpaper", group: "Products" },
   { id: "downloader", label: "Downloader", group: "Products" },
   { id: "ai", label: "Frenz AI", group: "Products" },
+  /* Owner, 2026-10-25: "give wallet its own roll" — the Frenz Coin wallet is a product of its own, not a monetization tab. */
+  { id: "wallet", label: "Wallet", group: "Products" },
   /* Everything shared. Deliberately not duplicated inside each product. */
   { id: "platform", label: "Platform", group: "Platform" },
   { id: "monetization", label: "Monetization", group: "Monetization" },
@@ -118,8 +121,8 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   {
     // Frenz Coin Part 6 (2026-10-25): settings, withdrawals, transfer corrections, deposit reversals
     id: "frenz-coin",
-    label: "Frenz Coin",
-    category: "monetization",
+    label: "Frenz Coin Wallet",
+    category: "wallet",
     icon: "Wallet",
     blurb: "The coin wallet's switches, fees, limits and payout rate; withdrawals to pay; transfer corrections; deposit refunds and chargebacks.",
   },

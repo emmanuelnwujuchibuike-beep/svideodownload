@@ -33,6 +33,7 @@ import { AdPlatformControlsLazy } from "@/features/admin/ad-platform-controls-la
 import { AdSafetyCenterLazy } from "@/features/admin/ad-safety-center-lazy";
 import { AdminPanel, AdminShell } from "@/features/admin/admin-shell";
 import { FrenzCoinAdminLazy } from "@/features/admin/frenz-coin-admin-lazy";
+import { pinPepper } from "@/lib/coin/pin";
 import { AdminSubsections } from "@/features/admin/section-tabs";
 import { SupportInbox } from "@/features/admin/support-inbox";
 import { RatingsSection } from "@/features/admin/ratings-section";
@@ -920,7 +921,8 @@ async function PlatformStatusSection() {
 /** Frenz Coin Part 6: the console, given the current audited coin settings (read here, streamed with the panel). */
 async function FrenzCoinSection() {
   const landing = await getLandingSettings();
-  return <FrenzCoinAdminLazy config={landing.frenzCoin} />;
+  // only WHETHER the transaction-PIN secret is configured — never the secret itself
+  return <FrenzCoinAdminLazy config={landing.frenzCoin} pinConfigured={!!pinPepper()} />;
 }
 
 async function LandingSection() {

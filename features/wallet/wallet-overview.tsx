@@ -13,6 +13,7 @@ import { type HistoryPage, type WalletSummary, walletApi } from "./api";
 import { coins, dateTimeLabel, fc, holdLabel, releaseLabel, walletNumber } from "./money";
 import { depositVerifyView } from "./state";
 import { invalidateCoinGlance } from "./coin-glance";
+import { TapPending } from "./tap-pending";
 import { useRefreshOnLongReturn, whenVisible } from "./use-wallet-runtime";
 import { BankIcon, CheckIcon, ClockIcon, CopyIcon, DepositIcon, EyeIcon, EyeOffIcon, KeyIcon, LockIcon, SendIcon, ShieldCheckIcon } from "./wallet-icons";
 import { CoinMark, HeroCard, Notice, SectionTitle, Unavailable, WalletScreen } from "./wallet-ui";
@@ -92,8 +93,9 @@ function DepositReturn({ reference }: { reference: string }) {
             Check again
           </button>
         ) : state === "failed" ? (
-          <Link href="/wallet/deposit" prefetch={false} className="self-start font-bold underline underline-offset-4">
+          <Link href="/wallet/deposit" prefetch={false} className="flex min-h-11 touch-manipulation items-center gap-1.5 self-start font-bold underline underline-offset-4 active:opacity-60">
             Try again
+            <TapPending size={14}>{null}</TapPending>
           </Link>
         ) : null
       }
@@ -114,8 +116,10 @@ function ActionButton({ href, label, primary, children, disabled }: { href: stri
       </span>
     );
   return (
-    <Link href={href} prefetch={false} className="group flex flex-col items-center gap-1.5 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-white/80">
-      <span className={cn(circle, "group-active:scale-95")}>{children}</span>
+    <Link href={href} prefetch={false} className="group flex touch-manipulation flex-col items-center gap-1.5 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-white/80">
+      <span className={cn(circle, "group-active:scale-90")}>
+        <TapPending size={20}>{children}</TapPending>
+      </span>
       <span className="text-[12.5px] font-semibold text-white/90">{label}</span>
     </Link>
   );
@@ -158,11 +162,13 @@ export function WalletOverview({ summary, history, depositRef, loadedAt }: { sum
       <header className="flex items-center justify-between px-5 pb-3 pt-4">
         <h1 className="font-heading text-[32px] font-extrabold tracking-[-1px] text-frenz-ink">Wallet</h1>
         <div className="flex gap-2">
-          <button type="button" onClick={() => setHidden(!hidden)} aria-pressed={hidden} aria-label={hidden ? "Show balance" : "Hide balance"} className="flex h-11 w-11 items-center justify-center rounded-full bg-frenz-fill text-frenz-ink outline-none focus-visible:ring-2 focus-visible:ring-frenz-blue">
+          <button type="button" onClick={() => setHidden(!hidden)} aria-pressed={hidden} aria-label={hidden ? "Show balance" : "Hide balance"} className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-full bg-frenz-fill text-frenz-ink outline-none transition active:scale-90 focus-visible:ring-2 focus-visible:ring-frenz-blue motion-reduce:transition-none">
             {hidden ? <EyeOffIcon size={20} /> : <EyeIcon size={20} />}
           </button>
-          <Link href="/wallet/security" prefetch={false} aria-label="PIN and security" className="flex h-11 w-11 items-center justify-center rounded-full bg-frenz-fill text-frenz-ink outline-none focus-visible:ring-2 focus-visible:ring-frenz-blue">
-            <KeyIcon size={19} />
+          <Link href="/wallet/security" prefetch={false} aria-label="PIN and security" className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-full bg-frenz-fill text-frenz-ink outline-none transition active:scale-90 focus-visible:ring-2 focus-visible:ring-frenz-blue motion-reduce:transition-none">
+            <TapPending>
+              <KeyIcon size={19} />
+            </TapPending>
           </Link>
         </div>
       </header>
@@ -178,8 +184,11 @@ export function WalletOverview({ summary, history, depositRef, loadedAt }: { sum
               <ShieldCheckIcon size={14} /> PIN protected
             </span>
           ) : (
-            <Link href="/wallet/security" prefetch={false} className="flex h-7 items-center gap-1 rounded-full border border-white/25 bg-white/10 px-2.5 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-white">
-              <LockIcon size={13} /> Set a PIN
+            <Link href="/wallet/security" prefetch={false} className="flex h-7 touch-manipulation items-center gap-1 rounded-full border border-white/25 bg-white/10 px-2.5 text-xs font-semibold outline-none transition active:scale-95 focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none">
+              <TapPending size={13}>
+                <LockIcon size={13} />
+              </TapPending>{" "}
+              Set a PIN
             </Link>
           )}
         </div>
@@ -265,8 +274,9 @@ export function WalletOverview({ summary, history, depositRef, loadedAt }: { sum
 
       <SectionTitle
         action={
-          <Link href="/wallet/activity" prefetch={false} className="text-sm font-bold text-frenz-violet outline-none focus-visible:underline">
+          <Link href="/wallet/activity" prefetch={false} className="flex min-h-11 touch-manipulation items-center gap-1.5 text-sm font-bold text-frenz-violet outline-none transition active:opacity-60 focus-visible:underline">
             See all
+            <TapPending size={14}>{null}</TapPending>
           </Link>
         }
       >

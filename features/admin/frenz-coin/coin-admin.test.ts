@@ -147,6 +147,11 @@ describe("money calls", () => {
     const r = await postMoney(async () => res(403, { error: "Confirm your password to continue.", code: "REAUTH_REQUIRED" }), "/x", {});
     expect(r).toMatchObject({ ok: false, reason: "reauth", error: expect.stringMatching(/nothing was changed/i) });
   });
+  it("a bare 403 (session gone, e.g. after an admin password change) says what to do — never just 'Forbidden'", async () => {
+    const r = await postMoney(async () => res(403, { error: "Forbidden" }), "/x", {});
+    expect(r).toMatchObject({ ok: false, reason: "session" });
+    expect(!r.ok && r.error).toMatch(/Refresh the page, sign in again/);
+  });
   it("a refusal keeps the server's reason; a network failure never throws", async () => {
     expect(await postMoney(async () => res(409, { error: "That transfer's fee was already refunded.", reason: "already_refunded" }), "/x", {})).toMatchObject({ ok: false, reason: "already_refunded" });
     expect(await postMoney(async () => Promise.reject(new TypeError("offline")), "/x", {})).toMatchObject({ ok: false, reason: "network" });

@@ -28,7 +28,7 @@ const TABS: { id: Tab; label: string }[] = [
  * REAUTH_REQUIRED raises it and replays the request once. Tabs keep their state while open; a tab's data is read when
  * it is first opened and when the operator refreshes or acts — never on a timer.
  */
-export function CoinAdminConsole({ config }: { config: FrenzCoinConfig }) {
+export function CoinAdminConsole({ config, pinConfigured = true }: { config: FrenzCoinConfig; pinConfigured?: boolean }) {
   const { sensitiveFetch, reauthPrompt } = useSensitiveAction();
   const [tab, setTab] = useState<Tab>("settings");
   const [seen, setSeen] = useState<Set<Tab>>(() => new Set(["settings"]));
@@ -46,6 +46,12 @@ export function CoinAdminConsole({ config }: { config: FrenzCoinConfig }) {
         <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", config.enabled ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-muted text-muted-foreground")}>{config.enabled ? "Live for members" : "Off for members"}</span>
         <span className="text-xs text-muted-foreground">Payout rate: {w.payoutRateSource === "none" ? "none (withdrawals can't be paid)" : w.payoutRateSource === "fixed" ? (w.payoutMinorPerUsd ? `fixed ₦${(w.payoutMinorPerUsd / 100).toFixed(2)} per $1` : "fixed — no rate set") : "market"}</span>
       </div>
+      {/* owner, 2026-10-25: "transfer is still saying transfers are paused" — the PIN secret was missing on Vercel and nothing said so */}
+      {!pinConfigured ? (
+        <p role="alert" className="rounded-2xl bg-rose-500/10 px-4 py-3 text-sm text-rose-800 dark:text-rose-200">
+          <strong>Transfers and withdrawals are paused:</strong> the transaction-PIN secret <code>FRENZ_COIN_PIN_PEPPER</code> is not set on the server. Add it in Vercel → Settings → Environment Variables (Production), then redeploy. Set it once and never change it — changing it invalidates every member&apos;s PIN.
+        </p>
+      ) : null}
       <div role="tablist" aria-label="Frenz Coin admin" className="flex gap-1 overflow-x-auto rounded-2xl border border-border p-1 [scrollbar-width:none]">
         {TABS.map((t) => (
           <button key={t.id} type="button" role="tab" id={`coin-tab-${t.id}`} aria-selected={tab === t.id} aria-controls={`coin-panel-${t.id}`} onClick={() => open(t.id)} className={cn("whitespace-nowrap rounded-xl px-3.5 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary", tab === t.id ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted")}>

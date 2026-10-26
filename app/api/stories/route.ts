@@ -8,6 +8,7 @@ import { CAPTION_MAX_CHARS, normalizeCaption } from "@/lib/social/caption";
 import { notifyNewStory } from "@/lib/social/creator-notify-emit";
 import { bustHomeFeedCache } from "@/lib/social/home-feed";
 import { getActiveStories, type StoryScope } from "@/lib/social/stories";
+import { isOwnUpload, storageBasesFromEnv } from "@/lib/storage/owned-media";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -127,11 +128,32 @@ export async function POST(request: Request) {
 
   let storyId: string | null = null;
   if (wantStory) {
+    /*
+      🔴 Stories Part 1 (2026-10-26, audit S3). A story's media must be THIS
+      member's own upload of the kind it claims to be — never another member's
+      file, and never an address on another site (a tracking image there would
+      learn every viewer's IP). The cover likewise. Read from the URL's own key
+      (lib/storage/owned-media.ts), so it costs no lookup.
+    */
+    const bases = storageBasesFromEnv();
+    if (!isOwnUpload(mediaUrl, user.id, mediaKind, bases)) {
+      return NextResponse.json({ error: "That file can't be used for a story. Upload it again." }, { status: 400 });
+    }
+    if (mediaKind === "video" && thumbnailUrl && !isOwnUpload(thumbnailUrl, user.id, "image", bases)) {
+      return NextResponse.json({ error: "That cover can't be used for a story. Upload it again." }, { status: 400 });
+    }
+    // A suspended account publishes nothing (lib/social/account-visibility.ts `canAccountPublish`).
+    const { data: author } = await createAdminClient().from("profiles").select("is_suspended").eq("id", user.id).maybeSingle();
+    if (author?.is_suspended) return NextResponse.json({ error: "Your account can't post right now." }, { status: 403 });
+
     // `thumbnail_url` (0083) is what stops the story ring streaming this MP4 on
     // every mount just to paint a 68px circle. The client already captures and
     // uploads this poster and has always sent it — it was being dropped here for
     // want of a column.
-    const { data: story, error } = await supabase
+    //
+    // Written by the SERVER: since 0285 a member session cannot insert a story at
+    // all, and the database stamps every story with its own 24 hour life.
+    const { data: story, error } = await createAdminClient()
       .from("stories")
       .insert({
         user_id: user.id,

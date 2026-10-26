@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { hasR2, presignR2Put, putR2 } from "./r2";
+import type { StoredUpload } from "./owned-media";
+import { deleteR2, hasR2, presignR2Put, putR2 } from "./r2";
 
 /* Browser-safe constants, types and pure helpers live in ./buckets.ts — a client
    component imports them from there, so this module (and its service-role
@@ -51,6 +52,21 @@ export async function putServerMedia(opts: {
   if (error) throw new Error("Supabase upload failed");
   const { data } = admin.storage.from(POST_BUCKET).getPublicUrl(opts.key);
   return { url: data.publicUrl, backend: "supabase" };
+}
+
+/**
+ * Delete one uploaded file from wherever it lives (lib/storage/owned-media.ts
+ * names it). True when it is gone afterwards, including when it was already
+ * gone, so a sweep that retries is idempotent. Never throws.
+ */
+export async function deleteStoredUpload(up: StoredUpload): Promise<boolean> {
+  try {
+    if (up.backend === "r2") return await deleteR2(up.key);
+    const { error } = await createAdminClient().storage.from(POST_BUCKET).remove([up.key]);
+    return !error;
+  } catch {
+    return false;
+  }
 }
 
 /**

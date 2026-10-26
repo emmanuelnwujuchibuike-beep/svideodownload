@@ -11,6 +11,7 @@ import { clearAiHistoryCache } from "@/lib/ai/history-cache";
 import { forgetAiDeviceData } from "@/lib/ai/device-keys";
 
 import { clearInboxCache } from "@/lib/social/inbox-cache";
+import { clearStoryCaches } from "@/lib/social/story-cache";
 
 import { clearIdentity } from "./identity-cache";
 
@@ -85,6 +86,7 @@ export async function signOutClient(): Promise<void> {
   clearCharacterReplaceBalanceCache(); // and the Character Replace wallet snapshot (Part 3)
   forgetCachedImages(); // and the service worker's image copies (Part 7 §56, 2026-10-07) — chat faces too: who you talk to
   clearInboxCache(); // and the inbox painted on entry (2026-10-10) — another account must never see it
+  clearStoryCaches(); // and the story rings + seen marks (Stories Part 1, 2026-10-26) — whose stories you see, and which you watched
 
   // Clear the "just signed in" splash cookie so the hard navigation to `/` below
   // can never make BootSplash force its F loader on sign-out (owner, 2026-08-02:

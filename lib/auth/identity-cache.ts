@@ -40,7 +40,9 @@ export interface CachedIdentity {
 }
 
 export function readIdentity(): CachedIdentity | null {
-  if (typeof window === "undefined") return null;
+  // Guarded on what it reads, not on `window` — same in a browser and during SSR,
+  // and testable without a DOM (the same reasoning as lib/social/story-cache.ts).
+  if (typeof localStorage === "undefined") return null;
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;

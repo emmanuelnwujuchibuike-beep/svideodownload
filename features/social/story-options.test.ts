@@ -67,14 +67,18 @@ describe("story options, like the History viewer's", () => {
 });
 
 describe("DELETE /api/stories/:id", () => {
-  it("runs as the member (RLS 'stories owner delete'), scoped to their own id, and never deletes the media file", () => {
+  it("runs as the member, ENDS their own story (0285 expire_own_story: ownership is auth.uid()), and never touches storage itself", () => {
     const r = src("app/api/stories/[id]/route.ts");
     expect(r).toContain('import { createClient } from "@/lib/supabase/server";');
     expect(r).not.toContain("createAdminClient");
-    expect(r).toContain('.delete().eq("id", id).eq("user_id", user.id)');
-    expect(r).toContain('if (!data?.length) return NextResponse.json({ error: "Not found." }, { status: 404 });');
+    // Stories Part 1 (2026-10-26): not a row delete — that lost the only record of which file the story used
+    expect(r).toContain('supabase.rpc("expire_own_story", { p_story: id })');
+    expect(r).not.toContain(".delete()");
+    expect(r).toContain('if (data !== true) return NextResponse.json({ error: "Not found." }, { status: 404 });');
     expect(r).not.toMatch(/storage|\.remove\(/);
-    expect(src("supabase/migrations/0015_stories.sql")).toContain('create policy "stories owner delete" on public.stories');
+    const m = src("supabase/migrations/0285_stories_security.sql");
+    expect(m).toContain("where id = p_story and user_id = v_uid;");
+    expect(m).toContain('drop policy if exists "stories owner delete" on public.stories;');
   });
 });
 

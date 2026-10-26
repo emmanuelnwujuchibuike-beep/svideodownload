@@ -1,0 +1,62 @@
+name: Cron - Story cleanup
+
+# Supplies the clock for app/api/cron/story-cleanup/route.ts (Stories Part 1, 2026-10-26).
+#
+# ── 🔴 WHY THIS EXISTS ───────────────────────────────────────────────────────
+# A story "disappears in 24 hours" — and until now only its ring did. Proven on
+# production 2026-10-26: 69 story rows, all expired, none ever removed, and files
+# that expired 117 days earlier still publicly downloadable. This removes expired
+# stories, their viewer lists, and every file of theirs that nothing else uses
+# (a feed post, an album, a chat attachment or another story keeps its file).
+#
+# ── Once a day ───────────────────────────────────────────────────────────────
+# One small request a day. No polling and nothing while idle. A large backlog
+# finishes over the following days (each run stops starting new pages at 45 s).
+#
+# ── Not Vercel ───────────────────────────────────────────────────────────────
+# The Hobby plan's two cron slots are spent by `trending` and `profile-snapshots`.
+# GitHub Actions is the clock for every other cron here, so this uses the same pattern.
+#
+# ── REQUIRES THE ACTIONS SECRET `CRON_SECRET` ────────────────────────────────
+# The same one the other crons use — nothing new to add.
+#
+# Verify before trusting it: Actions → this workflow → "Run workflow". A healthy
+# run returns HTTP 200 with a body like
+#   {"storiesDeleted":0,"viewsDeleted":0,"filesDeleted":0,"filesInUse":0,
+#    "cdn":{"configured":false,"purged":0,"errors":0},"retried":0,"errors":0,"more":false,"ms":140}
+# `errors` is what matters. `cdn.configured:false` means deleted files may still be
+# served from Cloudflare's cache — see docs/STORIES_SECURITY.md.
+on:
+  schedule:
+    - cron: "45 4 * * *" # daily, 04:45 UTC, clear of the other crons
+  workflow_dispatch: {}
+
+concurrency:
+  # Never two sweeps at once — the second would only log meaningless "already gone" work.
+  group: cron-story-cleanup
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/cron/story-cleanup
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: |
+          set -euo pipefail
+          url="${SITE_URL:-https://frenzsave.com}/api/cron/story-cleanup"
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET repo secret is not set — see the header of this workflow for setup steps."
+            exit 1
+          fi
+          status=$(curl -sS -o /tmp/response.json -w "%{http_code}" -X POST "$url" \
+            -H "Authorization: Bearer $CRON_SECRET")
+          echo "HTTP $status"
+          cat /tmp/response.json
+          echo
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::Story cleanup cron returned HTTP $status"
+            exit 1
+          fi

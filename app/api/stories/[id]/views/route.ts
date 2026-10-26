@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  *  WHO SAW IT — and who took a picture of it
@@ -52,11 +54,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const shot = new URL(request.url).searchParams.get("shot") === "1";
   const admin = createAdminClient();
 
+  if (!UUID.test(id)) return NextResponse.json({ ok: true, recorded: false });
+
   try {
-    const { data: story } = await admin.from("stories").select("id, user_id").eq("id", id).maybeSingle();
-    if (!story) return NextResponse.json({ ok: true, recorded: false });
-    // Watching your own story is not a view, and screenshotting it is not news.
-    if ((story.user_id as string) === user.id) return NextResponse.json({ ok: true, recorded: false });
+    /*
+      🔴 Stories Part 1 (2026-10-26, audit S6). A view is recorded only when this
+      viewer may SEE this story right now — the same rules the rings apply
+      (`story_view_access`, 0285: blocks and status restrictions both ways, a
+      suspended or hidden author, a private profile without a direct chat), and
+      never on an ended story. Before this any signed-in member could POST any
+      story id and appear in the author's viewer list, a blocked one included.
+      Watching your own story is not a view ("self"), and screenshotting it is not news.
+    */
+    const { data: access, error: accessError } = await admin.rpc("story_view_access", { p_story: id, p_viewer: user.id });
+    if (accessError || access !== "ok") return NextResponse.json({ ok: true, recorded: false });
 
     if (shot) {
       /*

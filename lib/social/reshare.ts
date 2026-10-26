@@ -133,6 +133,17 @@ async function resolveStoryMedia(viewerId: string, storyId: string): Promise<Sou
   const isAuthor = (story.user_id as string) === viewerId;
   const allowed = story.allow_reshare === undefined || story.allow_reshare === null ? true : !!story.allow_reshare;
   if (!isAuthor && !allowed) return { error: { ok: false, reason: "not-allowed" } };
+  /*
+    🔴 Stories Part 1 (2026-10-26, audit S4): only a story the viewer may SEE can
+    be reshared — the rings' own rules (`story_view_access`, 0285: blocks and
+    status restrictions both ways, a suspended or hidden author, a private
+    profile without a direct chat). Before this a blocked member could reshare
+    by id. The provenance written below comes from THIS row, never the request.
+  */
+  if (!isAuthor) {
+    const { data: access, error } = await db.rpc("story_view_access", { p_story: storyId, p_viewer: viewerId });
+    if (error || access !== "ok") return { error: { ok: false, reason: access === "expired" || access === "missing" ? "not-found" : "forbidden" } };
+  }
 
   const kind = (story.media_kind as string) === "video" ? "video" : "image";
   return {

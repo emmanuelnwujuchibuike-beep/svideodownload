@@ -67,6 +67,17 @@ export async function putR2(key: string, body: Uint8Array | ArrayBuffer | Blob, 
 }
 
 /**
+ * Remove one object from the PUBLIC bucket (the Stories expiry sweep). True when
+ * the object is gone afterwards — R2 answers 204 for a key that was never there,
+ * so a retry of an already-deleted file is a success, not an error.
+ */
+export async function deleteR2(key: string): Promise<boolean> {
+  if (!hasR2) return false;
+  const res = await r2().fetch(objectEndpoint(key), { method: "DELETE" }).catch(() => null);
+  return !!res && (res.status === 204 || res.status === 200 || res.status === 404);
+}
+
+/**
  * A short-lived presigned PUT URL so a browser/native client can upload straight
  * to R2 (no bytes through our server). Content-Type is sent by the client at
  * upload time. Returns the upload URL plus the eventual public URL.

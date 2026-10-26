@@ -172,6 +172,59 @@ describe("B3 · order, one ring per author", () => {
   });
 });
 
+describe("Part 3 · each story carries the viewer's OWN seen state, from story_views", () => {
+  it("a watched story is seen, the same author's other stories are not", async () => {
+    db.tables.stories!.push(story(FRIEND, 3));
+    const watched = db.tables.stories!.find((s) => s.user_id === FRIEND)!.id;
+    db.tables.story_views = [{ story_id: watched, viewer_id: ME }];
+    const friend = (await getActiveStories(ME, 50, "all")).find((g) => g.handle === "friend")!;
+    expect(friend.stories.map((s) => [s.id, s.seen])).toEqual(expect.arrayContaining([[watched, true]]));
+    expect(friend.stories.filter((s) => s.seen)).toHaveLength(1);
+  });
+
+  it("🔴 another member's view never reads as mine", async () => {
+    const id = db.tables.stories!.find((s) => s.user_id === FRIEND)!.id;
+    db.tables.story_views = [{ story_id: id, viewer_id: STRANGER }];
+    const friend = (await getActiveStories(ME, 50, "all")).find((g) => g.handle === "friend")!;
+    expect(friend.stories.every((s) => s.seen === false)).toBe(true);
+  });
+
+  it("signed out: nothing is seen, and story_views is never read", async () => {
+    db.tables.story_views = [{ story_id: db.tables.stories![0]!.id, viewer_id: ME }];
+    const groups = await getActiveStories(null, 50, "all");
+    expect(groups.flatMap((g) => g.stories).every((s) => s.seen === false)).toBe(true);
+  });
+
+  it("the chat strip carries it too, and each story its own end time", async () => {
+    const id = db.tables.stories!.find((s) => s.user_id === PRIVATE_CHAT)!.id;
+    db.tables.story_views = [{ story_id: id, viewer_id: ME }];
+    const g = await getActiveStoryForUser(PRIVATE_CHAT, ME);
+    expect(g?.stories[0]?.seen).toBe(true);
+    expect(g?.stories[0]?.expiresAt).toEqual(expect.any(String));
+  });
+
+  it("a failed story_views read is 'not seen' — never an error, never fewer rings", async () => {
+    db.failOn.story_views = "down";
+    const hs = handles(await getActiveStories(ME, 50, "all"));
+    expect(hs).toEqual(["me", "friend", "followed", "privatechat", "stranger"]);
+  });
+});
+
+describe("the Story viewer design's settings", () => {
+  it("each story carries its 'Allow replies' (0288); absent = on", async () => {
+    db.tables.stories = db.tables.stories!.map((s) => (s.user_id === FRIEND ? { ...s, allow_replies: false } : s));
+    const groups = await getActiveStories(ME, 50, "all");
+    expect(groups.find((g) => g.handle === "friend")!.stories[0]!.allowReplies).toBe(false);
+    expect(groups.find((g) => g.handle === "stranger")!.stories[0]!.allowReplies).toBe(true);
+  });
+
+  it("'Who can see this' rides on YOUR ring only — never on anyone else's", async () => {
+    const groups = await getActiveStories(ME, 50, "all");
+    expect(groups.find((g) => g.handle === "me")!.audience).toBe("private");
+    expect(groups.filter((g) => g.handle !== "me").every((g) => g.audience === undefined)).toBe(true);
+  });
+});
+
 describe("regression · nothing about an unauthorized author leaves the function", () => {
   it("no hidden author's media URL is in the payload", async () => {
     const json = JSON.stringify(await getActiveStories(ME, 50, "all"));

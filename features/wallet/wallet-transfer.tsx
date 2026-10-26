@@ -88,7 +88,18 @@ function TransferReceipt({ sent }: { sent: Sent }) {
  * ever send it once. The receipt shows what the server says it did. The draft (recipient, amount, note — never the PIN)
  * survives leaving and coming back (useStickyState), and is cleared once the transfer is confirmed.
  */
-export function WalletTransfer({ summary, preset = null, recents = [] }: { summary: WalletSummary; preset?: Recipient | null; recents?: { id: string; name: string; avatarUrl: string | null }[] }) {
+export function WalletTransfer({
+  summary,
+  preset = null,
+  recents = [],
+  storyGift = null,
+}: {
+  summary: WalletSummary;
+  preset?: Recipient | null;
+  recents?: { id: string; name: string; avatarUrl: string | null }[];
+  /** Sent from a Story viewer's coin button (2026-10-26): the story this gift is for — checked on the server (lib/coin/story-gift.ts). */
+  storyGift?: { storyId: string; coverUrl: string | null } | null;
+}) {
   const router = useRouter();
   // a chat's "Send Frenz Coin" arrives with the person chosen (a different preset starts a fresh draft)
   const draft = preset?.number ?? 0;
@@ -122,6 +133,8 @@ export function WalletTransfer({ summary, preset = null, recents = [] }: { summa
     );
 
   const t = summary.transfers;
+  // the story label holds only while the recipient is still the story's author (Change drops it)
+  const gift = storyGift && preset && recipient?.number === preset.number ? storyGift : null;
   const cents = parseCoinInput(raw);
   const problem = amountProblem(cents, t, summary.availableCents);
   const noteValue = note.trim() || null;
@@ -160,7 +173,7 @@ export function WalletTransfer({ summary, preset = null, recents = [] }: { summa
     if (!recipient || !quote || !key.current || sending || pin.length !== 6) return;
     setSending(true);
     setSendError(null);
-    const r = await walletApi.transfer({ accountNumber: recipient.number, amountCents: quote.amountCents, idempotencyKey: key.current.key, note: noteValue, pin });
+    const r = await walletApi.transfer({ accountNumber: recipient.number, amountCents: quote.amountCents, idempotencyKey: key.current.key, note: noteValue, pin, ...(gift ? { storyId: gift.storyId } : {}) });
     setSending(false);
     setPin("");
     if (!r.ok) return setSendError({ msg: failMessage(r, "transfer"), expired: r.session === "expired" });
@@ -199,7 +212,18 @@ export function WalletTransfer({ summary, preset = null, recents = [] }: { summa
             Change
           </button>
         </section>
-      ) : (
+      ) : null}
+      {recipient && gift ? (
+        // from their story: they are told it was for THIS story, and their notification opens it
+        <p className="mx-4 mt-2 flex items-center gap-2.5 rounded-[18px] bg-frenz-fill px-3 py-2 text-[13px] font-semibold text-frenz-ink">
+          {gift.coverUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- the story's own cover, already cached by the viewer it came from
+            <img src={gift.coverUrl} alt="" width={28} height={40} className="h-10 w-7 shrink-0 rounded-md object-cover" />
+          ) : null}
+          <span className="min-w-0">A gift for {recipient.name.split(" ")[0]}&apos;s story — they&apos;ll see which story it was for.</span>
+        </p>
+      ) : null}
+      {recipient ? null : (
         <>
         {recents.length ? (
           /* Recent recipients (Wallet setup, 2026-10-26) — from the member's own transfers. A tap opens the existing

@@ -25,7 +25,22 @@ export interface StoryItem {
    * for stories posted before 0083 — those age out within 24h by themselves.
    */
   thumbnailUrl: string | null;
+  /**
+   * 🔴 Stories Part 3 (2026-10-26): has THIS viewer watched THIS story — their own
+   * `story_views` row (0181), read in the same batch the ordering already uses. The
+   * server is the authority for ring colour on every device; the client only adds
+   * the views it has just had confirmed (lib/social/story-seen.ts). Optional so a
+   * disk copy saved before Part 3 still parses (absent = not seen).
+   */
+  seen?: boolean;
+  /** When the story ends (`stories.expires_at`, stamped by the database since 0285). */
+  expiresAt?: string | null;
+  /** The author's "Allow replies" switch (0288). Absent or unapplied = on, the column's own default. */
+  allowReplies?: boolean;
 }
+
+/** Who a story reaches — the author's profile visibility (Part 2's rule). Sent for the viewer's OWN ring only. */
+export type StoryAudience = "public" | "followers" | "private";
 
 export interface StoryGroup {
   userId: string;
@@ -34,6 +49,8 @@ export interface StoryGroup {
   avatarUrl: string | null;
   isVerified: boolean;
   stories: StoryItem[];
+  /** Only on the viewer's own ring: "Who can see this" in Story options. */
+  audience?: StoryAudience;
 }
 
 /** Who a story feed is scoped to: everyone (default), just friends, or people you follow. */
@@ -157,20 +174,22 @@ type StoryRow = {
   media_kind: "image" | "video";
   caption: string | null;
   created_at: string;
+  expires_at?: string | null;
   allow_reshare?: boolean | null;
+  allow_replies?: boolean | null;
   thumbnail_url?: string | null;
 };
 type ProfileRow = { id: string; handle: string | null; display_name: string | null; avatar_url: string | null; is_verified: boolean | null; visibility: string | null; is_suspended: boolean | null; is_hidden: boolean | null };
 
-const STORY_COLS = "id, user_id, media_url, media_kind, caption, created_at";
+const STORY_COLS = "id, user_id, media_url, media_kind, caption, created_at, expires_at";
 
 /** Whose active stories to read: some authors, one author, or the newest of everyone's (discovery). */
 type Authors = { in: readonly string[] } | { one: string } | "everyone";
 
 /**
- * Active stories, newest first. `allow_reshare` (0081) and `thumbnail_url` (0083)
- * ride in an optional group: supabase-js fails the WHOLE select on a missing
- * column (42703), so an unapplied migration costs only those two fields.
+ * Active stories, newest first. `allow_reshare` (0081), `thumbnail_url` (0083) and
+ * `allow_replies` (0288) ride in an optional group: supabase-js fails the WHOLE
+ * select on a missing column (42703), so an unapplied migration costs only those fields.
  */
 async function activeStories(db: Db, authors: Authors, limit: number): Promise<StoryRow[]> {
   const now = new Date().toISOString();
@@ -180,9 +199,12 @@ async function activeStories(db: Db, authors: Authors, limit: number): Promise<S
       if (authors !== "everyone") q = "one" in authors ? q.eq("user_id", authors.one) : q.in("user_id", [...authors.in]);
       return q.order("created_at", { ascending: false }).order("id", { ascending: false }).range(a, b) as unknown as PromiseLike<{ data: StoryRow[] | null; error: { message: string } | null }>;
     }, limit);
-  const first = await run(`${STORY_COLS}, allow_reshare, thumbnail_url`);
-  if (/allow_reshare|thumbnail_url|42703|does not exist/.test(first.error?.message ?? "")) return (await run(STORY_COLS)).rows;
-  return first.rows;
+  const first = await run(`${STORY_COLS}, allow_reshare, thumbnail_url, allow_replies`);
+  if (!/allow_reshare|thumbnail_url|allow_replies|42703|does not exist/.test(first.error?.message ?? "")) return first.rows;
+  // 0288 not applied yet: keep the two older optional columns, lose only the reply switch
+  const older = await run(`${STORY_COLS}, allow_reshare, thumbnail_url`);
+  if (/allow_reshare|thumbnail_url|42703|does not exist/.test(older.error?.message ?? "")) return (await run(STORY_COLS)).rows;
+  return older.rows;
 }
 
 async function profilesFor(db: Db, ids: readonly string[]): Promise<Map<string, ProfileRow>> {
@@ -209,7 +231,7 @@ async function watchedBy(db: Db, viewerId: string | null, storyIds: readonly str
 
 const facts = (p: ProfileRow): StoryAuthorFacts => ({ id: p.id, handle: p.handle, visibility: p.visibility, isSuspended: !!p.is_suspended, isHidden: !!p.is_hidden });
 
-const toItem = (r: StoryRow): StoryItem => ({
+const toItem = (r: StoryRow, watched: ReadonlySet<string>): StoryItem => ({
   id: r.id,
   mediaUrl: r.media_url,
   mediaKind: r.media_kind,
@@ -218,10 +240,13 @@ const toItem = (r: StoryRow): StoryItem => ({
   // Absent column (0081 unapplied) === the column's own default.
   allowReshare: r.allow_reshare ?? true,
   thumbnailUrl: r.thumbnail_url ?? null,
+  seen: watched.has(r.id),
+  expiresAt: r.expires_at ?? null,
+  allowReplies: r.allow_replies ?? true,
 });
 
-function groupOf(p: ProfileRow, stories: StoryItem[]): StoryGroup {
-  return {
+function groupOf(p: ProfileRow, stories: StoryItem[], viewerId: string | null = null): StoryGroup {
+  const group: StoryGroup = {
     userId: p.id,
     handle: p.handle as string,
     displayName: p.display_name || `@${p.handle as string}`,
@@ -229,6 +254,9 @@ function groupOf(p: ProfileRow, stories: StoryItem[]): StoryGroup {
     isVerified: !!p.is_verified,
     stories,
   };
+  // your own ring says who it reaches (unknown values read as private, as story-audience.ts treats them)
+  if (viewerId && p.id === viewerId) group.audience = p.visibility === "public" || p.visibility === "followers" ? p.visibility : "private";
+  return group;
 }
 
 /**
@@ -281,10 +309,10 @@ export async function getActiveStories(viewerId: string | null, limit = 50, scop
       if (!storyVisibleTo(facts(p), viewerId, t)) continue;
       let g = grouped.get(r.user_id);
       if (!g) {
-        g = { group: groupOf(p, []), tier: storyTier(r.user_id, viewerId, t), unwatched: false, newestAt: r.created_at };
+        g = { group: groupOf(p, [], viewerId), tier: storyTier(r.user_id, viewerId, t), unwatched: false, newestAt: r.created_at };
         grouped.set(r.user_id, g);
       }
-      g.group.stories.push(toItem(r));
+      g.group.stories.push(toItem(r, watched));
       if (!watched.has(r.id)) g.unwatched = true;
     }
 
@@ -320,7 +348,9 @@ export async function getActiveStoryForUser(userId: string, viewerId?: string | 
     const p = profiles.get(userId);
     if (!p || rows.length === 0) return null;
     if (!storyVisibleTo(facts(p), viewer, { ...ties, excluded: false })) return null;
-    return groupOf(p, rows.map(toItem));
+    // Part 3: the viewer's own views of these stories, one batched read — only once they may see them
+    const watched = await watchedBy(db, viewer, rows.map((r) => r.id));
+    return groupOf(p, rows.map((r) => toItem(r, watched)), viewer);
   } catch {
     return null;
   }

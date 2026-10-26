@@ -448,7 +448,8 @@ describe("ONE physical slot → ONE provider (slots addendum)", () => {
 
   it("a story card only between two people's stories, within the gap", () => {
     const s = src("features/app-shell/dashboard/story-viewer.tsx");
-    expect(s).toMatch(/else if \(gi < groups\.length - 1\) \{[\s\S]{0,160}const ad = storyAds\.status === "ready" \? storyAds\.take\(\) : null;/);
+    // Stories Part 3: `nextPosition` flags a ring boundary; at the very end it is null and the viewer closes (no card after the last)
+    expect(s).toMatch(/if \(!to\) \{\s*onClose\(\);\s*return;\s*\}\s*if \(to\.changedGroup\) \{[\s\S]{0,160}const ad = storyAds\.status === "ready" \? storyAds\.take\(\) : null;/);
     expect(s).toContain("replying || paidCard || optionsOpen"); // a hold plays at 2x since 2026-10-15
     // take() = within the admin gap, never the last one, recorded as shown
     const pool = src("features/ads-platform/serve/use-self-ad-pool.ts");

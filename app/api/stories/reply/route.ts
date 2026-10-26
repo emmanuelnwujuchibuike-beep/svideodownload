@@ -12,12 +12,24 @@ export const dynamic = "force-dynamic";
 const schema = z.object({
   toUserId: z.string().uuid(),
   text: z.string().trim().min(1).max(500),
+  /** The story replied to (the Story viewer design, 2026-10-26). Older clients omit it. */
+  storyId: z.string().uuid().optional(),
+  /** A reaction (Love it, Fire, Wow, the heart, a double-tap, a one-emoji reply) — counted for the author (0288). */
+  reaction: z.boolean().optional(),
 });
 
 /**
  * POST /api/stories/reply — reply to a story. Delivered as a direct message to
  * the story's author (creating the conversation if needed), prefixed so they see
  * it's a story reply. Powers text / emoji / sticker replies from the viewer.
+ *
+ * With `storyId` (the new viewer always sends it):
+ *   · the replier must be able to SEE that story (`story_view_access`, 0285/0287)
+ *     and it must be this author's — a reply never reaches past a block;
+ *   · the author's "Allow replies" switch (0288) is obeyed: off → 403;
+ *   · a `reaction` is recorded once per person per story (story_reactions, 0288)
+ *     so the author's "Seen by" can count it. Best-effort: an unapplied 0288
+ *     never stops the message itself.
  */
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -34,15 +46,41 @@ export async function POST(request: Request) {
   }
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid reply." }, { status: 400 });
-  const { toUserId, text } = parsed.data;
+  const { toUserId, text, storyId, reaction } = parsed.data;
 
   if (toUserId === user.id) return NextResponse.json({ error: "You can't reply to your own story." }, { status: 400 });
+
+  if (storyId) {
+    const admin = createAdminClient();
+    const [{ data: access, error: accessError }, storyRead] = await Promise.all([
+      admin.rpc("story_view_access", { p_story: storyId, p_viewer: user.id }),
+      admin.from("stories").select("user_id, allow_replies").eq("id", storyId).maybeSingle(),
+    ]);
+    // 0288 not applied: read the author without the switch (replies stay on, the column's default)
+    const story = storyRead.error ? (await admin.from("stories").select("user_id").eq("id", storyId).maybeSingle()).data : storyRead.data;
+    if (accessError || access !== "ok" || !story || (story.user_id as string) !== toUserId) {
+      return NextResponse.json({ error: "That story isn't available." }, { status: 403 });
+    }
+    if ((story as { allow_replies?: boolean | null }).allow_replies === false) {
+      return NextResponse.json({ error: "Replies are off for this story." }, { status: 403 });
+    }
+  }
 
   const conv = await getOrCreateConversation(user.id, toUserId);
   if (!conv.ok) return NextResponse.json({ error: "Couldn't send." }, { status: 403 });
 
   const sent = await sendMessage(user.id, conv.id, `↩️ Replied to your story: ${text}`);
   if (!sent.ok) return NextResponse.json({ error: "Couldn't send." }, { status: 500 });
+
+  if (storyId && reaction) {
+    await createAdminClient()
+      .from("story_reactions")
+      .upsert({ story_id: storyId, reactor_id: user.id, emoji: text.slice(0, 16), reacted_at: new Date().toISOString() }, { onConflict: "story_id,reactor_id" })
+      .then(
+        () => undefined,
+        () => undefined,
+      );
+  }
 
   // Device push to the story author (this path bypasses the messages API route,
   // so it wouldn't otherwise push when they're away).

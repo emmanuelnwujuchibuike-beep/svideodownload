@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { cacheDelete } from "@/lib/cache";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -37,4 +39,36 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (error) return NextResponse.json({ error: "Couldn't delete the story." }, { status: 500 });
   if (data !== true) return NextResponse.json({ error: "Not found." }, { status: 404 });
   return NextResponse.json({ ok: true });
+}
+
+/**
+ * PATCH /api/stories/:id  { allowReplies: boolean } — the author's "Allow replies"
+ * switch (Story options, 0288). A member session cannot update a story (0285), so
+ * the service role writes it — only after matching the row to THIS member, in the
+ * same statement (`.eq("user_id", user.id)`): another member's story changes
+ * nothing and answers 404. The 0285 trigger still guards the story's life.
+ */
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  if (!UUID.test(id)) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+
+  const body = (await request.json().catch(() => null)) as { allowReplies?: unknown } | null;
+  if (typeof body?.allowReplies !== "boolean") return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+
+  const { data, error } = await createAdminClient()
+    .from("stories")
+    .update({ allow_replies: body.allowReplies })
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .select("id");
+  if (error) return NextResponse.json({ error: "Couldn't save that." }, { status: 500 });
+  if (!data || data.length === 0) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  // the author's own rings carry the switch — their 20 s copy must not show the old value
+  await Promise.all((["all", "friends", "following"] as const).map((s) => cacheDelete(`stories:${user.id}:${s}`))).catch(() => {});
+  return NextResponse.json({ ok: true, allowReplies: body.allowReplies });
 }

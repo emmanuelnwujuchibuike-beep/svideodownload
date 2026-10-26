@@ -3,6 +3,7 @@ import "server-only";
 import { isCoinTransferAuthorized, type CoinTransferAuthorization } from "@/lib/coin/authorization";
 import { transferRulesForDb, withdrawalRulesForDb, type FrenzCoinConfig } from "@/lib/coin/config";
 import { pinPolicy } from "@/lib/coin/pin";
+import { resolveStoryGift, storyGiftPath, type StoryGift } from "@/lib/coin/story-gift";
 import { COIN_WALLET_PATH, coinMemberLabel, emailCoinReceipt, notifyCoin, notifyCoinAdmins } from "@/lib/coin/notify";
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import { SITE_URL } from "@/lib/site";
@@ -70,7 +71,7 @@ const refuse = (reason: string): { ok: false; status: number; reason: string; er
  * notified_at, so a retried request, a replay or a second announce never notifies twice, and a failed push never
  * touches the transfer.
  */
-export async function sendCoins(input: { senderId: string; accountNumber: string; amountCents: number; idempotencyKey: string; note: string | null; config: FrenzCoinConfig; authorization: CoinTransferAuthorization | null }): Promise<CoinResult<{ transferId: string; amountCents: number; feeCents: number; totalCents: number; duplicate: boolean; announce: () => Promise<void> }>> {
+export async function sendCoins(input: { senderId: string; accountNumber: string; amountCents: number; idempotencyKey: string; note: string | null; config: FrenzCoinConfig; authorization: CoinTransferAuthorization | null; storyId?: string | null }): Promise<CoinResult<{ transferId: string; amountCents: number; feeCents: number; totalCents: number; duplicate: boolean; announce: () => Promise<void> }>> {
   if (!input.config.enabled || !input.config.transfers.enabled) return refuse("disabled");
   if (!isCoinTransferAuthorized(input.authorization, input.senderId)) return refuse("authorization_required");
   if (!Number.isSafeInteger(input.amountCents) || input.amountCents <= 0 || !KEY.test(input.idempotencyKey) || !WALLET_NUMBER.test(input.accountNumber)) return refuse("invalid");
@@ -99,7 +100,7 @@ export async function sendCoins(input: { senderId: string; accountNumber: string
   const transferId = r.transfer_id;
   const amountCents = Number(r.amount);
   // a replay answers what the first request did; its announcement (if any) was the first request's
-  const announce = r.duplicate || !r.recipient_id ? async () => {} : () => announceCoinTransfer({ transferId, recipientId: r.recipient_id!, senderId: input.senderId, amountCents, feeCents: Number(r.fee), totalCents: Number(r.total) });
+  const announce = r.duplicate || !r.recipient_id ? async () => {} : () => announceCoinTransfer({ transferId, recipientId: r.recipient_id!, senderId: input.senderId, amountCents, feeCents: Number(r.fee), totalCents: Number(r.total), storyId: input.storyId ?? null });
   return { ok: true, transferId, amountCents, feeCents: Number(r.fee), totalCents: Number(r.total), duplicate: !!r.duplicate, announce };
 }
 
@@ -107,14 +108,17 @@ export async function sendCoins(input: { senderId: string; accountNumber: string
  * Tell the recipient once. The claim is a conditional update of the transfer's `transfer_in` ledger row (notified_at
  * null → now, allowed once by 0278's ledger guard): only the caller whose update moved it sends. Never throws.
  */
-export async function announceCoinTransfer(t: { transferId: string; recipientId: string; senderId: string; amountCents: number; feeCents?: number; totalCents?: number }): Promise<void> {
-  await announceToRecipient(t);
+export async function announceCoinTransfer(t: { transferId: string; recipientId: string; senderId: string; amountCents: number; feeCents?: number; totalCents?: number; storyId?: string | null }): Promise<void> {
+  // sent from a story (2026-10-26): honoured only if it is the recipient's live story and the sender may see it (lib/coin/story-gift.ts)
+  const gift = t.storyId ? await resolveStoryGift(t.senderId, t.recipientId, t.storyId) : null;
+  await announceToRecipient(t, gift);
   const amount = usd(t.amountCents);
   const fee = t.feeCents ?? 0;
   const total = t.totalCents ?? t.amountCents + fee;
   // closeout: the sender's own record that it went, once (claim key), low priority — Part 5: and their receipt by email
   const to = await coinMemberPublicName(t.recipientId);
-  await notifyCoin(t.senderId, `coin-transfer-out:${t.transferId}`, "coin_transfer_sent", { title: `You sent ${amount} in Frenz Coin`, body: `Your transfer of ${amount} was delivered.`, genericBody: "Your Frenz Coin transfer was delivered." }, { priority: "low", email: { subject: `You sent ${amount} in Frenz Coin`, heading: "Transfer sent", intro: `You sent ${amount} in Frenz Coin to ${to}. It was delivered.`, body: `Amount ${amount} · fee ${usd(fee)} · total taken from your wallet ${usd(total)}. Reference: ${t.transferId}` } });
+  const forStory = gift ? ` for ${to}'s story` : "";
+  await notifyCoin(t.senderId, `coin-transfer-out:${t.transferId}`, "coin_transfer_sent", { title: `You sent ${amount} in Frenz Coin`, body: gift ? `Your gift of ${amount}${forStory} was delivered.` : `Your transfer of ${amount} was delivered.`, genericBody: "Your Frenz Coin transfer was delivered." }, { priority: "low", email: { subject: `You sent ${amount} in Frenz Coin`, heading: "Transfer sent", intro: `You sent ${amount} in Frenz Coin to ${to}${gift ? " for their story" : ""}. It was delivered.`, body: `Amount ${amount} · fee ${usd(fee)} · total taken from your wallet ${usd(total)}. Reference: ${t.transferId}` } });
   // Part 5: the admins — who sent whom how much, and the fee earned
   const [from, toAdmin] = await Promise.all([coinMemberLabel(t.senderId), coinMemberLabel(t.recipientId)]);
   await notifyCoinAdmins(`coin-transfer:${t.transferId}`, t.senderId, {
@@ -133,7 +137,7 @@ async function coinMemberPublicName(userId: string): Promise<string> {
   return p?.display_name || (p?.handle ? `@${p.handle}` : "a Frenz member");
 }
 
-async function announceToRecipient(t: { transferId: string; recipientId: string; senderId: string; amountCents: number }): Promise<void> {
+async function announceToRecipient(t: { transferId: string; recipientId: string; senderId: string; amountCents: number }, gift: StoryGift | null = null): Promise<void> {
   try {
     const db = createAdminClient();
     const { data, error } = await db
@@ -150,10 +154,13 @@ async function announceToRecipient(t: { transferId: string; recipientId: string;
     const p = me as { handle?: string | null; display_name?: string | null } | null;
     const who = p?.display_name || (p?.handle ? `@${p.handle}` : "A Frenz member");
     const amount = usd(t.amountCents);
-    // closeout (0283): the coin's own type
-    await sendSmartPush(t.recipientId, { title: `You received ${amount} in Frenz Coin`, body: `${who} sent you ${amount} in Frenz Coin.`, genericBody: "You received Frenz Coin.", url: `${SITE_URL}${COIN_WALLET_PATH}`, tag: `coin-transfer-${t.transferId}` }, "high", "premium", { type: "coin_transfer_received" });
+    // closeout (0283): the coin's own type. Sent from a story: it names the story, shows its picture and opens it.
+    const push = gift
+      ? { title: `${who} sent you ${amount} for your story`, body: `${who} sent you ${amount} in Frenz Coin for your story. Tap to see the story.`, genericBody: "You received Frenz Coin for your story.", url: `${SITE_URL}${storyGiftPath(gift.storyId)}`, ...(gift.coverUrl ? { icon: gift.coverUrl } : {}) }
+      : { title: `You received ${amount} in Frenz Coin`, body: `${who} sent you ${amount} in Frenz Coin.`, genericBody: "You received Frenz Coin.", url: `${SITE_URL}${COIN_WALLET_PATH}` };
+    await sendSmartPush(t.recipientId, { ...push, tag: `coin-transfer-${t.transferId}` }, "high", "premium", { type: "coin_transfer_received" });
     // Part 5: the recipient's receipt by email — under the same claim (the ledger row's notified_at), so once
-    await emailCoinReceipt(t.recipientId, { subject: `You received ${amount} in Frenz Coin`, heading: "You received Frenz Coin", intro: `${who} sent you ${amount} in Frenz Coin. It's in your wallet now.`, body: `Reference: ${t.transferId}` });
+    await emailCoinReceipt(t.recipientId, { subject: `You received ${amount} in Frenz Coin`, heading: "You received Frenz Coin", intro: `${who} sent you ${amount} in Frenz Coin${gift ? " for your story" : ""}. It's in your wallet now.`, body: `Reference: ${t.transferId}` });
   } catch (e) {
     console.warn("[coin/transfer] announce failed — the transfer stands", { transferId: t.transferId, error: e instanceof Error ? e.name : "unknown" });
   }

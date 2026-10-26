@@ -131,6 +131,64 @@ describe("sendCoins", () => {
   });
 });
 
+/*
+  Owner, 2026-10-26: "let users get a notification when someone gift them frenz coin through story and the particular
+  story". The story is a LABEL on the transfer (lib/coin/story-gift.ts): never sent to the money function, checked only
+  after the commit — the recipient's live story, one the sender may see — else the plain notification.
+*/
+describe("Frenz Coin sent from a story", () => {
+  const R = "9f8e7d6c-5b4a-4c3d-8e2f-ba0987654321";
+  const STORY = "20000000-0000-4000-8000-000000000001";
+  const later = () => new Date(Date.now() + 3_600_000).toISOString();
+  beforeEach(() => {
+    db.rpc.transfer_coins_with_pin = vi.fn(() => ({ data: { ok: true, transfer_id: "t1", recipient_id: R, amount: 5_000, fee: 600, total: 5_600 }, error: null }));
+    db.tables.ai_product_ledger = [{ id: "l1", user_id: R, product: "frenz_coin", kind: "transfer_in", reference: "coin-transfer:t1", notified_at: null }];
+    db.tables.stories = [{ id: STORY, user_id: R, media_kind: "image", media_url: "https://media.test/s.jpg", thumbnail_url: null, expires_at: later() }];
+    db.tables.profiles!.push({ id: R, handle: "bola", display_name: "Bola" });
+    db.rpc.story_view_access = vi.fn(() => ({ data: "ok", error: null }));
+  });
+  const gifted = async (storyId: string | null = STORY) => {
+    const out = await send({ storyId });
+    if (out.ok) await out.announce();
+    return push.mock.calls.find((c) => c[0] === R)?.[1] as { title: string; body: string; url: string; icon?: string } | undefined;
+  };
+
+  it("the recipient is told it was for their story, sees its picture, and the notification opens THAT story", async () => {
+    const p = await gifted();
+    expect(p?.title).toBe("Ada sent you $50.00 for your story");
+    expect(p?.url).toMatch(new RegExp(`/home\\?story=${STORY}$`));
+    expect(p?.icon).toBe("https://media.test/s.jpg");
+    expect(db.rpc.story_view_access).toHaveBeenCalledWith({ p_story: STORY, p_viewer: "u1" });
+    // the sender's own notice says so too
+    expect((push.mock.calls.find((c) => c[0] === "u1")?.[1] as { body: string }).body).toBe("Your gift of $50.00 for Bola's story was delivered.");
+  });
+
+  it("🔴 the story never reaches the money function", async () => {
+    await gifted();
+    const args = (db.rpc.transfer_coins_with_pin as ReturnType<typeof vi.fn>).mock.calls[0]![0] as Record<string, unknown>;
+    expect(JSON.stringify(args)).not.toContain(STORY);
+  });
+
+  it.each([
+    ["another member's story", () => (db.tables.stories![0]!.user_id = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d")],
+    ["a story that has ended", () => (db.tables.stories![0]!.expires_at = new Date(Date.now() - 1000).toISOString())],
+    ["a story the sender may not see (a block)", () => (db.rpc.story_view_access = vi.fn(() => ({ data: "forbidden", error: null })))],
+    ["no such story", () => (db.tables.stories = [])],
+  ])("🔴 %s: the plain 'You received' notification, opening the wallet", async (_label, arrange) => {
+    arrange();
+    const p = await gifted();
+    expect(p?.title).toBe("You received $50.00 in Frenz Coin");
+    expect(p?.url).toMatch(/\/wallet$/);
+    expect(p?.icon).toBeUndefined();
+  });
+
+  it("no story named: nothing extra is read", async () => {
+    const p = await gifted(null);
+    expect(p?.title).toBe("You received $50.00 in Frenz Coin");
+    expect(db.rpc.story_view_access).not.toHaveBeenCalled();
+  });
+});
+
 describe("requestCoinWithdrawal", () => {
   const ask = (over: Partial<Parameters<typeof coin.requestCoinWithdrawal>[0]> = {}) => coin.requestCoinWithdrawal({ userId: "u1", grossCents: 10_000, method: "paystack", details, idempotencyKey: "cw_0123456789", config: on, authorization: WGRANT as never, ...over });
   it("🔴 closeout: no proof, or a TRANSFER proof, never requests a withdrawal (nothing reaches the database)", async () => {

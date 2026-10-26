@@ -1,80 +1,98 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
+
 import { readIdentity } from "@/lib/auth/identity-cache";
-import { LEGACY_SEEN_KEY, SEEN_KEY } from "@/lib/social/story-cache";
-import type { StoryGroup } from "@/lib/social/stories";
+import { confirmedSeenIds, rememberConfirmedView, subscribeConfirmedSeen } from "@/lib/social/story-cache";
+import type { StoryGroup, StoryItem } from "@/lib/social/stories";
 
 /**
- * Device-local "seen" tracking for Story rings — a per-device signal (same
- * trade-off already made for the feed's "while you were away" via
- * `localStorage frenz:feed-seen-at`), not a cross-device synced one. Keyed by
- * handle -> the newest story `createdAt` the viewer has opened for that author;
- * a group reads as "seen" once its newest story is at or before that mark.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  WATCHED OR NOT — the server decides (Stories Part 3, 2026-10-26)
+ * ═══════════════════════════════════════════════════════════════════════════
  *
- * 🔴 PER ACCOUNT (Stories Part 1, 2026-10-26, audit S5): which stories somebody
- * watched is theirs. The marks are saved under the signed-in handle and read back
- * only for it, and cleared on sign-out (`clearStoryCaches`, lib/auth/sign-out.ts).
- * The marks saved before this (under no account) are adopted ONCE by the account
- * signed in when they are first read — they were that device's only account's —
- * so nobody's rings all turn unseen on the day this ships.
+ * The audit's B4. Until now a ring's colour came from THIS PHONE: a localStorage
+ * mark per author ("the newest story time I opened"), written the moment a ring
+ * was OPENED — so opening one story of seven greyed all seven, a second phone
+ * showed everything unwatched, and the order beside it (Part 2's unwatched-first,
+ * from story_views) disagreed with the colour.
+ *
+ * Now there is one answer, per STORY:
+ *
+ *   story.seen            the server's — the viewer's own story_views row, read in
+ *                         the batch that already orders the rings (stories.ts)
+ *   + a confirmed view    what this session's POST /api/stories/:id/views answered
+ *                         `recorded: true` for, until the next fetch carries it
+ *                         (story-cache.ts `rememberConfirmedView`)
+ *
+ * Nothing is marked seen on a failed or refused request, nothing is marked for a
+ * story that was never on screen, and nothing here outlives the account: the
+ * confirmed ids are kept per signed-in handle and dropped on sign-out.
  */
 
-export type SeenMap = Record<string, string>;
+export type SeenOverlay = ReadonlySet<string>;
 
-interface Stored {
-  owner: string;
-  marks: SeenMap;
+const NONE: SeenOverlay = new Set();
+
+/** The views this session has had confirmed — re-renders a ring the moment one lands. Empty on the server. */
+export function useSeenOverlay(): SeenOverlay {
+  return useSyncExternalStore(subscribeConfirmedSeen, confirmedSeenIds, () => NONE);
 }
 
-function owner(): string | null {
-  return readIdentity()?.handle ?? null;
+export function isStorySeen(story: StoryItem, overlay: SeenOverlay): boolean {
+  return story.seen === true || overlay.has(story.id);
 }
 
-function read(): SeenMap {
-  const me = owner();
-  if (!me) return {};
+/** A ring is "watched" only when EVERY story in it is — one new story makes it unwatched again. */
+export function isGroupSeen(group: StoryGroup, overlay: SeenOverlay): boolean {
+  return group.stories.length > 0 && group.stories.every((s) => isStorySeen(s, overlay));
+}
+
+/* ─────────────────────────── recording a view ──────────────────────────── */
+
+export interface ViewOutcome {
+  /** the server holds this view now (written, or already there) */
+  recorded: boolean;
+  /** false: ended, gone, or no longer the viewer's to see — drop it */
+  available: boolean;
+}
+
+type Poster = (storyId: string) => Promise<ViewOutcome>;
+
+const postView: Poster = async (storyId) => {
   try {
-    const raw = localStorage.getItem(SEEN_KEY);
-    if (raw) {
-      const s = JSON.parse(raw) as Partial<Stored>;
-      return s.owner === me && s.marks && typeof s.marks === "object" ? (s.marks as SeenMap) : {};
-    }
-    // first read since Part 1: adopt the unowned marks once, then drop them
-    const legacy = localStorage.getItem(LEGACY_SEEN_KEY);
-    if (!legacy) return {};
-    localStorage.removeItem(LEGACY_SEEN_KEY);
-    const marks = JSON.parse(legacy) as SeenMap;
-    if (!marks || typeof marks !== "object" || Array.isArray(marks)) return {};
-    localStorage.setItem(SEEN_KEY, JSON.stringify({ owner: me, marks } satisfies Stored));
-    return marks;
+    const r = await fetch(`/api/stories/${encodeURIComponent(storyId)}/views`, { method: "POST", keepalive: true });
+    if (!r.ok) return { recorded: false, available: true };
+    const d = (await r.json()) as { recorded?: unknown; available?: unknown };
+    return { recorded: d.recorded === true, available: d.available !== false };
   } catch {
-    return {};
+    return { recorded: false, available: true };
   }
+};
+
+/** One request per story per account per session: re-renders, effects re-running and remounts share it. */
+const requests = new Map<string, Promise<ViewOutcome>>();
+
+/**
+ * Record that the viewer watched ONE story — called when it is on screen, never
+ * for the author's other stories. Deduplicated while in flight and after success;
+ * a failure is forgotten, so the next time the story is shown it is tried once
+ * more (one request per showing — never a retry loop).
+ */
+export function recordStoryView(storyId: string, post: Poster = postView): Promise<ViewOutcome> {
+  const key = `${readIdentity()?.handle ?? ""}:${storyId}`;
+  const existing = requests.get(key);
+  if (existing) return existing;
+  const p = post(storyId).then((out) => {
+    if (out.recorded) rememberConfirmedView(storyId);
+    else requests.delete(key);
+    return out;
+  });
+  requests.set(key, p);
+  return p;
 }
 
-export function loadSeenMap(): SeenMap {
-  if (typeof localStorage === "undefined") return {};
-  return read();
-}
-
-export function isGroupSeen(group: StoryGroup, seen: SeenMap): boolean {
-  const newest = group.stories[0]?.createdAt;
-  const mark = seen[group.handle];
-  return !!newest && !!mark && mark >= newest;
-}
-
-export function markGroupSeen(group: StoryGroup) {
-  if (typeof localStorage === "undefined") return;
-  const me = owner();
-  const newest = group.stories[0]?.createdAt;
-  if (!me || !newest) return;
-  const map = read();
-  const mark = map[group.handle];
-  if (mark && mark >= newest) return;
-  map[group.handle] = newest;
-  try {
-    localStorage.setItem(SEEN_KEY, JSON.stringify({ owner: me, marks: map } satisfies Stored));
-  } catch {
-    /* storage full/unavailable — seen-state just won't persist this time */
-  }
+/** Tests only: forget every request this module made. */
+export function resetStoryViewRequests(): void {
+  requests.clear();
 }

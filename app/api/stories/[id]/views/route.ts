@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { cacheDelete } from "@/lib/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -31,7 +32,21 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * The GET then applies the author's own half: with THEIR switch off, the list
  * comes back with every `screenshotted` flag false. They opted out of the
  * exchange, so they do not get the half that benefits them.
+ *
+ * ── Stories Part 3 (2026-10-26): what the POST answers ─────────────────────
+ *
+ *   recorded   true only when the row EXISTS after this call (written now, or
+ *              already there). A failed write is false — the client marks a ring
+ *              seen only on true (lib/social/story-seen.ts), so a lost request
+ *              can never turn a ring grey that the server would show unwatched.
+ *   available  false when the story has ended, is gone, or this viewer may no
+ *              longer see it (a block, a privacy change) — one flag for all three,
+ *              so the answer reveals nothing about WHY. The viewer drops the story
+ *              and moves on. A failed access check stays `available: true`: the
+ *              rings that offered the story were already authorised, and a
+ *              database hiccup must not yank stories from somebody mid-watch.
  */
+const GONE = new Set(["missing", "expired", "forbidden"]);
 
 /** Both halves of the rule read this. Defaults TRUE, and a missing column (migration not yet applied) is also TRUE. */
 async function screenshotAlertsOn(admin: ReturnType<typeof createAdminClient>, userId: string): Promise<boolean> {
@@ -49,12 +64,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   } = await supabase.auth.getUser();
   // A signed-out visitor watching a story is not an error — there is simply
   // nobody to record. Answering 200 keeps the client's fire-and-forget quiet.
-  if (!user) return NextResponse.json({ ok: true, recorded: false });
+  if (!user) return NextResponse.json({ ok: true, recorded: false, available: true });
 
   const shot = new URL(request.url).searchParams.get("shot") === "1";
   const admin = createAdminClient();
 
-  if (!UUID.test(id)) return NextResponse.json({ ok: true, recorded: false });
+  if (!UUID.test(id)) return NextResponse.json({ ok: true, recorded: false, available: false });
 
   try {
     /*
@@ -67,21 +82,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       Watching your own story is not a view ("self"), and screenshotting it is not news.
     */
     const { data: access, error: accessError } = await admin.rpc("story_view_access", { p_story: id, p_viewer: user.id });
-    if (accessError || access !== "ok") return NextResponse.json({ ok: true, recorded: false });
+    if (accessError || access !== "ok") return NextResponse.json({ ok: true, recorded: false, available: accessError ? true : !GONE.has(access as string) });
 
     if (shot) {
       /*
         🔴 The rule. With the switch off nothing is written — not a flag that is
         later hidden, not a row the author cannot read. There is no record.
       */
-      if (!(await screenshotAlertsOn(admin, user.id))) return NextResponse.json({ ok: true, recorded: false, reason: "alerts-off" });
-      await admin
+      if (!(await screenshotAlertsOn(admin, user.id))) return NextResponse.json({ ok: true, recorded: false, available: true, reason: "alerts-off" });
+      const { error: shotError } = await admin
         .from("story_views")
         .upsert(
           { story_id: id, viewer_id: user.id, screenshot_at: new Date().toISOString() },
           { onConflict: "story_id,viewer_id" },
         );
-      return NextResponse.json({ ok: true, recorded: true });
+      return NextResponse.json({ ok: true, recorded: !shotError, available: true });
     }
 
     /*
@@ -90,13 +105,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       importantly, so a second view cannot wipe a `screenshot_at` already on the
       row by overwriting it with a default.
     */
-    await admin
+    const { data: inserted, error: writeError } = await admin
       .from("story_views")
-      .upsert({ story_id: id, viewer_id: user.id }, { onConflict: "story_id,viewer_id", ignoreDuplicates: true });
-    return NextResponse.json({ ok: true, recorded: true });
+      .upsert({ story_id: id, viewer_id: user.id }, { onConflict: "story_id,viewer_id", ignoreDuplicates: true })
+      .select("story_id");
+    if (writeError) return NextResponse.json({ ok: true, recorded: false, available: true });
+    /*
+      A FIRST view changes this viewer's rings (seen, and Part 2's unwatched-first
+      order), so their own 20 s ring cache (app/api/stories/route.ts) is dropped — a
+      refresh then shows the server's answer, not the copy from before. A repeat
+      view inserts nothing (ON CONFLICT DO NOTHING returns no row) and costs nothing.
+    */
+    if ((inserted ?? []).length > 0) {
+      await Promise.all((["all", "friends", "following"] as const).map((s) => cacheDelete(`stories:${user.id}:${s}`))).catch(() => {});
+    }
+    return NextResponse.json({ ok: true, recorded: true, available: true });
   } catch {
     // A view that failed to record must never surface to somebody watching a story.
-    return NextResponse.json({ ok: true, recorded: false });
+    return NextResponse.json({ ok: true, recorded: false, available: true });
   }
 }
 
@@ -115,13 +141,26 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   // this says it before a query runs, with a sentence instead of an empty array.
   if ((story.user_id as string) !== user.id) return NextResponse.json({ error: "Not yours." }, { status: 403 });
 
-  const { data, error } = await admin
-    .from("story_views")
-    .select("viewer_id, viewed_at, screenshot_at")
-    .eq("story_id", id)
-    .order("viewed_at", { ascending: false })
-    .limit(200);
+  /*
+    The Story viewer design's "Seen by" (2026-10-26): the three totals are REAL
+    counts (truth rule — never a sample number) — viewers from story_views, people
+    who reacted from story_reactions (0288), reshares from the stories that name
+    this one as their source (0081) — read together. The list itself stays the
+    newest 200; the count says how many there are in all.
+  */
+  const [{ data, error, count }, reactionRead, reshareRead] = await Promise.all([
+    admin
+      .from("story_views")
+      .select("viewer_id, viewed_at, screenshot_at", { count: "exact" })
+      .eq("story_id", id)
+      .order("viewed_at", { ascending: false })
+      .limit(200),
+    admin.from("story_reactions").select("reactor_id", { count: "exact" }).eq("story_id", id).limit(1000),
+    admin.from("stories").select("id", { count: "exact", head: true }).eq("reshared_from_story_id", id),
+  ]);
   if (error) return NextResponse.json({ error: "Couldn't load viewers." }, { status: 500 });
+  // 0288 not applied: no reactions yet — null, so the sheet shows a dash, not a made-up 0
+  const reacted = new Set(reactionRead.error ? [] : (reactionRead.data ?? []).map((r) => r.reactor_id as string));
 
   const rows = data ?? [];
   const ids = rows.map((r) => r.viewer_id as string);
@@ -136,6 +175,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   return NextResponse.json({
     screenshotAlerts: authorSeesShots,
+    totals: {
+      viewers: count ?? rows.length,
+      reactions: reactionRead.error ? null : (reactionRead.count ?? reacted.size),
+      reshares: reshareRead.error ? null : (reshareRead.count ?? 0),
+    },
     viewers: rows.map((r) => {
       const p = byId.get(r.viewer_id as string);
       return {
@@ -145,6 +189,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         avatarUrl: (p?.avatar_url as string | null) ?? null,
         viewedAt: r.viewed_at as string,
         screenshotted: authorSeesShots ? !!r.screenshot_at : false,
+        reacted: reacted.has(r.viewer_id as string),
       };
     }),
   });

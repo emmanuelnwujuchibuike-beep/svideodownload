@@ -136,7 +136,7 @@ export const walletApi = {
   history: (cursor: string | null, limit = 20, signal?: AbortSignal) => get<HistoryPage>(`/api/coin/history?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`, signal),
   quote: (kind: "transfer" | "withdrawal", amountCents: number, signal?: AbortSignal) => get<TransferQuote | WithdrawalQuote>(`/api/coin/quote?kind=${kind}&amountCents=${amountCents}`, signal),
   lookup: (number: string, signal?: AbortSignal) => get<{ ok: true; name: string; handle: string | null; avatarUrl: string | null }>(`/api/ai/wallet/transfer/lookup?number=${encodeURIComponent(number)}`, signal),
-  transfer: (b: { accountNumber: string; amountCents: number; idempotencyKey: string; note: string | null; pin: string }) =>
+  transfer: (b: { accountNumber: string; amountCents: number; idempotencyKey: string; note: string | null; pin: string; storyId?: string }) =>
     post<{ ok: true; transferId: string; amountCents: number; feeCents: number; totalCents: number; duplicate: boolean }>("/api/coin/transfers", b),
   deposit: (b: { amountCents: number; idempotencyKey: string }) => post<{ ok: true; url: string; reference: string; amountCents: number; holdHours: number; reused: boolean }>("/api/coin/deposits", b),
   verifyDeposit: (reference: string, signal?: AbortSignal) => post<{ status: "on_hold" | "pending" | "failed" | "review"; amountCents?: number; releaseAt?: string }>("/api/coin/deposits/verify", { reference }, signal),

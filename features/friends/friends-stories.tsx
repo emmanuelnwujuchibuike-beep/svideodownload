@@ -2,13 +2,13 @@
 
 import { Plus, CircleDashed } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
 import { StoryViewer } from "@/features/app-shell/dashboard/stories-row";
 import { useQuery } from "@/features/data";
 import type { StoryGroup } from "@/lib/social/stories";
-import { isGroupSeen, loadSeenMap, type SeenMap } from "@/lib/social/story-seen";
+import { isGroupSeen, useSeenOverlay } from "@/lib/social/story-seen";
 import { cn } from "@/lib/utils";
 
 type Scope = "friends" | "following";
@@ -53,8 +53,8 @@ export function FriendsStories({
   const [start, setStart] = useState<number | null>(null);
   const initial = (viewerName ?? "").charAt(0).toUpperCase() || "+";
 
-  const [seen, setSeen] = useState<SeenMap>({});
-  useEffect(() => setSeen(loadSeenMap()), [groups]);
+  // the server's per-story `seen` plus this session's confirmed views (Stories Part 3, lib/social/story-seen.ts)
+  const seen = useSeenOverlay();
 
   return (
     <div className="mb-5">
@@ -186,7 +186,7 @@ export function FriendsStories({
       </div>
 
       {start !== null ? (
-        <StoryViewer groups={groups} startGroup={start} onClose={() => setStart(null)} onGroupSeen={() => setSeen(loadSeenMap())} />
+        <StoryViewer groups={groups} startGroup={start} onClose={() => setStart(null)} />
       ) : null}
     </div>
   );

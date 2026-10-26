@@ -108,6 +108,8 @@ export const DATA_DOMAINS: DataDomain[] = [
         (ON DELETE CASCADE), as a 24-hour object's audience must.
       */
       "story_views",
+      // Who reacted to a story (0288) — one row per person, read by the author only, gone with the story.
+      "story_reactions",
       "user_stickers",
       "user_home_preferences",
       // FrenzDNA™ — per-category interest weights, self-owned (Feature 15

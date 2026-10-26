@@ -4,13 +4,13 @@ import { Plus } from "lucide-react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
 import { seed, useQuery } from "@/features/data";
 import { fetchStoryGroups, readCachedStories } from "@/lib/social/story-cache";
 import type { StoryGroup } from "@/lib/social/stories";
-import { isGroupSeen, loadSeenMap, type SeenMap } from "@/lib/social/story-seen";
+import { isGroupSeen, useSeenOverlay } from "@/lib/social/story-seen";
 import { cn } from "@/lib/utils";
 
 /*
@@ -158,18 +158,43 @@ export function StoriesRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per mount; the fetch below is the authority from then on
   }, []);
   const [start, setStart] = useState<number | null>(null);
+  const [startStory, setStartStory] = useState<string | undefined>(undefined);
   const initial = (viewerName ?? "").charAt(0).toUpperCase() || "+";
+
+  /*
+    `?story=<id>` opens that one story (2026-10-26) — where a "sent you Frenz Coin
+    for your story" notification lands (lib/coin/story-gift.ts). Read once the rings
+    hold it, then dropped from the address so a refresh or back does not reopen it.
+    An ended story says so instead of opening something else.
+  */
+  const wanted = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (wanted.current === undefined) wanted.current = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("story");
+    const id = wanted.current;
+    if (!id || data === undefined) return;
+    wanted.current = null;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("story");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    const gi = (data ?? []).findIndex((g) => g.stories.some((s) => s.id === id));
+    if (gi === -1) {
+      void import("@/features/ui/toast").then(({ toast }) => toast("That story has ended.", "info"));
+      return;
+    }
+    setStartStory(id);
+    setStart(gi);
+  }, [data]);
 
   // Server groups sort the viewer's own stories first when present — surfaced
   // once as a dedicated "Your Story" card, not a second time in the row below.
   const ownGroup = viewerHandle ? groups.find((g) => g.handle === viewerHandle) : undefined;
   const otherGroups = ownGroup ? groups.filter((g) => g !== ownGroup) : groups;
 
-  // Seen/unseen rings: hydration-safe default (everything reads "unseen" on
-  // first paint, same on server and client) then refined from localStorage
-  // right after mount — avoids a server/client markup mismatch.
-  const [seen, setSeen] = useState<SeenMap>({});
-  useEffect(() => setSeen(loadSeenMap()), [data]);
+  // Seen/unseen rings (Stories Part 3): each story's server `seen` — so the
+  // server-rendered row already paints the right colour, on every device — plus
+  // the views this session has had confirmed (empty on the server, so hydration
+  // matches; a confirmed view re-renders the ring with no refetch).
+  const seen = useSeenOverlay();
 
   return (
     <div className={cn("frenz-ui -mx-1 flex overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", compact ? "gap-2.5" : "gap-3.5")}>
@@ -225,7 +250,15 @@ export function StoriesRow({
       ))}
 
       {start !== null ? (
-        <StoryViewer groups={groups} startGroup={start} onClose={() => setStart(null)} onGroupSeen={() => setSeen(loadSeenMap())} />
+        <StoryViewer
+          groups={groups}
+          startGroup={start}
+          startStoryId={startStory}
+          onClose={() => {
+            setStart(null);
+            setStartStory(undefined);
+          }}
+        />
       ) : null}
     </div>
   );

@@ -32,7 +32,8 @@ vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://sb.test");
 vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "test");
 const { POST: createStory } = await import("./route");
 const { DELETE: deleteStory } = await import("./[id]/route");
-const { POST: recordView } = await import("./[id]/views/route");
+const { POST: recordView, GET: viewers } = await import("./[id]/views/route");
+const { cacheDelete } = await import("@/lib/cache");
 const { reshare } = await import("@/lib/social/reshare");
 
 const R2 = "https://media.test";
@@ -152,6 +153,91 @@ describe("S6 · a view is recorded only when the viewer may see the story", () =
     const res = await recordView(new Request("https://x.test", { method: "POST" }), params("not-a-uuid"));
     expect((await res.json()).recorded).toBe(false);
     expect(db.rpc.story_view_access).not.toHaveBeenCalled();
+  });
+});
+
+/*
+  Stories Part 3 (2026-10-26): the answer the client marks a ring by. `recorded` only when the row exists,
+  `available: false` (one flag for ended / gone / no longer allowed) takes the story off screen.
+*/
+describe("Part 3 · what the view POST answers", () => {
+  const view = () => recordView(new Request(`https://x.test/api/stories/${STORY}/views`, { method: "POST" }), params(STORY));
+  const rows = () => db.tables.story_views!;
+  beforeEach(() => vi.mocked(cacheDelete).mockClear());
+
+  it.each(["forbidden", "expired", "missing"])("🔴 %s → available:false, and the reason is not told", async (verdict) => {
+    db.rpc.story_view_access = vi.fn(() => ({ data: verdict, error: null }));
+    const body = await (await view()).json();
+    expect(body).toEqual({ ok: true, recorded: false, available: false });
+  });
+
+  it("the check failing (a database hiccup) keeps the story on screen — and records nothing", async () => {
+    db.rpc.story_view_access = vi.fn(() => ({ data: null, error: { message: "down" } }));
+    expect(await (await view()).json()).toEqual({ ok: true, recorded: false, available: true });
+  });
+
+  it("🔴 the write failing is recorded:false — the client must not grey the ring", async () => {
+    db.rpc.story_view_access = vi.fn(() => ({ data: "ok", error: null }));
+    db.failOn.story_views = "write failed";
+    expect(await (await view()).json()).toEqual({ ok: true, recorded: false, available: true });
+  });
+
+  it("a first view writes ONE row and drops only this viewer's ring caches", async () => {
+    db.rpc.story_view_access = vi.fn(() => ({ data: "ok", error: null }));
+    expect((await (await view()).json()).recorded).toBe(true);
+    expect(rows()).toHaveLength(1);
+    expect(vi.mocked(cacheDelete).mock.calls.map((c) => c[0]).sort()).toEqual([`stories:${ME}:all`, `stories:${ME}:following`, `stories:${ME}:friends`]);
+  });
+
+  it("🔴 a duplicate view: still one row, written ON CONFLICT DO NOTHING, no cache traffic", async () => {
+    db.rpc.story_view_access = vi.fn(() => ({ data: "ok", error: null }));
+    await view();
+    vi.mocked(cacheDelete).mockClear();
+    expect((await (await view()).json()).recorded).toBe(true);
+    expect(rows()).toHaveLength(1);
+    expect(cacheDelete).not.toHaveBeenCalled();
+  });
+
+  it("a screenshot on an existing view keeps it ONE row", async () => {
+    db.rpc.story_view_access = vi.fn(() => ({ data: "ok", error: null }));
+    await view();
+    await recordView(new Request(`https://x.test/api/stories/${STORY}/views?shot=1`, { method: "POST" }), params(STORY));
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0]!.screenshot_at).toEqual(expect.any(String));
+  });
+
+  it("signed out: nothing recorded, nothing asked", async () => {
+    user = null;
+    db.rpc.story_view_access = vi.fn(() => ({ data: "ok", error: null }));
+    expect((await (await view()).json()).recorded).toBe(false);
+    expect(db.rpc.story_view_access).not.toHaveBeenCalled();
+  });
+});
+
+describe("the viewer list stays the author's", () => {
+  const list = () => viewers(new Request(`https://x.test/api/stories/${STORY}/views`), params(STORY));
+  beforeEach(() => {
+    db.tables.stories = [{ id: STORY, user_id: THEM }];
+    db.tables.story_views = [{ story_id: STORY, viewer_id: ME, viewed_at: "2026-10-26T10:00:00Z", screenshot_at: null }];
+  });
+
+  it("🔴 signed out: 401, and no view record leaves", async () => {
+    user = null;
+    const res = await list();
+    expect(res.status).toBe(401);
+    expect(JSON.stringify(await res.json())).not.toContain(ME);
+  });
+
+  it("🔴 a viewer who is not the author: 403, even one who is IN the list", async () => {
+    const res = await list();
+    expect(res.status).toBe(403);
+    expect(JSON.stringify(await res.json())).not.toContain("viewedAt");
+  });
+
+  it("the author: their viewers", async () => {
+    user = { id: THEM };
+    const body = await (await list()).json();
+    expect(body.viewers.map((v: { id: string }) => v.id)).toEqual([ME]);
   });
 });
 

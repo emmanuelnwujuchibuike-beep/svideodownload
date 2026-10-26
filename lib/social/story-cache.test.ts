@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { clearStoryCaches, readCachedStories, writeCachedStories } from "./story-cache";
-import { loadSeenMap, markGroupSeen } from "./story-seen";
+import { clearStoryCaches, confirmedSeenIds, readCachedStories, rememberConfirmedView, writeCachedStories } from "./story-cache";
 import type { StoryGroup } from "./stories";
 
 /**
@@ -25,6 +24,7 @@ beforeEach(() => {
     setItem: (k: string, v: string) => void store.set(k, v),
     removeItem: (k: string) => void store.delete(k),
   });
+  clearStoryCaches(); // the confirmed views live in memory between tests
   signIn("me");
 });
 
@@ -113,29 +113,54 @@ describe("🔴 story state is per account", () => {
     expect(store.has("frenz-stories-v1")).toBe(false);
   });
 
-  it("sign-out clears the rings AND the seen marks, old keys too — and nothing else", () => {
+  it("sign-out clears the rings, the confirmed views AND the old seen marks — and nothing else", () => {
     writeCachedStories([group("ada", 1)]);
-    markGroupSeen(group("ada", 1));
+    rememberConfirmedView("s-ada");
     store.set("frenz-stories-v1", "[]");
     store.set("frenz:stories-seen", "{}");
+    store.set("frenz:stories-seen-v2", "{}");
     store.set("unrelated", "keep");
     clearStoryCaches();
     expect([...store.keys()].sort()).toEqual(["frenz-identity", "unrelated"]);
+    expect(confirmedSeenIds().size).toBe(0);
   });
 
-  it("seen marks belong to the account that made them", () => {
-    markGroupSeen(group("ada", 1));
-    expect(Object.keys(loadSeenMap())).toEqual(["ada"]);
+  /* Stories Part 3: a confirmed view belongs to the account that made it */
+  it("confirmed views belong to the account that made them — another account on the same phone sees none", () => {
+    rememberConfirmedView("s-ada");
+    expect([...confirmedSeenIds()]).toEqual(["s-ada"]);
     signIn("someone-else");
-    expect(loadSeenMap()).toEqual({});
+    expect(confirmedSeenIds().size).toBe(0);
+    rememberConfirmedView("s-bob");
+    signIn("me");
+    expect([...confirmedSeenIds()]).toEqual([]); // the newer account's set replaced it — nothing crosses over
   });
 
-  it("the old unowned seen marks are adopted ONCE by the account signed in, so no ring turns unseen on release", () => {
+  it("a confirmed view patches the disk copy, so a cold start paints the ring watched", () => {
+    writeCachedStories([group("ada", 1)]);
+    rememberConfirmedView("s-ada");
+    expect(readCachedStories()?.[0]?.stories[0]?.seen).toBe(true);
+  });
+
+  it("signed out, a view is never remembered", () => {
+    signIn(null);
+    rememberConfirmedView("s-ada");
+    expect(confirmedSeenIds().size).toBe(0);
+  });
+
+  it("the old device-local seen marks are never read again, and are removed on the next ring write", () => {
     store.set("frenz:stories-seen", JSON.stringify({ ada: "2026-10-26T00:00:00.000Z" }));
-    expect(loadSeenMap()).toEqual({ ada: "2026-10-26T00:00:00.000Z" });
+    store.set("frenz:stories-seen-v2", JSON.stringify({ owner: "me", marks: { ada: "2026-10-26T00:00:00.000Z" } }));
+    writeCachedStories([group("ada", 1)]);
     expect(store.has("frenz:stories-seen")).toBe(false);
-    signIn("someone-else");
-    expect(loadSeenMap()).toEqual({});
+    expect(store.has("frenz:stories-seen-v2")).toBe(false);
+  });
+
+  it("a story ended early (its own end time passed) is dropped from the disk copy", () => {
+    const g = group("ended", 1);
+    g.stories[0]!.expiresAt = new Date(Date.now() - 1000).toISOString();
+    writeCachedStories([g]);
+    expect(readCachedStories()).toBeUndefined();
   });
 
   it("lib/auth/sign-out.ts calls it", async () => {

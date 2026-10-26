@@ -1,37 +1,49 @@
 "use client";
 
 /*
-  The full-screen Story viewer (moved out of stories-row.tsx in Stories Part 2, 2026-10-26, unchanged). It is loaded
-  only when a story is opened: stories-row.tsx exports a `next/dynamic` wrapper under the same name, so the rings on
-  /home, /messages, Friends and a chat thread never carry framer-motion, the ad card or these sheets.
+  The full-screen Story viewer (moved out of stories-row.tsx in Stories Part 2, 2026-10-26). It is loaded only when a
+  story is opened: stories-row.tsx exports a `next/dynamic` wrapper under the same name, so the rings on /home,
+  /messages, Friends and a chat thread never carry framer-motion, the ad card or these sheets. Drawn to the Story
+  Viewer design since 2026-10-26 (design/Frenz-Story-Viewer-design.zip).
 */
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
-import { Eye, FastForward, Heart, Loader2, MoreHorizontal, Repeat2, Rewind, Send, X } from "lucide-react";
+import { FastForward, Loader2, Rewind, Send } from "lucide-react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useSelfAdPool } from "@/features/ads-platform/serve/use-self-ad-pool";
 import type { EligibleAd } from "@/lib/ads-platform/eligibility";
-import { seed } from "@/features/data";
+import { getEntry, mutate } from "@/features/data";
 import { useEntitlements } from "@/features/auth/use-entitlements";
+import { faceGradient, useStoryViewers, viewersLine } from "@/features/social/story-viewers-data";
 import { toast } from "@/features/ui/toast";
 import { fireWowFeedback, WowBurst } from "@/features/ui/wow-burst";
-import { formatRelative } from "@/lib/i18n/format";
 
 // Sheets a story viewer opens on a tap: loaded then, not with /home (2026-10-16, /home weight).
 const ReshareSheet = dynamic(() => import("@/features/social/reshare-sheet").then((m) => m.ReshareSheet), { ssr: false });
 const StoryViewersSheet = dynamic(() => import("@/features/social/story-viewers-sheet").then((m) => m.StoryViewersSheet), {
   ssr: false,
 });
+const SendToChatSheet = dynamic(() => import("@/features/downloads/send-to-chat-sheet").then((m) => m.SendToChatSheet), { ssr: false });
 import { haptic } from "@/lib/motion/haptics";
 import { isSingleEmoji } from "@/lib/social/single-emoji";
-import { writeCachedStories } from "@/lib/social/story-cache";
-import type { StoryGroup } from "@/lib/social/stories";
-import { markGroupSeen } from "@/lib/social/story-seen";
+import { readCachedStories, writeCachedStories } from "@/lib/social/story-cache";
+import { isStoryLive, nextPosition, positionAfterRemoval, startIndex, withoutStories, type IsSeen, type Position } from "@/lib/social/story-progression";
+import type { StoryGroup, StoryItem } from "@/lib/social/stories";
+import { isStorySeen, recordStoryView, useSeenOverlay } from "@/lib/social/story-seen";
 import { cn } from "@/lib/utils";
 
-const QUICK_EMOJI = ["😍", "😂", "😮"];
+/** Every story surface's copy of the rings (Home/Messages, the Friends tabs) and the disk copy, without these stories. */
+function forgetStories(ids: ReadonlySet<string>) {
+  for (const key of ["stories", "stories:friends", "stories:following"]) {
+    if (getEntry<StoryGroup[]>(key).data === undefined) continue;
+    mutate<StoryGroup[]>(key, (prev) => withoutStories(prev ?? [], ids));
+  }
+  const disk = readCachedStories();
+  if (disk) writeCachedStories(withoutStories(disk, ids));
+}
 
 const IMAGE_MS = 5000;
 
@@ -44,30 +56,45 @@ const SelfStoryCard = dynamic(() => import("@/features/ads-platform/serve/self-s
 export function StoryViewer({
   groups: incomingGroups,
   startGroup,
+  startStoryId,
   onClose,
-  onGroupSeen,
 }: {
   groups: StoryGroup[];
   startGroup: number;
+  /** open at this exact story (a "Frenz Coin for your story" notification) instead of the ring's first unwatched one */
+  startStoryId?: string;
   onClose: () => void;
-  /** Fired once per group after it's marked seen (ring-state refresh in the row). */
-  onGroupSeen?: () => void;
 }) {
   /*
-    Stories the author deleted from here (owner, 2026-10-08). Filtered locally
-    so the viewer moves on at once whichever surface opened it (the home row,
-    Friends, a chat), and the shared "stories" cache is updated for the rest.
+    Watched or not, per story (Stories Part 3): the server's `seen` plus the views
+    this session has had confirmed. Read through a ref by the navigation below, so
+    a view landing mid-story does not rebuild `next` and restart the image timer.
   */
-  const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(() => new Set());
-  const groups = useMemo(
-    () =>
-      deletedIds.size === 0
-        ? incomingGroups
-        : incomingGroups.map((g) => ({ ...g, stories: g.stories.filter((x) => !deletedIds.has(x.id)) })).filter((g) => g.stories.length > 0),
-    [incomingGroups, deletedIds],
-  );
+  const overlay = useSeenOverlay();
+  const isSeen = useCallback<IsSeen>((s: StoryItem) => isStorySeen(s, overlay), [overlay]);
+  const isSeenRef = useRef(isSeen);
+  isSeenRef.current = isSeen;
+
+  /*
+    Stories that left while the viewer is open: deleted by their author here
+    (owner, 2026-10-08), ended, or no longer this viewer's to see (Stories Part 3 —
+    the view request says so). Filtered locally so the viewer moves on at once
+    whichever surface opened it (the home row, Friends, a chat), and every
+    surface's copy of the rings drops them too (`forgetStories`). Stories already
+    over when the viewer opens never show at all.
+  */
+  const [goneIds, setGoneIds] = useState<ReadonlySet<string>>(() => {
+    const now = Date.now();
+    return new Set(incomingGroups.flatMap((g) => g.stories).filter((s) => !isStoryLive(s, now)).map((s) => s.id));
+  });
+  const groups = useMemo(() => withoutStories(incomingGroups, goneIds), [incomingGroups, goneIds]);
   const [optionsOpen, setOptionsOpen] = useState(false);
-  const [gi, setGi] = useState(startGroup);
+  const [optionsUsed, setOptionsUsed] = useState(false);
+  useEffect(() => {
+    if (optionsOpen) setOptionsUsed(true);
+  }, [optionsOpen]);
+  // the ring that was tapped (found by author — an ended story may have shifted the list), at its first unwatched story
+  const [gi, setGi] = useState(() => Math.max(0, groups.findIndex((g) => g.userId === incomingGroups[startGroup]?.userId)));
   /*
     Ad Platform Part 5 (placement stories_card): BETWEEN two people's stories,
     never inside one, at most once per the format's admin gap. The story under
@@ -76,7 +103,10 @@ export function StoryViewer({
   */
   const storyAds = useSelfAdPool("stories_card", "stories");
   const [paidCard, setPaidCard] = useState<EligibleAd | null>(null);
-  const [si, setSi] = useState(0);
+  const [si, setSi] = useState(() => {
+    const exact = startStoryId ? (groups[gi]?.stories.findIndex((s) => s.id === startStoryId) ?? -1) : -1;
+    return exact >= 0 ? exact : startIndex(groups[gi], isSeen);
+  });
   const [pct, setPct] = useState(0);
   /*
     ── 🔴 THE SHAPE OF THE SOURCE DECIDES, NOT THE VIEWER (owner, 2026-10-04) ─
@@ -150,11 +180,12 @@ export function StoryViewer({
   useEffect(() => {
     setFillFrame(false);
   }, [gi, si]);
-  const { handle } = useEntitlements();
+  // `frenzCoin` is the on/off flag /api/me already carries — the gift button needs no wallet request
+  const { handle, frenzCoin, ready: entitlementsReady } = useEntitlements();
 
   const group = groups[gi]!;
   const story = group?.stories[si];
-  const isOwn = !!handle && group.handle === handle;
+  const isOwn = !!handle && group?.handle === handle;
 
   // The author's own switch (owner, 2026-07-16: "users who made the posts on
   // stories … can set the media to be reshare or not"). Optimistic, and the
@@ -182,13 +213,86 @@ export function StoryViewer({
     }
   };
 
-  // Mark the group seen as soon as it's opened (matches how Instagram-style
-  // rings behave — opening counts as "seen", not finishing every segment).
+  /*
+    The author's "Allow replies" (Story options, 0288). Optimistic like resharing;
+    the reply route obeys the stored value whatever this shows.
+  */
+  const [allowRepliesOverride, setAllowRepliesOverride] = useState<boolean | null>(null);
+  const allowReplies = allowRepliesOverride ?? story?.allowReplies ?? true;
+  useEffect(() => setAllowRepliesOverride(null), [story?.id]);
+  const toggleAllowReplies = async () => {
+    if (!story) return;
+    const next = !allowReplies;
+    setAllowRepliesOverride(next);
+    haptic("selection");
+    try {
+      const res = await fetch(`/api/stories/${encodeURIComponent(story.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ allowReplies: next }),
+      });
+      if (!res.ok) throw new Error();
+      toast(next ? "Replies are on for this story" : "Replies are off for this story", "success");
+    } catch {
+      setAllowRepliesOverride(!next);
+      toast("Couldn't save that.", "error");
+    }
+  };
+
+  // the sound control on a video story (the design's speaker button) — kept across stories while the viewer is open
+  const [muted, setMuted] = useState(false);
+  // your own story's "Share": the existing send-to-chat sheet, fetched on the tap
+  const [sendOpen, setSendOpen] = useState(false);
+  // the people who saw YOUR story, for the bottom bar (one read per story, only for your own)
+  const ownViewers = useStoryViewers(isOwn && story ? story.id : null);
+
+  /*
+    🔴 Stories Part 3: opening a ring no longer marks it seen. It used to write a
+    device-local mark for the author's NEWEST story the moment the ring opened,
+    which greyed every story in it — including the ones never shown. A story is
+    now seen only when its own view is recorded, below.
+  */
+
+  /*
+    A story leaves (Part 3): the viewer stands where `positionAfterRemoval` says,
+    or closes when nothing is left. The refs move with each call, so two stories
+    leaving before React re-renders still land on the right one.
+  */
+  const posRef = useRef<Position>({ gi, si });
+  posRef.current = { gi, si };
+  const groupsRef = useRef(groups);
+  groupsRef.current = groups;
+  const dropStories = useCallback(
+    (ids: readonly string[]) => {
+      const removed = new Set(ids);
+      const before = groupsRef.current;
+      const at = posRef.current;
+      const onScreen = before[at.gi]?.stories[at.si]?.id;
+      const to = positionAfterRemoval(before, at, removed, isSeenRef.current);
+      groupsRef.current = withoutStories(before, removed);
+      setGoneIds((prev) => new Set([...prev, ...removed]));
+      forgetStories(removed);
+      if (!to) {
+        onClose();
+        return;
+      }
+      posRef.current = to;
+      if (onScreen && removed.has(onScreen)) setPct(0);
+      setGi(to.gi);
+      setSi(to.si);
+    },
+    [onClose],
+  );
+
+  // A story that ends while the viewer is open is passed over, not played on.
   useEffect(() => {
-    if (!group) return;
-    markGroupSeen(group);
-    onGroupSeen?.();
-  }, [group, onGroupSeen]);
+    if (story && !isStoryLive(story, Date.now())) dropStories([story.id]);
+  }, [story, dropStories]);
+
+  // Nothing left to show (every story ended, or the ring tapped was already gone): close, never a blank takeover.
+  useEffect(() => {
+    if (!story) onClose();
+  }, [story, onClose]);
 
   /*
     ── 🔴 PRELOAD THE NEXT ONE (owner, 2026-10-04: "stories delays to load
@@ -215,7 +319,9 @@ export function StoryViewer({
   */
   useEffect(() => {
     if (!group) return;
-    const next = group.stories[si + 1] ?? groups[gi + 1]?.stories[0];
+    // the story `next()` will actually go to — the next ring opens at its first unwatched one
+    const to = nextPosition(groups, { gi, si }, isSeenRef.current);
+    const next = to ? groups[to.gi]?.stories[to.si] : undefined;
     if (!next) return;
     const href = next.mediaKind === "image" ? next.mediaUrl : next.thumbnailUrl;
     if (!href) return;
@@ -237,23 +343,37 @@ export function StoryViewer({
     closed in the same gesture that triggered it. Your own story is skipped on
     the server too; skipping it here as well saves a pointless request on the
     surface people open most.
+
+    Stories Part 3: keyed on the story's ID, so a re-render, a refetched ring or
+    a confirmed view landing never sends it again (story-seen.ts also shares one
+    request per story per session). The ring greys only when the server answers
+    `recorded`; `available: false` (ended, gone, or no longer the viewer's to
+    see — a new block, a privacy change) takes the story off screen at once.
   */
+  const storyId = story?.id;
   useEffect(() => {
-    if (!story || isOwn) return;
-    void fetch(`/api/stories/${encodeURIComponent(story.id)}/views`, { method: "POST", keepalive: true }).catch(() => {});
-  }, [story, isOwn]);
+    if (!storyId || isOwn) return;
+    // dropped even if the viewer has moved on by the time the answer lands — it must not be reachable by going back
+    void recordStoryView(storyId).then((out) => {
+      if (!out.available) dropStories([storyId]);
+    });
+  }, [storyId, isOwn, dropStories]);
 
   const next = useCallback(() => {
     setPct(0);
-    if (si < group.stories.length - 1) setSi(si + 1);
-    else if (gi < groups.length - 1) {
+    const to = nextPosition(groups, { gi, si }, isSeenRef.current);
+    if (!to) {
+      onClose();
+      return;
+    }
+    if (to.changedGroup) {
       // the next paid card that may show now (never the last one, within the admin gap)
       const ad = storyAds.status === "ready" ? storyAds.take() : null;
       if (ad) setPaidCard(ad);
-      setGi(gi + 1);
-      setSi(0);
-    } else onClose();
-  }, [si, gi, group, groups.length, onClose, storyAds]);
+    }
+    setGi(to.gi);
+    setSi(to.si);
+  }, [si, gi, groups, onClose, storyAds]);
 
   const prev = useCallback(() => {
     setPct(0);
@@ -359,7 +479,7 @@ export function StoryViewer({
       setWowKey((k) => k + 1);
       if (story && !isOwn && !wowed.current.has(story.id)) {
         wowed.current.add(story.id);
-        void postStoryReply(group.userId, "😮");
+        if (allowReplies) void postStoryReply(group.userId, "😮", { storyId: story.id, reaction: true });
       }
       return;
     }
@@ -442,14 +562,30 @@ export function StoryViewer({
     and the message page). Rendered in place it sat inside a scroll or transform ancestor
     whose stacking context trapped this z-[95] UNDER the z-40 bottom nav. From <body> the
     viewer covers the nav entirely and the reply box is the last thing on the screen.
+
+    ── The Story Viewer design (design/Frenz-Story-Viewer-design.zip, 2026-10-26) ──
+    StoryWatching.dc.html (someone else's) and StoryYours.dc.html (yours), at their
+    proportions: the picture is a card with 28 px bottom corners ending above a black
+    band (92 px on a 844 px phone: 58 px of controls + the home-indicator inset); the
+    progress bar and the header float on it under a dark top fade; the quick reactions
+    sit on its foot; the band holds the reply box (theirs) or who saw it (yours).
+
+    🔴 Lightweight on purpose (owner: "never slow or overheat"): the design's frosted
+    buttons are drawn as a tinted fill with NO backdrop-filter — six blurred circles over
+    a PLAYING video re-blur every frame, which is exactly the cost this viewer has always
+    refused (see the progress bar note below). The sheets that open over a paused story
+    keep their glass.
   */
+  const firstName = group.displayName.split(" ")[0] || group.displayName;
+  const viewersReady = ownViewers.status === "ready" ? ownViewers.data : null;
   return createPortal(
     <motion.div
       ref={rootRef}
-      className="fixed inset-0 z-[95] flex items-center justify-center bg-black"
+      className="frenz-ui fixed inset-0 z-[95] bg-black !text-white"
       role="dialog"
       aria-modal="true"
-      style={{ y, opacity: reduceMotion ? 1 : dragOpacity }}
+      aria-label={`Story from ${group.displayName}`}
+      style={{ y, opacity: reduceMotion ? 1 : dragOpacity, ["--story-band" as string]: "calc(3.625rem + max(env(safe-area-inset-bottom), 0.75rem))" }}
       // Off while replying, not just the close callback — otherwise the panel
       // still visually drags under a thumb that's trying to select/caret text
       // in the composer, it just silently fails to close at the end of it.
@@ -461,63 +597,292 @@ export function StoryViewer({
       onDragEnd={handleDragEnd}
     >
       {paidCard ? <SelfStoryCard ad={paidCard} onDone={() => setPaidCard(null)} /> : null}
-      {holding ? (
-        <div className="pointer-events-none absolute left-1/2 top-[calc(1.5rem+var(--frenz-safe-top))] z-30 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-[13px] font-bold text-white backdrop-blur-md" aria-live="polite">
-          {holding === "back" ? <Rewind className="h-4 w-4 fill-white" aria-hidden /> : null}
-          2×
-          {holding === "forward" ? <FastForward className="h-4 w-4 fill-white" aria-hidden /> : null}
-        </div>
-      ) : null}
       <WowBurst burstKey={wowKey} anchorRef={rootRef} />
       {rise ? <EmojiRise key={rise.id} emoji={rise.emoji} onDone={() => setRise(null)} /> : null}
-      {/*
-        Every piece of chrome below fades out together while `holding` —
-        "full clear screen on press and hold" (owner, 2026-08-16). One class
-        on each element rather than one wrapping div: several of these are
-        already individually `absolute`-positioned at their own coordinates
-        (progress bar, author row, buttons), and wrapping them would either
-        collapse that positioning or require re-deriving it on a new parent.
-        `pointer-events-none` while hidden so a hold-release near a button's
-        old position can't register a stray tap on chrome that isn't visible.
-      */}
-      <div
-        className={cn(
-          "absolute right-4 top-[calc(1.25rem+var(--frenz-safe-top))] z-20 flex items-center gap-2 transition-opacity duration-150",
-          holding && "pointer-events-none opacity-0",
-        )}
-      >
-        {/* Author: turn resharing on/off for THIS story. Viewer: reshare it —
-            but only when the author allows it (owner, 2026-07-16). The row is
-            hidden rather than disabled when it's off: a greyed-out "Reshare"
-            would advertise an action that will never work. */}
-        {isOwn ? (
-          <button
-            type="button"
-            onClick={() => void toggleAllowReshare()}
-            aria-pressed={effectiveAllow}
-            title={effectiveAllow ? "Resharing is on — tap to turn off" : "Resharing is off — tap to turn on"}
-            className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-2 text-xs font-semibold text-white backdrop-blur transition hover:bg-white/20"
-          >
-            <Repeat2 className={cn("h-4 w-4", !effectiveAllow && "opacity-40")} />
-            {effectiveAllow ? "Resharing on" : "Resharing off"}
-          </button>
-        ) : effectiveAllow ? (
-          <button
-            type="button"
-            onClick={() => setResharing(true)}
-            aria-label="Reshare this story"
-            className="rounded-full bg-white/10 p-2 text-white backdrop-blur transition hover:bg-white/20"
-          >
-            <Repeat2 className="h-5 w-5" />
-          </button>
-        ) : null}
-        <button type="button" onClick={() => setOptionsOpen(true)} aria-label="Story options" className="rounded-full bg-white/10 p-2 text-white backdrop-blur transition hover:bg-white/20">
-          <MoreHorizontal className="h-5 w-5" />
-        </button>
-        <button type="button" onClick={onClose} aria-label="Close" className="rounded-full bg-white/10 p-2 text-white backdrop-blur"><X className="h-5 w-5" /></button>
-      </div>
 
-      {story && optionsOpen ? (
+      {/*
+        ── 🔴 THE MEDIA STOPS AT THE SAFE AREA; THE CHROME FLOATS ON IT ──────
+        (owner, 2026-10-04, with a screenshot of the Dynamic Island): the picture
+        begins where the status bar ends and never passes behind it; the progress
+        bar and the header lie ON it. The design's card keeps that top line and
+        ends above the band (owner, 2026-10-08: "the bottom should be comment,
+        react and all") — now in the browser too, as the design draws it.
+      */}
+      <section
+        aria-label={`Story ${si + 1} of ${group.stories.length}`}
+        className="absolute inset-x-0 overflow-hidden rounded-b-[28px] bg-[#0B0920]"
+        style={{ top: "var(--frenz-safe-top, 0px)", bottom: "var(--story-band)" }}
+      >
+        <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center">
+          {story.mediaKind === "video" ? (
+            // eslint-disable-next-line jsx-a11y/media-has-caption
+            <video
+              ref={videoRef}
+              key={`${gi}-${si}`}
+              src={story.mediaUrl}
+              // The stored first frame (0083) paints immediately while the video
+              // buffers, instead of a black rectangle — and it's already in the
+              // image cache from the ring the user just tapped.
+              poster={story.thumbnailUrl ?? undefined}
+              autoPlay
+              playsInline
+              muted={muted}
+              onTimeUpdate={(e) => {
+                const v = e.currentTarget;
+                if (v.duration) setPct((v.currentTime / v.duration) * 100);
+              }}
+              onEnded={next}
+              onLoadedMetadata={(e) => setFillFrame(e.currentTarget.videoHeight > e.currentTarget.videoWidth)}
+              className={cn("h-full w-full", fillFrame ? "object-cover" : "object-contain")}
+            />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={`${gi}-${si}`}
+              src={story.mediaUrl}
+              alt=""
+              onLoad={(e) => setFillFrame(e.currentTarget.naturalHeight > e.currentTarget.naturalWidth)}
+              className={cn("h-full w-full", fillFrame ? "object-cover" : "object-contain")}
+            />
+          )}
+        </div>
+
+        {/* the design's fades: the header reads on any picture; the reactions on theirs */}
+        <div aria-hidden className={cn("pointer-events-none absolute inset-x-0 top-0 z-[1] h-[170px] bg-[linear-gradient(180deg,rgba(8,6,20,0.62)_0%,rgba(8,6,20,0.3)_55%,rgba(8,6,20,0)_100%)] transition-opacity duration-150", holding && "opacity-0")} />
+        {!isOwn ? (
+          <div aria-hidden className={cn("pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-[140px] bg-[linear-gradient(0deg,rgba(8,6,20,0.55)_0%,rgba(8,6,20,0)_100%)] transition-opacity duration-150", holding && "opacity-0")} />
+        ) : null}
+
+        {/*
+          tap zones: left third = back, the rest = forward (the whole picture).
+          Also the hold surface — press either zone and hold past 220ms to clear
+          the screen; release before that and it's an ordinary tap. `onClick`
+          checks `wasHold` because a hold's release still fires a click event,
+          which must NOT also navigate.
+        */}
+        <button
+          type="button"
+          aria-label="Previous (hold to rewind at 2x)"
+          onPointerDown={() => startHold("back")}
+          onPointerUp={endHold}
+          onPointerLeave={endHold}
+          onPointerCancel={endHold}
+          onClick={() => zoneTap(prev)}
+          className="absolute inset-y-0 left-0 z-10 w-1/3"
+        />
+        <button
+          type="button"
+          aria-label="Next (hold to play at 2x)"
+          onPointerDown={() => startHold("forward")}
+          onPointerUp={endHold}
+          onPointerLeave={endHold}
+          onPointerCancel={endHold}
+          onClick={() => zoneTap(next)}
+          className="absolute inset-y-0 left-1/3 right-0 z-10"
+        />
+
+        {/*
+          ── The segmented bar (owner, 2026-10-04): one segment per story, so the
+          COUNT IS THE BAR. The design's 3 px segments, 4 px apart, 12 px in.
+          🔴 No backdrop-blur and no gradient here, deliberately: this element sits
+          over every frame of a playing video. The current segment is driven by a
+          RAF/timeupdate already, so only the others transition.
+        */}
+        <div
+          className={cn("absolute inset-x-3 top-2.5 z-20 flex gap-1 transition-opacity duration-150", holding && "opacity-0")}
+          role="progressbar"
+          aria-label={`Story ${si + 1} of ${group.stories.length}`}
+          aria-valuemin={0}
+          aria-valuemax={group.stories.length}
+          aria-valuenow={si + 1}
+        >
+          {group.stories.map((_, idx) => (
+            <span key={idx} className="h-[3px] flex-1 overflow-hidden rounded-[2px] bg-white/[0.32] shadow-[0_1px_3px_rgba(0,0,0,0.3)]">
+              <span
+                className={cn(
+                  "block h-full bg-white",
+                  idx !== si && "transition-[width] duration-200",
+                  // an IMAGE segment moves in 2 % steps (Part 9) - a linear 120 ms glide hides the steps; a video's bar follows timeupdate untransitioned
+                  idx === si && story.mediaKind !== "video" && "transition-[width] duration-[120ms] ease-linear",
+                )}
+                style={{ width: `${idx < si ? 100 : idx === si ? pct : 0}%` }}
+              />
+            </span>
+          ))}
+        </div>
+
+        {/* the author, when, the sound — and the three round buttons (sound, options, close) */}
+        <header className={cn("absolute left-3 right-2 top-[22px] z-20 flex items-center gap-2.5 transition-opacity duration-150", holding && "pointer-events-none opacity-0")}>
+          <span aria-hidden className="flex h-[42px] w-[42px] shrink-0 rounded-full bg-[linear-gradient(135deg,#3D5AFE,#7B3FE4_55%,#C23FD1)] p-[2px]">
+            <span className="flex flex-1 items-center justify-center overflow-hidden rounded-full border-2 border-[#0B0920] bg-[linear-gradient(135deg,#3D5AFE,#7B3FE4)] font-heading text-[16px] font-extrabold text-white">
+              {group.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={group.avatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                group.displayName.charAt(0).toUpperCase()
+              )}
+            </span>
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col gap-[3px] [text-shadow:0_1px_6px_rgba(0,0,0,0.4)]">
+            <span className="flex min-w-0 items-center gap-[5px]">
+              <span className="truncate text-[15px] font-extrabold">{group.displayName}</span>
+              {group.isVerified ? <VerifiedMark /> : null}
+              <span className="shrink-0 text-[13px] font-semibold text-white/[0.82]">{shortAgo(story.createdAt)}</span>
+            </span>
+            {story.mediaKind === "video" ? (
+              <span className="flex min-w-0 items-center gap-[5px] text-[12px] font-semibold text-white/[0.88]">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden className="shrink-0">
+                  <path d="M4 10v4" />
+                  <path d="M8 7v10" />
+                  <path d="M12 4v16" />
+                  <path d="M16 8v8" />
+                  <path d="M20 11v2" />
+                </svg>
+                <span className="truncate">Original audio · {firstName}</span>
+              </span>
+            ) : null}
+          </span>
+          {/* the sound button only where there is sound — a speaker on a photo would do nothing */}
+          {story.mediaKind === "video" ? (
+            <GlassButton label={muted ? "Unmute" : "Mute"} onClick={() => setMuted((m) => !m)}>
+              {muted ? (
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M4 9h4l5-4v14l-5-4H4z" />
+                  <path d="M17 9l5 6" />
+                  <path d="M22 9l-5 6" />
+                </svg>
+              ) : (
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M4 9h4l5-4v14l-5-4H4z" />
+                  <path d="M16.5 8.5a5 5 0 0 1 0 7" />
+                  <path d="M19 6a8.5 8.5 0 0 1 0 12" />
+                </svg>
+              )}
+            </GlassButton>
+          ) : null}
+          <GlassButton label="Story options" onClick={() => setOptionsOpen(true)}>
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <circle cx="5" cy="12" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="19" cy="12" r="2" />
+            </svg>
+          </GlassButton>
+          <GlassButton label="Close" onClick={onClose}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden>
+              <path d="M6 6l12 12" />
+              <path d="M18 6L6 18" />
+            </svg>
+          </GlassButton>
+        </header>
+
+        {holding ? (
+          <div className="pointer-events-none absolute left-1/2 top-[76px] z-30 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-[13px] font-bold text-white" aria-live="polite">
+            {holding === "back" ? <Rewind className="h-4 w-4 fill-white" aria-hidden /> : null}
+            2×
+            {holding === "forward" ? <FastForward className="h-4 w-4 fill-white" aria-hidden /> : null}
+          </div>
+        ) : null}
+
+        {story.caption ? (
+          <p
+            className={cn(
+              "pointer-events-none absolute inset-x-0 z-[15] px-6 text-center text-sm text-white/95 drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] transition-opacity duration-150",
+              !isOwn && allowReplies ? "bottom-[68px]" : "bottom-5",
+              holding && "opacity-0",
+            )}
+          >
+            {story.caption}
+          </p>
+        ) : null}
+
+        {/* the design's quick reactions on the foot of the picture — each one a reaction the author can count (0288) */}
+        {!isOwn && allowReplies && !replying ? (
+          <div role="group" aria-label="Quick reactions" className={cn("absolute inset-x-4 bottom-4 z-20 flex justify-center gap-2 transition-opacity duration-150", holding && "pointer-events-none opacity-0")}>
+            {QUICK_REACTIONS.map((r) => (
+              <button
+                key={r.label}
+                type="button"
+                onClick={() => {
+                  haptic("light");
+                  setRise({ id: Date.now(), emoji: r.emoji });
+                  void postStoryReply(group.userId, r.emoji, { storyId: story.id, reaction: true });
+                }}
+                className="flex h-10 items-center gap-1.5 rounded-[20px] border border-white/[0.22] bg-[rgba(18,17,26,0.42)] px-3.5 text-[13px] font-bold text-white transition active:scale-95"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d={r.icon} />
+                </svg>
+                {r.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </section>
+
+      {/* ── the band: who saw it (yours) · the reply box (theirs) ── */}
+      {isOwn ? (
+        <nav
+          aria-label="Your story"
+          className={cn("absolute inset-x-0 bottom-0 z-30 flex items-start gap-2 pl-4 pr-3 transition-opacity duration-150", holding && "pointer-events-none opacity-0")}
+          style={{ height: "var(--story-band)" }}
+        >
+          <button type="button" onClick={() => setViewersOpen(true)} className="flex h-[3.625rem] min-w-0 flex-1 items-center gap-2.5 text-left">
+            {viewersReady && viewersReady.viewers.length > 0 ? (
+              <span aria-hidden className="flex shrink-0">
+                {viewersReady.viewers.slice(0, 3).map((v, i) => (
+                  <span key={v.id} className={cn("h-[30px] w-[30px] overflow-hidden rounded-full border-2 border-black", i > 0 && "-ml-2.5")}>
+                    <ViewerFace id={v.id} avatarUrl={v.avatarUrl} name={v.displayName ?? v.handle} />
+                  </span>
+                ))}
+              </span>
+            ) : null}
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className="flex items-center gap-1 text-[15px] font-extrabold">
+                {viewersReady ? `${viewersReady.totals.viewers.toLocaleString()} ${viewersReady.totals.viewers === 1 ? "viewer" : "viewers"}` : "Seen by"}
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M6 15l6-6 6 6" />
+                </svg>
+              </span>
+              <span className="truncate text-[12px] font-semibold text-[#A9A6BD]">
+                {viewersReady ? viewersLine(viewersReady) : ownViewers.status === "error" ? "Tap to see who viewed it" : "Loading…"}
+              </span>
+            </span>
+          </button>
+          <button type="button" onClick={() => toast("Highlights are coming soon.", "info")} className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-[5px] text-[11px] font-bold">
+            <span aria-hidden className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 16.5s-4-2.4-4-5.3A2.2 2.2 0 0 1 12 10a2.2 2.2 0 0 1 4 1.2c0 2.9-4 5.3-4 5.3z" />
+              </svg>
+            </span>
+            Highlight
+          </button>
+          <button type="button" onClick={() => setSendOpen(true)} className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-[5px] text-[11px] font-bold">
+            <span aria-hidden className="flex h-10 w-10 items-center justify-center rounded-full bg-[linear-gradient(135deg,#3D5AFE,#7B3FE4)] shadow-[0_8px_18px_-8px_rgba(91,63,240,0.8)]">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 2L11 13" />
+                <path d="M22 2l-7 20-4-9-9-4z" />
+              </svg>
+            </span>
+            Share
+          </button>
+        </nav>
+      ) : holding ? null : (
+        <StoryReplyBar
+          toUserId={group.userId}
+          storyId={story.id}
+          name={firstName}
+          allowReplies={allowReplies}
+          canShare={effectiveAllow}
+          coinGift={entitlementsReady && frenzCoin ? `/wallet/transfer?to=${encodeURIComponent(group.userId)}&story=${encodeURIComponent(story.id)}` : null}
+          onShare={() => setResharing(true)}
+          onFocusChange={setReplying}
+          onEmoji={(emoji) => setRise({ id: Date.now(), emoji })}
+        />
+      )}
+
+      {/* kept mounted once opened: "Send to chat" and "Report" close the sheet and open their own — unmounting it lost them */}
+      {optionsUsed ? (
         <StoryOptions
           open={optionsOpen}
           onClose={() => setOptionsOpen(false)}
@@ -525,330 +890,130 @@ export function StoryViewer({
           group={group}
           isOwn={isOwn}
           allowShare={effectiveAllow}
+          allowReplies={allowReplies}
+          onToggleReshare={() => void toggleAllowReshare()}
+          onToggleReplies={() => void toggleAllowReplies()}
           onSeenBy={() => setViewersOpen(true)}
           onReshare={() => setResharing(true)}
-          onDeleted={(id) => {
-            const left = group.stories.length - 1;
-            const updated = groups.map((g) => (g.userId === group.userId ? { ...g, stories: g.stories.filter((x) => x.id !== id) } : g)).filter((g) => g.stories.length > 0);
-            seed<StoryGroup[]>("stories", updated);
-            writeCachedStories(updated);
-            setPct(0);
-            if (left > 0) setSi(Math.min(si, left - 1));
-            else if (gi < groups.length - 1) setSi(0); // the next person's stories move into this index
-            else {
-              onClose();
-              return;
-            }
-            setDeletedIds((prev) => new Set(prev).add(id));
-          }}
+          // the same path as a story that ends or is withdrawn (Part 3): the next one slides in, every surface drops it
+          onDeleted={(id) => dropStories([id])}
         />
       ) : null}
 
-      {story ? (
-        <ReshareSheet
-          open={resharing}
-          onClose={() => setResharing(false)}
-          source="story"
-          sourceId={story.id}
-          mediaKind={story.mediaKind}
-          previewUrl={story.mediaKind === "image" ? story.mediaUrl : story.thumbnailUrl}
+      <ReshareSheet
+        open={resharing}
+        onClose={() => setResharing(false)}
+        source="story"
+        sourceId={story.id}
+        mediaKind={story.mediaKind}
+        previewUrl={story.mediaKind === "image" ? story.mediaUrl : story.thumbnailUrl}
+      />
+
+      {sendOpen ? (
+        <SendToChatSheet
+          open={sendOpen}
+          onClose={() => setSendOpen(false)}
+          blob={null}
+          // straight from the media CDN, only when a chat is picked
+          resolveBlob={async () => fetch(story.mediaUrl).then((r) => (r.ok ? r.blob() : null)).catch(() => null)}
+          kind={story.mediaKind}
+          title={story.caption?.trim() || `${group.displayName}'s story`}
+          thumbnailUrl={story.mediaKind === "image" ? story.mediaUrl : (story.thumbnailUrl ?? null)}
         />
       ) : null}
 
       {/*
         ── "Seen by" — the author's own story only (2026-10-04) ──────────────
-        Bottom-left, where Instagram and Snapchat both put it, so it is where a
-        thumb already expects it and it does not compete with the reshare and
-        close controls at the top right.
-
         Rendered only for `isOwn`: the route refuses anyone else and RLS refuses
         them underneath that, but offering a control that will 403 is worse than
-        not offering it. Lazy — the sheet fetches nothing until it is opened, so
-        an author scrolling their own statuses pays nothing for it.
+        not offering it. The sheet reads nothing until it is opened.
       */}
-      {isOwn && story ? (
-        <>
-          <button
-            type="button"
-            onClick={() => setViewersOpen(true)}
-            className={cn(
-              "absolute bottom-[calc(0.5rem+env(safe-area-inset-bottom,0px))] left-3 z-20 inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-[11px] font-medium text-white/90 transition active:scale-95",
-              holding && "pointer-events-none opacity-0",
-            )}
-          >
-            <Eye className="h-3.5 w-3.5" aria-hidden /> Seen by
-          </button>
-          <StoryViewersSheet storyId={story.id} open={viewersOpen} onClose={() => setViewersOpen(false)} />
-        </>
-      ) : null}
-
-      {/*
-        Progress segments — right on the safe-area line (owner, 2026-08-11:
-        "the progress bar should be in the line of the safe area"), a small
-        0.625rem breathing gap rather than the 0.75rem it had, which is what
-        the media stage's own top offset below is now measured FROM.
-      */}
-      <div
-        className={cn(
-          "absolute inset-x-3 top-[calc(0.625rem+var(--frenz-safe-top))] z-20 flex gap-[3px] transition-opacity duration-150",
-          holding && "opacity-0",
-        )}
-        role="group"
-        aria-label={`Story ${si + 1} of ${group.stories.length}`}
-      >
-        {/*
-          ── The segmented bar (owner, 2026-10-04, with a reference) ──────────
-          One segment per status, so the COUNT IS THE BAR: "users see their or
-          other story progress and how many status they uploaded" needs no
-          separate "3 / 7" label, and a label would be one more thing covering
-          the picture.
-
-          Premium without weight: 2.5px tall, fully rounded, and a hairline
-          shadow so the unfilled track survives a white photo underneath —
-          `bg-white/30` alone disappears on a bright frame, which is exactly
-          when somebody is trying to read their progress.
-
-          🔴 No backdrop-blur and no gradient here, deliberately. This element
-          sits over every frame of a playing video; a backdrop-filter on it is
-          the one thing on this screen that would genuinely cost frames, and the
-          owner asked for premium "without heavy weight".
-
-          The fill transitions only on segments that are NOT the current one —
-          the active segment is driven by a RAF/timeupdate at ~60fps already, and
-          a CSS transition on top of that makes it lag behind the video.
-        */}
-        {group.stories.map((_, idx) => (
-          <span
-            key={idx}
-            className="h-[2.5px] flex-1 overflow-hidden rounded-full bg-white/30 shadow-[0_0_1px_rgba(0,0,0,0.45)]"
-          >
-            <span
-              className={cn(
-                "block h-full rounded-full bg-white",
-                idx !== si && "transition-[width] duration-200",
-                // an IMAGE segment moves in 2 % steps (Part 9) - a linear 120 ms glide hides the steps; a video's bar follows timeupdate untransitioned
-                idx === si && story?.mediaKind !== "video" && "transition-[width] duration-[120ms] ease-linear",
-              )}
-              style={{ width: `${idx < si ? 100 : idx === si ? pct : 0}%` }}
-            />
-          </span>
-        ))}
-      </div>
-
-      {/*
-        ── The author row, rebuilt to the owner's reference (2026-10-04) ──────
-
-        Avatar hard left, the name bold on its own line, and the time UNDER it
-        in a lighter weight — the reference's two-line block, not the single
-        inline name this had. The second line is what the row gains: a story is
-        ephemeral, so "when was this posted" is the one fact a viewer actually
-        wants and the old row never answered.
-
-        Sits directly beneath the progress bar (`2.1rem` vs the bar's `0.625rem`)
-        so the two read as one piece of chrome rather than two floating
-        elements, which is what the reference shows.
-
-        Premium and light: NO glass panel behind it. A blurred pane here would
-        be a permanent rectangle over the top of every story, and the text
-        already survives any background on the drop-shadow alone — which costs
-        nothing to composite.
-      */}
-      <div
-        className={cn(
-          "absolute left-3 top-[calc(2.1rem+var(--frenz-safe-top))] z-20 flex min-w-0 items-center gap-2.5 pr-28 text-white transition-opacity duration-150",
-          holding && "pointer-events-none opacity-0",
-        )}
-      >
-        {group.avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={group.avatarUrl} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-white/35" />
-        ) : (
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-sm font-bold ring-1 ring-white/25">
-            {group.displayName.charAt(0)}
-          </span>
-        )}
-        <span className="min-w-0 leading-tight">
-          <span className="block truncate text-[15px] font-bold tracking-[-0.01em] drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]">
-            {group.displayName}
-          </span>
-          {story ? (
-            <span className="block truncate text-[12.5px] font-medium text-white/70 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
-              {formatRelative(story.createdAt)}
-            </span>
-          ) : null}
-        </span>
-      </div>
-
-      {/*
-        tap zones: left third = back, the rest = forward (full-screen coverage).
-        Also the hold surface — press either zone and hold past 220ms to clear
-        the screen; release before that and it's an ordinary tap. `onClick`
-        checks `wasHold` because a hold's release still fires a click event,
-        which must NOT also navigate.
-      */}
-      <button
-        type="button"
-        aria-label="Previous (hold to rewind at 2x)"
-        onPointerDown={() => startHold("back")}
-        onPointerUp={endHold}
-        onPointerLeave={endHold}
-        onPointerCancel={endHold}
-        onClick={() => zoneTap(prev)}
-        className="absolute inset-y-0 left-0 z-10 w-1/3"
-      />
-      <button
-        type="button"
-        aria-label="Next (hold to play at 2x)"
-        onPointerDown={() => startHold("forward")}
-        onPointerUp={endHold}
-        onPointerLeave={endHold}
-        onPointerCancel={endHold}
-        onClick={() => zoneTap(next)}
-        className="absolute inset-y-0 left-1/3 right-0 z-10"
-      />
-
-      {/*
-        ── The stage, corrected AGAIN (owner, 2026-08-16) ────────────────────
-        "the story top progress bar... needed that progress bar to be on top
-        of the video or image, and to the bottom 0, and the top should not
-        cross the safe area."
-
-        Reverses the 2026-08-11 pass directly above (kept in git history, not
-        repeated here): that version padded the stage below the progress bar
-        so the two never occupied the same pixels. The current, more recent
-        instruction is the opposite shape — the bar OVERLAYS the media rather
-        than the media stopping short of it, which is also how History's
-        equivalent stage already worked and was confirmed correct the same
-        day ("the history top is perfect already"). Media is `inset-0` again,
-        genuinely full-bleed including the region behind the progress bar and
-        the status bar; the bar itself keeps its own `safe-top`-aware position
-        AND now an explicit `z-20` vs. the stage's explicit `z-0` (was
-        implicit `z-auto` before — CSS stacking already put it on top either
-        way, but this makes the ordering a fact of the markup, not an
-        inference from the spec). "Should not cross the safe area" is about
-        the CONTROLS (the bar, the buttons) staying clear of the notch, which
-        their own `safe-top`-based offsets already guarantee — it was never
-        asking the MEDIA to stop short, which is the one thing an immersive
-        full-bleed video viewer specifically should not do.
-      */}
-      {/*
-        ── 🔴 THE MEDIA STOPS AT THE SAFE AREA; THE CHROME FLOATS ON IT ──────
-        (owner, 2026-10-04, with a screenshot of the Dynamic Island)
-
-        "The media is supposed to go under the progress bar, the progress bar
-        should float on top. But the media should not cross the safe area."
-
-        Those are two separate requirements and the old `inset-0` satisfied
-        neither cleanly: the media ran under the notch (crossing the safe area),
-        and because it did, the progress bar ended up reading as part of a black
-        band above the picture rather than as something lying ON it.
-
-        Now: `top` is the safe inset, so the picture begins exactly at the line
-        the status bar ends on and never passes behind it — and the progress bar
-        keeps its own `calc(0.625rem + safe-top)` offset, which now places it
-        just INSIDE the media's top edge. Same two elements, the relationship
-        the owner is asking for.
-
-        The note above is the superseded 2026-08-16 reasoning and is kept
-        deliberately: it argued an immersive viewer should never make the media
-        stop short, which is true of the BOTTOM (still `0`) and is what the new
-        instruction overrides for the top.
-      */}
-      {/*
-        ── 🔴 THE PWA KEEPS A BOTTOM BAND (owner, 2026-10-08: "story upload
-        shouldn't go to the bottom below on pwa, the bottom should be comment,
-        react and all") ──────────────────────────────────────────────────────
-        In the INSTALLED app the media stops above a black band, and the reply
-        box and reactions (or, on your own story, Seen by) live in that band —
-        Instagram's shape, and the same rule the History viewer follows
-        (download-player.tsx). In a browser its own toolbar is the bottom, so the
-        media still runs to the edge there.
-      */}
-      <div
-        className={cn(
-          "pointer-events-none absolute inset-x-0 bottom-0 z-0 flex items-center justify-center",
-          isOwn
-            ? "[.pwa-standalone_&]:bottom-[calc(env(safe-area-inset-bottom)+2.75rem)]"
-            : // the band is just the reply box (WhatsApp's shape — no emoji row)
-              "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+3.5rem)]",
-        )}
-        style={{ top: "var(--frenz-safe-top, 0px)" }}
-      >
-        {story.mediaKind === "video" ? (
-          // eslint-disable-next-line jsx-a11y/media-has-caption
-          <video
-            ref={videoRef}
-            key={`${gi}-${si}`}
-            src={story.mediaUrl}
-            // The stored first frame (0083) paints immediately while the video
-            // buffers, instead of a black rectangle — and it's already in the
-            // image cache from the ring the user just tapped.
-            poster={story.thumbnailUrl ?? undefined}
-            autoPlay
-            playsInline
-            onTimeUpdate={(e) => {
-              const v = e.currentTarget;
-              if (v.duration) setPct((v.currentTime / v.duration) * 100);
-            }}
-            onEnded={next}
-            onLoadedMetadata={(e) => setFillFrame(e.currentTarget.videoHeight > e.currentTarget.videoWidth)}
-            className={cn("h-full w-full", fillFrame ? "object-cover" : "object-contain")}
-          />
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            key={`${gi}-${si}`}
-            src={story.mediaUrl}
-            alt=""
-            onLoad={(e) => setFillFrame(e.currentTarget.naturalHeight > e.currentTarget.naturalWidth)}
-            className={cn("h-full w-full", fillFrame ? "object-cover" : "object-contain")}
-          />
-        )}
-      </div>
-      {story.caption ? (
-        <p
-          className={cn(
-            "pointer-events-none absolute inset-x-0 bottom-28 z-[15] px-6 text-center text-sm text-white/95 drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] transition-opacity duration-150",
-            // in the PWA the caption sits on the media, just above the band
-            isOwn
-              ? "[.pwa-standalone_&]:bottom-[calc(env(safe-area-inset-bottom)+3.75rem)]"
-              : "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.5rem)]",
-            holding && "opacity-0",
-          )}
-        >
-          {story.caption}
-        </p>
-      ) : null}
-
-      {/* Reply bar — text and quick emojis (delivered as a DM). Hidden with
-          the rest of the chrome while holding, not just faded: it sits UNDER
-          a `pointer-events-none` toggle of its own composer input, and a
-          held thumb resting near the bottom of the screen must not land on a
-          text field it can no longer see. */}
-      {isOwn || holding ? null : (
-        <StoryReplyBar
-          toUserId={group.userId}
-          name={group.displayName.split(" ")[0] || group.displayName}
-          onFocusChange={setReplying}
-          onEmoji={(emoji) => setRise({ id: Date.now(), emoji })}
+      {isOwn ? (
+        <StoryViewersSheet
+          storyId={story.id}
+          open={viewersOpen}
+          onClose={() => setViewersOpen(false)}
+          stories={group.stories}
+          currentIndex={si}
+          onPick={(i) => {
+            setPct(0);
+            setSi(i);
+          }}
         />
-      )}
+      ) : null}
     </motion.div>,
     document.body,
   );
 }
 
-/** A story reply, delivered as a DM to the author (/api/stories/reply). */
-async function postStoryReply(toUserId: string, text: string): Promise<boolean> {
+/** The design's quick reactions — the label it shows, and the emoji the author receives. */
+const QUICK_REACTIONS = [
+  { label: "Love it", emoji: "😍", icon: "M12 20.5s-8-4.7-8-10.6A4.4 4.4 0 0 1 12 7.3a4.4 4.4 0 0 1 8 2.6c0 5.9-8 10.6-8 10.6z" },
+  { label: "Fire", emoji: "🔥", icon: "M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.2 1-3.6 2-4.6.3 1.6 1.1 2.6 2.2 2.6C10.5 8.5 11 5.5 12 3z" },
+  { label: "Wow", emoji: "😮", icon: "M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" },
+] as const;
+
+/** "26s", "4m", "2h" — the design's header time. Stories live 24 h, so hours is the largest unit. */
+function shortAgo(iso: string): string {
+  const s = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 1000));
+  if (!Number.isFinite(s)) return "";
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  return `${Math.floor(s / 3600)}h`;
+}
+
+/** The design's round header button: a dark tint and a hairline, no backdrop-filter (see the note on the viewer). */
+function GlassButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/[0.22] bg-[rgba(18,17,26,0.42)] text-white transition active:scale-95"
+    >
+      {children}
+    </button>
+  );
+}
+
+function VerifiedMark() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" role="img" aria-label="Verified" className="shrink-0">
+      <path d="M12 2l2.4 1.8 3-.2.9 2.9 2.5 1.7-1 2.8 1 2.8-2.5 1.7-.9 2.9-3-.2L12 22l-2.4-1.8-3 .2-.9-2.9-2.5-1.7 1-2.8-1-2.8 2.5-1.7.9-2.9 3 .2z" fill="#3D5AFE" />
+      <path d="M8 12.2l2.6 2.6L16 9.4" fill="none" stroke="#FFFFFF" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** A viewer's face in the bottom bar: their photo, or their initial on the design's gradient. */
+function ViewerFace({ id, avatarUrl, name }: { id: string; avatarUrl: string | null; name: string | null }) {
+  return avatarUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element -- a 30px remote avatar
+    <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+  ) : (
+    <span className="flex h-full w-full items-center justify-center text-[12px] font-bold text-white" style={{ background: faceGradient(id) }}>
+      {(name ?? "?").charAt(0).toUpperCase()}
+    </span>
+  );
+}
+
+/**
+ * A story reply, delivered as a DM to the author (/api/stories/reply). With the
+ * story named, the route checks the reader may see it and that replies are on
+ * (0288); a `reaction` is counted for the author's "Seen by".
+ */
+async function postStoryReply(toUserId: string, text: string, opts: { storyId?: string; reaction?: boolean } = {}): Promise<{ ok: boolean; error?: string }> {
   try {
     const r = await fetch("/api/stories/reply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ toUserId, text }),
+      body: JSON.stringify({ toUserId, text, ...opts }),
     });
-    return r.ok;
+    if (r.ok) return { ok: true };
+    const d = (await r.json().catch(() => null)) as { error?: string } | null;
+    return { ok: false, error: d?.error };
   } catch {
-    return false;
+    return { ok: false };
   }
 }
 
@@ -890,14 +1055,39 @@ function EmojiRise({ emoji, onDone }: { emoji: string; onDone: () => void }) {
   );
 }
 
+/**
+ * ── The reply band (the Story Viewer design, StoryWatching.dc.html) ──────────
+ * One outlined pill — "Reply to Ada…" with the coin button inside it — then the
+ * heart and the paper plane. Typing swaps the heart and the plane for Send.
+ *
+ *   coin    sends Frenz Coin to the author FOR this story (owner, 2026-10-26: "should
+ *           be gifting of Frenz coin not AI credit"): the ordinary transfer screen,
+ *           with the story named so their notification opens it (lib/coin/story-gift.ts).
+ *           Shown only while Frenz Coin is switched on.
+ *   heart   a like: one ❤️ reaction to the author, once per story
+ *   plane   reshare / send to a chat — only when the author allows resharing
+ *
+ * With the author's "Allow replies" off, the pill says so and takes no text.
+ */
 function StoryReplyBar({
   toUserId,
+  storyId,
   name,
+  allowReplies,
+  canShare,
+  coinGift,
+  onShare,
   onFocusChange,
   onEmoji,
 }: {
   toUserId: string;
+  storyId: string;
   name: string;
+  allowReplies: boolean;
+  canShare: boolean;
+  /** the transfer screen for a gift to this story, or null (Frenz Coin off) */
+  coinGift: string | null;
+  onShare: () => void;
   onFocusChange: (v: boolean) => void;
   /** the reply was one emoji: the viewer plays its rise */
   onEmoji?: (emoji: string) => void;
@@ -905,6 +1095,7 @@ function StoryReplyBar({
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
+  const [liked, setLiked] = useState<ReadonlySet<string>>(() => new Set());
 
   const send = async (payload: string) => {
     const t = payload.trim();
@@ -912,76 +1103,103 @@ function StoryReplyBar({
     setBusy(true);
     setText("");
     // the rise plays on the tap itself, not after the network answers
-    if (isSingleEmoji(t)) {
+    const single = isSingleEmoji(t);
+    if (single) {
       haptic("light");
       onEmoji?.(t);
     }
-    const ok = await postStoryReply(toUserId, t);
-    if (ok) {
+    const out = await postStoryReply(toUserId, t, { storyId, reaction: single });
+    if (out.ok) {
       setSent(true);
       setTimeout(() => setSent(false), 1600);
-    }
+    } else if (out.error) toast(out.error, "error");
     setBusy(false);
   };
 
-  /*
-    ── WhatsApp's status reply bar, exactly (owner, 2026-10-15, with its screenshot) ──
-    A thin divider across the foot of the picture, then ONE grey glass pill — "Reply"
-    on the left, three quick emojis inside it on the right — and a separate round
-    heart button beside it. Typing swaps the emojis and heart for Send. No sticker
-    tray, no emoji row above the pill.
-  */
+  const like = () => {
+    if (liked.has(storyId)) return;
+    setLiked((prev) => new Set(prev).add(storyId));
+    haptic("light");
+    onEmoji?.("❤️");
+    void postStoryReply(toUserId, "❤️", { storyId, reaction: true });
+  };
+
   const typing = text.trim().length > 0;
+  const isLiked = liked.has(storyId);
   return (
-    <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/70 to-transparent px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-5 [.pwa-standalone_&]:bg-black [.pwa-standalone_&]:bg-none [.pwa-standalone_&]:pt-0">
-      <div className="mx-auto mb-2 h-px max-w-md bg-white/35 [.pwa-standalone_&]:hidden" aria-hidden />
-      {sent ? <p className="mb-1 text-center text-xs font-semibold text-emerald-300">Sent to {name} ✓</p> : null}
-      <div className="mx-auto flex max-w-md items-center gap-2">
-        <div className="flex h-11 min-w-0 flex-1 items-center rounded-full bg-white/20 pl-4 pr-3 backdrop-blur-md">
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onFocus={() => onFocusChange(true)}
-            onBlur={() => onFocusChange(false)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void send(text);
-            }}
-            maxLength={500}
-            placeholder="Reply"
-            aria-label={`Reply to ${name}`}
-            className="h-full min-w-0 flex-1 bg-transparent text-[17px] text-white outline-none placeholder:text-white/80"
-          />
-          {typing ? null : (
-            <span className="flex shrink-0 items-center gap-3">
-              {QUICK_EMOJI.map((e) => (
-                <button key={e} type="button" onClick={() => send(e)} className="text-[26px] leading-none transition active:scale-125" aria-label={`React ${e}`}>
-                  {e}
-                </button>
-              ))}
-            </span>
+    <form
+      aria-label={`Reply to ${name}`}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void send(text);
+      }}
+      className="absolute inset-x-0 bottom-0 z-30 flex items-start gap-2 px-3"
+      style={{ height: "var(--story-band)" }}
+    >
+      {sent ? <p className="absolute -top-6 inset-x-0 text-center text-xs font-semibold text-emerald-300">Sent to {name} ✓</p> : null}
+      <div className="flex h-[3.625rem] min-w-0 flex-1 items-center">
+        <label className="flex h-[50px] min-w-0 flex-1 items-center gap-2 rounded-[25px] border border-white/[0.32] pl-[18px] pr-1.5">
+          <span className="sr-only">Reply</span>
+          {allowReplies ? (
+            <input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onFocus={() => onFocusChange(true)}
+              onBlur={() => onFocusChange(false)}
+              maxLength={500}
+              placeholder={`Reply to ${name}…`}
+              data-large-text
+              className="h-full min-w-0 flex-1 border-none bg-transparent !text-[15px] text-white outline-none placeholder:text-white/[0.78]"
+            />
+          ) : (
+            <span className="min-w-0 flex-1 truncate text-[15px] text-white/60">Replies are off</span>
           )}
-        </div>
-        {typing ? (
+          {coinGift && !typing ? (
+            <Link
+              href={coinGift}
+              prefetch={false}
+              aria-label={`Send Frenz Coin to ${name} for this story`}
+              className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-white/[0.12] text-white transition active:scale-95"
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 7v10" />
+                <path d="M15 9.5c-.6-1-1.7-1.5-3-1.5-1.7 0-3 .8-3 2s1.3 1.7 3 2 3 .8 3 2-1.3 2-3 2c-1.3 0-2.4-.5-3-1.5" />
+              </svg>
+            </Link>
+          ) : null}
+        </label>
+      </div>
+      {typing ? (
+        <div className="flex h-[3.625rem] items-center">
           <button
-            type="button"
-            onClick={() => send(text)}
+            type="submit"
             disabled={busy}
             aria-label="Send reply"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white transition disabled:opacity-40"
+            className="flex h-[50px] w-[50px] shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#3D5AFE,#7B3FE4)] text-white transition disabled:opacity-40"
           >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
           </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => send("❤️")}
-            aria-label="Like"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md transition active:scale-110"
-          >
-            <Heart className="h-6 w-6" />
-          </button>
-        )}
-      </div>
-    </div>
+        </div>
+      ) : (
+        <div className="flex h-[3.625rem] items-center">
+          {allowReplies ? (
+            <button type="button" onClick={like} aria-label={isLiked ? "Liked" : "Like story"} aria-pressed={isLiked} className="flex h-[50px] w-[50px] shrink-0 items-center justify-center text-white transition active:scale-110">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill={isLiked ? "#FF3B6B" : "none"} stroke={isLiked ? "#FF3B6B" : "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M12 20.5s-8-4.7-8-10.6A4.4 4.4 0 0 1 12 7.3a4.4 4.4 0 0 1 8 2.6c0 5.9-8 10.6-8 10.6z" />
+              </svg>
+            </button>
+          ) : null}
+          {canShare ? (
+            <button type="button" onClick={onShare} aria-label="Share story" className="flex h-[50px] w-[50px] shrink-0 items-center justify-center text-white transition active:scale-95">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M22 2L11 13" />
+                <path d="M22 2l-7 20-4-9-9-4z" />
+              </svg>
+            </button>
+          ) : null}
+        </div>
+      )}
+    </form>
   );
 }

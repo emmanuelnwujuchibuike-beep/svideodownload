@@ -18,6 +18,8 @@ const schema = z
     note: z.string().max(200).nullable().optional(),
     // the member's six-digit TRANSACTION PIN (Part 4.2). Never logged, never stored, never echoed.
     pin: z.string().max(12),
+    // sent from a story (2026-10-26): a label for the recipient's notification only — checked after the commit, never part of the money (lib/coin/story-gift.ts)
+    storyId: z.string().uuid().optional(),
   })
   .strict();
 
@@ -60,6 +62,7 @@ export async function POST(request: Request) {
     note: parsed.data.note ?? null,
     config: c,
     authorization: auth.authorization,
+    storyId: parsed.data.storyId ?? null,
   });
   if (!out.ok) return NextResponse.json({ error: out.error, reason: out.reason }, { status: out.status });
   // after the commit, off the money path: a failed push never touches the transfer

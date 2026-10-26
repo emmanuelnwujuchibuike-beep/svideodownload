@@ -5,7 +5,7 @@
 # video/audio streams and audio transcoding).
 # ----------------------------------------------------------------------
 
-FROM node:22-bookworm-slim AS base
+FROM node:22.23.4-bookworm-slim AS base
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # ---- deps ----

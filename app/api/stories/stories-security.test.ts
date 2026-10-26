@@ -26,6 +26,13 @@ vi.mock("@/lib/social/creator-notify-emit", () => ({ notifyNewStory: vi.fn(async
 vi.mock("@/lib/social/home-feed", () => ({ bustHomeFeedCache: vi.fn(async () => {}) }));
 vi.mock("@/lib/notifications/publish", () => ({ publishNotification: vi.fn(async () => {}) }));
 vi.mock("@/lib/social/messages", () => ({ sendMessage: vi.fn(async () => ({ ok: true })) }));
+// Stories Part 4 (B7): the file's own verdict (lib/social/story-media.ts, tested with real box layouts in lib/media)
+type Verdict = { ok: true; durationSec: number; codec: string } | { ok: false; reason: string; message: string };
+let videoVerdict: Verdict = { ok: true, durationSec: 12, codec: "avc1" };
+const checkStoryVideo = vi.fn(async (_url: string) => videoVerdict);
+vi.mock("@/lib/social/story-media", () => ({ checkStoryVideo: (url: string) => checkStoryVideo(url) }));
+const deleted: string[] = [];
+vi.mock("@/lib/storage", () => ({ deleteStoredUpload: vi.fn(async (up: { key: string }) => (deleted.push(up.key), true)) }));
 
 // reshare.ts reads its `hasSupabase` once, at load — so the env exists before the import
 vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://sb.test");
@@ -97,6 +104,70 @@ describe("S3 · POST /api/stories publishes only the member's own upload", () =>
     const res = await createStory(post({ mediaUrl: img(ME), mediaKind: "image", destination: "story" }));
     expect(res.status).toBe(401);
     expect(storyInserts()).toHaveLength(0);
+  });
+});
+
+/*
+  Stories Part 4 (2026-10-26, audit B7): a story video is judged from the FILE on the server — length and a codec every
+  phone plays — before any row exists; a refused story-only upload nothing else uses is removed.
+*/
+describe("B7 · story videos: length and playback, decided by the server", () => {
+  beforeEach(() => {
+    videoVerdict = { ok: true, durationSec: 12, codec: "avc1" };
+    checkStoryVideo.mockClear();
+    deleted.length = 0;
+    db.rpc.story_media_references = vi.fn(() => ({ data: [], error: null }));
+  });
+  const postVideo = (over: Record<string, unknown> = {}) => createStory(post({ mediaUrl: vid(ME), mediaKind: "video", thumbnailUrl: img(ME), destination: "story", ...over }));
+
+  it("a 12 s H.264 video: published, checked from its own URL", async () => {
+    expect((await postVideo()).status).toBe(200);
+    expect(checkStoryVideo).toHaveBeenCalledWith(vid(ME));
+    expect(storyInserts()).toHaveLength(1);
+  });
+
+  it("a photo story is not probed at all", async () => {
+    expect((await createStory(post({ mediaUrl: img(ME), mediaKind: "image", destination: "story" }))).status).toBe(200);
+    expect(checkStoryVideo).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["too long", { ok: false, reason: "too_long", message: "Story videos can be up to 60 seconds. Trim it and try again." }],
+    ["HEVC", { ok: false, reason: "codec", message: "This video is in HEVC…" }],
+    ["unreadable", { ok: false, reason: "unreadable", message: "We couldn't read that video." }],
+  ] as const)("🔴 %s: 400 with the reason, no story row, and the orphaned upload + its cover removed", async (_l, v) => {
+    videoVerdict = v as Verdict;
+    const res = await postVideo();
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: v.message, reason: v.reason });
+    expect(storyInserts()).toHaveLength(0);
+    expect(deleted.sort()).toEqual([`${ME}/images/1792999483123-k3j9x2.jpg`, `${ME}/videos/1792999483123-k3j9x2.mp4`].sort());
+  });
+
+  it("🔴 a file something else still uses is kept", async () => {
+    videoVerdict = { ok: false, reason: "too_long", message: "x" };
+    db.rpc.story_media_references = vi.fn(() => ({ data: [vid(ME)], error: null }));
+    await postVideo();
+    expect(deleted).toEqual([`${ME}/images/1792999483123-k3j9x2.jpg`]);
+  });
+
+  it("🔴 the reference check failing keeps everything (a kept file beats a deleted one in use)", async () => {
+    videoVerdict = { ok: false, reason: "too_long", message: "x" };
+    db.rpc.story_media_references = vi.fn(() => ({ data: null, error: { message: "down" } }));
+    await postVideo();
+    expect(deleted).toEqual([]);
+  });
+
+  it("story + feed post: refused as a whole, but the file is kept for the member to post to the feed", async () => {
+    videoVerdict = { ok: false, reason: "too_long", message: "x" };
+    expect((await postVideo({ destination: "both" })).status).toBe(400);
+    expect(deleted).toEqual([]);
+  });
+
+  it("feed posts and reels are not touched by the story rule", async () => {
+    videoVerdict = { ok: false, reason: "too_long", message: "x" };
+    await createStory(post({ mediaUrl: vid(ME), mediaKind: "video", thumbnailUrl: img(ME), destination: "reel" }));
+    expect(checkStoryVideo).not.toHaveBeenCalled();
   });
 });
 
@@ -198,12 +269,31 @@ describe("Part 3 · what the view POST answers", () => {
     expect(cacheDelete).not.toHaveBeenCalled();
   });
 
-  it("a screenshot on an existing view keeps it ONE row", async () => {
+  /*
+    Stories Part 4 (B5): no client can detect a screenshot, so a `?shot=1` is an unverifiable claim — never written,
+    never notified, whatever the switch says. A member's saved switch is untouched.
+  */
+  it("🔴 a screenshot claim is never recorded — not on a fresh story, not on an existing view, switch on or off", async () => {
     db.rpc.story_view_access = vi.fn(() => ({ data: "ok", error: null }));
+    db.tables.privacy_settings = [{ user_id: ME, story_screenshot_alerts: true }];
+    const shot = () => recordView(new Request(`https://x.test/api/stories/${STORY}/views?shot=1`, { method: "POST" }), params(STORY));
+    expect(await (await shot()).json()).toEqual({ ok: true, recorded: false, available: true, reason: "unsupported" });
+    expect(rows()).toHaveLength(0);
     await view();
-    await recordView(new Request(`https://x.test/api/stories/${STORY}/views?shot=1`, { method: "POST" }), params(STORY));
+    await shot();
     expect(rows()).toHaveLength(1);
-    expect(rows()[0]!.screenshot_at).toEqual(expect.any(String));
+    expect(rows()[0]!.screenshot_at ?? null).toBeNull();
+    expect(db.tables.privacy_settings).toEqual([{ user_id: ME, story_screenshot_alerts: true }]); // the member's choice stays
+  });
+
+  it("🔴 the settings and the Seen-by sheet no longer promise screenshot detection", async () => {
+    const { readFileSync } = await import("node:fs");
+    const privacy = readFileSync("features/social/privacy-editor.tsx", "utf8");
+    const sheet = readFileSync("features/social/story-viewers-sheet.tsx", "utf8");
+    expect(privacy).not.toContain("See who screenshots your stories.");
+    expect(privacy).toContain("Not available yet");
+    expect(sheet).not.toContain("They can only be reported from the installed app");
+    expect(sheet).toContain("nobody is ever reported here");
   });
 
   it("signed out: nothing recorded, nothing asked", async () => {

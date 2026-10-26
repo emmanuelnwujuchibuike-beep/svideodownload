@@ -15,7 +15,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * ═══════════════════════════════════════════════════════════════════════════
  *
  *   POST  /api/stories/:id/views            record that I watched it
- *   POST  /api/stories/:id/views?shot=1     record that I screenshotted it
+ *   POST  /api/stories/:id/views?shot=1     refused since Part 4 — no client can detect a screenshot (see POST)
  *   GET   /api/stories/:id/views            the author's own viewer list
  *
  * ── 🔴 THE RECIPROCITY RULE (migration 0181) ───────────────────────────────
@@ -71,6 +71,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   if (!UUID.test(id)) return NextResponse.json({ ok: true, recorded: false, available: false });
 
+  /*
+    🔴 Stories Part 4 (2026-10-26, audit B5): a screenshot is never recorded. No client Frenz ships can DETECT one — a
+    browser, the installed web app and the Android app (a web view) are all told nothing by the phone — so a `?shot=1`
+    could only ever be somebody's unverified claim about themselves, and the author would read it as fact. Nothing is
+    written and nobody is notified. The reciprocity switch (0181) and every saved choice stay as they are; the author's
+    list still reads the column, which this keeps empty. Should a native app ever report real screenshots, it gets its
+    own verified path — not this one.
+  */
+  if (shot) return NextResponse.json({ ok: true, recorded: false, available: true, reason: "unsupported" });
+
   try {
     /*
       🔴 Stories Part 1 (2026-10-26, audit S6). A view is recorded only when this
@@ -83,21 +93,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     */
     const { data: access, error: accessError } = await admin.rpc("story_view_access", { p_story: id, p_viewer: user.id });
     if (accessError || access !== "ok") return NextResponse.json({ ok: true, recorded: false, available: accessError ? true : !GONE.has(access as string) });
-
-    if (shot) {
-      /*
-        🔴 The rule. With the switch off nothing is written — not a flag that is
-        later hidden, not a row the author cannot read. There is no record.
-      */
-      if (!(await screenshotAlertsOn(admin, user.id))) return NextResponse.json({ ok: true, recorded: false, available: true, reason: "alerts-off" });
-      const { error: shotError } = await admin
-        .from("story_views")
-        .upsert(
-          { story_id: id, viewer_id: user.id, screenshot_at: new Date().toISOString() },
-          { onConflict: "story_id,viewer_id" },
-        );
-      return NextResponse.json({ ok: true, recorded: !shotError, available: true });
-    }
 
     /*
       A plain view. `ignoreDuplicates` so re-watching does not keep moving

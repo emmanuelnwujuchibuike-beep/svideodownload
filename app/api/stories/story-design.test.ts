@@ -16,9 +16,14 @@ import { fakeDb, type FakeDb } from "@/lib/testing/fake-supabase";
  */
 let db: FakeDb;
 let user: { id: string } | null;
-const sendMessage = vi.fn(async () => ({ ok: true }));
+const order: string[] = [];
+const sendMessage = vi.fn(async (..._a: unknown[]): Promise<{ ok: boolean; id?: string; duplicate?: boolean }> => (order.push("saved"), { ok: true, id: "m1" }));
+// the post-response hook: queued here, run by the test — so "saved before notified" can be checked
+const afterQueue: (() => unknown)[] = [];
+const push = vi.fn(async (..._a: unknown[]) => void order.push("pushed"));
 vi.mock("server-only", () => ({}));
-vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/server")>()), after: vi.fn() }));
+vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/server")>()), after: (fn: () => unknown) => void afterQueue.push(fn) }));
+vi.mock("@/lib/notifications/smart-delivery", () => ({ sendSmartPush: (...a: unknown[]) => push(...a) }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => db.client() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: async () => ({ data: { user } }) } }) }));
 vi.mock("@/lib/cache", () => ({ getCached: vi.fn(), cacheDelete: vi.fn(async () => {}) }));
@@ -40,8 +45,11 @@ const access = (verdict: string) => (db.rpc.story_view_access = vi.fn(() => ({ d
 beforeEach(() => {
   user = { id: ME };
   sendMessage.mockClear();
+  push.mockClear();
+  afterQueue.length = 0;
+  order.length = 0;
   db = fakeDb({
-    stories: [{ id: STORY, user_id: AUTHOR, allow_replies: true }],
+    stories: [{ id: STORY, user_id: AUTHOR, allow_replies: true, media_kind: "image", media_url: "https://media.test/story.jpg", thumbnail_url: null }],
     story_reactions: [],
     story_views: [],
     profiles: [{ id: ME, handle: "me", display_name: "Me", avatar_url: null }],
@@ -91,6 +99,70 @@ describe("a reply that names its story", () => {
   it("0288 not applied: the reply still goes (replies stay on), the count is simply skipped", async () => {
     db.failOn.story_reactions = "relation does not exist";
     expect((await send({ toUserId: AUTHOR, text: "🔥", storyId: STORY, reaction: true })).status).toBe(200);
+  });
+});
+
+/*
+  Stories Part 4 (2026-10-26, audit B6): the reply notification is reliable and names the story.
+*/
+describe("Part 4 · the author's notification", () => {
+  const drain = async () => {
+    for (const fn of afterQueue.splice(0)) await fn();
+  };
+
+  it("SAVED first, then pushed in after() — through smart delivery, as a chat message, with the story's own picture", async () => {
+    const res = await send({ toUserId: AUTHOR, text: "love this", storyId: STORY, clientId: "5f6b2c1a-1111-4111-8111-111111111111" });
+    expect(res.status).toBe(200);
+    expect(push).not.toHaveBeenCalled(); // nothing sent before the response
+    await drain();
+    expect(order).toEqual(["saved", "pushed"]);
+    const [to, payload, priority, category, record] = push.mock.calls[0]!;
+    expect(to).toBe(AUTHOR);
+    expect(payload).toMatchObject({ title: "Me replied to your story", body: "love this", genericBody: "Replied to your story", icon: "https://media.test/story.jpg", url: expect.stringContaining("/messages/c1"), tag: "msg:c1" });
+    expect([priority, category]).toEqual(["high", "social"]);
+    expect(record).toEqual({ recorded: { type: "message", conversationId: "c1", actorId: ME } });
+    // the message itself names the story (an existing column — no migration)
+    expect(sendMessage.mock.calls[0]![3]).toEqual({ clientId: "5f6b2c1a-1111-4111-8111-111111111111", metadata: { kind: "story_reply", storyId: STORY } });
+  });
+
+  it("🔴 a retry with the same clientId: the same message comes back — no second push, no second reaction", async () => {
+    sendMessage.mockImplementationOnce(async () => ({ ok: true, id: "m1", duplicate: true }));
+    const res = await send({ toUserId: AUTHOR, text: "🔥", storyId: STORY, reaction: true, clientId: "5f6b2c1a-1111-4111-8111-111111111111" });
+    expect(await res.json()).toMatchObject({ ok: true, duplicate: true });
+    expect(afterQueue).toHaveLength(0);
+    expect(db.tables.story_reactions).toEqual([]);
+  });
+
+  it("🔴 the push failing never turns the saved reply into an error", async () => {
+    push.mockImplementationOnce(async () => {
+      throw new Error("push service down");
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const res = await send({ toUserId: AUTHOR, text: "hi", storyId: STORY });
+    expect(res.status).toBe(200);
+    await expect(drain()).resolves.toBeUndefined();
+    warn.mockRestore();
+  });
+
+  it("🔴 a refused reply notifies nobody", async () => {
+    access("forbidden");
+    await send({ toUserId: AUTHOR, text: "hi", storyId: STORY });
+    expect(afterQueue).toHaveLength(0);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("an older client naming no story: still pushed, with the replier's face — no story shown", async () => {
+    await send({ toUserId: AUTHOR, text: "hi" });
+    await drain();
+    expect((push.mock.calls[0]![1] as { icon?: string }).icon).toBeUndefined();
+    expect(sendMessage.mock.calls[0]![3]).toEqual({});
+  });
+
+  it("the route has no bare fire-and-forget left", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("app/api/stories/reply/route.ts", "utf8");
+    expect(src).not.toMatch(/void \(async/);
+    expect(src).toContain("after(() => notifyStoryReply(");
   });
 });
 

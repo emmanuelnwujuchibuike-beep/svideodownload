@@ -1007,7 +1007,8 @@ async function postStoryReply(toUserId: string, text: string, opts: { storyId?: 
     const r = await fetch("/api/stories/reply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ toUserId, text, ...opts }),
+      // Part 4 (B6): one key per reply — a resent request returns the same message, never a second one or a second push
+      body: JSON.stringify({ toUserId, text, ...opts, clientId: crypto.randomUUID() }),
     });
     if (r.ok) return { ok: true };
     const d = (await r.json().catch(() => null)) as { error?: string } | null;

@@ -213,9 +213,10 @@ export function StoryViewersSheet({
           )}
           {data ? (
             <p className="mt-3 text-[11.5px] leading-snug text-[#8A879C]">
+              {/* Stories Part 4 (B5): honest — neither a browser nor the Frenz app (web or Android) can see a screenshot */}
               {data.screenshotAlerts
-                ? "Screenshot alerts are on. They can only be reported from the installed app — a browser cannot detect a screenshot."
-                : "Screenshot alerts are off, so you won't see who screenshots your stories — and others won't see when you screenshot theirs."}
+                ? "Screenshots aren't shown: phones don't let a browser or the Frenz app detect them, so nobody is ever reported here."
+                : "Screenshot alerts are off for you. They aren't available yet anyway — phones don't let a browser or the Frenz app detect screenshots."}
             </p>
           ) : null}
         </div>

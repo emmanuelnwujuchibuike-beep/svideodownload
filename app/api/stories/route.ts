@@ -8,7 +8,9 @@ import { CAPTION_MAX_CHARS, normalizeCaption } from "@/lib/social/caption";
 import { notifyNewStory } from "@/lib/social/creator-notify-emit";
 import { bustHomeFeedCache } from "@/lib/social/home-feed";
 import { getActiveStories, type StoryScope } from "@/lib/social/stories";
-import { isOwnUpload, storageBasesFromEnv } from "@/lib/storage/owned-media";
+import { checkStoryVideo } from "@/lib/social/story-media";
+import { deleteStoredUpload } from "@/lib/storage";
+import { isOwnUpload, parseUploadUrl, storageBasesFromEnv, type StorageBases } from "@/lib/storage/owned-media";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -49,6 +51,27 @@ export async function GET(request: Request) {
     getActiveStories(viewerId, scope === "all" ? 50 : 100, scope),
   );
   return NextResponse.json({ groups }, { headers: { "Cache-Control": "private, no-store" } });
+}
+
+/**
+ * A story upload the server refused (Part 4): its files are removed when NOTHING references them — the same check the
+ * daily clean-up makes (`story_media_references`, 0285: every *_url column). A failed check or delete keeps the file
+ * (the clean-up never sees it, but a kept file is a smaller harm than a deleted one in use). Never throws.
+ */
+async function discardRefusedUpload(urls: (string | null)[], bases: StorageBases): Promise<void> {
+  try {
+    const own = urls.filter((u): u is string => !!u && !!parseUploadUrl(u, bases));
+    if (!own.length) return;
+    const { data, error } = await createAdminClient().rpc("story_media_references", { p_urls: own, p_exclude: [] });
+    if (error) return;
+    const inUse = new Set(((data ?? []) as unknown[]).map((v) => (typeof v === "string" ? v : String((v as Record<string, unknown>)?.story_media_references ?? ""))));
+    for (const url of own) {
+      const up = parseUploadUrl(url, bases);
+      if (up && !inUse.has(url)) await deleteStoredUpload(up).catch(() => false);
+    }
+  } catch {
+    /* the refusal stands either way */
+  }
 }
 
 const mediaItem = z.object({
@@ -147,6 +170,20 @@ export async function POST(request: Request) {
     // A suspended account publishes nothing (lib/social/account-visibility.ts `canAccountPublish`).
     const { data: author } = await createAdminClient().from("profiles").select("is_suspended").eq("id", user.id).maybeSingle();
     if (author?.is_suspended) return NextResponse.json({ error: "Your account can't post right now." }, { status: 403 });
+
+    /*
+      🔴 Stories Part 4 (2026-10-26, audit B7): a story video is checked from the FILE — its length (≤ 60 s) and a
+      codec every phone plays (H.264) — read from its own index with range requests (lib/social/story-media.ts),
+      never from anything the browser says. Refused before any row exists; a story-only upload that nothing else
+      uses is then deleted, so a refusal leaves no orphan file behind. Feed posts and reels keep their own rules.
+    */
+    if (mediaKind === "video") {
+      const verdict = await checkStoryVideo(mediaUrl);
+      if (!verdict.ok) {
+        if (!wantPost) await discardRefusedUpload([mediaUrl, thumbnailUrl ?? null], bases);
+        return NextResponse.json({ error: verdict.message, reason: verdict.reason }, { status: 400 });
+      }
+    }
 
     // `thumbnail_url` (0083) is what stops the story ring streaming this MP4 on
     // every mount just to paint a 68px circle. The client already captures and

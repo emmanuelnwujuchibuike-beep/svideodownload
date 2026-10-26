@@ -115,11 +115,16 @@ export function PrivacyEditor({ settings }: { settings: PrivacySettings }) {
             reading only "Screenshot alerts" would let somebody switch it off to
             stop being reported and then wonder why their own list went blank.
           */}
+          {/*
+            🔴 Stories Part 4 (2026-10-26, audit B5): honest. No browser, installed web app or the Android app (a web
+            view) can detect a screenshot, so Frenz reports none. The switch and the member's saved choice are kept as
+            they are — it will decide the exchange if a native app ever can — but the row no longer promises it works.
+          */}
           <ToggleRow
             icon={Camera}
             tint="amber"
             title="Story screenshot alerts"
-            desc="See who screenshots your stories. Turn this off and others stop seeing when you screenshot theirs — and you stop seeing yours."
+            desc="Not available yet: phones don't let a browser or the Frenz web app see screenshots, so nobody is reported. Your choice is saved — off means you'd never see others' and they'd never see yours."
             on={state.story_screenshot_alerts}
             onToggle={() => set("story_screenshot_alerts", !state.story_screenshot_alerts)}
           />

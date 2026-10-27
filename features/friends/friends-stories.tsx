@@ -1,11 +1,11 @@
 "use client";
 
 import { Plus, CircleDashed } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
-import { StoryViewer } from "@/features/app-shell/dashboard/stories-row";
+import { AddStoryLink } from "@/features/app-shell/dashboard/add-story-link";
+import { preloadStoryViewer, StoryViewer, useWarmStoryViewer } from "@/features/app-shell/dashboard/stories-row";
 import { useQuery } from "@/features/data";
 import type { StoryGroup } from "@/lib/social/stories";
 import { useStoryDeepLink } from "@/features/app-shell/dashboard/use-story-deep-link";
@@ -41,7 +41,6 @@ export function FriendsStories({
   viewerName?: string;
   viewerHandle?: string | null;
 }) {
-  const router = useRouter();
   const [scope, setScope] = useState<Scope>("friends");
 
   const friends = useQuery<StoryGroup[]>("stories:friends", () => loadScope("friends"), { initialData: initialFriends });
@@ -62,6 +61,8 @@ export function FriendsStories({
 
   // the server's per-story `seen` plus this session's confirmed views (Stories Part 3, lib/social/story-seen.ts)
   const seen = useSeenOverlay();
+  // Part 5: the viewer's code is ready before the first tap (after load, never during it)
+  useWarmStoryViewer(otherGroups.length > 0);
 
   return (
     <div className="mb-5">
@@ -114,7 +115,7 @@ export function FriendsStories({
       <div className="-mx-1 flex gap-4 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {/* Add your story — the dedicated Story surface (owner, 2026-07-16). */}
         <PressIcon className="shrink-0">
-          <button type="button" onClick={() => router.push("/create/story")} className="flex w-[68px] flex-col items-center gap-1.5">
+          <AddStoryLink label="Add to your story" className="flex w-[68px] flex-col items-center gap-1.5">
             <span className="relative flex h-16 w-16 rounded-full border-2 border-dashed border-frenz-violet/30 p-[3px]">
               {viewerAvatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -129,7 +130,7 @@ export function FriendsStories({
               </span>
             </span>
             <span className="text-[12px] font-bold text-frenz-ink">Your story</span>
-          </button>
+          </AddStoryLink>
         </PressIcon>
 
         {otherGroups.map((g) => {
@@ -137,7 +138,7 @@ export function FriendsStories({
           const unseen = !isGroupSeen(g, seen);
           return (
             <PressIcon key={g.handle} className="shrink-0">
-              <button type="button" onClick={() => setStart(groups.indexOf(g))} className="flex w-16 flex-col items-center gap-1.5">
+              <button type="button" onPointerDown={preloadStoryViewer} onClick={() => setStart(groups.indexOf(g))} className="flex w-16 flex-col items-center gap-1.5">
                 <span className={cn("rounded-full p-0.5", unseen ? "bg-brand" : "ring-1 ring-inset ring-border/70")}>
                   <span className="block overflow-hidden rounded-full bg-background p-0.5">
                     {cover?.mediaKind === "image" ? (

@@ -9,8 +9,8 @@ import { notifyNewStory } from "@/lib/social/creator-notify-emit";
 import { bustHomeFeedCache } from "@/lib/social/home-feed";
 import { getActiveStories, type StoryScope } from "@/lib/social/stories";
 import { checkStoryVideo } from "@/lib/social/story-media";
-import { deleteStoredUpload } from "@/lib/storage";
-import { isOwnUpload, parseUploadUrl, storageBasesFromEnv, type StorageBases } from "@/lib/storage/owned-media";
+import { isOwnUpload, storageBasesFromEnv } from "@/lib/storage/owned-media";
+import { releaseUnreferencedUploads } from "@/lib/storage/release-unreferenced";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -53,26 +53,7 @@ export async function GET(request: Request) {
   return NextResponse.json({ groups }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
-/**
- * A story upload the server refused (Part 4): its files are removed when NOTHING references them — the same check the
- * daily clean-up makes (`story_media_references`, 0285: every *_url column). A failed check or delete keeps the file
- * (the clean-up never sees it, but a kept file is a smaller harm than a deleted one in use). Never throws.
- */
-async function discardRefusedUpload(urls: (string | null)[], bases: StorageBases): Promise<void> {
-  try {
-    const own = urls.filter((u): u is string => !!u && !!parseUploadUrl(u, bases));
-    if (!own.length) return;
-    const { data, error } = await createAdminClient().rpc("story_media_references", { p_urls: own, p_exclude: [] });
-    if (error) return;
-    const inUse = new Set(((data ?? []) as unknown[]).map((v) => (typeof v === "string" ? v : String((v as Record<string, unknown>)?.story_media_references ?? ""))));
-    for (const url of own) {
-      const up = parseUploadUrl(url, bases);
-      if (up && !inUse.has(url)) await deleteStoredUpload(up).catch(() => false);
-    }
-  } catch {
-    /* the refusal stands either way */
-  }
-}
+// A refused story upload's files go only when nothing references them: lib/storage/release-unreferenced.ts (shared with highlights).
 
 const mediaItem = z.object({
   url: z.string().url().max(2048),
@@ -180,7 +161,7 @@ export async function POST(request: Request) {
     if (mediaKind === "video") {
       const verdict = await checkStoryVideo(mediaUrl);
       if (!verdict.ok) {
-        if (!wantPost) await discardRefusedUpload([mediaUrl, thumbnailUrl ?? null], bases);
+        if (!wantPost) await releaseUnreferencedUploads([mediaUrl, thumbnailUrl ?? null], bases);
         return NextResponse.json({ error: verdict.message, reason: verdict.reason }, { status: 400 });
       }
     }

@@ -52,6 +52,8 @@ const IMAGE_MS = 5000;
 // Ad Platform Part 5: a paid card between two people's Stories — fetched only when one shows.
 // The ••• sheet (send to chat, save, seen by, delete / report) — fetched on the first tap.
 const StoryOptions = dynamic(() => import("@/features/social/story-options").then((m) => m.StoryOptions), { ssr: false });
+// Stories Part 5: "Add to highlight", loaded on the first tap of Highlight
+const HighlightPicker = dynamic(() => import("@/features/social/highlight-picker").then((m) => m.HighlightPicker), { ssr: false });
 
 const SelfStoryCard = dynamic(() => import("@/features/ads-platform/serve/self-story-card").then((m) => m.SelfStoryCard), { ssr: false });
 
@@ -245,6 +247,8 @@ export function StoryViewer({
   const [muted, setMuted] = useState(false);
   // your own story's "Share": the existing send-to-chat sheet, fetched on the tap
   const [sendOpen, setSendOpen] = useState(false);
+  // your own story: the "Add to highlight" sheet
+  const [highlighting, setHighlighting] = useState(false);
   // the people who saw YOUR story, for the bottom bar (one read per story, only for your own)
   const ownViewers = useStoryViewers(isOwn && story ? story.id : null);
 
@@ -907,7 +911,7 @@ export function StoryViewer({
               </span>
             </span>
           </button>
-          <button type="button" onClick={() => toast("Highlights are coming soon.", "info")} className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-[5px] text-[11px] font-bold">
+          <button type="button" onClick={() => setHighlighting(true)} className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-[5px] text-[11px] font-bold">
             <span aria-hidden className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="9" />
@@ -956,8 +960,12 @@ export function StoryViewer({
           onReshare={() => setResharing(true)}
           // the same path as a story that ends or is withdrawn (Part 3): the next one slides in, every surface drops it
           onDeleted={(id) => dropStories([id])}
+          onHighlight={() => setHighlighting(true)}
         />
       ) : null}
+
+      {/* Stories Part 5: keep your own story in a highlight (loaded on the first tap) */}
+      {highlighting && isOwn ? <HighlightPicker open onClose={() => setHighlighting(false)} userId={group.userId} storyId={story.id} /> : null}
 
       <ReshareSheet
         open={resharing}
@@ -1219,7 +1227,7 @@ function StoryReplyBar({
           {coinGift && !typing ? (
             <Link
               href={coinGift}
-              prefetch={false}
+              // warmed as soon as the reply bar shows it (the viewer only ever opens after a tap, never during a page load)
               aria-label={`Send Frenz Coin to ${name} for this story`}
               // the screen starts loading as the finger lands — a tap's ~100 ms head start (2026-10-26: "open faster")
               onPointerDown={() => router.prefetch(coinGift)}

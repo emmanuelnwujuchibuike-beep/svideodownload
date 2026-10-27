@@ -2,9 +2,9 @@
 
 import { Loader2 } from "lucide-react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { PendingLink } from "@/features/frenz-ui/pending";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
 import type { StoryAudience, StoryGroup } from "@/lib/social/stories";
@@ -31,9 +31,8 @@ type Story = StoryGroup["stories"][number];
  * real setting at once and rolls back if the server refuses (the viewer owns
  * them, so the reply box and the reshare button follow without a refetch).
  *
- *   Highlight     keeping a story past its 24 hours needs a place on the profile
- *                 and an exception in the story clean-up (Stories Part 1). Not
- *                 built — the tile says "coming soon" rather than pretend.
+ *   Highlight     keep this story on your profile past its 24 hours (Stories Part 5,
+ *                 0289): opens "Add to highlight" (features/social/highlight-picker.tsx).
  *   Copy link     there is no public page for a story (they are private to their
  *                 audience), so it copies the story's own media link — yours, to
  *                 share as you choose; it stops working when the story ends.
@@ -60,6 +59,7 @@ export function StoryOptions({
   onSeenBy: _onSeenBy,
   onReshare,
   onDeleted,
+  onHighlight,
 }: {
   open: boolean;
   onClose: () => void;
@@ -74,6 +74,8 @@ export function StoryOptions({
   onSeenBy?: () => void;
   onReshare: () => void;
   onDeleted: (storyId: string) => void;
+  /** Your own story: open "Add to highlight". */
+  onHighlight?: () => void;
 }) {
   const [sendOpen, setSendOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -147,7 +149,14 @@ export function StoryOptions({
   const tiles: { label: string; icon: React.ReactNode; onClick: () => void }[] = isOwn
     ? [
         { label: story.mediaKind === "video" ? "Save video" : "Save photo", icon: <IconSave />, onClick: () => void saveToDevice() },
-        { label: "Highlight", icon: <IconHighlight />, onClick: () => toast("Highlights are coming soon.", "info") },
+        {
+          label: "Highlight",
+          icon: <IconHighlight />,
+          onClick: () => {
+            close();
+            onHighlight?.();
+          },
+        },
         { label: "Copy link", icon: <IconLink />, onClick: () => void copyLink() },
       ]
     : allowShare
@@ -218,7 +227,7 @@ export function StoryOptions({
               <div className="overflow-hidden rounded-[20px] bg-white shadow-[0_1px_2px_rgba(30,20,80,0.06)]">
                 <SwitchRow icon={<IconReshare size={17} />} label="Allow resharing" detail="People can add this to their story" on={allowShare} onToggle={onToggleReshare} />
                 <SwitchRow icon={<IconReply />} label="Allow replies" detail="Everyone who can see it" on={allowReplies} onToggle={onToggleReplies} divider />
-                <Link href="/account/privacy" prefetch={false} className="flex items-center gap-3 border-t border-[#F0EEF8] px-3.5 py-3 text-[#12111A]">
+                <PendingLink href="/account/privacy" className="block border-t border-[#F0EEF8] px-3.5 py-3 text-[#12111A]" inner="flex items-center gap-3">
                   <RowIcon>
                     <IconPeople />
                   </RowIcon>
@@ -229,7 +238,7 @@ export function StoryOptions({
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8A879C" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                     <path d="M9 6l6 6-6 6" />
                   </svg>
-                </Link>
+                </PendingLink>
               </div>
             ) : null}
 

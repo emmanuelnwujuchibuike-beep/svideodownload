@@ -3,7 +3,6 @@
 import { Plus } from "lucide-react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
@@ -12,6 +11,10 @@ import { fetchStoryGroups, readCachedStories } from "@/lib/social/story-cache";
 import type { StoryGroup } from "@/lib/social/stories";
 import { isGroupSeen, useSeenOverlay } from "@/lib/social/story-seen";
 
+import { afterPageLoad } from "@/features/app-shell/warm-routes";
+import { isSlowConnection } from "@/lib/pwa/use-network-status";
+
+import { AddStoryLink } from "./add-story-link";
 import { useStoryDeepLink } from "./use-story-deep-link";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +36,28 @@ const COL_COMPACT = "w-[4.5rem]";
   under the same name, so Friends and a chat thread, which import it from this module, are lazy too.
 */
 export const StoryViewer = dynamic(() => import("./story-viewer").then((m) => m.StoryViewer), { ssr: false });
+// the same module as the viewer above — the loader fetches it once, whoever asks first
+const loadViewer = () => import("./story-viewer");
+
+/*
+  Stories Part 5 (2026-10-27) — "loading the viewer on first tap" (the Part 1 plan): the viewer's code started
+  downloading only at the first tap, so the first story opened after a wait. It is now fetched (once — the module
+  loader keeps it) the moment a finger lands on a ring, and on its own once the page has LOADED and gone idle
+  (afterPageLoad; never during a cold entry, never on a slow or data-saver connection). Still not in the page bundle.
+*/
+let viewerWarm: Promise<unknown> | null = null;
+export function preloadStoryViewer(): void {
+  viewerWarm ??= loadViewer().catch(() => {
+    viewerWarm = null; // a failed fetch is retried by the next warm, or by the tap itself
+  });
+}
+/** Warm the viewer after load, for a page that shows story rings. */
+export function useWarmStoryViewer(active: boolean): void {
+  useEffect(() => {
+    if (!active || isSlowConnection()) return;
+    return afterPageLoad(preloadStoryViewer);
+  }, [active]);
+}
 
 /**
  * One story circle. Shared by the viewer's own row and the friends row so the
@@ -62,7 +87,7 @@ function StoryRing({
 
   return (
     <PressIcon className="shrink-0">
-      <button type="button" onClick={onOpen} className={cn("flex flex-col items-center", col, compact ? "gap-1" : "gap-1.5")}>
+      <button type="button" onPointerDown={preloadStoryViewer} onClick={onOpen} className={cn("flex flex-col items-center", col, compact ? "gap-1" : "gap-1.5")}>
         {/* unseen: the brand-gradient ring (identity — allowed); seen: the hairline */}
         <span className={cn("rounded-full p-[2.5px]", unseen ? "bg-frenz-gradient" : "ring-1 ring-inset ring-frenz-line")}>
           <span className="block overflow-hidden rounded-full bg-frenz-page p-[2.5px]">
@@ -118,7 +143,6 @@ export function StoriesRow({
   compact?: boolean;
 }) {
   const av = compact ? AV_COMPACT : AV;
-  const router = useRouter();
   // Seeded from the server + cached-first: paints instantly, refreshed in
   // background. `initialGroups` is only present where the row is server-rendered
   // (/home, /friends); on the inbox it's client-only, so it falls back to the
@@ -179,6 +203,8 @@ export function StoriesRow({
   // the views this session has had confirmed (empty on the server, so hydration
   // matches; a confirmed view re-renders the ring with no refetch).
   const seen = useSeenOverlay();
+  // Part 5: the viewer's code is ready before the first tap (after load, never during it)
+  useWarmStoryViewer(groups.length > 0);
 
   return (
     <div className={cn("frenz-ui -mx-1 flex overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", compact ? "gap-2.5" : "gap-3.5")}>
@@ -196,12 +222,7 @@ export function StoriesRow({
           No brand ring on the plus, for the same reason: nothing there is
           watchable. */}
       <PressIcon className="shrink-0">
-        <button
-          type="button"
-          onClick={() => router.push("/create/story")}
-          aria-label="Add to your story"
-          className={cn("flex flex-col items-center", compact ? cn(COL_COMPACT, "gap-1") : cn(COL, "gap-1.5"))}
-        >
+        <AddStoryLink label="Add to your story" className={cn("flex flex-col items-center", compact ? cn(COL_COMPACT, "gap-1") : cn(COL, "gap-1.5"))}>
           {/* the design's "Your story": a dashed ring, the gradient plus badge */}
           <span className="relative rounded-full border-2 border-dashed border-frenz-violet/30 p-[1.5px]">
             <span className="block rounded-full bg-frenz-page p-[1.5px]">
@@ -219,7 +240,7 @@ export function StoriesRow({
           </span>
           {/* "Your story" as designed until you have one — then your ring carries that name and this is "Add story" */}
           <span className="text-xs font-semibold text-frenz-ink/80">{ownGroup ? "Add story" : "Your story"}</span>
-        </button>
+        </AddStoryLink>
       </PressIcon>
 
       {/* Yours first, then everyone else. Always reads as "unseen" (brand ring):

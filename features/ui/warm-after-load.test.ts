@@ -57,6 +57,15 @@ describe("route warm-ups wait for the page to load (2026-10-26)", () => {
     expect(tabViewportPrefetches(nav, "History")).toBe(false);
   });
 
+  // Stories Part 5: the viewer is warmed before the first tap — but only after load, and it stays out of the bundle
+  it("the story viewer stays lazy and is warmed only after the page has loaded (or on a ring press)", () => {
+    const row = code("features/app-shell/dashboard/stories-row.tsx");
+    expect(row).not.toMatch(/^import[^\n]*["']\.\/story-viewer["']/m); // never a static import
+    expect(row).toContain("return afterPageLoad(preloadStoryViewer);");
+    expect(row).toContain("onPointerDown={preloadStoryViewer}");
+    expect(row).toMatch(/if \(!active \|\| isSlowConnection\(\)\) return;/);
+  });
+
   it("teeth: a History tab without prefetch={false} is caught", () => {
     expect(tabViewportPrefetches(`<NavTab label="History" href="/history" onWarm={router.prefetch} />`, "History")).toBe(true);
   });

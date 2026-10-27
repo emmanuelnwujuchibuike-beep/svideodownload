@@ -1,3 +1,4 @@
+import { ProfileHighlightsLoader } from "@/features/profile/profile-highlights-loader";
 import {
   BadgeCheck,
   CalendarDays,
@@ -533,6 +534,13 @@ async function ProfileData({
                   <ProfileCardLink handle={profile.handle} />
                 </ProfileActionRow>
 
+                {/* Story highlights (Stories Part 5) — streamed on their own; nothing when there are none */}
+                <div className="px-4 sm:px-6">
+                  <Suspense fallback={null}>
+                    <ProfileHighlightsLoader profileId={profile.id} viewerId={me} />
+                  </Suspense>
+                </div>
+
                 {/* The daily streak card is a hub section now ("Daily streak"),
                     with the rest of the owner's cards — see ProfileHub. */}
 
@@ -751,6 +759,14 @@ async function ProfileData({
                 owner branch above. */}
             {/* Content sections — fetched once, switched instantly client-side.
                 Hidden entirely for private accounts. */}
+            {/* Story highlights (Stories Part 5): whoever may see this member's stories may see these */}
+            {!profile.restricted ? (
+              <div className="px-4 sm:px-6">
+                <Suspense fallback={null}>
+                  <ProfileHighlightsLoader profileId={profile.id} viewerId={me} />
+                </Suspense>
+              </div>
+            ) : null}
             {!profile.restricted ? (
               <div className="mt-6 px-4 sm:px-6">
                 <Suspense fallback={<PostGridSkeleton count={6} />}>

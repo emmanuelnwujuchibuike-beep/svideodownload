@@ -1,7 +1,7 @@
 "use client";
 
 import { Camera } from "lucide-react";
-import Link from "next/link";
+import { PendingLink } from "@/features/frenz-ui/pending";
 import { useMemo, useState } from "react";
 
 import type { StoryItem } from "@/lib/social/stories";
@@ -200,13 +200,13 @@ export function StoryViewersSheet({
                       ) : null}
                     </span>
                   </span>
-                  <Link
+                  <PendingLink
                     href={`/messages/new/${v.id}`}
-                    prefetch={false}
-                    className="flex h-9 shrink-0 items-center rounded-full border border-[#E6E2F5] bg-white px-3.5 text-[13px] font-bold text-[#12111A] transition active:scale-95"
+                    spinnerSize={14}
+                    className="flex h-11 shrink-0 items-center rounded-full border border-[#E6E2F5] bg-white px-3.5 text-[13px] font-bold text-[#12111A]"
                   >
                     Message
-                  </Link>
+                  </PendingLink>
                 </li>
               ))}
             </ul>

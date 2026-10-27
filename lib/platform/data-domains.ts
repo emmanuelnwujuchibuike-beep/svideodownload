@@ -110,6 +110,9 @@ export const DATA_DOMAINS: DataDomain[] = [
       "story_views",
       // Who reacted to a story (0288) — one row per person, read by the author only, gone with the story.
       "story_reactions",
+      // Story highlights (0289): a member's named collections of their own stories, kept past 24 hours on the profile.
+      "story_highlights",
+      "story_highlight_items",
       "user_stickers",
       "user_home_preferences",
       // FrenzDNA™ — per-category interest weights, self-owned (Feature 15

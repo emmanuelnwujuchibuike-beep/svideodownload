@@ -183,6 +183,15 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   { method: "POST", path: "/api/admin/flutterwave/test", auth: "admin", category: "payments", description: "Part 5: test the saved Flutterwave key with one read-only call — a fixed code and copy, never the key or provider text. Audited." },
   { method: "GET", path: "/api/admin/flutterwave/transactions", auth: "admin", category: "payments", description: "Part 5: payment attempts across the existing ledgers plus the webhook log, filtered by provider / purpose / reconciliation state / reference." },
   { method: "POST", path: "/api/admin/flutterwave/transactions", auth: "admin", category: "payments", description: "Part 5: recheck ONE attempt by reference through its purpose's existing idempotent settle path (fresh password, rate limited, audited)." },
+
+  /* ── story highlights (Stories Part 5, 0289 — lib/social/story-highlights.ts) ── */
+  { method: "GET", path: "/api/stories/highlights", auth: "session-optional", category: "feed", description: "A member's highlights as the caller may see them (the stories visibility rule); empty, never an error, when they may not." },
+  { method: "POST", path: "/api/stories/highlights", auth: "session", category: "feed", description: "A new highlight from the caller's own stories (title up to 30 characters)." },
+  { method: "GET", path: "/api/stories/highlights/[id]", auth: "session-optional", category: "feed", description: "One highlight with its stories, if the caller may see its owner's stories." },
+  { method: "PATCH", path: "/api/stories/highlights/[id]", auth: "session", category: "feed", description: "Rename a highlight or pick one of its stories as the cover (owner only)." },
+  { method: "DELETE", path: "/api/stories/highlights/[id]", auth: "session", category: "feed", description: "Delete a highlight; files nothing else uses are deleted after (owner only)." },
+  { method: "POST", path: "/api/stories/highlights/[id]/items", auth: "session", category: "feed", description: "Add one of the caller's own stories to their highlight." },
+  { method: "DELETE", path: "/api/stories/highlights/[id]/items", auth: "session", category: "feed", description: "Take a story out of a highlight; the last one out deletes the highlight." },
 ];
 
 export function getApiEndpoints(): ApiEndpoint[] {

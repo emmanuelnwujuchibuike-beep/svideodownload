@@ -316,6 +316,9 @@ export const OWNER_COLUMN: Record<string, string> = {
   story_views: "viewer_id",
   // 0288: the reactions THIS member gave — never who reacted to theirs (the story_views reasoning above)
   story_reactions: "reactor_id",
+  // 0289: the member's own highlights and the stories kept in them
+  story_highlights: "user_id",
+  story_highlight_items: "user_id",
   // follower_id = accounts you chose to follow. The other side is exported
   // separately as `followers`, see FOLLOW_MIRROR.
   follows: "follower_id",

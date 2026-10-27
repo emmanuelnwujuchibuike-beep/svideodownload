@@ -191,6 +191,22 @@ type Authors = { in: readonly string[] } | { one: string } | "everyone";
  * `allow_replies` (0288) ride in an optional group: supabase-js fails the WHOLE
  * select on a missing column (42703), so an unapplied migration costs only those fields.
  */
+/*
+  Stories Part 5 (2026-10-27): which optional column set this database has, remembered. With a migration unapplied,
+  EVERY read used to fail its first query (42703) and run again with fewer columns — two round trips per read, on
+  every ring load. The tier that worked is kept for 10 minutes, then the full set is tried again (so a migration
+  applied while the process runs is picked up without a restart). Fewer columns only ever means fewer fields.
+*/
+const STORY_COL_TIERS = [`${STORY_COLS}, allow_reshare, thumbnail_url, allow_replies`, `${STORY_COLS}, allow_reshare, thumbnail_url`, STORY_COLS] as const;
+const MISSING_COLUMN = /allow_reshare|thumbnail_url|allow_replies|42703|does not exist/;
+const COL_TIER_RETRY_MS = 10 * 60_000;
+let colTier: { tier: number; at: number } = { tier: 0, at: 0 };
+
+/** The column tier to start from (exported for the test). */
+export function storyColumnTier(now = Date.now()): number {
+  return colTier.tier > 0 && now - colTier.at > COL_TIER_RETRY_MS ? 0 : colTier.tier;
+}
+
 async function activeStories(db: Db, authors: Authors, limit: number): Promise<StoryRow[]> {
   const now = new Date().toISOString();
   const run = (cols: string) =>
@@ -199,12 +215,15 @@ async function activeStories(db: Db, authors: Authors, limit: number): Promise<S
       if (authors !== "everyone") q = "one" in authors ? q.eq("user_id", authors.one) : q.in("user_id", [...authors.in]);
       return q.order("created_at", { ascending: false }).order("id", { ascending: false }).range(a, b) as unknown as PromiseLike<{ data: StoryRow[] | null; error: { message: string } | null }>;
     }, limit);
-  const first = await run(`${STORY_COLS}, allow_reshare, thumbnail_url, allow_replies`);
-  if (!/allow_reshare|thumbnail_url|allow_replies|42703|does not exist/.test(first.error?.message ?? "")) return first.rows;
-  // 0288 not applied yet: keep the two older optional columns, lose only the reply switch
-  const older = await run(`${STORY_COLS}, allow_reshare, thumbnail_url`);
-  if (/allow_reshare|thumbnail_url|42703|does not exist/.test(older.error?.message ?? "")) return (await run(STORY_COLS)).rows;
-  return older.rows;
+  // 0288 not applied: keep the two older optional columns, lose only the reply switch; then the bare set
+  for (let t = storyColumnTier(); t < STORY_COL_TIERS.length; t++) {
+    const res = await run(STORY_COL_TIERS[t]!);
+    if (t === STORY_COL_TIERS.length - 1 || !MISSING_COLUMN.test(res.error?.message ?? "")) {
+      if (t !== colTier.tier) colTier = { tier: t, at: Date.now() };
+      return res.rows;
+    }
+  }
+  return [];
 }
 
 async function profilesFor(db: Db, ids: readonly string[]): Promise<Map<string, ProfileRow>> {
@@ -275,7 +294,17 @@ export async function getActiveStories(viewerId: string | null, limit = 50, scop
   if (!hasSupabase) return [];
   try {
     const db = createAdminClient();
-    const [ties, excluded] = await Promise.all([viewerTies(db, viewerId), excludedStoryAuthors(db, viewerId)]);
+    /*
+      Stories Part 5 (2026-10-27): Home's public discovery read depends on nothing but the clock, so it runs in the
+      SAME round trip as the ties and the block list (it used to wait for the tied authors' stories — a fourth
+      sequential round trip). Its rows are still dropped when the block list is unknown, and filtered by blocks and
+      `storyVisibleTo` below exactly as before: only the waiting changed, not who sees what.
+    */
+    const [ties, excluded, discoveryRows] = await Promise.all([
+      viewerTies(db, viewerId),
+      excludedStoryAuthors(db, viewerId),
+      scope === "all" ? activeStories(db, "everyone", DISCOVERY_ROWS).catch(() => [] as StoryRow[]) : Promise.resolve([] as StoryRow[]),
+    ]);
 
     // 🔴 Fail closed on the block list: only the viewer's own stories (Stories Part 2).
     const blocksUnknown = excluded === null;
@@ -290,8 +319,8 @@ export async function getActiveStories(viewerId: string | null, limit = 50, scop
     // B2: the tied authors' stories, read by author — never crowded out by anyone else's
     const tiedIds = [...tied];
     const tiedRows = (await Promise.all(chunks(tiedIds).map((c) => activeStories(db, { in: c }, STORIES_PER_CHUNK)))).flat();
-    // Home only: public discovery fills the space that is left (signed out, this is all there is)
-    const discovery = scope === "all" && !blocksUnknown ? await activeStories(db, "everyone", DISCOVERY_ROWS) : [];
+    // Home only: public discovery fills the space that is left (signed out, this is all there is) — read above, kept only when blocks are known
+    const discovery = blocksUnknown ? [] : discoveryRows;
 
     const byId = new Map<string, StoryRow>();
     for (const r of [...tiedRows, ...discovery]) if (!exclude.has(r.user_id)) byId.set(r.id, r);
@@ -353,6 +382,27 @@ export async function getActiveStoryForUser(userId: string, viewerId?: string | 
     return groupOf(p, rows.map((r) => toItem(r, watched)), viewer);
   } catch {
     return null;
+  }
+}
+
+/**
+ * May this viewer see this member's stories at all — the rings' own rule (Part 2: lib/social/story-audience.ts, blocks
+ * and restrictions both ways, profile visibility, ties) for ONE author, whether or not a story is up right now. Story
+ * highlights (Part 5, 2026-10-27) use it: who may see someone's stories may see their highlights. The owner always may.
+ * Fails CLOSED: any error answers false.
+ */
+export async function canSeeStoriesOf(authorId: string, viewerId: string | null): Promise<boolean> {
+  if (!hasSupabase) return false;
+  if (viewerId && viewerId === authorId) return true;
+  try {
+    const db = createAdminClient();
+    const excluded = await excludedStoryAuthors(db, viewerId);
+    if (excluded === null || excluded.has(authorId)) return false;
+    const [profiles, ties] = await Promise.all([profilesFor(db, [authorId]), viewerId ? pairTies(db, viewerId, authorId) : Promise.resolve(NO_TIES)]);
+    const p = profiles.get(authorId);
+    return !!p && storyVisibleTo(facts(p), viewerId, { ...ties, excluded: false });
+  } catch {
+    return false;
   }
 }
 

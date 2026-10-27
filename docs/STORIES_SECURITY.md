@@ -88,3 +88,29 @@ Who sees whose stories (Part 2), seen state from `story_views` (Part 3), screens
 notifications and video limits (Part 4), loading the viewer on first tap (Part 5).
 🔴 When Part 2 widens visibility, `story_view_access` must widen with it, or views and reshares
 will refuse people the rings show.
+
+## Part 5 (2026-10-27) — highlights and performance
+
+**Highlights (migration 0289, not applied by this change — it runs with the next push through the Supabase integration).**
+`story_highlights` + `story_highlight_items`, no member table access (the 0285 model); every read and write is the
+server's (`lib/social/story-highlights.ts`, routes under `/api/stories/highlights`, catalogued in `api-registry.ts`).
+
+| Rule | How |
+|---|---|
+| Who sees a member's highlights | whoever may see their stories — `canSeeStoriesOf` (the rings' one rule: blocks and status restrictions both ways, profile visibility, ties). A refusal is an empty list / 404, never the rows or media URLs |
+| Who writes | the owner, and only with their OWN stories (checked on the `stories` row before anything is written) |
+| The file outlives the story | an item copies the story's `media_url` / `thumbnail_url`; the daily sweep never deletes a file any `*_url` column names (`story_media_references`, 0285), so no sweep change was needed |
+| Nothing left behind | removing a story or deleting a highlight offers its files to `releaseUnreferencedUploads` (`lib/storage/release-unreferenced.ts`, shared with the refused-upload path): deleted only when nothing references them |
+| Limits | titles 1–30 characters, 100 highlights per member, 100 stories per highlight; the last story out deletes the highlight |
+
+Where: **Highlight** on your own story (the bar and Story options) opens "Add to highlight"; the profile shows a row of
+circles (owner + visitors who may see the stories; not on a restricted profile) with **New** for the owner while they
+have a story up; a circle opens the highlight viewer (owner: remove, make cover, rename, delete).
+
+**Performance.** Home's ring read went from 4 sequential database round trips to 3 (public discovery now runs with the
+ties and block list instead of after the tied authors' stories — same filtering after). With a migration unapplied,
+the missing-column fallback is remembered for 10 minutes instead of costing a failed query on every read. The viewer's
+code is fetched on a ring press and after page load (never during it, never on a slow connection) — still not in the
+page bundle. No index was needed: `stories_user_idx`, `stories_active_idx` and `story_views`' primary key cover every
+read. Tests: `lib/social/stories-perf.server.test.ts` (round trips, the fallback, access unchanged — mutation-checked),
+`lib/social/story-highlights.server.test.ts`, `features/ui/warm-after-load.test.ts`.

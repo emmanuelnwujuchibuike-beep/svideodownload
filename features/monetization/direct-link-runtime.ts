@@ -244,9 +244,15 @@ export async function loadDirectLinkOpener(spot: DirectLinkSpot): Promise<SpotOp
       return links.length > 0;
     }
     if (coolingDown(spotPopunder)) {
-      // a pop-under showed a short while ago: this tap opens nothing at all (the direct link included) — less aggressive
-      onOutcome?.("none");
-      return true;
+      /*
+        A pop-under showed a short while ago, so none may open now (the gate refuses it). The tap still gets its BACKUP —
+        the direct link / Smartlink, each on its own chance — exactly as when no pop-under is set up. Owner, 2026-10-27:
+        "the adsterra smartlink and pop under is not counting … so I get low impression": every tap inside the
+        cooldown (30 min by default) used to open NOTHING, Smartlink included. One ad per tap still holds.
+      */
+      const opened = openDirect();
+      onOutcome?.(spotOutcome({ popunderOpened: false, directOpened: opened }));
+      return links.length > 0;
     }
     if (deciding) return true;
     deciding = true;

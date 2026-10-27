@@ -438,7 +438,9 @@ describe("less aggressive (owner 2026-10-23) — fewer pop-unders, the ones that
     expect(scripts).toEqual([]);
   });
 
-  it("the cooldown: after a pop-under, the next 30 minutes open nothing at the spots (no direct link either); then again", async () => {
+  // 2026-10-27 (owner: "smartlink and pop under is not counting … low impression"): inside the cooldown the pop-under is
+  // still refused, but the tap gets its BACKUP link — it used to open nothing at all
+  it("the cooldown: after a pop-under, the next 30 minutes open no pop-under — the direct link carries those taps; then again", async () => {
     const open = await readyOpener();
     press("downloadAdClose");
     const first = vi.fn();
@@ -451,9 +453,9 @@ describe("less aggressive (owner 2026-10-23) — fewer pop-unders, the ones that
     press("downloadAdClose");
     const second = vi.fn();
     open(second);
-    expect(second).toHaveBeenCalledWith("none");
+    expect(second).toHaveBeenCalledWith("direct");
     expect(thirdPartyOpen("https://pop.example/2")).toBeNull();
-    expect(opened).toEqual(["https://pop.example/1"]);
+    expect(opened).toEqual(["https://pop.example/1", DIRECT.url]);
 
     vi.advanceTimersByTime(26 * 60_000);
     press("downloadAdClose");

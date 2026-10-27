@@ -43,7 +43,7 @@ function reducedMotion(): boolean {
   }
 }
 
-export function SuggestionDeck({ initial, variant, seeAllHref }: { initial: PersonSuggestion[]; variant: "panel" | "hero"; seeAllHref?: string }) {
+export function SuggestionDeck({ initial, variant, seeAllHref, onWarmSeeAll }: { initial: PersonSuggestion[]; variant: "panel" | "hero"; seeAllHref?: string; onWarmSeeAll?: () => void }) {
   const [queue, setQueue] = useState<PersonSuggestion[]>(initial);
   const [deck, apply] = useOptimistic(queue, (q: PersonSuggestion[], op: Op) =>
     op.type === "remove" ? q.filter((p) => p.id !== op.id) : [op.person, ...q.filter((p) => p.id !== op.person.id)],
@@ -188,7 +188,7 @@ export function SuggestionDeck({ initial, variant, seeAllHref }: { initial: Pers
             </span>
           ) : null
         ) : seeAllHref ? (
-          <PendingLink href={seeAllHref} prefetch={false} className="frenz-glass-chip flex h-11 items-center rounded-full px-3.5 text-[13px] font-bold text-white" spinnerSize={15}>
+          <PendingLink href={seeAllHref} prefetch={false} onPointerDown={onWarmSeeAll} className="frenz-glass-chip flex h-11 items-center rounded-full px-3.5 text-[13px] font-bold text-white" spinnerSize={15}>
             See all
           </PendingLink>
         ) : null}

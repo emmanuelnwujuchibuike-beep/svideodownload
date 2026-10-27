@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { memo, type ReactNode, useCallback, useMemo, useRef, useState, useTransition } from "react";
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { sayHiAction } from "@/features/friends/actions";
 import { FriendCelebration } from "@/features/friends/friend-celebration";
@@ -35,10 +35,12 @@ import { FriendsToast, useFriendsToast } from "@/features/friends/friends-toast"
 import { PendingButton, PendingLink } from "@/features/frenz-ui/pending";
 import { RequestCard } from "@/features/friends/request-card";
 import { filterRequests, REQUEST_FILTERS, type RequestFilter } from "@/features/friends/request-logic";
+import { PeopleSheet } from "@/features/friends/people-sheet";
 import { SuggestionDeck } from "@/features/friends/suggestion-deck";
+import { afterPageLoad } from "@/features/app-shell/warm-routes";
 import { iconButton, PersonAvatar, primaryPill, quietPill } from "@/features/friends/ui";
 import { usePresence } from "@/features/friends/use-presence";
-import { ChevronRightIcon, SearchIcon, UserPlusIcon } from "@/features/frenz-ui/icons";
+import { ChevronRightIcon, UserPlusIcon } from "@/features/frenz-ui/icons";
 import { timeAgo } from "@/features/notifications/meta";
 import type { FriendItem, FriendProfile, FriendRequestItem, FriendsOverview } from "@/lib/social/friends";
 import type { PersonSuggestion } from "@/lib/social/people/engine";
@@ -110,6 +112,8 @@ function Heading({ title, count, action, id }: { title: string; count?: number; 
     </div>
   );
 }
+
+const DISCOVER = "/friends/discover";
 
 const ROUND =
   "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-frenz-line bg-frenz-fill/60 text-frenz-ink";
@@ -296,13 +300,14 @@ export function FriendsHub({
   };
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-  // The header's search button: to the friends search when there is a list, else to Add friends.
-  const focusSearch = () => {
-    const el = searchRef.current;
-    if (!el) return;
-    el.scrollIntoView({ block: "center", behavior: "smooth" });
-    el.focus({ preventScroll: true });
-  };
+  /*
+    The header's button is "Your people" now (owner, 2026-10-27): your friends and the requests you've sent, in a
+    sheet — search lives on Add friends. Add friends itself is warmed once this page has loaded (afterPageLoad: never
+    competing with the page's own load) and again the moment a finger lands on one of its buttons.
+  */
+  const [peopleOpen, setPeopleOpen] = useState(false);
+  useEffect(() => afterPageLoad(() => router.prefetch(DISCOVER)), [router]);
+  const warmDiscover = () => router.prefetch(DISCOVER);
 
   const sayHi = (f: FriendItem) => {
     if (hiBusy) return;
@@ -338,26 +343,26 @@ export function FriendsHub({
           </p>
         </div>
         <div className="flex shrink-0 gap-2 pb-1">
-          {friends.length > 0 ? (
-            <PendingButton onClick={focusSearch} aria-label="Search friends" className={ROUND}>
-              <SearchIcon size={20} />
-            </PendingButton>
-          ) : (
-            <PendingLink href="/friends/discover" prefetch={false} aria-label="Find people" className={ROUND}>
-              <SearchIcon size={20} />
-            </PendingLink>
-          )}
+          <PendingButton onClick={() => setPeopleOpen(true)} aria-label={`Friends and requests: ${friends.length} friends, ${outgoing.length} sent`} className={cn(ROUND, "relative")}>
+            <Users className="h-[20px] w-[20px]" strokeWidth={2.2} aria-hidden />
+            {outgoing.length > 0 ? (
+              <span aria-hidden className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-frenz-gradient-x px-1 text-[10.5px] font-bold text-white ring-2 ring-frenz-page">
+                {outgoing.length > 9 ? "9+" : outgoing.length}
+              </span>
+            ) : null}
+          </PendingButton>
         </div>
       </header>
 
       {stories}
 
-      {suggestions.length > 0 ? <SuggestionDeck initial={suggestions} variant="panel" seeAllHref="/friends/discover" /> : null}
+      {suggestions.length > 0 ? <SuggestionDeck initial={suggestions} variant="panel" seeAllHref={DISCOVER} onWarmSeeAll={warmDiscover} /> : null}
 
       <div className="mt-3.5 flex gap-2.5">
         <PendingLink
-          href="/friends/discover"
+          href={DISCOVER}
           prefetch={false}
+          onPointerDown={warmDiscover}
           className="flex h-[54px] flex-1 items-center justify-center rounded-[27px] bg-frenz-ink font-heading text-[16px] font-bold text-frenz-page shadow-[0_14px_28px_-14px_rgb(18_17_26/0.6)]"
           inner="inline-flex items-center justify-center gap-[9px]"
         >
@@ -621,6 +626,8 @@ export function FriendsHub({
       ) : null}
 
       <FriendsToast toast={toast} onHide={hide} />
+
+      <PeopleSheet open={peopleOpen} onClose={() => setPeopleOpen(false)} friends={friends} outgoing={outgoing} busyId={busyId} onCancel={(req) => void cancel(req)} />
 
       <FriendCelebration
         open={!!celebrating}

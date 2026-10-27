@@ -248,12 +248,15 @@ const nextConfig: NextConfig = {
     // Lower webpack's peak memory during `next build` (2026-10-15: the Docker build on Railway
     // ran out of heap). A little slower to build, nothing changes in what ships.
     webpackMemoryOptimizations: true,
-    // The stylesheet travels inside the HTML instead of as a separate render-blocking request
-    // (owner 2026-10-27: "the landing and download page must be below 1.6 to below 2s"). Measured on
-    // slow 4G: the 67 kB sheet shared the connection with ~40 script chunks and finished ~0.6 s after
-    // the HTML. Inline, a page can never reference a stylesheet a later deploy deleted, either
-    // (the unstyled-page-after-deploy bug).
-    inlineCss: true,
+    /*
+      ⛔ NO `inlineCss` (tried 2026-10-27, reverted the same day). It took a cold browser landing from 2.04 to
+      1.64 s first paint, but it put the whole 478 kB stylesheet into EVERY document's <head> (1.09 MB of HTML) —
+      ahead of the boot F loader's markup — and a document cannot be cached the way an immutable /_next/static
+      stylesheet is. In the installed app every launch then re-downloaded and parsed it before the loader could
+      paint (owner: "the pwa now shows more white screen and not the Brand loader", and the page showed signed-out
+      until the account loaded, which the loader used to cover). A separate, cached stylesheet is right for an app
+      people return to. To speed the landing, shrink the stylesheet instead (it ships every page's CSS to every page).
+    */
   },
   images: {
     // yt-dlp returns thumbnails from arbitrary CDNs; allow https remotes.

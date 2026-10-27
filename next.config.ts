@@ -248,6 +248,12 @@ const nextConfig: NextConfig = {
     // Lower webpack's peak memory during `next build` (2026-10-15: the Docker build on Railway
     // ran out of heap). A little slower to build, nothing changes in what ships.
     webpackMemoryOptimizations: true,
+    // The stylesheet travels inside the HTML instead of as a separate render-blocking request
+    // (owner 2026-10-27: "the landing and download page must be below 1.6 to below 2s"). Measured on
+    // slow 4G: the 67 kB sheet shared the connection with ~40 script chunks and finished ~0.6 s after
+    // the HTML. Inline, a page can never reference a stylesheet a later deploy deleted, either
+    // (the unstyled-page-after-deploy bug).
+    inlineCss: true,
   },
   images: {
     // yt-dlp returns thumbnails from arbitrary CDNs; allow https remotes.

@@ -433,6 +433,53 @@ export function StoryViewer({
     else void v.play().catch(() => {});
   }, [replying, paidCard, optionsOpen, gi, si]);
 
+  /*
+    ── 🔴 NO SOUND WITHOUT THE STORY (owner, 2026-10-27: "story keeps playing the sound even
+       without the video playing, and when I go out of the story the sound still continues") ──
+    · A <video> taken out of the page can keep sounding (iOS keeps a detached element playing, and a
+      play() that resolves after the close starts it again). The element left behind — on the next
+      story and when the viewer closes — is paused AND emptied, so nothing can sound from it again.
+      Only once it is really out of the page: StrictMode's dev re-run finds it still connected.
+    · The app going to the background pauses it; coming back resumes it unless something holds it.
+    · A video whose picture never arrives (a codec this phone can't draw — older HEVC stories) played
+      its sound over the still poster. After 1.5 s of playback with no decoded frame it is stopped,
+      the story says so, and the viewer moves on (onTimeUpdate below).
+  */
+  const heldRef = useRef(false);
+  heldRef.current = !!(replying || paidCard || optionsOpen);
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    return () => {
+      if (v.isConnected) return;
+      v.pause();
+      v.removeAttribute("src");
+      v.load();
+    };
+  }, [gi, si]);
+  useEffect(() => {
+    const onVis = () => {
+      const v = videoRef.current;
+      if (!v) return;
+      if (document.visibilityState === "hidden") v.pause();
+      else if (!heldRef.current && !v.ended) void v.play().catch(() => {});
+    };
+    const onHide = () => videoRef.current?.pause();
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("pagehide", onHide);
+    };
+  }, []);
+  const [noPicture, setNoPicture] = useState(false);
+  useEffect(() => setNoPicture(false), [gi, si]);
+  useEffect(() => {
+    if (!noPicture) return;
+    const t = window.setTimeout(next, 2500);
+    return () => window.clearTimeout(t);
+  }, [noPicture, next]);
+
   // 2x while held: forward plays at playbackRate 2, backward steps back 0.2 s every 100 ms
   // (no browser plays a video in reverse), then playback resumes where the rewind stopped.
   useEffect(() => {
@@ -632,6 +679,11 @@ export function StoryViewer({
               onTimeUpdate={(e) => {
                 const v = e.currentTarget;
                 if (v.duration) setPct((v.currentTime / v.duration) * 100);
+                // sound but no picture: the phone can't draw this video's codec — stop it (see "NO SOUND WITHOUT THE STORY")
+                if (!noPicture && v.currentTime > 1.5 && (v.videoWidth === 0 || v.getVideoPlaybackQuality?.().totalVideoFrames === 0)) {
+                  v.pause();
+                  setNoPicture(true);
+                }
               }}
               onEnded={next}
               onLoadedMetadata={(e) => setFillFrame(e.currentTarget.videoHeight > e.currentTarget.videoWidth)}
@@ -648,6 +700,11 @@ export function StoryViewer({
             />
           )}
         </div>
+        {noPicture ? (
+          <p role="status" className="pointer-events-none absolute inset-x-6 top-1/2 z-[2] -translate-y-1/2 rounded-2xl bg-black/60 px-4 py-3 text-center text-[14px] font-semibold text-white">
+            This video can&apos;t play on this device.
+          </p>
+        ) : null}
 
         {/* the design's fades: the header reads on any picture; the reactions on theirs */}
         <div aria-hidden className={cn("pointer-events-none absolute inset-x-0 top-0 z-[1] h-[170px] bg-[linear-gradient(180deg,rgba(8,6,20,0.62)_0%,rgba(8,6,20,0.3)_55%,rgba(8,6,20,0)_100%)] transition-opacity duration-150", holding && "opacity-0")} />

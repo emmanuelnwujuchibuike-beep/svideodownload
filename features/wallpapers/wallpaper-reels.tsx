@@ -323,26 +323,37 @@ export function WallpaperReels({
   }, [onClose, comments, upgradeOpen]);
 
   /*
-    🔴 THE PAGE BEHIND IS PINNED, NOT JUST "overflow: hidden" (owner, 2026-10-26: "sometimes scrolling in Wallpapers
-    reels get stuck in a particular picture while the bottom Wallpapers gallery keep scrolling"). iOS Safari ignores
-    `overflow: hidden` on <body> for touch scrolling: a swipe that starts on the fixed chrome, or runs past the end of a
-    snap, scrolled the GALLERY underneath while the viewer sat still. Pinning the body in place (position: fixed at
-    its own offset) leaves nothing behind to scroll; the offset is put back exactly when the viewer closes. Mount
-    and unmount only — a comment sheet opening must not unpin and re-pin it.
+    🔴 THE PAGE BEHIND CAN'T SCROLL — WITHOUT PINNING IT (owner, 2026-10-26: "scrolling in Wallpapers reels get stuck
+    … while the bottom Wallpapers gallery keep scrolling"; then 2026-10-27: "since the earlier Wallpaper fix the bottom
+    part of the Wallpaper in PWA now shows white"). Pinning <body> with position: fixed stopped the gallery, but in the
+    installed iOS app it also shortened this full-screen layer, and the white page showed under it. Now nothing is
+    pinned: the page keeps `overflow: hidden`, and a touch that moves anywhere in this layer is cancelled unless it is
+    inside something here that really scrolls (the reel scroller, a comment list) — so a swipe on the chrome, or past
+    the end of a snap, has nothing behind to move. One non-passive listener, mount to unmount.
   */
+  const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const body = document.body;
-    const y = window.scrollY;
-    const prev = { position: body.style.position, top: body.style.top, left: body.style.left, right: body.style.right, width: body.style.width, overflowY: body.style.overflowY };
-    body.style.position = "fixed";
-    body.style.top = `-${y}px`;
-    body.style.left = "0";
-    body.style.right = "0";
-    body.style.width = "100%";
-    body.style.overflowY = "hidden";
+    const root = rootRef.current;
+    const html = document.documentElement;
+    const prev = { html: html.style.overflow, body: document.body.style.overflowY };
+    html.style.overflow = "hidden";
+    document.body.style.overflowY = "hidden";
+    const scrollsHere = (from: EventTarget | null): boolean => {
+      for (let el = from instanceof Element ? from : null; el && el !== root; el = el.parentElement) {
+        const oy = getComputedStyle(el).overflowY;
+        if ((oy === "auto" || oy === "scroll") && el.scrollHeight > el.clientHeight) return true;
+      }
+      return false;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (e.touches.length > 1) return; // a pinch is a zoom
+      if (!scrollsHere(e.target)) e.preventDefault();
+    };
+    root?.addEventListener("touchmove", onMove, { passive: false });
     return () => {
-      Object.assign(body.style, prev);
-      window.scrollTo(0, y);
+      root?.removeEventListener("touchmove", onMove);
+      html.style.overflow = prev.html;
+      document.body.style.overflowY = prev.body;
     };
   }, []);
 
@@ -421,6 +432,7 @@ export function WallpaperReels({
 
   return (
     <div
+      ref={rootRef}
       data-media-protected
       className="fixed inset-0 z-[100] overscroll-none bg-black"
       onTouchStart={(e) => {

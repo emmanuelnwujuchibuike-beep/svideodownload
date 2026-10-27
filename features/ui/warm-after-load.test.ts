@@ -24,6 +24,14 @@ function hasViewportPrefetchLink(src: string): boolean {
   return [...src.matchAll(/<Link\b[^>]*?>/gs)].some((m) => !/prefetch=\{false\}/.test(m[0]));
 }
 
+/** The nav's warm-up effect calls router.prefetch on a line BEFORE it hands the rest to afterPageLoad. */
+function navPrefetchesAtMount(src: string): boolean {
+  const i = src.indexOf("return afterPageLoad(() => {");
+  if (i < 0) return true;
+  const effectStart = src.lastIndexOf("useEffect(", i);
+  return /router\.prefetch\(/.test(src.slice(Math.max(0, effectStart), i));
+}
+
 describe("route warm-ups wait for the page to load (2026-10-26)", () => {
   it("TapOnceLink's warmOnIdle goes through afterPageLoad", () => {
     const src = code("features/ui/tap-once-link.tsx");
@@ -35,7 +43,13 @@ describe("route warm-ups wait for the page to load (2026-10-26)", () => {
     expect(hasViewportPrefetchLink(code("features/downloads/home-screen.tsx"))).toBe(false);
   });
 
+  // owner 2026-10-27: "Download and landing must load below 2s in slow 4G" — /history was still warmed at mount
+  it("the bottom nav prefetches nothing before load — not even History", () => {
+    expect(navPrefetchesAtMount(code("features/app-shell/mobile-nav.tsx"))).toBe(false);
+  });
+
   it("the guards fail on the shapes that shipped before", () => {
+    expect(navPrefetchesAtMount(`    if (routes.includes(FIRST_WARM_ROUTE)) router.prefetch(FIRST_WARM_ROUTE);\n    return afterPageLoad(() => {`)).toBe(true);
     expect(warmsBeforeLoad("const id = w.requestIdleCallback(warm, { timeout: 4000 });")).toBe(true);
     expect(warmsBeforeLoad("const t = window.setTimeout(warm, 2000);")).toBe(true);
     expect(hasViewportPrefetchLink('<Link\n  href="/ai"\n  data-track="ai_clicked"\n>')).toBe(true);

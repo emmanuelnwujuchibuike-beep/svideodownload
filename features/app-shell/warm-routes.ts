@@ -7,8 +7,8 @@
 export const GUEST_WARM_ROUTES = ["/history", "/profile"] as const;
 
 /**
- * Warmed FIRST, the moment the nav mounts — everything else waits for the page
- * to finish loading (afterPageLoad).
+ * Warmed FIRST once the page has loaded (afterPageLoad) — ahead of every other tab.
+ * Since 2026-10-27 not at mount: that competed with the cold entry page itself.
  *
  * MEASURED 2026-10-10 (cold landing, iPhone 13, 4x CPU, 1.6 Mbps, tap at 5 s,
  * n=6): History took 5.6 s to paint because its prefetch was issued LAST —

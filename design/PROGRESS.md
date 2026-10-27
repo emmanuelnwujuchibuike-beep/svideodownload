@@ -658,3 +658,16 @@ Frenz AI — Image to Video
 
 **Checked (2026-10-27):** typecheck, lint, tests (features/friends + lib/social: 776 pass). Production build passed with the new deck and Add friends page: /friends 276 kB first load, /friends/discover 205 kB. Screenshots at 390 and 320 px from a sample-data preview — no sideways overflow; a refused Skip puts the card back.
 **Still owed:** the rebuild after the lower-section restyle was stopped for low memory (machine ~3 GB free), so that restyle has no screenshot yet, and `lib/perf/budget.test.ts` has not been re-run on the final build. The preview routes are parked in the session scratchpad (`preview-park`).
+
+## Search & Discover + Explore (owner, 2026-10-27) → design/Frenz-Search-Discover-design.zip
+
+- [x] 26. Discover (`/search` before typing) → Discover.dc.html
+- [x] 27. Search, focused + results → Search.dc.html
+- [x] 28. Explore (`/explore`) on the same design (owner: "use same design for the explore page too")
+
+**Discover:** large "Discover" title + bell, the fill field, creator circles (gradient ring; each opens the profile), **Trending now** (the gradient panel: top 3 tags as glass rows with rank, post count and the tag's real cover; "See all" shows the other three — a CSS-only toggle), **Trending searches** chips (the tags beyond those six), **Creators to follow** cards (followers count; Follow), **Explore videos** (3-column grid, real view counts; See all → /explore).
+**Search:** tapping the field: violet field + Cancel (back to Discover), Top · Users · Videos · Sounds · Hashtags · Places chips, the **Recent** card (#, @ or clock icon read from the term; × removes one; Clear all; "Save search history · Turn off"; when off, a Turn on row), Trending searches. Results: Top shows 3 people, 3 hashtags, 4 videos, 3 sounds, 3 places, each with **See all** (switches the chip, no navigation); a single chip shows only that section.
+**Follow:** the shared spinner on tap, then "Following" (README).
+**Differs from the design:** creators show "n followers", not "Business · n" (no profile type in this data — not guessed). The field sits above the chips (the design's order; the owner had asked for chips first on 2026-09-27). Places kept as a sixth chip. The page ground is white (it was the grey canvas). No bell duplicates: the topbar is hidden on /search and /explore below `lg`.
+**Explore:** title "Explore" (its own h1, still indexed), the same Discover sections, then Video Collections and its own **Explore videos** (Trending · Recent | All + categories over the 3-column tile grid; cached per choice, pull to refresh, URL kept). **Removed:** the "Creators" Discovery Orbit rail (Creators to follow covers it) and its client component; the old ExploreCard. Searching from /explore stays on /explore.
+**Lighter:** the bell and the results view load after the screen (next/dynamic); collections and tiles never viewport-prefetch.

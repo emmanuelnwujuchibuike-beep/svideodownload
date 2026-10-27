@@ -244,9 +244,14 @@ export function MobileNav({
     const routes = member
       ? ["/home", "/friends", "/messages", "/account", "/history", "/studio/ai/history", profileHref]
       : GUEST_WARM_ROUTES;
-    // History first and at once; the rest after the page has loaded (warm-routes.ts, measured)
-    if ((routes as readonly string[]).includes(FIRST_WARM_ROUTE)) router.prefetch(FIRST_WARM_ROUTE);
+    /*
+      History FIRST, but no longer before the page has loaded (owner, 2026-10-27: "Download and landing must load
+      below 2s in slow 4G"). Warming it at mount pulled /history RSC + ~25 chunks in while the cold entry page was
+      still loading. It now leads the queue the moment the page has loaded, so it still never waits behind the
+      other tabs (the 2026-10-10 History-tap measurement), and the entry page gets the whole connection first.
+    */
     return afterPageLoad(() => {
+      if ((routes as readonly string[]).includes(FIRST_WARM_ROUTE)) router.prefetch(FIRST_WARM_ROUTE);
       for (const r of routes) if (r !== FIRST_WARM_ROUTE) router.prefetch(r);
     });
   }, [router, profileHref, handle]);

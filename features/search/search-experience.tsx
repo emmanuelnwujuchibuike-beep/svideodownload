@@ -1,12 +1,11 @@
 "use client";
 
 import { Hash, History, Search, TrendingUp, UserRound, X } from "lucide-react";
+import dynamic from "next/dynamic";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { SearchCommitProvider } from "@/features/search/search-commit";
 import { TREND_CHIP } from "@/features/search/search-primitives";
-import { SearchResultsView } from "@/features/search/search-results-view";
 import {
   clearRecentSearches,
   isRecentSearchEnabled,
@@ -48,6 +47,18 @@ import { cn } from "@/lib/utils";
  * The design puts the field above the type chips; the owner had asked (2026-09-27) for the chips above. The
  * design is the newer word, so the field is first. "Places" stays as a sixth chip (a real search the app has).
  */
+
+/*
+  The bell, loaded after the screen rather than in its first bundle: its live stream brings the Supabase client
+  (~57 kB gz) and /explore is a cold-entry page. A same-size placeholder holds its place, so nothing moves.
+*/
+const NotificationBell = dynamic(() => import("@/features/app-shell/notification-bell").then((m) => m.NotificationBell), {
+  ssr: false,
+  loading: () => <span aria-hidden className="block h-11 w-11" />,
+});
+
+// Results only exist once something is searched — their code (rows, tiles, follow) loads then, or with a ?q= entry.
+const SearchResultsView = dynamic(() => import("@/features/search/search-results-view").then((m) => m.SearchResultsView));
 
 const TABS: { id: SearchType; label: string }[] = [
   { id: "all", label: "Top" },
@@ -241,11 +252,11 @@ export function SearchExperience({
     <SearchCommitProvider value={commitFn}>
       {/* `-mt-4` cancels AppContent's own `pt-4` below `lg`: the topbar is hidden on this route on mobile, so this
           screen owns the status-bar inset itself. From `lg` the topbar is back. */}
-      <div className="frenz-ui mx-auto -mt-4 w-full max-w-3xl lg:mt-0">
+      <div className="frenz-ui mx-auto -mt-4 w-full max-w-3xl px-1 lg:mt-0">
         {/* Sticky only while searching (a sticky bar rides the document, so it never fights the iOS keyboard). */}
         <div
           className={cn(
-            "z-20 -mx-3 bg-frenz-page px-4 pb-1 pt-[calc(var(--frenz-safe-top)+0.5rem)] sm:-mx-4 lg:pt-2",
+            "z-20 -mx-4 bg-frenz-page px-4 pb-1 pt-[calc(var(--frenz-safe-top)+0.5rem)] lg:pt-2",
             active && "sticky top-0 lg:top-[calc(4rem+var(--frenz-safe-top)+var(--frenz-announce-h,0px))]",
           )}
         >
@@ -400,7 +411,7 @@ function SearchTabs({ active, onPick }: { active: SearchType; onPick: (t: Search
       ref={railRef}
       role="tablist"
       aria-label="Search categories"
-      className="srch-rail -mx-4 mt-3 gap-2 px-4 pb-1"
+      className="srch-rail -mx-4 mt-3 scroll-px-4 gap-2 px-4 pb-1"
       onKeyDown={(e) => {
         if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
         e.preventDefault();

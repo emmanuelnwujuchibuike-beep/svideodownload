@@ -85,7 +85,7 @@ export function DiscoveryRow({
 }) {
   if (creators.length === 0 && !viewerHandle) return null;
   return (
-    <nav aria-label="Discover creators" className="srch-rail -mx-4 gap-3 px-4 pb-1 pt-1">
+    <nav aria-label="Discover creators" className="srch-rail -mx-4 scroll-px-4 gap-3 px-4 pb-1 pt-1">
       <Circle href={viewerHandle ? profilePath(viewerHandle) : `/login?next=${loginNext}`} label="Your story" badge>
         <span className="flex h-full w-full items-center justify-center rounded-full bg-frenz-fill text-frenz-muted">
           <UserRound className="h-7 w-7" aria-hidden />
@@ -219,7 +219,7 @@ function CreatorsToFollow({ creators, canFollow }: { creators: SuggestedCreator[
   return (
     <section aria-labelledby="discover-creators">
       <Heading id="discover-creators" title="Creators to follow" href="/friends/discover" />
-      <div className="srch-rail -mx-4 gap-2.5 px-4 pb-1">
+      <div className="srch-rail -mx-4 scroll-px-4 gap-2.5 px-4 pb-1">
         {creators.slice(0, 10).map((c) => (
           <article key={c.id} className="flex w-[168px] shrink-0 flex-col items-center rounded-[24px] border border-frenz-line bg-frenz-card px-3.5 pb-3.5 pt-4 text-center">
             <PendingLink href={profilePath(c.handle)} prefetch={false} className="flex w-full flex-col items-center rounded-2xl" inner="flex w-full flex-col items-center">

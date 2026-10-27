@@ -1,6 +1,6 @@
 /**
  * Discovery Orbit™ catalogue — pure, client-safe (Feature 15 Part 8). Split
- * out of orbits.ts specifically so `features/explore/orbit-rail.tsx` (a
+ * out of orbits.ts specifically so the Explore page (a
  * client component) can import the TABS/TYPES without pulling in
  * `getOrbitFeed`'s data layer, which transitively imports server-only code
  * (lib/social/home-feed.ts → posts.ts → lib/supabase/paginate.ts, marked

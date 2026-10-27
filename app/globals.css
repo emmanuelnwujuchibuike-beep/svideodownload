@@ -1044,7 +1044,7 @@
     -webkit-backdrop-filter: blur(20px);
     backdrop-filter: blur(20px);
   }
-  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
     .frenz-glass-card { background: hsl(var(--frenz-card) / 0.97); }
     .frenz-glass-chip { background: rgb(255 255 255 / 0.24); }
     .frenz-glass-toast { background: rgb(18 17 26 / 0.96); }

@@ -101,7 +101,7 @@ function CardGroup({ children, label }: { children: ReactNode; label?: string })
 
 function Heading({ title, count, action, id }: { title: string; count?: number; action?: ReactNode; id?: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 px-1 pb-2.5 pt-[26px]">
+    <div className="flex items-center justify-between gap-3 px-1 pb-2.5 pt-1.5">
       <h2 id={id} className="flex items-center gap-2 font-heading text-[19px] font-bold tracking-[-0.4px]">
         {title}
         {count ? <span className="rounded-full bg-frenz-violet/10 px-2 py-px text-[12px] font-bold tabular-nums text-frenz-violet">{count}</span> : null}

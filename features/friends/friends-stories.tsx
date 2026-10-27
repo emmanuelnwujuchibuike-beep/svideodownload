@@ -74,18 +74,19 @@ export function FriendsStories({
         nothing that triggers layout. Same language as /explore's sort control,
         so the two surfaces feel like one product.
 
-        A neutral/dark active pill, not a purple one: this sits directly above
-        the story ring and the brand gradient already lives there.
+        A neutral white pill on a soft fill (design/friends, 2026-10-26), not a
+        purple one: this sits directly above the story ring and the brand
+        gradient already lives there.
       */}
       <div
         role="tablist"
         aria-label="Stories"
-        className="relative mb-3.5 inline-flex rounded-full border border-border/60 bg-secondary/70 p-1 text-[13px] font-semibold"
+        className="relative mb-3 inline-flex rounded-[14px] bg-frenz-fill p-[3px] text-[13px]"
       >
         <span
           aria-hidden
           className={cn(
-            "absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-full bg-foreground shadow-[0_2px_8px_-2px_rgba(0,0,0,0.35)]",
+            "absolute inset-y-[3px] left-[3px] w-[calc(50%-3px)] rounded-[11px] bg-frenz-card shadow-[0_2px_8px_-2px_rgb(30_20_80/0.18)]",
             "transition-transform duration-250 ease-[var(--ease-out)] motion-reduce:transition-none",
           )}
           style={{ transform: scope === "following" ? "translateX(100%)" : "translateX(0)" }}
@@ -100,12 +101,12 @@ export function FriendsStories({
             className={cn(
               // 36px tall with the padding — a comfortable target without the
               // control growing into the story row below it.
-              "relative z-10 min-w-[112px] rounded-full px-4 py-1.5 capitalize",
+              "relative z-10 h-[34px] min-w-[92px] rounded-[11px] px-3.5 capitalize",
               "transition-colors duration-200 motion-reduce:transition-none",
-              scope === s ? "text-background" : "text-muted-foreground",
+              scope === s ? "font-extrabold text-frenz-ink" : "font-semibold text-frenz-muted",
             )}
           >
-            {s} stories
+            {s}
           </button>
         ))}
       </div>
@@ -113,23 +114,21 @@ export function FriendsStories({
       <div className="-mx-1 flex gap-4 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {/* Add your story — the dedicated Story surface (owner, 2026-07-16). */}
         <PressIcon className="shrink-0">
-          <button type="button" onClick={() => router.push("/create/story")} className="flex w-16 flex-col items-center gap-1.5">
-            <span className="relative rounded-full p-0.5 ring-1 ring-inset ring-border/70">
-              <span className="block rounded-full bg-background p-0.5">
-                {viewerAvatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={viewerAvatarUrl} alt="" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
-                ) : (
-                  <span className="flex h-[3.4rem] w-[3.4rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
-                    {initial}
-                  </span>
-                )}
-              </span>
-              <span className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white ring-2 ring-background">
-                <Plus className="h-3.5 w-3.5" />
+          <button type="button" onClick={() => router.push("/create/story")} className="flex w-[68px] flex-col items-center gap-1.5">
+            <span className="relative flex h-16 w-16 rounded-full border-2 border-dashed border-frenz-violet/30 p-[3px]">
+              {viewerAvatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={viewerAvatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
+              ) : (
+                <span className="flex flex-1 items-center justify-center rounded-full bg-frenz-gradient font-heading text-[20px] font-extrabold text-white">
+                  {initial}
+                </span>
+              )}
+              <span className="absolute -bottom-[3px] -right-[3px] flex h-6 w-6 items-center justify-center rounded-full border-[2.5px] border-frenz-page bg-frenz-ink text-frenz-page">
+                <Plus className="h-[11px] w-[11px]" strokeWidth={3.4} />
               </span>
             </span>
-            <span className="text-[11px] font-medium text-muted-foreground">Your Story</span>
+            <span className="text-[12px] font-bold text-frenz-ink">Your story</span>
           </button>
         </PressIcon>
 
@@ -178,16 +177,16 @@ export function FriendsStories({
             and no extra copy: the existing sentence is the whole message, and
             the brief rules out growing it.
           */
-          <div className="flex min-w-0 flex-1 items-center gap-3 self-stretch rounded-2xl border border-dashed border-border px-3.5 py-2.5">
-            <span
-              aria-hidden
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground"
-            >
-              <CircleDashed className="h-[18px] w-[18px]" />
+          <div className="flex h-16 min-w-0 flex-1 items-center gap-2.5 rounded-[20px] bg-frenz-fill/70 px-3.5">
+            <span aria-hidden className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-frenz-card text-frenz-violet">
+              <CircleDashed className="h-[17px] w-[17px]" />
             </span>
-            <p className="min-w-0 text-[13px] leading-snug text-muted-foreground">
-              {scope === "friends" ? "No friend stories right now." : "No stories from people you follow yet."}
-            </p>
+            <span className="flex min-w-0 flex-col gap-px">
+              <span className="truncate text-[14px] font-bold text-frenz-ink">{scope === "friends" ? "No friend stories yet" : "No stories yet"}</span>
+              <span className="truncate text-[12px] text-frenz-muted">
+                {scope === "friends" ? "Add friends to see theirs here" : "Stories from people you follow land here"}
+              </span>
+            </span>
           </div>
         ) : null}
       </div>

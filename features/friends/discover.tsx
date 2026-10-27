@@ -1,19 +1,21 @@
 "use client";
 
-import { BookUser, Check, ChevronRight, Loader2, QrCode, RotateCw, Search, Send, Users, X } from "lucide-react";
-import Link from "next/link";
+import { BookUser, Check, QrCode, RotateCw, Send, Users, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { VerifiedTick } from "@/components/badges/identity-badges";
-import { AmbientWash, GLASS, GlassGroup, GlassIconLink, PersonAvatar, primaryPill, SectionHeader } from "@/features/friends/ui";
-import { usePresence } from "@/features/friends/use-presence";
-import { attributionLink, reportReferralShared, shareOrCopy } from "@/lib/referrals/share-client";
 import { FollowChip } from "@/features/friends/follow-chip";
+import { PendingButton, PendingLink } from "@/features/friends/pending";
 import { PeopleYouMayKnow } from "@/features/friends/people-you-may-know";
-import type { SearchPerson } from "@/lib/social/search";
+import { SuggestionDeck } from "@/features/friends/suggestion-deck";
+import { PersonAvatar, primaryPill } from "@/features/friends/ui";
+import { usePresence } from "@/features/friends/use-presence";
+import { ChevronLeftIcon, SearchIcon } from "@/features/frenz-ui/icons";
+import { attributionLink, reportReferralShared, shareOrCopy } from "@/lib/referrals/share-client";
 import type { PersonSuggestion } from "@/lib/social/people/engine";
-import { cn, formatCompactNumber } from "@/lib/utils";
 import { profilePath } from "@/lib/social/profile-url";
+import type { SearchPerson } from "@/lib/social/search";
+import { cn, formatCompactNumber } from "@/lib/utils";
 
 type Person = {
   id: string;
@@ -25,26 +27,29 @@ type Person = {
   isFollowing?: boolean;
 };
 
+/** The deck takes the first page of the same server-rendered list; it fetches the rest itself. */
+const DECK_FIRST = 10;
+
+const ROUND =
+  "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-frenz-line bg-frenz-fill/60 text-frenz-ink";
+const TILE = "flex min-h-[132px] flex-col items-start gap-2 rounded-[24px] border border-frenz-line bg-frenz-card p-4 text-left";
+const LIST = "divide-y divide-frenz-line/70 overflow-hidden rounded-[24px] border border-frenz-line bg-frenz-card";
+
 /**
- * "Add friends" — people discovery.
+ * "Add friends" — people discovery (design/friends AddFriends.dc.html, 2026-10-26).
  *
- * The data path is unchanged: suggestions are server-rendered so the page opens
- * with content, search hits `/api/search?type=people` behind a debounce, and
- * every Follow goes through the shared `follow-store`, so following someone
- * here updates their card on the feed, the profile and /search at the same
- * instant.
+ * Layout: ‹ Friends + the QR card, the large title, the Suggestions deck (the shared SuggestionDeck,
+ * hero variant: TAP ONLY — Skip, Add, View profile; the design's swipe hint and ADD/SKIP badges are
+ * not built), the search field, From contacts + Invite friends as two white tiles, then People you
+ * may know with its filters.
  *
- * 2026-10-10 glass redesign (owner: "glassy professional, lightweight social
- * platform"): the shared features/friends/ui.tsx language (ambient wash,
- * frosted grouped list, the cached CDN avatar every list uses), plus an Invite
- * card that reuses the ONE attribution link (lib/referrals/share-client) and a
- * way to the existing QR card (/u/<handle>/card). Nothing new on the server.
+ * The data path is unchanged: suggestions are server-rendered so the page opens with content, search
+ * hits `/api/search?type=people` behind a debounce, Follow goes through the shared `follow-store`,
+ * Invite shares the ONE attribution link (lib/referrals/share-client). While searching, the deck and
+ * the tiles step aside so the results sit under the field.
  *
- * ── 🔴 NOT ADDED, DELIBERATELY ───────────────────────────────────────────
- * The original reference showed "See all ›" and a "Popular creator" chip.
- * Neither exists in this product: there is no all-suggestions route, and no
- * field that honestly says "popular". A follower-count threshold would be a
- * number invented to justify a badge, so both are absent rather than faked.
+ * Glass only on the deck's gradient panel (owner rule: glass over images/colour only); every white
+ * surface is a solid card with the frenz-line border.
  */
 export function FriendsDiscover({ initialSuggestions, handle = null }: { initialSuggestions: PersonSuggestion[]; handle?: string | null }) {
   const [q, setQ] = useState("");
@@ -76,8 +81,7 @@ export function FriendsDiscover({ initialSuggestions, handle = null }: { initial
         const j = (await res.json()) as { people?: SearchPerson[] };
         setResults(j.people ?? []);
       } catch {
-        // A failed request is not "no matches". Telling a user "no one matches"
-        // when the request failed would be a lie, which is why there is a retry.
+        // A failed request is not "no matches" — hence the retry.
         setResults([]);
         setFailed(true);
       } finally {
@@ -89,132 +93,113 @@ export function FriendsDiscover({ initialSuggestions, handle = null }: { initial
     };
   }, [q, attempt]);
 
-  const searching = results !== null;
+  const searching = q.trim().length > 0;
   const people: Person[] = results ?? [];
 
   return (
-    <div className="relative isolate">
-      <AmbientWash />
-
-      <header className="mb-4 flex items-start justify-between gap-3 px-1 pt-1">
-        <div className="min-w-0">
-          <h1 className="text-[clamp(1.75rem,7.5vw,2.125rem)] font-extrabold leading-none tracking-[-0.04em]">Add friends</h1>
-          <p className="mt-1.5 text-[13.5px] text-muted-foreground">Find people you know, or invite them to Frenz.</p>
-        </div>
+    <div className="frenz-ui">
+      <div className="flex items-center justify-between gap-3 pt-1">
+        <PendingLink href="/friends" prefetch={false} className="-ml-1.5 flex h-11 items-center rounded-full pl-1 pr-2 text-[16px] font-semibold text-frenz-violet" inner="inline-flex items-center gap-1" spinnerSize={16}>
+          <ChevronLeftIcon size={20} strokeWidth={2.4} />
+          Friends
+        </PendingLink>
         {handle ? (
-          <GlassIconLink href={`${profilePath(handle)}/card`} label="My QR card">
-            <QrCode className="h-5 w-5" aria-hidden />
-          </GlassIconLink>
+          <PendingLink href={`${profilePath(handle)}/card`} prefetch={false} aria-label="My QR card" className={ROUND}>
+            <QrCode className="h-[20px] w-[20px]" strokeWidth={2.1} aria-hidden />
+          </PendingLink>
         ) : null}
-      </header>
-
-      {/*
-        The search bar sticks under the topbar with no wrapper background (an opaque band cut the ambient wash) and no
-        backdrop blur. A full-width blur on a sticky bar repaints a large area on
-        every scroll frame. The field gets its glass look from a solid fill, a
-        hairline ring and a soft shadow.
-      */}
-      <div className="sticky top-[calc(4rem+var(--frenz-safe-top)+var(--frenz-announce-h,0px))] z-10 mb-4 pb-2 pt-1">
-        <div className="relative">
-          <label htmlFor="friends-search" className="sr-only">
-            Search people by name or handle
-          </label>
-          <Search aria-hidden className="pointer-events-none absolute left-4 top-1/2 h-[19px] w-[19px] -translate-y-1/2 text-muted-foreground" />
-          <input
-            id="friends-search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            type="search"
-            inputMode="search"
-            enterKeyHint="search"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="none"
-            spellCheck={false}
-            placeholder="Search name or @handle"
-            /*
-              The 16px size (`text-base`) is not a style choice. iOS Safari zooms
-              the page in on a focused input below 16px. The native WebKit clear
-              glyph is hidden because we draw our own.
-            */
-            className="frnd-field h-[50px] w-full rounded-full bg-white pl-11 pr-11 text-base font-medium text-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-14px_rgba(15,23,42,0.22)] outline-none ring-1 ring-black/[0.07] transition-shadow focus:ring-2 focus:ring-primary/40 dark:bg-[hsl(var(--card))] dark:ring-white/10 [&::-webkit-search-cancel-button]:hidden"
-          />
-          <button
-            type="button"
-            onClick={() => setQ("")}
-            tabIndex={q ? 0 : -1}
-            aria-hidden={!q}
-            aria-label="Clear search"
-            /* Absolutely positioned, so appearing and disappearing never
-               changes the field's width while the user types. */
-            className={cn(
-              "absolute right-2.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/[0.05] text-muted-foreground transition-opacity duration-150 dark:bg-white/10",
-              q ? "opacity-100" : "pointer-events-none opacity-0",
-            )}
-          >
-            <X className="h-4 w-4" aria-hidden />
-          </button>
-        </div>
       </div>
 
-      {searching ? null : (
-        <>
-          <ContactsLink />
-          <InviteCard />
-        </>
-      )}
+      <header className="mb-4 mt-1">
+        <h1 className="font-heading text-[34px] font-extrabold leading-[1.05] tracking-[-1.2px]">Add friends</h1>
+        <p className="mt-1.5 text-[15px] leading-snug text-frenz-muted">Go through suggestions, or find someone yourself.</p>
+      </header>
+
+      {!searching && initialSuggestions.length > 0 ? <SuggestionDeck initial={initialSuggestions.slice(0, DECK_FIRST)} variant="hero" /> : null}
+
+      <label className="relative mt-4 block">
+        <span className="sr-only">Search people by name or handle</span>
+        <SearchIcon size={19} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-frenz-muted" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          type="search"
+          inputMode="search"
+          enterKeyHint="search"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          placeholder="Search name or @handle"
+          /* 16px: iOS Safari zooms in on a focused input below it. The native clear glyph is ours instead. */
+          className="h-[52px] w-full rounded-[26px] bg-frenz-fill pl-12 pr-12 text-base text-frenz-ink outline-none transition-shadow placeholder:text-frenz-muted focus:ring-2 focus:ring-frenz-violet/35 [&::-webkit-search-cancel-button]:hidden"
+        />
+        <button
+          type="button"
+          onClick={() => setQ("")}
+          tabIndex={q ? 0 : -1}
+          aria-hidden={!q}
+          aria-label="Clear search"
+          className={cn(
+            "absolute right-2.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-frenz-ink/[0.06] text-frenz-muted transition-opacity duration-150",
+            q ? "opacity-100" : "pointer-events-none opacity-0",
+          )}
+        >
+          <X className="h-4 w-4" aria-hidden />
+        </button>
+      </label>
 
       {searching ? (
-        <>
-          <SectionHeader title={loading ? "Searching…" : "Results"} count={!loading && !failed ? people.length : undefined} />
+        <section aria-labelledby="discover-results" className="mt-5">
+          <h2 id="discover-results" className="px-1 pb-2.5 font-heading text-[19px] font-bold tracking-[-0.4px]">
+            {loading ? "Searching…" : failed ? "Results" : `Results${people.length ? ` · ${people.length}` : ""}`}
+          </h2>
           {loading && people.length === 0 ? (
             <SkeletonRows />
           ) : failed ? (
             <ErrorState onRetry={() => setAttempt((n) => n + 1)} />
           ) : people.length === 0 ? (
-            <EmptyState searching query={q} />
+            <EmptyState query={q} />
           ) : (
-            /*
-              One grouped glass card with hairline dividers instead of a card per
-              person. It reads lighter and is one paint instead of fourteen.
-            */
-            <GlassGroup label="Search results">
+            <ul aria-label="Search results" className={LIST}>
               {people.map((p) => (
                 <PersonRow key={p.id} person={p} />
               ))}
-            </GlassGroup>
+            </ul>
           )}
-        </>
+        </section>
       ) : (
-        <PeopleYouMayKnow initial={initialSuggestions} />
+        <>
+          <div className="mt-3.5 grid grid-cols-2 gap-2.5">
+            <ContactsTile />
+            <InviteTile />
+          </div>
+          <PeopleYouMayKnow initial={initialSuggestions} />
+        </>
       )}
     </div>
   );
 }
 
 /** The way into Contact Discovery (Part 5): contacts are read and hashed on the device, on that page. */
-function ContactsLink() {
+function ContactsTile() {
   return (
-    <Link href="/friends/contacts" prefetch={false} className={cn("mb-3 flex items-center gap-3 rounded-[22px] p-3.5 transition active:scale-[0.99] motion-reduce:active:scale-100", GLASS)}>
-      <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">
-        <BookUser className="h-5 w-5" />
+    <PendingLink href="/friends/contacts" prefetch={false} className={TILE} inner="flex flex-col items-start gap-2">
+      <span aria-hidden className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-frenz-violet/10 text-frenz-violet">
+        <BookUser className="h-[21px] w-[21px]" strokeWidth={2.1} />
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-[14.5px] font-semibold leading-tight">Find friends from your contacts</span>
-        <span className="mt-0.5 block text-[12.5px] leading-snug text-muted-foreground">Private: your contacts never leave this device.</span>
-      </span>
-      <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
-    </Link>
+      <span className="mt-1 font-heading text-[16px] font-bold tracking-[-0.2px] text-frenz-ink">From contacts</span>
+      <span className="text-[13px] leading-snug text-frenz-muted">Private. Contacts never leave this device.</span>
+    </PendingLink>
   );
 }
 
 /**
- * Invite: shares the member's ONE attribution link, the same `/r/<token>` that
- * the Rewards page and the referral banner share, through the native share
- * sheet or the clipboard. Admins are told about the share exactly as they are
- * for a share from Rewards.
+ * Invite: shares the member's ONE attribution link — the same `/r/<token>` the Rewards page and the
+ * referral banner share — through the native share sheet or the clipboard. Admins are told about the
+ * share exactly as for a share from Rewards.
  */
-function InviteCard() {
+function InviteTile() {
   const [state, setState] = useState<"idle" | "busy" | "copied" | "failed">("idle");
   const invite = async () => {
     if (state === "busy") return;
@@ -225,21 +210,15 @@ function InviteCard() {
     setState(out === "copied" ? "copied" : out === "failed" ? "failed" : "idle");
   };
   return (
-    <div className={cn("mb-5 flex items-center gap-3 rounded-[22px] p-3.5", GLASS)}>
-      <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-500 text-white shadow-[0_6px_16px_-8px_rgba(99,102,241,0.8)]">
-        <Users className="h-5 w-5" />
+    <PendingButton onClick={() => void invite()} pending={state === "busy"} className={TILE} inner="flex flex-col items-start gap-2">
+      <span aria-hidden className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-frenz-gradient-x text-white shadow-[0_8px_18px_-10px_rgb(91_63_240/0.9)]">
+        {state === "copied" ? <Check className="h-[20px] w-[20px]" strokeWidth={2.4} /> : <Send className="h-[20px] w-[20px]" strokeWidth={2.2} />}
       </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-[14.5px] font-semibold leading-tight">Invite your friends</p>
-        <p className="mt-0.5 text-[12.5px] leading-snug text-muted-foreground" aria-live="polite">
-          {state === "copied" ? "Link copied. Paste it anywhere." : state === "failed" ? "Couldn’t share. Try again." : "Frenz is better with people you know."}
-        </p>
-      </div>
-      <button type="button" onClick={() => void invite()} disabled={state === "busy"} aria-label="Invite friends" className={primaryPill}>
-        {state === "busy" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : state === "copied" ? <Check className="h-4 w-4" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}
-        <span className="max-[359px]:sr-only">Invite</span>
-      </button>
-    </div>
+      <span className="mt-1 font-heading text-[16px] font-bold tracking-[-0.2px] text-frenz-ink">Invite friends</span>
+      <span className="text-[13px] leading-snug text-frenz-muted" aria-live="polite">
+        {state === "copied" ? "Link copied. Paste it anywhere." : state === "failed" ? "Couldn’t share. Try again." : "Frenz is better with people you know."}
+      </span>
+    </PendingButton>
   );
 }
 
@@ -251,22 +230,26 @@ function PersonRow({ person }: { person: Person }) {
   const online = usePresence();
   const isOnline = online.has(person.id);
   return (
-    <li className="flex items-center gap-3 px-3.5 py-2.5 transition-colors duration-150 hover:bg-black/[0.02] dark:hover:bg-white/[0.03]">
+    <li className="flex items-center gap-3 px-3.5 py-2.5">
       {/* Real presence, from the channel the signed-in shell already joins. Not a made-up dot. */}
-      <Link href={`${profilePath(person.handle)}`} prefetch={false} aria-label={isOnline ? `${person.displayName}, online` : person.displayName} className="shrink-0">
+      <PendingLink
+        href={profilePath(person.handle)}
+        prefetch={false}
+        aria-label={isOnline ? `${person.displayName}, online` : person.displayName}
+        className="min-w-0 flex-1 rounded-2xl"
+        inner="flex min-w-0 items-center gap-3"
+      >
         <PersonAvatar user={person} size={52} online={isOnline} />
-      </Link>
-
-      <Link href={`${profilePath(person.handle)}`} prefetch={false} className="min-w-0 flex-1 py-0.5">
-        <span className="flex min-w-0 items-center gap-1">
-          <span className="truncate text-[15px] font-semibold tracking-[-0.01em]">{person.displayName}</span>
-          {person.isVerified ? <VerifiedTick size="sm" className="h-[15px] w-[15px] shrink-0" /> : null}
+        <span className="min-w-0 flex-1 py-0.5 text-left">
+          <span className="flex min-w-0 items-center gap-1">
+            <span className="truncate text-[15px] font-bold tracking-[-0.01em]">{person.displayName}</span>
+            {person.isVerified ? <VerifiedTick size="sm" className="h-[15px] w-[15px] shrink-0" /> : null}
+          </span>
+          <span className="mt-0.5 block truncate text-[13px] text-frenz-muted">
+            @{person.handle} · {formatCompactNumber(person.followersCount)} followers
+          </span>
         </span>
-        <span className="mt-0.5 block truncate text-[12.5px] text-muted-foreground">
-          @{person.handle} · {formatCompactNumber(person.followersCount)} followers
-        </span>
-      </Link>
-
+      </PendingLink>
       <FollowChip id={person.id} name={person.displayName} initial={person.isFollowing ?? false} />
     </li>
   );
@@ -279,7 +262,7 @@ function PersonRow({ person }: { person: Person }) {
 /** The same geometry as a real row, so nothing moves when people arrive. */
 function SkeletonRows() {
   return (
-    <ul role="status" aria-live="polite" className={cn("divide-y divide-black/[0.06] overflow-hidden rounded-[22px] dark:divide-white/[0.07]", GLASS)}>
+    <ul role="status" aria-live="polite" className={LIST}>
       <li className="sr-only">Loading people…</li>
       {Array.from({ length: 6 }).map((_, i) => (
         <li key={i} className="flex items-center gap-3 px-3.5 py-2.5" aria-hidden>
@@ -295,27 +278,23 @@ function SkeletonRows() {
   );
 }
 
-function EmptyState({ searching, query }: { searching: boolean; query: string }) {
+function EmptyState({ query }: { query: string }) {
   return (
-    <div className={cn("flex flex-col items-center rounded-[22px] px-6 py-14 text-center", GLASS)}>
-      <span aria-hidden className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+    <div className="flex flex-col items-center rounded-[24px] border border-frenz-line bg-frenz-card px-6 py-14 text-center">
+      <span aria-hidden className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-frenz-violet/10 text-frenz-violet">
         <Users className="h-6 w-6" />
       </span>
-      <p className="text-[15.5px] font-semibold">{searching ? "No users found" : "No new people to discover"}</p>
-      <p className="mt-1.5 max-w-xs text-[13.5px] text-muted-foreground">
-        {searching
-          ? `Nothing matched “${query.trim()}”. Try another name or @handle.`
-          : "We’ll show you more suggestions as your Frenz community grows. Inviting friends is the fastest way."}
-      </p>
+      <p className="text-[15.5px] font-semibold">No users found</p>
+      <p className="mt-1.5 max-w-xs text-[13.5px] text-frenz-muted">Nothing matched “{query.trim()}”. Try another name or @handle.</p>
     </div>
   );
 }
 
 function ErrorState({ onRetry }: { onRetry: () => void }) {
   return (
-    <div role="alert" className={cn("flex flex-col items-center rounded-[22px] px-6 py-14 text-center", GLASS)}>
+    <div role="alert" className="flex flex-col items-center rounded-[24px] border border-frenz-line bg-frenz-card px-6 py-14 text-center">
       <p className="text-[15.5px] font-semibold">Couldn&rsquo;t search right now</p>
-      <p className="mt-1.5 max-w-xs text-[13.5px] text-muted-foreground">Check your connection. Everything else on this page still works.</p>
+      <p className="mt-1.5 max-w-xs text-[13.5px] text-frenz-muted">Check your connection. Everything else on this page still works.</p>
       <button type="button" onClick={onRetry} className={cn(primaryPill, "mt-5")}>
         <RotateCw className="h-4 w-4" aria-hidden /> Try again
       </button>

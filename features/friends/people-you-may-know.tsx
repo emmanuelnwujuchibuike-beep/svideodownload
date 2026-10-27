@@ -1,13 +1,13 @@
 "use client";
 
-import { Check, Loader2, MoreHorizontal, RotateCw, UserPlus, Users } from "lucide-react";
+import { Check, Loader2, MoreHorizontal, Plus, RotateCw, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { VerifiedTick } from "@/components/badges/identity-badges";
 import { FollowChip } from "@/features/friends/follow-chip";
-import { GLASS, GlassGroup, iconButton, PersonAvatar, primaryPill, quietPill, SectionHeader } from "@/features/friends/ui";
+import { GLASS, iconButton, PersonAvatar, primaryPill, quietPill } from "@/features/friends/ui";
 import { usePresence } from "@/features/friends/use-presence";
 import { haptic } from "@/lib/motion/haptics";
 import type { SuggestionFilter } from "@/lib/social/graph/suggestions";
@@ -163,8 +163,10 @@ export function PeopleYouMayKnow({ initial }: { initial: PersonSuggestion[] }) {
 
   return (
     <section aria-labelledby="pymk-title">
-      <SectionHeader id="pymk-title" title="People you may know" />
-      <div role="tablist" aria-label="Filter suggestions" className="-mx-3 mb-3 flex gap-1.5 overflow-x-auto px-3 pb-1 [scrollbar-width:none] sm:-mx-4 sm:px-4 [&::-webkit-scrollbar]:hidden">
+      <h2 id="pymk-title" className="px-1 pb-2.5 pt-[26px] font-heading text-[19px] font-bold tracking-[-0.4px]">
+        People you may know
+      </h2>
+      <div role="tablist" aria-label="Filter suggestions" className="-mx-3 mb-3 flex gap-2 overflow-x-auto px-3 pb-1 [scrollbar-width:none] sm:-mx-4 sm:px-4 [&::-webkit-scrollbar]:hidden">
         {FILTERS.map((f) => (
           <button
             key={f.key}
@@ -173,8 +175,8 @@ export function PeopleYouMayKnow({ initial }: { initial: PersonSuggestion[] }) {
             aria-selected={filter === f.key}
             onClick={() => void load(f.key)}
             className={cn(
-              "min-h-[2.25rem] shrink-0 rounded-full px-3.5 text-[13px] font-semibold transition",
-              filter === f.key ? "bg-foreground text-background" : "bg-black/[0.04] text-foreground/75 dark:bg-white/[0.07]",
+              "h-9 shrink-0 rounded-[18px] px-3.5 text-[14px] transition",
+              filter === f.key ? "bg-frenz-ink font-bold text-frenz-page" : "border border-frenz-line font-semibold text-frenz-ink/80",
             )}
           >
             {f.label}
@@ -226,11 +228,11 @@ export function PeopleYouMayKnow({ initial }: { initial: PersonSuggestion[] }) {
           </p>
         </div>
       ) : (
-        <GlassGroup label="Suggested people">
+        <ul aria-label="Suggested people" className="divide-y divide-frenz-line/70 overflow-hidden rounded-[24px] border border-frenz-line">
           {list.map((p) => (
             <SuggestionRow key={p.id} person={p} onAnswer={(a) => answer(p, a)} />
           ))}
-        </GlassGroup>
+        </ul>
       )}
 
       <div className="mt-3 flex flex-col items-center gap-0.5">
@@ -260,6 +262,7 @@ function SuggestionRow({ person, onAnswer }: { person: PersonSuggestion; onAnswe
   const online = usePresence();
   const isOnline = online.has(person.id);
   const [menu, setMenu] = useState(false);
+  const [refused, setRefused] = useState<string | null>(null);
   return (
     <li className="px-3.5 py-2.5">
       <div className="flex items-center gap-2.5">
@@ -268,14 +271,15 @@ function SuggestionRow({ person, onAnswer }: { person: PersonSuggestion; onAnswe
         </Link>
         <Link href={`${profilePath(person.handle)}`} prefetch={false} className="min-w-0 flex-1 py-0.5">
           <span className="flex min-w-0 items-center gap-1">
-            <span className="truncate text-[15px] font-semibold tracking-[-0.01em]">{person.displayName}</span>
+            <span className="truncate text-[15px] font-bold tracking-[-0.01em]">{person.displayName}</span>
             {person.isVerified ? <VerifiedTick size="sm" className="h-[15px] w-[15px] shrink-0" /> : null}
           </span>
           {/* the reason: true, and never naming or counting a private connection */}
-          <span className="mt-0.5 line-clamp-2 text-[12.5px] leading-snug text-muted-foreground">{person.reason}</span>
+          <span className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-frenz-muted">{person.reason}</span>
         </Link>
-        {/* someone you already follow is suggested as a FRIEND - there is evidence you know each other */}
-        {person.isFollowing ? <AddFriendChip id={person.id} name={person.displayName} /> : <FollowChip id={person.id} name={person.displayName} initial={false} />}
+        {/* Add friends: every suggestion offers a friend request (design/friends, 2026-10-26). If they
+            refuse requests from people like this, the row says so and offers Follow — the way still open. */}
+        {refused && !person.isFollowing ? <FollowChip id={person.id} name={person.displayName} initial={false} /> : <AddFriendChip id={person.id} name={person.displayName} onRefused={setRefused} />}
         <button
           type="button"
           onClick={() => setMenu((v) => !v)}
@@ -286,6 +290,11 @@ function SuggestionRow({ person, onAnswer }: { person: PersonSuggestion; onAnswe
           <MoreHorizontal className="h-[18px] w-[18px]" aria-hidden />
         </button>
       </div>
+      {refused ? (
+        <p role="status" className="mt-1.5 pl-[62px] text-[12.5px] leading-snug text-frenz-muted">
+          {refused}
+        </p>
+      ) : null}
       {menu ? (
         <div className="mt-2 flex flex-wrap gap-1.5 pl-[62px]" role="group" aria-label={`About suggesting ${person.displayName}`}>
           {FEEDBACK.map((f) => (
@@ -300,7 +309,7 @@ function SuggestionRow({ person, onAnswer }: { person: PersonSuggestion; onAnswe
 }
 
 /** A friend request from a suggestion (source "suggestion"), through the same route as everywhere else. */
-function AddFriendChip({ id, name }: { id: string; name: string }) {
+function AddFriendChip({ id, name, onRefused }: { id: string; name: string; onRefused?: (msg: string) => void }) {
   const router = useRouter();
   const [state, setState] = useState<"idle" | "busy" | "sent" | "failed">("idle");
   const send = async () => {
@@ -312,6 +321,11 @@ function AddFriendChip({ id, name }: { id: string; name: string }) {
       body: JSON.stringify({ action: "request", source: "suggestion" }),
     }).catch(() => null);
     setState(res?.ok ? "sent" : "failed");
+    if (res && !res.ok) {
+      // the server's own words (lib/social/friend-requests/errors), e.g. "They aren't taking friend requests…"
+      const j = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (j?.error) onRefused?.(j.error);
+    }
     if (res?.ok) {
       // Coming back must not offer "Add" again (owner, 2026-10-16): this tab's saved
       // lists forget them and the router's cached pages are refreshed. The card on
@@ -329,12 +343,12 @@ function AddFriendChip({ id, name }: { id: string; name: string }) {
       disabled={state === "busy"}
       aria-label={state === "sent" ? `Friend request sent to ${name}` : `Add ${name} as a friend`}
       className={cn(
-        "inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold max-[359px]:px-2.5",
-        state === "sent" ? "bg-black/[0.05] text-foreground/80 dark:bg-white/[0.08]" : "bg-primary text-primary-foreground shadow-[0_6px_16px_-8px_hsl(var(--primary)/0.7)]",
+"inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-[18px] px-3.5 text-[13px] font-bold transition-transform active:scale-[0.97] motion-reduce:active:scale-100 max-[359px]:px-2.5",
+        state === "sent" ? "border border-frenz-line bg-frenz-card text-frenz-ink/80" : "bg-frenz-gradient-x text-white shadow-[0_10px_22px_-12px_rgb(91_63_240/0.8)]",
       )}
     >
-      {state === "busy" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : state === "sent" ? <Check className="h-4 w-4" aria-hidden /> : <UserPlus className="h-4 w-4" aria-hidden />}
-      <span className="max-[359px]:sr-only">{state === "sent" ? "Sent" : state === "failed" ? "Retry" : "Add"}</span>
+      {state === "busy" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : state === "sent" ? <Check className="h-4 w-4" aria-hidden /> : <Plus className="h-4 w-4" strokeWidth={2.8} aria-hidden />}
+      <span className="max-[359px]:sr-only">{state === "sent" ? "Requested" : state === "failed" ? "Retry" : "Add"}</span>
     </button>
   );
 }

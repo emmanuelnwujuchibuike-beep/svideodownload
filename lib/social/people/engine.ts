@@ -102,6 +102,22 @@ export async function peopleYouMayKnow(
       return [];
     }
   }
+  /*
+    Paging (the Friends suggestion deck, 2026-10-26): the next people after the ones already loaded,
+    in rank order. Uncached — it runs only when a member has answered their way to the last 3 cards.
+  */
+  if (opts.exclude?.length) {
+    try {
+      const shown = new Set(opts.exclude);
+      const ranked = await rankForViewer(createAdminClient(), viewerId, filter, Math.min(200, limit + shown.size), opts.userClient ?? null, true);
+      return ranked
+        .filter((p) => !shown.has(p.id))
+        .slice(0, limit)
+        .map(({ score: _s, confidence: _c, ...p }) => p);
+    } catch {
+      return [];
+    }
+  }
   const version = (await cacheGet<number>(VERSION_KEY(viewerId)).catch(() => null)) ?? 0;
   return getCached(`pymk:${viewerId}:${filter}:${limit}:${version}`, 60, async () => {
     try {

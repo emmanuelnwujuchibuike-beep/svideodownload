@@ -42,6 +42,7 @@
     --ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* shared easing */
     --ease-spring: cubic-bezier(0.34, 1.4, 0.5, 1);
     --dur-fast: 160ms;
+    --dur-deck: 180ms; /* Friends suggestion card leaving (Friends brief 2026-10-26) */
     --dur: 240ms;
     --dur-slow: 420ms;
   }
@@ -1019,6 +1020,59 @@
   .frenz-ui {
     font-family: var(--font-body, -apple-system), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     color: hsl(var(--frenz-ink));
+  }
+
+  /* The Friends screens' glass (design/friends, 2026-10-26). Only ever on SMALL
+     elements (the toast, the suggestion card, the chips on the gradient panel),
+     never on a sticky full-width bar; 20px blur at most. Where backdrop-filter
+     is missing the same element gets a near-solid fill instead. */
+  .frenz-glass-card {
+    background: hsl(var(--frenz-card) / 0.8);
+    border: 1px solid hsl(var(--frenz-card) / 0.8);
+    -webkit-backdrop-filter: blur(20px) saturate(170%);
+    backdrop-filter: blur(20px) saturate(170%);
+  }
+  .frenz-glass-chip {
+    background: rgb(255 255 255 / 0.16);
+    border: 1px solid rgb(255 255 255 / 0.3);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+  .frenz-glass-toast {
+    background: rgb(18 17 26 / 0.82);
+    border: 1px solid rgb(255 255 255 / 0.14);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .frenz-glass-card { background: hsl(var(--frenz-card) / 0.97); }
+    .frenz-glass-chip { background: rgb(255 255 255 / 0.24); }
+    .frenz-glass-toast { background: rgb(18 17 26 / 0.96); }
+  }
+  /* A suggestion card leaving on Add (right) or Skip (left): opacity + transform only,
+     once, var(--dur-deck). Reduced motion never plays it (the card is simply gone). */
+  @keyframes frenz-deck-out-add {
+    to { opacity: 0; transform: translateX(55%) rotate(6deg); }
+  }
+  @keyframes frenz-deck-out-skip {
+    to { opacity: 0; transform: translateX(-55%) rotate(-6deg); }
+  }
+  .frenz-deck-out-add { animation: frenz-deck-out-add var(--dur-deck) var(--ease-out) forwards; }
+  .frenz-deck-out-skip { animation: frenz-deck-out-skip var(--dur-deck) var(--ease-out) forwards; }
+  .frenz-deck-card { transition: transform var(--dur-deck) var(--ease-out), opacity var(--dur-deck) var(--ease-out); }
+  @media (prefers-reduced-motion: reduce) {
+    .frenz-deck-card { transition: none; }
+  }
+
+  /* The Suggested-for-you panel: a STATIC gradient (no animation), the brand's three
+     colours over the design's deep violet. */
+  .frenz-suggest-panel {
+    background:
+      radial-gradient(70% 60% at 0% 0%, hsl(var(--frenz-blue)) 0%, hsl(var(--frenz-blue) / 0) 70%),
+      radial-gradient(70% 70% at 100% 20%, hsl(var(--frenz-magenta)) 0%, hsl(var(--frenz-magenta) / 0) 65%),
+      radial-gradient(90% 80% at 50% 100%, hsl(var(--frenz-violet)) 0%, hsl(var(--frenz-violet) / 0) 75%),
+      #2a1e78;
+    box-shadow: 0 24px 50px -26px rgb(61 42 140 / 0.8);
   }
 
   /* Over full-bleed video (/reels): dark glass whatever the theme, so the white

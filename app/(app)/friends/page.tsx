@@ -8,6 +8,7 @@ import { getDiscoveryFeed } from "@/lib/social/discovery";
 import { getFriendActivity } from "@/lib/social/friend-activity";
 import { friendsOverview, runFriendRemindersSoon } from "@/lib/social/friends";
 import { archivedFriendIds } from "@/lib/social/intelligence/server";
+import { peopleYouMayKnow } from "@/lib/social/people/engine";
 import { getActiveStories } from "@/lib/social/stories";
 import { GuestLock } from "@/features/social/guest-chat";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -20,8 +21,9 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-/** /friends — Frenz Connect hub: stories (friends/following) on top, requests +
- *  your friends in the middle, and a nearby discovery grid at the bottom. */
+/** /friends — Frenz Connect hub (design/friends, 2026-10-26): header, stories (friends/following),
+ *  the Suggested-for-you deck, Add friends, Your people, Catch up, requests + your friends,
+ *  then activity and a nearby discovery grid at the bottom. */
 export default async function FriendsPage() {
   const supabase = await createClient();
   const {
@@ -53,13 +55,15 @@ export default async function FriendsPage() {
     /* location column not migrated yet */
   }
 
-  const [fullOverview, allFriendStories, followingStories, discovery, allActivity, archived] = await Promise.all([
+  const [fullOverview, allFriendStories, followingStories, discovery, allActivity, archived, suggestions] = await Promise.all([
     friendsOverview(user.id),
     getActiveStories(user.id, 100, "friends"),
     getActiveStories(user.id, 100, "following"),
     getDiscoveryFeed(user.id, { viewerLocation }),
     getFriendActivity(user.id, 12),
     archivedFriendIds(user.id),
+    // the deck's first 10 — the one People You May Know engine (cached 60 s); a failed read is simply no deck
+    peopleYouMayKnow(user.id, { limit: 10, userClient: supabase }).catch(() => []),
   ]);
   // Feature 19 Part 8: an ARCHIVED friend leaves the list, Catch up, stories
   // and activity here. Their history stays, and /friends/insights restores them.
@@ -70,16 +74,19 @@ export default async function FriendsPage() {
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-1 gap-4 px-3 sm:px-4">
       <main className="min-w-0 flex-1 pb-[calc(var(--frenz-nav-clearance)+1.5rem)] pt-4 lg:pb-6">
-        <div className="mx-auto w-full max-w-2xl">
-          <FriendsStories
-            initialFriends={friendStories}
-            initialFollowing={followingStories}
-            viewerAvatarUrl={overview.viewer?.avatarUrl}
-            viewerName={overview.viewer?.displayName}
-            viewerHandle={overview.viewer?.handle}
-          />
-        </div>
-        <FriendsHub initial={overview} />
+        <FriendsHub
+          initial={overview}
+          suggestions={suggestions}
+          stories={
+            <FriendsStories
+              initialFriends={friendStories}
+              initialFollowing={followingStories}
+              viewerAvatarUrl={overview.viewer?.avatarUrl}
+              viewerName={overview.viewer?.displayName}
+              viewerHandle={overview.viewer?.handle}
+            />
+          }
+        />
         <div className="mx-auto w-full max-w-2xl">
           <FriendActivityFeed items={activity} />
         </div>

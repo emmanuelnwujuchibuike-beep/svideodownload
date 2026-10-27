@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-/** /friends/discover — full-page "Add friends": search anyone's profile + a live
+/** /friends/discover — full-page "Add friends" (design/friends, 2026-10-26): the suggestion deck, search, contacts/invite and a live
  *  grid of people you may know. Suggestions are server-rendered so it opens
  *  instantly (no spinner-on-open like the old sheet). */
 export default async function DiscoverPage() {
@@ -35,8 +35,8 @@ export default async function DiscoverPage() {
   ]);
 
   return (
-    <div className="mx-auto w-full max-w-2xl flex-1 px-3 pt-4 sm:px-4"
-      style={{ paddingBottom: "calc(var(--frenz-bottom-nav) + 1rem)" }}>
+    <div className="mx-auto w-full max-w-2xl flex-1 px-4 pt-3"
+      style={{ paddingBottom: "calc(var(--frenz-nav-clearance) + 1.5rem)" }}>
       <FriendsDiscover initialSuggestions={suggestions} handle={handle} />
     </div>
   );

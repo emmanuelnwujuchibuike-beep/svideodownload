@@ -9,6 +9,7 @@ import {
   sendFriendRequest,
   unfriend,
 } from "@/lib/social/friends";
+import { friendErrorFor } from "@/lib/social/friend-requests/errors";
 import { NOTE_MAX, REQUEST_SOURCES } from "@/lib/social/friend-requests/trust";
 import { bumpSuggestionVersion } from "@/lib/social/people/engine";
 import { createClient } from "@/lib/supabase/server";
@@ -27,23 +28,6 @@ const schema = z.object({
   /** Where the request was sent from — context for the receiver and the spam review */
   source: z.enum(REQUEST_SOURCES).optional(),
 });
-
-const ERR: Record<string, { msg: string; status: number }> = {
-  self: { msg: "That's you.", status: 400 },
-  blocked: { msg: "You can't send a request to this user.", status: 400 },
-  exists: { msg: "You're already friends.", status: 400 },
-  incoming: { msg: "They already sent you a request — check your requests.", status: 409 },
-  cap: { msg: "You've sent a lot of requests today. Try again tomorrow.", status: 429 },
-  unavailable: { msg: "Couldn't update friendship right now.", status: 400 },
-  // Feature 19 · Part 2 — plain words, never a score (lib/social/friend-requests/trust.ts)
-  policy: { msg: "They aren't taking friend requests from everyone right now. You can still follow them.", status: 403 },
-  cooldown: { msg: "You can't send them another request just yet.", status: 429 },
-  hourly: { msg: "That's a lot of requests in a short time. Take a short break and try again.", status: 429 },
-  paused: { msg: "Sending friend requests is paused for a day — most of your recent ones weren't accepted.", status: 429 },
-  note_link: { msg: "Notes can't include links.", status: 400 },
-  note_contact: { msg: "Notes can't include phone numbers, emails or other apps — say hello here instead.", status: 400 },
-  note_repeated: { msg: "You've sent this same note to a lot of people today. Write something personal, or send without a note.", status: 429 },
-};
 
 async function requireUser() {
   const supabase = await createClient();
@@ -80,7 +64,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       : await respondToFriendRequest(user.id, id, action, { as: action === "accept" ? (as ?? null) : null });
 
   if (!res.ok) {
-    const e = ERR[res.reason] ?? { msg: "Couldn't update friendship right now.", status: 400 };
+    const e = friendErrorFor(res.reason);
     return NextResponse.json({ error: e.msg, reason: res.reason }, { status: e.status });
   }
   // Suggestions are cached 60 s per person; without this the one just requested came back as "Add".

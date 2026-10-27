@@ -635,3 +635,26 @@ Frenz AI — Image to Video
 - Rewards & referrals as a white row; the three figures as white cards; Statement with the design's **All · Earned · Transfers · Spent** chips (new: a client filter over the ledger's own kinds — Earned = top-ups, bonuses, earned credits, refunds, returned withdrawals; Transfers = sent, received, fees; Spent = creations, withdrawals), grouped by day, a white card per group.
 - Unlock withdrawals, AI plans, send & receive (wallet number) are the existing components, unchanged in behaviour.
 - Screenshot: only the loading state could be captured locally (the balance needs a signed-in account); the filled layout is checked by typecheck and tests.
+
+## Friends (owner, 2026-10-26) → design/Frenz-Friends-design.zip (Friends.dc.html, AddFriends.dc.html)
+
+- [x] 24. Friends hub (`/friends`) → Friends.dc.html
+- [x] 25. Add friends (`/friends/discover`) → AddFriends.dc.html
+
+**Step 24 · Friends**
+- Sora "Friends" title with the real count line (friends · online · requests), one round search button (to the friends search when there is a list, else to Add friends). No bell: the topbar's bell is app-wide.
+- Stories row, then **Suggested for you**: the gradient panel with a 3-card deck (features/friends/suggestion-deck.tsx). TAP ONLY (design README): Skip and Add friend; no drag, no ADD/SKIP badges, no swipe hint. Add/Skip are Server Actions (features/friends/actions.ts) with useOptimistic: the card leaves on the tap and comes back with an error toast if the server refuses. Add shows "Friend request sent to {name}" with Undo for 4 s. Skip = the existing "remind me later" (hidden a week). Never more than 3 cards in the DOM; the next 10 load when 3 remain (the engine's new `exclude` paging). "You're all caught up" + "Show suggestions again" (a reshuffle).
+- **Differs from the design:** the design draws mutual-friend faces next to "1 friend in common". The engine's reason never names a private connection, so there are no faces to show honestly; a person-check glyph stands in.
+- Add friends (ink pill) + My QR code; Your people; **Catch up** (friends 3+ days old with no chat in 14+ days, max 3) with **Say hi** — a new Server Action that sends "Hi 👋" in their chat through the same message gate, idempotent per friend per page (a double tap sends one), push after the response.
+- Requests, sent requests and the friends list keep their behaviour. Refusal words live in one list (lib/social/friend-requests/errors.ts) shared by the API route and the actions.
+- Glass only on small elements over the gradient panel and the dark toast (`.frenz-glass-card/-chip/-toast`, 20 px blur at most, a solid fallback without backdrop-filter). New token `--dur-deck` 180 ms.
+
+**Step 25 · Add friends**
+- "‹ Friends" and the QR card button, large "Add friends" title. Subtitle says "Go through suggestions, or find someone yourself." — the design's "Swipe through" is not true of a tap-only deck.
+- **Suggestions**: the same deck, hero variant (108 px face, name, @handle, reason chip, "n of N" counter; Skip · Add · View profile round buttons).
+- Search field (fill, 16 px text), then **From contacts** and **Invite friends** as two white tiles (contacts = the existing on-device Contact Discovery; invite = the one attribution link). While a search is typed the deck and tiles step aside so results sit under the field.
+- **People you may know** with the filter chips (For you · People you know · Creators · Businesses · Professionals · Verified · Near you — the engine's real filters), each row Add + the ⋯ feedback menu.
+- The hub's lower sections (Favourites, Friend requests, All friends, Sent requests) are not in the design; they now use the same white card + Sora heading as Catch up (no glass on white). The shared RequestCard's blue Accept is unchanged.
+
+**Checked (2026-10-27):** typecheck, lint, tests (features/friends + lib/social: 776 pass). Production build passed with the new deck and Add friends page: /friends 276 kB first load, /friends/discover 205 kB. Screenshots at 390 and 320 px from a sample-data preview — no sideways overflow; a refused Skip puts the card back.
+**Still owed:** the rebuild after the lower-section restyle was stopped for low memory (machine ~3 GB free), so that restyle has no screenshot yet, and `lib/perf/budget.test.ts` has not been re-run on the final build. The preview routes are parked in the session scratchpad (`preview-park`).

@@ -121,6 +121,7 @@ export const SCALAR_TOKENS: ScalarToken[] = [
   { name: "ease-out", value: "cubic-bezier(0.22, 1, 0.36, 1)", comment: "shared easing" },
   { name: "ease-spring", value: "cubic-bezier(0.34, 1.4, 0.5, 1)" },
   { name: "dur-fast", value: "160ms" },
+  { name: "dur-deck", value: "180ms", comment: "Friends suggestion card leaving (Friends brief 2026-10-26)" },
   { name: "dur", value: "240ms" },
   { name: "dur-slow", value: "420ms" },
 ];

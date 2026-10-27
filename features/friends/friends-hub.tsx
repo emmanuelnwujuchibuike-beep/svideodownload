@@ -5,15 +5,17 @@ import {
   BadgeCheck,
   BookHeart,
   Briefcase,
-  ChevronRight,
+  CircleDot,
   Compass,
   Crown,
   Hand,
   ListChecks,
   Loader2,
+  type LucideIcon,
   Network,
   MessageCircle,
   MoreHorizontal,
+  QrCode,
   Search,
   ShieldCheck,
   Send,
@@ -24,16 +26,22 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState, useTransition } from "react";
 
+import { sayHiAction } from "@/features/friends/actions";
 import { FriendCelebration } from "@/features/friends/friend-celebration";
 import { FollowRequestsSection } from "@/features/friends/follow-requests";
+import { FriendsToast, useFriendsToast } from "@/features/friends/friends-toast";
+import { PendingButton, PendingLink } from "@/features/friends/pending";
 import { RequestCard } from "@/features/friends/request-card";
 import { filterRequests, REQUEST_FILTERS, type RequestFilter } from "@/features/friends/request-logic";
-import { AmbientWash, GLASS, GlassGroup, GlassIconLink, iconButton, PersonAvatar, primaryPill, quietPill, SectionHeader } from "@/features/friends/ui";
+import { SuggestionDeck } from "@/features/friends/suggestion-deck";
+import { iconButton, PersonAvatar, primaryPill, quietPill } from "@/features/friends/ui";
 import { usePresence } from "@/features/friends/use-presence";
+import { ChevronRightIcon, SearchIcon, UserPlusIcon } from "@/features/frenz-ui/icons";
 import { timeAgo } from "@/features/notifications/meta";
 import type { FriendItem, FriendProfile, FriendRequestItem, FriendsOverview } from "@/lib/social/friends";
+import type { PersonSuggestion } from "@/lib/social/people/engine";
 import { cn } from "@/lib/utils";
 import { profilePath } from "@/lib/social/profile-url";
 
@@ -58,8 +66,82 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "new", label: "New" },
 ];
 
-export function FriendsHub({ initial }: { initial: FriendsOverview }) {
+/* Your people — every way into the rest of Connect, one list (Circles and the Trust Center were header icons before 2026-10-26). */
+const PEOPLE_LINKS: { href: string; title: string; sub: string; icon: LucideIcon }[] = [
+  // Part 8: the private Social Intelligence dashboard (stages in words, reconnect, archive)
+  { href: "/friends/insights", title: "Your connections", sub: "How each friendship is going. Only you see it.", icon: Users },
+  // Part 10: the Relationship Manager (lists, tags, bulk actions)
+  { href: "/friends/manage", title: "Manage people", sub: "Lists, tags and everyone you follow", icon: ListChecks },
+  { href: "/friends/circles", title: "Circles", sub: "Close friends, family and the groups you share with", icon: CircleDot },
+  // Part 12: the Professional Network
+  { href: "/network", title: "Professional network", sub: "Work, mentors and opportunities", icon: Briefcase },
+  // Part 15: your network — graph search, trust explained, growth, history
+  { href: "/friends/graph", title: "Your network", sub: "Search it and see how it grew", icon: Network },
+  // Part 14: shared memories and life journey
+  { href: "/memories", title: "Memories", sub: "Moments you keep, and your life journey", icon: BookHeart },
+  // Part 13: creator memberships
+  { href: "/members", title: "Members", sub: "Your community and memberships", icon: Crown },
+  { href: "/friends/trust", title: "Trust Center", sub: "Who can add you, and how Frenz keeps it safe", icon: ShieldCheck },
+];
+
+/*
+  The lower sections (favourites, requests, all friends, sent) are not drawn in the design; they take
+  the same system as the drawn ones — a solid white card with the frenz-line border (glass only over
+  images, owner rule) and the Sora 19px heading Catch up uses.
+*/
+const CARD = "border border-frenz-line bg-frenz-card";
+
+function CardGroup({ children, label }: { children: ReactNode; label?: string }) {
+  return (
+    <ul aria-label={label} className={cn("divide-y divide-frenz-line/70 overflow-hidden rounded-[24px]", CARD)}>
+      {children}
+    </ul>
+  );
+}
+
+function Heading({ title, count, action, id }: { title: string; count?: number; action?: ReactNode; id?: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-1 pb-2.5 pt-[26px]">
+      <h2 id={id} className="flex items-center gap-2 font-heading text-[19px] font-bold tracking-[-0.4px]">
+        {title}
+        {count ? <span className="rounded-full bg-frenz-violet/10 px-2 py-px text-[12px] font-bold tabular-nums text-frenz-violet">{count}</span> : null}
+      </h2>
+      {action}
+    </div>
+  );
+}
+
+const ROUND =
+  "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-frenz-line bg-frenz-fill/60 text-frenz-ink";
+const HI_PILL =
+  "flex h-[38px] shrink-0 items-center rounded-[19px] border border-frenz-line bg-frenz-card px-3.5 text-[13px] font-bold text-frenz-ink";
+
+/** "17 Aug" — the design's last-chat date (this year), with the year when it's older. */
+function shortDate(iso: string): string {
+  const d = new Date(iso);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString("en-GB", sameYear ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "numeric" });
+}
+
+export function FriendsHub({
+  initial,
+  suggestions = [],
+  stories = null,
+}: {
+  initial: FriendsOverview;
+  /** The deck's first page (People You May Know); empty → no deck. */
+  suggestions?: PersonSuggestion[];
+  /** The stories row, server-seeded by the page — drawn under the header. */
+  stories?: ReactNode;
+}) {
   const router = useRouter();
+  const searchRef = useRef<HTMLInputElement>(null);
+  const { toast, show, hide } = useFriendsToast();
+  // Say hi: one clientId per friend per visit (a retry re-sends the SAME wave), then the row offers the chat
+  const hiIds = useRef<Record<string, string>>({});
+  const [hiBusy, setHiBusy] = useState<string | null>(null);
+  const [hiSent, setHiSent] = useState<Record<string, string>>({});
+  const [, startHi] = useTransition();
   const [incoming, setIncoming] = useState<FriendRequestItem[]>(initial.incoming);
   const [outgoing, setOutgoing] = useState<FriendRequestItem[]>(initial.outgoing);
   const [friends, setFriends] = useState<FriendItem[]>(initial.friends);
@@ -211,108 +293,162 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
   };
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
+  // The header's search button: to the friends search when there is a list, else to Add friends.
+  const focusSearch = () => {
+    const el = searchRef.current;
+    if (!el) return;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    el.focus({ preventScroll: true });
+  };
+
+  const sayHi = (f: FriendItem) => {
+    if (hiBusy) return;
+    const clientId = (hiIds.current[f.user.id] ??= crypto.randomUUID());
+    setHiBusy(f.user.id);
+    startHi(async () => {
+      const res = await sayHiAction(f.user.id, clientId);
+      setHiBusy(null);
+      if (!res.ok) {
+        show(res.error, { tone: "error" });
+        return;
+      }
+      setHiSent((m) => ({ ...m, [f.user.id]: res.conversationId ?? "" }));
+      show(`Said hi to ${f.user.displayName}`);
+    });
+  };
+
   /*
-    2026-10-10 redesign (owner: "glassy, professional, lightweight social
-    platform") — features/friends/ui.tsx holds the language. The data, the
-    actions and their optimistic rollbacks are unchanged; only the surface is.
+    The Friends redesign (design/friends, 2026-10-26): Sora header, stories, the Suggested-for-you
+    deck, the Add friends bar, Your people and Catch up, on the plain page — then the existing
+    requests, favourites and friends list. The data, the actions and their optimistic rollbacks are
+    unchanged. No bell here: the topbar's NotificationBell is app-wide, and two would double-count.
   */
   return (
-    <div className="relative isolate mx-auto w-full max-w-2xl">
-      <AmbientWash />
-
-      <header className="mb-5 flex items-start justify-between gap-3 pt-1">
-        <div className="min-w-0">
-          <h1 className="text-[clamp(1.75rem,7.5vw,2.1rem)] font-extrabold leading-none tracking-[-0.035em]">Friends</h1>
-          <p className="mt-1.5 text-[13px] text-muted-foreground">
+    <div className="frenz-ui relative isolate mx-auto w-full max-w-2xl">
+      <header className="mb-4 flex items-end justify-between gap-3 pt-1">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <h1 className="font-heading text-[34px] font-extrabold leading-[1.05] tracking-[-1.2px]">Friends</h1>
+          <p className="text-[14px] font-semibold text-frenz-muted">
             {plural(friends.length, "friend", "friends")}
             {counts.online ? ` · ${counts.online} online` : ""}
             {incoming.length ? ` · ${plural(incoming.length, "request", "requests")}` : ""}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {/* owner 2026-10-11: no Add pill here — the header's add-friend icon is the one way in */}
-          <GlassIconLink href="/friends/circles" label="Circles">
-            <Users className="h-[18px] w-[18px]" aria-hidden />
-          </GlassIconLink>
-          <GlassIconLink href="/friends/trust" label="Trust Center">
-            <ShieldCheck className="h-[18px] w-[18px]" aria-hidden />
-          </GlassIconLink>
+        <div className="flex shrink-0 gap-2 pb-1">
+          {friends.length > 0 ? (
+            <PendingButton onClick={focusSearch} aria-label="Search friends" className={ROUND}>
+              <SearchIcon size={20} />
+            </PendingButton>
+          ) : (
+            <PendingLink href="/friends/discover" prefetch={false} aria-label="Find people" className={ROUND}>
+              <SearchIcon size={20} />
+            </PendingLink>
+          )}
         </div>
       </header>
 
-      {/* Part 8: the private Social Intelligence dashboard (stages in words, reconnect, archive) and
-          Part 10: the Relationship Manager (lists, tags, bulk actions) - one grouped card, two rows */}
-      <ul className={cn("mb-5 divide-y divide-black/[0.06] overflow-hidden rounded-[20px] dark:divide-white/[0.07]", GLASS)}>
-        <li>
-          <Link href="/friends/insights" prefetch={false} className="flex items-center gap-3 px-3.5 py-2.5">
-            <Users className="h-[18px] w-[18px] shrink-0 text-primary" aria-hidden />
-            <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-semibold">Your connections</span>
-              <span className="block truncate text-[12.5px] text-muted-foreground">How each friendship is going. Only you see it.</span>
-            </span>
-            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
-          </Link>
-        </li>
-        <li>
-          <Link href="/friends/manage" prefetch={false} className="flex items-center gap-3 px-3.5 py-2.5">
-            <ListChecks className="h-[18px] w-[18px] shrink-0 text-primary" aria-hidden />
-            <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-semibold">Manage people</span>
-              <span className="block truncate text-[12.5px] text-muted-foreground">Lists, tags and everyone you follow, in one place.</span>
-            </span>
-            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
-          </Link>
-        </li>
-        {/* Part 12: the Professional Network */}
-        <li>
-          <Link href="/network" prefetch={false} className="flex items-center gap-3 px-3.5 py-2.5 transition active:bg-black/[0.04]">
-            <Briefcase className="h-[18px] w-[18px] shrink-0 text-primary" aria-hidden />
-            <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-semibold">Professional network</span>
-              <span className="block truncate text-[12.5px] text-muted-foreground">Work, mentors, recommendations and opportunities.</span>
-            </span>
-            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
-          </Link>
-        </li>
-        {/* Part 15: your network — graph search, trust explained, growth, history */}
-        <li>
-          <Link href="/friends/graph" prefetch={false} className="flex items-center gap-3 px-3.5 py-2.5 transition active:bg-black/[0.04]">
-            <Network className="h-[18px] w-[18px] shrink-0 text-primary" aria-hidden />
-            <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-semibold">Your network</span>
-              <span className="block truncate text-[12.5px] text-muted-foreground">Search it, see how it grew, and how Frenz reads your account.</span>
-            </span>
-            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
-          </Link>
-        </li>
-        {/* Part 14: shared memories and life journey */}
-        <li>
-          <Link href="/memories" prefetch={false} className="flex items-center gap-3 px-3.5 py-2.5 transition active:bg-black/[0.04]">
-            <BookHeart className="h-[18px] w-[18px] shrink-0 text-primary" aria-hidden />
-            <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-semibold">Memories</span>
-              <span className="block truncate text-[12.5px] text-muted-foreground">Moments you keep, and your life journey.</span>
-            </span>
-            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
-          </Link>
-        </li>
-        {/* Part 13: creator memberships */}
-        <li>
-          <Link href="/members" prefetch={false} className="flex items-center gap-3 px-3.5 py-2.5 transition active:bg-black/[0.04]">
-            <Crown className="h-[18px] w-[18px] shrink-0 text-primary" aria-hidden />
-            <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-semibold">Members</span>
-              <span className="block truncate text-[12.5px] text-muted-foreground">Your community, and the memberships you hold.</span>
-            </span>
-            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
-          </Link>
-        </li>
+      {stories}
+
+      {suggestions.length > 0 ? <SuggestionDeck initial={suggestions} variant="panel" seeAllHref="/friends/discover" /> : null}
+
+      <div className="mt-3.5 flex gap-2.5">
+        <PendingLink
+          href="/friends/discover"
+          prefetch={false}
+          className="flex h-[54px] flex-1 items-center justify-center rounded-[27px] bg-frenz-ink font-heading text-[16px] font-bold text-frenz-page shadow-[0_14px_28px_-14px_rgb(18_17_26/0.6)]"
+          inner="inline-flex items-center justify-center gap-[9px]"
+        >
+          <UserPlusIcon size={19} strokeWidth={2.3} />
+          Add friends
+        </PendingLink>
+        {initial.viewer?.handle ? (
+          <PendingLink href={`${profilePath(initial.viewer.handle)}/card`} prefetch={false} aria-label="My QR code" className={cn(ROUND, "h-[54px] w-[54px]")}>
+            <QrCode className="h-[21px] w-[21px]" strokeWidth={2.1} aria-hidden />
+          </PendingLink>
+        ) : null}
+      </div>
+
+      <h2 className="px-1 pb-2.5 pt-[26px] font-heading text-[19px] font-bold tracking-[-0.4px]">Your people</h2>
+      <ul className="mb-1 overflow-hidden rounded-[24px] border border-frenz-line" aria-label="Your people">
+        {PEOPLE_LINKS.map((l, i) => (
+          <li key={l.href} className={cn(i > 0 && "border-t border-frenz-line/70")}>
+            <PendingLink href={l.href} prefetch={false} inner="flex min-h-16 w-full items-center gap-3 px-3.5 py-2.5" className="block transition-colors active:bg-frenz-fill">
+              <span aria-hidden className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-xl bg-frenz-violet/10 text-frenz-violet">
+                <l.icon className="h-[19px] w-[19px]" strokeWidth={2.1} />
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col gap-px text-left">
+                <span className="text-[15px] font-bold">{l.title}</span>
+                <span className="truncate text-[13px] text-frenz-muted">{l.sub}</span>
+              </span>
+              <ChevronRightIcon size={15} strokeWidth={2.4} className="shrink-0 text-frenz-muted/70" />
+            </PendingLink>
+          </li>
+        ))}
       </ul>
+
+      {catchUp.length > 0 ? (
+        <section className="mb-5" aria-labelledby="friends-catchup">
+          <div className="flex items-baseline justify-between px-1 pb-2.5 pt-[26px]">
+            <h2 id="friends-catchup" className="font-heading text-[19px] font-bold tracking-[-0.4px]">
+              Catch up
+            </h2>
+            <PendingLink href="/friends/insights" prefetch={false} className="text-[14px] font-bold text-frenz-blue" spinnerSize={14}>
+              See all
+            </PendingLink>
+          </div>
+          <ul className="overflow-hidden rounded-[24px] border border-frenz-line" aria-label="Friends to catch up with">
+            {catchUp.map((f, i) => {
+              const sent = hiSent[f.user.id];
+              return (
+                <li key={f.user.id} className={cn("flex h-[72px] items-center gap-3 px-3.5", i > 0 && "border-t border-frenz-line/70")}>
+                  <Link href={profilePath(f.user.handle)} prefetch={false} className="flex min-w-0 flex-1 items-center gap-3">
+                    <PersonAvatar user={f.user} size={44} />
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span className="truncate text-[15px] font-bold">{f.user.displayName}</span>
+                      <span className="truncate text-[13px] text-frenz-muted" suppressHydrationWarning>
+                        {f.lastChatAt ? `Last chat ${shortDate(f.lastChatAt)}` : "You haven't chatted yet"}
+                      </span>
+                    </span>
+                  </Link>
+                  {sent !== undefined ? (
+                    <PendingLink
+                      href={sent ? `/messages/${sent}` : `/messages/new/${f.user.id}`}
+                      prefetch={false}
+                      aria-label={`Open your chat with ${f.user.displayName}`}
+                      className={HI_PILL}
+                      inner="inline-flex items-center gap-1.5"
+                      spinnerSize={15}
+                    >
+                      <MessageCircle className="h-[15px] w-[15px]" strokeWidth={2.2} aria-hidden />
+                      <span className="max-[359px]:sr-only">Chat</span>
+                    </PendingLink>
+                  ) : (
+                    <PendingButton
+                      onClick={() => sayHi(f)}
+                      pending={hiBusy === f.user.id}
+                      disabled={!!hiBusy && hiBusy !== f.user.id}
+                      aria-label={`Say hi to ${f.user.displayName}`}
+                      className={HI_PILL}
+                      inner="inline-flex items-center gap-1.5"
+                      spinnerSize={15}
+                    >
+                      <Hand className="h-[15px] w-[15px]" strokeWidth={2.2} aria-hidden />
+                      <span className="max-[359px]:sr-only">Say hi</span>
+                    </PendingButton>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : (
+        <div className="mb-5" />
+      )}
 
       {favorites.length > 0 ? (
         <section className="mb-5" aria-labelledby="friends-favourites">
-          <SectionHeader id="friends-favourites" title="Favourites" count={favorites.length} />
-          <div className={cn("flex gap-3 overflow-x-auto rounded-[22px] px-3 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", GLASS)}>
+          <Heading id="friends-favourites" title="Favourites" count={favorites.length} />
+          <div className={cn("flex gap-3 overflow-x-auto rounded-[22px] px-3 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", CARD)}>
             {favorites.map((f) => (
               <Link
                 key={f.user.id}
@@ -341,7 +477,7 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
 
       {incoming.length > 0 ? (
         <section className="mb-5" aria-labelledby="friends-requests">
-          <SectionHeader id="friends-requests" title="Friend requests" count={incoming.length} />
+          <Heading id="friends-requests" title="Friend requests" count={incoming.length} />
           {incoming.length > 1 ? (
             <div className="mb-2 flex gap-1.5 overflow-x-auto px-0.5 pb-0.5 [scrollbar-width:none]" role="group" aria-label="Sort and filter requests">
               {REQUEST_FILTERS.map((f) => (
@@ -352,7 +488,7 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
                   onClick={() => setRequestFilter(f.id)}
                   className={cn(
                     "min-h-[2.25rem] shrink-0 rounded-full px-3.5 text-[12.5px] font-semibold transition",
-                    requestFilter === f.id ? "bg-foreground text-background" : cn(GLASS, "shadow-none text-muted-foreground hover:text-foreground"),
+                    requestFilter === f.id ? "bg-foreground text-background" : cn(CARD, "shadow-none text-muted-foreground hover:text-foreground"),
                   )}
                 >
                   {f.label}
@@ -360,7 +496,7 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
               ))}
             </div>
           ) : null}
-          <GlassGroup label="Friend requests">
+          <CardGroup label="Friend requests">
             {visibleRequests.map((req) => (
               <RequestCard
                 key={req.id}
@@ -372,48 +508,18 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
               />
             ))}
             {visibleRequests.length === 0 ? <li className="px-4 py-4 text-sm text-muted-foreground">No requests match this filter.</li> : null}
-          </GlassGroup>
-        </section>
-      ) : null}
-
-      {catchUp.length > 0 ? (
-        <section className="mb-5" aria-labelledby="friends-catchup">
-          <SectionHeader
-            id="friends-catchup"
-            title="Catch up"
-            action={<MessageCircle className="h-4 w-4 text-primary" aria-hidden />}
-          />
-          <GlassGroup label="Friends to catch up with">
-            {catchUp.map((f) => (
-              <li key={f.user.id} className="flex items-center gap-3 px-3.5 py-3">
-                <PersonAvatar user={f.user} />
-                <p className="min-w-0 flex-1 text-[14px] leading-snug text-muted-foreground">
-                  {f.lastChatAt ? (
-                    <>
-                      <strong className="font-semibold text-foreground">{f.user.displayName}</strong> · last chat {timeAgo(f.lastChatAt)} ago
-                    </>
-                  ) : (
-                    <>
-                      <strong className="font-semibold text-foreground">{f.user.displayName}</strong> · you haven&apos;t chatted yet
-                    </>
-                  )}
-                </p>
-                <Link href={`/messages/new/${f.user.id}`} prefetch aria-label={`Say hello to ${f.user.displayName}`} className={quietPill}>
-                  <Hand className="h-4 w-4" aria-hidden /> <span className="max-[359px]:sr-only">Say hi</span>
-                </Link>
-              </li>
-            ))}
-          </GlassGroup>
+          </CardGroup>
         </section>
       ) : null}
 
       <section className="mb-5" aria-labelledby="friends-all">
         {friends.length > 0 ? (
           <>
-            <SectionHeader id="friends-all" title="All friends" count={friends.length} />
+            <Heading id="friends-all" title="All friends" count={friends.length} />
             <label className="relative mb-2.5 block">
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
               <input
+                ref={searchRef}
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -421,13 +527,13 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
                 aria-label="Search friends"
                 className={cn(
                   "min-h-[2.75rem] w-full rounded-full py-2.5 pl-11 pr-4 text-[15px] outline-none transition placeholder:text-muted-foreground/70 focus:ring-2 focus:ring-primary/40",
-                  GLASS,
+                  CARD,
                   "shadow-none",
                 )}
               />
             </label>
 
-            <div role="tablist" aria-label="Friend filters" className={cn("mb-3 flex gap-1 overflow-x-auto rounded-full p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", GLASS, "shadow-none")}>
+            <div role="tablist" aria-label="Friend filters" className={cn("mb-3 flex gap-1 overflow-x-auto rounded-full p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", CARD, "shadow-none")}>
               {TABS.map((t) => (
                 <button
                   key={t.id}
@@ -447,7 +553,7 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
             </div>
 
             {visible.length > 0 ? (
-              <GlassGroup label="Friends">
+              <CardGroup label="Friends">
                 {visible.map((f) => (
                   <FriendRow
                     key={f.user.id}
@@ -458,15 +564,15 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
                     onRemoved={(id) => setFriends((l) => l.filter((x) => x.user.id !== id))}
                   />
                 ))}
-              </GlassGroup>
+              </CardGroup>
             ) : (
-              <p className={cn("rounded-[22px] px-4 py-8 text-center text-sm text-muted-foreground", GLASS)}>
+              <p className={cn("rounded-[22px] px-4 py-8 text-center text-sm text-muted-foreground", CARD)}>
                 {query ? `No friends match “${query}”.` : "Nothing here yet."}
               </p>
             )}
           </>
         ) : (
-          <div className={cn("rounded-[26px] p-8 text-center", GLASS)}>
+          <div className={cn("rounded-[26px] p-8 text-center", CARD)}>
             <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
               <UserPlus className="h-6 w-6" aria-hidden />
             </span>
@@ -485,8 +591,8 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
 
       {outgoing.length > 0 ? (
         <section className="mb-5" aria-labelledby="friends-sent">
-          <SectionHeader id="friends-sent" title="Sent requests" count={outgoing.length} action={<Send className="h-4 w-4 text-muted-foreground" aria-hidden />} />
-          <GlassGroup label="Sent friend requests">
+          <Heading id="friends-sent" title="Sent requests" count={outgoing.length} action={<Send className="h-4 w-4 text-muted-foreground" aria-hidden />} />
+          <CardGroup label="Sent friend requests">
             {outgoing.map((req) => (
               <li key={req.id} className="flex items-center gap-3 px-3.5 py-2.5">
                 <Link href={`${profilePath(req.user.handle)}`} prefetch className="flex min-w-0 flex-1 items-center gap-3">
@@ -507,9 +613,11 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
                 </button>
               </li>
             ))}
-          </GlassGroup>
+          </CardGroup>
         </section>
       ) : null}
+
+      <FriendsToast toast={toast} onHide={hide} />
 
       <FriendCelebration
         open={!!celebrating}

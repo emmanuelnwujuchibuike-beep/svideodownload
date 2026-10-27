@@ -411,7 +411,7 @@ export function MobileNav({
           /* Friends in Earn's place on the landing (owner, 2026-10-16) — a guest sees the page locked behind sign-in. */
           <NavTab label="Friends" href="/friends" icon={Users} activeIcon={Users} active={pathname.startsWith("/friends")} prefetch={false} onWarm={router.prefetch} onGo={go} />
         )}
-        <NavTab label="History" href="/history" icon={HistoryIcon} activeIcon={HistoryIcon} active={pathname.startsWith("/history")} onWarm={router.prefetch} onGo={go} />
+        <NavTab label="History" href="/history" icon={HistoryIcon} activeIcon={HistoryIcon} active={pathname.startsWith("/history")} prefetch={false} onWarm={router.prefetch} onGo={go} />
         {/* Chats for everyone (owner, 2026-10-16: Support → Chats on the landing too). A guest sees an empty
             inbox and a sign-in modal (features/social/guest-chat.tsx); Support stays in the menu. */}
         <NavTab label="Chats" href="/messages" icon={ChatIcon} activeIcon={ChatIcon} active={pathname.startsWith("/messages")} badge={handle ? unread : 0} prefetch={false} onWarm={router.prefetch} onGo={go} />

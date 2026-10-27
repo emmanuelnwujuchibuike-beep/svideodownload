@@ -32,6 +32,12 @@ function navPrefetchesAtMount(src: string): boolean {
   return /router\.prefetch\(/.test(src.slice(Math.max(0, effectStart), i));
 }
 
+/** A bottom-nav tab drawn without prefetch={false} — Next prefetches it the moment it is on screen, i.e. during load. */
+function tabViewportPrefetches(src: string, label: string): boolean {
+  const m = src.match(new RegExp(`<NavTab label="${label}"[^>]*>`));
+  return !m || !/prefetch=\{false\}/.test(m[0]);
+}
+
 describe("route warm-ups wait for the page to load (2026-10-26)", () => {
   it("TapOnceLink's warmOnIdle goes through afterPageLoad", () => {
     const src = code("features/ui/tap-once-link.tsx");
@@ -45,7 +51,14 @@ describe("route warm-ups wait for the page to load (2026-10-26)", () => {
 
   // owner 2026-10-27: "Download and landing must load below 2s in slow 4G" — /history was still warmed at mount
   it("the bottom nav prefetches nothing before load — not even History", () => {
-    expect(navPrefetchesAtMount(code("features/app-shell/mobile-nav.tsx"))).toBe(false);
+    const nav = code("features/app-shell/mobile-nav.tsx");
+    expect(navPrefetchesAtMount(nav)).toBe(false);
+    // measured 2026-10-27: the History TAB's own viewport prefetch still fired at 4.8 s, before load at 7.7 s
+    expect(tabViewportPrefetches(nav, "History")).toBe(false);
+  });
+
+  it("teeth: a History tab without prefetch={false} is caught", () => {
+    expect(tabViewportPrefetches(`<NavTab label="History" href="/history" onWarm={router.prefetch} />`, "History")).toBe(true);
   });
 
   it("the guards fail on the shapes that shipped before", () => {

@@ -1,20 +1,21 @@
 "use client";
 
-import { Hash, MapPin, Music, RotateCw, SearchX } from "lucide-react";
-import Link from "next/link";
+import { ChevronRight, Hash, MapPin, Play, RotateCw, SearchX } from "lucide-react";
+import { PendingLink } from "@/features/frenz-ui/pending";
 import { useState, type ReactNode } from "react";
 
-import { PostGrid } from "@/components/social/post-grid";
 import { FollowPill } from "@/features/search/follow-pill";
 import { Avatar, SafeImage } from "@/features/search/media";
 import { NameLine } from "@/features/search/search-primitives";
 import { SearchAction } from "@/features/search/tag-chip";
+import { VideoTile } from "@/features/search/video-tile";
 import { Skeleton, SkeletonSection } from "@/features/ui/skeleton";
 import type { TrendingTag } from "@/lib/social/hashtags";
 import type { PlaceResult } from "@/lib/social/places";
 import type { SearchPerson, SearchResult, SearchType } from "@/lib/social/search";
 import type { Sound } from "@/lib/social/sounds";
-import { formatCompactNumber } from "@/lib/utils";
+import { postViewHref } from "@/lib/social/post-url";
+import { cn, formatCompactNumber } from "@/lib/utils";
 import { profilePath } from "@/lib/social/profile-url";
 
 /**
@@ -44,6 +45,7 @@ export function SearchResultsView({
   status,
   canFollow,
   onRetry,
+  onSeeAll,
 }: {
   query: string;
   type: SearchType;
@@ -51,6 +53,8 @@ export function SearchResultsView({
   status: "idle" | "loading" | "error";
   canFollow: boolean;
   onRetry: () => void;
+  /** "See all" on a Top section: switch to that section's chip. */
+  onSeeAll: (t: SearchType) => void;
 }) {
   const isEmpty =
     result.people.length === 0 &&
@@ -67,62 +71,69 @@ export function SearchResultsView({
   if (status === "error" && isEmpty) return <ErrorState onRetry={onRetry} />;
   if (isEmpty) return <NoResults query={query} />;
 
-  const showPeople = result.people.length > 0;
-  const showTags = result.tags.length > 0;
-  const showPlaces = result.places.length > 0;
-  const showSounds = result.sounds.length > 0;
-  const showPosts = result.posts.length > 0;
-  const labelled = type === "all";
+  /*
+    Search & Discover design (2026-10-26): "Top shows a few of each section with See all; Users / Videos /
+    Sounds / Hashtags show only that section." See all switches to that section's chip (no navigation).
+  */
+  const top = type === "all";
+  const few = <T,>(items: T[], n: number) => (top ? items.slice(0, n) : items);
+  const seeAll = (t: SearchType, total: number, shown: number) => (top && total > shown ? () => onSeeAll(t) : undefined);
 
   return (
-    <div
-      className={`space-y-7 transition-opacity duration-200 ${status === "loading" ? "opacity-55" : "opacity-100"}`}
-      aria-busy={status === "loading"}
-    >
-      {showPeople ? (
-        <Group title={labelled ? "People" : null}>
-          <Paged
-            items={result.people}
-            render={(p) => <PersonRow key={p.id} person={p} canFollow={canFollow} />}
-            more="Show all people"
-          />
+    <div className={cn("transition-opacity duration-200", status === "loading" ? "opacity-55" : "opacity-100")} aria-busy={status === "loading"}>
+      {result.people.length > 0 ? (
+        <Group title={top ? "People" : null} onSeeAll={seeAll("people", result.people.length, 3)}>
+          <Paged items={few(result.people, 3)} render={(p) => <PersonRow key={p.id} person={p} canFollow={canFollow} />} more="Show all people" list={CARD_LIST} />
         </Group>
       ) : null}
 
-      {showTags ? (
-        <Group title={labelled ? "Hashtags" : null}>
-          <Paged items={result.tags} render={(t) => <TagRow key={t.tag} tag={t} />} more="Show all hashtags" />
+      {result.tags.length > 0 ? (
+        <Group title={top ? "Hashtags" : null} onSeeAll={seeAll("hashtag", result.tags.length, 3)}>
+          <Paged items={few(result.tags, 3)} render={(t) => <TagRow key={t.tag} tag={t} />} more="Show all hashtags" list="flex flex-col gap-2.5" />
         </Group>
       ) : null}
 
-      {showSounds ? (
-        <Group title={labelled ? "Sounds" : null}>
-          <Paged items={result.sounds} render={(s) => <SoundRow key={s.id} sound={s} />} more="Show all sounds" />
+      {result.posts.length > 0 ? (
+        <Group title={top ? "Videos" : null} onSeeAll={seeAll("video", result.posts.length, 4)}>
+          <ul className="grid grid-cols-2 gap-2.5">
+            {few(result.posts, 4).map((p) => (
+              <li key={p.id}>
+                <VideoTile video={{ ...p, href: postViewHref(p) }} caption sizes="(max-width: 640px) 50vw, 300px" />
+              </li>
+            ))}
+          </ul>
         </Group>
       ) : null}
 
-      {showPlaces ? (
-        <Group title={labelled ? "Places" : null}>
-          <Paged items={result.places} render={(p) => <PlaceRow key={p.label} place={p} />} more="Show all places" />
+      {result.sounds.length > 0 ? (
+        <Group title={top ? "Sounds" : null} onSeeAll={seeAll("sound", result.sounds.length, 3)}>
+          <Paged items={few(result.sounds, 3)} render={(s) => <SoundRow key={s.id} sound={s} />} more="Show all sounds" list={CARD_LIST} />
         </Group>
       ) : null}
 
-      {showPosts ? (
-        <Group title={labelled ? "Videos & photos" : null}>
-          <PostGrid posts={result.posts} layout={type === "video" ? "reel" : "card"} emptyText="" />
+      {result.places.length > 0 ? (
+        <Group title={top ? "Places" : null} onSeeAll={seeAll("place", result.places.length, 3)}>
+          <Paged items={few(result.places, 3)} render={(p) => <PlaceRow key={p.label} place={p} />} more="Show all places" list={CARD_LIST} />
         </Group>
       ) : null}
     </div>
   );
 }
 
-function Group({ title, children }: { title: string | null; children: ReactNode }) {
+const CARD_LIST = "divide-y divide-frenz-line/70 overflow-hidden rounded-[24px] border border-frenz-line bg-frenz-card";
+
+function Group({ title, onSeeAll, children }: { title: string | null; onSeeAll?: () => void; children: ReactNode }) {
   return (
-    <section>
+    <section className={title ? undefined : "pt-1"}>
       {title ? (
-        <h2 className="mb-2.5 px-1 text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
-          {title}
-        </h2>
+        <div className="flex items-center justify-between px-1 pb-2.5 pt-5">
+          <h2 className="font-heading text-[19px] font-bold tracking-[-0.4px]">{title}</h2>
+          {onSeeAll ? (
+            <button type="button" onClick={onSeeAll} className="h-11 px-1 text-[15px] font-bold text-frenz-blue">
+              See all
+            </button>
+          ) : null}
+        </div>
       ) : null}
       {children}
     </section>
@@ -130,25 +141,17 @@ function Group({ title, children }: { title: string | null; children: ReactNode 
 }
 
 /** First 12 rows now, the rest on a tap. */
-function Paged<T>({
-  items,
-  render,
-  more,
-}: {
-  items: T[];
-  render: (item: T) => ReactNode;
-  more: string;
-}) {
+function Paged<T>({ items, render, more, list }: { items: T[]; render: (item: T) => ReactNode; more: string; list: string }) {
   const [all, setAll] = useState(false);
   const shown = all ? items : items.slice(0, FIRST_PAGE);
   return (
     <>
-      <ul className="space-y-1">{shown.map(render)}</ul>
+      <ul className={list}>{shown.map(render)}</ul>
       {!all && items.length > FIRST_PAGE ? (
         <button
           type="button"
           onClick={() => setAll(true)}
-          className="srch-press mt-2 w-full rounded-xl bg-secondary/70 py-2.5 text-[13px] font-semibold text-primary"
+          className="mt-2.5 h-11 w-full rounded-full bg-frenz-fill text-[14px] font-bold text-frenz-violet transition-transform active:scale-[0.97]"
         >
           {more} ({items.length})
         </button>
@@ -160,8 +163,7 @@ function Paged<T>({
 /* ── Rows ──────────────────────────────────────────────────────────────── */
 
 const ROW = "flex min-w-0 flex-1 items-center gap-3 text-left";
-const ROW_LI =
-  "flex items-center gap-3 rounded-2xl px-2 py-2 transition-colors duration-150 hover:bg-secondary/60";
+const ROW_LI = "flex items-center gap-3 px-3.5 py-3";
 
 function RowBody({
   leading,
@@ -177,7 +179,7 @@ function RowBody({
       {leading}
       <span className="min-w-0 flex-1">
         {title}
-        <span className="mt-0.5 block truncate text-[12.5px] text-muted-foreground">{subtitle}</span>
+        <span className="mt-0.5 block truncate text-[14px] text-frenz-muted">{subtitle}</span>
       </span>
     </>
   );
@@ -197,9 +199,9 @@ function LinkRow({
 }) {
   return (
     <li className={ROW_LI}>
-      <Link href={href} prefetch className={ROW}>
+      <PendingLink href={href} prefetch={false} className={ROW} inner={ROW}>
         <RowBody {...body} />
-      </Link>
+      </PendingLink>
       {trailing}
     </li>
   );
@@ -235,8 +237,8 @@ function PersonRow({ person: p, canFollow }: { person: SearchPerson; canFollow: 
   return (
     <LinkRow
       href={`${profilePath(p.handle)}`}
-      leading={<Avatar src={p.avatarUrl} size={46} />}
-      title={<NameLine name={p.displayName} verified={p.isVerified} className="text-[14.5px] font-semibold" />}
+      leading={<Avatar src={p.avatarUrl} size={52} />}
+      title={<NameLine name={p.displayName} verified={p.isVerified} className="font-heading text-[16px] font-bold" />}
       subtitle={`@${p.handle} · ${formatCompactNumber(p.followersCount)} followers`}
       trailing={
         <FollowPill
@@ -251,57 +253,48 @@ function PersonRow({ person: p, canFollow }: { person: SearchPerson; canFollow: 
 }
 
 function TagRow({ tag }: { tag: TrendingTag }) {
-  const glyph = (
-    <span className="srch-ring flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-2xl text-white">
-      <Hash className="h-5 w-5" aria-hidden />
-    </span>
-  );
   return (
-    <ActionRow
-      term={`#${tag.tag}`}
-      type="hashtag"
-      ariaLabel={`Search #${tag.tag}`}
-      leading={
-        <SafeImage
-          src={tag.thumbnailUrl ?? ""}
-          alt=""
-          width={46}
-          height={46}
-          loading="lazy"
-          decoding="async"
-          fallback={glyph}
-          className="h-[46px] w-[46px] shrink-0 rounded-2xl bg-secondary object-cover"
-        />
-      }
-      title={<span className="block truncate text-[14.5px] font-semibold">#{tag.tag}</span>}
-      subtitle={`${formatCompactNumber(tag.postCount)} ${tag.postCount === 1 ? "post" : "posts"}`}
-    />
+    <li>
+      <SearchAction
+        term={`#${tag.tag}`}
+        type="hashtag"
+        ariaLabel={`Search #${tag.tag}`}
+        className="flex h-[76px] w-full items-center gap-3.5 rounded-[24px] bg-frenz-fill px-4 text-left transition-transform active:scale-[0.97] motion-reduce:active:scale-100"
+      >
+        <span aria-hidden className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[14px] bg-frenz-gradient-x text-white">
+          <Hash className="h-5 w-5" strokeWidth={2.6} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-heading text-[17px] font-bold">#{tag.tag}</span>
+          <span className="block text-[14px] text-frenz-muted">
+            {formatCompactNumber(tag.postCount)} {tag.postCount === 1 ? "post" : "posts"}
+          </span>
+        </span>
+        <ChevronRight className="h-5 w-5 shrink-0 text-frenz-muted" aria-hidden />
+      </SearchAction>
+    </li>
   );
 }
 
 function SoundRow({ sound: s }: { sound: Sound }) {
-  const glyph = (
-    <span className="srch-ring flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-2xl text-white">
-      <Music className="h-5 w-5" aria-hidden />
-    </span>
-  );
+  const mins = Math.floor(s.durationSec / 60);
+  const secs = String(Math.round(s.durationSec % 60)).padStart(2, "0");
   return (
     <LinkRow
       href={`/sound/${s.id}`}
       leading={
-        <SafeImage
-          src={s.coverArtUrl ?? ""}
-          alt=""
-          width={46}
-          height={46}
-          loading="lazy"
-          decoding="async"
-          fallback={glyph}
-          className="h-[46px] w-[46px] shrink-0 rounded-2xl bg-secondary object-cover"
-        />
+        <span className="relative h-[52px] w-[52px] shrink-0 overflow-hidden rounded-[14px] bg-frenz-gradient-x">
+          {s.coverArtUrl ? (
+            <SafeImage src={s.coverArtUrl} alt="" width={52} height={52} loading="lazy" decoding="async" fallback={null} className="h-full w-full object-cover" />
+          ) : null}
+          <span aria-hidden className="absolute inset-0 flex items-center justify-center bg-black/10 text-white">
+            <Play className="h-4 w-4 translate-x-[1px] fill-current" />
+          </span>
+        </span>
       }
-      title={<span className="block truncate text-[14.5px] font-semibold">{s.title}</span>}
-      subtitle={`${s.artistLabel} · ${formatCompactNumber(s.usageCount)} reels`}
+      title={<span className="block truncate font-heading text-[16px] font-bold">{s.title}</span>}
+      subtitle={`${s.artistLabel} · ${formatCompactNumber(s.usageCount)} ${s.usageCount === 1 ? "video" : "videos"}`}
+      trailing={s.durationSec > 0 ? <span className="shrink-0 text-[14px] font-semibold tabular-nums text-frenz-muted">{mins}:{secs}</span> : undefined}
     />
   );
 }
@@ -314,7 +307,7 @@ function PlaceRow({ place: p }: { place: PlaceResult }) {
       type="people"
       ariaLabel={`Find creators in ${p.label}`}
       leading={
-        <span className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-2xl bg-secondary text-primary">
+        <span className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-2xl bg-frenz-fill text-frenz-violet">
           <MapPin className="h-5 w-5" aria-hidden />
         </span>
       }

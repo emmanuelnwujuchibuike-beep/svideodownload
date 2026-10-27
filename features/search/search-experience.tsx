@@ -1,10 +1,11 @@
 "use client";
 
-import { Clock, Search, TrendingUp, X } from "lucide-react";
+import { Hash, History, Search, TrendingUp, UserRound, X } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { SearchCommitProvider } from "@/features/search/search-commit";
+import { TREND_CHIP } from "@/features/search/search-primitives";
 import { SearchResultsView } from "@/features/search/search-results-view";
 import {
   clearRecentSearches,
@@ -19,16 +20,13 @@ import { emptySearchResult } from "@/lib/social/search-shared";
 import { cn } from "@/lib/utils";
 
 /**
- * The interactive half of /search: the field, the type tabs, recent/trending
- * shortcuts, and the results.
+ * The interactive half of /search (design/Frenz-Search-Discover-design.zip, 2026-10-26): Discover until the
+ * field is tapped, then Search — the field with Cancel, the type chips, Recent + Trending searches, results.
  *
  * ── What is NOT in here ───────────────────────────────────────────────────
- * The whole discovery screen — creator circles, Trending Now, Suggested for
- * you, Popular videos. It arrives as the `discover` ReactNode prop, already
- * rendered by the server. Passing server output THROUGH a client component
- * keeps it server output; had this component imported those sections instead,
- * four rails of cards would have become client JavaScript for no gain, because
- * none of them is interactive beyond a link and a Follow pill.
+ * The whole Discover screen — creator circles, Trending now, Trending searches, Creators to follow, Explore
+ * videos. It arrives as the `discover` ReactNode prop, already rendered by the server. Passing server output
+ * THROUGH a client component keeps it server output.
  *
  * ── The network contract ──────────────────────────────────────────────────
  *  • Typing sends nothing. A search fires 300ms after the last keystroke.
@@ -42,9 +40,13 @@ import { cn } from "@/lib/utils";
  * ── Navigation ────────────────────────────────────────────────────────────
  * The URL is kept in step with `history.replaceState`, never `router.push`.
  * A push would re-run the server component on every committed search —
- * re-fetching suggestions, trending tags and the popular-videos rail to
- * repaint a list the client already has. It also means the back gesture
- * leaves /search instead of walking a dozen keystrokes backwards.
+ * re-fetching suggestions, trending tags and the videos rail to repaint a list
+ * the client already has. It also means the back gesture leaves /search
+ * instead of walking a dozen keystrokes backwards.
+ *
+ * ── Where the design and the app differ ───────────────────────────────────
+ * The design puts the field above the type chips; the owner had asked (2026-09-27) for the chips above. The
+ * design is the newer word, so the field is first. "Places" stays as a sixth chip (a real search the app has).
  */
 
 const TABS: { id: SearchType; label: string }[] = [
@@ -69,21 +71,23 @@ export function SearchExperience({
   canFollow,
   discoveryRow,
   discover,
+  title = "Discover",
+  path = "/search",
 }: {
   initialQuery: string;
   initialType: SearchType;
   initialResult: SearchResult;
-  /**
-   * Real trending tags that "Trending Now" is NOT already showing as cards —
-   * so the two blocks complement each other instead of printing the same six
-   * tags twice.
-   */
+  /** Real trending tags beyond the six "Trending now" shows — the chips under Recent. */
   trendingTerms: string[];
   canFollow: boolean;
-  /** Server-rendered creator circles — sits directly under the tabs. */
+  /** Server-rendered creator circles — directly under the field. */
   discoveryRow: ReactNode;
-  /** Server-rendered Trending Now / Suggested for you / Popular videos. */
+  /** Server-rendered Discover sections. */
   discover: ReactNode;
+  /** The large title over the field while it is not in use. */
+  title?: string;
+  /** The route this screen lives on — /search, or /explore (the same screen) — kept in the URL as the member searches. */
+  path?: string;
 }) {
   const [input, setInput] = useState(initialQuery);
   const [query, setQuery] = useState(initialQuery);
@@ -91,15 +95,15 @@ export function SearchExperience({
   const [result, setResult] = useState<SearchResult>(initialResult);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [recents, setRecents] = useState<string[]>([]);
-  /*
-    2026-09-27: whether this device keeps a search history at all, and
-    whether the field is focused — the second is what decides if the recent
-    list is shown UNDER the field ("make recent previous search show below
-    the placeholder when a user want to search again") rather than only far
-    down the page under the discovery row.
-  */
+  // whether this device keeps a search history at all (2026-09-27)
   const [historyOn, setHistoryOn] = useState(true);
-  const [fieldFocused, setFieldFocused] = useState(false);
+  /*
+    Discover ↔ Search: the screen opens as Discover. Tapping the field turns it into Search (the field at the
+    top with a violet ring and Cancel, the type chips, then Recent + Trending searches until something is
+    typed). Cancel clears and goes back to Discover. A blur alone never leaves Search, so a tap on a recent
+    term or a chip still lands.
+  */
+  const [active, setActive] = useState(initialQuery.length > 0);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const cache = useRef(new Map<string, SearchResult>([[`${initialQuery}:${initialType}`, initialResult]]));
@@ -112,8 +116,7 @@ export function SearchExperience({
     setRecents(readRecentSearches());
   }, []);
 
-  // One listener for the life of the screen, and it only aborts. Nothing here
-  // is registered on `window`.
+  // One listener for the life of the screen, and it only aborts.
   useEffect(() => () => inFlight.current?.abort(), []);
 
   const syncUrl = useCallback((term: string, t: SearchType) => {
@@ -121,8 +124,8 @@ export function SearchExperience({
     if (term) sp.set("q", term);
     if (t !== "all") sp.set("type", t);
     const qs = sp.toString();
-    window.history.replaceState(window.history.state, "", qs ? `/search?${qs}` : "/search");
-  }, []);
+    window.history.replaceState(window.history.state, "", qs ? `${path}?${qs}` : path);
+  }, [path]);
 
   const run = useCallback(async (term: string, t: SearchType) => {
     const q = term.trim();
@@ -149,8 +152,7 @@ export function SearchExperience({
       if (!res.ok) throw new Error(`search ${res.status}`);
       const data = (await res.json()) as SearchResult;
       if (controller.signal.aborted) return;
-      // Oldest-first eviction — Map preserves insertion order, so the first
-      // key is the least recently ADDED.
+      // Oldest-first eviction — Map preserves insertion order.
       if (cache.current.size >= CACHE_MAX) {
         const oldest = cache.current.keys().next().value;
         if (oldest !== undefined) cache.current.delete(oldest);
@@ -165,8 +167,7 @@ export function SearchExperience({
     }
   }, []);
 
-  // Debounce. Clearing the field is exempt: waiting 300ms to show the
-  // discovery screen again would feel like the app was thinking about it.
+  // Debounce. Clearing the field is exempt: waiting 300ms to empty the results would feel like thinking.
   useEffect(() => {
     const term = input.trim();
     if (term === query) return;
@@ -187,6 +188,7 @@ export function SearchExperience({
   const commit = useCallback(
     (term: string, t: SearchType = type) => {
       const trimmed = term.trim();
+      setActive(true);
       setInput(trimmed);
       setQuery(trimmed);
       setType(t);
@@ -205,285 +207,192 @@ export function SearchExperience({
     inputRef.current?.blur();
   };
 
-  const pickTab = (t: SearchType) => {
-    setType(t);
-    syncUrl(query, t);
-    if (query) void run(query, t);
-  };
+  const pickTab = useCallback(
+    (t: SearchType) => {
+      setType(t);
+      syncUrl(query, t);
+      if (query) void run(query, t);
+    },
+    [query, run, syncUrl],
+  );
 
   const clear = () => {
     setInput("");
     inputRef.current?.focus();
   };
 
+  const cancel = () => {
+    inFlight.current?.abort();
+    setInput("");
+    setQuery("");
+    setResult(emptySearchResult());
+    setStatus("idle");
+    syncUrl("", type);
+    setActive(false);
+    inputRef.current?.blur();
+  };
+
   const searching = query.length > 0;
 
-  /*
-    A stable identity for the provider value, so a keystroke re-render of THIS
-    component never invalidates the context for every card below it.
-  */
+  // A stable identity for the provider value, so a keystroke never invalidates the context for every card below.
   const commitFn = useMemo(() => (term: string, t?: SearchType) => commit(term, t ?? type), [commit, type]);
 
   return (
     <SearchCommitProvider value={commitFn}>
-    {/* `-mt-4` cancels AppContent's own `pt-4` below `lg`, so the header this
-        page took over from the topbar sits flush against the top of the screen
-        rather than floating 16px under the status bar. From `lg` the real
-        topbar is back and that breathing room is wanted again. */}
-    <div className="mx-auto -mt-4 w-full max-w-3xl lg:mt-0">
-      {/*
-        🔴 THE FIELD IS THE TOP HEADER ON MOBILE (owner, 2026-08-24: "on the
-        search page the search icon shouldnt be there, only the search
-        placeholder that is supposed to be at the top header where the search
-        icon is").
+      {/* `-mt-4` cancels AppContent's own `pt-4` below `lg`: the topbar is hidden on this route on mobile, so this
+          screen owns the status-bar inset itself. From `lg` the topbar is back. */}
+      <div className="frenz-ui mx-auto -mt-4 w-full max-w-3xl lg:mt-0">
+        {/* Sticky only while searching (a sticky bar rides the document, so it never fights the iOS keyboard). */}
+        <div
+          className={cn(
+            "z-20 -mx-3 bg-frenz-page px-4 pb-1 pt-[calc(var(--frenz-safe-top)+0.5rem)] sm:-mx-4 lg:pt-2",
+            active && "sticky top-0 lg:top-[calc(4rem+var(--frenz-safe-top)+var(--frenz-announce-h,0px))]",
+          )}
+        >
+          {!active ? (
+            <header className="mb-3.5 flex items-center justify-between gap-3">
+              <h1 className="font-heading text-[34px] font-extrabold leading-[1.05] tracking-[-1.2px]">{title}</h1>
+              {/* the bell the hidden topbar would have shown; from `lg` the topbar owns it */}
+              <span className="shrink-0 lg:hidden">
+                <NotificationBell />
+              </span>
+            </header>
+          ) : null}
 
-        `AppTopbar` hides itself on this route below `lg` (one condition,
-        exactly the pattern `/messages` already uses), so there is no longer a
-        near-empty bar holding a magnifier above a search field that does the
-        same job. This row takes its place: the field where the icon was, the
-        notification bell where the bell was. The topbar drops its own bell on
-        this route so it is never mounted twice.
+          <div className="flex items-center gap-3">
+            <form role="search" onSubmit={submit} className="relative min-w-0 flex-1">
+              <label htmlFor="frenz-search" className="sr-only">
+                Search Frenz
+              </label>
+              <Search
+                aria-hidden
+                className={cn("pointer-events-none absolute left-4 top-1/2 h-[19px] w-[19px] -translate-y-1/2", active ? "text-frenz-violet" : "text-frenz-muted")}
+              />
+              <input
+                id="frenz-search"
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onFocus={() => setActive(true)}
+                type="search"
+                inputMode="search"
+                enterKeyHint="search"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                placeholder="Search people, videos, sounds"
+                /*
+                  16px (`text-base`): iOS Safari zooms the page in on a focused input below it. WebKit's own clear
+                  glyph is hidden because ours sits in the same corner.
+                */
+                className={cn(
+                  "h-[52px] w-full rounded-[26px] border-2 pl-12 pr-12 text-base text-frenz-ink outline-none placeholder:text-frenz-muted [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden",
+                  active ? "border-frenz-violet bg-frenz-card shadow-[0_0_0_4px_hsl(var(--frenz-violet)/0.14)]" : "border-transparent bg-frenz-fill",
+                )}
+              />
+              {/* inside the field and absolutely placed, so it never changes the field's width */}
+              <button
+                type="button"
+                onClick={clear}
+                tabIndex={input ? 0 : -1}
+                aria-hidden={!input}
+                aria-label="Clear search"
+                className={cn(
+                  "absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-frenz-fill text-frenz-muted transition-opacity duration-150",
+                  input ? "opacity-100" : "pointer-events-none opacity-0",
+                )}
+              >
+                <X className="h-4 w-4" aria-hidden />
+              </button>
+            </form>
+            {active ? (
+              <button type="button" onClick={cancel} className="h-11 shrink-0 px-1 text-[16px] font-bold text-frenz-violet transition-transform active:scale-[0.97]">
+                Cancel
+              </button>
+            ) : null}
+          </div>
 
-        Sticky, not fixed. A `fixed` bar is what fights the iOS viewport when
-        the keyboard opens; a sticky one rides the document and stays put on
-        its own. On mobile it pins to the very top and owns the status-bar
-        inset itself; from `lg` the topbar is back, so it tucks beneath it —
-        offset from the tokens the topbar and announcement bar publish, with
-        no measurement, no ResizeObserver and no scroll listener.
-
-        Its ground is the CANVAS colour, not `bg-background`: this page uses
-        `AppContent canvas`, so a `bg-background` bar would be a white strip
-        sitting on grey until the moment it stuck.
-      */}
-      <div
-        className="sticky top-0 z-20 -mx-3 bg-[hsl(var(--frenz-canvas))] px-3 pb-1 pt-[var(--frenz-safe-top)] sm:-mx-4 sm:px-4 lg:top-[calc(4rem+var(--frenz-safe-top)+var(--frenz-announce-h,0px))] lg:pt-1"
-      >
-        {/*
-          ── THE TABS SIT ABOVE THE FIELD (owner, 2026-09-27) ────────────────
-          "Bring the search down below the top, users and all NAV, so it sits
-          below." Top / Users / Videos / Sounds / Hashtags is the coarse
-          choice and the field refines it, so the field reading second
-          matches the order the decision is actually made in — and it puts
-          the input nearer the thumb on a phone, which is where the typing
-          happens.
-        */}
-        <SearchTabs active={type} onPick={pickTab} />
-
-        <div className="mt-1.5 flex items-center gap-2">
-        <form role="search" onSubmit={submit} className="relative min-w-0 flex-1">
-          <label htmlFor="frenz-search" className="sr-only">
-            Search Frenzsave
-          </label>
-          <Search
-            aria-hidden
-            className="pointer-events-none absolute left-4 top-1/2 h-[19px] w-[19px] -translate-y-1/2 text-muted-foreground"
-          />
-          <input
-            id="frenz-search"
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onFocus={() => setFieldFocused(true)}
-            /*
-              A blur that closes the list immediately would fire BEFORE the
-              tap on a suggestion registers, so the tap would land on
-              nothing. The list itself blocks the blur (pointer-down is
-              prevented on it); this only has to cover the case where the
-              member taps somewhere else entirely.
-            */
-            onBlur={() => setFieldFocused(false)}
-            type="search"
-            inputMode="search"
-            enterKeyHint="search"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="none"
-            spellCheck={false}
-            placeholder="Search people, videos, hashtags, sounds..."
-            /*
-              `text-base` (16px) is not a style choice — iOS Safari zooms the
-              whole page in when a focused input is below 16px, which is the
-              single most common cause of a "search bar that breaks the
-              layout" on iPhone.
-
-              `::-webkit-search-cancel-button` is hidden because `type="search"`
-              draws WebKit's own clear glyph — next to ours, on iOS, that is two
-              clear buttons in the same corner.
-            */
-            className="srch-glass srch-field h-[52px] w-full rounded-[18px] pl-11 pr-11 text-base outline-none placeholder:text-muted-foreground focus:ring-0 [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden"
-          />
-          {/*
-            Clear sits INSIDE the field and is absolutely positioned, so it
-            fades in and out without ever changing the field's width. A Cancel
-            button appearing beside the field — the other common pattern —
-            resizes it the instant the keyboard opens, which is exactly the
-            layout jump this must not do.
-          */}
-          <button
-            type="button"
-            onClick={clear}
-            tabIndex={input ? 0 : -1}
-            aria-hidden={!input}
-            aria-label="Clear search"
-            className={cn(
-              "absolute right-2.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-secondary text-muted-foreground transition-opacity duration-150",
-              input ? "opacity-100" : "pointer-events-none opacity-0",
-            )}
-          >
-            <X className="h-4 w-4" aria-hidden />
-          </button>
-        </form>
-        {/* The bell the hidden topbar would have shown. `lg:hidden` because
-            from `lg` the topbar is back and owns it again. */}
-        <span className="shrink-0 lg:hidden">
-          <NotificationBell />
-        </span>
+          {active ? <SearchTabs active={type} onPick={pickTab} /> : null}
         </div>
 
-        {/*
-          ── RECENTS, RIGHT UNDER THE FIELD (owner, 2026-09-27) ──────────────
-          "make recent previous search show below the placeholder when a user
-          want to search again." They were only ever at the foot of the page,
-          under the discovery row — which is not where someone who has just
-          tapped the field is looking.
-
-          Shown while the field has focus and nothing has been typed yet:
-          once there is a query the member is past their history. It is
-          inside the sticky header so it travels with the field rather than
-          being scrolled away from it.
-        */}
-        {fieldFocused && historyOn && !input.trim() && recents.length > 0 ? (
-          <div
-            // keeps the field focused so the tap lands on the item, not on a closing list
-            onPointerDown={(e) => e.preventDefault()}
-            className="mt-1.5 overflow-hidden rounded-[18px] bg-card shadow-[0_8px_28px_-18px_rgb(15_23_42/0.45)] ring-1 ring-black/[0.04] dark:ring-white/10"
-          >
-            <ul>
-              {recents.slice(0, 5).map((t) => (
-                <li key={t} className="flex items-center transition-colors duration-150 hover:bg-secondary/60">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFieldFocused(false);
-                      commit(t);
+        <div id="search-panel" role="tabpanel" aria-labelledby={active ? `search-tab-${type}` : undefined} className="pt-3">
+          {searching ? (
+            <SearchResultsView
+              query={query}
+              type={type}
+              result={result}
+              status={status}
+              canFollow={canFollow}
+              onRetry={() => void run(query, type)}
+              onSeeAll={pickTab}
+            />
+          ) : active ? (
+            <div>
+              {historyOn ? (
+                recents.length > 0 ? (
+                  <RecentSearches
+                    terms={recents}
+                    onPick={(t) => commit(t)}
+                    onRemove={(t) => setRecents(removeRecentSearch(t))}
+                    onClearAll={() => setRecents(clearRecentSearches())}
+                    onTurnOff={() => {
+                      setHistoryOn(false);
+                      setRecents(setRecentSearchEnabled(false));
                     }}
-                    className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left"
-                  >
-                    <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                    <span className="truncate text-[14px]">{t}</span>
-                  </button>
-                  {/* one term at a time, without turning the whole history off */}
+                  />
+                ) : null
+              ) : (
+                /* with the history off there is no list to hang the switch on, so the way back stands on its own */
+                <section className="flex items-center gap-3 rounded-[24px] border border-frenz-line bg-frenz-card px-4 py-2.5">
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[15px] font-bold">Search history is off</span>
+                    <span className="block text-[13px] leading-snug text-frenz-muted">What you search isn&apos;t saved on this device.</span>
+                  </span>
                   <button
                     type="button"
-                    onClick={() => setRecents(removeRecentSearch(t))}
-                    aria-label={`Remove ${t} from recent searches`}
-                    className="mr-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground"
-                  >
-                    <X className="h-4 w-4" aria-hidden />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </div>
-
-      <div
-        id="search-panel"
-        role="tabpanel"
-        aria-labelledby={`search-tab-${type}`}
-        // No bottom padding of its own: AppContent's `pb-24` already clears the
-        // mobile nav, and adding a second nav-height pad stacked ~10rem of dead
-        // space under the last card.
-        className="pt-3"
-      >
-        {searching ? (
-          <SearchResultsView
-            query={query}
-            type={type}
-            result={result}
-            status={status}
-            canFollow={canFollow}
-            onRetry={() => void run(query, type)}
-          />
-        ) : (
-          <div className="space-y-3.5">
-            {discoveryRow}
-            {historyOn && recents.length > 0 ? (
-              <RecentSearches
-                terms={recents}
-                onPick={(t) => commit(t)}
-                onRemove={(t) => setRecents(removeRecentSearch(t))}
-                onClearAll={() => setRecents(clearRecentSearches())}
-                historyOn={historyOn}
-                onToggleHistory={() => {
-                  const next = !historyOn;
-                  setHistoryOn(next);
-                  setRecents(setRecentSearchEnabled(next));
-                }}
-              />
-            ) : null}
-            {/*
-              With the history off there is no list to hang the switch on, so
-              the way back has to exist on its own — otherwise turning it off
-              is a one-way door.
-            */}
-            {!historyOn ? (
-              <section className="rounded-[22px] border border-border/70 bg-card px-4 py-3.5">
-                <div className="flex items-center gap-3">
-                  <Clock className="h-[17px] w-[17px] shrink-0 text-muted-foreground" aria-hidden />
-                  <div className="min-w-0 flex-1">
-                    <h2 className="text-[15px] font-semibold">Search history is off</h2>
-                    <p className="text-[12.5px] leading-snug text-muted-foreground">What you search stays on this device and is not being saved.</p>
-                  </div>
-                  <button
-                    type="button"
+                    role="switch"
+                    aria-checked={false}
+                    aria-label="Save search history on this device"
                     onClick={() => {
                       setHistoryOn(true);
                       setRecents(setRecentSearchEnabled(true));
                     }}
-                    className="srch-press shrink-0 rounded-full bg-secondary px-3.5 py-2 text-[13px] font-semibold"
+                    className="h-11 shrink-0 px-1 text-[15px] font-bold text-frenz-violet"
                   >
                     Turn on
                   </button>
-                </div>
-              </section>
-            ) : null}
-            {trendingTerms.length > 0 ? <TrendingSearches terms={trendingTerms} onPick={(t) => commit(t)} /> : null}
-            {discover}
-          </div>
-        )}
+                </section>
+              )}
+              {trendingTerms.length > 0 ? <TrendingSearches terms={trendingTerms} onPick={(t) => commit(t)} /> : null}
+            </div>
+          ) : (
+            <div>
+              {discoveryRow}
+              {discover}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
     </SearchCommitProvider>
   );
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
-   Tabs
+   Type chips
    ──────────────────────────────────────────────────────────────────────── */
 
-/**
- * A CSS scroller with six buttons. The active underline is a `<span>` inside
- * the selected button, not a shared element being measured and translated —
- * so selecting a tab costs one class change and zero layout reads.
- */
+/** Pill chips on one scrolling row. Selecting one is a class change; the rail scrolls itself, never the page. */
 function SearchTabs({ active, onPick }: { active: SearchType; onPick: (t: SearchType) => void }) {
   const railRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef(new Map<SearchType, HTMLButtonElement>());
 
-  /** Centre a tab in the rail. One native scroll on the RAIL only — never
-      `scrollIntoView`, which would also scroll the page vertically.
-      `behavior` is chosen per call because the CSS `prefers-reduced-motion`
-      block cannot override a behaviour passed in JavaScript. */
+  /** Centre a chip in the rail — one native scroll on the RAIL only, never `scrollIntoView` (it would move the page). */
   const reveal = (el: HTMLElement) => {
     const rail = railRef.current;
     if (!rail) return;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    rail.scrollTo({
-      left: el.offsetLeft - rail.clientWidth / 2 + el.clientWidth / 2,
-      behavior: reduced ? "auto" : "smooth",
-    });
+    rail.scrollTo({ left: el.offsetLeft - rail.clientWidth / 2 + el.clientWidth / 2, behavior: reduced ? "auto" : "smooth" });
   };
 
   return (
@@ -491,7 +400,7 @@ function SearchTabs({ active, onPick }: { active: SearchType; onPick: (t: Search
       ref={railRef}
       role="tablist"
       aria-label="Search categories"
-      className="srch-rail -mx-1 mt-1 gap-1 px-1"
+      className="srch-rail -mx-4 mt-3 gap-2 px-4 pb-1"
       onKeyDown={(e) => {
         if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
         e.preventDefault();
@@ -499,8 +408,7 @@ function SearchTabs({ active, onPick }: { active: SearchType; onPick: (t: Search
         const next = TABS[(i + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length];
         if (!next) return;
         onPick(next.id);
-        // Roving tabindex: the tab that just lost selection also loses its tab
-        // stop, so focus has to travel with the selection or it lands nowhere.
+        // roving tabindex: focus travels with the selection or it lands nowhere
         const el = tabRefs.current.get(next.id);
         if (el) {
           el.focus();
@@ -528,18 +436,11 @@ function SearchTabs({ active, onPick }: { active: SearchType; onPick: (t: Search
               reveal(e.currentTarget);
             }}
             className={cn(
-              "srch-press relative shrink-0 px-3.5 pb-2.5 pt-2 text-[14.5px] font-semibold transition-colors duration-150",
-              selected ? "text-foreground" : "text-muted-foreground",
+              "h-11 shrink-0 rounded-full px-[18px] text-[15px] font-bold transition-transform active:scale-[0.97] motion-reduce:active:scale-100",
+              selected ? "bg-frenz-ink text-frenz-page" : "border border-frenz-line bg-frenz-card text-frenz-ink/80",
             )}
           >
             {t.label}
-            <span
-              aria-hidden
-              className={cn(
-                "srch-tab-underline absolute inset-x-2.5 bottom-0 h-[2.5px] rounded-full transition-opacity duration-150",
-                selected ? "opacity-100" : "opacity-0",
-              )}
-            />
           </button>
         );
       })}
@@ -548,96 +449,81 @@ function SearchTabs({ active, onPick }: { active: SearchType; onPick: (t: Search
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
-   Empty-state shortcuts
+   Recent + Trending searches (the focused, empty field)
    ──────────────────────────────────────────────────────────────────────── */
+
+/** # for a hashtag, a person for an @handle, a clock for anything else — read from the term itself. */
+function RecentIcon({ term }: { term: string }) {
+  const Icon = term.startsWith("#") ? Hash : term.startsWith("@") ? UserRound : History;
+  return (
+    <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-frenz-fill text-frenz-muted">
+      <Icon className="h-[18px] w-[18px]" strokeWidth={2.2} />
+    </span>
+  );
+}
 
 function RecentSearches({
   terms,
   onPick,
   onRemove,
   onClearAll,
-  historyOn,
-  onToggleHistory,
+  onTurnOff,
 }: {
   terms: string[];
   onPick: (t: string) => void;
   onRemove: (t: string) => void;
   onClearAll: () => void;
-  historyOn: boolean;
-  onToggleHistory: () => void;
+  onTurnOff: () => void;
 }) {
   return (
-    <section className="rounded-[22px] border border-border/70 bg-card px-1.5 py-2.5">
-      <div className="flex items-center gap-2.5 px-2.5 pb-1.5">
-        <Clock className="h-[17px] w-[17px] text-muted-foreground" aria-hidden />
-        <h2 className="flex-1 text-[15px] font-semibold">Recent</h2>
-        {/*
-          TWO CONTROLS, NOT ONE. Clearing is "forget what I searched";
-          switching off is "stop remembering from now on". The owner asked
-          for both separately, and conflating them would make a member who
-          wants one accept the other.
-        */}
-        <button
-          type="button"
-          onClick={onClearAll}
-          className="srch-press rounded-lg px-1 py-0.5 text-[13px] font-semibold text-primary"
-        >
+    <section aria-labelledby="search-recent" className="overflow-hidden rounded-[24px] border border-frenz-line bg-frenz-card">
+      <div className="flex items-center justify-between pl-4 pr-3 pt-1.5">
+        <h2 id="search-recent" className="font-heading text-[18px] font-bold tracking-[-0.3px]">
+          Recent
+        </h2>
+        {/* TWO controls, not one: "forget what I searched" and "stop remembering" are different wishes */}
+        <button type="button" onClick={onClearAll} className="h-11 px-1 text-[15px] font-bold text-frenz-blue">
           Clear all
         </button>
-        <button
-          type="button"
-          onClick={onToggleHistory}
-          role="switch"
-          aria-checked={historyOn}
-          aria-label="Save search history on this device"
-          className="srch-press rounded-lg px-1 py-0.5 text-[13px] font-semibold text-muted-foreground"
-        >
-          Turn off
-        </button>
       </div>
-      <ul>
-        {terms.map((t) => (
-          <li key={t} className="flex items-center rounded-xl transition-colors duration-150 hover:bg-secondary/60">
-            <button
-              type="button"
-              onClick={() => onPick(t)}
-              className="flex min-w-0 flex-1 items-center gap-3 px-2.5 py-2 text-left"
-            >
-              <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
-                <Clock className="h-4 w-4" />
-              </span>
-              <span className="truncate text-[14px]">{t}</span>
+      <ul className="divide-y divide-frenz-line/70 border-y border-frenz-line/70">
+        {terms.slice(0, 8).map((t) => (
+          <li key={t} className="flex items-center">
+            <button type="button" onClick={() => onPick(t)} className="flex min-w-0 flex-1 items-center gap-3 py-2 pl-4 text-left">
+              <RecentIcon term={t} />
+              <span className="truncate text-[16px] font-semibold">{t}</span>
             </button>
             <button
               type="button"
               onClick={() => onRemove(t)}
               aria-label={`Remove ${t} from recent searches`}
-              className="srch-press mr-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground"
+              className="mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-frenz-muted"
             >
-              <X className="h-4 w-4" aria-hidden />
+              <X className="h-[18px] w-[18px]" aria-hidden />
             </button>
           </li>
         ))}
       </ul>
+      <div className="flex items-center justify-between pl-4 pr-3">
+        <span className="text-[14px] text-frenz-muted">Save search history</span>
+        <button type="button" onClick={onTurnOff} role="switch" aria-checked aria-label="Save search history on this device" className="h-11 px-1 text-[15px] font-bold text-frenz-violet">
+          Turn off
+        </button>
+      </div>
     </section>
   );
 }
 
 function TrendingSearches({ terms, onPick }: { terms: string[]; onPick: (t: string) => void }) {
   return (
-    <section className="rounded-[22px] border border-border/70 bg-card px-4 py-3.5">
-      <div className="flex items-center gap-2.5 pb-2.5">
-        <TrendingUp className="h-[17px] w-[17px] text-primary" aria-hidden />
-        <h2 className="text-[15px] font-semibold">Trending searches</h2>
-      </div>
+    <section aria-labelledby="search-trending">
+      <h2 id="search-trending" className="px-1 pb-2.5 pt-[26px] font-heading text-[19px] font-bold tracking-[-0.4px]">
+        Trending searches
+      </h2>
       <div className="flex flex-wrap gap-2">
         {terms.map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => onPick(t)}
-            className="srch-press rounded-full bg-secondary/80 px-3.5 py-1.5 text-[13px] font-medium"
-          >
+          <button key={t} type="button" onClick={() => onPick(t)} className={TREND_CHIP}>
+            <TrendingUp className="h-4 w-4 text-frenz-violet" strokeWidth={2.4} aria-hidden />
             {t}
           </button>
         ))}

@@ -1,301 +1,260 @@
-import { Flame, Play, Plus, UserRound, Users } from "lucide-react";
-import Link from "next/link";
+import { Flame, Play, Plus, TrendingUp, UserRound } from "lucide-react";
 
+import { PendingLink } from "@/features/frenz-ui/pending";
 import { FollowPill } from "@/features/search/follow-pill";
-import { Avatar, CreatorPortrait, SafeImage, VideoCover } from "@/features/search/media";
-import { NameLine, SectionCard, SectionHeader } from "@/features/search/search-primitives";
+import { Avatar, SafeImage } from "@/features/search/media";
+import { NameLine, TREND_CHIP } from "@/features/search/search-primitives";
 import { SearchAction } from "@/features/search/tag-chip";
-import { MoreShareButton } from "@/features/media/more-share-button";
+import { VideoTile } from "@/features/search/video-tile";
 import { TRENDING_CARD_COUNT, type DiscoverVideo, type SearchDiscover } from "@/lib/social/discover";
 import type { TrendingTag } from "@/lib/social/hashtags";
+import { profilePath } from "@/lib/social/profile-url";
 import type { SuggestedCreator } from "@/lib/social/suggest";
 import { formatCompactNumber } from "@/lib/utils";
-import { profilePath } from "@/lib/social/profile-url";
 
 /**
- * The /search empty state: discovery row, Trending Now, Suggested for you,
- * Popular videos.
+ * Discover (design/Frenz-Search-Discover-design.zip → Discover.dc.html, 2026-10-26): the creator circles,
+ * Trending now (the gradient panel), Trending searches, Creators to follow and Explore videos. Used by
+ * /search before anything is typed, and by /explore (the owner: "use same design for the explore page too").
  *
  * ── 🔴 EVERY SECTION HERE IS A SERVER COMPONENT ───────────────────────────
- * This is the entire first screen, and it ships as HTML. The only client code
- * is a handful of leaves — a Follow pill, a share button, the image wrappers
- * that need `onError`, and the tag cards that run a search in place.
- * `SearchExperience` receives all of this as `ReactNode` props, so putting an
- * interactive search field above it does NOT drag it across the client
- * boundary; it stays RSC output the client shell positions.
+ * This is the whole first screen and it ships as HTML. The only client leaves are the Follow button, the
+ * image wrappers that need `onError`, the pending links, and the controls that run a search in place
+ * (`SearchAction`, which falls back to a plain link to /search where no search page is above it — /explore).
+ * Trending now's "See all" is a CSS-only toggle (a hidden checkbox), so it ships no script either.
  *
- * ── 🔴 EVERY CROSS-ROUTE LINK PREFETCHES ──────────────────────────────────
- * Owner, 2026-08-24: "everything is suppose to prefetch immediately as the
- * search page opens so nothing loads when clicked". Next's App Router only
- * prefetches a dynamic route's `loading.tsx` boundary by default, which is
- * why a tap still felt like it was fetching. `prefetch` here is explicit, and
- * viewport-triggered — a card three screens down the rail costs nothing until
- * it is scrolled near, at which point its destination is already warm.
- *
- * Searches, by contrast, never navigate at all — see `search-commit.tsx`.
+ * Real data only: tags, post counts, followers and view counts come from the existing reads in
+ * lib/social/discover.ts. The design's "Business · 2.5K" line is "2.5K followers" — creators carry no
+ * profile type here, and a guessed one would be a fabricated label.
  */
+
+const H2 = "font-heading text-[19px] font-bold tracking-[-0.4px]";
+const SEE_ALL = "flex h-11 items-center px-1 text-[14px] font-bold text-frenz-blue";
+
+function Heading({ id, title, href }: { id: string; title: string; href?: string }) {
+  return (
+    <div className="flex items-center justify-between px-1 pb-2.5 pt-[26px]">
+      <h2 id={id} className={H2}>
+        {title}
+      </h2>
+      {href ? (
+        <PendingLink href={href} prefetch={false} className={SEE_ALL} spinnerSize={14}>
+          See all
+        </PendingLink>
+      ) : null}
+    </div>
+  );
+}
 
 export function DiscoverSections({
   discover,
   canFollow,
+  videosHref = "/explore",
+  showVideos = true,
 }: {
   discover: SearchDiscover;
   canFollow: boolean;
+  /** Explore videos → "See all". /explore points it at /reels (it IS the explore page). */
+  videosHref?: string;
+  /** /explore draws its own filtered grid in this place, so it leaves this one out. */
+  showVideos?: boolean;
 }) {
   return (
-    <div className="space-y-3.5">
+    <div>
       <TrendingNow tags={discover.tags.slice(0, TRENDING_CARD_COUNT)} />
-      <SuggestedForYou creators={discover.creators} canFollow={canFollow} />
-      <PopularVideos videos={discover.videos} />
+      <TrendingSearches terms={discover.tags.slice(TRENDING_CARD_COUNT).map((t) => `#${t.tag}`)} />
+      <CreatorsToFollow creators={discover.creators} canFollow={canFollow} />
+      {showVideos ? <ExploreVideos videos={discover.videos} href={videosHref} /> : null}
     </div>
   );
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
-   Discovery row — Frenzsave, Your story, then the people worth meeting.
+   The circles — Your story, then the people worth meeting (each opens their profile).
    ──────────────────────────────────────────────────────────────────────── */
 
 export function DiscoveryRow({
   creators,
   viewerHandle,
+  loginNext = "/search",
 }: {
   creators: SuggestedCreator[];
   /** The signed-in viewer's @handle, for the "Your story" circle. Null = guest. */
   viewerHandle: string | null;
+  loginNext?: string;
 }) {
   if (creators.length === 0 && !viewerHandle) return null;
   return (
-    <nav aria-label="Discover creators" className="srch-rail -mx-3 gap-3.5 px-3 pb-1 pt-0.5">
-      {/* The brand's own circle used to lead this row; removed at the owner's
-          request (2026-08-24) — a logo tile among faces is the one thing here
-          that is not a person to discover. */}
-      <Circle href={viewerHandle ? `${profilePath(viewerHandle)}` : "/login?next=/search"} label="Your story" badge>
-        <span className="flex h-full w-full items-center justify-center rounded-full bg-secondary text-muted-foreground">
+    <nav aria-label="Discover creators" className="srch-rail -mx-4 gap-3 px-4 pb-1 pt-1">
+      <Circle href={viewerHandle ? profilePath(viewerHandle) : `/login?next=${loginNext}`} label="Your story" badge>
+        <span className="flex h-full w-full items-center justify-center rounded-full bg-frenz-fill text-frenz-muted">
           <UserRound className="h-7 w-7" aria-hidden />
         </span>
       </Circle>
-
       {creators.map((c) => (
-        <Circle key={c.id} href={`${profilePath(c.handle)}`} label={c.handle} verified={c.isVerified}>
-          {/* 62px = the 70px ring minus its 2.5px gradient edge and 2px gap. */}
-          <Avatar src={c.avatarUrl} size={62} />
+        <Circle key={c.id} href={profilePath(c.handle)} label={c.handle} verified={c.isVerified}>
+          <Avatar src={c.avatarUrl} size={56} />
         </Circle>
       ))}
     </nav>
   );
 }
 
-/**
- * One circle: a static gradient ring, a background-coloured gap, and the image.
- * Three nested spans and no filter — the ring is a plain CSS gradient painted
- * once, never a conic sweep or an animated border.
- */
-function Circle({
-  href,
-  label,
-  badge = false,
-  verified = false,
-  children,
-}: {
-  href: string;
-  label: string;
-  /** The "+" corner marker, for the viewer's own story circle. */
-  badge?: boolean;
-  verified?: boolean;
-  children: React.ReactNode;
-}) {
+/** A static gradient ring, a white gap, the face. No conic sweep, no animated border. */
+function Circle({ href, label, badge = false, verified = false, children }: { href: string; label: string; badge?: boolean; verified?: boolean; children: React.ReactNode }) {
   return (
-    <Link href={href} prefetch className="srch-press flex w-[74px] flex-col items-center gap-1.5">
-      <span className="srch-ring relative flex h-[70px] w-[70px] items-center justify-center rounded-full p-[2.5px]">
-        <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-background p-[2px]">
-          {children}
-        </span>
+    <PendingLink href={href} prefetch={false} className="flex w-[72px] shrink-0 flex-col items-center gap-1.5" inner="flex w-full flex-col items-center gap-1.5">
+      <span className="relative flex h-[66px] w-[66px] items-center justify-center rounded-full bg-frenz-gradient p-[2.5px]">
+        <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-frenz-card p-[2px]">{children}</span>
         {badge ? (
-          <span className="absolute -bottom-0.5 -right-0.5 flex h-[22px] w-[22px] items-center justify-center rounded-full border-[2.5px] border-background bg-primary text-primary-foreground">
+          <span className="absolute -bottom-0.5 -right-0.5 flex h-[22px] w-[22px] items-center justify-center rounded-full border-[2.5px] border-frenz-card bg-frenz-ink text-white">
             <Plus className="h-3 w-3" strokeWidth={3} aria-hidden />
           </span>
         ) : null}
       </span>
-      <NameLine
-        name={label}
-        verified={verified}
-        className="max-w-full justify-center text-[11.5px] font-medium text-muted-foreground"
-        tickClassName="h-3 w-3"
-      />
-    </Link>
+      <NameLine name={label} verified={verified} className="max-w-full justify-center text-[12.5px] font-semibold text-frenz-ink" tickClassName="h-3 w-3" />
+    </PendingLink>
   );
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
-   Trending Now
+   Trending now — the gradient panel: the top three, then the rest behind "See all".
    ──────────────────────────────────────────────────────────────────────── */
 
 function TrendingNow({ tags }: { tags: TrendingTag[] }) {
   if (tags.length === 0) return null;
+  const more = tags.length > 3;
   return (
-    <SectionCard>
-      <SectionHeader icon={<Flame className="h-[19px] w-[19px]" />} title="Trending Now" href="/explore" />
-      <div className="grid grid-cols-1 gap-2 px-3 pb-3.5 sm:grid-cols-2">
-        {tags.map((tag, i) => (
-          <TrendingTagCard key={`${tag.source}:${tag.tag}`} tag={tag} rank={i + 1} />
-        ))}
+    <section aria-labelledby="discover-trending" className="frenz-suggest-panel relative isolate mt-4 overflow-hidden rounded-[32px] px-4 pb-4 pt-4 text-white">
+      <span aria-hidden className="pointer-events-none absolute -right-10 -top-12 h-[180px] w-[180px] rounded-full bg-white/[0.12]" />
+      {/* the "See all" toggle: a real (visually hidden) checkbox, so it works with no script and is keyboard-reachable */}
+      {more ? <input id="discover-trending-all" type="checkbox" className="peer sr-only" aria-label="Show all trending hashtags" /> : null}
+      <div className="relative mb-3 flex items-center justify-between gap-3">
+        <h2 id="discover-trending" className="flex items-center gap-2 font-heading text-[18px] font-bold tracking-[-0.3px]">
+          <Flame className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden />
+          Trending now
+        </h2>
+        {more ? (
+          <label htmlFor="discover-trending-all" className="frenz-glass-chip flex h-11 cursor-pointer items-center rounded-full px-3.5 text-[13px] font-bold transition-transform active:scale-[0.97]">
+            <span className="[.peer:checked~*_&]:hidden">See all</span>
+            <span className="hidden [.peer:checked~*_&]:inline">See less</span>
+          </label>
+        ) : null}
       </div>
-    </SectionCard>
+      <ol className="relative flex flex-col gap-2.5">
+        {tags.map((tag, i) => (
+          <li key={`${tag.source}:${tag.tag}`} className={i >= 3 ? "hidden [.peer:checked~*_&]:block" : undefined}>
+            <TrendingRow tag={tag} rank={i + 1} />
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 
-function TrendingTagCard({ tag, rank }: { tag: TrendingTag; rank: number }) {
+function TrendingRow({ tag, rank }: { tag: TrendingTag; rank: number }) {
   return (
     <SearchAction
       term={`#${tag.tag}`}
       type="hashtag"
       ariaLabel={`Search #${tag.tag}`}
-      className="srch-press flex w-full items-center gap-3 rounded-2xl bg-secondary/70 p-2.5 text-left"
+      className="frenz-glass-card flex h-[78px] w-full items-center gap-3.5 rounded-[22px] pl-4 pr-3 text-left text-frenz-ink transition-transform active:scale-[0.97] motion-reduce:active:scale-100"
     >
-      {/* The top three read as a ranking; the rest are just positions. */}
-      <span
-        aria-hidden
-        className={`w-4 shrink-0 text-center text-[15px] font-bold tabular-nums ${
-          rank <= 3 ? "text-primary" : "text-muted-foreground"
-        }`}
-      >
+      <span aria-hidden className="w-5 shrink-0 text-center font-heading text-[22px] font-bold tabular-nums text-frenz-violet">
         {rank}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[14.5px] font-semibold">#{tag.tag}</span>
-        <span className="mt-0.5 block text-[12px] text-muted-foreground">
+        <span className="block truncate font-heading text-[18px] font-bold tracking-[-0.3px]">#{tag.tag}</span>
+        <span className="block text-[14px] text-frenz-muted">
           {formatCompactNumber(tag.postCount)} {tag.postCount === 1 ? "post" : "posts"}
         </span>
       </span>
-      <TagThumb src={tag.thumbnailUrl} />
+      <span className="relative h-[54px] w-[62px] shrink-0 overflow-hidden rounded-[14px] bg-frenz-ink">
+        <SafeImage
+          src={tag.thumbnailUrl ?? ""}
+          alt=""
+          width={62}
+          height={54}
+          loading="lazy"
+          decoding="async"
+          fallback={<span aria-hidden className="absolute inset-0 bg-frenz-gradient opacity-80" />}
+          className="h-full w-full object-cover"
+        />
+        <span aria-hidden className="absolute inset-0 flex items-center justify-center bg-black/25 text-white">
+          <Play className="h-3.5 w-3.5 translate-x-[1px] fill-current" />
+        </span>
+      </span>
     </SearchAction>
   );
 }
 
-/** A tag's cover, degrading to a neutral tile rather than a broken-image glyph. */
-export function TagThumb({ src, className = "h-11 w-11" }: { src: string | null; className?: string }) {
+/* ────────────────────────────────────────────────────────────────────────────
+   Trending searches — one-tap chips (the tags beyond the panel's six)
+   ──────────────────────────────────────────────────────────────────────── */
+
+
+function TrendingSearches({ terms }: { terms: string[] }) {
+  if (terms.length === 0) return null;
   return (
-    <SafeImage
-      src={src ?? ""}
-      alt=""
-      width={44}
-      height={44}
-      loading="lazy"
-      decoding="async"
-      fallback={
-        <span aria-hidden className={`shrink-0 rounded-xl bg-secondary ${className}`} />
-      }
-      className={`shrink-0 rounded-xl bg-secondary object-cover ${className}`}
-    />
+    <section aria-labelledby="discover-searches">
+      <Heading id="discover-searches" title="Trending searches" />
+      <div className="flex flex-wrap gap-2">
+        {terms.map((t) => (
+          <SearchAction key={t} term={t} type="hashtag" ariaLabel={`Search ${t}`} className={TREND_CHIP}>
+            <TrendingUp className="h-4 w-4 text-frenz-violet" strokeWidth={2.4} aria-hidden />
+            {t}
+          </SearchAction>
+        ))}
+      </div>
+    </section>
   );
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
-   Suggested for you
+   Creators to follow
    ──────────────────────────────────────────────────────────────────────── */
 
-function SuggestedForYou({ creators, canFollow }: { creators: SuggestedCreator[]; canFollow: boolean }) {
+function CreatorsToFollow({ creators, canFollow }: { creators: SuggestedCreator[]; canFollow: boolean }) {
   if (creators.length === 0) return null;
   return (
-    <SectionCard className="srch-defer">
-      <SectionHeader
-        icon={<Users className="h-[19px] w-[19px]" />}
-        title="Suggested for you"
-        href="/friends/discover"
-      />
-      <div className="srch-rail gap-2.5 px-3 pb-3.5">
+    <section aria-labelledby="discover-creators">
+      <Heading id="discover-creators" title="Creators to follow" href="/friends/discover" />
+      <div className="srch-rail -mx-4 gap-2.5 px-4 pb-1">
         {creators.slice(0, 10).map((c) => (
-          <article
-            key={c.id}
-            className="w-[144px] rounded-2xl border border-border/60 bg-secondary/50 p-2.5"
-          >
-            <Link href={`${profilePath(c.handle)}`} prefetch className="srch-press block">
-              <CreatorPortrait src={c.avatarUrl} className="mb-2.5 h-[150px] w-full rounded-xl" />
-              <NameLine name={c.displayName} verified={c.isVerified} className="text-[13.5px] font-semibold" />
-              <span className="mt-0.5 block truncate text-[11.5px] text-muted-foreground">@{c.handle}</span>
-              <span className="mt-0.5 block truncate text-[11.5px] text-muted-foreground">
-                {formatCompactNumber(c.followersCount)} followers
+          <article key={c.id} className="flex w-[168px] shrink-0 flex-col items-center rounded-[24px] border border-frenz-line bg-frenz-card px-3.5 pb-3.5 pt-4 text-center">
+            <PendingLink href={profilePath(c.handle)} prefetch={false} className="flex w-full flex-col items-center rounded-2xl" inner="flex w-full flex-col items-center">
+              <span className="flex h-[80px] w-[80px] items-center justify-center rounded-full bg-frenz-gradient p-[2.5px]">
+                <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-frenz-card p-[2px]">
+                  <Avatar src={c.avatarUrl} size={71} />
+                </span>
               </span>
-            </Link>
-            <FollowPill
-              targetId={c.id}
-              initialFollowing={c.isFollowing}
-              canFollow={canFollow}
-              displayName={c.displayName}
-              className="mt-2.5 w-full"
-            />
+              <NameLine name={c.displayName} verified={c.isVerified} className="mt-2.5 max-w-full justify-center font-heading text-[16px] font-bold" />
+              <span className="mt-0.5 block text-[13px] text-frenz-muted">{formatCompactNumber(c.followersCount)} followers</span>
+            </PendingLink>
+            <FollowPill targetId={c.id} initialFollowing={c.isFollowing} canFollow={canFollow} displayName={c.displayName} className="mt-3 w-full" />
           </article>
         ))}
       </div>
-    </SectionCard>
+    </section>
   );
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
-   Popular videos
+   Explore videos — a 3-column grid of covers. Nothing autoplays.
    ──────────────────────────────────────────────────────────────────────── */
 
-function PopularVideos({ videos }: { videos: DiscoverVideo[] }) {
+function ExploreVideos({ videos, href }: { videos: DiscoverVideo[]; href: string }) {
   if (videos.length === 0) return null;
   return (
-    <SectionCard className="srch-defer">
-      <SectionHeader icon={<Play className="h-[19px] w-[19px]" />} title="Popular videos" href="/reels" />
-      <div className="srch-rail gap-2.5 px-3 pb-3.5">
-        {videos.map((v) => (
-          <VideoCard key={v.id} video={v} />
+    <section aria-labelledby="discover-videos">
+      <Heading id="discover-videos" title="Explore videos" href={href} />
+      <ul className="grid grid-cols-3 gap-2">
+        {videos.slice(0, 9).map((v) => (
+          <li key={v.id}>
+            <VideoTile video={v} />
+          </li>
         ))}
-      </div>
-    </SectionCard>
-  );
-}
-
-/**
- * Nothing here ever autoplays. `VideoCover` paints the stored cover when there
- * is one and the media's own first frame when there is not — see the extended
- * note on it in media.tsx for why that one exception exists and how bounded it
- * is.
- */
-function VideoCard({ video: v }: { video: DiscoverVideo }) {
-  return (
-    <article className="w-[164px]">
-      <Link href={v.href} prefetch className="srch-press block">
-        <span className="relative block aspect-[9/16] w-full overflow-hidden rounded-2xl bg-secondary">
-          <VideoCover
-            thumbnailUrl={v.thumbnailUrl}
-            mediaUrl={v.mediaUrl}
-            mediaKind={v.mediaKind}
-            sizes="164px"
-          />
-          {/* Play indicator — a mark on the artwork, not a control. */}
-          <span
-            aria-hidden
-            className="absolute left-1/2 top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-white"
-          >
-            <Play className="h-4 w-4 translate-x-[1px] fill-current" />
-          </span>
-        </span>
-        <span className="mt-2 flex items-center gap-1 text-[12px] font-medium text-muted-foreground">
-          <Play className="h-3 w-3 fill-current" aria-hidden />
-          {formatCompactNumber(v.viewsCount)}
-        </span>
-        <span className="mt-1 block truncate text-[13.5px] font-semibold">{v.title}</span>
-      </Link>
-      <div className="mt-1.5 flex items-center gap-1.5">
-        <Link
-          href={`${profilePath(v.publisher.handle)}`}
-          prefetch
-          className="srch-press flex min-w-0 flex-1 items-center gap-1.5"
-        >
-          <Avatar src={v.publisher.avatarUrl} size={20} />
-          <NameLine
-            name={v.publisher.handle}
-            verified={v.publisher.isVerified}
-            className="text-[12px] text-muted-foreground"
-            tickClassName="h-3 w-3"
-          />
-        </Link>
-        <MoreShareButton href={v.href} title={v.title} />
-      </div>
-    </article>
+      </ul>
+    </section>
   );
 }

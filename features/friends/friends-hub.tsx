@@ -32,7 +32,7 @@ import { sayHiAction } from "@/features/friends/actions";
 import { FriendCelebration } from "@/features/friends/friend-celebration";
 import { FollowRequestsSection } from "@/features/friends/follow-requests";
 import { FriendsToast, useFriendsToast } from "@/features/friends/friends-toast";
-import { PendingButton, PendingLink } from "@/features/friends/pending";
+import { PendingButton, PendingLink } from "@/features/frenz-ui/pending";
 import { RequestCard } from "@/features/friends/request-card";
 import { filterRequests, REQUEST_FILTERS, type RequestFilter } from "@/features/friends/request-logic";
 import { SuggestionDeck } from "@/features/friends/suggestion-deck";

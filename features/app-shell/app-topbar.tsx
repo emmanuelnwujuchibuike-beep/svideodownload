@@ -53,7 +53,8 @@ export function AppTopbar() {
     desktop layout (where this bar returns at `lg`) keeps no redundant
     magnifier either.
   */
-  const searchActive = pathname === "/search" || pathname.startsWith("/search?");
+  // /explore is the same Discover screen since 2026-10-27 (its own title, bell and field), so it hides this bar too
+  const searchActive = pathname === "/search" || pathname.startsWith("/search?") || pathname === "/explore";
   const [q, setQ] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   // The owner's Messages mockup starts straight at the big "Messages" title —

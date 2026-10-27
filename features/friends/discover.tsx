@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { VerifiedTick } from "@/components/badges/identity-badges";
 import { FollowChip } from "@/features/friends/follow-chip";
-import { PendingButton, PendingLink } from "@/features/friends/pending";
+import { PendingButton, PendingLink } from "@/features/frenz-ui/pending";
 import { PeopleYouMayKnow } from "@/features/friends/people-you-may-know";
 import { SuggestionDeck } from "@/features/friends/suggestion-deck";
 import { PersonAvatar, primaryPill } from "@/features/friends/ui";

@@ -185,7 +185,7 @@ export const DISCOVERY_SURFACES: DiscoverySurface[] = [
   { id: "command-centre", name: "Command centre (⌘K)", source: "features/navigation/command-center.tsx", status: "live", description: "Instant navigation and actions across every workspace." },
   { id: "suggestions", name: "Friend suggestions", source: "features/friends/suggestions-launcher.tsx", status: "live", description: "People-you-may-know recommendations." },
   { id: "search-results", name: "Universal search results", source: "features/search/search-results-view.tsx", status: "live", description: "The /search results view — people, hashtags, sounds, places and posts, per tab." },
-  { id: "search-discover", name: "Search discovery screen", source: "features/search/discover-sections.tsx", status: "live", description: "The /search empty state: creator circles, Trending Now, Suggested for you, Popular videos. Server-rendered." },
+  { id: "search-discover", name: "Search discovery screen", source: "features/search/discover-sections.tsx", status: "live", description: "Discover (/search before typing, and /explore): creator circles, Trending now, Trending searches, Creators to follow, Explore videos. Server-rendered." },
   { id: "related-links", name: "Related content links", source: "lib/content/graph/traverse.ts", status: "live", description: "Internal links derived from graph traversal (siblingsOf/relatedFor) rather than hand-written — sibling and next-step relations." },
 ];
 

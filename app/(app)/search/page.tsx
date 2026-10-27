@@ -3,8 +3,8 @@ import { Suspense } from "react";
 
 import { AppContent } from "@/features/app-shell/app-content";
 import { DiscoverSections, DiscoveryRow } from "@/features/search/discover-sections";
+import { DiscoverSkeleton } from "@/features/search/discover-skeleton";
 import { SearchExperience } from "@/features/search/search-experience";
-import { LoadingStripe } from "@/features/ui/page-loader";
 import { getSearchDiscover, TRENDING_CARD_COUNT } from "@/lib/social/discover";
 import { emptySearchResult, searchAll, type SearchType } from "@/lib/social/search";
 import { createClient } from "@/lib/supabase/server";
@@ -31,8 +31,8 @@ export default function SearchPage(props: { searchParams: Promise<{ q?: string; 
   return (
     <Suspense
       fallback={
-        <AppContent canvas>
-          <LoadingStripe />
+        <AppContent>
+          <DiscoverSkeleton title="Discover" />
         </AppContent>
       }
     >
@@ -71,7 +71,7 @@ async function SearchData({ searchParams }: { searchParams: Promise<{ q?: string
   ]);
 
   return (
-    <AppContent canvas>
+    <AppContent>
       <SearchExperience
         initialQuery={query}
         initialType={type}

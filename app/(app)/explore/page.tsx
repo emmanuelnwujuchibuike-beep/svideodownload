@@ -1,30 +1,25 @@
-import { Compass } from "lucide-react";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { AppContent } from "@/features/app-shell/app-content";
-import { LoadingStripe } from "@/features/ui/page-loader";
 import { CollectionsRail } from "@/features/explore/collections-rail";
 import { ExploreBrowser } from "@/features/explore/explore-browser";
-import { OrbitRail } from "@/features/explore/orbit-rail";
+import { DiscoverSections, DiscoveryRow } from "@/features/search/discover-sections";
+import { DiscoverSkeleton } from "@/features/search/discover-skeleton";
+import { SearchExperience } from "@/features/search/search-experience";
 import { isCategory, type Category } from "@/lib/social/categories";
 import { getVideoCollections } from "@/lib/social/discovery-collections";
+import { getSearchDiscover, TRENDING_CARD_COUNT } from "@/lib/social/discover";
 import { getFeed, type FeedSort } from "@/lib/social/feed";
-import { getOrbitFeed } from "@/lib/social/orbits";
+import { emptySearchResult, searchAll, type SearchType } from "@/lib/social/search";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 /*
-  🔴 `robots: index:true` made explicit (2026-08-16 SEO audit). This was the
-  only page in the (app) group with no `robots` field at all — every sibling
-  route explicitly declares `index:false`, so this one's indexability was an
-  accident of omission rather than a decision. It's real: genuinely public,
-  signed-out-accessible community content (no login redirect — see the page
-  body below), so the deliberate call is to index it and add it to the
-  sitemap (app/sitemap.ts), not to noindex it to match its siblings by
-  default. `sort`/`category` vary the results but canonical stays this one
-  static path, so parameter variants consolidate rather than fragment.
+  🔴 `robots: index:true` made explicit (2026-08-16 SEO audit): genuinely public, signed-out-accessible community
+  content, in the sitemap. `sort`/`category`/`q` vary the results but canonical stays this one static path.
 */
 export const metadata: Metadata = {
   title: "Explore — trending downloads",
@@ -33,19 +28,26 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
+const TYPES: SearchType[] = ["all", "people", "video", "image", "audio", "sound", "hashtag", "place"];
+
 /*
-  🔴 Synchronous shell, streamed data — the cold-entry white-screen fix
-  (owner, 2026-08-11). See app/(app)/home/page.tsx for why `loading.tsx` alone
-  cannot fix a page that awaits at its top level.
+  /explore on the Discover design (owner, 2026-10-27: "use same design for the explore page too"). The same screen
+  as /search — the title (here "Explore", the page's own h1), the field, the circles, Trending now, Trending
+  searches, Creators to follow — and in the place of Discover's short video grid, this page's own Explore videos:
+  Trending · Recent and the categories over the 3-column grid. Searching from here stays on /explore.
+
+  Removed in the redesign: the "Creators" Discovery Orbit rail (its job is Creators to follow now — the same people,
+  one section instead of two). Kept: Video Collections, on the default view only.
+
+  🔴 Synchronous shell, streamed data — the cold-entry white-screen fix (owner, 2026-08-11). See
+  app/(app)/home/page.tsx for why `loading.tsx` alone cannot fix a page that awaits at its top level.
 */
-export default function ExplorePage(props: {
-  searchParams: Promise<{ sort?: string; category?: string }>;
-}) {
+export default function ExplorePage(props: { searchParams: Promise<{ sort?: string; category?: string; q?: string; type?: string }> }) {
   return (
     <Suspense
       fallback={
         <AppContent>
-          <LoadingStripe />
+          <DiscoverSkeleton title="Explore" />
         </AppContent>
       }
     >
@@ -54,14 +56,12 @@ export default function ExplorePage(props: {
   );
 }
 
-async function ExploreData({
-  searchParams,
-}: {
-  searchParams: Promise<{ sort?: string; category?: string }>;
-}) {
-  const { sort: sortParam, category: catParam } = await searchParams;
+async function ExploreData({ searchParams }: { searchParams: Promise<{ sort?: string; category?: string; q?: string; type?: string }> }) {
+  const { sort: sortParam, category: catParam, q, type: typeParam } = await searchParams;
   const sort: FeedSort = sortParam === "recent" ? "recent" : "trending";
   const category: Category | null = catParam && isCategory(catParam) ? catParam : null;
+  const query = (q ?? "").trim();
+  const type: SearchType = TYPES.includes(typeParam as SearchType) ? (typeParam as SearchType) : "all";
 
   let viewerId: string | null = null;
   try {
@@ -74,52 +74,46 @@ async function ExploreData({
     /* anon */
   }
 
-  const [posts, orbitResult, collections] = await Promise.all([
+  const [posts, discover, collections, viewerHandle, initialResult] = await Promise.all([
     getFeed({ sort, category, viewerId }),
-    // Discovery Orbit™ (Feature 15 Part 8) — "Creators" as the seeded default:
-    // works signed-out (unlike Friends) and always has content (unlike a
-    // category orbit on a quiet day).
-    getOrbitFeed("creator", viewerId, 12),
-    // Video Collections (Feature 15 Part 8) — only rendered on the default
-    // (no sort/category param) view, same reasoning as the orbit rail: a
-    // filtered view of Explore is the visitor's OWN choice and shouldn't be
-    // pushed back down the page by curated rails they didn't ask for.
+    // the same cached reads /search uses (60 s suggestions, 600 s tags, 20 s feed)
+    getSearchDiscover(viewerId),
+    // a filtered view is the visitor's own choice — curated rails stay off it
     !sortParam && !category ? getVideoCollections(viewerId) : Promise.resolve([]),
+    handleOf(viewerId),
+    query ? searchAll(query, type, viewerId) : Promise.resolve(emptySearchResult()),
   ]);
 
   return (
     <AppContent>
-      <div className="mx-auto max-w-5xl">
-        {/*
-          🔴 TIGHTER, NOT BIGGER (owner reference: public/explore page.jpg).
-          The header was `mb-6` under a `mt-2` subtitle, which pushed the first
-          row of content most of a screen down on a phone — the "too plain and
-          spacious" the redesign is answering. The title gets MORE weight and
-          LESS room: a heavier, tighter-tracked wordmark with the subtitle
-          pulled up against it, so the pair reads as one block and the grid
-          starts near the top of the viewport.
-
-          The entrance is the site's own `fade-up` (globals.css), which animates
-          only opacity and transform and already honours reduced motion — not a
-          new animation, and nothing that delays the heading's paint.
-        */}
-        <header className="mb-3 motion-safe:animate-fade-up">
-          <h1 className="flex items-center gap-1.5 text-[clamp(1.9rem,8.5vw,2.5rem)] font-extrabold leading-none tracking-[-0.04em]">
-            Explore
-            <Compass className="h-5 w-5 shrink-0 text-primary" aria-hidden />
-          </h1>
-          <p className="mt-1.5 text-[13.5px] text-muted-foreground">
-            Trending &amp; fresh downloads from the community.
-          </p>
-        </header>
-
-        <OrbitRail initialOrbit="creator" initialResult={orbitResult} />
-
-        <CollectionsRail collections={collections} />
-
-        {/* Instant client-side tabs/chips — switching never reloads the page */}
-        <ExploreBrowser initialPosts={posts} initialSort={sort} initialCategory={category} />
-      </div>
+      <SearchExperience
+        title="Explore"
+        path="/explore"
+        initialQuery={query}
+        initialType={type}
+        initialResult={initialResult}
+        trendingTerms={discover.tags.slice(TRENDING_CARD_COUNT).map((t) => `#${t.tag}`)}
+        canFollow={!!viewerId}
+        discoveryRow={<DiscoveryRow creators={discover.creators} viewerHandle={viewerHandle} loginNext="/explore" />}
+        discover={
+          <>
+            <DiscoverSections discover={discover} canFollow={!!viewerId} showVideos={false} />
+            <CollectionsRail collections={collections} />
+            <ExploreBrowser initialPosts={posts} initialSort={sort} initialCategory={category} />
+          </>
+        }
+      />
     </AppContent>
   );
+}
+
+/** The viewer's own @handle, for the "Your story" circle. Guests get null. */
+async function handleOf(viewerId: string | null): Promise<string | null> {
+  if (!viewerId) return null;
+  try {
+    const { data } = await createAdminClient().from("profiles").select("handle").eq("id", viewerId).maybeSingle();
+    return ((data?.handle as string | null) ?? null) || null;
+  } catch {
+    return null;
+  }
 }

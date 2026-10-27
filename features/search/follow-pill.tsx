@@ -1,8 +1,9 @@
 "use client";
 
 import { Check } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
+
+import { PendingButton, PendingLink } from "@/features/frenz-ui/pending";
 
 import { toggleFollow, useFollowState } from "@/lib/social/follow-store";
 import { cn } from "@/lib/utils";
@@ -20,13 +21,13 @@ import { cn } from "@/lib/utils";
  * the popular-videos rail — to repaint one word of text. That is precisely the
  * "unnecessary API request" this page is not allowed to make.
  *
- * ── Optimistic, with no spinner ───────────────────────────────────────────
- * `toggleFollow` writes to the shared store BEFORE it awaits the network, so
- * the label flips on the same frame as the tap and every other card for that
- * creator flips with it. A spinner would only ever be visible on a slow
- * connection, and it would be showing progress for something already done —
- * so there isn't one. A genuine failure rolls the store back and the label
- * returns; an offline tap is queued for replay rather than rolled back.
+ * ── A spinner on the tap, then "Following" (Search & Discover design, 2026-10-26) ──
+ * "Every Follow button shows an inline spinner on tap, then switches to Following."
+ * `toggleFollow` still writes the shared store before it awaits the network, so
+ * every other card for that creator flips at once; THIS button shows the shared
+ * spinner (width locked, label kept in the layout) until the server answers, then
+ * the new label. A genuine failure rolls the store back and the label returns; an
+ * offline tap is queued for replay rather than rolled back.
  */
 export function FollowPill({
   targetId,
@@ -47,20 +48,20 @@ export function FollowPill({
   const [busy, setBusy] = useState(false);
 
   const base =
-    "srch-press inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl px-3.5 text-[13px] font-semibold";
+    "inline-flex h-11 min-w-[96px] shrink-0 items-center justify-center gap-1.5 rounded-[22px] px-4 font-heading text-[14px] font-bold";
 
   if (!canFollow) {
     return (
-      <Link href="/login?next=/search" className={cn(base, "bg-secondary text-foreground", className)}>
+      <PendingLink href="/login?next=/search" prefetch={false} className={cn(base, "bg-frenz-fill text-frenz-ink", className)} spinnerSize={15}>
         Follow
-      </Link>
+      </PendingLink>
     );
   }
 
   return (
-    <button
-      type="button"
-      disabled={busy}
+    <PendingButton
+      pending={busy}
+      spinnerSize={15}
       aria-pressed={following}
       aria-label={`${following ? "Unfollow" : "Follow"} ${displayName}`}
       onClick={async () => {
@@ -72,8 +73,8 @@ export function FollowPill({
       className={cn(
         base,
         following
-          ? "bg-secondary text-foreground"
-          : "srch-ring text-white shadow-[0_6px_16px_-8px_hsl(var(--brand-purple)/0.9)]",
+          ? "border border-frenz-line bg-frenz-card text-frenz-ink"
+          : "bg-frenz-gradient-x text-white shadow-[0_10px_22px_-12px_rgb(91_63_240/0.8)]",
         className,
       )}
     >
@@ -84,6 +85,6 @@ export function FollowPill({
       ) : (
         "Follow"
       )}
-    </button>
+    </PendingButton>
   );
 }

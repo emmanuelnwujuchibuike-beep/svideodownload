@@ -57,6 +57,6 @@ describe("a shared video link still previews as the post, and nothing lists dead
     }
   });
   it("in-app taps go straight to Reels (no redirect hop): profile grid, explore, feed, discover", () => {
-    for (const f of ["components/social/post-grid.tsx", "features/explore/explore-card.tsx", "features/feed/feed-post-card.tsx", "lib/social/discover.ts"]) expect(src(f), f).toContain("postViewHref(");
+    for (const f of ["components/social/post-grid.tsx", "features/explore/explore-browser.tsx", "features/feed/feed-post-card.tsx", "lib/social/discover.ts"]) expect(src(f), f).toContain("postViewHref(");
   });
 });

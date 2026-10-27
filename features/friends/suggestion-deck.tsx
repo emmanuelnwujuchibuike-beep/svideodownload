@@ -7,7 +7,7 @@ import { VerifiedTick } from "@/components/badges/identity-badges";
 import { StableAvatar } from "@/components/ui/stable-avatar";
 import { addFriendAction, cancelFriendAction, skipSuggestionAction } from "@/features/friends/actions";
 import { FriendsToast, useFriendsToast } from "@/features/friends/friends-toast";
-import { PendingButton, PendingLink } from "@/features/friends/pending";
+import { PendingButton, PendingLink } from "@/features/frenz-ui/pending";
 import type { PersonSuggestion } from "@/lib/social/people/engine";
 import { profilePath } from "@/lib/social/profile-url";
 import { cn } from "@/lib/utils";

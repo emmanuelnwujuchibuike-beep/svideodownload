@@ -1,12 +1,13 @@
 "use client";
 
-import { Clock, Compass, Flame } from "lucide-react";
+import { Compass } from "lucide-react";
 import { useRef, useState } from "react";
 
-import { ExploreCard, ExploreCardSkeleton } from "@/features/explore/explore-card";
+import { VideoTile } from "@/features/search/video-tile";
 import { PullToRefresh } from "@/features/ui/pull-to-refresh";
 import { CATEGORIES, categoryLabel, type Category } from "@/lib/social/categories";
 import type { FeedSort } from "@/lib/social/feed";
+import { postViewHref } from "@/lib/social/post-url";
 import type { PostCard } from "@/lib/social/posts";
 import { cn } from "@/lib/utils";
 
@@ -111,72 +112,43 @@ export function ExploreBrowser({
   // Only ever ONE featured tile, and never in the first four — a wide card at
   // the top would cost the first screen a row of discovery, and one every few
   // cards would stop being a break in the rhythm and become the rhythm.
-  const featuredAt = posts.length >= 9 ? 8 : -1;
-
+  /*
+    Discover design on /explore (owner, 2026-10-27: "use same design for the explore page too"): the section
+    heading, ONE row of pill chips — Trending · Recent, then the categories — and the 3-column grid of video
+    tiles the Discover screen uses. Not sticky: the topbar is hidden here and the grid is short (24 posts).
+  */
   return (
     <PullToRefresh onRefresh={refresh}>
-      {/*
-        The controls, on ONE sticky layer. Keeping the segmented control with
-        the chips means a reader who has scrolled into the grid can still
-        switch sort or category without scrolling back — the brief's "remain
-        accessible while scrolling" — while costing a single sticky element
-        rather than two competing ones.
-      */}
-      <div className="sticky top-[calc(4rem+var(--frenz-safe-top)+var(--frenz-announce-h,0px))] z-20 -mx-3 bg-background/95 px-3 pb-2 pt-1 sm:-mx-4 sm:px-4">
-        <div className="flex items-center gap-2">
-          <Segmented sort={sort} onSelect={(s) => void select(s, category)} />
-        </div>
-
-        <div
-          role="tablist"
-          aria-label="Categories"
-          className="explore-rail -mx-3 mt-2 gap-1.5 px-3 sm:-mx-4 sm:px-4"
-        >
+      <section aria-labelledby="explore-videos">
+        <h2 id="explore-videos" className="px-1 pb-2.5 pt-[26px] font-heading text-[19px] font-bold tracking-[-0.4px]">
+          Explore videos
+        </h2>
+        <div role="toolbar" aria-label="Sort and categories" className="explore-rail -mx-4 gap-2 px-4 pb-1">
+          <Chip active={sort === "trending"} label="Trending" onClick={() => void select("trending", category)} />
+          <Chip active={sort === "recent"} label="Recent" onClick={() => void select("recent", category)} />
+          <span aria-hidden className="mx-0.5 w-px shrink-0 self-stretch bg-frenz-line" />
           <Chip active={!category} label="All" onClick={() => void select(sort, null)} />
           {CATEGORIES.map((c) => (
-            <Chip
-              key={c}
-              active={category === c}
-              label={categoryLabel(c)}
-              onClick={() => void select(sort, c)}
-            />
+            <Chip key={c} active={category === c} label={categoryLabel(c)} onClick={() => void select(sort, c)} />
           ))}
         </div>
-      </div>
 
-      {/*
-        🔴 The grid is `pb`-padded clear of the bottom nav via the shared token
-        the nav publishes, so the last row is never hidden behind it on any
-        device — safe-area inset included, without this file knowing the bar's
-        height.
-      */}
-      <div
-        className="mt-2.5"
-        style={{ paddingBottom: "calc(var(--frenz-bottom-nav) + 1rem)" }}
-      >
-        {loading && posts.length === 0 ? (
-          <ExploreSkeletonGrid />
-        ) : posts.length === 0 ? (
-          <EmptyState category={category} onReset={() => void select(sort, null)} />
-        ) : (
-          <div
-            className={cn(
-              "grid grid-cols-2 gap-x-2.5 gap-y-3 transition-opacity duration-200 sm:gap-x-3 lg:grid-cols-3 xl:grid-cols-4",
-              loading && "opacity-60",
-            )}
-          >
-            {posts.map((post, i) => (
-              <ExploreCard
-                key={post.id}
-                post={post}
-                featured={i === featuredAt}
-                // Only the two tiles that are actually above the fold.
-                priority={i < 2}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+        <div className="mt-3">
+          {loading && posts.length === 0 ? (
+            <ExploreSkeletonGrid />
+          ) : posts.length === 0 ? (
+            <EmptyState category={category} onReset={() => void select(sort, null)} />
+          ) : (
+            <ul className={cn("grid grid-cols-3 gap-2 transition-opacity duration-200 lg:grid-cols-4", loading && "opacity-60")}>
+              {posts.map((post) => (
+                <li key={post.id}>
+                  <VideoTile video={{ ...post, href: postViewHref(post) }} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
     </PullToRefresh>
   );
 }
@@ -185,79 +157,15 @@ export function ExploreBrowser({
    Controls
    ──────────────────────────────────────────────────────────────────────── */
 
-/**
- * The Trending / Recent selector.
- *
- * The active state is a real moving element: one absolutely-positioned pill
- * translated between the two halves, so switching reads as the control
- * responding rather than as two buttons swapping colours. `transform` only —
- * no width animation, nothing that triggers layout.
- */
-function Segmented({ sort, onSelect }: { sort: FeedSort; onSelect: (s: FeedSort) => void }) {
-  const isRecent = sort === "recent";
-  return (
-    <div
-      role="tablist"
-      aria-label="Sort"
-      className="relative inline-flex rounded-full bg-secondary/80 p-1 ring-1 ring-inset ring-border/60"
-    >
-      <span
-        aria-hidden
-        className={cn(
-          "absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-full bg-foreground shadow-[0_2px_8px_-2px_rgba(0,0,0,0.35)]",
-          "transition-transform duration-250 ease-[var(--ease-out)] motion-reduce:transition-none",
-        )}
-        style={{ transform: isRecent ? "translateX(100%)" : "translateX(0)" }}
-      />
-      <SegButton active={!isRecent} icon={Flame} label="Trending" onClick={() => onSelect("trending")} />
-      <SegButton active={isRecent} icon={Clock} label="Recent" onClick={() => onSelect("recent")} />
-    </div>
-  );
-}
-
-function SegButton({
-  active,
-  icon: Icon,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  icon: typeof Flame;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
-      className={cn(
-        // 40px tall: comfortably over the minimum touch target.
-        "relative z-10 inline-flex min-w-[104px] items-center justify-center gap-1.5 rounded-full px-4 py-2 text-[13.5px] font-semibold",
-        "transition-colors duration-200 motion-reduce:transition-none",
-        active ? "text-background" : "text-muted-foreground",
-      )}
-    >
-      <Icon className="h-[15px] w-[15px]" aria-hidden />
-      {label}
-    </button>
-  );
-}
-
 function Chip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
   return (
     <button
       type="button"
-      role="tab"
-      aria-selected={active}
+      aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-semibold",
-        "transition-colors duration-150 motion-reduce:transition-none",
-        active
-          ? "bg-primary text-primary-foreground"
-          : "bg-secondary/70 text-muted-foreground ring-1 ring-inset ring-border/50 hover:text-foreground",
+        "h-11 shrink-0 rounded-full px-[18px] text-[15px] font-bold transition-transform active:scale-[0.97] motion-reduce:active:scale-100",
+        active ? "bg-frenz-ink text-frenz-page" : "border border-frenz-line bg-frenz-card text-frenz-ink/80",
       )}
     >
       {label}
@@ -272,12 +180,12 @@ function Chip({ active, label, onClick }: { active: boolean; label: string; onCl
 /** The same grid, the same ratios — so nothing moves when the posts arrive. */
 function ExploreSkeletonGrid() {
   return (
-    <div role="status" aria-live="polite" className="grid grid-cols-2 gap-x-2.5 gap-y-3 sm:gap-x-3 lg:grid-cols-3 xl:grid-cols-4">
-      <span className="sr-only">Loading Explore…</span>
-      {Array.from({ length: 6 }).map((_, i) => (
-        <ExploreCardSkeleton key={i} />
+    <ul role="status" aria-live="polite" className="grid grid-cols-3 gap-2 lg:grid-cols-4">
+      <li className="sr-only">Loading Explore…</li>
+      {Array.from({ length: 9 }).map((_, i) => (
+        <li key={i} aria-hidden className="aspect-[3/4] rounded-[18px] bg-frenz-fill" />
       ))}
-    </div>
+    </ul>
   );
 }
 
@@ -286,7 +194,7 @@ function EmptyState({ category, onReset }: { category: Category | null; onReset:
     <div className="flex flex-col items-center px-6 py-16 text-center">
       <span
         aria-hidden
-        className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-secondary text-muted-foreground"
+        className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-frenz-fill text-frenz-muted"
       >
         <Compass className="h-7 w-7" />
       </span>
@@ -300,7 +208,7 @@ function EmptyState({ category, onReset }: { category: Category | null; onReset:
         <button
           type="button"
           onClick={onReset}
-          className="mt-5 inline-flex h-10 items-center rounded-xl bg-primary px-4 text-[13.5px] font-semibold text-primary-foreground transition-transform duration-150 active:scale-[0.97] motion-reduce:transition-none"
+          className="mt-5 inline-flex h-11 items-center rounded-full bg-frenz-gradient-x px-5 text-[14px] font-bold text-white transition-transform duration-150 active:scale-[0.97] motion-reduce:transition-none"
         >
           Browse everything
         </button>

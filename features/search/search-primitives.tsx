@@ -82,3 +82,7 @@ export function SectionHeader({
     </div>
   );
 }
+
+/** A one-tap trending search chip (Search & Discover design, 2026-10-26) — the Discover screen and the focused search share it. */
+export const TREND_CHIP =
+  "inline-flex h-11 items-center gap-2 rounded-full bg-frenz-fill px-4 text-[15px] font-bold text-frenz-ink transition-transform active:scale-[0.97] motion-reduce:active:scale-100";

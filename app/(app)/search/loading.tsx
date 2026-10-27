@@ -1,3 +1,2 @@
-// Loading UI = a stripe under the persistent (app) top bar. Just the
-// Suspense fallback — see features/ui/page-loader.tsx; touches no navigation.
-export { default } from "@/features/ui/page-loader";
+// Discover design 2026-10-26: a static skeleton shaped like the screen, under the loading stripe.
+export { SearchLoading as default } from "@/features/search/discover-skeleton";

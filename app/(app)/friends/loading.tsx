@@ -1,3 +1,2 @@
-// Loading UI = a stripe under the persistent (app) top bar. Just the
-// Suspense fallback — see features/ui/page-loader.tsx; touches no navigation.
-export { default } from "@/features/ui/page-loader";
+// Friends brief 2026-10-26: a skeleton shaped like the hub (static, server-only) under the loading stripe.
+export { FriendsSkeleton as default } from "@/features/friends/skeletons";

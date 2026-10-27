@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useMemo, useRef, useState, useTransition } from "react";
+import { memo, type ReactNode, useCallback, useMemo, useRef, useState, useTransition } from "react";
 
 import { sayHiAction } from "@/features/friends/actions";
 import { FriendCelebration } from "@/features/friends/friend-celebration";
@@ -214,7 +214,8 @@ export function FriendsHub({
   };
 
   // Star/unstar — optimistic re-sort (favorites float to the top), revert on error.
-  const toggleFavorite = async (id: string, on: boolean) => {
+  // stable (only setters inside), so the memoised rows below don't re-render when the hub does
+  const toggleFavorite = useCallback(async (id: string, on: boolean) => {
     const resort = (l: FriendItem[]) => [...l].sort((a, b) => Number(b.favorite) - Number(a.favorite));
     setFriends((l) => resort(l.map((f) => (f.user.id === id ? { ...f, favorite: on } : f))));
     try {
@@ -223,7 +224,9 @@ export function FriendsHub({
     } catch {
       setFriends((l) => resort(l.map((f) => (f.user.id === id ? { ...f, favorite: !on } : f))));
     }
-  };
+  }, []);
+
+  const removeFriend = useCallback((id: string) => setFriends((l) => l.filter((x) => x.user.id !== id)), []);
 
   const cancel = async (req: FriendRequestItem) => {
     if (busyId) return;
@@ -561,7 +564,7 @@ export function FriendsHub({
                     isNew={now - new Date(f.since).getTime() < 30 * DAY}
                     online={online.has(f.user.id)}
                     onFavorite={toggleFavorite}
-                    onRemoved={(id) => setFriends((l) => l.filter((x) => x.user.id !== id))}
+                    onRemoved={removeFriend}
                   />
                 ))}
               </CardGroup>
@@ -634,7 +637,7 @@ export function FriendsHub({
  * for the rest (favourite, remove — two-step). Two controls on the row, not
  * four, so the name has room even at 320 px.
  */
-function FriendRow({
+const FriendRow = memo(function FriendRow({
   item,
   isNew,
   online,
@@ -745,4 +748,4 @@ function FriendRow({
       ) : null}
     </li>
   );
-}
+});

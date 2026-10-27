@@ -3,7 +3,7 @@
 import { Check, Loader2, MoreHorizontal, Plus, RotateCw, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 
 import { VerifiedTick } from "@/components/badges/identity-badges";
 import { FollowChip } from "@/features/friends/follow-chip";
@@ -120,6 +120,11 @@ export function PeopleYouMayKnow({ initial }: { initial: PersonSuggestion[] }) {
     }).catch(() => {});
   };
 
+  // one stable handler for every row (reads the latest `answer`), so the memoised rows skip re-rendering
+  const answerRef = useRef(answer);
+  answerRef.current = answer;
+  const onAnswer = useCallback((p: PersonSuggestion, a: FeedbackAction) => answerRef.current(p, a), []);
+
   const undoLast = () => {
     if (!undo) return;
     const { person, index, filter: from } = undo;
@@ -230,7 +235,7 @@ export function PeopleYouMayKnow({ initial }: { initial: PersonSuggestion[] }) {
       ) : (
         <ul aria-label="Suggested people" className="divide-y divide-frenz-line/70 overflow-hidden rounded-[24px] border border-frenz-line">
           {list.map((p) => (
-            <SuggestionRow key={p.id} person={p} onAnswer={(a) => answer(p, a)} />
+            <SuggestionRow key={p.id} person={p} onAnswer={onAnswer} />
           ))}
         </ul>
       )}
@@ -258,7 +263,7 @@ export function PeopleYouMayKnow({ initial }: { initial: PersonSuggestion[] }) {
   );
 }
 
-function SuggestionRow({ person, onAnswer }: { person: PersonSuggestion; onAnswer: (a: FeedbackAction) => void }) {
+const SuggestionRow = memo(function SuggestionRow({ person, onAnswer }: { person: PersonSuggestion; onAnswer: (p: PersonSuggestion, a: FeedbackAction) => void }) {
   const online = usePresence();
   const isOnline = online.has(person.id);
   const [menu, setMenu] = useState(false);
@@ -298,7 +303,7 @@ function SuggestionRow({ person, onAnswer }: { person: PersonSuggestion; onAnswe
       {menu ? (
         <div className="mt-2 flex flex-wrap gap-1.5 pl-[62px]" role="group" aria-label={`About suggesting ${person.displayName}`}>
           {FEEDBACK.map((f) => (
-            <button key={f.key} type="button" onClick={() => onAnswer(f.key)} className={cn(quietPill, "min-h-[2.25rem] px-3 text-[12.5px]")}>
+            <button key={f.key} type="button" onClick={() => onAnswer(person, f.key)} className={cn(quietPill, "min-h-[2.25rem] px-3 text-[12.5px]")}>
               {f.label}
             </button>
           ))}
@@ -306,7 +311,7 @@ function SuggestionRow({ person, onAnswer }: { person: PersonSuggestion; onAnswe
       ) : null}
     </li>
   );
-}
+});
 
 /** A friend request from a suggestion (source "suggestion"), through the same route as everywhere else. */
 function AddFriendChip({ id, name, onRefused }: { id: string; name: string; onRefused?: (msg: string) => void }) {

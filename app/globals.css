@@ -1059,6 +1059,13 @@
   }
   .frenz-deck-out-add { animation: frenz-deck-out-add var(--dur-deck) var(--ease-out) forwards; }
   .frenz-deck-out-skip { animation: frenz-deck-out-skip var(--dur-deck) var(--ease-out) forwards; }
+  /* The friends celebration's ring and particles: out from the centre once, then gone (--bx/--by distance,
+     --bs end scale). Transform + opacity only; reduced motion hides them (the element carries motion-reduce:hidden). */
+  @keyframes frenz-burst {
+    from { opacity: 0.7; transform: translate(0, 0) scale(0.4); }
+    to { opacity: 0; transform: translate(var(--bx), var(--by)) scale(var(--bs)); }
+  }
+  .frenz-burst { animation: frenz-burst 1.1s var(--ease-out) both; }
   .frenz-deck-card { transition: transform var(--dur-deck) var(--ease-out), opacity var(--dur-deck) var(--ease-out); }
   @media (prefers-reduced-motion: reduce) {
     .frenz-deck-card { transition: none; }

@@ -20,12 +20,35 @@ vi.mock("./http", () => ({
     const ua = String((init.headers as Record<string, string> | undefined)?.["User-Agent"] ?? "");
     calls.push({ url, ua, method: init.method ?? "GET" });
     if (url.includes("tikwm.com")) return new Response(JSON.stringify(tikwm), { status: 200 });
-    if (init.method === "HEAD") return Object.assign(new Response(null, { status: 200 }), { url: "https://www.tiktok.com/@someone/photo/7698056477365357857" });
+    // `Response.url` is a read-only getter (Object.assign cannot set it) — define it, as fetch does after a redirect
+    if (init.method === "HEAD") return Object.defineProperty(new Response(null, { status: 200 }), "url", { value: "https://www.tiktok.com/@someone/photo/7698056477365357857" });
     return new Response(/iPhone/.test(ua) ? mobileHtml : desktopHtml, { status: 200, headers: { "set-cookie": "tt_chain_token=abc; Path=/" } });
   }),
 }));
 
-const { findItemInPage, tiktokExtractor } = await import("./tiktok");
+const { findItemInPage, tiktokExtractor, tiktokPageAttempts } = await import("./tiktok");
+
+/*
+  Owner, 2026-10-27: vt.tiktok.com/ZSgVnvTD2 (a /photo/ post) failed on production after 23 s, while the same mobile
+  page carried the post from a home connection — the datacenter IP gets a 200 page without it, which is not a
+  "block", so the residential proxy never got a turn. Pinned: the page order per link type, and the proxy step.
+*/
+describe("tiktokPageAttempts — which pages native asks for, in order", () => {
+  const kinds = (a: ReturnType<typeof tiktokPageAttempts>) => a.map((x) => `${/iPhone/.test(x.headers["User-Agent"] ?? "") ? "mobile" : "desktop"}${x.proxy ? "+proxy" : ""}`);
+  it("a photo link: mobile first (the desktop page never has it), then mobile through the proxy", () => {
+    expect(kinds(tiktokPageAttempts("https://www.tiktok.com/@a/photo/7701129264254455062", true))).toEqual(["mobile", "mobile+proxy"]);
+  });
+  it("a video link: desktop, mobile, then mobile through the proxy", () => {
+    expect(kinds(tiktokPageAttempts("https://www.tiktok.com/@a/video/7701129264254455062", true))).toEqual(["desktop", "mobile", "mobile+proxy"]);
+  });
+  it("no proxy configured: no proxy step (it would only repeat the same direct fetch)", () => {
+    expect(kinds(tiktokPageAttempts("https://www.tiktok.com/@a/photo/1", false))).toEqual(["mobile"]);
+  });
+  it("teeth: a photo link that still starts with the desktop page is caught", () => {
+    const old = [{ headers: { "User-Agent": "Windows" }, proxy: false }, { headers: { "User-Agent": "iPhone" }, proxy: false }];
+    expect(kinds(old)).not.toEqual(kinds(tiktokPageAttempts("https://www.tiktok.com/@a/photo/1", false)));
+  });
+});
 
 const state = (scope: Record<string, unknown>) => `<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">${JSON.stringify({ __DEFAULT_SCOPE__: scope })}</script>`;
 const apiData = (item: unknown) => `<script id="api-data" type="application/json">${JSON.stringify({ videoDetail: { itemInfo: { itemStruct: item } } })}</script>`;
@@ -68,15 +91,15 @@ describe("the photo post end to end (TikWM rate-limited, as on the worker)", () 
     // the slides carry the cookie the MOBILE page set (the CDN may need it — same rule as video, 2026-10-08)
     const photo = m.formats.find((f) => /Photo/i.test(f.label ?? "")) as { httpHeaders?: Record<string, string> } | undefined;
     expect(JSON.stringify(photo?.httpHeaders ?? {})).toContain("tt_chain_token=abc");
+    // 2026-10-27: a /photo/ link goes straight to the mobile page — the desktop page never has a photo post now
     const pages = calls.filter((c) => c.method !== "HEAD" && !c.url.includes("tikwm"));
-    expect(pages.map((c) => (/iPhone/.test(c.ua) ? "mobile" : "desktop"))).toEqual(expect.arrayContaining(["desktop", "mobile"]));
+    expect(pages.map((c) => (/iPhone/.test(c.ua) ? "mobile" : "desktop"))).toEqual(["mobile"]);
   }, 20_000);
 
   it("a page that already has the post costs NO second request", async () => {
-    desktopHtml = MOBILE_WITH_POST; // the post present on the first page
     await tiktokExtractor.extract("https://vt.tiktok.com/ZSgCj5asD/");
-    const mobilePageCalls = calls.filter((c) => c.method !== "HEAD" && /iPhone/.test(c.ua) && !c.url.includes("tikwm"));
-    expect(mobilePageCalls).toHaveLength(0);
+    const pageCalls = calls.filter((c) => c.method !== "HEAD" && !c.url.includes("tikwm"));
+    expect(pageCalls).toHaveLength(1);
   }, 20_000);
 
   it("teeth: if the mobile page has no post either, the extraction still fails (no invented media)", async () => {

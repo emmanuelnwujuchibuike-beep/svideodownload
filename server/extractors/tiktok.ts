@@ -1,4 +1,5 @@
 import { detectPlatform } from "@/lib/platforms";
+import { isProxyEligible, runWithForcedProxy } from "@/server/proxy/proxy-manager";
 import type { MediaFormat, PlatformId, VideoMetadata } from "@/types";
 
 import { extractorFetch } from "./http";
@@ -849,6 +850,19 @@ async function tikwmExtract(
   }
 }
 
+/**
+ * Which pages the native route asks for, in order (2026-10-27). Pure, so the order — the whole fix — is testable:
+ * a /photo/ link → mobile, then mobile through the proxy; anything else → desktop, mobile, then mobile through the
+ * proxy. The proxy step only exists when a proxy is configured for TikTok.
+ */
+export function tiktokPageAttempts(resolvedUrl: string, proxyAvailable: boolean): Array<{ headers: Record<string, string>; proxy: boolean }> {
+  const desktop = { headers: FETCH_HEADERS, proxy: false };
+  const mobile = { headers: { ...FETCH_HEADERS, "User-Agent": MOBILE_UA }, proxy: false };
+  const viaProxy = { ...mobile, proxy: true };
+  const list = /\/photo\/\d+/.test(resolvedUrl) ? [mobile] : [desktop, mobile];
+  return proxyAvailable ? [...list, viaProxy] : list;
+}
+
 async function nativeExtract(
   url: string,
   platform: ReturnType<typeof detectPlatform>,
@@ -871,21 +885,31 @@ async function nativeExtract(
     }
   };
 
-  let { html, pageCookie } = await fetchPage(FETCH_HEADERS);
-  let item: TikTokItem;
-  try {
-    item = findItemInPage(html);
-  } catch (desktopErr) {
-    // the desktop page answered without the post (a photo post since 2026-10-25): ask once more as mobile Safari
-    const mobile = await fetchPage({ ...FETCH_HEADERS, "User-Agent": MOBILE_UA }).catch(() => null);
-    if (!mobile) throw desktopErr;
+  /*
+    Where the post is (owner, 2026-10-27: "these tiktok multiple Download is failing again … and taking too much
+    time", vt.tiktok.com/ZSgVnvTD2 → a /photo/ post; production 422 after 23 s):
+      · a PHOTO post is only ever on the MOBILE page (api-data) since 2026-10-25 — so a /photo/ link asks the mobile
+        page FIRST and never waits on the desktop one (it used to fetch ~400 kB of desktop page for nothing);
+      · a VIDEO tries desktop, then mobile, as before;
+      · a page that comes back 200 WITHOUT the post (what a datacenter IP gets: measured locally the same mobile page
+        has the post) is not a "block" to extractorFetch, so the residential proxy never got a turn. Now the mobile
+        page is asked once more through the proxy — only when a proxy is configured for TikTok (otherwise it would
+        just repeat the same direct fetch).
+  */
+  let item: TikTokItem | null = null;
+  let pageCookie: string | null = null;
+  let firstErr: unknown = null;
+  for (const a of tiktokPageAttempts(resolved, isProxyEligible("tiktok"))) {
     try {
-      item = findItemInPage(mobile.html);
-    } catch {
-      throw desktopErr;
+      const page = a.proxy ? await runWithForcedProxy(() => fetchPage(a.headers)) : await fetchPage(a.headers);
+      item = findItemInPage(page.html);
+      pageCookie = page.pageCookie;
+      break;
+    } catch (e) {
+      firstErr ??= e;
     }
-    ({ html, pageCookie } = mobile);
   }
+  if (!item) throw firstErr ?? new ExtractionError("TikTok item missing");
     const isPhoto = !item.video && !!item.imagePost?.images?.length;
     const video = item.video;
     const createTime = item.createTime ? Number(item.createTime) : null;

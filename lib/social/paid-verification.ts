@@ -72,7 +72,7 @@ export async function paidVerificationOffer(userId: string): Promise<{ config: P
 
 type StartResult = { ok: true; url: string; reused: boolean } | { ok: false; error: string; status: number };
 
-export async function startVerificationCheckout(input: { userId: string; email: string; market?: PaymentMarket; country?: string | null }): Promise<StartResult> {
+export async function startVerificationCheckout(input: { userId: string; email: string; market?: PaymentMarket; country?: string | null; provider?: unknown }): Promise<StartResult> {
   const cfg = await getPaidVerificationConfig();
   if (!cfg.enabled) return { ok: false, error: "Paid verification isn't available right now.", status: 409 };
   if (!input.email) return { ok: false, error: "Add an email to your account to pay.", status: 400 };
@@ -99,7 +99,8 @@ export async function startVerificationCheckout(input: { userId: string; email: 
   */
   const landing = await getLandingSettings();
   const usable = await usableRails("verification");
-  const candidates = routePayment({ purpose: "verification", market: input.market ?? "other", routing: normalizePaymentRouting(landing.frenzAiPlans?.wallet?.routing, landing.frenzAiPlans?.wallet?.routingVersion), usable });
+  // the member's switch (owner, 2026-10-27: "they can decide to switch") — only reorders what the route allows
+  const candidates = routePayment({ purpose: "verification", market: input.market ?? "other", routing: normalizePaymentRouting(landing.frenzAiPlans?.wallet?.routing, landing.frenzAiPlans?.wallet?.routingVersion), usable, preferred: landing.frenzAiPlans?.wallet?.memberChoice === false ? undefined : input.provider });
   if (!candidates.length) return { ok: false, error: "Payments are unavailable right now. Try again shortly.", status: 503 };
   const out = await firstRail(
     candidates,

@@ -4,6 +4,7 @@ import {
   getNetworkCapabilities,
   getRewardNetworks,
 } from "@/lib/monetization/reward-networks-store";
+import { resolveRewardNetwork } from "@/lib/monetization/reward-networks";
 import { parseExoClickSticky } from "@/lib/monetization/exoclick-sticky";
 import {
   HILLTOP_BANNER_SLOTS,
@@ -244,6 +245,8 @@ export async function GET() {
       */
       rewardNetworks,
       offeriumConfigured: capabilities.offeriumConfigured,
+      // the top-quality download gate, resolved by the server's own rule — for the static landing page (2026-10-27), which runs no React to resolve it
+      hdDownloadNetwork: resolveRewardNetwork("hd_download", rewardNetworks, capabilities).network,
       interstitialSkipSeconds: normalizeSkipSeconds(settings.interstitialSkipSeconds),
       // Monetag Direct Link: null unless Monetag is on and the admin set a URL. Public, like every tag here.
       monetagDirectLink: publicDirectLink(settings.monetagDirectLink, settings.monetag === true),

@@ -46,6 +46,7 @@ var SWX = (self.SWX = self.SWX || {});
 // Behaviour change in an already-installed worker, so it needs a bump to
 // activate at all — the v14 note below is the same situation.
 //
+// v31 (2026-10-27): /landing/*.js — the static landing page's versioned scripts — are served cache-first like /_next/static.
 // v25 (2026-10-04): `/launch.html` again — the written reveal is now SUPPRESSED
 // in installed display modes, because the iOS native launch images it hands over
 // from carry the finished wordmark as of this deploy (scripts/gen-splash.mjs).
@@ -118,7 +119,7 @@ var SWX = (self.SWX = self.SWX || {});
 // was a plain white square. A submodule change; must bump.
 // v29 (2026-10-12): push.js closes a credits-earned notification at once while the app is
 // open and focused (still shown first — iOS revokes silent pushes). Must bump.
-SWX.VERSION = "v30";
+SWX.VERSION = "v31";
 SWX.STATIC_CACHE = `frenz-static-${SWX.VERSION}`;
 SWX.IMAGE_CACHE = `frenz-img-${SWX.VERSION}`;
 SWX.PAGE_CACHE = `frenz-pages-${SWX.VERSION}`;

@@ -7,6 +7,9 @@ import { DeferredAdFurniture } from "@/features/monetization/deferred-ad-furnitu
 import { PageRefresh } from "@/features/app-shell/page-refresh";
 import { getFeed } from "@/lib/social/feed";
 
+// the cold-entry stylesheet: globals.css compiled for only what this group reaches — see app/entry.css
+import "../entry.css";
+
 /**
  * The first couple of reel VIDEO urls, so `ReelsWarmup` can buffer them ahead of a
  * tap on the Reels nav / the hero mockup (owner). Own-hosted media only — the same

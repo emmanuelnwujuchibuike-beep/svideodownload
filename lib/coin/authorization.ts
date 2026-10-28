@@ -24,7 +24,7 @@ import { beginPinProof } from "@/lib/coin/pin";
 
 declare const issued: unique symbol;
 /** What a PIN proof is for: a proof for one never authorizes the other (the database checks the attempt's purpose too). */
-export type CoinAuthorizedAction = "transfer" | "withdrawal";
+export type CoinAuthorizedAction = "transfer" | "withdrawal" | "gift";
 /** One counted PIN attempt and its derived key, for ONE operation by ONE member. Only this module makes one. */
 export type CoinTransferAuthorization = { readonly [issued]: true; readonly userId: string; readonly attemptId: string; readonly keyHex: string; readonly method: "transaction_pin"; readonly purpose: CoinAuthorizedAction };
 
@@ -40,6 +40,11 @@ export async function authorizeCoinTransfer(userId: string, pin: unknown, config
 /** Closeout: the same proof for a coin WITHDRAWAL (a counted 'withdrawal' attempt, 0283). */
 export async function authorizeCoinWithdrawal(userId: string, pin: unknown, config: FrenzCoinConfig): Promise<CoinAuthorizationOutcome> {
   return authorizeCoinAction(userId, pin, "withdrawal", config);
+}
+
+/** Frenz Gift Coin Part 4: the same proof for a sticker GIFT (a counted 'gift' attempt, 0293). A transfer proof never authorizes a gift. */
+export async function authorizeGift(userId: string, pin: unknown, config: FrenzCoinConfig): Promise<CoinAuthorizationOutcome> {
+  return authorizeCoinAction(userId, pin, "gift", config);
 }
 
 async function authorizeCoinAction(userId: string, pin: unknown, purpose: CoinAuthorizedAction, config: FrenzCoinConfig): Promise<CoinAuthorizationOutcome> {

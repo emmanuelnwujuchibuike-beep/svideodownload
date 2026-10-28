@@ -421,13 +421,13 @@ describe("Nigeria — a one-off naira month, or a card subscription", () => {
   });
 
   it("the default button in Nigeria opens a NAIRA one-off checkout — no payment plan, so bank transfer / USSD show", async () => {
-    expect(await (await checkout({ plan: "pro" }, "NG")).json()).toMatchObject({ provider: "flutterwave" });
+    expect(await (await checkout({ plan: "pro", provider: "flutterwave" }, "NG")).json()).toMatchObject({ provider: "flutterwave" });
     expect(calls).toEqual([`fw:checkout:undefined:${NAIRA_MONTH}:NGN:row-first`]);
     expect(attempts()[0]).toMatchObject({ provider: "flutterwave", item_id: "pro", provider_amount: NAIRA_MONTH, provider_currency: "NGN", amount_cents: 900, currency: "USD", fx_minor_per_usd: 160_000, metadata: { one_off_period: "monthly" } });
   });
 
   it("a verified naira payment grants ONE month that ends on its own (no subscription, no renewal grace); a second run changes nothing", async () => {
-    await checkout({ plan: "pro", billing: "once" }, "NG");
+    await checkout({ plan: "pro", billing: "once", provider: "flutterwave" }, "NG");
     fwVerify = (ref) => fwCharge(ref, { amountMinor: NAIRA_MONTH, currency: "NGN", channel: "bank_transfer" });
     expect(await settle()).toMatchObject({ settled: 1 });
     expect(sub()).toMatchObject({ plan: "pro", status: "active", provider: "flutterwave", subscription_ref: null, cancel_at_period_end: true, contract_amount_minor: null });
@@ -440,7 +440,7 @@ describe("Nigeria — a one-off naira month, or a card subscription", () => {
   });
 
   it("a short naira payment, or one in dollars, grants nothing", async () => {
-    await checkout({ plan: "pro" }, "NG");
+    await checkout({ plan: "pro", provider: "flutterwave" }, "NG");
     fwVerify = (ref) => fwCharge(ref, { amountMinor: NAIRA_MONTH - 10_000, currency: "NGN" });
     expect(await settle()).toMatchObject({ mismatched: 1 });
     expect(sub()).toBeUndefined();
@@ -470,7 +470,7 @@ describe("Nigeria — a one-off naira month, or a card subscription", () => {
   });
 
   it("'Card — renews monthly' without a naira plan: the USD subscription, exactly as outside Nigeria", async () => {
-    expect(await (await checkout({ plan: "pro", billing: "renew" }, "NG")).json()).toMatchObject({ provider: "flutterwave" });
+    expect(await (await checkout({ plan: "pro", billing: "renew", provider: "flutterwave" }, "NG")).json()).toMatchObject({ provider: "flutterwave" });
     expect(calls).toEqual(["fw:plan:501", "fw:checkout:501:900:USD:row-first"]);
   });
 
@@ -478,7 +478,7 @@ describe("Nigeria — a one-off naira month, or a card subscription", () => {
     process.env.FLUTTERWAVE_PLAN_PRO_NGN = "601";
     fwPlan = { id: "601", amountMinor: 1_450_000, currency: "NGN", interval: "monthly", active: true };
     try {
-      expect(await (await checkout({ plan: "pro", billing: "renew" }, "NG")).json()).toMatchObject({ provider: "flutterwave" });
+      expect(await (await checkout({ plan: "pro", billing: "renew", provider: "flutterwave" }, "NG")).json()).toMatchObject({ provider: "flutterwave" });
       expect(calls).toEqual(["fw:plan:601", "fw:checkout:601:1450000:NGN:row-first"]);
       expect(attempts()[0]).toMatchObject({ provider_currency: "NGN", provider_amount: 1_450_000, metadata: { provider_plan_id: "601" } });
     } finally {

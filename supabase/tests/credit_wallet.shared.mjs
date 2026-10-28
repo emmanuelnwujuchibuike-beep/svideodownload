@@ -112,3 +112,6 @@ export const closeoutMigration = (dir) => split(readFileSync(`${dir}/${CLOSEOUT_
 export const applyCloseout = (dir) => (process.env.APPLY_0283 === "1" ? [...closeoutMigration(dir), ...closeoutMigration(dir)] : []);
 
 export const U = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+/** Frenz Gift Coin Part 2: the FGC wallet and the FC <-> FGC conversion engine (0290), applied after 0284. */
+export const GIFT_MIGRATION = "0290_frenz_gift_coin_conversion.sql";
+export const giftMigration = (dir) => split(readFileSync(`${dir}/${GIFT_MIGRATION}`, "utf8"));

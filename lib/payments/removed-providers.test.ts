@@ -62,7 +62,7 @@ describe("a saved setting can't bring Bachs back", () => {
     expect(JSON.stringify(w.routing)).not.toContain("bachs");
     for (const purpose of ["wallet_topup", "ai_subscription", "ad_campaign", "sub_purchase", "verification"] as const) {
       const all = routePayment({ purpose, market: "NG", routing: w.routing, usable: () => true, preferred: "bachs" });
-      expect(all).toEqual(["flutterwave", "paystack"]);
+      expect(all).toEqual(["paystack", "flutterwave"]); // Nigeria: Paystack first (owner, 2026-10-27)
       expect(all as string[]).not.toContain("bachs");
       // with Flutterwave unconfirmed, Paystack still takes the payment
       expect(routePayment({ purpose, market: "NG", routing: w.routing, usable: (p) => p === "paystack", preferred: "bachs" })).toEqual(["paystack"]);

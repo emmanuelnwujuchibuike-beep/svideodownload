@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { BarChart3, Camera, Coins, File as FileIcon, Images, MapPin, Music, User, Video as VideoIcon, X } from "lucide-react";
+import { BarChart3, Camera, Coins, File as FileIcon, Gift, Images, MapPin, Music, User, Video as VideoIcon, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -28,6 +28,7 @@ export function MediaComposerSheet({
   onOpenContactPicker,
   onOpenPollComposer,
   onSendCredits,
+  onSendGift,
 }: {
   open: boolean;
   onClose: () => void;
@@ -37,6 +38,8 @@ export function MediaComposerSheet({
   onOpenPollComposer: () => void;
   /** 2026-10-07: send AI credits to the other person (direct chats only — absent in a group). */
   onSendCredits?: () => void;
+  /** Frenz Gift Coin Part 4: send a sticker gift (absent in secret chats — gift details are visible to the server). */
+  onSendGift?: () => void;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -145,6 +148,17 @@ export function MediaComposerSheet({
                   onOpenPollComposer();
                 }}
               />
+              {onSendGift ? (
+                <PickerButton
+                  icon={Gift}
+                  label="Gift"
+                  tint="from-violet-500 to-fuchsia-500"
+                  onClick={() => {
+                    onClose();
+                    onSendGift();
+                  }}
+                />
+              ) : null}
               {onSendCredits ? (
                 <PickerButton
                   icon={Coins}

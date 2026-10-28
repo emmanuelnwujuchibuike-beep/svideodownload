@@ -1,12 +1,17 @@
 import "server-only";
 
-import type { PaymentMarket } from "@/lib/ai/credits/wallet-config";
+import { resolveCheckoutRate } from "@/lib/ai/character-replace/fx-rate-server";
+import { quoteCheckout } from "@/lib/ai/character-replace/topup-fx";
+import type { PaymentMarket, TopupProviderId } from "@/lib/ai/credits/wallet-config";
 import { depositRulesForDb, type FrenzCoinConfig } from "@/lib/coin/config";
 import { createFlutterwaveCheckout, flutterwaveFailureIsDefinite, verifyFlutterwaveByReference } from "@/lib/flutterwave/client";
 import { FLUTTERWAVE_CHECKOUT_CURRENCY, flutterwaveCollectionGate, flutterwaveConfigured, getFlutterwaveConfig } from "@/lib/flutterwave/config";
 import { chargeMatches, type VerifiedCharge } from "@/lib/payments/charge";
 import { flutterwaveChargeFor } from "@/lib/payments/flutterwave-charge";
 import { flutterwaveReferencePurpose, newFlutterwaveReference } from "@/lib/payments/references";
+import { offeredProviders, routePayment } from "@/lib/payments/router";
+import { initializeCoinDepositCheckout, paystackEnabled, paystackFailureIsDefinite, paystackRefusedForSure, verifyTransaction } from "@/lib/paystack/paystack";
+import { getLandingSettings } from "@/lib/landing/settings";
 import { SITE_URL } from "@/lib/site";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -36,6 +41,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *                        looks like one is logged for an admin, who records the reversal after checking the dashboard
  *                        (the original charge is re-verified first). reverse_coin_deposit does the accounting.
  *
+ * ── PAYSTACK TOO (0299, owner 2026-10-27) ──────────────────────────────────
+ * "Make Nigeria users use Paystack as first choice of payment, deposit … but they can decide to switch." A deposit asks
+ * the payment router (purpose wallet_topup — a deposit IS a wallet top-up): in Nigeria Paystack first, elsewhere
+ * Flutterwave first, the member's pick reordering the two when the admin lets members choose. Paystack charges its
+ * checkout currency (naira) at the same live rate every other Paystack checkout uses (resolveCheckoutRate + quoteCheckout),
+ * pinned on the same attempt row, settled by the same settle_coin_deposit on exactly that amount — so a Paystack deposit
+ * lands on the same hold, under the same rules. Its references are frenz_coin_dep_<uuid> (no _fw_), so a Flutterwave
+ * webhook can never settle one and the other way round. The second rail is tried only after a DEFINITE refusal.
+ *
  * Nothing here trusts a browser: the member is the session, the amount is the server's, the outcome is the provider's.
  */
 
@@ -45,7 +59,12 @@ const OPEN = ["pending", "verification_required"] as const;
 const MISSING = (m: string) => /begin_coin_deposit|settle_coin_deposit|release_due_coin_deposits|reverse_coin_deposit|coin_deposit|schema cache|does not exist/i.test(m);
 const usd = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
-export const isCoinDepositReference = (r: unknown): r is string => flutterwaveReferencePurpose(r) === "coin_deposit";
+/** 0299: a Paystack coin deposit's reference — our own, no _fw_ (Flutterwave's are frenz_coin_dep_fw_<uuid>). */
+const PAYSTACK_COIN_REF = /^frenz_coin_dep_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+export const isPaystackCoinDepositReference = (r: unknown): r is string => typeof r === "string" && PAYSTACK_COIN_REF.test(r);
+export const isCoinDepositReference = (r: unknown): r is string => flutterwaveReferencePurpose(r) === "coin_deposit" || isPaystackCoinDepositReference(r);
+/** The rail a coin deposit reference was minted for — never guessed from anything else. */
+export const coinDepositProviderOf = (r: unknown): TopupProviderId | null => (isPaystackCoinDepositReference(r) ? "paystack" : flutterwaveReferencePurpose(r) === "coin_deposit" ? "flutterwave" : null);
 
 type Fail = { ok: false; status: number; reason: string; error: string };
 const fail = (status: number, reason: string, error: string): Fail => ({ ok: false, status, reason, error });
@@ -55,19 +74,100 @@ export type CoinDepositStart = { ok: true; url: string; reference: string; amoun
 /** The member returns here from the checkout (the wallet page verifies the reference; the webhook settles regardless). */
 export const coinDepositReturnUrl = (reference: string) => `${SITE_URL}/wallet?deposit=${encodeURIComponent(reference)}`;
 
+/** The rails a coin deposit may use for this member, in order (the router's; the checkout re-decides from scratch). */
+async function coinDepositRails(): Promise<{ usable: (p: TopupProviderId) => boolean; routing: Awaited<ReturnType<typeof getLandingSettings>>["frenzAiPlans"]["wallet"] }> {
+  const [fw, ps, landing] = await Promise.all([getFlutterwaveConfig(), paystackEnabled(), getLandingSettings()]);
+  const fwOk = flutterwaveCollectionGate(FLUTTERWAVE_CHECKOUT_CURRENCY, fw).ok;
+  return { usable: (p) => (p === "flutterwave" ? fwOk : p === "paystack" && ps), routing: landing.frenzAiPlans.wallet };
+}
+
+/** Which providers the deposit sheet may offer (a choice is shown only when there are two). Display only. */
+export async function coinDepositOptions(market: PaymentMarket | undefined): Promise<TopupProviderId[]> {
+  const { usable, routing } = await coinDepositRails();
+  return offeredProviders({ purpose: "wallet_topup", market: market ?? "other", routing: routing.routing, memberChoice: routing.memberChoice, usable });
+}
+
 /**
  * Open a Frenz Coin deposit for the signed-in member. `amountCents` and `idempotencyKey` come from the request and are
- * validated here and again in SQL; everything else is the server's.
+ * validated here and again in SQL; `provider` is only the member's pick among the rails the router offers; everything
+ * else is the server's.
  */
-export async function beginCoinDeposit(opts: { userId: string; email: string; amountCents: unknown; idempotencyKey: unknown; config: FrenzCoinConfig; market?: PaymentMarket; country?: string | null }): Promise<CoinDepositStart> {
+export async function beginCoinDeposit(opts: { userId: string; email: string; amountCents: unknown; idempotencyKey: unknown; config: FrenzCoinConfig; market?: PaymentMarket; country?: string | null; provider?: unknown }): Promise<CoinDepositStart> {
   const c = opts.config;
   if (!c.enabled || !c.deposits.enabled) return fail(503, "disabled", "Frenz Coin deposits aren't available right now.");
   const amount = opts.amountCents;
-  if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0 || typeof opts.idempotencyKey !== "string" || !KEY.test(opts.idempotencyKey)) return fail(400, "invalid", "That request isn't valid.");
+  const key = opts.idempotencyKey;
+  if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0 || typeof key !== "string" || !KEY.test(key)) return fail(400, "invalid", "That request isn't valid.");
   if (amount < c.deposits.minCents || amount > c.deposits.maxCents) return fail(400, "amount_out_of_range", `Deposit between ${usd(c.deposits.minCents)} and ${usd(c.deposits.maxCents)}.`);
-  const gate = flutterwaveCollectionGate(FLUTTERWAVE_CHECKOUT_CURRENCY, await getFlutterwaveConfig());
-  if (!gate.ok) return fail(503, "rail_unavailable", "Deposits aren't available right now.");
 
+  const { usable, routing } = await coinDepositRails();
+  const candidates = routePayment({ purpose: "wallet_topup", market: opts.market ?? "other", routing: routing.routing, usable, preferred: routing.memberChoice ? opts.provider : undefined });
+  if (!candidates.length) return fail(503, "rail_unavailable", "Deposits aren't available right now.");
+  let last: Opened = { out: fail(503, "rail_unavailable", "Deposits aren't available right now."), next: true, wrote: false };
+  let usedKey = key;
+  for (const [i, provider] of candidates.entries()) {
+    last = provider === "paystack" ? await openPaystackDeposit(opts, amount, usedKey, c) : await openFlutterwaveDeposit(opts, amount, usedKey, c);
+    if (last.out.ok || !last.next) return last.out;
+    const to = candidates[i + 1];
+    if (to) console.warn("[payments] fallback_triggered", { purpose: "coin_deposit", from: provider, to, userId: opts.userId });
+    // the refused attempt keeps its key (a replay finds it); the next rail's attempt is its own
+    if (last.wrote) usedKey = `${key.slice(0, 74)}-alt${i + 1}`;
+  }
+  return last.out;
+}
+
+/** `next`: the rail DEFINITELY created nothing, so the next one may be tried. `wrote`: an attempt row now holds the key. */
+type Opened = { out: CoinDepositStart; next: boolean; wrote: boolean };
+
+/** The attempt row, BEFORE any checkout (begin_coin_deposit). A replayed key, or a checkout still open, answers here. */
+async function beginAttempt(opts: { userId: string }, provider: TopupProviderId, reference: string, amount: number, charge: { amountMinor: number; currency: string }, key: string, c: FrenzCoinConfig): Promise<{ ok: true; holdHours: number } | { ok: false; out: CoinDepositStart }> {
+  const { data, error } = await createAdminClient().rpc("begin_coin_deposit", {
+    p_user: opts.userId,
+    p_reference: reference,
+    p_amount_cents: amount,
+    p_provider: provider,
+    p_provider_amount: charge.amountMinor,
+    p_provider_currency: charge.currency,
+    p_idempotency: key,
+    p_rules: depositRulesForDb(c),
+  });
+  if (error) {
+    if (MISSING(error.message)) return { ok: false, out: fail(503, "not_available", "Frenz Coin deposits arrive with the next update.") };
+    console.error("[coin/deposit] begin failed", { userId: opts.userId, code: error.code });
+    return { ok: false, out: fail(503, "error", "Couldn't start that deposit. Nothing was charged.") };
+  }
+  const r = (data ?? {}) as { ok?: boolean; reason?: string; reference?: string; status?: string; checkout_url?: string | null; hold_hours?: number };
+  if (r.ok) return { ok: true, holdHours: Number(r.hold_hours ?? c.deposits.holdHours) };
+  // an earlier request (the same key, or a checkout still open): hand back its link when it has one, never a second checkout
+  if ((r.reason === "existing" || r.reason === "open") && r.reference) {
+    if (r.checkout_url && (r.status === "pending" || r.status === undefined)) return { ok: false, out: { ok: true, url: r.checkout_url, reference: r.reference, amountCents: amount, holdHours: c.deposits.holdHours, reused: true } };
+    if (r.status === "success") return { ok: false, out: fail(409, "already_paid", "That deposit was already paid.") };
+    return { ok: false, out: fail(409, "in_progress", "Your last deposit is still being confirmed. Try again in a few minutes.") };
+  }
+  const map: Record<string, [number, string]> = {
+    idempotency_conflict: [409, "That request key was already used. Try again."],
+    rules_invalid: [503, "Frenz Coin isn't configured correctly. Nothing was charged."],
+    disabled: [503, "Frenz Coin deposits aren't available right now."],
+    amount_out_of_range: [400, `Deposit between ${usd(c.deposits.minCents)} and ${usd(c.deposits.maxCents)}.`],
+    suspended: [403, "Deposits are paused on this account."],
+    invalid: [400, "That request isn't valid."],
+  };
+  const [status, msg] = map[r.reason ?? ""] ?? [409, "Couldn't start that deposit."];
+  return { ok: false, out: fail(status, r.reason ?? "error", msg) };
+}
+
+/** A checkout the provider definitely refused, or whose outcome is unknown: the attempt is closed or held, never left open. */
+async function closeAttempt(reference: string, provider: TopupProviderId, definite: boolean): Promise<void> {
+  await createAdminClient()
+    .from("ai_topup_attempts")
+    .update(definite ? { status: "failed", status_reason: `${provider} refused the checkout`, updated_at: new Date().toISOString() } : { status: "verification_required", status_reason: `${provider} checkout outcome unknown`, updated_at: new Date().toISOString() })
+    .eq("reference", reference)
+    .eq("status", "pending");
+}
+
+const refusedOut = (definite: boolean) => (definite ? fail(503, "checkout_refused", "We couldn't start that payment. Try again.") : fail(503, "checkout_unknown", "We couldn't confirm the payment page opened. Nothing more will be charged — try again in a few minutes."));
+
+async function openFlutterwaveDeposit(opts: { userId: string; email: string; market?: PaymentMarket; country?: string | null }, amount: number, key: string, c: FrenzCoinConfig): Promise<Opened> {
   /*
     The member's own currency (2026-10-26, owner: "it should also take effect for the Frenz coin deposit"): in Nigeria
     naira, in Ghana / Kenya / South Africa cedis, shillings or rand — their cards often refuse dollars, and the local
@@ -76,59 +176,74 @@ export async function beginCoinDeposit(opts: { userId: string; email: string; am
   */
   const charge = await flutterwaveChargeFor(amount, opts.market, "coin_deposit", opts.country);
   const reference = newFlutterwaveReference("coin_deposit");
-  const db = createAdminClient();
   // 🔴 written BEFORE the provider is called: a checkout never exists without its attempt row
-  const { data, error } = await db.rpc("begin_coin_deposit", {
-    p_user: opts.userId,
-    p_reference: reference,
-    p_amount_cents: amount,
-    p_provider: "flutterwave",
-    p_provider_amount: charge.amountMinor,
-    p_provider_currency: charge.currency,
-    p_idempotency: opts.idempotencyKey,
-    p_rules: depositRulesForDb(c),
-  });
-  if (error) {
-    if (MISSING(error.message)) return fail(503, "not_available", "Frenz Coin deposits arrive with the next update.");
-    console.error("[coin/deposit] begin failed", { userId: opts.userId, code: error.code });
-    return fail(503, "error", "Couldn't start that deposit. Nothing was charged.");
-  }
-  const r = (data ?? {}) as { ok?: boolean; reason?: string; reference?: string; status?: string; checkout_url?: string | null; hold_hours?: number };
-  if (!r.ok) {
-    // an earlier request (the same key, or a checkout still open): hand back its link when it has one, never a second checkout
-    if ((r.reason === "existing" || r.reason === "open") && r.reference) {
-      if (r.checkout_url && (r.status === "pending" || r.status === undefined)) return { ok: true, url: r.checkout_url, reference: r.reference, amountCents: amount, holdHours: c.deposits.holdHours, reused: true };
-      if (r.status === "success") return fail(409, "already_paid", "That deposit was already paid.");
-      return fail(409, "in_progress", "Your last deposit is still being confirmed. Try again in a few minutes.");
-    }
-    const map: Record<string, [number, string]> = {
-      idempotency_conflict: [409, "That request key was already used. Try again."],
-      rules_invalid: [503, "Frenz Coin isn't configured correctly. Nothing was charged."],
-      disabled: [503, "Frenz Coin deposits aren't available right now."],
-      amount_out_of_range: [400, `Deposit between ${usd(c.deposits.minCents)} and ${usd(c.deposits.maxCents)}.`],
-      suspended: [403, "Deposits are paused on this account."],
-      invalid: [400, "That request isn't valid."],
-    };
-    const [status, msg] = map[r.reason ?? ""] ?? [409, "Couldn't start that deposit."];
-    return fail(status, r.reason ?? "error", msg);
-  }
-
+  const begun = await beginAttempt(opts, "flutterwave", reference, amount, charge, key, c);
+  if (!begun.ok) return { out: begun.out, next: false, wrote: false };
   try {
     const url = await createFlutterwaveCheckout({ reference, amountMinor: charge.amountMinor, currency: charge.currency, email: opts.email, redirectUrl: coinDepositReturnUrl(reference), title: "Frenz Coin", meta: { purpose: "coin_deposit" } });
-    await db.from("ai_topup_attempts").update({ checkout_url: url, updated_at: new Date().toISOString() }).eq("reference", reference);
+    await createAdminClient().from("ai_topup_attempts").update({ checkout_url: url, updated_at: new Date().toISOString() }).eq("reference", reference);
     console.info("[payments] checkout_created", { provider: "flutterwave", purpose: "coin_deposit", userId: opts.userId, reference });
-    return { ok: true, url, reference, amountCents: amount, holdHours: Number(r.hold_hours ?? c.deposits.holdHours), reused: false };
+    return { out: { ok: true, url, reference, amountCents: amount, holdHours: begun.holdHours, reused: false }, next: false, wrote: true };
   } catch (e) {
     const definite = flutterwaveFailureIsDefinite(e);
-    await db
-      .from("ai_topup_attempts")
-      .update(definite ? { status: "failed", status_reason: "flutterwave refused the checkout", updated_at: new Date().toISOString() } : { status: "verification_required", status_reason: "flutterwave checkout outcome unknown", updated_at: new Date().toISOString() })
-      .eq("reference", reference)
-      .eq("status", "pending");
+    await closeAttempt(reference, "flutterwave", definite);
     // never the provider's message: it can carry the request back
     console.error("[coin/deposit] flutterwave initialize failed", { userId: opts.userId, reference, definite, error: e instanceof Error ? e.name : "unknown" });
-    return definite ? fail(503, "checkout_refused", "We couldn't start that payment. Try again.") : fail(503, "checkout_unknown", "We couldn't confirm the payment page opened. Nothing more will be charged — try again in a few minutes.");
+    return { out: refusedOut(definite), next: definite, wrote: true };
   }
+}
+
+/** 0299: the Paystack rail — its checkout currency (naira) at the live rate every Paystack checkout uses; no rate, no checkout. */
+async function openPaystackDeposit(opts: { userId: string; email: string }, amount: number, key: string, c: FrenzCoinConfig): Promise<Opened> {
+  const cr = (await getLandingSettings()).frenzAiCharacterReplace;
+  const rate = await resolveCheckoutRate(cr, "USD");
+  const noRate: Opened = { out: fail(503, "rail_unavailable", "Deposits aren't available right now."), next: true, wrote: false };
+  if (rate && "error" in rate) return noRate;
+  // `recharge.checkoutCurrency` is PAYSTACK's checkout currency (NGN: the Paystack account is in naira), never Flutterwave's
+  const q = quoteCheckout({ walletAmountCents: amount, walletCurrency: "USD", checkoutCurrency: cr.recharge.checkoutCurrency, minorPerUsd: rate?.minorPerUsd ?? 0 });
+  if ("error" in q) return noRate;
+  const reference = `frenz_coin_dep_${crypto.randomUUID()}`;
+  const begun = await beginAttempt(opts, "paystack", reference, amount, { amountMinor: q.amount, currency: q.currency }, key, c);
+  if (!begun.ok) return { out: begun.out, next: false, wrote: false };
+  try {
+    const url = await initializeCoinDepositCheckout({ email: opts.email, userId: opts.userId, amount: q.amount, currency: q.currency, reference, callbackUrl: coinDepositReturnUrl(reference), metadata: { coin_cents: amount, fx_minor_per_usd: q.minorPerUsd || null } });
+    await createAdminClient().from("ai_topup_attempts").update({ checkout_url: url, fx_minor_per_usd: q.minorPerUsd || null, updated_at: new Date().toISOString() }).eq("reference", reference);
+    console.info("[payments] checkout_created", { provider: "paystack", purpose: "coin_deposit", userId: opts.userId, reference });
+    return { out: { ok: true, url, reference, amountCents: amount, holdHours: begun.holdHours, reused: false }, next: false, wrote: true };
+  } catch (e) {
+    const definite = paystackFailureIsDefinite(e);
+    await closeAttempt(reference, "paystack", definite);
+    console.error("[coin/deposit] paystack initialize failed", { userId: opts.userId, reference, definite, error: e instanceof Error ? e.name : "unknown" });
+    return { out: refusedOut(definite), next: definite, wrote: true };
+  }
+}
+
+/**
+ * 0299: Paystack's verify, in the one vocabulary every settle path speaks. A reference Paystack answers with a 4xx for
+ * ("Transaction reference not found") is not_found; anything else unreadable THROWS, so the caller retries.
+ */
+export async function verifyPaystackCoinCharge(reference: string): Promise<VerifiedCharge> {
+  let c;
+  try {
+    c = await verifyTransaction(reference);
+  } catch (e) {
+    if (paystackRefusedForSure(e)) return { provider: "paystack", reference, externalId: null, status: "not_found", amountMinor: null, currency: null, channel: null, paidAt: null, reason: null };
+    throw e;
+  }
+  const word = String(c.status ?? "").toLowerCase();
+  const status: VerifiedCharge["status"] = word === "success" ? "success" : word === "failed" || word === "reversed" ? "failed" : word === "abandoned" ? "abandoned" : "pending";
+  return {
+    provider: "paystack",
+    reference: typeof c.reference === "string" ? c.reference : null,
+    externalId: c.id != null ? String(c.id) : null,
+    status,
+    amountMinor: typeof c.amount === "number" ? c.amount : null,
+    currency: typeof c.currency === "string" ? c.currency.toUpperCase() : null,
+    channel: c.channel ?? null,
+    paidAt: c.paid_at ?? null,
+    reason: c.gateway_response ?? null,
+    customerEmail: c.customer?.email ? c.customer.email.toLowerCase() : null,
+  };
 }
 
 interface AttemptRow {
@@ -166,9 +281,10 @@ async function audit(action: string, reference: string, details: Record<string, 
 }
 
 /**
- * Settle one coin deposit. `charge`, when given, is one the caller ALREADY verified with Flutterwave (the webhook, by
- * transaction id); otherwise Flutterwave is asked about our reference here. `userId`, when given, must own the attempt.
- * Throws only when Flutterwave cannot be reached (the caller retries); a database error is `error`.
+ * Settle one coin deposit. `charge`, when given, is one the caller ALREADY verified with the provider (the Flutterwave
+ * webhook, by transaction id); otherwise the rail that collected it (the ROW's provider) is asked about our reference
+ * here. `userId`, when given, must own the attempt. Throws only when the provider cannot be reached (the caller retries);
+ * a database error is `error`.
  */
 export async function settleCoinDeposit(reference: string, opts: { userId?: string; charge?: VerifiedCharge } = {}): Promise<CoinDepositSettle> {
   if (!isCoinDepositReference(reference)) return { kind: "unknown" };
@@ -176,20 +292,22 @@ export async function settleCoinDeposit(reference: string, opts: { userId?: stri
   const { data, error } = await db.from("ai_topup_attempts").select(ROW).eq("reference", reference).eq("purpose", "coin_deposit").maybeSingle();
   if (error) return { kind: "error" };
   const row = data as AttemptRow | null;
-  if (!row || row.provider !== "flutterwave") return { kind: "unknown" };
+  // the row names its rail, and so must the reference — and a charge handed over must come from that same rail
+  const provider = coinDepositProviderOf(reference);
+  if (!row || !provider || row.provider !== provider || (opts.charge && opts.charge.provider !== provider)) return { kind: "unknown" };
   if (opts.userId && row.user_id !== opts.userId) {
     console.warn("[coin/deposit] reference does not belong to caller", { reference });
     return { kind: "not_ours" };
   }
 
-  const charge = opts.charge ?? (await verifyFlutterwaveByReference(reference));
+  const charge = opts.charge ?? (provider === "paystack" ? await verifyPaystackCoinCharge(reference) : await verifyFlutterwaveByReference(reference));
   if (charge.status === "success") {
-    const expected = { provider: "flutterwave" as const, reference, amountMinor: Number(row.provider_amount ?? row.amount_cents), currency: row.provider_currency ?? FLUTTERWAVE_CHECKOUT_CURRENCY };
+    const expected = { provider, reference, amountMinor: Number(row.provider_amount ?? row.amount_cents), currency: row.provider_currency ?? FLUTTERWAVE_CHECKOUT_CURRENCY };
     const match = chargeMatches(charge, expected);
     if (!match.ok) {
       // money may have moved, but not what was asked: nothing is credited, a person reviews it
       console.error("[coin/deposit] verified charge does not match the attempt", { reference, mismatch: match.mismatch });
-      await setOpenStatus(reference, { status: "mismatch", status_reason: `flutterwave ${match.mismatch}`, paid_amount: charge.amountMinor, paid_currency: charge.currency, charge_id: charge.externalId });
+      await setOpenStatus(reference, { status: "mismatch", status_reason: `${provider} ${match.mismatch}`, paid_amount: charge.amountMinor, paid_currency: charge.currency, charge_id: charge.externalId });
       await audit("coin_deposit_mismatch", reference, { mismatch: match.mismatch, expected_minor: expected.amountMinor, expected_currency: expected.currency, paid_minor: charge.amountMinor, paid_currency: charge.currency });
       return { kind: "mismatch" };
     }
@@ -208,13 +326,13 @@ export async function settleCoinDeposit(reference: string, opts: { userId?: stri
 
   // the provider no longer says "paid" about a deposit we settled (a refund?): logged for a person, nothing changes here
   if (row.status === "success") {
-    await audit("coin_deposit_provider_status_review", reference, { provider_status: charge.status, review: "A settled coin deposit is no longer shown as paid. Check the Flutterwave dashboard; record any refund in Admin." });
+    await audit("coin_deposit_provider_status_review", reference, { provider_status: charge.status, review: `A settled coin deposit is no longer shown as paid. Check the ${provider === "paystack" ? "Paystack" : "Flutterwave"} dashboard; record any refund in Admin.` });
     return { kind: "review" };
   }
   const age = Date.now() - Date.parse(row.created_at);
-  // a checkout whose creation outcome was unknown, and Flutterwave holds nothing for it: nobody could have paid it
+  // a checkout whose creation outcome was unknown, and the provider holds nothing for it: nobody could have paid it
   if (charge.status === "not_found" && !row.checkout_url) {
-    await setOpenStatus(reference, { status: "failed", status_reason: "flutterwave checkout never created" });
+    await setOpenStatus(reference, { status: "failed", status_reason: `${provider} checkout never created` });
     return { kind: "failed" };
   }
   if (charge.status === "failed" || ((charge.status === "abandoned" || charge.status === "not_found") && age >= CANCEL_AFTER_MS)) {
@@ -265,10 +383,11 @@ export async function reconcileCoinDepositAttempt(reference: string): Promise<Co
   if (error) return "verification_failed";
   const row = data as AttemptRow | null;
   if (!row) return "unsupported";
-  // a coin deposit is collected by Flutterwave only: another provider's row is never guessed at
-  if (row.provider !== "flutterwave") return "unsupported";
+  // the row's rail must be the one its reference names (0299: Flutterwave or Paystack) — never guessed
+  const provider = coinDepositProviderOf(row.reference);
+  if (!provider || row.provider !== provider) return "unsupported";
   if (!(OPEN as readonly string[]).includes(row.status)) return "skipped";
-  if (!flutterwaveConfigured(await getFlutterwaveConfig())) return "skipped";
+  if (provider === "flutterwave" ? !flutterwaveConfigured(await getFlutterwaveConfig()) : !(await paystackEnabled())) return "skipped";
   if (Date.parse(row.updated_at) > Date.now()) return "skipped";
   const { data: claimed } = await db
     .from("ai_topup_attempts")
@@ -287,7 +406,7 @@ export async function reconcileCoinDepositAttempt(reference: string): Promise<Co
     if (r.kind === "error") return "verification_failed";
     return "review";
   } catch {
-    // Flutterwave unreachable: nothing decided, the attempt stays open
+    // the provider unreachable: nothing decided, the attempt stays open
     return "verification_failed";
   }
 }
@@ -306,7 +425,7 @@ export async function reconcileCoinDeposits(opts: { limit?: number; budgetMs?: n
     .from("ai_topup_attempts")
     .select(ROW)
     .eq("purpose", "coin_deposit")
-    .eq("provider", "flutterwave")
+    .in("provider", ["flutterwave", "paystack"])
     .in("status", [...OPEN])
     .lte("created_at", new Date(now - 60_000).toISOString())
     .gte("created_at", new Date(now - 7 * 86_400_000).toISOString())
@@ -354,8 +473,19 @@ export async function noteFlutterwaveCoinDepositEvent(type: string, data: Record
   });
 }
 
+/** 0299: Paystack sent a refund or dispute about a coin deposit: logged for an admin, who records it after checking. */
+export async function notePaystackCoinDepositEvent(type: string, reference: unknown, providerId: unknown): Promise<boolean | null> {
+  if (!isPaystackCoinDepositReference(reference)) return null;
+  return audit("coin_deposit_provider_event_review", reference, {
+    provider: "paystack",
+    event: type.slice(0, 60),
+    provider_id: typeof providerId === "number" || typeof providerId === "string" ? String(providerId).slice(0, 40) : null,
+    review: "Check this payment in the Paystack dashboard, then record the refund or chargeback for this Frenz Coin deposit.",
+  });
+}
+
 /**
- * An admin records a refund or chargeback of a coin deposit, confirmed in the Flutterwave dashboard. The ORIGINAL charge
+ * An admin records a refund or chargeback of a coin deposit, confirmed in the provider's dashboard (Flutterwave or Paystack). The ORIGINAL charge
  * is re-verified first (ours, and paid); the replay key makes a double press one reversal.
  */
 export async function recordAdminCoinDepositReversal(input: { reference: string; kind: "refund" | "dispute"; refundedMinor: number | null; idempotencyKey: string; adminId: string; note: string }): Promise<CoinReversalOutcome> {
@@ -363,7 +493,7 @@ export async function recordAdminCoinDepositReversal(input: { reference: string;
   let paidMinor: number | null;
   let paidCurrency: string | null;
   try {
-    const c = await verifyFlutterwaveByReference(input.reference);
+    const c = coinDepositProviderOf(input.reference) === "paystack" ? await verifyPaystackCoinCharge(input.reference) : await verifyFlutterwaveByReference(input.reference);
     if (c.reference !== input.reference || c.status !== "success") return { ok: false, reason: "not_paid" };
     paidMinor = c.amountMinor;
     paidCurrency = c.currency;
@@ -372,7 +502,7 @@ export async function recordAdminCoinDepositReversal(input: { reference: string;
   }
   if (input.refundedMinor !== null && (!paidMinor || input.refundedMinor > paidMinor)) return { ok: false, reason: "invalid" };
   const { data, error } = await createAdminClient().rpc("reverse_coin_deposit", {
-    p_provider: "flutterwave",
+    p_provider: coinDepositProviderOf(input.reference) ?? "flutterwave",
     p_event_key: `admin:${input.idempotencyKey}`,
     p_kind: input.kind,
     p_reference: input.reference,

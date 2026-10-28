@@ -101,6 +101,39 @@ export function routeWeights(): RouteWeight[] {
     .sort((a, b) => b.bytes - a.bytes);
 }
 
+/**
+ * The FULL cold-entry weight of a page: its own manifest entry PLUS every ancestor layout and template
+ * (`/layout`, `/(app)/layout`, `/(app)/template`, …), each chunk counted once.
+ *
+ * 2026-10-27 — why this exists: `routeWeights()` reads only the page's own manifest list, and Next lists a layout's
+ * chunks under the LAYOUT's key, not the page's. So everything the signed-in shell imported was invisible to every
+ * ceiling in budget.test: /downloads "weighed" 188 kB while a cold visit actually downloaded 380 kB — and the shell
+ * (topbar, inbox chrome, PIN gate) had quietly grown the Supabase realtime client and framer-motion into it.
+ */
+export function entryWeight(pageRoute: string): RouteWeight | null {
+  if (!buildExists()) return null;
+  const manifest = JSON.parse(readFileSync(MANIFEST, "utf8")) as { pages: Record<string, string[]> };
+  const own = manifest.pages[pageRoute];
+  if (!own) return null;
+  const files = new Set(own);
+  for (const key of ancestorEntries(pageRoute)) for (const f of manifest.pages[key] ?? []) files.add(f);
+  // JavaScript only: the stylesheets are guarded on their own (lib/perf/css-entry.test.ts), and mixing them in would hide a JS regression behind a CSS win
+  const js = [...files].filter((f) => f.endsWith(".js"));
+  const bytes = js.reduce((sum, file) => sum + gzippedSize(path.join(NEXT_DIR, file)), 0);
+  return { route: pageRoute, bytes, chunks: js.length };
+}
+
+/** `/(app)/messages/[id]/page` → `/layout`, `/template`, `/(app)/layout`, `/(app)/template`, `/(app)/messages/layout`, … */
+export function ancestorEntries(pageRoute: string): string[] {
+  const segs = pageRoute.replace(/\/page$/, "").split("/").filter(Boolean);
+  const out: string[] = [];
+  for (let i = 0; i <= segs.length; i++) {
+    const base = i === 0 ? "" : `/${segs.slice(0, i).join("/")}`;
+    out.push(`${base}/layout`, `${base}/template`);
+  }
+  return out;
+}
+
 /** Routes over a byte budget, heaviest first. */
 export function overBudget(budgetBytes: number): RouteWeight[] {
   return routeWeights().filter((r) => r.bytes > budgetBytes);

@@ -862,6 +862,8 @@ export async function recordPostView(
   viewerId: string | null,
   ipHash: string,
   source?: string,
+  /** 0297: the viewer's country and city from the hosting platform's request geolocation (viewGeo) — never an IP */
+  geo?: { country: string | null; city: string | null },
 ): Promise<void> {
   if (!hasSupabase) return;
   try {
@@ -872,6 +874,8 @@ export async function recordPostView(
       viewer_id: viewerId,
       ip_hash: viewerId ? "" : ipHash,
       source: source ?? null,
+      ...(geo?.country ? { country: geo.country } : {}),
+      ...(geo?.city ? { city: geo.city } : {}),
     });
   } catch {
     /* duplicate view or transient error — ignore */

@@ -11,8 +11,11 @@ import { AppTopbar } from "@/features/app-shell/app-topbar";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
 import { DownloadTopAd } from "@/features/monetization/download-top-ad";
 import { PinLockGate } from "@/features/account/pin-lock-gate";
-import { InboxMobileChrome } from "@/features/social/inbox-mobile-chrome";
+import { InboxMobileChromeLazy } from "@/features/social/inbox-mobile-chrome-lazy";
 import { Toaster } from "@/features/ui/toast";
+
+// this group's stylesheet — the root layout no longer imports one (see app/layout.tsx)
+import "../app.css";
 
 /**
  * Persistent app shell for signed-in surfaces. Rendered ONCE and preserved across
@@ -117,7 +120,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           unmounts on the iOS back-swipe out of a chat — the fix for the
           long-running "stories/profile flash on swipe back". Renders only on
           /messages (mobile); see InboxMobileChrome. */}
-      <InboxMobileChrome />
+      <InboxMobileChromeLazy />
       
       <Toaster />
       {/* Drops down after a follow/friend-request to offer that person's

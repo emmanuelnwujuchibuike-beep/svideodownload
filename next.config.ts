@@ -333,6 +333,12 @@ const nextConfig: NextConfig = {
           is the honest ceiling. `/_next/static/*` is a different case — Next
           content-hashes those filenames, so it already sets `immutable` itself.
         */
+        source: "/landing/:file*",
+        // the static landing page's scripts (app/route.ts): every URL carries ?v=<content hash>, so a new version is a
+        // new URL — a year, immutable, never revalidated (owner brief 2026-10-27)
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
+      {
         source: "/:dir(login|brand|splash)/:file*",
         headers: [
           { key: "Cache-Control", value: "public, max-age=604800, stale-while-revalidate=2592000" },

@@ -31,7 +31,7 @@ function esc(s: string): string {
 
 export async function emailMember(
   userId: string,
-  opts: { subject: string; heading: string; intro: string; body?: string; ctaLabel?: string; ctaPath?: string; person?: { name: string; handle: string | null; avatarUrl: string | null } },
+  opts: { subject: string; heading: string; intro: string; body?: string; ctaLabel?: string; ctaPath?: string; person?: { name: string; handle: string | null; avatarUrl: string | null }; settingsPath?: string },
   kind: MemberEmailKind,
 ): Promise<MemberEmailOutcome> {
   try {
@@ -53,6 +53,7 @@ export async function emailMember(
       ctaHref: opts.ctaPath ? `${SITE_URL}${opts.ctaPath}` : undefined,
       person: opts.person ? { name: esc(opts.person.name), handle: opts.person.handle ? esc(opts.person.handle) : null, avatarUrl: opts.person.avatarUrl } : undefined,
       unsubscribeUrl,
+      settingsHref: opts.settingsPath && opts.settingsPath.startsWith("/") ? `${SITE_URL}${opts.settingsPath}` : undefined,
     });
     if (!accepted) console.error("[email/member] refused", { userId, kind });
     return accepted ? "sent" : "failed";

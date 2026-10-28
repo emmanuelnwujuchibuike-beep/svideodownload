@@ -2502,14 +2502,18 @@ function ReelCard({
             none, which is why the reference screenshot shows no trace of it. */}
         <div className="relative flex flex-col items-center gap-1">
           <RepostBurst triggerKey={repostBurst} />
-          {item.repostBadge && item.repostBadge.count > 0 ? (
+          {/* owner, 2026-10-27: "the circle of mutual users who reposted should animate and disappear up the same way the story
+              reaction animates" — shown while this reel is on screen, it holds ~2 s, then floats up, grows and fades (transform +
+              opacity only), and plays again each time the reel comes back. Reduce Motion: a plain fade. */}
+          {isActive && item.repostBadge && item.repostBadge.count > 0 ? (
             <button
+              key={item.id}
               type="button"
               onClick={() => {
                 setRepostersReady(true);
                 setRepostersOpen(true);
               }}
-              className="flex items-center transition active:scale-95"
+              className="flex items-center will-change-transform motion-safe:animate-[badge-rise_3.2s_cubic-bezier(0.22,0.61,0.36,1)_forwards] motion-reduce:animate-[badge-fade_3.2s_linear_forwards]"
               aria-label={`${item.repostBadge.count} people you follow reposted this — see who`}
             >
               <span className="flex -space-x-2">

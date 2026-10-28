@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { clientId, trackLimiter } from "@/lib/rate-limit";
 import { recordPostView } from "@/lib/social/posts";
+import { viewGeo } from "@/lib/social/view-geo";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -37,7 +38,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const ipHash = createHash("sha256")
     .update(((request.headers.get("x-forwarded-for") ?? "").split(",")[0] || "anon").trim())
     .digest("hex");
-  void recordPostView(id, viewerId, ipHash, "feed");
+  void recordPostView(id, viewerId, ipHash, "feed", viewGeo(request.headers));
 
   return NextResponse.json({ ok: true });
 }

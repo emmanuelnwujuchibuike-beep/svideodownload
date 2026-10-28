@@ -1,6 +1,5 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
 import { Delete, Loader2, Lock } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
@@ -299,13 +298,11 @@ export function PinLockGate() {
 
   if (!mounted || !locked) return null;
 
+  // A CSS fade, not framer-motion (2026-10-27): this gate is mounted on every signed-in page, so framer here put the
+  // library in /downloads' first load. The exit fade never played anyway — the line above unmounts it on unlock.
   return createPortal(
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-background/98 px-6 backdrop-blur-xl"
+      <div
+        className="fixed inset-0 z-[200] flex animate-in fade-in duration-200 motion-reduce:animate-none flex-col items-center justify-center bg-background/98 px-6 backdrop-blur-xl"
         role="dialog"
         aria-modal="true"
         aria-label={unlocking ? "Unlocking" : "Enter your PIN to continue"}
@@ -371,8 +368,7 @@ export function PinLockGate() {
         </div>
           </>
         )}
-      </motion.div>
-    </AnimatePresence>,
+      </div>,
     document.body,
   );
 }

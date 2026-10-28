@@ -93,7 +93,7 @@ function DepositReturn({ reference }: { reference: string }) {
             Check again
           </button>
         ) : state === "failed" ? (
-          <Link href="/wallet/deposit" prefetch={false} className="flex min-h-11 touch-manipulation items-center gap-1.5 self-start font-bold underline underline-offset-4 active:opacity-60">
+          <Link href="/wallet/deposit" className="flex min-h-11 touch-manipulation items-center gap-1.5 self-start font-bold underline underline-offset-4 active:opacity-60">
             Try again
             <TapPending size={14}>{null}</TapPending>
           </Link>
@@ -116,7 +116,8 @@ function ActionButton({ href, label, primary, children, disabled }: { href: stri
       </span>
     );
   return (
-    <Link href={href} prefetch={false} className="group flex touch-manipulation flex-col items-center gap-1.5 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-white/80">
+    // a main button (Deposit / Withdraw / Transfer): prefetched like the other main buttons, and it spins from the tap (owner, 2026-10-27)
+    <Link href={href} className="group flex touch-manipulation flex-col items-center gap-1.5 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-white/80">
       <span className={cn(circle, "group-active:scale-90")}>
         <TapPending size={20}>{children}</TapPending>
       </span>
@@ -275,6 +276,14 @@ export function WalletOverview({ summary, history, depositRef, loadedAt }: { sum
         </>
       ) : null}
 
+      {/* Frenz Gift Coin Part 5: the Gift Box — received and sent sticker gifts, gift earnings, and converting them to Frenz Coins */}
+      {/* a main button: prefetched, and it spins from the tap until the Gift Box opens (owner, 2026-10-27) */}
+      <Link href="/wallet/gifts" className="mx-4 mt-4 flex min-h-11 touch-manipulation items-center justify-between rounded-[22px] border border-white bg-white/80 px-4 py-3 text-sm font-bold text-frenz-ink shadow-frenz-card outline-none transition active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-frenz-blue">
+        <span>Gift Box</span>
+        <span className="flex items-center gap-1.5 text-frenz-violet">
+          <TapPending size={16}>Gift Coins &amp; gifts ›</TapPending>
+        </span>
+      </Link>
       <SectionTitle
         action={
           <Link href="/wallet/activity" prefetch={false} className="flex min-h-11 touch-manipulation items-center gap-1.5 text-sm font-bold text-frenz-violet outline-none transition active:opacity-60 focus-visible:underline">

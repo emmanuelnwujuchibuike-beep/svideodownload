@@ -114,6 +114,10 @@ describe.skipIf(!PGlite)("Exclusive bundles & promotions, end to end (real SQL, 
     // the promotion LIMIT under real concurrency (and its mutant) is proven in supabase/tests/sub_promotion_limit.pg.mjs:
     // here the app's own pre-check refuses first, so a mutant of the SQL check could not fail this journey
     await bridge.pull();
+    // 2026-10-27 (full-suite timeouts): compile the modules the timed steps reach (the Paystack webhook route is a ~2.5 s
+    // cold import on its own) HERE, inside the setup budget — a step's 5 s measures what it does, not module compilation.
+    // Nothing is mocked or skipped by this: the steps still import and run the same modules.
+    await Promise.all([import("@/app/api/paystack/webhook/route"), import("./server")]);
   }, 60_000);
   afterAll(async () => {
     await bridge?.close();

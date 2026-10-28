@@ -297,7 +297,24 @@ export function Downloader({
   // `initialUrl` comes from the server (app/page.tsx), so no re-validation
   // is needed here.
   useEffect(() => {
-    if (initialUrl) fetchMetadata(initialUrl);
+    if (initialUrl) {
+      fetchMetadata(initialUrl);
+      return;
+    }
+    /*
+      2026-10-27: the static landing page (app/route.ts) hands a link over here — `?url=` — when the visitor picks
+      something only this full downloader does (a top-quality file behind the reward ad, a multi-item batch). The
+      page is static, so the link is read in the browser. It is fetched like a pasted one: every check still runs.
+    */
+    try {
+      const fromQuery = new URLSearchParams(window.location.search).get("url");
+      if (fromQuery && /^https?:\/\//i.test(fromQuery) && fromQuery.length <= 2048) {
+        setUrl(fromQuery);
+        fetchMetadata(fromQuery);
+      }
+    } catch {
+      /* no query */
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

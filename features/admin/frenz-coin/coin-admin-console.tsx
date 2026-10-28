@@ -13,13 +13,19 @@ import { CoinSettings } from "./coin-settings";
 const CoinWithdrawals = dynamic(() => import("./coin-withdrawals").then((m) => m.CoinWithdrawals), { loading: () => <p className="text-sm text-muted-foreground">Loading…</p> });
 const CoinTransfers = dynamic(() => import("./coin-transfers").then((m) => m.CoinTransfers), { loading: () => <p className="text-sm text-muted-foreground">Loading…</p> });
 const CoinReversals = dynamic(() => import("./coin-reversals").then((m) => m.CoinReversals), { loading: () => <p className="text-sm text-muted-foreground">Loading…</p> });
+// Frenz Gift Coin Part 3: the conversion rules and the sticker catalogue
+const GiftSettings = dynamic(() => import("../frenz-gift/gift-settings").then((m) => m.GiftSettings), { loading: () => <p className="text-sm text-muted-foreground">Loading…</p> });
+const GiftGifting = dynamic(() => import("../frenz-gift/gift-gifting").then((m) => m.GiftGifting), { loading: () => <p className="text-sm text-muted-foreground">Loading…</p> });
+const GiftStickers = dynamic(() => import("../frenz-gift/gift-stickers").then((m) => m.GiftStickers), { loading: () => <p className="text-sm text-muted-foreground">Loading…</p> });
 
-type Tab = "settings" | "withdrawals" | "transfers" | "reversals";
+type Tab = "settings" | "withdrawals" | "transfers" | "reversals" | "gift" | "stickers";
 const TABS: { id: Tab; label: string }[] = [
   { id: "settings", label: "Settings" },
   { id: "withdrawals", label: "Withdrawals" },
   { id: "transfers", label: "Transfers" },
   { id: "reversals", label: "Deposit reversals" },
+  { id: "gift", label: "Gift Coin" },
+  { id: "stickers", label: "Stickers" },
 ];
 
 /**
@@ -66,6 +72,13 @@ export function CoinAdminConsole({ config, pinConfigured = true }: { config: Fre
           {t.id === "withdrawals" ? <CoinWithdrawals sensitiveFetch={sensitiveFetch} payoutRateApproved={payoutRateApproved} /> : null}
           {t.id === "transfers" ? <CoinTransfers sensitiveFetch={sensitiveFetch} /> : null}
           {t.id === "reversals" ? <CoinReversals sensitiveFetch={sensitiveFetch} /> : null}
+          {t.id === "gift" ? (
+            <div className="space-y-5">
+              <GiftSettings sensitiveFetch={sensitiveFetch} />
+              <GiftGifting sensitiveFetch={sensitiveFetch} />
+            </div>
+          ) : null}
+          {t.id === "stickers" ? <GiftStickers sensitiveFetch={sensitiveFetch} /> : null}
         </div>
       ))}
       {reauthPrompt}

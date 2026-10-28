@@ -87,7 +87,8 @@ export default async function ProfileCardPage({ params }: { params: Promise<{ ha
       a standalone route has to ask for it itself.
     */
     <main
-      className="frenz-lux min-h-dvh px-4 pb-6"
+      // clears the floating bottom nav (its height + gap), like every app page — the card's last line sat under it (owner, 2026-10-27)
+      className="frenz-lux min-h-dvh px-4 pb-[calc(var(--frenz-nav-clearance,96px)+1.5rem)] lg:pb-6"
       style={{ paddingTop: "calc(var(--frenz-safe-top, 0px) + 1.5rem)" }}
     >
       <div className="mx-auto w-full max-w-md">

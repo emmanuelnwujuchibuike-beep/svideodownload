@@ -1,0 +1,11 @@
+/*
+  The FULL stylesheet (2026-10-27) — every route group except (marketing) imports this.
+
+  globals.css inlined by postcss-import and compiled with the full tailwind.config.ts, named EXPLICITLY. Measured on
+  the first build of the split: when one layout imported globals.css directly and another imported entry.css (which
+  inlines globals.css with its own @config), Tailwind compiled BOTH with the entry config — the signed-in pages got
+  the landing's smaller sheet. Both sheets are now thin files with their own @config, and nothing imports
+  globals.css directly. lib/perf/css-entry.test.ts pins that.
+*/
+@import "./globals.css";
+@config "../tailwind.config.ts";

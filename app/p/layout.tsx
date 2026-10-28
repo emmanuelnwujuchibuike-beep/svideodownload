@@ -3,6 +3,9 @@ import type { ReactNode } from "react";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
 import { StoryStudio } from "@/features/create/studio/story-studio";
 
+// this group's stylesheet — the root layout no longer imports one (see app/layout.tsx)
+import "../app.css";
+
 /**
  * Post pages live outside the (app) shell (public/SEO surface), but on mobile
  * the bottom nav must never disappear — navigation stays connected. The nav's

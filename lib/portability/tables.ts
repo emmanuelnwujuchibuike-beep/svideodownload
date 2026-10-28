@@ -105,6 +105,7 @@ export const NOT_EXPORTED: Record<string, string> = {
   sub_membership_reminders: "Bookkeeping that stops a renewal reminder being sent twice (0250). The reminders themselves are in your notifications, which are exported.",
   profile_visits: "Counts for a creator's analytics (0265): one row per visitor per day to their profile — a signed-in visitor by id, a guest by a daily one-way hash. It records nothing you did beyond opening the page, and is not part of your own data.",
   sub_post_views: "Counts for a creator's analytics (0265): that an exclusive post was opened, once per viewer per day. The posts and your subscriptions themselves are exported.",
+  message_request_notices: "Bookkeeping that stops a message request being announced to you more than once per chat (0295): who, which chat and when, no content. Your message-request choices are in notification_settings, which is exported.",
   message_email_sends: "Bookkeeping that stops a busy chat emailing you once per message (0262): when each chat last emailed you. Your email choice itself is in notification_settings, which is exported.",
   email_unsubscribe_tokens: "Only a one-way hash of the secret in your unsubscribe links (0253), so they can be checked without storing a usable link. Your optional-email choice itself is in notification_settings, which is exported.",
   follower_milestone_checks: "When each follower milestone was last checked (0255), so the check runs at most daily. The milestone rewards themselves are in reward_events, which is exported.",
@@ -130,6 +131,11 @@ export const NOT_EXPORTED: Record<string, string> = {
   /* 0278: the counter-entry of every transfer fee — the platform's fee income. The fee itself is on the member's own ledger (ai_product_ledger, kind transfer_fee), which is exported. */
   platform_fee_ledger: "The platform's fee-income ledger (0278). Each fee you paid is exported on your own wallet ledger.",
   reward_config: "The operator's reward rules (one row, a mirror of the admin settings) - about nobody.",
+  // 0291: the gift sticker catalogue and its history - written by administrators, about nobody (a gift a member sends or receives is on their own records)
+  gift_stickers: "The gift sticker catalogue (names, prices, artwork). Not personal data.",
+  // 0294: delivery bookkeeping for gift notifications — a status and a reason code, no content (the gift itself is on your records)
+  gift_notifications: "Gift notification delivery status (0294): bookkeeping that stops a notification being sent twice — no content.",
+  gift_sticker_revisions: "The history of each gift sticker in the catalogue. Not personal data.",
   poll_options: "Options belonging to a poll; the poll itself is exported.",
   /* Rows belonging to a streak, keyed by `streak_id` rather than by a person —
      the same shape as `post_media` above. The streak itself IS exported, and it
@@ -175,6 +181,9 @@ export const NOT_EXPORTED: Record<string, string> = {
     still not ours to hand over in bulk: exporting them would disclose other
     people's actions to you in a form they never agreed to.
   */
+  post_download_events: "Who downloaded your posts and when (0297). Same reasoning as post_views — it would identify other people; the total is exported through posts.downloads_count.",
+  follow_events: "Unfollows (0297): who stopped following whom. It would identify other people; your own follows are exported through follows.",
+  sub_preview_events: "That a member saw a locked exclusive post or tapped Subscribe on it (0297), counted for the creator's funnel. It would identify other people's browsing.",
   post_views: "Who viewed your posts. Exporting it would identify other people's browsing.",
   post_watch_events: "Who watched your posts and for how long. Same reasoning as post_views — exporting it would identify other people's watch behavior; the aggregate (completion_rate) is already exported through posts.",
   sound_plays: "Who played your sounds. Same reasoning as post_views — the total is already exported through sounds.plays_count.",
@@ -269,6 +278,10 @@ export const OWNER_COLUMN: Record<string, string> = {
   coin_deposit_reversals: "user_id",
   // 0283: corrections an administrator made to a transfer you sent
   coin_transfer_corrections: "sender_id",
+  // 0290: your conversions between Frenz Coins and Frenz Gift Coins (the ledger rows are on your wallet ledger)
+  fgc_conversions: "user_id",
+  // 0293: the sticker gifts you sent (gifts you received are on your wallet ledger)
+  gift_sends: "sender_id",
   /*
     Voice Cloning (0171). An export carries the member's own facts — the names,
     the dates, the rights record they signed, how much audio each voice was built

@@ -199,7 +199,7 @@ export async function sendSmartPush(
    * (Wallet settings, 2026-10-26). It is still recorded in-app, as `category_off`, and never pushed.
    */
   opts: { push?: boolean } = {},
-): Promise<void> {
+): Promise<SmartPushOutcome> {
   const settings = await getNotificationSettings(userId);
   const actorId = (typeof record === "object" && "recorded" in record ? record.recorded.actorId : typeof record === "object" ? record.actorId : null) ?? payload.actorId ?? null;
   const type = typeof record === "object" ? ("recorded" in record ? record.recorded.type : record.type) : null;
@@ -218,9 +218,21 @@ export async function sendSmartPush(
     if ("recorded" in record) await stampRecorded(userId, record.recorded, outcome);
     else await recordInApp(userId, payload, record, outcome, ref);
   }
-  if (outcome.decision !== "push") return;
+  if (outcome.decision !== "push") return { decision: outcome.decision, reasons: outcome.reasons, devices: 0, accepted: 0 };
 
   // Lock-screen privacy (Part 5): full, no preview (the caller's generic text), or hidden (no sender, text or photo)
   const deliver: PushPayload = lockScreenPayload(payload, settings.lockScreen);
-  await sendPushToUser(userId, deliver);
+  const sent = await sendPushToUser(userId, deliver);
+  return { decision: "push", reasons: outcome.reasons, devices: sent?.devices ?? 0, accepted: sent?.accepted ?? 0 };
+}
+
+/**
+ * Frenz Gift Coin Part 4.1: what sendSmartPush decided and did — callers that report honestly (the gift outbox)
+ * record "sent" only when a device's push service accepted it. Fire-and-forget callers ignore it, as before.
+ */
+export interface SmartPushOutcome {
+  decision: string;
+  reasons: readonly string[];
+  devices: number;
+  accepted: number;
 }

@@ -6,6 +6,7 @@ import { coinPinStatus, pinPepper } from "@/lib/coin/pin";
 import { getWalletPrefs } from "@/lib/coin/wallet-prefs";
 import { decodeSubCursor, encodeSubCursor, isUuid } from "@/lib/sub/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getWalletNumber } from "@/lib/ai/wallet/transfers";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -83,6 +84,13 @@ export async function coinWalletSummary(userId: string, config: FrenzCoinConfig)
   const pendingDeposits = deps.error
     ? []
     : ((deps.data ?? []) as { amount_cents: number; settled_at: string; release_at: string; status: "held" | "disputed" }[]).map((d) => ({ amountCents: n(d.amount_cents), settledAt: d.settled_at, releaseAt: d.release_at, status: d.status }));
+  /*
+    Every member has a wallet number (owner, 2026-10-27: "some accounts are showing wallet number not assigned … every user
+    should have an account number, as they create an account"). New accounts get one at sign-up and existing ones were
+    backfilled (migration 0298); a member somehow still without one is given theirs here, on their OWN wallet read —
+    once, for themselves only (never another member's id: see transfer-preset.ts).
+  */
+  const walletNumber = ((acct.data as { account_number?: string } | null)?.account_number ?? null) || (await getWalletNumber(userId).catch(() => null));
   const t = config.transfers;
   const on = config.enabled && t.enabled;
   const blockedBy: CoinWalletSummary["transfers"]["blockedBy"] = !on ? "disabled" : !pin ? "authorization_unavailable" : !pin.set ? "pin_not_set" : pin.lockedUntil ? "pin_locked" : null;
@@ -90,7 +98,7 @@ export async function coinWalletSummary(userId: string, config: FrenzCoinConfig)
     enabled: config.enabled,
     currency: "USD",
     centsPerCoin: config.centsPerCoin,
-    walletNumber: ((acct.data as { account_number?: string } | null)?.account_number ?? null) || null,
+    walletNumber,
     hideBalance: prefs.hideBalance,
     availableCents: b - p,
     pendingCents: p,
@@ -121,7 +129,7 @@ export async function coinWalletSummary(userId: string, config: FrenzCoinConfig)
   };
 }
 
-export type CoinEntryKind = "deposit" | "transfer_in" | "transfer_out" | "transfer_fee" | "withdrawal" | "withdrawal_reversal" | "reversal" | "refund" | "adjustment";
+export type CoinEntryKind = "deposit" | "transfer_in" | "transfer_out" | "transfer_fee" | "withdrawal" | "withdrawal_reversal" | "reversal" | "refund" | "adjustment" | "conversion_in" | "conversion_out" | "conversion_fee";
 export type CoinEntryStatus = "pending" | "completed" | "processing" | "held" | "reversed" | "returned";
 
 export interface CoinHistoryEntry {
@@ -139,7 +147,8 @@ export interface CoinHistoryEntry {
   counterparty: { handle: string | null; name: string | null } | null;
 }
 
-const KINDS: readonly CoinEntryKind[] = ["deposit", "transfer_in", "transfer_out", "transfer_fee", "withdrawal", "withdrawal_reversal", "reversal", "refund", "adjustment"];
+// 0290: a conversion to or from Frenz Gift Coins writes conversion_* rows on the coin ledger too
+const KINDS: readonly CoinEntryKind[] = ["deposit", "transfer_in", "transfer_out", "transfer_fee", "withdrawal", "withdrawal_reversal", "reversal", "refund", "adjustment", "conversion_in", "conversion_out", "conversion_fee"];
 const PAGE = 20;
 const MAX_PAGE = 50;
 
@@ -169,6 +178,12 @@ function titleOf(kind: CoinEntryKind, who: string | null): string {
       return "Deposit taken back";
     case "refund":
       return "Returned to your wallet";
+    case "conversion_out":
+      return "Converted to Gift Coins";
+    case "conversion_in":
+      return "Converted from Gift Coins";
+    case "conversion_fee":
+      return "Conversion fee";
     default:
       return "Balance correction";
   }

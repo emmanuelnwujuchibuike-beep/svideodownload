@@ -20,17 +20,32 @@ const PAYSTACK_ONLY_ROUTE = { primary: "paystack", fallback: null };
 const legacySaved = { NG: Object.fromEntries(["wallet_topup", "ai_subscription", "ad_campaign"].map((p) => [p, PAYSTACK_ONLY_ROUTE])), other: Object.fromEntries(["wallet_topup", "ai_subscription", "ad_campaign"].map((p) => [p, PAYSTACK_ONLY_ROUTE])) };
 
 describe("fresh defaults", () => {
-  it("every market and purpose: Flutterwave first, Paystack the backup; a fresh config is version 2", () => {
+  it("owner 2026-10-27: Nigeria — Paystack first, Flutterwave the switch; everywhere else Flutterwave first, Paystack the backup; version 3", () => {
     const fresh = normalizeAiWalletConfig(null);
     expect(fresh.routingVersion).toBe(ROUTING_VERSION);
-    for (const m of ["NG", "other"] as const) for (const p of PAYMENT_PURPOSES) expect(fresh.routing[m][p]).toEqual({ primary: "flutterwave", fallback: "paystack" });
+    expect(ROUTING_VERSION).toBe(3);
+    for (const p of PAYMENT_PURPOSES) {
+      expect(fresh.routing.NG[p]).toEqual({ primary: "paystack", fallback: "flutterwave" });
+      expect(fresh.routing.other[p]).toEqual({ primary: "flutterwave", fallback: "paystack" });
+    }
+    expect(fresh.memberChoice).toBe(true);
+  });
+  it("a member in Nigeria who switches gets Flutterwave first — and one outside who switches gets Paystack first", () => {
+    const { routing } = normalizeAiWalletConfig(null);
+    for (const p of PAYMENT_PURPOSES) {
+      expect(routePayment({ purpose: p, market: "NG", routing, usable: both })).toEqual(["paystack", "flutterwave"]);
+      expect(routePayment({ purpose: p, market: "NG", routing, usable: both, preferred: "flutterwave" })).toEqual(["flutterwave", "paystack"]);
+      expect(routePayment({ purpose: p, market: "other", routing, usable: both })).toEqual(["flutterwave", "paystack"]);
+      expect(routePayment({ purpose: p, market: "other", routing, usable: both, preferred: "paystack" })).toEqual(["paystack", "flutterwave"]);
+    }
   });
 });
 
 describe("a table saved before Flutterwave (version 1)", () => {
   it("its Paystack-only routes take the new default — they were never a choice against Flutterwave", () => {
     const w = normalizeAiWalletConfig({ routing: legacySaved });
-    for (const p of PAYMENT_PURPOSES) expect(w.routing.NG[p]).toEqual({ primary: "flutterwave", fallback: "paystack" });
+    for (const p of PAYMENT_PURPOSES) expect(w.routing.NG[p]).toEqual({ primary: "paystack", fallback: "flutterwave" });
+    for (const p of PAYMENT_PURPOSES) expect(w.routing.other[p]).toEqual({ primary: "flutterwave", fallback: "paystack" });
     expect(w.routingVersion).toBe(ROUTING_VERSION);
   });
   it("…but with Flutterwave's gate closed (the default today) the effective rail is STILL Paystack alone", () => {
@@ -55,11 +70,26 @@ describe("a version-2 table is authoritative", () => {
     expect(w.NG.wallet_topup).toEqual({ primary: "paystack", fallback: "flutterwave" });
   });
   it("🔴 'Flutterwave, no fallback' can never close payments: Paystack is always its backup", () => {
-    for (const v of [1, 2]) {
-      const w = normalizePaymentRouting({ NG: { wallet_topup: { primary: "flutterwave", fallback: null } } }, v);
-      expect(w.NG.wallet_topup).toEqual({ primary: "flutterwave", fallback: "paystack" });
-      expect(routePayment({ purpose: "wallet_topup", market: "NG", routing: w, usable: paystackOnly })).toEqual(["paystack"]);
+    for (const v of [1, 2, 3]) {
+      const w = normalizePaymentRouting({ other: { wallet_topup: { primary: "flutterwave", fallback: null } } }, v);
+      expect(w.other.wallet_topup).toEqual({ primary: "flutterwave", fallback: "paystack" });
+      expect(routePayment({ purpose: "wallet_topup", market: "other", routing: w, usable: paystackOnly })).toEqual(["paystack"]);
     }
+    const ng = normalizePaymentRouting({ NG: { wallet_topup: { primary: "flutterwave", fallback: null } } }, 3);
+    expect(ng.NG.wallet_topup).toEqual({ primary: "flutterwave", fallback: "paystack" });
+  });
+  it("version 2 → 3: Nigeria's Flutterwave-first rows (the old default) read as Paystack first; other markets are untouched", () => {
+    const old = { NG: { wallet_topup: { primary: "flutterwave", fallback: "paystack" }, sub_purchase: { primary: "flutterwave", fallback: "paystack" } }, other: { wallet_topup: { primary: "flutterwave", fallback: "paystack" } } };
+    const w = normalizePaymentRouting(old, 2);
+    expect(w.NG.wallet_topup).toEqual({ primary: "paystack", fallback: "flutterwave" });
+    expect(w.NG.sub_purchase).toEqual({ primary: "paystack", fallback: "flutterwave" });
+    expect(w.other.wallet_topup).toEqual({ primary: "flutterwave", fallback: "paystack" });
+  });
+  it("…but an admin who saves Flutterwave first for Nigeria under version 3 keeps it", () => {
+    const w = normalizePaymentRouting({ NG: { wallet_topup: { primary: "flutterwave", fallback: "paystack" } } }, 3);
+    expect(w.NG.wallet_topup).toEqual({ primary: "flutterwave", fallback: "paystack" });
+    const cfg = normalizeAiWalletConfig({ routingVersion: 3, routing: { NG: { wallet_topup: { primary: "flutterwave", fallback: "paystack" } } } });
+    expect(normalizeAiWalletConfig(cfg).routing.NG.wallet_topup).toEqual({ primary: "flutterwave", fallback: "paystack" });
   });
   it("re-reading a normalized table changes nothing (idempotent)", () => {
     const once = normalizeAiWalletConfig({ routing: legacySaved });
@@ -72,8 +102,10 @@ describe("the capability gate decides, never the table", () => {
   it("per purpose: the gate open for wallet top-ups only routes only top-ups to Flutterwave", () => {
     const routing = AI_WALLET_DEFAULTS.routing;
     const gate = (purpose: string) => (p: string) => p === "paystack" || purpose === "wallet_topup";
-    expect(routePayment({ purpose: "wallet_topup", market: "NG", routing, usable: gate("wallet_topup") })).toEqual(["flutterwave", "paystack"]);
-    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: gate("ad_campaign") })).toEqual(["paystack"]);
+    expect(routePayment({ purpose: "wallet_topup", market: "other", routing, usable: gate("wallet_topup") })).toEqual(["flutterwave", "paystack"]);
+    expect(routePayment({ purpose: "ad_campaign", market: "other", routing, usable: gate("ad_campaign") })).toEqual(["paystack"]);
+    expect(routePayment({ purpose: "wallet_topup", market: "NG", routing, usable: gate("wallet_topup") })).toEqual(["paystack", "flutterwave"]);
+    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: gate("ad_campaign"), preferred: "flutterwave" })).toEqual(["paystack"]);
   });
   it("AI plans (2026-10-23): Flutterwave only through its gate AND a plan id, Paystack the backup — the table never decides alone", () => {
     const src = readFileSync(join(process.cwd(), "app/api/ai/subscriptions/checkout/route.ts"), "utf8");

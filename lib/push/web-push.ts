@@ -248,7 +248,16 @@ function isApplePermanentReject(endpoint: string, outcome: SendOutcome): boolean
  * `push_delivery_log`, fire-and-forget — the source for the admin
  * "Push delivery" monitor (features/admin/push-delivery-monitor.tsx).
  */
-export async function sendPushToUser(userId: string, payload: PushPayload): Promise<void> {
+/**
+ * What one send did (Frenz Gift Coin Part 4.1): how many of the member's devices were tried and how many the push
+ * service ACCEPTED (201, first try or retry). Callers that only fire and forget ignore it, as before.
+ */
+export interface PushSendResult {
+  devices: number;
+  accepted: number;
+}
+
+export async function sendPushToUser(userId: string, payload: PushPayload): Promise<PushSendResult> {
   return sendPushToIdentity({ kind: "user", id: userId }, payload);
 }
 
@@ -261,7 +270,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
  * stale endpoint to rot. Only the SELECT filter and the logged identity column
  * differ.
  */
-export async function sendPushToAnon(anonId: string, payload: PushPayload): Promise<void> {
+export async function sendPushToAnon(anonId: string, payload: PushPayload): Promise<PushSendResult> {
   return sendPushToIdentity({ kind: "anon", id: anonId }, payload);
 }
 
@@ -270,16 +279,17 @@ export async function sendPushToAnon(anonId: string, payload: PushPayload): Prom
  * the same sender — retry, pruning, the delivery log — limited to that subscription,
  * and only if it belongs to the member. Never a second sender.
  */
-export async function sendPushToDevice(userId: string, subscriptionId: string, payload: PushPayload): Promise<void> {
+export async function sendPushToDevice(userId: string, subscriptionId: string, payload: PushPayload): Promise<PushSendResult> {
   return sendPushToIdentity({ kind: "user", id: userId, subscriptionId }, payload);
 }
 
 type PushIdentity = { kind: "user" | "anon"; id: string; subscriptionId?: string };
 
-async function sendPushToIdentity(identity: PushIdentity, payload: PushPayload): Promise<void> {
+async function sendPushToIdentity(identity: PushIdentity, payload: PushPayload): Promise<PushSendResult> {
   const userId = identity.kind === "user" ? identity.id : null;
   const anonId = identity.kind === "anon" ? identity.id : null;
-  if (!ensureConfigured()) return;
+  const none: PushSendResult = { devices: 0, accepted: 0 };
+  if (!ensureConfigured()) return none;
   try {
     const db = createAdminClient();
     let q = db
@@ -289,7 +299,7 @@ async function sendPushToIdentity(identity: PushIdentity, payload: PushPayload):
     if (identity.subscriptionId) q = q.eq("id", identity.subscriptionId);
     const { data } = await q;
     const subs = (data as SubRow[]) ?? [];
-    if (subs.length === 0) return;
+    if (subs.length === 0) return none;
 
     // genericBody is a hint for THIS function's caller-facing type only —
     // never part of the actual payload delivered to the service worker.
@@ -398,7 +408,9 @@ async function sendPushToIdentity(identity: PushIdentity, payload: PushPayload):
 
     if (dead.length) await db.from("push_subscriptions").delete().in("id", dead);
     if (logRows.length) void db.from("push_delivery_log").insert(logRows).then(() => {}, () => {});
+    return { devices: subs.length, accepted: logRows.filter((r) => r.status === "sent" || r.status === "retried").length };
   } catch {
     /* never let push failures affect the caller */
+    return none;
   }
 }

@@ -27,8 +27,8 @@ describe("routing — the existing router, a new purpose", () => {
   const routing = normalizePaymentRouting(null);
   const both = () => true;
 
-  it("default (owner 2026-10-23): Flutterwave first, Paystack the fallback, in every market", () => {
-    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: both })).toEqual(["flutterwave", "paystack"]);
+  it("default (owner 2026-10-27): Paystack first in Nigeria with Flutterwave the switch; Flutterwave first elsewhere", () => {
+    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: both })).toEqual(["paystack", "flutterwave"]);
     expect(routePayment({ purpose: "ad_campaign", market: "other", routing, usable: both })).toEqual(["flutterwave", "paystack"]);
   });
   it("while Flutterwave's account capability is unconfirmed (not usable), the route is Paystack alone — as before", () => {
@@ -38,9 +38,9 @@ describe("routing — the existing router, a new purpose", () => {
   });
   it("a SAVED route that still names Bachs reads as the whole default route (Paystack always the fallback) — never an error, never Bachs", () => {
     const saved = normalizePaymentRouting({ NG: { ad_campaign: { primary: "bachs", fallback: "paystack" }, wallet_topup: { primary: "bachs", fallback: null } } });
-    expect(saved.NG.ad_campaign).toEqual({ primary: "flutterwave", fallback: "paystack" });
-    // 🔴 not "Flutterwave with no fallback": that would close payments while Flutterwave is unconfirmed
-    expect(saved.NG.wallet_topup).toEqual({ primary: "flutterwave", fallback: "paystack" });
+    expect(saved.NG.ad_campaign).toEqual({ primary: "paystack", fallback: "flutterwave" });
+    // 🔴 never a single-rail route that could close payments: the whole default, both rails
+    expect(saved.NG.wallet_topup).toEqual({ primary: "paystack", fallback: "flutterwave" });
     expect(routePayment({ purpose: "wallet_topup", market: "NG", routing: saved, usable: (p) => p === "paystack" })).toEqual(["paystack"]);
     expect(JSON.stringify(normalizePaymentRouting(saved))).not.toContain("bachs");
   });
@@ -49,10 +49,10 @@ describe("routing — the existing router, a new purpose", () => {
     expect(normalizePaymentRouting(old).NG.ad_campaign).toEqual(AI_WALLET_DEFAULTS.routing.NG.ad_campaign);
   });
   it("T20 a provider the route does not allow (a removed one included), or an unconfigured one, is ignored", () => {
-    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: both, preferred: "bachs" })).toEqual(["flutterwave", "paystack"]);
-    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: both, preferred: "stripe" })).toEqual(["flutterwave", "paystack"]);
+    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: both, preferred: "bachs" })).toEqual(["paystack", "flutterwave"]);
+    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: both, preferred: "stripe" })).toEqual(["paystack", "flutterwave"]);
     // a member's preference only REORDERS what the route allows
-    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: both, preferred: "paystack" })).toEqual(["paystack", "flutterwave"]);
+    expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: both, preferred: "flutterwave" })).toEqual(["flutterwave", "paystack"]);
     expect(routePayment({ purpose: "ad_campaign", market: "NG", routing, usable: () => false })).toEqual([]);
   });
 });

@@ -689,12 +689,12 @@ describe("Nigeria (2026-10-24) — AI plans: a one-off naira month, or a card su
     process.env.FLUTTERWAVE_VERIFIED_CURRENCIES = "USD,NGN";
   });
   it("the default button: ONE month in naira ($10.00 at ₦1,600 = ₦16,000), no payment plan — every naira method shows", async () => {
-    expect(await (await checkout({ plan: "ai_pro" }, "NG")).json()).toMatchObject({ provider: "flutterwave" });
+    expect(await (await checkout({ plan: "ai_pro", provider: "flutterwave" }, "NG")).json()).toMatchObject({ provider: "flutterwave" });
     expect(calls).toEqual(["fw:checkout:undefined:1600000:NGN:row-first"]);
     expect(attempts()[0]).toMatchObject({ provider_currency: "NGN", provider_amount: 1_600_000, metadata: { one_off_period: "monthly" } });
   });
   it("the card button (no naira plan set): the USD payment plan, as everywhere else", async () => {
-    expect(await (await checkout({ plan: "ai_pro", billing: "renew" }, "NG")).json()).toMatchObject({ provider: "flutterwave" });
+    expect(await (await checkout({ plan: "ai_pro", billing: "renew", provider: "flutterwave" }, "NG")).json()).toMatchObject({ provider: "flutterwave" });
     expect(calls).toEqual(["fw:plan", "fw:checkout:123:1000:USD:row-first"]);
   });
   it("outside Nigeria the body cannot ask for a naira month", async () => {

@@ -159,6 +159,10 @@ describe.skipIf(!PGlite)("the Exclusive journey, end to end (real SQL money func
     }
     if (process.env.JOURNEY_MUTANT) console.warn(`[journey] mutant ${process.env.JOURNEY_MUTANT} applied`);
     await bridge.pull();
+    // 2026-10-27 (full-suite timeouts): compile the modules the timed steps reach (the Paystack webhook route is a ~2.5 s
+    // cold import on its own) HERE, inside the setup budget — a step's 5 s measures what it does, not module compilation.
+    // Nothing is mocked or skipped by this: the steps still import and run the same modules.
+    await Promise.all([import("@/app/api/paystack/webhook/route"), import("./server")]);
   }, 60_000);
   afterAll(async () => {
     await bridge?.close();

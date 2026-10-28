@@ -119,6 +119,30 @@ the member is owed that credit (or a refund through Bachs).
    set) from the hosting environment (Vercel) and from `.env.local`.
 4. Reconcile the 5 pending attempts above in the Bachs dashboard.
 
+## By country (2026-10-27) — Paystack first in Nigeria, Flutterwave first elsewhere
+
+Owner: "make Nigeria users use Paystack as first choice of payment, deposit, plan and withdraw provider, but they can
+decide to switch. Outside Nigeria … Flutterwave as first choice." This supersedes "Flutterwave first in every market"
+below **for Nigeria only**.
+
+- **Routing v3** (`lib/ai/credits/wallet-config.ts`): every purpose defaults to `NG` Paystack → Flutterwave and
+  `other` Flutterwave → Paystack. A table saved under v2 has its NG Flutterwave-first rows read as Paystack-first. A save
+  under v3 is kept as saved, so an admin can still put Flutterwave first for Nigeria. `memberChoice` (on by default)
+  lets the member's `provider` pick reorder the two: top-ups, AI plans, site plans, SUBs, the blue tick and coin
+  deposits all accept it.
+- **Frenz Coin deposits (0299):** a Paystack rail beside Flutterwave's, through the router (purpose `wallet_topup`).
+  Paystack charges naira at the live rate, and the attempt row pins it. References are `frenz_coin_dep_<uuid>` (no
+  `_fw_`) and the webhook purpose is `frenz_coin_deposit`. The same `settle_coin_deposit`, the same hold, and refunds
+  are logged for an admin, as with Flutterwave. The second rail is tried only after a definite refusal, under its own
+  idempotency key (`…-alt1`).
+- **Frenz Coin withdrawals:** the destination bank's country picks the rail (`lib/rewards/payout-rail.ts`): NG, GH, ZA
+  and KE go to Paystack, beyond them to Flutterwave. Today every coin withdrawal is to a Nigerian bank, so Paystack pays
+  it. Exclusive withdrawals keep Admin → SUB → Payout provider.
+- **Not built, owner decisions:** paying a bank outside Nigeria in its own currency. That needs a bank-details form
+  per country, an approved payout rate per currency (no rate is ever assumed), and, for Paystack in Ghana, Kenya or
+  South Africa, a Paystack account registered in that country. Paystack pays out only inside its account's country,
+  and the Frenz account is Nigerian.
+
 ## Flutterwave (Part 2, 2026-10-23) — the primary rail, OFF until the account is confirmed
 
 Owner: Flutterwave first for every one-off payment, charging **USD** (every Frenz price is

@@ -411,9 +411,12 @@ describe("the Multi-Link card: one row that explains itself (2026-10-09 referenc
       "Install" CTAs on one screen was the reported noise, and it is the kind of
       thing that comes back when one of the two halves is edited alone.
     */
-    const page = read("app/(marketing)/page.tsx");
-    expect(page).toMatch(/<SiteHeader landing \/>/);
-    expect(read("components/landing/hero.tsx")).toMatch(/installBanner=\{false\}/);
+    // the static landing (2026-10-27): the header's Install is the only one on the first screen; the second lives
+    // in the "Get the app" band far below the fold
+    const html = read("lib/landing-static/html.ts");
+    const firstScreen = html.slice(html.indexOf("<main"), html.indexOf('id="how"'));
+    expect(firstScreen).not.toContain("data-install");
+    expect(html.slice(html.indexOf("<header"), html.indexOf("</header>")).match(/data-install/g)).toHaveLength(1);
   });
 });
 

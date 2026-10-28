@@ -8,6 +8,10 @@ import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
 import { getPrimaryPages } from "@/lib/seo/seo-pages";
 
+// An unmatched URL renders this under the ROOT layout alone, which no longer carries a stylesheet (2026-10-27) —
+// so it brings the cold-entry one, which already holds its classes (it is one of lib/perf/css-entry's roots).
+import "./entry.css";
+
 /**
  * The site-wide 404 (2026-08-16 SEO audit finding: none existed — Next was
  * serving its own unbranded default for every bad URL).

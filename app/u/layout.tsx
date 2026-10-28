@@ -5,6 +5,9 @@ import { AppSidebar } from "@/features/app-shell/app-sidebar";
 import { AppTopbar } from "@/features/app-shell/app-topbar";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
 
+// this group's stylesheet — the root layout no longer imports one (see app/layout.tsx)
+import "../app.css";
+
 /**
  * Profile pages get the same shell as the rest of the app on desktop — the
  * home-style left sidebar + top bar — so navigation is identical everywhere.

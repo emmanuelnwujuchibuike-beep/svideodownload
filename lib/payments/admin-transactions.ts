@@ -227,7 +227,7 @@ export async function adminRecheckPayment(reference: string, adminId: string): P
     } else if (purpose === "ad_campaign") {
       outcome = await reconcileAdAttempt(db as never, reference);
     } else if (purpose === "coin_deposit") {
-      // Part 4.1: the coin settle path (Flutterwave asked about OUR reference, matched to the row, once in SQL, on hold)
+      // Part 4.1: the coin settle path (the rail that collected it — Flutterwave or Paystack, 0299 — asked about OUR reference, matched to the row, once in SQL, on hold)
       outcome = await reconcileCoinDepositAttempt(reference);
     } else {
       return { ok: false, code: "unsupported", message: "This attempt's purpose has no recheck path." };

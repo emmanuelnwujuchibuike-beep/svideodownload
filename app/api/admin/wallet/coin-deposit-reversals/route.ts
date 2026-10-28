@@ -43,11 +43,11 @@ export async function POST(request: Request) {
   await auditAdminAction(gate.user.id, out.ok ? "admin_coin_deposit_reversal_recorded" : "admin_coin_deposit_reversal_refused", "coin_deposit_reversal.record", parsed.data.reference, out.ok ? { id: out.id, state: out.state, shortfall: out.shortfall } : { reason: out.reason });
   if (out.ok) return NextResponse.json(out);
   const msg: Record<string, [number, string]> = {
-    not_paid: [409, "Flutterwave doesn't show this deposit as paid, so nothing was taken back."],
+    not_paid: [409, "The provider doesn't show this deposit as paid, so nothing was taken back."],
     not_credited: [409, "No coins were ever added for this reference."],
     invalid: [400, "That amount is more than the charge."],
     pending_migration: [503, "Coin deposit reversals arrive with migration 0280."],
-    error: [503, "Flutterwave or the database couldn't be reached. Nothing was changed. Try again."],
+    error: [503, "The provider or the database couldn't be reached. Nothing was changed. Try again."],
   };
   const [status, error] = msg[out.reason] ?? [409, "Couldn't record it."];
   return NextResponse.json({ error, reason: out.reason }, { status });

@@ -1,6 +1,7 @@
 "use client";
 
-import { createClient } from "@/lib/supabase/client";
+import type { BrowserClient } from "@/lib/supabase/client-instance";
+import { getClient } from "@/lib/supabase/client-lazy";
 import { getClientAuthUser } from "@/lib/supabase/client-user";
 
 /**
@@ -40,25 +41,37 @@ function fire<T>(set: Set<(a: T) => void>, arg: T) {
   }
 }
 
+/*
+  2026-10-27 — the browser Supabase client (realtime included, ~57 kB gz) is loaded ON DEMAND through client-lazy,
+  not imported eagerly: the bell is in the signed-in shell's topbar, so an eager import put the whole library on the
+  first-load path of every (app) route, /downloads included. The channel opens a moment later instead; nothing is lost.
+*/
 function open() {
-  const supabase = createClient();
-  let channel: ReturnType<typeof supabase.channel> | null = null;
+  let supabase: BrowserClient | null = null;
+  let channel: ReturnType<BrowserClient["channel"]> | null = null;
   let closed = false;
-  void getClientAuthUser(supabase).then(({ data: auth }) => {
-    const uid = auth.user?.id;
-    if (!uid || closed) return;
-    const ch = supabase
-      .channel(`notifications:${uid}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${uid}` }, (payload) => fire(listeners, payload.new as NotificationInsert))
-      .on("broadcast", { event: "sync" }, () => fire(syncListeners, undefined))
-      .subscribe();
-    channel = ch;
-    live = { send: () => void ch.send({ type: "broadcast", event: "sync", payload: {} }).catch(() => {}) };
-  });
+  void getClient()
+    .then(async (sb) => {
+      if (closed) return;
+      supabase = sb;
+      const { data: auth } = await getClientAuthUser(sb);
+      const uid = auth.user?.id;
+      if (!uid || closed) return;
+      const ch = sb
+        .channel(`notifications:${uid}`)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${uid}` }, (payload) => fire(listeners, payload.new as NotificationInsert))
+        .on("broadcast", { event: "sync" }, () => fire(syncListeners, undefined))
+        .subscribe();
+      channel = ch;
+      live = { send: () => void ch.send({ type: "broadcast", event: "sync", payload: {} }).catch(() => {}) };
+    })
+    .catch(() => {
+      /* realtime is non-critical: fail open, the bell still loads its list */
+    });
   return () => {
     closed = true;
     live = null;
-    if (channel) void supabase.removeChannel(channel);
+    if (supabase && channel) void supabase.removeChannel(channel);
   };
 }
 

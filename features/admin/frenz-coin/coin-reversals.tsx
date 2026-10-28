@@ -69,10 +69,10 @@ export function CoinReversals({ sensitiveFetch }: { sensitiveFetch: SensitiveFet
   return (
     <div className="space-y-5">
       <Card title="Record a refund or chargeback">
-        <p className="mb-3 text-xs text-muted-foreground">Only after you see it in the Flutterwave dashboard. The original charge is checked again first. A full refund or a chargeback takes the coins back now (any part already spent becomes a shortfall); a partial refund is held for review and applied separately.</p>
+        <p className="mb-3 text-xs text-muted-foreground">Only after you see it in the provider&apos;s dashboard (Flutterwave, or Paystack for frenz_coin_dep_ references without _fw_). The original charge is checked again first. A full refund or a chargeback takes the coins back now (any part already spent becomes a shortfall); a partial refund is held for review and applied separately.</p>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field htmlFor="rev-ref" label="Deposit reference">
-            <input id="rev-ref" className={`${INPUT} font-mono`} placeholder="frenz_coin_dep_fw_…" value={rec.reference} onChange={(e) => setRec({ ...rec, reference: e.target.value })} />
+            <input id="rev-ref" className={`${INPUT} font-mono`} placeholder="frenz_coin_dep_…" value={rec.reference} onChange={(e) => setRec({ ...rec, reference: e.target.value })} />
           </Field>
           <Field htmlFor="rev-kind" label="What happened">
             <select id="rev-kind" className={INPUT} value={rec.kind} onChange={(e) => setRec({ ...rec, kind: e.target.value as "refund" | "dispute", partial: e.target.value === "dispute" ? false : rec.partial })}>

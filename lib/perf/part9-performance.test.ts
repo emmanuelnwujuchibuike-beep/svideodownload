@@ -134,9 +134,11 @@ describe("one notification channel app-wide", () => {
     channel.mockReset();
     removeChannel.mockReset();
     vi.resetModules();
-    vi.doMock("@/lib/supabase/client", () => {
+    // 2026-10-27: the stream loads the browser client on demand (client-lazy) — off the signed-in shell's first load
+    vi.doMock("@/lib/supabase/client-lazy", () => {
       const ch = { on: () => ch, subscribe: () => ch };
-      return { createClient: () => ({ channel: (n: string) => (channel(n), ch), removeChannel }) };
+      const client = { channel: (n: string) => (channel(n), ch), removeChannel };
+      return { getClient: async () => client };
     });
     vi.doMock("@/lib/supabase/client-user", () => ({ getClientAuthUser: async () => ({ data: { user: { id: "u1" } } }) }));
   });
@@ -144,8 +146,8 @@ describe("one notification channel app-wide", () => {
   it("three listeners share one channel; the last one out closes it", async () => {
     const { onNotificationInsert, notificationStreamState } = await import("@/features/notifications/notif-stream");
     const offs = [onNotificationInsert(() => {}), onNotificationInsert(() => {}), onNotificationInsert(() => {})];
-    await Promise.resolve();
-    await Promise.resolve();
+    // the on-demand client and the auth read both resolve first
+    await new Promise((r) => setTimeout(r, 0));
     expect(channel).toHaveBeenCalledTimes(1);
     offs[0]!();
     offs[1]!();

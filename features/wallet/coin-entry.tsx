@@ -5,10 +5,8 @@ import Link from "next/link";
 import { IconTile } from "@/components/icons/icon-tile";
 import { cn } from "@/lib/utils";
 
-import { CoinAmount } from "./coin-amount";
-import { useCoinGlance } from "./coin-glance";
 import { CloseWhenOpened, TapPending } from "./tap-pending";
-import { ChevronRightIcon, SendIcon } from "./wallet-icons";
+import { ChevronRightIcon } from "./wallet-icons";
 
 /*
   The wallet's ENTRY POINTS, from the owner's "Where the wallet lives" board (2026-10-25): the balance pill in the
@@ -16,9 +14,6 @@ import { ChevronRightIcon, SendIcon } from "./wallet-icons";
   chat's options. Each renders NOTHING until the member's real balance is known and Frenz Coin is on — never a
   placeholder figure. They share one read (coin-glance.ts).
 */
-
-const INK_GLOW =
-  "radial-gradient(80% 120% at 100% 0%, hsl(var(--frenz-magenta) / 0.55) 0%, hsl(var(--frenz-magenta) / 0) 60%), radial-gradient(70% 120% at 0% 100%, hsl(var(--frenz-blue) / 0.7) 0%, hsl(var(--frenz-blue) / 0) 62%), hsl(247 21% 8%)";
 
 /**
  * Entry 1 — the /downloads header. Owner, 2026-10-25: no balance on the Download page, then "make the wallet button
@@ -54,60 +49,67 @@ export function CoinHeaderPill({ className }: { className?: string }) {
   );
 }
 
-/** Entry 2 — the profile menu card: "Frenz Coin wallet", the balance as a currency, and "Open ›". */
-export function CoinMenuCard({ onNavigate }: { onNavigate?: () => void }) {
-  const g = useCoinGlance();
-  if (!g) return null;
+/** The wallet glyph, in the current text colour (the rows below). */
+function WalletGlyph({ size = 20 }: { size?: number }) {
   return (
-    <Link
-      href="/wallet"
-      prefetch={false}
-      className="mx-4 mt-3 touch-manipulation flex items-center justify-between gap-3 overflow-hidden rounded-[22px] px-4 py-3.5 text-white shadow-frenz-raised outline-none transition active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-frenz-blue motion-reduce:transition-none"
-      style={{ background: INK_GLOW }}
-    >
-      <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-[12px] font-semibold text-white/75">Frenz Coin wallet</span>
-        <CoinAmount cents={g.availableCents} className="text-[26px] font-extrabold leading-tight tracking-[-0.8px]" />
+    <svg aria-hidden width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H17a1 1 0 0 1 1 1v2" />
+      <rect x="3.5" y="8" width="17" height="11.5" rx="2.6" />
+      <path d="M20.5 12h-3.25a1.75 1.75 0 0 0 0 3.5h3.25" />
+    </svg>
+  );
+}
+
+/*
+  Owner, 2026-10-27: "convert this Send Frenz Coin button in the chat menu and in the profile menu to be just a wallet and
+  coin button that prefetches and responds to tap instantly — to cut weight and less visual noise, each button with a
+  description". So both are now quiet rows like their neighbours: the glyph, a title, ONE line saying what it does, and
+  a chevron that turns into the tap spinner. No balance figure and no dark card — the amount component and its read are
+  gone from these surfaces (the wallet itself shows the balance). Both are main buttons, so both prefetch.
+*/
+const ROW =
+  "flex w-full touch-manipulation items-center gap-3 rounded-[18px] border border-frenz-line bg-frenz-card px-3.5 py-2.5 text-left text-frenz-ink outline-none transition active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2 motion-reduce:transition-none min-h-[56px]";
+
+function RowBody({ title, description }: { title: string; description: string }) {
+  return (
+    <>
+      <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-frenz-fill text-frenz-violet">
+        <WalletGlyph />
       </span>
-      <span className="flex h-9 shrink-0 items-center gap-1 rounded-full border border-white/25 bg-white/10 px-3.5 text-[13px] font-bold backdrop-blur-md">
-        Open{" "}
-        <TapPending size={14}>
-          <ChevronRightIcon size={14} strokeWidth={2.6} />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="font-heading text-[14px] font-bold">{title}</span>
+        <span className="truncate text-[13px] text-frenz-muted">{description}</span>
+      </span>
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center text-frenz-muted">
+        <TapPending size={16}>
+          <ChevronRightIcon size={16} strokeWidth={2.4} />
         </TapPending>
       </span>
-      <CloseWhenOpened onOpened={onNavigate} />
-    </Link>
+    </>
+  );
+}
+
+/** Entry 2 — the profile menu: the Frenz Coin wallet, as one quiet row. */
+export function CoinMenuCard({ onNavigate }: { onNavigate?: () => void }) {
+  return (
+    <div className="mx-4 mt-3">
+      <Link href="/wallet" className={ROW}>
+        <RowBody title="Frenz Coin wallet" description="Your balance, deposits, withdrawals and transfers" />
+        <CloseWhenOpened onOpened={onNavigate} />
+      </Link>
+    </div>
   );
 }
 
 /**
- * In a chat's options: "Send Frenz Coin" to the person you're talking to — the wallet's own transfer screen, with them
+ * In a chat's options: Frenz Coin to the person you're talking to — the wallet's own transfer screen, with them
  * already chosen (the server resolves who they are; nothing is sent until the member reviews and enters their PIN).
  */
 export function CoinChatSend({ recipientId, name, onNavigate }: { recipientId: string; name: string; onNavigate?: () => void }) {
-  const g = useCoinGlance();
-  if (!g) return null;
   return (
-    <Link
-      href={`/wallet/transfer?to=${encodeURIComponent(recipientId)}`}
-      prefetch={false}
-      className="mt-4 flex touch-manipulation w-full items-center gap-3 rounded-[20px] p-3.5 text-left text-white shadow-frenz-card outline-none transition active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2 motion-reduce:transition-none"
-      style={{ background: INK_GLOW }}
-    >
-      <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15">
-        <TapPending size={18}>
-          <SendIcon size={19} />
-        </TapPending>
-      </span>
+    <Link href={`/wallet/transfer?to=${encodeURIComponent(recipientId)}`} className={cn(ROW, "mt-4")}>
+      <RowBody title="Send Frenz Coin" description={`Send money to ${name} from your wallet`} />
       <CloseWhenOpened onOpened={onNavigate} />
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="font-heading text-[15px] font-bold">Send Frenz Coin</span>
-        <span className="truncate text-[13px] text-white/80">Send money to {name}</span>
-      </span>
-      <span className="shrink-0 text-right text-[12px] leading-tight text-white/80">
-        Available
-        <CoinAmount cents={g.availableCents} className="block text-[14px] font-bold text-white" />
-      </span>
     </Link>
   );
 }

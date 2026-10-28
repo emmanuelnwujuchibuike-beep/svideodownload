@@ -144,7 +144,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (post.status !== "published" || post.visibility !== "public") {
     return NextResponse.json({ error: "This post can't be reposted." }, { status: 403 });
   }
-  if (post.publisher_id === user.id) return NextResponse.json({ error: "You can't repost your own post." }, { status: 400 });
+  // Your own post may be reposted too (owner, 2026-10-27: "users should be able to repost their own posts"). Nothing
+  // else changes: a self-repost notifies nobody (the notify trigger and pushSocialEvent both skip the actor), and reposts
+  // earn no reward, so there is nothing to farm.
 
   // ── Provenance ────────────────────────────────────────────────────────────
   // A client hint, verified before it is trusted: the cited repost must exist

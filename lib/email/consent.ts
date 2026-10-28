@@ -73,6 +73,12 @@ export const MEMBER_EMAIL_KINDS = {
   subscription_renewal: "optional",
   ad_slot_waitlist: "optional",
   new_message: "optional",
+  // Frenz Gift Coin Part 4.1: "you received a sticker gift" (lib/gift/gift-notify.ts). Optional: the member's own
+  // gift-email switch (0294) AND this global switch both silence it. The gift itself is in the chat either way.
+  gift_received: "optional",
+  // 0295: "someone new wants to send you a message" (lib/social/message-request.ts) — never the message itself.
+  // Optional: the member's own message-request email switch AND this global switch both silence it.
+  message_request: "optional",
   credits_received: "transactional",
   withdrawal_decision: "transactional",
   withdrawal_update: "transactional",

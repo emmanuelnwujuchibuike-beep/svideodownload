@@ -115,6 +115,16 @@ const config: Config = {
           "linear-gradient(to right, hsl(var(--border) / 0.4) 1px, transparent 1px), linear-gradient(to bottom, hsl(var(--border) / 0.4) 1px, transparent 1px)",
       },
       keyframes: {
+        // the who-reposted badge on a reel: holds, then floats up and fades like a story reaction (owner, 2026-10-27)
+        "badge-rise": {
+          "0%, 62%": { opacity: "1", transform: "translateY(0) scale(1)" },
+          "70%": { opacity: "1", transform: "translateY(-14px) scale(1.15)" },
+          "100%": { opacity: "0", transform: "translateY(-72px) scale(1.5)", visibility: "hidden" },
+        },
+        "badge-fade": {
+          "0%, 62%": { opacity: "1" },
+          "100%": { opacity: "0", visibility: "hidden" },
+        },
         "fade-up": {
           from: { opacity: "0", transform: "translateY(12px)" },
           to: { opacity: "1", transform: "translateY(0)" },

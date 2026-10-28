@@ -19,7 +19,12 @@ import { DEFAULT_LOCALE, getLocale, isRtl } from "@/lib/i18n/locales";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
-import "./globals.css";
+/*
+  NO stylesheet here any more (2026-10-27). The root layout used to import globals.css, which put the WHOLE app's
+  stylesheet (455 kB, 67 kB gzipped) in front of the landing's first paint. Each route group now brings its own:
+  (marketing) → app/entry.css (the same sheet, compiled for just what it can reach), every other group → globals.css.
+  lib/perf/css-entry.test.ts fails if a page ends up with neither.
+*/
 
 /*
  * Inter — restored 2026-07-19.

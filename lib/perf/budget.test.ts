@@ -3,15 +3,19 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { buildExists, formatKb, routeWeights } from "./budget";
+import { ancestorEntries, buildExists, entryWeight, formatKb, routeWeights } from "./budget";
 
-/** The JS chunks the landing page actually loads, straight from the manifest. */
+/**
+ * The JS chunks a cold-entry React page loads, straight from the manifest. Since 2026-10-27 the landing itself is the
+ * static app/route.ts with no React bundle (its own budget: lib/perf/landing-static.test.ts), so this reads the
+ * platform downloader pages — the cold-entry pages still built with React.
+ */
 function landingChunks(): string[] {
   try {
     const manifest = JSON.parse(readFileSync(join(".next", "app-build-manifest.json"), "utf8")) as {
       pages?: Record<string, string[]>;
     };
-    return (manifest.pages?.["/(marketing)/page"] ?? []).filter((f) => f.endsWith(".js"));
+    return (manifest.pages?.["/(marketing)/[downloader]/page"] ?? []).filter((f) => f.endsWith(".js"));
   } catch {
     return [];
   }
@@ -677,8 +681,8 @@ const GLOBAL_CEILING = 380 * 1024;
  */
 const ENTRY_CEILING = 218 * 1024;
 
+// "/(marketing)/page" left this list 2026-10-27: the landing is the static app/route.ts (lib/perf/landing-static.test.ts)
 const ENTRY_ROUTES = [
-  "/(marketing)/page",
   "/(marketing)/[downloader]/page",
   "/(marketing)/academy/page",
   "/(marketing)/trust/page",
@@ -846,4 +850,47 @@ describe.skipIf(!buildExists())("route weight budget", () => {
       `Entry routes absent from the build manifest — the budget is not measuring them:\n  ${missing.join("\n  ")}`,
     ).toHaveLength(0);
   });
+});
+
+/**
+ * ── THE FULL COLD-ENTRY WEIGHT: page + every ancestor layout (2026-10-27) ────
+ *
+ * Owner: "the landing page, the PWA white screen and the Download page now load like I'm downloading a file".
+ * Every ceiling above reads routeWeights(), which counts a page's OWN manifest list — and Next lists a layout's chunks
+ * under the layout's key. So the signed-in shell was invisible to all of them: /downloads "weighed" 188 kB while a
+ * cold visit downloaded 380.8 kB, after the shell had quietly taken in the Supabase realtime client (the bell's
+ * notif-stream), framer-motion (the Create sheet, the inbox chrome, the PIN gate) and the presence picker.
+ *
+ * Measured with entryWeight() on the build after the fix (gzipped JS, page + layouts):
+ *   /(marketing)/page          243,637 B   (was 243,359 — the landing's JS was never the regression; its CSS was)
+ *   /(app)/downloads/page      256,609 B   (was 380,772: −124 kB)
+ *   /(app)/home/page           332,874 B   (was 416,567: −84 kB)
+ * Ceilings sit a few kB above, the same ratchet rule: they only move down.
+ */
+const FULL_ENTRY_CEILINGS: Record<string, number> = {
+  "/(marketing)/[downloader]/page": 248 * 1024,
+  "/(app)/downloads/page": 262 * 1024,
+  "/(app)/home/page": 330 * 1024,
+};
+
+describe("ancestorEntries", () => {
+  it("names the root, the group and every nested layout and template", () => {
+    expect(ancestorEntries("/(app)/messages/[id]/page")).toEqual(["/layout", "/template", "/(app)/layout", "/(app)/template", "/(app)/messages/layout", "/(app)/messages/template", "/(app)/messages/[id]/layout", "/(app)/messages/[id]/template"]);
+  });
+});
+
+describe.skipIf(!buildExists())("full cold-entry weight (page + layouts)", () => {
+  it("counts the layouts — more than the page alone, where a layout ships chunks of its own", () => {
+    const page = routeWeights().find((r) => r.route === "/(app)/downloads/page")!;
+    const full = entryWeight("/(app)/downloads/page")!;
+    expect(full.bytes).toBeGreaterThan(page.bytes);
+    expect(entryWeight("/(app)/no-such-route/page")).toBeNull();
+  });
+  it("keeps every entry route under its full-weight ceiling", () => {
+    const over = Object.entries(FULL_ENTRY_CEILINGS)
+      .map(([route, ceiling]) => ({ route, ceiling, w: entryWeight(route) }))
+      .filter((x) => !x.w || x.w.bytes > x.ceiling)
+      .map((x) => `${x.w ? formatKb(x.w.bytes) : "missing"} > ${formatKb(x.ceiling)}  ${x.route}`);
+    expect(over, `Full cold-entry weight over budget (page + its layouts):\n  ${over.join("\n  ")}`).toEqual([]);
+  }, 60_000);
 });

@@ -13,8 +13,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
  */
 
 /** Part 8 §22: Character Replace settings changes ride the same log. */
+// Frenz Gift Coin Part 3: "frenz_gift" = the conversion rules and the sticker catalogue (written by the 0291 functions)
 // Frenz Coin Part 2 (M5): "rewards" = the reward rules, withdrawal rates and SUB money settings; "ai_wallet" = deposits, transfer fees, payment routing; "frenz_coin" = the coin wallet (Part 3)
-export type ConfigSurface = "flag" | "experiment" | "character_replace" | "ai_plans" | "ai_providers" | "lip_sync" | "text_to_audio" | "voice_clone" | "ai_showcase" | "ai_promo" | "ad_pricing" | "rewards" | "ai_wallet" | "frenz_coin";
+export type ConfigSurface = "flag" | "experiment" | "character_replace" | "ai_plans" | "ai_providers" | "lip_sync" | "text_to_audio" | "voice_clone" | "ai_showcase" | "ai_promo" | "ad_pricing" | "rewards" | "ai_wallet" | "frenz_coin" | "frenz_gift";
 
 export interface ConfigChange {
   id: string;

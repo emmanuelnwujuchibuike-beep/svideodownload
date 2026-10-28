@@ -229,7 +229,9 @@ export function HomeTools({ aiPromo, rotateUrls }: { aiPromo: AiPromo | null; ro
           warmOnIdle
           spinner={false}
           data-track="ai_clicked"
-          className={cn(SHOWCASE, "bg-[radial-gradient(circle_at_75%_20%,hsl(var(--frenz-magenta)),hsl(var(--frenz-violet))_40%,hsl(var(--frenz-ink))_92%)]")}
+          // no purple gradient (owner, 2026-10-27: "remove this purple gradient slot from the AI button") — a plain dark
+          // base under the promo media, the same in both themes so the white words always read (--frenz-ink flips light in dark)
+          className={cn(SHOWCASE, "bg-neutral-900")}
         >
           {playsPromo ? <AiPromoLoader promo={aiPromo!} /> : null}
           <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/55 to-transparent" />

@@ -37,6 +37,8 @@ function safeName(title: string | null, id: string, ext: string): string {
  * still in flight at that moment needs `after()` to be guaranteed to run. */
 async function bumpDownloadsCount(admin: ReturnType<typeof createAdminClient>, postId: string, publisherId: string, before: number): Promise<void> {
   const result = await admin.from("posts").update({ downloads_count: before + 1 }).eq("id", postId);
+  // Creator analytics (0297): the dated twin of the counter. Best-effort and after the response, like the bump itself.
+  await admin.from("post_download_events").insert({ post_id: postId, creator_id: publisherId }).then(() => undefined, () => undefined);
   // Postgrest RESOLVES (doesn't reject) on a query-level error — a failed
   // update must not still fire the milestone check as if the count
   // genuinely advanced.

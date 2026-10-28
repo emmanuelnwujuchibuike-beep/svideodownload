@@ -13,17 +13,22 @@ import { ActionBar, AmountEntry, DetailList, Notice, PillButton, SectionTitle, S
 const QUICK = [1000, 2500, 5000, 10000];
 
 /**
- * /wallet/deposit (design: Deposit). The member picks an amount; the server records the attempt and hands back the
- * Flutterwave checkout. Nothing is credited here — the payment is verified by the server when they come back (and by the
+ * /wallet/deposit (design: Deposit). The member picks an amount (and, when two are offered, who to pay through —
+ * Paystack first in Nigeria, Flutterwave elsewhere, 0299); the server records the attempt and hands back the checkout. Nothing is credited here — the payment is verified by the server when they come back (and by the
  * webhook regardless), then the coins sit on hold for the published hold period. No card fee, no markup: 1 FC = $1.
  */
-export function WalletDeposit({ summary }: { summary: WalletSummary }) {
+const PROVIDER_NAME = { paystack: "Paystack", flutterwave: "Flutterwave" } as const;
+type Provider = keyof typeof PROVIDER_NAME;
+
+export function WalletDeposit({ summary, providers = [] }: { summary: WalletSummary; providers?: Provider[] }) {
   const [raw, setRaw] = useStickyState("wallet-deposit-amount", 0, "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ msg: string; expired: boolean } | null>(null);
   const [touched, setTouched] = useState(false);
-  // one key per amount: a double tap or a retry of the same amount is the same deposit attempt
-  const key = useRef<{ cents: number; key: string } | null>(null);
+  // the router's first choice unless the member switches (the server re-checks it against what it offers)
+  const [pick, setPick] = useState<Provider | null>(providers[0] ?? null);
+  // one key per amount and provider: a double tap or a retry of the same choice is the same deposit attempt
+  const key = useRef<{ cents: number; provider: Provider | null; key: string } | null>(null);
 
   // back from the checkout via the browser's back button: the page comes out of the back-forward cache as it was left,
   // "Opening checkout…" included — let the member act again (the same key makes a second tap the same attempt)
@@ -53,10 +58,10 @@ export function WalletDeposit({ summary }: { summary: WalletSummary }) {
   const start = async () => {
     setTouched(true);
     if (problem || cents == null || busy) return;
-    if (!key.current || key.current.cents !== cents) key.current = { cents, key: newKey("dep") };
+    if (!key.current || key.current.cents !== cents || key.current.provider !== pick) key.current = { cents, provider: pick, key: newKey("dep") };
     setBusy(true);
     setError(null);
-    const r = await walletApi.deposit({ amountCents: cents, idempotencyKey: key.current.key });
+    const r = await walletApi.deposit({ amountCents: cents, idempotencyKey: key.current.key, ...(pick ? { provider: pick } : {}) });
     if (!r.ok) {
       setBusy(false);
       return setError({ msg: failMessage(r, "deposit"), expired: r.session === "expired" });
@@ -81,6 +86,20 @@ export function WalletDeposit({ summary }: { summary: WalletSummary }) {
           </div>
         ) : null}
       </section>
+
+      {providers.length > 1 ? (
+        <>
+          <SectionTitle>Pay with</SectionTitle>
+          <div role="radiogroup" aria-label="Pay with" className="mx-4 grid grid-cols-2 gap-2">
+            {providers.map((p, i) => (
+              <button key={p} type="button" role="radio" aria-checked={pick === p} disabled={busy} onClick={() => setPick(p)} className="flex min-h-12 flex-col items-start justify-center rounded-2xl border border-border bg-card px-4 py-2 text-left outline-none transition active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring aria-checked:border-foreground aria-checked:ring-1 aria-checked:ring-foreground">
+                <span className="text-[14px] font-bold">{PROVIDER_NAME[p]}</span>
+                <span className="text-[12px] text-muted-foreground">{i === 0 ? "Recommended for you" : "Also available"}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
 
       {touched && problem ? (
         <p role="alert" className="mx-5 mt-3 text-[13px] font-semibold text-rose-700 dark:text-rose-300">
@@ -110,7 +129,7 @@ export function WalletDeposit({ summary }: { summary: WalletSummary }) {
       <ActionBar
         hint={
           <>
-            <LockIcon size={13} /> Paid securely through Flutterwave. You&apos;ll come back here when it&apos;s done.
+            <LockIcon size={13} /> Paid securely through {pick ? PROVIDER_NAME[pick] : "our payment provider"}. You&apos;ll come back here when it&apos;s done.
           </>
         }
       >

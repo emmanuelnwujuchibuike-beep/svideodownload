@@ -550,7 +550,7 @@ describe("Flutterwave in naira for Nigeria — opened and settled", () => {
   });
 
   it("SUB: a member in Nigeria gets a NAIRA checkout; a verified naira charge settles once at that amount", async () => {
-    expect(await startSubCheckout({ subscriberId: S, email: "a@b.co", creatorId: C, returnPath: "/x", market: "NG" })).toMatchObject({ ok: true });
+    expect(await startSubCheckout({ subscriberId: S, email: "a@b.co", creatorId: C, returnPath: "/x", market: "NG", provider: "flutterwave" })).toMatchObject({ ok: true });
     const row = db.tables.sub_purchases![0]!;
     expect(seen[0]).toMatchObject({ currency: "NGN" });
     expect(row).toMatchObject({ provider: "flutterwave", charged_currency: "NGN", charged_minor: seen[0]!.amountMinor });
@@ -564,7 +564,7 @@ describe("Flutterwave in naira for Nigeria — opened and settled", () => {
   });
 
   it("SUB: a naira charge for the WRONG amount, or paid in dollars, never settles", async () => {
-    await startSubCheckout({ subscriberId: S, email: "a@b.co", creatorId: C, returnPath: "/x", market: "NG" });
+    await startSubCheckout({ subscriberId: S, email: "a@b.co", creatorId: C, returnPath: "/x", market: "NG", provider: "flutterwave" });
     const row = db.tables.sub_purchases![0]!;
     const ref = String(row.reference);
     const settle = vi.fn(() => ({ data: { ok: true }, error: null }));
@@ -574,8 +574,19 @@ describe("Flutterwave in naira for Nigeria — opened and settled", () => {
     expect(settle).not.toHaveBeenCalled();
   });
 
-  it("paid verification: naira in Nigeria; the verified naira charge grants the tick once", async () => {
+  it("owner 2026-10-27: with no switch, a member in Nigeria opens PAYSTACK first — subs and the blue tick; outside Nigeria Flutterwave", async () => {
+    expect(await startSubCheckout({ subscriberId: S, email: "a@b.co", creatorId: C, returnPath: "/x", market: "NG" })).toMatchObject({ ok: true });
+    expect(db.tables.sub_purchases![0]).toMatchObject({ provider: "paystack" });
     expect(await startVerificationCheckout({ userId: S, email: "a@b.co", market: "NG" })).toMatchObject({ ok: true });
+    expect(db.tables.verification_purchases![0]).toMatchObject({ provider: "paystack" });
+    expect(seen).toHaveLength(0);
+    db.tables.sub_purchases = [];
+    expect(await startSubCheckout({ subscriberId: S, email: "a@b.co", creatorId: C, returnPath: "/x", market: "other" })).toMatchObject({ ok: true });
+    expect(db.tables.sub_purchases![0]).toMatchObject({ provider: "flutterwave" });
+  });
+
+  it("paid verification: naira in Nigeria; the verified naira charge grants the tick once", async () => {
+    expect(await startVerificationCheckout({ userId: S, email: "a@b.co", market: "NG", provider: "flutterwave" })).toMatchObject({ ok: true });
     const row = db.tables.verification_purchases![0]!;
     expect(row).toMatchObject({ provider: "flutterwave", price_cents: 500, charged_currency: "NGN", charged_minor: 500 * 1600, fx_minor_per_usd: 160_000 });
     const ref = String(row.reference);

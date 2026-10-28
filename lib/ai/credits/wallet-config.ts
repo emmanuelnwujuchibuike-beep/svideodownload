@@ -95,14 +95,22 @@ export const WALLET_BOUNDS = {
 } as const;
 
 const FW_THEN_PAYSTACK: PaymentRoute = { primary: "flutterwave", fallback: "paystack" };
-const ROUTE_DEFAULTS: Record<PaymentPurpose, PaymentRoute> = { wallet_topup: FW_THEN_PAYSTACK, ai_subscription: FW_THEN_PAYSTACK, ad_campaign: FW_THEN_PAYSTACK, sub_purchase: FW_THEN_PAYSTACK, verification: FW_THEN_PAYSTACK, site_subscription: FW_THEN_PAYSTACK };
+const PAYSTACK_THEN_FW: PaymentRoute = { primary: "paystack", fallback: "flutterwave" };
+const every = (r: PaymentRoute): Record<PaymentPurpose, PaymentRoute> => ({ wallet_topup: r, ai_subscription: r, ad_campaign: r, sub_purchase: r, verification: r, site_subscription: r });
+/*
+  Owner, 2026-10-27: "make Nigeria users use Paystack as first choice of payment, deposit, plan and withdraw provider,
+  but they can decide to switch. Outside Nigeria … Flutterwave as first choice." Nigeria: Paystack first, Flutterwave
+  the fallback (the member may pick it: memberChoice). Everywhere else: Flutterwave first, Paystack the backup.
+*/
+const ROUTE_DEFAULTS_NG = every(PAYSTACK_THEN_FW);
+const ROUTE_DEFAULTS = every(FW_THEN_PAYSTACK);
 
 /** $5 · $10 · $25 · $50 · $100 at 10¢ — the dollar shortcuts that were live before 0184, as credits. No bonus is invented. */
 export const AI_WALLET_DEFAULTS: AiWalletConfig = {
   packs: [50, 100, 250, 500, 1000].map((credits) => ({ id: `pack_${credits}`, credits, bonusCredits: 0, enabled: true, highlight: credits === 100 })),
   custom: { enabled: true, minCredits: 10, maxCredits: 5000 },
-  routing: { NG: ROUTE_DEFAULTS, other: ROUTE_DEFAULTS },
-  routingVersion: 2,
+  routing: { NG: ROUTE_DEFAULTS_NG, other: ROUTE_DEFAULTS },
+  routingVersion: 3,
   memberChoice: true,
   transfers: { enabled: true, feePercent: 5, depositedFeePercent: 10, minCredits: 10, maxCredits: 5000, dailyMaxCredits: 20000 },
   provider: "paystack",
@@ -181,7 +189,9 @@ const knownProvider = (v: unknown): v is TopupProviderId => (TOPUP_PROVIDER_IDS 
  * Open attempts are never re-routed: routing only picks the rail of a NEW checkout, and every open
  * attempt answers through the provider written on its own row.
  */
-export const ROUTING_VERSION = 2;
+// 3 (2026-10-27): Nigeria's rows default to Paystack first — a table saved before (Flutterwave first everywhere) is read
+// with Nigeria's Flutterwave-first rows turned to Paystack-first; anything an admin saves from now on is kept as saved
+export const ROUTING_VERSION = 3;
 
 function normalizeRoute(raw: unknown, d: PaymentRoute, version: number): PaymentRoute {
   const r = isRecord(raw) ? raw : {};
@@ -191,7 +201,9 @@ function normalizeRoute(raw: unknown, d: PaymentRoute, version: number): Payment
   const primary: TopupProviderId = r.primary;
   const fb = r.fallback === null ? null : knownProvider(r.fallback) ? r.fallback : d.fallback;
   // a version-1 Paystack-only route predates Flutterwave: the new default
-  if (version < ROUTING_VERSION && primary === "paystack" && (fb === null || fb === "paystack")) return { ...d };
+  if (version < 2 && primary === "paystack" && (fb === null || fb === "paystack")) return { ...d };
+  // version 3: where the default is now Paystack first (Nigeria), a saved Flutterwave-first row from before becomes it
+  if (version < 3 && d.primary === "paystack" && primary === "flutterwave") return { ...d };
   // Paystack always backs Flutterwave
   if (primary === "flutterwave" && (fb === null || fb === "flutterwave")) return { primary, fallback: "paystack" };
   // a fallback to the primary itself is no fallback

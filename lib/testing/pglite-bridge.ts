@@ -59,11 +59,26 @@ export async function createSqlBridge(PGlite: PGliteCtor, db: FakeDb, opts: { se
   const toSql = (v: unknown, type: string) => (v !== null && v !== undefined && (type === "jsonb" || type === "json") && typeof v !== "string" ? JSON.stringify(v) : v);
   const fromSql = (v: unknown) => (v instanceof Date ? v.toISOString() : typeof v === "bigint" ? Number(v) : v);
 
-  /** PGlite := fake (triggers and FK checks off while copying: the rows already happened) */
+  /*
+    What PGlite holds, per table, as of the last sync (the fake's rows serialized). A table whose fake rows are byte-for-
+    byte what was last synced is already identical in PGlite and is NOT rewritten. Before this (2026-10-27), every RPC
+    deleted and re-inserted every row of every table one statement at a time and re-read them all — the cost grew with
+    the journey's whole history, and the SUB journeys' later steps (4 s alone for bundles step 4) timed out under the
+    full suite's CPU contention. Pull always reads every table (an RPC may write any of them).
+  */
+  const synced = new Map<string, string>();
+  const stats = { pushedTables: 0, skippedTables: 0 };
+  const snapshot = (t: string) => JSON.stringify(db.tables[t] ?? []);
+
+  /** PGlite := fake (triggers and FK checks off while copying: the rows already happened) — only the tables that changed */
   const push = async () => {
+    const changed = tables.filter((t) => synced.get(t) !== snapshot(t));
+    stats.skippedTables += tables.length - changed.length;
+    if (!changed.length) return;
+    stats.pushedTables += changed.length;
     await pg.exec("set session_replication_role = replica");
     try {
-      for (const t of tables) {
+      for (const t of changed) {
         await pg.exec(`delete from public.${t}`);
         const tc = cols.get(t)!;
         for (const row of db.tables[t] ?? []) {
@@ -73,16 +88,18 @@ export async function createSqlBridge(PGlite: PGliteCtor, db: FakeDb, opts: { se
           const over = present.some((c) => c.identityAlways) ? " overriding system value" : "";
           await pg.query(`insert into public.${t} (${present.map((c) => `"${c.name}"`).join(", ")})${over} values (${present.map((_, i) => `$${i + 1}`).join(", ")})`, present.map((c) => toSql(row[c.name], c.type)));
         }
+        synced.set(t, snapshot(t));
       }
     } finally {
       await pg.exec("set session_replication_role = origin");
     }
   };
-  /** fake := PGlite */
+  /** fake := PGlite (every table), and remember it as synced */
   const pull = async () => {
     for (const t of tables) {
       const rows = (await pg.query<Record<string, unknown>>(`select * from public.${t}`)).rows;
       db.tables[t] = rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, fromSql(v)])));
+      synced.set(t, snapshot(t));
     }
   };
 
@@ -108,5 +125,5 @@ export async function createSqlBridge(PGlite: PGliteCtor, db: FakeDb, opts: { se
     await pull();
     return out;
   };
-  return { pg, push, pull, sql, close: () => pg.close() };
+  return { pg, push, pull, sql, close: () => pg.close(), stats: () => ({ ...stats, tables: tables.length }) };
 }

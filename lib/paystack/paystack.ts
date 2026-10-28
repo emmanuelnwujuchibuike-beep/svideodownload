@@ -278,6 +278,18 @@ export async function initializeVerificationCheckout(opts: { email: string; user
   return data.data.authorization_url;
 }
 
+/** 0299: a Frenz Coin deposit (lib/coin/deposits.ts). Its own purpose: it can never credit AI Credits, touch a plan or settle a SUB. */
+export const COIN_DEPOSIT_PURPOSE = "frenz_coin_deposit";
+
+/** A hosted checkout for a Frenz Coin deposit: the server's amount (the naira the attempt row pinned), currency and reference. */
+export async function initializeCoinDepositCheckout(opts: { email: string; userId: string; amount: number; currency: string; reference: string; callbackUrl: string; metadata: Record<string, string | number | null> }): Promise<string> {
+  const data = await paystack<{ data: { authorization_url: string } }>("/transaction/initialize", {
+    method: "POST",
+    body: { email: opts.email, amount: opts.amount, currency: opts.currency, reference: opts.reference, callback_url: opts.callbackUrl, metadata: { ...opts.metadata, user_id: opts.userId, purpose: COIN_DEPOSIT_PURPOSE } },
+  });
+  return data.data.authorization_url;
+}
+
 /**
  * Did a checkout INITIALIZE fail for sure (nothing was created), or is the outcome unknown?
  * Definite: Paystack's own 4xx answer, or no key (nothing was sent). Everything else is

@@ -1,6 +1,7 @@
 "use client";
 
-import { IoAdd, IoCloudUploadOutline, IoPersonAdd, IoSearchOutline } from "react-icons/io5";
+import { IoAdd, IoCloudUploadOutline, IoPersonAddOutline, IoSearchOutline } from "react-icons/io5";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
@@ -17,13 +18,18 @@ import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { useTopbarCenter } from "@/features/app-shell/topbar-slot";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { UserMenu } from "@/features/auth/user-menu";
-import { CreateActionSheet } from "@/features/create/create-action-sheet";
 import { CoinHeaderPillLazy as CoinHeaderPill } from "@/features/wallet/coin-entry-lazy";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { useTopAdPresent } from "@/lib/dom/top-ad-present";
 import { useScrollDirection } from "@/lib/dom/use-scroll-direction";
 import { cn } from "@/lib/utils";
+import { TapPending } from "@/features/wallet/tap-pending";
+
+// 2026-10-27: the Create sheet (framer-motion) is fetched on the first press — warmed on pointer-down — instead of
+// riding in the first load of every signed-in route. It stays mounted after that so its exit animation still plays.
+const loadCreateSheet = () => import("@/features/create/create-action-sheet");
+const CreateActionSheet = dynamic(() => loadCreateSheet().then((m) => m.CreateActionSheet), { ssr: false });
 
 export function AppTopbar() {
   const router = useRouter();
@@ -57,6 +63,7 @@ export function AppTopbar() {
   const searchActive = pathname === "/search" || pathname.startsWith("/search?") || pathname === "/explore";
   const [q, setQ] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [createUsed, setCreateUsed] = useState(false);
   // The owner's Messages mockup starts straight at the big "Messages" title —
   // no global topbar above it on mobile. That page carries its own header
   // (compose + tools circles), so the topbar hides there below lg; every
@@ -71,7 +78,6 @@ export function AppTopbar() {
   // ONLY the /friends hub itself (not its sub-pages like /friends/discover,
   // which is literally where this button navigates TO — showing it there
   // too would be a link to the page you're already on).
-  const onFriendsIndex = pathname === "/friends";
   /*
     🔴 NO CREATE BUTTON ON /feed, FOR EVERYONE (owner, 2026-08-18: "the reels
     buttons should be place at the top header of the feed page... in place
@@ -90,7 +96,10 @@ export function AppTopbar() {
     premium and professional, like Instagram"). The Feed tab is /home. The white bar becomes a see-through,
     tap-through strip; each button is the profile's glass circle; the feed scrolls under them.
   */
-  const glassBar = pathname === "/home";
+  // 2026-10-27 (owner): "make all Friends pages' top header use this floating glass button like the feed top header" —
+  // the Friends tab and every page under it get the same see-through strip of glass circles
+  const onFriendsPages = pathname === "/friends" || pathname.startsWith("/friends/");
+  const glassBar = pathname === "/home" || onFriendsPages;
   /*
     The full product name in the Downloads header (owner, 2026-08-23: "put the
     text frenzsave with the brand style like it is with the brand text frenz…
@@ -283,9 +292,11 @@ export function AppTopbar() {
           <PressIcon className="lg:hidden">
             <button
               type="button"
+              onPointerDown={() => void loadCreateSheet().catch(() => {})}
               onClick={() => {
                 haptic("selection");
                 playSound("tap");
+                setCreateUsed(true);
                 setCreateOpen(true);
               }}
               aria-label="Create"
@@ -409,7 +420,9 @@ export function AppTopbar() {
           full-page discovery UI inline on this route.
         */}
         {/* members only: a guest's /friends is locked behind sign-in (owner, 2026-10-16) */}
-        {onFriendsIndex && !!handle ? (
+        {/* 2026-10-27 (owner): also on the Feed, "a floating glass Add friends button next to the notification button" — the
+            same glass circle as its neighbours there; on every Friends page but the one it opens */}
+        {(onFriendsPages || pathname === "/home") && pathname !== "/friends/discover" && !!handle ? (
           <PressIcon className="lg:hidden">
             <Link
               href="/friends/discover"
@@ -421,9 +434,13 @@ export function AppTopbar() {
               }}
               aria-label="Add friends"
               title="Add friends"
-              className="flex h-11 w-11 items-center justify-center text-foreground transition active:scale-95"
+              className={cn("flex h-11 w-11 items-center justify-center text-foreground transition active:scale-95", glassBar && FLOATING_GLASS_CIRCLE)}
             >
-              <IoPersonAdd className="h-[26px] w-[26px] [filter:drop-shadow(0_3px_5px_rgba(2,6,23,0.35))]" />
+              <IconTile>
+                <TapPending size={18}>
+                  <IoPersonAddOutline className="h-[26px] w-[26px]" />
+                </TapPending>
+              </IconTile>
             </Link>
           </PressIcon>
         ) : null}
@@ -498,7 +515,7 @@ export function AppTopbar() {
           "+" above. Rendered here rather than in AppOverlays because nothing
           else can open it, so its state has no reason to be global. It
           portals to <body>, so this header's own stacking can't trap it. */}
-      <CreateActionSheet open={createOpen} onClose={() => setCreateOpen(false)} />
+      {createUsed ? <CreateActionSheet open={createOpen} onClose={() => setCreateOpen(false)} /> : null}
     </header>
     </>
   );

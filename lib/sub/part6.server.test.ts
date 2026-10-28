@@ -452,6 +452,8 @@ describe("Part 7 review — the fan-out's concurrency is bounded", () => {
       peak = Math.max(peak, inFlight);
       await new Promise((r) => setTimeout(r, 2));
       inFlight -= 1;
+      // 0294: sendSmartPush now reports what it did (the gift outbox reads it); this fan-out ignores it
+      return { decision: "push", reasons: [], devices: 1, accepted: 1 };
     });
     await drain(await announce());
     expect(spy).toHaveBeenCalledTimes(60);

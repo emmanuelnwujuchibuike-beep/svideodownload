@@ -8,6 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { FLUTTERWAVE_REF } from "./payout-refs";
 import { PAYSTACK_METHOD, payWithdrawalViaPaystack } from "./paystack-payouts";
 import { payoutQuote } from "./payout-quote";
+import { coinPayoutRail, payoutDestinationCountry } from "./payout-rail";
 import { resolveWithdrawal } from "./withdrawals";
 
 /**
@@ -57,7 +58,17 @@ export async function payoutProvider(): Promise<"flutterwave" | "paystack"> {
  * admin's Pay button). Flutterwave first by default; Paystack only after Flutterwave definitely sent nothing.
  */
 export async function payWithdrawal(withdrawalId: string, adminId: string | null): Promise<PayResult> {
-  if ((await payoutProvider()) === "paystack") {
+  /*
+    Frenz Coin (owner, 2026-10-27): the destination's country picks the rail — Nigeria, Ghana, South Africa, Kenya through
+    Paystack; beyond, Flutterwave (lib/rewards/payout-rail.ts). Exclusive withdrawals keep the admin's provider below.
+  */
+  const { data: head } = await createAdminClient().from("withdrawal_requests").select("source, payout_method, payout_details").eq("id", withdrawalId).maybeSingle();
+  const w = head as Row | null;
+  if (w?.source === "coin" && coinPayoutRail(payoutDestinationCountry(w)) === "paystack") {
+    const p = await payWithdrawalViaPaystack(withdrawalId, adminId);
+    return p.ok ? { ...p, provider: "paystack" } : p;
+  }
+  if (w?.source !== "coin" && (await payoutProvider()) === "paystack") {
     const p = await payWithdrawalViaPaystack(withdrawalId, adminId);
     return p.ok ? { ...p, provider: "paystack" } : p;
   }

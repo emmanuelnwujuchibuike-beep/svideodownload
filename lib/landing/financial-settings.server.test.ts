@@ -25,9 +25,26 @@ const load = async () => {
   return import("./settings");
 };
 
+/**
+ * 0291 save_landing_settings, as the database runs it: stored || (value - frenzGift). The landing row's only writer.
+ * Logged as a "settings" write like the upsert it replaced.
+ */
+export function scriptLandingSave(d: FakeDb) {
+  d.rpc.save_landing_settings = ({ p_value }) => {
+    const { frenzGift: _ignored, ...sent } = p_value as Record<string, unknown>;
+    d.tables.settings ??= [];
+    const row = d.tables.settings.find((r) => r.key === "landing");
+    if (row) row.value = { ...(row.value as Record<string, unknown>), ...sent };
+    else d.tables.settings.push({ key: "landing", value: sent });
+    d.writes.push({ table: "settings", op: "upsert", values: sent, filters: [] });
+    return { data: null, error: null };
+  };
+}
+
 beforeEach(() => {
   db = fakeDb({ settings: [], config_audit_log: [] });
   db.unique.settings = [["key"]];
+  scriptLandingSave(db);
 });
 
 describe("financialChanges (pure)", () => {
@@ -78,8 +95,9 @@ describe("setLandingSettings: the audit row first", () => {
     const s = await load();
     const client = db.client() as { from: (t: string) => unknown };
     const real = client.from.bind(client);
-    // the settings upsert fails, the audit table still works
-    (db as unknown as { client: () => unknown }).client = () => ({ ...client, from: (t: string) => (t === "settings" ? { ...(real(t) as object), upsert: async () => ({ data: null, error: { message: "disk full" } }) } : real(t)) });
+    // the settings write fails (0291: the save_landing_settings call), the audit table still works
+    void real;
+    db.rpc.save_landing_settings = () => ({ data: null, error: { message: "disk full" } });
     await expect(s.setLandingSettings({ frenzRewards: { sub: { withdrawalFeePercent: 6 } } as never }, { changedBy: "admin-1" })).rejects.toThrow(/could not be saved/);
     expect(db.tables.config_audit_log!.map((r) => r.action)).toEqual(["settings.update", "settings.update.failed"]);
   });
@@ -137,5 +155,75 @@ describe("versioning", () => {
     const b = normalizeRewardsConfig({ sub: { withdrawalFeePercent: a.sub.withdrawalFeePercent + 1 } });
     expect(versionRewardsConfig(a, b).version).toBe(a.version + 1);
     expect(versionRewardsConfig(a, a).version).toBe(a.version);
+  });
+});
+
+describe("Frenz Gift Coin Part 3 (0291): saving any other settings never loses frenzGift", () => {
+  const GIFT = {
+    conversion: {
+      version: 4,
+      fcToFgc: { rateNum: 1, rateDen: 1, feeBp: 200, feeFlat: 0, minIn: 100, maxIn: 1_000_000, dailyMaxIn: 3_000_000 },
+      fgcToFc: { rateNum: 1, rateDen: 1, feeBp: 500, feeFlat: 1, minIn: 100, maxIn: 1_000_000, dailyMaxIn: 3_000_000 },
+    },
+    updatedAt: "2026-10-27T10:00:00Z",
+    updatedBy: "admin-9",
+  };
+  const seed = () => db.tables.settings!.push({ key: "landing", value: { frenzGift: GIFT, futureSection: { keep: true }, reelsPosterUrl: "" } });
+  const stored = () => db.tables.settings!.find((r) => r.key === "landing")!.value as Record<string, unknown>;
+
+  it("reads the stored rules, or 'not configured' — never a guessed value", async () => {
+    let s = await load();
+    expect((await s.getLandingSettings()).frenzGift).toEqual({ conversion: null, problem: null, updatedAt: null, updatedBy: null, gifting: null, giftingProblem: null, giftingUpdatedAt: null, giftingUpdatedBy: null });
+    seed();
+    s = await load();
+    const g = (await s.getLandingSettings()).frenzGift;
+    expect(g.conversion?.version).toBe(4);
+    expect(g.updatedBy).toBe("admin-9");
+  });
+  it("a stored value that fails the rules check is reported and treated as not configured (never repaired)", async () => {
+    db.tables.settings!.push({ key: "landing", value: { frenzGift: { conversion: { ...GIFT.conversion, fcToFgc: { ...GIFT.conversion.fcToFgc, feeBp: 0 }, fgcToFc: { ...GIFT.conversion.fgcToFc, feeBp: 0, feeFlat: 0 } } } } });
+    const g = (await (await load()).getLandingSettings()).frenzGift;
+    expect(g.conversion).toBeNull();
+    expect(g.problem).toMatch(/round trip/);
+  });
+  it.each([
+    ["the landing panel", { reelsPosterUrl: "https://example.test/p.webp" }],
+    ["a Frenz Coin setting", { frenzCoin: { enabled: true } }],
+    ["a reward setting", { frenzRewards: { sub: { withdrawalFeePercent: 6 } } }],
+    ["an AI price", { frenzAiVideoPriceCents: 75 }],
+  ])("saving %s keeps frenzGift and unknown keys exactly", async (_, patch) => {
+    seed();
+    const s = await load();
+    await s.setLandingSettings(patch as never, { changedBy: "admin-1" });
+    expect(stored().frenzGift).toEqual(GIFT);
+    expect(stored().futureSection).toEqual({ keep: true });
+  });
+  it("a patch that smuggles frenzGift in cannot change it", async () => {
+    seed();
+    const s = await load();
+    await s.setLandingSettings({ reelsPosterUrl: "", frenzGift: { conversion: null } } as never, { changedBy: "admin-1" });
+    expect(stored().frenzGift).toEqual(GIFT);
+  });
+  it("frenzGift is not a money section of setLandingSettings (its own audited writer records it)", async () => {
+    seed();
+    const s = await load();
+    await s.setLandingSettings({ reelsPosterUrl: "" }, { changedBy: "admin-1" });
+    expect(db.tables.config_audit_log!.filter((r) => r.surface === "frenz_gift")).toEqual([]);
+  });
+  it("before 0291 has run (the function is missing) the fallback still keeps frenzGift and unknown keys", async () => {
+    seed();
+    db.rpc.save_landing_settings = () => ({ data: null, error: { message: "Could not find the function public.save_landing_settings(p_value) in the schema cache", code: "PGRST202" } });
+    const s = await load();
+    await s.setLandingSettings({ reelsPosterUrl: "https://example.test/q.webp", frenzCoin: { enabled: true } }, { changedBy: "admin-1" });
+    expect(stored().frenzGift).toEqual(GIFT);
+    expect(stored().futureSection).toEqual({ keep: true });
+    expect(stored().reelsPosterUrl).toBe("https://example.test/q.webp");
+  });
+  it("any other write failure is reported, not retried as the fallback", async () => {
+    seed();
+    db.rpc.save_landing_settings = () => ({ data: null, error: { message: "permission denied" } });
+    const s = await load();
+    await expect(s.setLandingSettings({ reelsPosterUrl: "" }, { changedBy: "admin-1" })).rejects.toThrow(/could not be saved/);
+    expect(db.writes.some((w) => w.table === "settings")).toBe(false);
   });
 });

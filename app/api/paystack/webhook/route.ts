@@ -4,7 +4,8 @@ import { announceCharacterReplaceRecharge, creditVerifiedCharacterReplaceRecharg
 import { resolveCredit } from "@/lib/ai/character-replace/topup-fx";
 import { WALLET_UNIT } from "@/lib/ai/credits/units";
 import { getLandingSettings } from "@/lib/landing/settings";
-import { AD_CAMPAIGN_PURPOSE, AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, SUB_PURPOSE, VERIFICATION_PURPOSE, verifyPaystackSignature, type PaystackEventData } from "@/lib/paystack/paystack";
+import { AD_CAMPAIGN_PURPOSE, AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, COIN_DEPOSIT_PURPOSE, SUB_PURPOSE, VERIFICATION_PURPOSE, verifyPaystackSignature, type PaystackEventData } from "@/lib/paystack/paystack";
+import { coinDepositProviderOf, notePaystackCoinDepositEvent, settleCoinDeposit } from "@/lib/coin/deposits";
 import { confirmVerificationPayment, reversePaidVerification } from "@/lib/social/paid-verification";
 import { confirmSubPayment, reverseSub, reverseSubForRefund } from "@/lib/sub/server";
 import { isAiPlanEvent } from "@/lib/ai/credits/paystack";
@@ -84,6 +85,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true });
   }
   /*
+    ── A FRENZ COIN DEPOSIT (0299) — its own purpose AND its own reference shape, so it can never credit AI Credits ──
+    settleCoinDeposit asks Paystack about OUR reference itself (never this body's numbers) and settles exactly the naira
+    the attempt pinned, once per reference; the coins land on hold. Not settled yet = 500, Paystack redelivers.
+  */
+  if (event.event === "charge.success" && event.data?.metadata?.purpose === COIN_DEPOSIT_PURPOSE) {
+    const ref = event.data.reference ?? "";
+    if (coinDepositProviderOf(ref) !== "paystack") return NextResponse.json({ received: true, ignored: true });
+    const key = `charge.success:${ref}`;
+    if ((await claimProviderEvent("paystack", key, event.event, ref)) === "done") return NextResponse.json({ received: true, duplicate: true });
+    try {
+      const out = await settleCoinDeposit(ref);
+      if (out.kind === "pending" || out.kind === "error") return NextResponse.json({ error: "Retry" }, { status: 500 });
+      await markProviderEvent("paystack", key, out.kind);
+      return NextResponse.json({ received: true });
+    } catch {
+      return NextResponse.json({ error: "Retry" }, { status: 500 });
+    }
+  }
+  /*
     ── PAID VERIFICATION (0268) — its own purpose, so it can never credit a wallet or settle a SUB ──
     confirmVerificationPayment re-verifies the reference with Paystack and grants the tick once
     (a conditional update — the return page may get there first). Unsettled = 500, Paystack redelivers.
@@ -118,6 +138,11 @@ export async function POST(request: Request) {
   }
   if (event.event === "refund.processed" || event.event === "charge.dispute.create") {
     const ref = event.data?.transaction_reference ?? event.data?.transaction?.reference ?? event.data?.reference ?? "";
+    // 0299: a refunded or disputed coin deposit — logged for an admin, who checks Paystack and records it (as Flutterwave's)
+    if (coinDepositProviderOf(ref) === "paystack") {
+      const noted = await notePaystackCoinDepositEvent(event.event, ref, (event.data as { id?: unknown } | undefined)?.id);
+      return noted === false ? NextResponse.json({ error: "Retry" }, { status: 500 }) : NextResponse.json({ received: true });
+    }
     // 0268: a refunded or disputed verification charge takes the paid tick back
     if (ref.startsWith("frenz_vf_")) {
       const key = `${event.event}:${ref}`;

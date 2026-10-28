@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { WalletLoadError } from "@/features/wallet/wallet-load-error";
 import { WalletDeposit } from "@/features/wallet/wallet-deposit";
+import { coinDepositOptions } from "@/lib/coin/deposits";
 import { walletPageData } from "@/lib/coin/wallet-page";
+import { paymentMarket } from "@/lib/payments/router";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +19,9 @@ export default async function WalletDepositPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/wallet/deposit");
-  const { summary } = await walletPageData(user.id);
+  // 0299: which providers this member may pick (Nigeria: Paystack first; elsewhere Flutterwave) — the edge's country, never
+  // the browser's; display only, the deposit route decides again. A failed read just hides the choice.
+  const [{ summary }, providers] = await Promise.all([walletPageData(user.id), coinDepositOptions(paymentMarket(await headers())).catch(() => [])]);
   if (!summary) return <WalletLoadError title="Deposit" />;
-  return <WalletDeposit summary={summary} />;
+  return <WalletDeposit summary={summary} providers={providers} />;
 }

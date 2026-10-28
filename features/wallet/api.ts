@@ -55,7 +55,7 @@ export interface WalletSummary {
   withdrawals: { enabled: boolean; percentBp: number; flatCents: number; minCents: number; maxCents: number; payoutRateApproved: boolean; example: { grossCents: number; feeCents: number; netCents: number } };
 }
 
-export type EntryKind = "deposit" | "transfer_in" | "transfer_out" | "transfer_fee" | "withdrawal" | "withdrawal_reversal" | "reversal" | "refund" | "adjustment";
+export type EntryKind = "deposit" | "transfer_in" | "transfer_out" | "transfer_fee" | "withdrawal" | "withdrawal_reversal" | "reversal" | "refund" | "adjustment" | "conversion_in" | "conversion_out" | "conversion_fee";
 export type EntryStatus = "pending" | "completed" | "processing" | "held" | "reversed" | "returned";
 export interface HistoryEntry {
   id: string;
@@ -138,7 +138,7 @@ export const walletApi = {
   lookup: (number: string, signal?: AbortSignal) => get<{ ok: true; name: string; handle: string | null; avatarUrl: string | null }>(`/api/ai/wallet/transfer/lookup?number=${encodeURIComponent(number)}`, signal),
   transfer: (b: { accountNumber: string; amountCents: number; idempotencyKey: string; note: string | null; pin: string; storyId?: string }) =>
     post<{ ok: true; transferId: string; amountCents: number; feeCents: number; totalCents: number; duplicate: boolean }>("/api/coin/transfers", b),
-  deposit: (b: { amountCents: number; idempotencyKey: string }) => post<{ ok: true; url: string; reference: string; amountCents: number; holdHours: number; reused: boolean }>("/api/coin/deposits", b),
+  deposit: (b: { amountCents: number; idempotencyKey: string; provider?: "flutterwave" | "paystack" }) => post<{ ok: true; url: string; reference: string; amountCents: number; holdHours: number; reused: boolean }>("/api/coin/deposits", b),
   verifyDeposit: (reference: string, signal?: AbortSignal) => post<{ status: "on_hold" | "pending" | "failed" | "review"; amountCents?: number; releaseAt?: string }>("/api/coin/deposits/verify", { reference }, signal),
   withdrawals: (signal?: AbortSignal) => get<{ items: CoinWithdrawal[] }>("/api/coin/withdrawals", signal),
   withdraw: (b: { grossCents: number; bankCode: string; bankName: string; accountNumber: string; savedAccount?: string; idempotencyKey: string; pin: string }) =>

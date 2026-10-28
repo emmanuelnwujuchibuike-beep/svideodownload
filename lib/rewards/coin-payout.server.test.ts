@@ -39,7 +39,9 @@ vi.mock("./withdrawals", () => ({
   },
 }));
 
-const { payWithdrawal } = await import("./flutterwave-payouts");
+// the quote is proven on the Flutterwave rail itself; which rail a coin payout takes is pinned at the end (2026-10-27)
+const { payWithdrawal, payWithdrawalViaFlutterwave } = await import("./flutterwave-payouts");
+const { payWithdrawalViaPaystack } = await import("./paystack-payouts");
 const { payoutQuote } = await import("./payout-quote");
 const row = () => db.tables.withdrawal_requests![0]!;
 const coinRow = (over: Record<string, unknown> = {}) => ({ id: W, user_id: "u", source: "coin", status: "pending", payout_method: "paystack", payout_reference: null, gross_cents: 10_000, fee_cents: 600, net_cents: 9_400, amount_usd_cents: 9_400, payout_currency: null, payout_minor: null, payout_fx: null, payout_details: { bankCode: "058", accountNumber: "0123456789", accountName: "ADA OBI" }, updated_at: "2026-10-25T00:00:00Z", ...over });
@@ -61,7 +63,7 @@ beforeEach(() => {
 
 describe("a Frenz Coin payout", () => {
   it("🔴 no approved naira rate (the default): refused — nothing approved, recorded or sent", async () => {
-    const out = await payWithdrawal(W, "admin-1");
+    const out = await payWithdrawalViaFlutterwave(W, "admin-1");
     expect(out.ok).toBe(false);
     if (!out.ok) expect(out.error).toMatch(/approved naira rate/);
     expect(row().status).toBe("pending");
@@ -71,7 +73,7 @@ describe("a Frenz Coin payout", () => {
   });
   it("market rate: the NET ($94 of $100) at the live rate, no markup, recorded BEFORE the transfer", async () => {
     source = "market";
-    const out = await payWithdrawal(W, "admin-1");
+    const out = await payWithdrawalViaFlutterwave(W, "admin-1");
     expect(out.ok).toBe(true);
     expect(sent).toEqual([9_400 * 1500]);
     expect(row()).toMatchObject({ payout_minor: 14_100_000, payout_currency: "NGN", status: "processing", payout_reference: expect.stringMatching(/^frenz_fwd_/) });
@@ -81,7 +83,7 @@ describe("a Frenz Coin payout", () => {
     source = "market";
     db.tables.withdrawal_requests = [coinRow({ status: "approved", payout_minor: 14_100_000, payout_currency: "NGN", payout_fx: { source: "market", perUsd: 1500 } })];
     perUsd = 2000;
-    await payWithdrawal(W, "admin-1");
+    await payWithdrawalViaFlutterwave(W, "admin-1");
     expect(sent).toEqual([14_100_000]);
   });
   it("fixed rate: floor(net × minor-per-USD / 100) — the same rule as the database", async () => {
@@ -98,7 +100,7 @@ describe("a Frenz Coin payout", () => {
   it("the quote cannot be recorded: nothing is sent", async () => {
     source = "market";
     db.rpc.record_coin_payout_quote = vi.fn(() => ({ data: { ok: false, reason: "not_quotable" }, error: null }));
-    const out = await payWithdrawal(W, "admin-1");
+    const out = await payWithdrawalViaFlutterwave(W, "admin-1");
     expect(out.ok).toBe(false);
     expect(sent).toEqual([]);
   });
@@ -108,5 +110,41 @@ describe("a Frenz Coin payout", () => {
     const c = await payoutQuote({ id: W, source: "credits", amount_usd_cents: 1_234 });
     expect(c).toMatchObject({ ok: true, kobo: 1_234 * 1500 });
     expect(db.rpc.record_coin_payout_quote).not.toHaveBeenCalled();
+  });
+});
+
+/*
+  Owner, 2026-10-27: "In withdraw, users in Nigeria, Ghana or any country supported by Paystack should use Paystack, but
+  beyond should be Flutterwave." The destination bank's country decides (lib/rewards/payout-rail.ts).
+*/
+describe("which rail pays a Frenz Coin withdrawal", () => {
+  beforeEach(() => {
+    source = "market";
+    vi.mocked(payWithdrawalViaPaystack).mockClear();
+  });
+  it("a Nigerian bank (every coin withdrawal today): Paystack — Flutterwave is never asked", async () => {
+    await payWithdrawal(W, "admin-1");
+    expect(payWithdrawalViaPaystack).toHaveBeenCalledWith(W, "admin-1");
+    expect(sent).toEqual([]);
+  });
+  it("a bank in Ghana, South Africa or Kenya: Paystack", async () => {
+    for (const country of ["GH", "za", "KE"]) {
+      db.tables.withdrawal_requests = [coinRow({ payout_details: { bankCode: "1", accountNumber: "2", accountName: "ADA OBI", country } })];
+      await payWithdrawal(W, "admin-1");
+    }
+    expect(payWithdrawalViaPaystack).toHaveBeenCalledTimes(3);
+    expect(sent).toEqual([]);
+  });
+  it("a bank beyond Paystack's countries: Flutterwave", async () => {
+    db.tables.withdrawal_requests = [coinRow({ payout_details: { bankCode: "058", accountNumber: "0123456789", accountName: "ADA OBI", country: "US" } })];
+    expect((await payWithdrawal(W, "admin-1")).ok).toBe(true);
+    expect(payWithdrawalViaPaystack).not.toHaveBeenCalled();
+    expect(sent).toHaveLength(1);
+  });
+  it("an Exclusive (SUB) withdrawal keeps the admin's provider (Flutterwave here), even to a Nigerian bank", async () => {
+    db.tables.withdrawal_requests = [coinRow({ source: "sub" })];
+    await payWithdrawal(W, "admin-1");
+    expect(payWithdrawalViaPaystack).not.toHaveBeenCalled();
+    expect(sent).toHaveLength(1);
   });
 });

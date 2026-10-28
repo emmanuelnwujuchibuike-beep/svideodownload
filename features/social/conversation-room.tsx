@@ -39,6 +39,8 @@ import { RichText } from "@/components/social/rich-text";
 import { revalidate } from "@/features/data";
 import { ContactPickerSheet } from "@/features/social/contact-picker-sheet";
 import { DocumentAttachmentCard } from "@/features/social/document-attachment-card";
+import { GiftBubble, type GiftMeta } from "@/features/gift/gift-bubble";
+import { GiftComposerButton } from "@/features/gift/gift-composer-button";
 import { EmojiPickerButton } from "@/features/social/emoji-picker-button";
 import { ForwardSheet } from "@/features/social/forward-sheet";
 import { cacheThread, getCachedThread, mergeMissing } from "@/features/social/thread-cache";
@@ -244,6 +246,8 @@ function sameDay(a: string, b: string): boolean {
  */
 // the send sheet loads only when Credits is tapped (2026-10-07)
 const ChatSendCredits = dynamicImport(() => import("@/features/ai/wallet/chat-send-credits").then((m) => m.ChatSendCredits), { ssr: false });
+// Frenz Gift Coin Part 4: the sticker gallery and gift confirmation, fetched only when opened
+const GiftSheet = dynamicImport(() => import("@/features/gift/gift-sheet").then((m) => m.GiftSheet), { ssr: false });
 
 export function ConversationRoom({
   conversationId,
@@ -392,9 +396,23 @@ export function ConversationRoom({
     const m = members.find((x) => x.id !== viewerId);
     return m ? { userId: m.id, name: m.displayName || `@${m.handle}`, handle: m.handle, avatarUrl: m.avatarUrl } : null;
   }, [type, members, viewerId]);
+  // Frenz Gift Coin Part 4: who a gift can go to — the other member of a direct chat, or a chosen member of a group.
+  // Never in a secret chat (gift details are server-visible); the server re-checks every rule (send_gift).
+  const [giftOpen, setGiftOpen] = useState(false);
+  // Part 6: "Send one back" from the reveal opens the sheet straight on that sticker
+  const [giftStickerId, setGiftStickerId] = useState<string | null>(null);
+  const giftRecipients = useMemo(
+    () => (type === "secret" ? [] : members.filter((x) => x.id !== viewerId).map((x) => ({ userId: x.id, name: x.displayName || `@${x.handle}`, avatarUrl: x.avatarUrl }))),
+    [type, members, viewerId],
+  );
+  const memberName = useCallback((id: string) => { const x = members.find((mm) => mm.id === id); return x ? x.displayName || `@${x.handle}` : "someone"; }, [members]);
   const [uploadingCount, setUploadingCount] = useState(0);
   const [recordingVoice, setRecordingVoice] = useState(false);
   const [mediaSheetOpen, setMediaSheetOpen] = useState(false);
+  // Frenz Gift Coin: warm the gift sheet's code as soon as the attachment sheet opens (owner, 2026-10-27: open really fast)
+  useEffect(() => {
+    if (mediaSheetOpen && type !== "secret") void import("@/features/gift/gift-sheet");
+  }, [mediaSheetOpen, type]);
   const [contactPickerOpen, setContactPickerOpen] = useState(false);
   const [pollComposerOpen, setPollComposerOpen] = useState(false);
   const [storyViewerOpen, setStoryViewerOpen] = useState(false);
@@ -2027,6 +2045,7 @@ export function ConversationRoom({
                 ? (m.metadata as { friendId: string; displayName: string; handle: string; avatarUrl: string | null })
                 : null;
             const pollMeta = !deleted && m.metadata?.kind === "poll" ? (m.metadata as { pollId: string }) : null;
+            const giftMeta = !deleted && m.metadata?.kind === "gift" ? (m.metadata as GiftMeta) : null;
             // WhatsApp-style "X turned on/off disappearing messages" notice
             // (owner ask, 2026-07-14) — a real message row like any other
             // metadata kind, but rendered as a centered plain-text pill with
@@ -2271,6 +2290,16 @@ export function ConversationRoom({
                           </Link>
                         ) : pollMeta ? (
                           <PollBubble pollId={pollMeta.pollId} mine={m.mine} />
+                        ) : giftMeta ? (
+                          <GiftBubble
+                            meta={giftMeta}
+                            mine={m.mine}
+                            viewerIsRecipient={giftMeta.recipientId === viewerId}
+                            senderName={memberName(m.senderId)}
+                            recipientName={memberName(giftMeta.recipientId ?? "")}
+                            onSayThanks={() => requestAnimationFrame(() => textareaRef.current?.focus())}
+                            onSendBack={giftRecipients.length > 0 && !sendLocked ? (stickerId) => { setGiftStickerId(stickerId); setGiftOpen(true); } : undefined}
+                          />
                         ) : null}
                         {m.attachments.length > 0 ? (
                           <div className={cn("flex flex-col gap-1.5", hasMediaAttachment ? "" : "px-0", m.body && "mb-1.5")}>
@@ -2799,6 +2828,8 @@ export function ConversationRoom({
                 });
               }}
             />
+            {/* Part 6 (design screen 1): the sticker-gift button, beside the emoji picker — only where a gift can be sent */}
+            {giftRecipients.length > 0 && !sendLocked ? <GiftComposerButton onOpen={() => { setGiftStickerId(null); setGiftOpen(true); }} /> : null}
             <motion.button
               type="button"
               onClick={() => setMediaSheetOpen(true)}
@@ -2851,7 +2882,9 @@ export function ConversationRoom({
         onOpenContactPicker={() => setContactPickerOpen(true)}
         onOpenPollComposer={() => setPollComposerOpen(true)}
         onSendCredits={creditsRecipient ? () => setSendCreditsOpen(true) : undefined}
+        onSendGift={giftRecipients.length > 0 && !sendLocked ? () => setGiftOpen(true) : undefined}
       />
+      {giftOpen ? <GiftSheet conversationId={conversationId} recipients={giftRecipients} requireChoice={type === "group"} initialStickerId={giftStickerId} onClose={() => { setGiftOpen(false); setGiftStickerId(null); }} onSent={() => void resync()} /> : null}
       {sendCreditsOpen && creditsRecipient ? <ChatSendCredits recipient={creditsRecipient} onClose={closeSendCredits} /> : null}
       <ContactPickerSheet open={contactPickerOpen} onClose={() => setContactPickerOpen(false)} onPick={handlePickContact} />
       <PollComposerSheet

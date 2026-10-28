@@ -133,7 +133,7 @@ export async function setCoinPin(userId: string, pin: unknown, confirm: unknown)
  * Begin a counted PIN entry and derive the key for it. The attempt is spent by whichever function checks it.
  * Any refusal (no PIN, locked, the database unavailable) is the same answer to the caller.
  */
-export async function beginPinProof(userId: string, pin: unknown, purpose: "transfer" | "change" | "withdrawal", config: FrenzCoinConfig): Promise<{ ok: true; attemptId: string; key: Buffer } | { ok: false; reason: "authorization_failed" | "unavailable" }> {
+export async function beginPinProof(userId: string, pin: unknown, purpose: "transfer" | "change" | "withdrawal" | "gift", config: FrenzCoinConfig): Promise<{ ok: true; attemptId: string; key: Buffer } | { ok: false; reason: "authorization_failed" | "unavailable" }> {
   const pepper = pinPepper();
   if (!pepper) return { ok: false, reason: "unavailable" };
   // a malformed PIN is never sent to the database (and never counted): it cannot be anyone's PIN

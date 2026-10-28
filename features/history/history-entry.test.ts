@@ -81,8 +81,11 @@ describe("History thumbnails are kept on the device", () => {
   });
 
   it("the worker version moved with it, in both files the browser diffs", () => {
-    expect(config).toContain('SWX.VERSION = "v30";');
-    expect(src("public/sw.js")).toContain("Frenz service worker v30");
+    // v30 introduced the history thumb cache; v31 (2026-10-27, the static landing's /landing/ scripts) is later — the
+    // rule this pins is that config.js and sw.js always name the SAME version, or installed devices never update
+    const v = /SWX\.VERSION = "v(\d+)";/.exec(config)?.[1];
+    expect(Number(v)).toBeGreaterThanOrEqual(30);
+    expect(src("public/sw.js")).toContain(`Frenz service worker v${v}`);
   });
 
   it("/history stays out of the shared page cache (it is listed private)", () => {

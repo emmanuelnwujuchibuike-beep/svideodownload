@@ -1,0 +1,10 @@
+/*
+  The cold-entry stylesheet (2026-10-27) — loaded by app/(marketing)/layout.tsx ONLY.
+
+  The SAME globals.css, inlined by postcss-import, compiled with tailwind.entry.config.ts: utilities only for the
+  files the marketing tree can reach (lib/perf/css-entry.ts). The landing waited on the whole app's 67 kB (gzipped)
+  stylesheet before painting; this is a fraction of it, and every rule in it is in globals.css in the same order.
+  Every other route group imports globals.css itself — lib/perf/css-entry.test.ts fails if one does not.
+*/
+@import "./globals.css";
+@config "../tailwind.entry.config.ts";

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getOptionalEmailSetting, setOptionalEmail } from "@/lib/email/consent";
+import { getGiftNotifyPrefs, setGiftNotifyPrefs } from "@/lib/gift/notify-prefs";
+import { getMessageRequestPrefs, setMessageRequestPrefs } from "@/lib/social/message-request";
 import { getMessageEmailSetting, setMessageEmail } from "@/lib/social/message-email";
 import { trackLimiter } from "@/lib/rate-limit";
 import { DEFAULT_NOTIFICATION_SETTINGS, getNotificationSettings, setNotificationSettings } from "@/lib/social/notification-settings";
@@ -21,8 +23,8 @@ export async function GET() {
   // Part 11 (0253): the global optional-email switch rides beside the settings, read on its own so a
   // database without the column still answers everything else unchanged
   // 0262: email me new messages — and whether push is on a device (turning email off needs it)
-  const [settings, optionalEmail, messageEmail] = await Promise.all([getNotificationSettings(user.id), getOptionalEmailSetting(user.id), getMessageEmailSetting(user.id)]);
-  return NextResponse.json({ settings, optionalEmail, messageEmail }, { headers: { "Cache-Control": "private, no-store" } });
+  const [settings, optionalEmail, messageEmail, giftNotify, messageRequest] = await Promise.all([getNotificationSettings(user.id), getOptionalEmailSetting(user.id), getMessageEmailSetting(user.id), getGiftNotifyPrefs(user.id), getMessageRequestPrefs(user.id)]);
+  return NextResponse.json({ settings, optionalEmail, messageEmail, giftNotify, messageRequest }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 const categoryPrefSchema = z.object({
@@ -53,6 +55,12 @@ const schema = z.object({
   optionalEmail: z.boolean().optional(),
   // 0262: new-message email on / off — off only while the member has push on a device
   messageEmail: z.boolean().optional(),
+  // Frenz Gift Coin Part 4.1 (0294): the two gift switches, each on its own — sending one never changes the other
+  giftPush: z.boolean().optional(),
+  giftEmail: z.boolean().optional(),
+  // 0295: the two message-request switches, each on its own
+  messageRequestPush: z.boolean().optional(),
+  messageRequestEmail: z.boolean().optional(),
 });
 
 /** PATCH /api/notification-settings — update one or more settings (merges into existing category_prefs). */
@@ -87,7 +95,20 @@ export async function PATCH(request: Request) {
     const out = await setNotificationSettings(user.id, { ...defaults, categoryPrefs });
     return out.ok || out.pending ? NextResponse.json({ ok: true }) : NextResponse.json({ error: "Couldn't reset." }, { status: 500 });
   }
-  const { optionalEmail, messageEmail, ...rest } = parsed.data;
+  const { optionalEmail, messageEmail, giftPush, giftEmail, messageRequestPush, messageRequestEmail, ...rest } = parsed.data;
+  const onlyThese = (n: number) => Object.keys(rest).length === 0 && optionalEmail === undefined && messageEmail === undefined && n === 0;
+  if (messageRequestPush !== undefined || messageRequestEmail !== undefined) {
+    const r = await setMessageRequestPrefs(user.id, { push: messageRequestPush, email: messageRequestEmail });
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+    // a request that only changes message-request switches is done: the other settings are untouched
+    if (onlyThese(giftPush === undefined && giftEmail === undefined ? 0 : 1)) return NextResponse.json({ ok: true });
+  }
+  if (giftPush !== undefined || giftEmail !== undefined) {
+    const g = await setGiftNotifyPrefs(user.id, { push: giftPush, email: giftEmail });
+    if (!g.ok) return NextResponse.json({ error: g.error }, { status: g.status });
+    // a request that only changes gift switches is done: the other settings are untouched
+    if (Object.keys(rest).length === 0 && optionalEmail === undefined && messageEmail === undefined) return NextResponse.json({ ok: true });
+  }
   if (messageEmail !== undefined) {
     const m = await setMessageEmail(user.id, messageEmail);
     if (!m.ok) return NextResponse.json({ error: m.error, ...(m.status === 409 ? { code: "push_required" } : {}) }, { status: m.status });

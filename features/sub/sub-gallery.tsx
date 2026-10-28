@@ -871,8 +871,26 @@ function RovingWatermark({ creatorHandle }: { creatorHandle: string }) {
 /** The visitor's locked grid (Exclusive.dc.html). No private file reaches it — only the blurred preview. */
 function LockedGrid({ posts, more }: { posts: Card[]; more: boolean }) {
   const kind = (p: Card) => (p.items > 1 ? `${p.items} items` : p.hasVideo ? "Video" : "Photo");
+  // Creator analytics (0297): the funnel's first two steps — the locked previews SEEN (once the grid is on screen) and
+  // Subscribe TAPPED on one. Counted for signed-in visitors, once per post and day, by the server; a beacon, never awaited.
+  const sectionRef = useRef<HTMLElement>(null);
+  const report = useCallback((kind: "preview_seen" | "subscribe_tapped", postIds: string[]) => {
+    if (!postIds.length) return;
+    void fetch("/api/sub/preview-events", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", keepalive: true, body: JSON.stringify({ kind, postIds: postIds.slice(0, 30) }) }).catch(() => {});
+  }, []);
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el || typeof IntersectionObserver === "undefined" || !posts.length) return;
+    const io = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      io.disconnect();
+      report("preview_seen", posts.map((p) => p.id));
+    }, { threshold: 0.3 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [posts, report]);
   return (
-    <section aria-labelledby="locked-posts" className="frenz-ui text-frenz-ink">
+    <section ref={sectionRef} aria-labelledby="locked-posts" className="frenz-ui text-frenz-ink">
       <h2 id="locked-posts" className="m-0 flex items-baseline gap-2 px-1 pb-2.5 font-heading text-[19px] font-bold tracking-[-0.4px]">
         Exclusive posts
         <span className="font-body text-sm font-semibold text-frenz-muted">
@@ -885,6 +903,7 @@ function LockedGrid({ posts, more }: { posts: Card[]; more: boolean }) {
           <li key={p.id}>
             <a
               href="#sub-offer"
+              onClick={() => report("subscribe_tapped", [p.id])}
               aria-label={`Locked ${kind(p).toLowerCase()}${p.mature ? ", Mature (18+)" : ""} — subscribe to view`}
               className="relative block h-[220px] overflow-hidden rounded-[20px] bg-[#1A1430]"
             >

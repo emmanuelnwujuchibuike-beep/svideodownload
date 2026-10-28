@@ -2,6 +2,7 @@ import { recordConfigChange, recordConfigChangeStrict, type ConfigSurface } from
 import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizeRewardsConfig, versionRewardsConfig, type RewardsConfig } from "@/lib/rewards/config";
 import { normalizeCoinConfig, versionCoinConfig, type FrenzCoinConfig } from "@/lib/coin/config";
+import { GIFT_SETTINGS_UNCONFIGURED, normalizeGiftSettings, type FrenzGiftSettings } from "@/lib/gift/settings";
 import {
   normalizeCharacterReplaceConfig,
   versionCharacterReplacePricing,
@@ -338,6 +339,12 @@ export interface LandingSettings {
   frenzRewards: RewardsConfig;
   /** Frenz Coin Part 3 (0279): the coin wallet's rates, fees, limits and placeholders — lib/coin/config.ts. Off by default. */
   frenzCoin: FrenzCoinConfig;
+  /**
+   * Frenz Gift Coin Part 3 (0291): the conversion rules (lib/gift/settings.ts). READ here, never written by
+   * setLandingSettings: its only writer is save_frenz_gift_conversion (lib/gift/settings-server.ts), and
+   * save_landing_settings keeps the stored value on every other save. Unconfigured (conversion null) by default.
+   */
+  frenzGift: FrenzGiftSettings;
 }
 
 /** The two engines, as a value the settings row can hold. */
@@ -400,6 +407,7 @@ export const DEFAULT_LANDING: LandingSettings = {
   frenzAiVoiceClone: normalizeVoiceCloneConfig(null),
   frenzRewards: normalizeRewardsConfig(null),
   frenzCoin: normalizeCoinConfig(null),
+  frenzGift: GIFT_SETTINGS_UNCONFIGURED,
 };
 
 /** Anything that is not exactly "propainter" is the safe, cheap engine. */
@@ -553,6 +561,7 @@ export async function getLandingSettings(): Promise<LandingSettings> {
       frenzAiVoiceClone: normalizeVoiceCloneConfig(raw.frenzAiVoiceClone),
       frenzRewards: normalizeRewardsConfig(raw.frenzRewards),
       frenzCoin: normalizeCoinConfig((raw as { frenzCoin?: unknown }).frenzCoin),
+      frenzGift: normalizeGiftSettings((raw as { frenzGift?: unknown }).frenzGift),
     };
     cache = { at: Date.now(), value };
     return value;
@@ -591,7 +600,8 @@ export async function getLandingSettings(): Promise<LandingSettings> {
  * What a caller may send: any flat field, and for the nested Character Replace
  * object a PARTIAL of it — the admin panel posts only the knobs it shows.
  */
-export type LandingSettingsPatch = Partial<Omit<LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiKlingPricing" | "frenzAiLipSync" | "frenzAiTextToAudio" | "frenzAiVoiceClone" | "frenzRewards" | "frenzCoin">> & {
+// frenzGift is not in the patch: no panel or caller of setLandingSettings can write it (0291)
+export type LandingSettingsPatch = Partial<Omit<LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiKlingPricing" | "frenzAiLipSync" | "frenzAiTextToAudio" | "frenzAiVoiceClone" | "frenzRewards" | "frenzCoin" | "frenzGift">> & {
   /** Voice Cloning: the same deep merge — the panel posts the slots without erasing the sample limits. */
   frenzAiVoiceClone?: Record<string, unknown>;
   frenzRewards?: Record<string, unknown>;
@@ -688,11 +698,35 @@ export async function financialChangesFor(s: LandingSettingsPatch): Promise<Fina
   });
 }
 
+/**
+ * Frenz Gift Coin Part 3 (0291): the landing row is written by save_landing_settings, which stores
+ * `stored || (value − frenzGift)` in ONE statement: every key sent replaces its stored value, and frenzGift plus any
+ * key this build does not know stay exactly as stored — even when another save lands at the same moment. Before 0291
+ * has run (the function is missing) it falls back to reading the stored row and writing it back merged the same way;
+ * that read-then-write has a small race window, but nothing can write frenzGift before 0291 exists anyway.
+ */
+type AdminDb = ReturnType<typeof createAdminClient>;
+const MISSING_FN = /could not find the function|does not exist|schema cache|PGRST202|42883/i;
+async function persistLanding(db: AdminDb, value: LandingSettings): Promise<{ error: { message: string } | null }> {
+  const { frenzGift: _gift, ...sent } = value;
+  const rpc = await db.rpc("save_landing_settings", { p_value: sent });
+  if (!rpc.error) return { error: null };
+  if (!MISSING_FN.test(`${rpc.error.message} ${(rpc.error as { code?: string }).code ?? ""}`)) return { error: rpc.error };
+  const stored = await db.from("settings").select("value").eq("key", "landing").maybeSingle();
+  if (stored.error) return { error: stored.error };
+  const prev = (stored.data?.value ?? {}) as Record<string, unknown>;
+  const merged: Record<string, unknown> = { ...prev, ...sent };
+  if ("frenzGift" in prev) merged.frenzGift = prev.frenzGift;
+  else delete merged.frenzGift;
+  const { error } = await db.from("settings").upsert({ key: "landing", value: merged }, { onConflict: "key" });
+  return { error };
+}
+
 export async function setLandingSettings(s: LandingSettingsPatch, audit: { changedBy?: string | null; reason?: string | null } = {}): Promise<void> {
   const db = createAdminClient();
   const current = await getLandingSettings();
 
-  const pick = <K extends Exclude<keyof LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiKlingPricing" | "frenzAiLipSync" | "frenzAiTextToAudio" | "frenzAiVoiceClone" | "frenzRewards" | "frenzCoin">>(key: K): LandingSettings[K] =>
+  const pick = <K extends Exclude<keyof LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiKlingPricing" | "frenzAiLipSync" | "frenzAiTextToAudio" | "frenzAiVoiceClone" | "frenzRewards" | "frenzCoin" | "frenzGift">>(key: K): LandingSettings[K] =>
     s[key] === undefined ? current[key] : (s[key] as unknown as LandingSettings[K]);
 
   const value: LandingSettings = {
@@ -773,6 +807,8 @@ export async function setLandingSettings(s: LandingSettingsPatch, audit: { chang
     frenzRewards: versionRewardsConfig(current.frenzRewards, normalizeRewardsConfig(mergeCharacterReplacePatch(current.frenzRewards as unknown as Record<string, unknown>, (s.frenzRewards ?? {}) as Record<string, unknown>))),
     // 0279: the coin settings — merged, normalised, versioned (the version is stamped on every coin operation's snapshot)
     frenzCoin: versionCoinConfig(current.frenzCoin, normalizeCoinConfig(mergeCharacterReplacePatch(current.frenzCoin as unknown as Record<string, unknown>, (s.frenzCoin ?? {}) as Record<string, unknown>))),
+    // 0291: carried for the type only — persistLanding never sends it, the stored value always stays
+    frenzGift: current.frenzGift,
   };
   /*
     Frenz Coin Part 2 (M5): a FINANCIAL change is recorded first, awaited, with the admin's id and the before/after of
@@ -785,7 +821,7 @@ export async function setLandingSettings(s: LandingSettingsPatch, audit: { chang
     const recorded = await recordConfigChangeStrict({ actorId: audit.changedBy ?? null, surface: c.surface, targetId: "settings", action: "settings.update", before: c.before, after: { ...c.after, ...(audit.reason ? { _reason: audit.reason } : {}) } });
     if (!recorded) throw new Error(`financial settings audit could not be written (${c.surface}) — nothing was saved`);
   }
-  const { error: saveError } = await db.from("settings").upsert({ key: "landing", value }, { onConflict: "key" });
+  const { error: saveError } = await persistLanding(db, value);
   if (saveError) {
     for (const c of money) await recordConfigChangeStrict({ actorId: audit.changedBy ?? null, surface: c.surface, targetId: "settings", action: "settings.update.failed", before: null, after: { keys: c.keys } });
     throw new Error("settings could not be saved");

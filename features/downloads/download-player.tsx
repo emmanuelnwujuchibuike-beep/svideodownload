@@ -8,6 +8,7 @@ import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef,
 
 import { suspendPlayback } from "@/lib/media/video-coordinator";
 
+import { cancelUploadAhead, getUploadAhead, releaseUploadAhead, startUploadAhead } from "@/features/create/upload-ahead";
 import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
 import {
   closePlayer,
@@ -472,6 +473,31 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
 
   // Fires as soon as the options sheet opens — not on mount — so a video the
   // viewer never opens the menu for never triggers a wasted presign/auth call.
+  /*
+    ── PUBLISH TO EVERYONE AS FAST AS A FEED UPLOAD (owner, 2026-10-27: "make publish to everyone from Download go
+       faster like an upload from feed") ─────────────────────────────────────────────────────────────────────────
+    The feed is fast because a picked video starts uploading at once (features/create/upload-ahead.ts) — by the time
+    Share is tapped the bytes are usually already there. Here the file is ALREADY on the device, so the same head
+    start begins the moment the ••• sheet opens (the real signal of intent): Publish then waits only for what is left,
+    with its real percentage, and the post carries a poster captured from the video itself. Videos only (the job is
+    the feed's video uploader); a photo or audio keeps the path below. Not on a slow or Save-Data connection, and an
+    upload nobody published is cancelled when the player closes.
+  */
+  const aheadId = `dl:${rec.url}|${rec.formatId}|${rec.kind}`;
+  useEffect(() => {
+    if (!moreOpen || postId || rec.kind !== "video" || isSlowConnection()) return;
+    const blob = blobRef.current;
+    if (!blob || blob.size > 100 * 1024 * 1024 || getUploadAhead(aheadId)) return;
+    const file = new File([blob], `${(rec.title || "frenz").replace(/[^\w-]+/g, "-").slice(0, 60) || "frenz"}.mp4`, { type: blob.type || "video/mp4" });
+    createClient()
+      .auth.getUser()
+      .then(({ data }) => {
+        if (data.user) startUploadAhead(aheadId, file);
+      })
+      .catch(() => {});
+  }, [moreOpen, postId, rec.kind, rec.title, aheadId]);
+  useEffect(() => () => cancelUploadAhead(aheadId), [aheadId]);
+
   useEffect(() => {
     if (!moreOpen || postId) return;
     if (!planRef.current) {
@@ -502,6 +528,42 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
       const ext = rec.kind === "audio" ? "mp3" : rec.kind === "image" ? "jpg" : "mp4";
       const contentType = blob.type || (rec.kind === "audio" ? "audio/mpeg" : rec.kind === "image" ? "image/jpeg" : "video/mp4");
       let publicUrl: string;
+      let posterUrl: string | null = null;
+      const ahead = getUploadAhead(aheadId);
+      if (ahead && ahead.status !== "failed") {
+        // the head start: wait for what is left of the upload that began when the sheet opened, showing its progress
+        const tick = window.setInterval(() => {
+          const pct = Math.round(ahead.progress * 100);
+          toast(pct >= 100 ? "Finishing…" : `Publishing for everyone… ${pct}%`, "loading", { id: tid });
+        }, 300);
+        try {
+          const done = await ahead.result;
+          publicUrl = done.url;
+          posterUrl = done.thumbnailUrl;
+          releaseUploadAhead(aheadId);
+        } catch {
+          releaseUploadAhead(aheadId);
+          publicUrl = "";
+        } finally {
+          window.clearInterval(tick);
+        }
+        if (publicUrl) {
+          const res = await fetch("/api/reels", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mediaUrl: publicUrl, mediaKind: rec.kind, title: rec.title, thumbnailUrl: posterUrl ?? rec.thumbnail, sourceUrl: rec.url }),
+          });
+          const json = await res.json();
+          if (!res.ok) {
+            toast(json.error ?? "Couldn't publish.", "error", { id: tid, duration: 3500 });
+            return;
+          }
+          setPostId(json.postId as string);
+          toast("Published! Everyone can watch it online.", "success", { id: tid, duration: 3500 });
+          return;
+        }
+        // the head start failed: fall through to the ordinary upload below
+      }
       try {
         // Main media → Cloudflare R2 when configured, else Supabase. Use the
         // plan prefetched when the sheet opened if we have one (skips the

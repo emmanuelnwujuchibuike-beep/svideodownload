@@ -41,6 +41,7 @@ const PostPoll = nextDynamic(() => import("@/features/social/post-poll").then((m
 const PollCreator = nextDynamic(() => import("@/features/social/post-poll").then((m) => m.PollCreator));
 import type { FeedItem } from "@/lib/social/home-feed";
 import { getPostMediaItems, recordPostView, relatedPosts, type PublicPost } from "@/lib/social/posts";
+import { viewGeo } from "@/lib/social/view-geo";
 import { formatCompactNumber } from "@/lib/utils";
 import { profilePath } from "@/lib/social/profile-url";
 
@@ -74,10 +75,11 @@ export async function PostPageView({
   // Deduped view (per viewer|ip per day) — fire and forget. Don't count the
   // owner viewing their own post.
   if (!post.isOwner) {
+    const h = await headers();
     const ipHash = createHash("sha256")
-      .update((((await headers()).get("x-forwarded-for") ?? "").split(",")[0] || "anon").trim())
+      .update(((h.get("x-forwarded-for") ?? "").split(",")[0] || "anon").trim())
       .digest("hex");
-    void recordPostView(post.id, me, ipHash, "post_page");
+    void recordPostView(post.id, me, ipHash, "post_page", viewGeo(h));
   }
 
   const [plan, related, reactions, comments, gate, poll, albumMedia] = await Promise.all([

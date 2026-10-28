@@ -255,7 +255,33 @@ async function notifyMembers(
         .neq("sender_id", senderId)
         .gte("created_at", new Date(Date.now() - 60_000).toISOString()),
     ]);
-    const recipientIds = ((memberRows ?? []) as { user_id: string }[]).map((m) => m.user_id);
+    const memberIds = ((memberRows ?? []) as { user_id: string }[]).map((m) => m.user_id);
+    if (memberIds.length === 0) return;
+
+    /*
+      0295 — MESSAGE REQUESTS (owner, 2026-10-27): in a one-to-one chat, a recipient who doesn't follow the sender, isn't
+      their friend and hasn't replied gets a REQUEST push / email (their own two switches, once per chat) — the sender's
+      name, never the message. They are taken out of the ordinary message push and email below, which carry the preview.
+    */
+    const { isMessageRequest, notifyMessageRequest } = await import("@/lib/social/message-request");
+    const senderName = (sender?.display_name as string) || (sender?.handle ? `@${sender.handle as string}` : "Someone");
+    const requestIds = new Set<string>();
+    if (conv?.type === "direct" || conv?.type === "secret") {
+      await Promise.all(
+        memberIds.map(async (recipientId) => {
+          if (!(await isMessageRequest(db, { recipientId, senderId, conversationId, conversationType: conv?.type as string | undefined }))) return;
+          requestIds.add(recipientId);
+          await notifyMessageRequest(db, {
+            recipientId,
+            senderId,
+            conversationId,
+            conversationType: conv?.type as string | undefined,
+            sender: { name: senderName, handle: (sender?.handle as string | null | undefined) ?? null, avatarUrl: (sender?.avatar_url as string | null | undefined) ?? null },
+          });
+        }),
+      );
+    }
+    const recipientIds = memberIds.filter((id) => !requestIds.has(id));
     if (recipientIds.length === 0) return;
 
     const mentionedHandles = parseMentionedHandles(body);

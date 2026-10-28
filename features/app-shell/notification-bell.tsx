@@ -18,6 +18,7 @@ import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { categoryForType } from "@/lib/platform/notifications-registry";
+import { CloseWhenOpened, TapPending } from "@/features/wallet/tap-pending";
 import { cn } from "@/lib/utils";
 
 /** `glass`: the feed's floating glass circle (features/ui/floating-glass.ts, owner 2026-10-23). */
@@ -117,8 +118,12 @@ export function NotificationBell({ glass = false }: { glass?: boolean } = {}) {
           <div className="absolute right-0 z-50 mt-2 max-h-[28rem] w-80 overflow-y-auto rounded-2xl border border-border/70 bg-card shadow-elevated">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border/60 bg-card px-4 py-3">
               <span className="text-sm font-semibold">Notifications</span>
-              <Link href="/notifications" onClick={() => setOpen(false)} className="text-xs font-semibold text-primary hover:underline">
-                See all
+              {/* owner, 2026-10-27: "Notification see all button is not pressing" — it was 12px text with no padding (a tiny target)
+                  and the panel closed on the tap, so a slow open looked like nothing happened. Now a 44px target that spins from
+                  the tap and closes the panel only once the page has opened; a main button, so it prefetches. */}
+              <Link href="/notifications" className="-my-2 -mr-2 inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-xl px-2 text-sm font-semibold text-primary hover:underline">
+                <TapPending size={14}>See all</TapPending>
+                <CloseWhenOpened onOpened={() => setOpen(false)} />
               </Link>
             </div>
             {items.length === 0 ? (

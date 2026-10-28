@@ -257,7 +257,7 @@ async function priceChoice(creatorId: string, s: SubSettings, cfg: SubConfig, mo
  * 0277: `months` (1 / 3 / 6 / 12, default 1) and an optional `promotionId` — the browser names an option, the server
  * prices it. Everything stays prepaid: one payment, `periodDays` of access, nothing renews.
  */
-export async function startSubCheckout(input: { subscriberId: string; email: string; creatorId: string; returnPath: string; market?: PaymentMarket; country?: string | null; months?: number; promotionId?: string | null }): Promise<Result<{ url: string; reused: boolean }>> {
+export async function startSubCheckout(input: { subscriberId: string; email: string; creatorId: string; returnPath: string; market?: PaymentMarket; country?: string | null; months?: number; promotionId?: string | null; provider?: unknown }): Promise<Result<{ url: string; reused: boolean }>> {
   const cfg = await subConfig();
   if (!cfg.purchasesEnabled) return fail("Subscriptions are paused right now.", 503, "paused");
   if (!isUuid(input.subscriberId) || !isUuid(input.creatorId)) return fail("Invalid request.", 400, "invalid");
@@ -313,7 +313,8 @@ export async function startSubCheckout(input: { subscriberId: string; email: str
     refused; an unknown outcome ends here and is reconciled.
   */
   const usable = await usableRails("sub_purchase");
-  const candidates = routePayment({ purpose: "sub_purchase", market: input.market ?? "other", routing: normalizePaymentRouting(landing.frenzAiPlans?.wallet?.routing, landing.frenzAiPlans?.wallet?.routingVersion), usable });
+  // the member's switch (owner, 2026-10-27: "they can decide to switch") — only reorders what the route allows
+  const candidates = routePayment({ purpose: "sub_purchase", market: input.market ?? "other", routing: normalizePaymentRouting(landing.frenzAiPlans?.wallet?.routing, landing.frenzAiPlans?.wallet?.routingVersion), usable, preferred: landing.frenzAiPlans?.wallet?.memberChoice === false ? undefined : input.provider });
   if (!candidates.length) return fail("Payments are unavailable right now. Try again shortly.", 503);
   const out = await firstRail(
     candidates,

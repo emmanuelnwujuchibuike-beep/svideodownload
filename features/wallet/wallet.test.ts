@@ -364,8 +364,21 @@ describe("the wallet entry points' shared balance read (coin-glance)", () => {
     // and while Frenz Coin is off (first paint: entitlements not ready) the header shows nothing at all
     const { CoinHeaderPillLazy } = await import("./coin-entry-lazy");
     expect(renderToStaticMarkup(createElement(CoinHeaderPillLazy))).toBe("");
-    expect(renderToStaticMarkup(createElement(CoinMenuCard))).toBe("");
-    expect(renderToStaticMarkup(createElement(CoinChatSend, { recipientId: "x", name: "Bo" }))).toBe("");
+    // 2026-10-27 (owner: "just a wallet and coin button … less visual noise"): the profile and chat rows are plain
+    // described rows — never a balance — and their lazy wrappers still show nothing until Frenz Coin is known to be on
+    const { CoinMenuCardLazy, CoinChatSendLazy } = await import("./coin-entry-lazy");
+    expect(renderToStaticMarkup(createElement(CoinMenuCardLazy, {}))).toBe("");
+    expect(renderToStaticMarkup(createElement(CoinChatSendLazy, { recipientId: "x", name: "Bo" }))).toBe("");
+    const menu = renderToStaticMarkup(createElement(CoinMenuCard));
+    const chat = renderToStaticMarkup(createElement(CoinChatSend, { recipientId: "x", name: "Bo" }));
+    expect(menu).toContain('href="/wallet"');
+    expect(menu).toContain("Your balance, deposits, withdrawals and transfers");
+    expect(chat).toContain('href="/wallet/transfer?to=x"');
+    expect(chat).toContain("Send money to Bo from your wallet");
+    for (const html of [menu, chat]) {
+      expect(html).not.toContain(">FC<");
+      expect(html).not.toMatch(/>[0-9][0-9,]*(\.[0-9]{2})?</);
+    }
   });
 });
 

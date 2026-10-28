@@ -96,7 +96,8 @@ self.addEventListener("fetch", (event) => {
 
   const isStatic =
     url.origin === self.location.origin &&
-    (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/fonts/"));
+    // /landing/ (v31): the static landing page's scripts, every URL versioned by content hash (app/route.ts) — immutable
+    (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/fonts/") || url.pathname.startsWith("/landing/"));
   const isFont = /\.(woff2?|ttf|otf)$/i.test(url.pathname);
   /*
     🔴 THE EXTENSION IS A FALLBACK FOR SUB-RESOURCES, NEVER A NET FOR `fetch()`

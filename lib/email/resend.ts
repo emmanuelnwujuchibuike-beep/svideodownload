@@ -150,6 +150,11 @@ export function sendProductEmail(
      * security email never carries it. Must be an https URL on this site.
      */
     unsubscribeUrl?: string;
+    /**
+     * Frenz Gift Coin Part 4.1: a "Manage notification settings" link in the footer (where a member turns this kind of
+     * email off). Must be an https URL on this site, like the unsubscribe link.
+     */
+    settingsHref?: string;
     /** "support": sent from the support desk (Frenz Support <support@frenzsave.com>) — an admin's own email to a member. */
     sender?: "support";
   },
@@ -157,6 +162,7 @@ export function sendProductEmail(
   const year = new Date().getFullYear();
   const pp = opts.person;
   const unsub = opts.unsubscribeUrl && opts.unsubscribeUrl.startsWith(`${SITE_URL}/`) && /^[^\s"'<>]+$/.test(opts.unsubscribeUrl) ? opts.unsubscribeUrl : null;
+  const manage = opts.settingsHref && opts.settingsHref.startsWith(`${SITE_URL}/`) && /^[^\s"'<>]+$/.test(opts.settingsHref) ? opts.settingsHref : null;
   const avatar = pp?.avatarUrl && /^https:\/\/[^\s"'<>]+$/.test(pp.avatarUrl)
     ? `<img src="${pp.avatarUrl}" width="56" height="56" alt="" style="display:block;margin:0 auto;width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid #ece9fb;">`
     : pp
@@ -205,7 +211,7 @@ export function sendProductEmail(
         <tr><td style="padding:28px 40px 32px;font-family:${FONT};">
           <p style="margin:0;border-top:1px solid #ececf2;padding-top:16px;font-size:12px;line-height:1.6;color:#a0a0aa;">
             Need more help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="color:#6C4DFF;text-decoration:none;">${SUPPORT_EMAIL}</a><br>
-            &copy; ${year} Frenz. All rights reserved.${unsub ? `<br>You get this because you chose email updates. <a href="${unsub}" style="color:#6C4DFF;text-decoration:underline;">Unsubscribe from optional emails</a>` : ""}
+            &copy; ${year} Frenz. All rights reserved.${manage ? `<br><a href="${manage}" style="color:#6C4DFF;text-decoration:underline;">Manage notification settings</a>` : ""}${unsub ? `<br>You get this because you chose email updates. <a href="${unsub}" style="color:#6C4DFF;text-decoration:underline;">Unsubscribe from optional emails</a>` : ""}
           </p>
         </td></tr>
       </table>
@@ -214,7 +220,7 @@ export function sendProductEmail(
 </body>
 </html>`;
 
-  const text = `${opts.heading}\n\n${opts.intro}${opts.body ? `\n\n${opts.body}` : ""}${opts.ctaHref ? `\n\n${opts.ctaLabel ?? "Open"}: ${opts.ctaHref}` : ""}\n\nNeed more help? ${SUPPORT_EMAIL}\n(c) ${year} Frenz.${unsub ? `\nUnsubscribe from optional emails: ${unsub}` : ""}`;
+  const text = `${opts.heading}\n\n${opts.intro}${opts.body ? `\n\n${opts.body}` : ""}${opts.ctaHref ? `\n\n${opts.ctaLabel ?? "Open"}: ${opts.ctaHref}` : ""}\n\nNeed more help? ${SUPPORT_EMAIL}\n(c) ${year} Frenz.${manage ? `\nManage notification settings: ${manage}` : ""}${unsub ? `\nUnsubscribe from optional emails: ${unsub}` : ""}`;
 
   return send(to, opts.subject, html, text, unsub ? { "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } : undefined, opts.sender === "support" ? SUPPORT_FROM : FROM);
 }

@@ -22,7 +22,24 @@ vi.mock("@/lib/flutterwave/client", async (orig) => ({
   // Flutterwave's live rate (2026-10-26): GH₵12.21 per dollar
   readFlutterwaveUsdRate: async (cur: string) => (cur === "GHS" ? 1221 : null),
 }));
-vi.mock("@/lib/landing/settings", () => ({ getLandingSettings: async () => ({ frenzAiCharacterReplace: { recharge: { checkoutCurrency: "NGN" } } }) }));
+// 0299: the payment routing every checkout reads (Nigeria: Paystack first, elsewhere Flutterwave first; members may switch)
+let memberChoice = true;
+vi.mock("@/lib/landing/settings", async () => {
+  const { AI_WALLET_DEFAULTS } = await import("@/lib/ai/credits/wallet-config");
+  return { getLandingSettings: async () => ({ frenzAiCharacterReplace: { recharge: { checkoutCurrency: "NGN" } }, frenzAiPlans: { wallet: { ...AI_WALLET_DEFAULTS, memberChoice } } }) };
+});
+// Paystack scripted: off unless a test turns it on; ₦1,600 per dollar at the live rate
+let paystackOn = false;
+let psInit: (input: Record<string, unknown>) => Promise<string>;
+let psVerify: (ref: string) => Promise<Record<string, unknown>>;
+const psCheckouts: Record<string, unknown>[] = [];
+vi.mock("@/lib/paystack/paystack", async (orig) => ({
+  ...(await orig<typeof import("@/lib/paystack/paystack")>()),
+  paystackEnabled: async () => paystackOn,
+  initializeCoinDepositCheckout: async (input: Record<string, unknown>) => (psCheckouts.push(input), psInit(input)),
+  verifyTransaction: async (ref: string) => psVerify(ref),
+}));
+vi.mock("@/lib/ai/character-replace/fx-rate-server", () => ({ resolveCheckoutRate: async () => ({ minorPerUsd: 160_000, marketPerUsd: 1600, markupPercent: 0, source: "test", fetchedAt: null, provider: "test" }) }));
 process.env.FLUTTERWAVE_SECRET_HASH = "the-secret-hash";
 process.env.FLUTTERWAVE_SECRET_KEY = "FLWSECK_TEST-k";
 
@@ -40,6 +57,11 @@ const attempt = (over: Record<string, unknown> = {}) => ({ reference: REF, user_
 beforeEach(() => {
   db = fakeDb({ ai_topup_attempts: [], financial_audit_log: [], coin_deposit_reversals: [] });
   checkouts.length = 0;
+  psCheckouts.length = 0;
+  paystackOn = false;
+  memberChoice = true;
+  psInit = async () => "https://checkout.paystack.com/new";
+  psVerify = async (ref) => ({ id: 901, reference: ref, status: "success", amount: 8_000_000, currency: "NGN", channel: "bank_transfer", gateway_response: "Approved" });
   checkout = async () => "https://checkout.flutterwave.com/new";
   byReference = async () => charge();
   db.rpc.begin_coin_deposit = vi.fn((a: Record<string, unknown>) => {
@@ -228,5 +250,123 @@ describe("recordAdminCoinDepositReversal", () => {
     expect(await record({ refundedMinor: 6_000 })).toEqual({ ok: false, reason: "invalid" });
     expect(await record({ reference: "frenz_cr_topup_fw_2b1c8f8e-1111-4111-8111-111111111111" })).toEqual({ ok: false, reason: "invalid" });
     expect(db.rpc.reverse_coin_deposit).not.toHaveBeenCalled();
+  });
+});
+
+/*
+  0299 — owner, 2026-10-27: "make Nigeria users use Paystack as first choice of payment, deposit … but they can decide to
+  switch. Outside Nigeria … Flutterwave as first choice."
+*/
+const PS_REF = "frenz_coin_dep_2b1c8f8e-2222-4222-8222-222222222222";
+const psAttempt = (over: Record<string, unknown> = {}) => attempt({ id: PS_REF, reference: PS_REF, provider: "paystack", provider_amount: 8_000_000, provider_currency: "NGN", checkout_url: "https://checkout.paystack.com/c", ...over });
+const beginArgs = (i = 0) => (db.rpc.begin_coin_deposit as ReturnType<typeof vi.fn>).mock.calls[i]![0] as Record<string, unknown>;
+
+describe("beginCoinDeposit — which provider (0299)", () => {
+  beforeEach(() => {
+    paystackOn = true;
+  });
+  it("Nigeria: Paystack first — naira at the live rate ($50.00 at ₦1,600 = ₦80,000) pinned on the attempt BEFORE the checkout", async () => {
+    const out = await begin({ market: "NG", country: "NG" });
+    expect(out).toMatchObject({ ok: true, url: "https://checkout.paystack.com/new", amountCents: 5_000 });
+    expect(beginArgs()).toMatchObject({ p_provider: "paystack", p_amount_cents: 5_000, p_provider_amount: 8_000_000, p_provider_currency: "NGN", p_idempotency: "dep_0123456789" });
+    expect(String(beginArgs().p_reference)).toMatch(/^frenz_coin_dep_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(dep.isCoinDepositReference(beginArgs().p_reference)).toBe(true);
+    expect(dep.coinDepositProviderOf(beginArgs().p_reference)).toBe("paystack");
+    expect(psCheckouts[0]).toMatchObject({ amount: 8_000_000, currency: "NGN", reference: beginArgs().p_reference });
+    expect(checkouts).toHaveLength(0);
+  });
+  it("Nigeria, the member switches to Flutterwave: a Flutterwave naira checkout instead", async () => {
+    expect(await begin({ market: "NG", country: "NG", provider: "flutterwave" })).toMatchObject({ ok: true, url: "https://checkout.flutterwave.com/new" });
+    expect(beginArgs()).toMatchObject({ p_provider: "flutterwave" });
+    expect(psCheckouts).toHaveLength(0);
+  });
+  it("outside Nigeria: Flutterwave first; a member who switches gets Paystack", async () => {
+    expect(await begin({ market: "other", country: "GH" })).toMatchObject({ ok: true, url: "https://checkout.flutterwave.com/new" });
+    expect(await begin({ market: "other", country: "GH", provider: "paystack", idempotencyKey: "dep_9999999999" })).toMatchObject({ ok: true, url: "https://checkout.paystack.com/new" });
+  });
+  it("when the admin turns member choice off, the switch is ignored", async () => {
+    memberChoice = false;
+    await begin({ market: "NG", provider: "flutterwave" });
+    expect(beginArgs()).toMatchObject({ p_provider: "paystack" });
+  });
+  it("a name that isn't a rail never adds one", async () => {
+    await begin({ market: "NG", provider: "bachs" });
+    expect(beginArgs()).toMatchObject({ p_provider: "paystack" });
+  });
+  it("Paystack not configured: Nigeria's deposit goes through Flutterwave", async () => {
+    paystackOn = false;
+    expect(await begin({ market: "NG" })).toMatchObject({ ok: true, url: "https://checkout.flutterwave.com/new" });
+  });
+  it("Paystack DEFINITELY refused: closed, then Flutterwave under its own key; an UNKNOWN outcome never opens a second checkout", async () => {
+    const { PaystackHttpError } = await import("@/lib/paystack/paystack");
+    psInit = async () => {
+      throw new PaystackHttpError("Invalid key", 400);
+    };
+    expect(await begin({ market: "NG" })).toMatchObject({ ok: true, url: "https://checkout.flutterwave.com/new" });
+    expect(db.tables.ai_topup_attempts!.find((a) => a.reference === beginArgs(0).p_reference)).toMatchObject({ status: "failed" });
+    expect(beginArgs(1)).toMatchObject({ p_provider: "flutterwave", p_idempotency: "dep_0123456789-alt1" });
+
+    db.tables.ai_topup_attempts = [];
+    (db.rpc.begin_coin_deposit as ReturnType<typeof vi.fn>).mockClear();
+    checkouts.length = 0;
+    psInit = async () => {
+      throw new TypeError("fetch failed");
+    };
+    expect(await begin({ market: "NG", idempotencyKey: "dep_unknown_01" })).toMatchObject({ ok: false, reason: "checkout_unknown" });
+    expect(db.tables.ai_topup_attempts![0]).toMatchObject({ status: "verification_required" });
+    expect(checkouts).toHaveLength(0);
+  });
+});
+
+describe("settleCoinDeposit — a Paystack deposit (0299)", () => {
+  beforeEach(() => {
+    paystackOn = true;
+    db.tables.ai_topup_attempts = [psAttempt()];
+  });
+  it("asks PAYSTACK about our reference and settles exactly the naira pinned", async () => {
+    expect(await dep.settleCoinDeposit(PS_REF)).toMatchObject({ kind: "credited", amountCents: 5_000 });
+    expect(db.rpc.settle_coin_deposit).toHaveBeenCalledWith({ p_reference: PS_REF, p_charge_id: "901", p_paid_minor: 8_000_000, p_paid_currency: "NGN" });
+  });
+  it("a short naira payment, or dollars, credits nothing and is held for a person", async () => {
+    psVerify = async (ref) => ({ id: 901, reference: ref, status: "success", amount: 7_990_000, currency: "NGN" });
+    expect(await dep.settleCoinDeposit(PS_REF)).toEqual({ kind: "mismatch" });
+    db.tables.ai_topup_attempts = [psAttempt()];
+    psVerify = async (ref) => ({ id: 901, reference: ref, status: "success", amount: 8_000_000, currency: "USD" });
+    expect(await dep.settleCoinDeposit(PS_REF)).toEqual({ kind: "mismatch" });
+    expect(db.rpc.settle_coin_deposit).not.toHaveBeenCalled();
+  });
+  it("🔴 a Flutterwave charge can never settle a Paystack deposit, and a row whose rail disagrees with its reference is not touched", async () => {
+    expect(await dep.settleCoinDeposit(PS_REF, { charge: charge({ reference: PS_REF, amountMinor: 8_000_000, currency: "NGN" }) })).toEqual({ kind: "unknown" });
+    db.tables.ai_topup_attempts = [psAttempt({ provider: "flutterwave" })];
+    expect(await dep.settleCoinDeposit(PS_REF)).toEqual({ kind: "unknown" });
+    expect(db.rpc.settle_coin_deposit).not.toHaveBeenCalled();
+  });
+  it("Paystack has no such transaction and no checkout was ever opened: closed; abandoned closes only after 30 minutes", async () => {
+    const { PaystackHttpError } = await import("@/lib/paystack/paystack");
+    psVerify = async () => {
+      throw new PaystackHttpError("Transaction reference not found", 400);
+    };
+    db.tables.ai_topup_attempts = [psAttempt({ checkout_url: null })];
+    expect(await dep.settleCoinDeposit(PS_REF)).toEqual({ kind: "failed" });
+    psVerify = async (ref) => ({ reference: ref, status: "abandoned" });
+    db.tables.ai_topup_attempts = [psAttempt()];
+    expect(await dep.settleCoinDeposit(PS_REF)).toEqual({ kind: "pending" });
+    db.tables.ai_topup_attempts = [psAttempt({ created_at: new Date(Date.now() - 31 * 60_000).toISOString() })];
+    expect(await dep.settleCoinDeposit(PS_REF)).toEqual({ kind: "failed" });
+  });
+  it("Paystack unreachable: it throws (the caller retries), nothing is settled", async () => {
+    psVerify = async () => {
+      throw new TypeError("fetch failed");
+    };
+    await expect(dep.settleCoinDeposit(PS_REF)).rejects.toThrow();
+    expect(db.rpc.settle_coin_deposit).not.toHaveBeenCalled();
+  });
+  it("the cron sweep settles an open Paystack attempt too", async () => {
+    expect(await dep.reconcileCoinDepositAttempt(PS_REF)).toBe("settled");
+  });
+  it("an admin's refund of a Paystack deposit is re-verified with Paystack and recorded against it", async () => {
+    const out = await dep.recordAdminCoinDepositReversal({ reference: PS_REF, kind: "refund", refundedMinor: null, idempotencyKey: "rev_0123456789", adminId: USER, note: "refunded" });
+    expect(out).toMatchObject({ ok: true });
+    expect(db.rpc.reverse_coin_deposit).toHaveBeenCalledWith(expect.objectContaining({ p_provider: "paystack", p_paid_minor: 8_000_000, p_paid_currency: "NGN" }));
   });
 });

@@ -49,7 +49,10 @@ const { FlutterwaveHttpError } = await import("@/lib/flutterwave/client");
 const { PaystackHttpError } = await import("@/lib/paystack/paystack");
 
 const USER = "11111111-1111-4111-8111-111111111111";
-const start = () => beginCharacterReplaceTopup({ userId: USER, email: "a@b.co", packId: "pack_100", returnTo: "/ai/usage", market: "NG" });
+// 2026-10-27 (owner): Flutterwave is first OUTSIDE Nigeria — the rail mechanics are proven there; in Nigeria Paystack is first and
+// Flutterwave is the member's switch (startNg below)
+const start = () => beginCharacterReplaceTopup({ userId: USER, email: "a@b.co", packId: "pack_100", returnTo: "/ai/usage", market: "other" });
+const startNg = (provider?: string) => beginCharacterReplaceTopup({ userId: USER, email: "a@b.co", packId: "pack_100", returnTo: "/ai/usage", market: "NG", provider });
 const rows = (provider: string) => (db.tables.ai_topup_attempts ?? []).filter((r) => r.provider === provider);
 const ENABLED = { FLUTTERWAVE_SECRET_KEY: "FLWSECK_TEST-k", FLUTTERWAVE_SECRET_HASH: "h", FLUTTERWAVE_VERIFIED_CURRENCIES: "USD", FLUTTERWAVE_ENABLED_PURPOSES: "wallet_topup", FLUTTERWAVE_AMOUNT_UNIT: "major" };
 const setEnv = (on: boolean) => {
@@ -86,7 +89,7 @@ describe("naira in Nigeria (2026-10-24: bank transfer / USSD only exist for NGN 
     setEnv(true);
     process.env.FLUTTERWAVE_VERIFIED_CURRENCIES = "USD,NGN";
     capture();
-    expect(await start()).toMatchObject({ ok: true, provider: "flutterwave", priceUsdCents: 1000 });
+    expect(await startNg("flutterwave")).toMatchObject({ ok: true, provider: "flutterwave", priceUsdCents: 1000 });
     // $10.00 at ₦1,500 per dollar (the mocked live rate) = ₦15,000.00 = 1,500,000 kobo
     expect(seen[0]).toMatchObject({ currency: "NGN", amountMinor: 1_500_000 });
     expect(rows("flutterwave")[0]).toMatchObject({ amount_cents: 1000, currency: "USD", provider_amount: 1_500_000, provider_currency: "NGN", fx_minor_per_usd: 150_000 });
@@ -102,11 +105,20 @@ describe("naira in Nigeria (2026-10-24: bank transfer / USSD only exist for NGN 
     expect(rows("flutterwave")[0]).toMatchObject({ provider_amount: 1000, provider_currency: "USD", fx_minor_per_usd: null });
   });
 
+  it("owner 2026-10-27: with both rails ready, a member in Nigeria who does not switch gets PAYSTACK (naira)", async () => {
+    setEnv(true);
+    process.env.FLUTTERWAVE_VERIFIED_CURRENCIES = "USD,NGN";
+    capture();
+    expect(await startNg()).toMatchObject({ ok: true, provider: "paystack" });
+    expect(seen).toHaveLength(0);
+    expect(rows("paystack")[0]).toMatchObject({ provider_currency: "NGN" });
+  });
+
   it("NGN not confirmed (switched off): Nigeria pays USD on Flutterwave as before — never a closed checkout", async () => {
     setEnv(true);
     process.env.FLUTTERWAVE_VERIFIED_CURRENCIES = "USD";
     capture();
-    expect(await start()).toMatchObject({ ok: true, provider: "flutterwave" });
+    expect(await startNg("flutterwave")).toMatchObject({ ok: true, provider: "flutterwave" });
     expect(seen[0]).toMatchObject({ currency: "USD", amountMinor: 1000 });
   });
 });

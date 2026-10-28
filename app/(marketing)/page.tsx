@@ -11,6 +11,7 @@ import { getPublicAdSummary } from "@/lib/ads-platform/public-summary";
 import { productJsonLd } from "@/lib/content/genome/queries";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { SITE_URL } from "@/lib/site";
+import { AppBand, CreatorBand } from "@/components/landing/creator-app-bands";
 import { AdSurface } from "@/features/monetization/ad-surface";
 import { LazyAdSurface } from "@/features/monetization/lazy-ad-surface";
 
@@ -296,6 +297,10 @@ export default async function HomePage() {
         </Suspense>
 
         <SectionAd />
+
+        {/* the new design's Creator Lounge and app bands (owner, 2026-10-28) */}
+        <CreatorBand />
+        <AppBand />
 
         {/* An ad above the platform links — the section the hero's "All platforms" lands on. */}
         <div className="container max-w-5xl px-3 py-2">

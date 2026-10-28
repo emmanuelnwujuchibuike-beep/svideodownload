@@ -3,6 +3,7 @@
 import type { AiPromo } from "@/lib/ai/promo/config";
 import { useEffect, useMemo, useState } from "react";
 
+import { AppBand, CreatorBand } from "@/components/landing/creator-app-bands";
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { DownloadBox } from "@/features/downloads/download-box";
 import { HomeHero, HomeTools, LiveDownloads, StorageRow } from "@/features/downloads/home-screen";
@@ -87,6 +88,10 @@ export function DownloadsPage({
       <DownloadHistoryAd position="top" maxWidth="max-w-3xl" />
       <TiredOfAds />
       <DownloadHistoryAd position="bottom" maxWidth="max-w-3xl" />
+
+      {/* the new design's Creator Lounge and app bands (owner, 2026-10-28); the app band hides once installed */}
+      <CreatorBand inPage />
+      <AppBand inPage />
 
       <div className="mt-6">
         <DownloadDisclaimer variant="card" />

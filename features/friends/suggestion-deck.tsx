@@ -1,6 +1,7 @@
 "use client";
 
 import { UserCheck, UserPlus, UserRound, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 
 import { VerifiedTick } from "@/components/badges/identity-badges";
@@ -43,6 +44,9 @@ function reducedMotion(): boolean {
   }
 }
 
+/** How long a card stays in front before its profile is warmed — longer than a skip, so skipping costs nothing. */
+const WARM_PROFILE_AFTER_MS = 450;
+
 export function SuggestionDeck({ initial, variant, seeAllHref, onWarmSeeAll }: { initial: PersonSuggestion[]; variant: "panel" | "hero"; seeAllHref?: string; onWarmSeeAll?: () => void }) {
   const [queue, setQueue] = useState<PersonSuggestion[]>(initial);
   const [deck, apply] = useOptimistic(queue, (q: PersonSuggestion[], op: Op) =>
@@ -56,6 +60,30 @@ export function SuggestionDeck({ initial, variant, seeAllHref, onWarmSeeAll }: {
   const known = useRef(new Set(initial.map((p) => p.id)));
   const loading = useRef(false);
   const ghostSeq = useRef(0);
+
+  /*
+    The front card's profile, warmed (owner, 2026-10-28: "when their profile comes up it should warm up so it doesn't load
+    when tapped — and it shouldn't interrupt the smoothness when a user skips"). Only once a card has stayed in front for
+    WARM_PROFILE_AFTER_MS, and then at an idle moment: a quick run of skips starts nothing (each skip cancels the pending
+    warm-up), so swiping stays smooth. A FULL prefetch — the whole page, kept by the router — so the tap opens it at once.
+  */
+  const router = useRouter();
+  const frontHandle = deck[0]?.handle ?? null;
+  useEffect(() => {
+    if (!frontHandle) return;
+    const href = profilePath(frontHandle);
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+    let idle: number | null = null;
+    const timer = window.setTimeout(() => {
+      const go = () => router.prefetch(href, { kind: "full" } as unknown as Parameters<typeof router.prefetch>[1]);
+      if (w.requestIdleCallback) idle = w.requestIdleCallback(go, { timeout: 1500 });
+      else go();
+    }, WARM_PROFILE_AFTER_MS);
+    return () => {
+      window.clearTimeout(timer);
+      if (idle !== null) w.cancelIdleCallback?.(idle);
+    };
+  }, [frontHandle, router]);
   const { toast, show, hide } = useFriendsToast();
 
   // the next page when 3 remain — the only fetch this component ever makes on its own

@@ -12,7 +12,7 @@ import { useEntitlements } from "@/features/auth/use-entitlements";
 import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
 import { useUser } from "@/features/auth/use-user";
 import { UserMenu } from "@/features/auth/user-menu";
-import { InstallButton, InstallCta, InstallHeaderCta } from "@/features/pwa/install-button";
+import { InstallCta, InstallHeaderCta } from "@/features/pwa/install-button";
 import { PromoteButton } from "@/features/downloads/promote-button";
 import { LanguageSelector } from "@/components/i18n/language-selector";
 import { useShowAds } from "@/features/monetization/use-show-ads";
@@ -45,6 +45,13 @@ import { profilePath } from "@/lib/social/profile-url";
   translated by the catalogue rather than by a second hand-maintained list that
   would drift out of step with this one.
 */
+/*
+  The DESKTOP bar's links (owner, 2026-10-28, with a screenshot of eight links, search, language, Install, the theme
+  switch and the menu in one row: "tightly packed with irrelevant buttons"). Four, as in design/frenz-landing.html — every
+  other destination, search, language and the theme are in the menu drawer, which every desktop visitor now has.
+*/
+const DESKTOP_NAV = new Set(["/#download", "/features", "/ai", "/pricing"]);
+
 const NAV_LINKS: { href: string; labelKey: MessageKey }[] = [
   { href: "/", labelKey: "nav.home" },
   { href: "/features", labelKey: "nav.features" },
@@ -387,7 +394,10 @@ export function SiteHeader({
               taking horizontal space, which is the whole point: that space
               becomes the install group on the right. */}
           {landing ? (
-            <FrenzLogo size={28} priority />
+            <>
+              <span className="lg:hidden"><FrenzLogo size={28} priority /></span>
+              <span className="hidden lg:inline-flex"><FrenzWordmark size={28} priority plate /></span>
+            </>
           ) : (
             <FrenzWordmark size={28} priority plate />
           )}
@@ -396,7 +406,7 @@ export function SiteHeader({
         {/* Desktop nav — only at lg+; iPad-portrait (md) uses the roomy drawer so
             the bar never gets cramped. */}
         <nav className="hidden items-center gap-6 text-sm font-medium text-muted-foreground lg:flex">
-          {NAV_LINKS.map((l) => (
+          {NAV_LINKS.filter((l) => DESKTOP_NAV.has(l.href)).map((l) => (
             <Link
               key={l.href}
               // "/" is a member's home only by redirect — see `homeHref` above.
@@ -423,58 +433,12 @@ export function SiteHeader({
             upgrade. Nothing is lost — Go Pro stays in the mobile menu, on
             /pricing, and here for signed-in free users, where it is the right ask.
           */}
-          {user && !isPremium && (
-            <Link
-              href="/pricing"
-              className="group relative inline-flex items-center gap-1.5 overflow-hidden rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-amber-500/25 transition-all hover:shadow-amber-500/40 hover:shadow-lg active:scale-[0.98]"
-            >
-              <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-              <Crown className="h-4 w-4" /> Go Pro
-            </Link>
-          )}
-          {/* Search is REMOVED on the landing (owner, 2026-08-25) so the install
-              group has room. It stays on every other marketing route, and on
-              the landing it is still reachable from the menu drawer below —
-              which already carries it for exactly this reason. */}
-          {landing ? null : <SearchTrigger className="w-48" />}
-          {/* Language selector for the top ~50 languages (owner — replaced the
-              downloads/history icon). History lives in the bottom nav now.
-              Not on the LANDING (owner, 2026-10-15: "the landing header is too
-              crowded"): there it is the "Language" row in the menu drawer. On a
-              desktop that drawer exists only for signed-out visitors, so a
-              signed-in one keeps the globe here, or they could not reach it. */}
-          {landing && !user ? null : <LanguageSelector />}
           {/*
-            Install — Frenz | Search | Language | Install | Menu.
-
-            Placed AFTER the language selector and before the theme/account
-            cluster so it reads as a site-level action rather than an account
-            one. Renders null when the app is already installed or running
-            standalone, so it never becomes a dead control.
-
-            🔴 On the LANDING it is the fuller `InstallHeaderCta` (icon + "Install
-            Frenz" + button) instead of the bare pill — that page gave up its
-            wordmark and its search field to make room for exactly this, and it
-            no longer carries the hero banner. Every other route keeps the
-            compact pill, where the header still has a wordmark and a search
-            field to fit around.
+            2026-10-28 (owner: "the desktop landing headers … are tightly packed with irrelevant buttons"): Install (ink,
+            like every Install now), the account, and the menu. Go Pro, search, language, the theme switch and Promote
+            are all in the drawer.
           */}
-          {/*
-            The streak, left of the install action.
-
-            🔴 It lives in BOTH headers. Mounting it only in `AppTopbar` (the
-            signed-in shell) meant it never showed on the landing or download
-            pages — the two the owner was looking at when they said they could
-            not see it. Those render this header instead.
-
-            It renders nothing without a streak, so a first-time visitor's
-            header is unchanged and the row cannot shift.
-          */}
-          {/* the streak moved to the chat page (owner, 2026-10-09) — see features/social/chat-streak.tsx */}
-          {landing ? <InstallHeaderCta label="Install" /> : <InstallButton />}
-          {/* Promote sits right beside Install on the landing (owner, 2026-10-09). */}
-          {landing ? <PromoteButton size="header" /> : null}
-          <ThemeToggle />
+          <InstallHeaderCta label="Install" />
           <UserMenu />
           {/*
             The menu button now renders on DESKTOP too, for signed-out visitors
@@ -486,19 +450,18 @@ export function SiteHeader({
             `lg:hidden`. A signed-in viewer still gets nothing extra here: they
             have the avatar, and the marketing drawer is not their navigation.
           */}
-          {!user ? (
-            <button
-              type="button"
-              aria-label={open ? t("nav.closeMenu") : t("nav.openMenu")}
-              aria-expanded={open}
-              onClick={() => (shown ? closeMenu() : openMenu())}
-              className="inline-flex h-10 w-10 items-center justify-center"
-            >
-              <IconTile>
-                <MenuMark shown={shown} />
-              </IconTile>
-            </button>
-          ) : null}
+          {/* every desktop visitor now: the drawer holds what left the bar (2026-10-28) */}
+          <button
+            type="button"
+            aria-label={open ? t("nav.closeMenu") : t("nav.openMenu")}
+            aria-expanded={open}
+            onClick={() => (shown ? closeMenu() : openMenu())}
+            className="inline-flex h-10 w-10 items-center justify-center"
+          >
+            <IconTile>
+              <MenuMark shown={shown} />
+            </IconTile>
+          </button>
         </div>
 
         {/* Mobile right — search then menu, hidden on social surfaces (the bottom

@@ -128,6 +128,9 @@ export function ExclusiveFeed({ initial = null, guest = false }: { initial?: Exc
   const [status, setStatus] = useState<"loading" | "ready" | "error">(() => (initial ? "ready" : "loading"));
   const [more, setMore] = useState<"idle" | "loading" | "error">("idle");
   const [open, setOpen] = useState<string | null>(null);
+  // the open post's creator, for a sticker gift from its comments (owner, 2026-10-28)
+  const openCreatorId = open ? posts.find((p) => p.id === open)?.creatorId ?? null : null;
+  const openGiftTo = openCreatorId && creators[openCreatorId] ? { userId: openCreatorId, name: creators[openCreatorId]!.name, avatarUrl: creators[openCreatorId]!.avatarUrl ?? null } : null;
   const [ageGate, setAgeGate] = useState(false);
   const busy = useRef(false);
   const abort = useRef<AbortController | null>(null);
@@ -281,7 +284,7 @@ export function ExclusiveFeed({ initial = null, guest = false }: { initial?: Exc
       ) : null}
 
 
-      {open ? <PrivateViewer postId={open} initial={null} isCreator={false} onClose={() => setOpen(null)} onDeleted={() => setOpen(null)} /> : null}
+      {open ? <PrivateViewer postId={open} initial={null} isCreator={false} giftTo={openGiftTo} onClose={() => setOpen(null)} onDeleted={() => setOpen(null)} /> : null}
       {ageGate ? (
         <AgeGateSheet
           onClose={() => setAgeGate(false)}

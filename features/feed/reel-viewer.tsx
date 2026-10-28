@@ -9,6 +9,7 @@ import {
   type MotionValue } from "framer-motion";
 import {
   BadgeCheck,
+  Gift,
   BellOff,
   Bookmark,
   Calendar,
@@ -92,6 +93,7 @@ import { RichText } from "@/components/social/rich-text";
 import { SmartVideo } from "@/features/media/smart-video";
 import { useAdaptiveSource } from "@/features/media/use-adaptive-source";
 import { GlassSheetShell } from "@/features/ui/glass-sheet-shell";
+import { PostGiftButton } from "@/features/gift/post-gift-button";
 import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { AnimatedCount } from "@/features/ui/animated-count";
 import { floatReaction } from "@/features/ui/reaction-float";
@@ -2497,6 +2499,15 @@ function ReelCard({
           />
         </span>
         <RailButton icon={MessageCircle} count={item.commentsCount} label="Comment" onClick={openComments} />
+        {/* owner, 2026-10-28: sticker gifting on reels and AI reels — warmed while the reel is on screen, opens instantly */}
+        {isActive ? (
+          <PostGiftButton
+            postId={item.id}
+            author={{ userId: item.publisher.id, name: item.publisher.displayName || `@${item.publisher.handle}`, avatarUrl: item.publisher.avatarUrl ?? null }}
+            authorHandle={item.publisher.handle}
+            render={(open) => <RailButton icon={Gift} label="Gift" onClick={(e) => { e.stopPropagation(); open(); }} />}
+          />
+        ) : null}
         {/* The stacked-avatars badge (who-you-follow reposted this) is purely
             conditional social proof — it simply doesn't render when a reel has
             none, which is why the reference screenshot shows no trace of it. */}

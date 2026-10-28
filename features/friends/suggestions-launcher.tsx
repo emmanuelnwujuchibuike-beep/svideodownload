@@ -35,6 +35,7 @@ export function SuggestionsLauncher({
     return (
       <Link
         href="/friends/discover"
+        prefetch
         onPointerEnter={warm}
         onPointerDown={warm}
         onClick={tap}
@@ -53,6 +54,7 @@ export function SuggestionsLauncher({
   return (
     <Link
       href="/friends/discover"
+        prefetch
       onPointerEnter={warm}
       onPointerDown={warm}
       onClick={tap}

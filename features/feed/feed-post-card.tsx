@@ -19,6 +19,7 @@ import {
   Play,
   Repeat2,
   Share2,
+  Gift,
   UserPlus,
   SlidersHorizontal,
 } from "lucide-react";
@@ -76,6 +77,7 @@ import { postHref, postViewHref } from "@/lib/social/post-url";
 import type { RepostAudience } from "@/lib/social/repost/audience";
 import { toggleRepost, useRepostState } from "@/lib/social/repost-store";
 import type { FeedItem } from "@/lib/social/home-feed";
+import { PostGiftButton } from "@/features/gift/post-gift-button";
 import type { SmartReason, SmartReasonTone } from "@/lib/social/smart-feed";
 import { cn, formatCompactNumber, formatDuration } from "@/lib/utils";
 import { profilePath } from "@/lib/social/profile-url";
@@ -546,6 +548,15 @@ function FeedPostCardImpl({
           label="Comment"
           light={light}
         />
+        {/* owner, 2026-10-28: sticker gifting from the feed, exclusive posts included — warmed while the card is on screen */}
+        {item.isOwner ? null : (
+          <PostGiftButton
+            postId={item.id}
+            author={{ userId: item.publisher.id, name: item.publisher.displayName || `@${item.publisher.handle}`, avatarUrl: item.publisher.avatarUrl ?? null }}
+            authorHandle={item.publisher.handle}
+            render={(open) => <ActionButton icon={Gift as typeof Heart} onClick={open} label="Gift" light={light} />}
+          />
+        )}
         {exclusive ? null : !item.isOwner ? (
           <span className="relative inline-flex">
             <RepostBurst triggerKey={repostBurst} />

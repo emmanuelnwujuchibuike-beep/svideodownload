@@ -361,7 +361,8 @@ export function FriendsHub({
       <div className="mt-3.5 flex gap-2.5">
         <PendingLink
           href={DISCOVER}
-          prefetch={false}
+          // the whole Add friends page, kept 6 h by the router — the tap opens it instantly (owner, 2026-10-28)
+          prefetch
           onPointerDown={warmDiscover}
           className="flex h-[54px] flex-1 items-center justify-center rounded-[27px] bg-frenz-ink font-heading text-[16px] font-bold text-frenz-page shadow-[0_14px_28px_-14px_rgb(18_17_26/0.6)]"
           inner="inline-flex items-center justify-center gap-[9px]"

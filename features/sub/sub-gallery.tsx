@@ -17,6 +17,8 @@ import { forgetSubPosts, loadSubPosts } from "./sub-posts-cache";
 import { CreatorSubscribeCard } from "./subscribe-card";
 import { profilePath } from "@/lib/social/profile-url";
 import type { SubOption } from "@/lib/sub/pricing";
+import { PostGiftButton } from "@/features/gift/post-gift-button";
+import type { GiftRecipient } from "@/features/gift/gift-sheet";
 
 // reporting exclusive content (Frenz Exclusive Part 2): the shared sheet, loaded only when opened
 const ReportSheet = dynamic(() => import("@/features/social/report-sheet").then((m) => m.ReportSheet), { ssr: false });
@@ -307,13 +309,13 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
           }}
         />
       ) : null}
-      {open ? <PrivateViewer postId={open} initial={state.posts.find((p) => p.id === open)?.open ?? null} isCreator={state.isCreator} onClose={() => setOpen(null)} onDeleted={(id) => { removed(id); setOpen(null); }} onEdited={(id, caption) => { forgetSubPosts(creatorId); setState((st) => (st ? { ...st, posts: st.posts.map((x) => (x.id === id ? { ...x, caption, ...(x.open ? { open: { ...x.open, caption } } : {}) } : x)) } : st)); }} /> : null}
+      {open ? <PrivateViewer postId={open} giftTo={{ userId: creatorId, name: creatorName, avatarUrl: null }} initial={state.posts.find((p) => p.id === open)?.open ?? null} isCreator={state.isCreator} onClose={() => setOpen(null)} onDeleted={(id) => { removed(id); setOpen(null); }} onEdited={(id, caption) => { forgetSubPosts(creatorId); setState((st) => (st ? { ...st, posts: st.posts.map((x) => (x.id === id ? { ...x, caption, ...(x.open ? { open: { ...x.open, caption } } : {}) } : x)) } : st)); }} /> : null}
     </div>
   );
 }
 
 /** The private viewer: a portal with no URL, no share action, covered whenever the app is not in front. */
-export function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted, onEdited }: { postId: string; initial: Opened | null; isCreator: boolean; onClose: () => void; onDeleted: (id: string) => void; onEdited?: (id: string, caption: string | null) => void }) {
+export function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted, onEdited, giftTo = null }: { postId: string; initial: Opened | null; isCreator: boolean; onClose: () => void; onDeleted: (id: string) => void; onEdited?: (id: string, caption: string | null) => void; /** the creator, for a sticker gift from the comments (owner, 2026-10-28) */ giftTo?: GiftRecipient | null }) {
   // already opened by the gallery (or earlier in this tab) and still valid: shown at once, no second check
   const [data, setData] = useState<Opened | null>(() => (fresh(openedCache.get(postId)) ? openedCache.get(postId)! : fresh(initial) ? initial : null));
   const [index, setIndex] = useState(0);
@@ -579,7 +581,7 @@ export function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted, 
         ) : null}
 
         {/* likes and comments — subscribers and the creator only (0239); there is no save for a private post */}
-        {data ? <PrivateInteractions postId={postId} isCreator={isCreator} /> : null}
+        {data ? <PrivateInteractions postId={postId} isCreator={isCreator} giftTo={giftTo} /> : null}
         {covered ? (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black">
             <EyeOff className="h-6 w-6 text-white/70" aria-hidden />
@@ -606,7 +608,7 @@ interface PrivateComment {
  * tap and is put back if the server refuses. One summary read when the post opens; comments load only
  * when the panel is opened.
  */
-function PrivateInteractions({ postId, isCreator }: { postId: string; isCreator: boolean }) {
+function PrivateInteractions({ postId, isCreator, giftTo }: { postId: string; isCreator: boolean; giftTo: GiftRecipient | null }) {
   const [sum, setSum] = useState<{ likes: number; liked: boolean; comments: number } | null>(null);
   const [panel, setPanel] = useState(false);
   const [comments, setComments] = useState<PrivateComment[] | null>(null);
@@ -808,6 +810,10 @@ function PrivateInteractions({ postId, isCreator }: { postId: string; isCreator:
                   enterKeyHint="send"
                   className="min-h-10 min-w-0 flex-1 bg-transparent text-[15px] text-white outline-none placeholder:text-white/45"
                 />
+                {/* owner, 2026-10-28: "add the sticker gifting in … exclusive posts' comments" — to the creator, warmed while open */}
+                {giftTo && !isCreator ? (
+                  <PostGiftButton author={giftTo} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/85 transition active:scale-90 active:bg-white/10 motion-reduce:active:scale-100" />
+                ) : null}
                 <button type="button" onClick={() => void send()} disabled={!draft.trim() || sending} aria-label="Post comment" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-[0_6px_18px_-6px_rgba(124,58,237,0.8)] transition active:scale-90 disabled:from-white/15 disabled:to-white/15 disabled:shadow-none motion-reduce:active:scale-100">
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}
                 </button>

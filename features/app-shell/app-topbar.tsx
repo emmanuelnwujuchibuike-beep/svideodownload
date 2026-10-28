@@ -426,6 +426,9 @@ export function AppTopbar() {
           <PressIcon className="lg:hidden">
             <Link
               href="/friends/discover"
+              // owner, 2026-10-28: "the add friends button should prefetch and warm so it opens instantly" — the WHOLE page
+              // (it has a loading.tsx, so the default prefetch stopped at the skeleton); the router keeps it 6 h
+              prefetch
               onPointerEnter={() => router.prefetch("/friends/discover")}
               onPointerDown={() => router.prefetch("/friends/discover")}
               onClick={() => {

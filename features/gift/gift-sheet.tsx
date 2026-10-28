@@ -247,7 +247,7 @@ export function GiftSheet({ conversationId, recipients, requireChoice, onClose, 
             <div className="flex flex-col items-center gap-2 text-center">
               <div className="flex h-44 w-full items-center justify-center rounded-[28px] bg-[radial-gradient(circle_at_50%_40%,hsl(var(--frenz-violet)/0.16),transparent_70%)]">
                 {/* eslint-disable-next-line @next/next/no-img-element -- uploaded sticker artwork, already a sized WebP */}
-                {chosen.animationUrl || chosen.imageUrl ? <img key={chosen.id} src={(chosen.animationUrl ?? chosen.imageUrl)!} alt="" className="origin-bottom motion-safe:animate-sticker h-40 w-40 object-contain motion-safe:animate-in motion-safe:zoom-in-75 motion-safe:duration-300 motion-reduce:animate-in motion-reduce:fade-in" /> : <span className="text-5xl" aria-hidden>🎁</span>}
+                {chosen.animationUrl || chosen.imageUrl ? <img key={chosen.id} src={(chosen.animationUrl ?? chosen.imageUrl)!} alt="" className="h-40 w-40 object-contain motion-safe:animate-in motion-safe:zoom-in-75 motion-safe:duration-300 motion-reduce:animate-in motion-reduce:fade-in" /> : <span className="text-5xl" aria-hidden>🎁</span>}
               </div>
               {RARITY_TAG[chosen.rarity] ? <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide", RARITY_TAG[chosen.rarity]!.className)}>{RARITY_TAG[chosen.rarity]!.label}</span> : null}
               <h3 className="text-[26px] font-extrabold leading-tight tracking-tight">{chosen.name}</h3>

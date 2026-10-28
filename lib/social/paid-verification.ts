@@ -346,6 +346,18 @@ async function grantPaidTick(userId: string, reference: string, expiresAt: strin
     if ((last as Row | null)?.id) await recordVerificationEvent((last as Row).id as string, userId, "system", "paid_renewal", `${reference}${expiresAt ? ` until ${expiresAt}` : " for good"}`);
     return;
   }
+  /*
+    The verification flow (design/frenz-verification.html, owner 2026-10-28): details and a selfie first, payment last,
+    THEN review. A member who filled the flow has a 'draft' application waiting for this payment: it goes to the review
+    queue, and the tick comes with the reviewer's approval (approveVerification starts the paid period then). Only a
+    payment with no application behind it (the older one-tap card) is a tick straight away, as before.
+  */
+  const { data: draft } = await db.from("verification_requests").select("id").eq("user_id", userId).eq("status", "draft").not("selfie_path", "is", null).maybeSingle();
+  if ((draft as Row | null)?.id) {
+    await db.from("verification_requests").update({ status: "pending", submitted_at: now, updated_at: now }).eq("id", (draft as Row).id as string).eq("status", "draft");
+    await recordVerificationEvent((draft as Row).id as string, userId, "system", "paid_submitted", reference);
+    return;
+  }
   await db.from("verification_requests").update({ status: "withdrawn", updated_at: now }).eq("user_id", userId).in("status", ["draft", "pending", "in_review"]);
   const { data: req } = await db
     .from("verification_requests")

@@ -55,7 +55,10 @@ describe("the My ads button (was Promote) has fixed homes — no dragging, no fl
       // 2026-10-15 (owner): "move it to the top header" — on /downloads it is in the top bar, no longer in the hero
       !core.includes("<PromoteButton") &&
       topbar.includes('{pathname === "/downloads" && !searchActive ? <PromoteButton /> : null}') &&
-      (header.match(/\{landing \? <PromoteButton size="header" \/> : null\}/g) ?? []).length === 2 &&
+      // 2026-10-28 (owner, "lean desktop header", 31573c6): the PHONE row keeps it beside Install; the desktop row lost it
+      // and reaches advertising through the menu drawer's Advertise entry
+      (header.match(/\{landing \? <PromoteButton size="header" \/> : null\}/g) ?? []).length === 1 &&
+      header.includes('{ href: "/advertise", labelKey: "nav.advertise" }') &&
       !/drag|createPortal|pointermove|position: fixed|\bfixed\b/.test(button) &&
       // 2026-10-25 (owner): "just the ad icon" — "My ads" is the accessible name, no longer visible text
       button.includes('aria-label="My ads"')
@@ -66,7 +69,7 @@ describe("the My ads button (was Promote) has fixed homes — no dragging, no fl
   const header = code("components/layout/site-header.tsx");
   // comments stripped: the file documents the bubble it replaced
   const button = code("features/downloads/promote-button.tsx").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-  it("in the /downloads top bar and beside Install in both landing header rows, labelled My ads", () => {
+  it("in the /downloads top bar and beside Install in the landing's phone row (the desktop has the drawer), labelled My ads", () => {
     expect(fixedHomes(core, header, button)).toBe(true);
   });
   it("teeth: a draggable/fixed button, or losing a home, fails", () => {

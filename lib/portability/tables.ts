@@ -43,6 +43,10 @@ export const SECRET_TABLES: Record<string, string> = {
   coin_pins: "Your Frenz Coin transaction PIN material (0282). The same reasoning as recovery codes.",
   coin_pin_attempts: "Frenz Coin PIN attempt records (0282): security counters, short-lived and meaningless outside a live check.",
   coin_pin_resets: "Frenz Coin PIN reset codes (0282): one-time secrets, even hashed — the same reasoning as recovery codes.",
+  admin_lock_credentials: "An administrator's dashboard password and PIN material (0301). The same reasoning as recovery codes.",
+  admin_lock_attempts: "Admin dashboard lock attempt records (0301): security counters, short-lived and meaningless outside a live check.",
+  admin_lock_sessions: "Admin dashboard unlock sessions (0301): hashed browser tokens. Exporting them would describe live access to the dashboard.",
+  admin_lock_links: "Admin dashboard setup and PIN-reset links (0301): one-time secrets, even hashed — the same reasoning as recovery codes.",
   coin_notification_claims: "Frenz Coin notification keys (0283): bookkeeping that stops a notification being sent twice — no content, nothing about you.",
   user_encryption_keys: "Private keys for end-to-end encrypted chats. Exporting them would let anyone holding the file read those conversations.",
   webauthn_credentials: "Passkey material, which is bound to the device that holds it and is meaningless — and dangerous — anywhere else.",
@@ -278,6 +282,8 @@ export const OWNER_COLUMN: Record<string, string> = {
   coin_deposit_reversals: "user_id",
   // 0283: corrections an administrator made to a transfer you sent
   coin_transfer_corrections: "sender_id",
+  // 0301: a manual Frenz Coin funding of your wallet by an administrator (the amount, the reason and when)
+  admin_coin_fundings: "user_id",
   // 0290: your conversions between Frenz Coins and Frenz Gift Coins (the ledger rows are on your wallet ledger)
   fgc_conversions: "user_id",
   // 0293: the sticker gifts you sent (gifts you received are on your wallet ledger)
@@ -476,6 +482,7 @@ export const OWNER_COLUMN: Record<string, string> = {
   presence_schedules: "owner_id", // 0224: your focus automations
   presence_history: "owner_id", // 0224: your private status history
   user_stickers: "user_id",
+  video_stickers: "creator_id", // 0303: the video stickers you made
 
   /* Creator Studio™ (Feature 15 Part 9, migration 0140) */
   // The dashboard layout they arranged — entirely their own choices.

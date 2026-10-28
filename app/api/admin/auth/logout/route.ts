@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { endAdminLockSession } from "@/lib/admin/lock";
+import { getAdminIdentity } from "@/lib/admin/require-admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -30,6 +32,13 @@ export const dynamic = "force-dynamic";
  * regardless, and the client redirects either way.
  */
 export async function POST() {
+  // the dashboard lock (0301) ends with the sign-in: the next sign-in asks for the password and PIN again
+  try {
+    const admin = await getAdminIdentity();
+    if (admin) await endAdminLockSession(admin.id);
+  } catch {
+    /* the cookie is short-lived and bound to this account; the sign-out below still runs */
+  }
   try {
     const supabase = await createClient();
     await supabase.auth.signOut({ scope: "global" });

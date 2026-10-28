@@ -30,11 +30,14 @@ import {
 } from "@/lib/wallpapers-sort";
 import { useWallpaperDownload } from "@/features/wallpapers/use-wallpaper-download";
 import { haptic } from "@/lib/motion/haptics";
+import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
 import {
   popularity,
   resolutionBadge,
+  sizedWallpaperUrl,
+  WALLPAPER_HEADER_WIDTH,
   wallpaperAlt,
   wallpaperCredit,
   wallpaperType,
@@ -332,6 +335,26 @@ export function WallpaperExplore({
   }, [category, type, query, sort, expanded]);
 
   const shown = capped ? filtered.slice(0, POPULAR_PREVIEW) : filtered.slice(0, limit);
+
+  // Warm the first row's full wallpapers once the page has loaded and is idle — never on Save-Data or a slow link,
+  // and never before the thumbnails, which are what the visitor is waiting for.
+  const firstRow = shown.slice(0, 3).map((w) => w.url).join("|");
+  useEffect(() => {
+    if (!firstRow || isSlowConnection()) return;
+    let cancelled = false;
+    const run = () => {
+      const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+      const go = () => !cancelled && firstRow.split("|").forEach(warmWallpaper);
+      if (w.requestIdleCallback) w.requestIdleCallback(go, { timeout: 3000 });
+      else window.setTimeout(go, 1200);
+    };
+    if (document.readyState === "complete") run();
+    else window.addEventListener("load", run, { once: true });
+    return () => {
+      cancelled = true;
+      window.removeEventListener("load", run);
+    };
+  }, [firstRow]);
   const remaining = capped ? 0 : Math.max(0, filtered.length - limit);
   const hasMore = remaining > 0;
   /* The "See less" pair only makes sense once the grid was actually expanded —
@@ -409,10 +432,11 @@ export function WallpaperExplore({
         {/* ── the featured header (glass only over the image) ─────────────────── */}
         <section className="relative h-[470px] overflow-hidden bg-frenz-ink" aria-label="Featured wallpaper">
           {featured ? (
+            // High quality, not the original (2026-10-28, owner: "the wallpaper itself shouldn't load unless clicked"): a
+            // full-width, 470 px tall header needs ~1170 px of width on a phone — the renderer's 1170 px copy is that,
+            // without the original's megabytes competing with the first row of thumbnails.
             // eslint-disable-next-line @next/next/no-img-element -- public storage CDN; next/image 403s on these
-            // the ORIGINAL (2026-10-24, owner: wallpapers "should always be in high quality"): a full-width, 470 px tall
-            // header needs ~1170 px of width on a phone — more than the grid thumbnail carries
-            <img src={featured.url} alt={wallpaperAlt(featured)} fetchPriority="high" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+            <img src={sizedWallpaperUrl(featured.url, WALLPAPER_HEADER_WIDTH)} alt={wallpaperAlt(featured)} fetchPriority="high" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
           ) : null}
           <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/45 to-transparent" />
           <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[300px] bg-gradient-to-t from-[rgba(10,6,30,0.82)] to-transparent" />
@@ -822,6 +846,18 @@ function SelectPill({
   );
 }
 
+/** Warmed originals, once each per visit. */
+const warmed = new Set<string>();
+
+/** Fetch a wallpaper's full image into the HTTP cache without showing it (the viewer then paints it from cache). */
+export function warmWallpaper(url: string) {
+  if (warmed.has(url) || typeof Image === "undefined") return;
+  warmed.add(url);
+  const img = new Image();
+  img.decoding = "async";
+  img.src = url;
+}
+
 /**
  * One grid tile — cover, download button, name, category, resolution chip.
  *
@@ -858,12 +894,16 @@ function ExploreTile({
       <img
         src={wp.thumbUrl}
         alt={wallpaperAlt(wp)}
+        // the first row first (owner, 2026-10-28: "the thumbnail should load from the first roll"), the second row
+        // eagerly behind it, everything below as it nears the screen
         loading={index < 6 ? "eager" : "lazy"}
+        fetchPriority={index < 3 ? "high" : "auto"}
         decoding="async"
         className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]"
       />
 
-      <button type="button" onClick={onOpen} aria-label={`Open ${wp.name} full screen`} className="absolute inset-0 z-10" />
+      {/* the full wallpaper loads only on open, but is warmed from the first touch, so the viewer has a head start */}
+      <button type="button" onClick={onOpen} onPointerDown={() => warmWallpaper(wp.url)} onFocus={() => warmWallpaper(wp.url)} aria-label={`Open ${wp.name} full screen`} className="absolute inset-0 z-10" />
 
       {/* the frosted name plate (glass over the image): name, resolution, and the credit */}
       <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 z-20 flex flex-col gap-px rounded-[15px] border border-white/20 bg-[rgba(15,12,30,0.38)] px-2 py-[7px] backdrop-blur-lg backdrop-saturate-[1.6]">

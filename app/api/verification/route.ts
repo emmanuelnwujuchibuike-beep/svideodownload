@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { getVerificationState, recordVerificationEvent } from "@/lib/social/verification";
-import { ID_DOCUMENT_TYPES, VERIFICATION_CATEGORIES } from "@/lib/social/verification-shared";
+import { getPaidVerificationConfig } from "@/lib/social/paid-verification";
+import { VERIFICATION_CATEGORIES } from "@/lib/social/verification-shared";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -22,23 +23,38 @@ export const dynamic = "force-dynamic";
  * against a stranger's passport.
  */
 
+/*
+  The verification flow (design/frenz-verification.html, owner 2026-10-28: "don't add the ID step"): who you are
+  (account type, legal name, date of birth, country, company or publication, links), a selfie, then — when the admin
+  has priced the tick — payment, then review. No ID document is asked for.
+
+  With the paid tick ON the application is saved as a DRAFT and goes to review only once paid (paid-verification.ts
+  grantPaidTick). With it OFF it goes to review now. Sending the form again while a draft waits for payment updates it.
+*/
 interface Body {
   category?: string;
   legalName?: string;
+  dateOfBirth?: string;
   country?: string;
-  idDocumentType?: string;
-  idNumberLast4?: string;
-  idFrontPath?: string;
-  idBackPath?: string | null;
+  organization?: string | null;
+  links?: string | null;
   selfiePath?: string;
-  statement?: string | null;
 }
 
 const CATEGORIES = new Set(VERIFICATION_CATEGORIES.map((c) => c.value as string));
-const DOC_TYPES = new Set(ID_DOCUMENT_TYPES.map((d) => d.value as string));
 
 function bad(error: string, status = 400) {
   return NextResponse.json({ ok: false, error }, { status });
+}
+
+/** A real calendar date, in the past, and an applicant of at least 13 (the platform's own minimum age). */
+function validDob(v: string): boolean {
+  if (!/^d{4}-d{2}-d{2}$/.test(v)) return false;
+  const d = new Date(`${v}T00:00:00Z`);
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== v || d.getUTCFullYear() < 1900) return false;
+  const thirteen = new Date();
+  thirteen.setUTCFullYear(thirteen.getUTCFullYear() - 13);
+  return d <= thirteen;
 }
 
 export async function POST(request: Request) {
@@ -49,12 +65,13 @@ export async function POST(request: Request) {
   if (!user) return bad("Sign in to apply.", 401);
 
   const state = await getVerificationState(user.id);
-  if (state.verified) return bad("Your account is already verified.");
+  if (state.verified && state.request?.decisionReason !== "Paid verification") return bad("Your account is already verified.");
   if (state.request && (state.request.status === "pending" || state.request.status === "in_review")) {
     return bad("You already have an application under review.");
   }
 
-  const { data: who } = await createAdminClient().from("profiles").select("is_suspended").eq("id", user.id).maybeSingle();
+  const admin = createAdminClient();
+  const { data: who } = await admin.from("profiles").select("is_suspended, display_name").eq("id", user.id).maybeSingle();
   if ((who as { is_suspended?: boolean } | null)?.is_suspended) return bad("This account can't be verified.", 403);
 
   let body: Body;
@@ -65,60 +82,50 @@ export async function POST(request: Request) {
   }
 
   const category = body.category && CATEGORIES.has(body.category) ? body.category : null;
-  const docType = body.idDocumentType && DOC_TYPES.has(body.idDocumentType) ? body.idDocumentType : null;
-  const legalName = (body.legalName ?? "").trim();
+  const legalName = (body.legalName ?? "").trim().replace(/s+/g, " ");
+  const dob = (body.dateOfBirth ?? "").trim();
   const country = (body.country ?? "").trim();
-  const last4 = (body.idNumberLast4 ?? "").trim().slice(-4);
+  const organization = (body.organization ?? "").trim().slice(0, 120) || null;
+  const links = (body.links ?? "").trim().slice(0, 500);
 
-  if (!category) return bad("Choose a category.");
-  if (!docType) return bad("Choose a document type.");
-  if (legalName.length < 3) return bad("Enter your full legal name as printed on the document.");
-  if (country.length < 2) return bad("Enter the country that issued the document.");
-  if (last4.length < 3) return bad("Enter the last 4 characters of the document number.");
+  if (!category) return bad("Choose the account type that fits you best.");
+  if (legalName.split(" ").filter(Boolean).length < 2 || legalName.length > 120) return bad("Enter your first and last name.");
+  if (!validDob(dob)) return bad("Enter a valid date of birth.");
+  if (country.length < 2 || country.length > 60) return bad("Select your country.");
+  if (category === "business" && !organization) return bad("Enter the registered company name.");
+  if (category === "journalist" && !organization) return bad("Enter the publication you report for.");
+  if (!body.selfiePath || !body.selfiePath.startsWith(`${user.id}/`)) return bad("Take a selfie to continue.");
 
-  // Every submitted path must sit in THIS user's folder in the private bucket.
-  const own = (p: string | null | undefined) => !!p && p.startsWith(`${user.id}/`);
-  if (!own(body.idFrontPath)) return bad("Upload the front of your document.");
-  if (docType !== "passport" && !own(body.idBackPath)) return bad("Upload the back of your document.");
-  if (body.idBackPath && !own(body.idBackPath)) return bad("That document image isn't yours.");
-  if (!own(body.selfiePath)) return bad("Take your security selfie.");
-
-  const admin = createAdminClient();
+  const offer = await getPaidVerificationConfig();
   const now = new Date().toISOString();
+  const row = {
+    category,
+    legal_name: legalName,
+    known_as: (who?.display_name as string | null) ?? null,
+    date_of_birth: dob,
+    country,
+    organization,
+    links: links ? links.split(/[s,]+/).filter(Boolean).slice(0, 5) : [],
+    selfie_path: body.selfiePath,
+    status: offer.enabled ? "draft" : "pending",
+    submitted_at: offer.enabled ? null : now,
+    updated_at: now,
+  };
 
-  // The profile's display name is the name they'll be verified UNDER, captured
-  // at submission so a later rename is visible to the reviewer as a change.
-  const { data: profile } = await admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle();
-
-  const { data, error } = await admin
-    .from("verification_requests")
-    .insert({
-      user_id: user.id,
-      status: "pending",
-      category,
-      legal_name: legalName,
-      known_as: (profile?.display_name as string | null) ?? null,
-      country,
-      id_document_type: docType,
-      id_number_last4: last4,
-      id_front_path: body.idFrontPath,
-      id_back_path: body.idBackPath ?? null,
-      selfie_path: body.selfiePath,
-      statement: (body.statement ?? "").trim() || null,
-      submitted_at: now,
-      updated_at: now,
-    })
-    .select("id")
-    .maybeSingle();
-
+  // a draft waiting for payment is updated in place (the one-open index allows one)
+  const { data: draft } = await admin.from("verification_requests").select("id").eq("user_id", user.id).eq("status", "draft").maybeSingle();
+  const write = draft?.id
+    ? admin.from("verification_requests").update(row).eq("id", draft.id as string).select("id").maybeSingle()
+    : admin.from("verification_requests").insert({ user_id: user.id, ...row }).select("id").maybeSingle();
+  const { data, error } = await write;
   if (error) {
-    // The partial unique index is the authority on "one open application".
     if (error.code === "23505") return bad("You already have an application in progress.");
-    return bad(error.message, 500);
+    // 0302 adds date_of_birth and organization
+    if (/date_of_birth|organization|column/i.test(error.message)) return bad("Verification is being updated. Try again in a few minutes.", 503);
+    return bad("Couldn't save your application.", 500);
   }
-
-  if (data?.id) await recordVerificationEvent(data.id as string, user.id, "user", "submitted");
-  return NextResponse.json({ ok: true });
+  if (data?.id) await recordVerificationEvent(data.id as string, user.id, "user", offer.enabled ? "details_saved" : "submitted");
+  return NextResponse.json({ ok: true, next: offer.enabled ? "pay" : "review" });
 }
 
 export async function DELETE() {

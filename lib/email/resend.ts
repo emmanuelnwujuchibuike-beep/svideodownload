@@ -356,3 +356,35 @@ export function sendTopupReceiptEmail(to: string, r: TopupReceipt): Promise<bool
     : `Your ${r.amount} Frenz AI deposit didn't go through`;
   return send(to, subject, html, text);
 }
+
+/**
+ * The admin dashboard lock's emailed LINK (0301, owner 2026-10-28: "reset mail sent to the email not code"): first
+ * setup, or a PIN reset after the dashboard passwords were proved. A button, never a code. Plain and short on purpose.
+ */
+export function sendAdminLockLinkEmail(to: string, purpose: "setup" | "pin_reset", url: string, minutes: number): Promise<boolean> {
+  const title = purpose === "setup" ? "Set up your admin dashboard lock" : "Reset your admin dashboard PIN";
+  const lead =
+    purpose === "setup"
+      ? "Open this link to choose your admin dashboard password and PIN."
+      : "Your dashboard passwords were confirmed. Open this link to choose a new admin PIN.";
+  const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title></head>
+<body style="margin:0;padding:0;background:#f4f4f6;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f6;padding:40px 16px;"><tr><td align="center">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:460px;background:#ffffff;border-radius:20px;border:1px solid #e8e8ee;">
+      <tr><td style="padding:36px 36px 0;font-family:${FONT};">
+        <p style="margin:0;font-size:19px;font-weight:800;color:#12111A;">${title}</p>
+        <p style="margin:10px 0 0;font-size:14px;line-height:1.6;color:#5d5d68;">${lead} It works once and expires in ${minutes} minutes. You must be signed in to the admin account it was sent for.</p>
+      </td></tr>
+      <tr><td style="padding:26px 36px 0;font-family:${FONT};">
+        <a href="${url}" style="display:inline-block;background:#12111A;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:14px 22px;border-radius:14px;">${purpose === "setup" ? "Set up the lock" : "Choose a new PIN"}</a>
+      </td></tr>
+      <tr><td style="padding:26px 36px 32px;font-family:${FONT};font-size:12.5px;line-height:1.6;color:#8a8a94;">
+        Didn't ask for this? Someone may be signed in to your admin account. Change your account password and tell the other admins.
+      </td></tr>
+    </table>
+  </td></tr></table>
+</body></html>`;
+  const text = `${title}\n\n${lead} It works once and expires in ${minutes} minutes. You must be signed in to the admin account it was sent for.\n\n${url}\n\nDidn't ask for this? Someone may be signed in to your admin account. Change your account password and tell the other admins.`;
+  return send(to, title, html, text);
+}

@@ -6,9 +6,13 @@ import { describe, expect, it } from "vitest";
 const header = readFileSync("components/layout/site-header.tsx", "utf8");
 
 describe("the language button on the landing", () => {
-  it("leaves the landing header: the phone row never shows it there, the desktop row only when there is no menu", () => {
+  // 2026-10-28 (owner, "lean desktop header", 31573c6): the desktop row has no language button at all — every desktop
+  // visitor gets the menu drawer, whose first row is the language. The phone row still leaves it off the landing.
+  it("leaves the landing header: the phone row never shows it there, the desktop row never at all (the drawer has it)", () => {
     expect(header).toContain("{landing ? null : <LanguageSelector />}");
-    expect(header).toContain("{landing && !user ? null : <LanguageSelector />}");
+    expect(header).not.toContain("{landing && !user ? null : <LanguageSelector />}");
+    // exactly two: the phone row's, and the menu row
+    expect(header.match(/<LanguageSelector[\s/]/g)?.length).toBe(2);
     // teeth: no unconditional globe is left in either header row
     expect(header.match(/^\s*<LanguageSelector \/>$/gm)).toBeNull();
   });

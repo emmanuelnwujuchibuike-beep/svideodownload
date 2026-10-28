@@ -236,3 +236,22 @@ export interface WallpaperComment {
   authorName: string | null;
   authorAvatar: string | null;
 }
+
+const PUBLIC_OBJECT = "/storage/v1/object/public/";
+const RENDER_IMAGE = "/storage/v1/render/image/public/";
+
+/**
+ * A wallpaper resized by Supabase's image renderer (owner, 2026-10-28: "the wallpaper page is too heavy … the thumbnail
+ * should load from the first roll, the wallpaper itself shouldn't load unless clicked"). Same picture and proportions
+ * (`resize=contain` — width alone would crop, see lib/ads-platform/media-url.ts), served as WebP where accepted. Only a
+ * Supabase public-object URL is rewritten; anything else (a built-in's /api/wallpaper route, a signed URL) is kept.
+ */
+export function sizedWallpaperUrl(url: string, width: number): string {
+  if (!url.includes(PUBLIC_OBJECT) || url.includes("?")) return url;
+  return `${url.replace(PUBLIC_OBJECT, RENDER_IMAGE)}?width=${width}&resize=contain&quality=72`;
+}
+
+/** Grid thumbnails: a third of a phone's width, at 3x. */
+export const WALLPAPER_THUMB_WIDTH = 420;
+/** The featured header: a full phone width at 3x — high quality without the original's megabytes. */
+export const WALLPAPER_HEADER_WIDTH = 1170;

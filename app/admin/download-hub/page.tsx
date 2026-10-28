@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { SiteHeader } from "@/components/layout/site-header";
 import { isAdmin } from "@/lib/admin";
+import { requireAdminPage } from "@/lib/admin/require-admin";
 import { fetchDownloadStats } from "@/lib/admin-stats";
 import { GATEWAY_ACTIONS } from "@/lib/download-hub/actions";
 import { resolveAvailability } from "@/lib/download-hub/recommend";
@@ -74,6 +75,8 @@ export default async function DownloadHubOpsPage() {
     .eq("id", user.id)
     .single();
   if (!isAdmin(profile?.role, user.email)) redirect("/");
+  // the dashboard lock (0301): held at the password + PIN screen until this browser unlocks
+  await requireAdminPage("/admin/download-hub");
 
   /*
     Downloads come from the real, always-populated `downloads` table (the same

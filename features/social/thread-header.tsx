@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   MoreVertical,
 } from "lucide-react";
+import { StableAvatar } from "@/components/ui/stable-avatar";
 import { VerifiedTick } from "@/components/badges/identity-badges";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -189,8 +190,7 @@ export function ThreadHeader({
       {type === "group" ? (
         <div className="relative flex min-w-0 flex-1 items-center gap-2.5">
           {avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={avatarUrl} alt="" className="h-[42px] w-[42px] shrink-0 rounded-full object-cover" />
+            <StableAvatar src={avatarUrl} width={42} height={42} loading="eager" className="h-[42px] w-[42px] shrink-0 rounded-full object-cover" />
           ) : (
             <GroupAvatarStack avatars={members.map((m) => ({ avatarUrl: m.avatarUrl, displayName: m.displayName }))} size="lg" />
           )}
@@ -203,8 +203,8 @@ export function ThreadHeader({
         <Link href={`${profilePath(other.handle)}`} className="relative flex min-w-0 flex-1 items-center gap-2.5">
           <span className="relative shrink-0">
             {other.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={other.avatarUrl} alt="" className="h-[42px] w-[42px] rounded-full object-cover" />
+              // the inbox's own small, cached render (~3 KB) — the raw original painted in strips on a slow network (owner, 2026-10-28)
+              <StableAvatar src={other.avatarUrl} width={42} height={42} loading="eager" className="h-[42px] w-[42px] rounded-full object-cover" />
             ) : (
               <span className="flex h-[42px] w-[42px] items-center justify-center rounded-full bg-frenz-gradient font-heading text-lg font-extrabold text-white">
                 {other.displayName.charAt(0).toUpperCase()}

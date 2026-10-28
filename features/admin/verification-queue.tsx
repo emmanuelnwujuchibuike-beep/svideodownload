@@ -16,6 +16,9 @@ type QueueRow = VerificationRequest & {
   handle: string | null;
   displayName: string | null;
   avatarUrl: string | null;
+  /** 0302 */
+  dateOfBirth?: string | null;
+  organization?: string | null;
 };
 
 interface Docs {
@@ -168,6 +171,9 @@ export function VerificationQueue({
                     }`}
                   />
                   <Detail label="Country" value={row.country} />
+                  {/* 0302: the verification flow asks these instead of an ID document */}
+                  {row.dateOfBirth ? <Detail label="Date of birth" value={row.dateOfBirth} /> : null}
+                  {row.organization ? <Detail label={row.category === "journalist" ? "Publication" : "Company"} value={row.organization} /> : null}
                 </dl>
                 {nameMismatch ? (
                   <p className="mt-2 rounded-xl bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-600 dark:text-amber-400">

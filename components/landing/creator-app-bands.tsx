@@ -1,6 +1,7 @@
 import { ArrowRight, BarChart3, Gift, Lock, Share } from "lucide-react";
 import Link from "next/link";
 
+import { NEU_CHIP, NEU_RAISED, NEU_WELL } from "@/components/landing/landing-classes";
 import { InstallHeaderCta } from "@/features/pwa/install-button";
 
 /*
@@ -9,9 +10,9 @@ import { InstallHeaderCta } from "@/features/pwa/install-button";
   New SECTIONS only: nothing here changes how a function works. Neumorphic skin: a raised card on the page, inset wells
   inside it. Server-rendered except the Install button, which is the app's own install flow.
 */
-const RAISED = "bg-frenz-card shadow-[0_1px_1px_rgba(16,24,40,.04),0_12px_30px_-8px_rgba(16,24,40,.14),0_0_0_1px_rgba(16,24,40,.05)] dark:shadow-[-6px_-6px_16px_rgba(255,255,255,.045),9px_11px_26px_rgba(0,0,0,.55)]";
-const WELL = "bg-frenz-fill shadow-[inset_0_2px_5px_rgba(16,24,40,.08)] dark:shadow-[inset_0_2px_6px_rgba(0,0,0,.5)]";
-const CHIP = "bg-frenz-card shadow-[0_1px_1px_rgba(16,24,40,.04),0_6px_14px_-4px_rgba(16,24,40,.13),0_0_0_1px_rgba(16,24,40,.05)] dark:shadow-[-4px_-4px_10px_rgba(255,255,255,.045),5px_6px_14px_rgba(0,0,0,.55)]";
+const RAISED = NEU_RAISED;
+const WELL = NEU_WELL;
+const CHIP = NEU_CHIP;
 
 const PERKS = [
   { icon: Gift, tone: "text-amber-700 dark:text-amber-400", title: "Sticker gifts", text: "Fans send stickers paid with Gift Coins." },

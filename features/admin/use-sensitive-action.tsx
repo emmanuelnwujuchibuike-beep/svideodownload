@@ -70,6 +70,11 @@ export function useSensitiveAction() {
       const run = () => fetch(input, { credentials: "same-origin", ...init });
 
       let res = await run();
+      // the dashboard lock (0301) ran out while the page was open: back to the password + PIN, then here again
+      if (res.status === 423) {
+        window.location.assign(`/admin/unlock?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+        return res;
+      }
       if (res.status !== 403) return res;
 
       const body = (await res

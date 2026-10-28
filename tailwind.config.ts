@@ -125,6 +125,17 @@ const config: Config = {
           "24%": { transform: "scale(1.08) rotate(-4deg)" },
           "32%": { transform: "scale(1.04) rotate(2deg)" },
         },
+        // design/frenz-reels.html: a like or save turning on pumps once (transform only)
+        "reel-pump": {
+          "0%": { transform: "scale(1)" },
+          "35%": { transform: "scale(0.78)" },
+          "70%": { transform: "scale(1.18)" },
+          "100%": { transform: "scale(1)" },
+        },
+        "reel-marquee": {
+          from: { transform: "translateX(0)" },
+          to: { transform: "translateX(-50%)" },
+        },
         "badge-rise": {
           "0%, 62%": { opacity: "1", transform: "translateY(0) scale(1)" },
           "70%": { opacity: "1", transform: "translateY(-14px) scale(1.15)" },

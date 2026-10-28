@@ -2,6 +2,7 @@ import * as Icons from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { NEU_RAISED, NEU_WELL } from "@/components/landing/landing-classes";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { RecommendedNext } from "@/features/personal/recommended-next";
@@ -110,7 +111,7 @@ export default function AcademyPage() {
                   <li key={school.id}>
                     <Link
                       href={`/academy/${school.slug}`}
-                      className="group flex h-full flex-col rounded-2xl border border-border/70 bg-card p-6 transition hover:border-primary/40 hover:shadow-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      className={`group flex h-full flex-col rounded-[22px] p-6 transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet ${NEU_RAISED}`}
                     >
                       <Icon aria-hidden className="mb-4 h-6 w-6 text-primary" />
                       <h3 className="text-lg font-semibold tracking-[-0.01em] group-hover:text-primary">
@@ -156,7 +157,7 @@ export default function AcademyPage() {
                   return (
                     <li
                       key={school.id}
-                      className="rounded-2xl border border-dashed border-border/70 p-5"
+                      className={`rounded-[22px] p-5 ${NEU_WELL}`}
                     >
                       <Icon aria-hidden className="mb-3 h-5 w-5 text-muted-foreground" />
                       <h3 className="text-sm font-semibold">{school.name}</h3>

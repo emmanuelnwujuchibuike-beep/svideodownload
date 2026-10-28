@@ -257,7 +257,8 @@ export async function middleware(request: NextRequest) {
       into the app instead — leaving them looking at the feed wondering why.
     */
     const redirectUrl = new URL(isProtectedAdmin ? "/admin/login" : "/login", request.url);
-    redirectUrl.searchParams.set("next", pathname);
+    // the admin lock's emailed links carry their token in the query (/admin/unlock/new-pin?t=…): keep it through sign-in
+    redirectUrl.searchParams.set("next", isProtectedAdmin && pathname.startsWith("/admin/unlock/") ? pathname + request.nextUrl.search : pathname);
     return NextResponse.redirect(redirectUrl);
   }
 

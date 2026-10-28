@@ -35,7 +35,13 @@ export function restoreToAnchor(opts: {
   const land = () => {
     if (stopped) return;
     const y = target();
-    if (Math.abs(window.scrollY - y) > 1) window.scrollTo({ top: y, behavior: "auto" });
+    /*
+      🔴 "instant", never "auto" (owner, 2026-10-28: "the feed page scrolls to get to the post … scrolling to the media
+      can cause overheating or lagging"). `auto` means "whatever the CSS says", and globals.css gives `html`
+      `scroll-behavior: smooth` — so the return GLIDED down the whole feed, laying out and loading every photo and video
+      on the way. `instant` jumps: only the cards around the reader's post are ever on screen to load.
+    */
+    if (Math.abs(window.scrollY - y) > 1) window.scrollTo({ top: y, behavior: "instant" });
     onLanded?.(window.scrollY);
   };
   const stop = () => {

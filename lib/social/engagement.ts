@@ -1,5 +1,6 @@
 import type { BillingPlan } from "@/lib/monetization/types";
 import { flagsOf, isAccountVisibleTo, relationTo } from "@/lib/social/account-visibility";
+import { loadVideoStickers } from "@/lib/social/video-stickers-server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -97,6 +98,8 @@ export interface CommentNode {
   body: string;
   /** Sticker id (see lib/social/stickers) when the comment is a sticker. */
   sticker: string | null;
+  /** The clip behind a video sticker (`vs:<uuid>`, 0303); null for an emoji sticker or none. */
+  stickerMedia?: { videoUrl: string; posterUrl: string } | null;
   /** Attached image URL when the comment carries a picture. */
   imageUrl: string | null;
   /** Voice-note attachment (recorded in-app — see features/social/voice-recorder.tsx). */
@@ -254,6 +257,8 @@ export async function listComments(
       }
     }
 
+    // 0303: the clips behind any video stickers on this page of comments — one query
+    const stickerClips = await loadVideoStickers(rows.map((r) => r.sticker));
     const planById = new Map<string, BillingPlan>();
     for (const s of (subs ?? []) as { user_id: string; plan: BillingPlan }[]) planById.set(s.user_id, s.plan);
     const blockedIds = new Set<string>();
@@ -317,6 +322,7 @@ export async function listComments(
         id: r.id,
         body: r.body,
         sticker: r.sticker ?? null,
+        stickerMedia: r.sticker ? (stickerClips.get(r.sticker) ?? null) : null,
         imageUrl: r.image_url ?? null,
         voiceUrl: r.voice_url ?? null,
         voiceDurationMs: r.voice_duration_ms ?? null,

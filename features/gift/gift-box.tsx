@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getEntry, seed } from "@/features/data";
 import { Spinner, TapPending } from "@/features/wallet/tap-pending";
 import { CoinMark, Notice, PillButton, SubHeader, WalletScreen } from "@/features/wallet/wallet-ui";
-import { type FgcConversionRules, previewConversion } from "@/lib/gift/conversion-rules";
+import { type ConversionLeg, type FgcConversionRules, legFor, previewConversion } from "@/lib/gift/conversion-rules";
 import { cn } from "@/lib/utils";
 
 import { fgcText, giftKey } from "./gift-format";
@@ -206,6 +206,12 @@ export function GiftBox({ wallet, initial, counts, conversion, fc = null, initia
 }
 
 /** Available Gift Coins → Frenz Coins (or FC → Gift Coins), with the existing conversion engine. */
+/** What `units` whole coins become at a leg's rate, before the fee (both currencies use 2 decimals): up to 4 places, trimmed. */
+function rateText(leg: ConversionLeg, units = 1): string {
+  const v = (units * leg.rateNum) / leg.rateDen;
+  return v.toLocaleString("en-US", { maximumFractionDigits: 4 });
+}
+
 function ConvertCard({ wallet, rules, fc, initialDirection, returnTo }: { wallet: { available: number } | null; rules: FgcConversionRules | null; fc: { available: number; pending: number } | null; initialDirection: Direction; returnTo: string | null }) {
   const router = useRouter();
   const [dir, setDir] = useState<Direction>(initialDirection);
@@ -258,6 +264,20 @@ function ConvertCard({ wallet, rules, fc, initialDirection, returnTo }: { wallet
             </button>
           ))}
         </div>
+      </div>
+      {/* the live rate, both ways (owner, 2026-10-28: "so they know how many FGC is 1 FC or 2 FC") — from the same rules
+          the database prices with, before the fee, which is said beside it */}
+      <div className="mt-3 rounded-2xl bg-frenz-fill px-3 py-2.5 text-[13px]">
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-0.5 font-semibold text-frenz-ink">
+          <span>1 FC = {rateText(rules.fcToFgc)} FGC</span>
+          <span>1 FGC = {rateText(rules.fgcToFc)} FC</span>
+        </p>
+        <p className="mt-0.5 text-[12px] text-frenz-muted">
+          {dir === "fc_to_fgc" ? `2 FC = ${rateText(rules.fcToFgc, 2)} FGC` : `2 FGC = ${rateText(rules.fgcToFc, 2)} FC`}
+          {legFor(rules, dir).feeBp || legFor(rules, dir).feeFlat
+            ? ` · fee ${[legFor(rules, dir).feeBp ? `${legFor(rules, dir).feeBp / 100}%` : null, legFor(rules, dir).feeFlat ? `${fgcText(legFor(rules, dir).feeFlat)} ${outUnit}` : null].filter(Boolean).join(" + ")}`
+            : " · no fee"}
+        </p>
       </div>
       <label htmlFor="gift-convert-amount" className="mt-3 block text-[13px] font-semibold text-frenz-muted">
         Amount ({inUnit})

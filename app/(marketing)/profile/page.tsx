@@ -40,7 +40,7 @@ export default async function ProfilePage() {
   const rewards = settings.frenzRewards;
   const sub = rewards.sub;
   return (
-    <div className="bg-background text-foreground">
+    <div className="bg-frenz-page text-frenz-ink">
       <SiteHeader />
       <main className="container max-w-3xl pb-[calc(var(--frenz-bottom-nav)+2.5rem)] pt-[calc(var(--frenz-safe-top)+4.75rem)] sm:pt-[calc(var(--frenz-safe-top)+5.75rem)]">
         <AnonymousProfile

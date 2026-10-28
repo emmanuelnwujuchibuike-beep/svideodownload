@@ -6,6 +6,8 @@ import { assistantLimiter } from "@/lib/rate-limit";
 import { isCommentMood } from "@/lib/social/comment-meta";
 import { canComment, commentKeywordBlocked, commentSpamReason, listComments } from "@/lib/social/engagement";
 import { isStickerId } from "@/lib/social/stickers";
+import { videoStickerUuid } from "@/lib/social/video-stickers";
+import { videoStickerUsable } from "@/lib/social/video-stickers-server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -124,7 +126,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!parsed.success) return NextResponse.json({ error: "Write a comment first." }, { status: 400 });
 
   const body = parsed.data.body.trim();
-  const sticker = parsed.data.sticker && isStickerId(parsed.data.sticker) ? parsed.data.sticker : null;
+  // an emoji sticker, or a video sticker (0303) that exists and is not hidden
+  const sticker =
+    parsed.data.sticker && (isStickerId(parsed.data.sticker) || (videoStickerUuid(parsed.data.sticker) && (await videoStickerUsable(parsed.data.sticker))))
+      ? parsed.data.sticker
+      : null;
   const imageUrl = parsed.data.imageUrl ?? null;
   const mood = parsed.data.mood && isCommentMood(parsed.data.mood) ? parsed.data.mood : null;
   const voiceUrl = parsed.data.voiceUrl ?? null;

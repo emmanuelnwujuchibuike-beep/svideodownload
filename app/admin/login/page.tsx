@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { AdminLoginForm } from "@/features/admin/admin-login-form";
-import { getAdminUser } from "@/lib/admin/require-admin";
+import { getAdminIdentity } from "@/lib/admin/require-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -35,8 +35,12 @@ export default async function AdminLoginPage({
 
   if (!hasSupabase) redirect("/");
 
-  const admin = await getAdminUser();
-  if (admin) redirect(safeNext(next));
+  // already signed in as an admin: on to the dashboard lock (it forwards to `next` once this browser is unlocked)
+  const admin = await getAdminIdentity();
+  if (admin) {
+    const to = safeNext(next);
+    redirect(to.startsWith("/admin/unlock") ? to : `/admin/unlock?next=${encodeURIComponent(to)}`);
+  }
 
   return <AdminLoginForm next={safeNext(next)} />;
 }

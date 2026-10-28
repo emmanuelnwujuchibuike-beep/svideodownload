@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { isStickerId } from "@/lib/social/stickers";
+import { videoStickerUuid } from "@/lib/social/video-stickers";
+import { loadVideoStickers, videoStickerUsable } from "@/lib/social/video-stickers-server";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -13,7 +15,7 @@ export async function GET() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ saved: [] });
+  if (!user) return NextResponse.json({ saved: [], video: [] });
 
   try {
     const { data } = await supabase
@@ -21,12 +23,15 @@ export async function GET() {
       .select("sticker")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
+    const saved = ((data ?? []) as { sticker: string }[]).map((r) => r.sticker);
+    // 0303: the clips behind the saved video stickers (newest first, the library's order)
+    const clips = await loadVideoStickers(saved);
     return NextResponse.json(
-      { saved: ((data ?? []) as { sticker: string }[]).map((r) => r.sticker) },
+      { saved: saved.filter((id) => !videoStickerUuid(id) || clips.has(id)), video: saved.map((id) => clips.get(id)).filter(Boolean) },
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch {
-    return NextResponse.json({ saved: [] });
+    return NextResponse.json({ saved: [], video: [] });
   }
 }
 
@@ -47,7 +52,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
   const parsed = schema.safeParse(body);
-  if (!parsed.success || !isStickerId(parsed.data.sticker)) {
+  // an emoji sticker, or a video sticker that exists and is not hidden — anyone's (saving from a comment)
+  if (!parsed.success || !(isStickerId(parsed.data.sticker) || (videoStickerUuid(parsed.data.sticker) && (await videoStickerUsable(parsed.data.sticker))))) {
     return NextResponse.json({ error: "Unknown sticker." }, { status: 400 });
   }
 

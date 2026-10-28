@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { NEU_RAISED, NEU_WELL } from "@/components/landing/landing-classes";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { CourseCheck } from "@/features/academy/course-check";
@@ -153,11 +154,11 @@ export default async function SchoolPage({
                           <li key={lesson!.slug}>
                             <Link
                               href={`/learn/${lesson!.slug}`}
-                              className="group flex items-start gap-4 rounded-xl border border-border/70 bg-card p-4 transition hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                              className={`group flex items-start gap-4 rounded-[18px] p-4 transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet ${NEU_RAISED}`}
                             >
                               <span
                                 aria-hidden
-                                className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold"
+                                className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${NEU_WELL}`}
                               >
                                 {i + 1}
                               </span>

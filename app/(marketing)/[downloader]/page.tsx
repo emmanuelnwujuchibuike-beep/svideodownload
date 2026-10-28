@@ -12,6 +12,7 @@ import { notFound } from "next/navigation";
 
 import Link from "next/link";
 
+import { NEU_RAISED } from "@/components/landing/landing-classes";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { SiteHeader } from "@/components/layout/site-header";
@@ -345,7 +346,7 @@ export default async function DownloaderPage({
                   </h3>
                   <ol className="space-y-3">
                     {pc.mobileSteps.map((s, i) => (
-                      <li key={s.title} className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+                      <li key={s.title} className={`rounded-[22px] p-5 ${NEU_RAISED}`}>
                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
                           {i + 1}
                         </span>
@@ -362,7 +363,7 @@ export default async function DownloaderPage({
                   </h3>
                   <ol className="space-y-3">
                     {pc.desktopSteps.map((s, i) => (
-                      <li key={s.title} className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+                      <li key={s.title} className={`rounded-[22px] p-5 ${NEU_RAISED}`}>
                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-sm font-bold text-muted-foreground">
                           {i + 1}
                         </span>
@@ -383,7 +384,7 @@ export default async function DownloaderPage({
                   </h3>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {pc.features.map((ft) => (
-                      <div key={ft.title} className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+                      <div key={ft.title} className={`rounded-[22px] p-5 ${NEU_RAISED}`}>
                         <h4 className="text-sm font-semibold">{ft.title}</h4>
                         <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{ft.text}</p>
                       </div>
@@ -405,7 +406,7 @@ export default async function DownloaderPage({
               {steps.map((s, i) => (
                 <li
                   key={s.title}
-                  className="rounded-2xl border border-border bg-card p-6 shadow-soft"
+                  className={`rounded-[22px] p-6 ${NEU_RAISED}`}
                 >
                   <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
                     {i + 1}
@@ -434,7 +435,7 @@ export default async function DownloaderPage({
                 </p>
               ))}
 
-              <div className="!mt-8 grid gap-4 rounded-2xl border border-border bg-card p-6 shadow-soft sm:grid-cols-2">
+              <div className={`!mt-8 grid gap-4 rounded-[22px] p-6 sm:grid-cols-2 ${NEU_RAISED}`}>
                 <Compat icon={Smartphone} label="iPhone & iPad" />
                 <Compat icon={Smartphone} label="Android phones" />
                 <Compat icon={Monitor} label="Windows PC" />
@@ -446,7 +447,7 @@ export default async function DownloaderPage({
               {page.benefits.map((b) => (
                 <div
                   key={b.title}
-                  className="rounded-2xl border border-border bg-card p-5 shadow-soft"
+                  className={`rounded-[22px] p-5 ${NEU_RAISED}`}
                 >
                   <h3 className="flex items-center gap-2 font-semibold">
                     <Zap className="h-4 w-4 text-primary" /> {b.title}
@@ -456,7 +457,7 @@ export default async function DownloaderPage({
                   </p>
                 </div>
               ))}
-              <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+              <div className={`rounded-[22px] p-5 ${NEU_RAISED}`}>
                 <h3 className="flex items-center gap-2 font-semibold">
                   <ShieldCheck className="h-4 w-4 text-primary" /> Safe & private
                 </h3>
@@ -485,7 +486,7 @@ export default async function DownloaderPage({
               {page.faqs.map((ff) => (
                 <details
                   key={ff.q}
-                  className="group rounded-2xl border border-border bg-card p-5 shadow-soft open:shadow-card sm:p-6"
+                  className={`group rounded-[22px] p-5 open:shadow-card sm:p-6 ${NEU_RAISED}`}
                 >
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-base font-medium [&::-webkit-details-marker]:hidden">
                     {ff.q}

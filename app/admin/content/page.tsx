@@ -9,6 +9,7 @@ import { detectDrift } from "@/lib/content/sync/detect";
 import { buildReport } from "@/lib/content/sync/impact";
 import { isSnapshotBlind, takeSnapshot } from "@/lib/content/sync/snapshot";
 import { isAdmin } from "@/lib/admin";
+import { requireAdminPage } from "@/lib/admin/require-admin";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -57,6 +58,8 @@ export default async function ContentOpsPage() {
   if (!user) redirect("/login?next=/admin/content");
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (!isAdmin(profile?.role, user.email)) redirect("/");
+  // the dashboard lock (0301): held at the password + PIN screen until this browser unlocks
+  await requireAdminPage("/admin/content");
 
   /*
     🔴 A SNAPSHOT THAT READ NOTHING MUST NOT BE REPORTED AS DRIFT.

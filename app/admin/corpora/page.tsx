@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { SiteHeader } from "@/components/layout/site-header";
 import { isAdmin } from "@/lib/admin";
+import { requireAdminPage } from "@/lib/admin/require-admin";
 import {
   auditCorpora,
   corpusCounts,
@@ -95,6 +96,8 @@ export default async function CorpusOpsPage() {
     .eq("id", user.id)
     .single();
   if (!isAdmin(profile?.role, user.email)) redirect("/");
+  // the dashboard lock (0301): held at the password + PIN screen until this browser unlocks
+  await requireAdminPage("/admin/corpora");
 
   const counts = corpusCounts();
   const findings = auditCorpora();

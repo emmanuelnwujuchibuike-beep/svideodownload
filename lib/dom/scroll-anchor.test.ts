@@ -97,6 +97,16 @@ describe("restoreToAnchor", () => {
     stop();
   });
 
+  // owner, 2026-10-28: the return glided through the feed (html has `scroll-behavior: smooth`, which "auto" obeys),
+  // loading every card's media on the way — it must JUMP
+  it("jumps instantly — never a smooth glide past every post above", () => {
+    const b = browser();
+    const cards = [{ id: "a", h: 500 }, { id: "b", h: 400 }];
+    const stop = restoreToAnchor({ anchor: { id: "b", offset: 0 }, fallbackY: 0, attr: ATTR, scope: () => page(cards, () => b.win.scrollY) });
+    expect(b.win.scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: "instant" }));
+    stop();
+  });
+
   it("the reader's first touch ends it: a later resize no longer moves the page", () => {
     const b = browser();
     const cards = [{ id: "a", h: 500 }, { id: "b", h: 400 }];

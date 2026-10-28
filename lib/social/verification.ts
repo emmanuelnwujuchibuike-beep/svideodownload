@@ -128,7 +128,7 @@ export async function getVerificationState(userId: string): Promise<Verification
 export async function listVerificationQueue(
   statuses: VerificationStatus[] = ["pending", "in_review"],
   limit = 100,
-): Promise<(VerificationRequest & { handle: string | null; displayName: string | null; avatarUrl: string | null })[]> {
+): Promise<(VerificationRequest & { handle: string | null; displayName: string | null; avatarUrl: string | null; dateOfBirth: string | null; organization: string | null })[]> {
   const admin = createAdminClient();
   try {
     const { data } = await admin
@@ -144,6 +144,9 @@ export async function listVerificationQueue(
       .from("profiles")
       .select("id, handle, display_name, avatar_url")
       .in("id", rows.map((r) => r.user_id));
+    // 0302's two facts, read apart so the queue still loads before that migration has run
+    const extra = await admin.from("verification_requests").select("id, date_of_birth, organization").in("id", rows.map((r) => r.id));
+    const facts = new Map(((extra.error ? [] : extra.data) ?? []).map((x) => [x.id as string, { dateOfBirth: (x.date_of_birth as string | null) ?? null, organization: (x.organization as string | null) ?? null }]));
     const byId = new Map(
       (profiles ?? []).map((p) => [
         p.id as string,
@@ -156,6 +159,8 @@ export async function listVerificationQueue(
       handle: byId.get(r.user_id)?.handle ?? null,
       displayName: byId.get(r.user_id)?.displayName ?? null,
       avatarUrl: byId.get(r.user_id)?.avatarUrl ?? null,
+      dateOfBirth: facts.get(r.id)?.dateOfBirth ?? null,
+      organization: facts.get(r.id)?.organization ?? null,
     }));
   } catch {
     return [];
@@ -244,13 +249,38 @@ export async function approveVerification(
 ): Promise<{ ok: boolean; error?: string }> {
   const admin = createAdminClient();
   try {
+    /*
+      A PAID application (the verification flow: pay, then review): the tick is the paid one, so it carries the
+      "Paid verification" reason the expiry sweep and refunds key on, and its period starts NOW ("active for 30 days
+      from approval"), not at payment.
+    */
+    const { data: reqRow } = await admin.from("verification_requests").select("user_id, submitted_at").eq("id", requestId).maybeSingle();
+    let paidReason: string | null = null;
+    // only the payment that submitted THIS application (the flow sets submitted_at when it is paid)
+    if (reqRow?.user_id && reqRow.submitted_at) {
+      const { data: paid } = await admin
+        .from("verification_purchases")
+        .select("id, period_days")
+        .eq("user_id", reqRow.user_id as string)
+        .eq("status", "paid")
+        .gte("paid_at", new Date(Date.parse(reqRow.submitted_at as string) - 2 * 86_400_000).toISOString())
+        .order("paid_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (paid?.id) {
+        paidReason = "Paid verification";
+        const days = Number(paid.period_days);
+        // a review longer than the period may have let the daily sweep close the purchase: it re-opens from today
+        if (days > 0) await admin.from("verification_purchases").update({ expires_at: new Date(Date.now() + days * 86_400_000).toISOString(), expired_at: null, updated_at: new Date().toISOString() }).eq("id", paid.id as string);
+      }
+    }
     const { data, error } = await admin
       .from("verification_requests")
       .update({
         status: "approved",
         reviewer_id: reviewerId,
         reviewed_at: new Date().toISOString(),
-        decision_reason: reason || null,
+        decision_reason: paidReason ?? (reason || null),
         rejection_code: null,
         updated_at: new Date().toISOString(),
       })

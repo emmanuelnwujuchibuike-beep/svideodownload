@@ -536,13 +536,16 @@ export function WallpaperReels({
               }
             }}
           >
+            {/* the grid's thumbnail (already in cache) holds the screen until the full wallpaper arrives — never a blank */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={w.thumbUrl} alt="" aria-hidden loading={Math.abs(i - index) <= 2 ? "eager" : "lazy"} className="absolute inset-0 h-full w-full object-cover" />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={w.url}
               alt={w.name}
               loading={Math.abs(i - index) <= 1 ? "eager" : "lazy"}
               decoding="async"
-              className="h-full w-full object-cover"
+              className="relative h-full w-full object-cover"
             />
             {/* Scrims exist to keep the controls legible over a light image, so
                 they leave with the controls — a darkened band over an

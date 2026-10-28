@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
-import { GLYPH_SHADOW, layer, reelMotion } from "./design";
+import { GLYPH_SHADOW, layer } from "./design";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -165,7 +165,8 @@ export function ReelTabs({
           does not fit scrolls, with a soft fade at the edge that has more — the
           mask is only applied to an edge that actually overflows.
         */
-        "fixed left-1/2 top-[max(1rem,var(--frenz-safe-top))] flex h-10 max-w-[min(calc(100vw_-_8rem),26rem)] -translate-x-1/2 items-center gap-0 overflow-x-auto scroll-px-2 px-1 min-[420px]:gap-0.5",
+        /* design/frenz-reels.html (owner, 2026-10-28): ONE glass pill holding the tabs, a white pill sliding under the active one */
+        "fixed left-1/2 top-[max(1rem,var(--frenz-safe-top))] flex max-w-[min(calc(100vw_-_7.5rem),26rem)] -translate-x-1/2 items-center overflow-x-auto rounded-full border border-white/[0.16] bg-[rgba(20,20,28,0.38)] p-[3px] backdrop-blur-[20px] backdrop-saturate-[1.7]",
         "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
         "data-[edge-end]:[mask-image:linear-gradient(to_right,#000_calc(100%_-_1.75rem),transparent)]",
         "data-[edge-start]:[mask-image:linear-gradient(to_right,transparent,#000_1.75rem)]",
@@ -209,18 +210,15 @@ export function ReelTabs({
             aria-selected={on}
             onClick={() => onChange(t.id)}
             className={cn(
-              "relative shrink-0 rounded-full px-2.5 py-1.5 outline-none transition active:scale-95 min-[420px]:px-3",
+              "relative flex h-[34px] shrink-0 items-center rounded-full px-[11px] outline-none transition active:scale-95",
               "focus-visible:ring-2 focus-visible:ring-white/80",
             )}
           >
             <span
               className={cn(
-                "relative z-[1] whitespace-nowrap text-[13px] font-semibold tracking-[-0.01em] transition-colors",
-                // Sits directly on video now that the panel is gone — same
-                // shadow as every other on-video glyph, so an inactive label
-                // never dissolves into a bright frame.
-                GLYPH_SHADOW,
-                on ? "text-white" : "text-white/70 hover:text-white/90",
+                "relative z-[1] whitespace-nowrap text-[14.5px] font-semibold tracking-[-0.01em] transition-colors duration-200",
+                // "AI Reels" is plain text — the design's purple "AI" badge is left out (owner, 2026-10-28)
+                on ? "text-[#111]" : "text-white/[0.72]",
               )}
             >
               {t.label}
@@ -235,18 +233,11 @@ export function ReelTabs({
               tab its own surface; the underline keeps the familiar affordance.
             */}
             {on ? (
-              <>
-                <motion.span
-                  layoutId="reel-tab-pill"
-                  transition={reelMotion.chrome}
-                  className="absolute inset-0 rounded-full bg-white/20 ring-1 ring-inset ring-white/25"
-                />
-                <motion.span
-                  layoutId="reel-tab-underline"
-                  transition={reelMotion.chrome}
-                  className="absolute inset-x-3 -bottom-0.5 h-[2px] rounded-full bg-[hsl(var(--reel-accent,0_0%_100%))]"
-                />
-              </>
+              <motion.span
+                layoutId="reel-tab-pill"
+                transition={{ type: "spring", stiffness: 420, damping: 30 }}
+                className="absolute inset-0 rounded-full bg-white shadow-[0_2px_10px_rgba(0,0,0,0.25)]"
+              />
             ) : null}
           </button>
         );

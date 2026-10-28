@@ -5,6 +5,8 @@ import {
   motion } from "framer-motion";
 import {
   BadgeCheck,
+  Bookmark,
+  BookmarkCheck,
   Award,
   CornerUpLeft,
   Copy,
@@ -40,7 +42,8 @@ import { createPortal } from "react-dom";
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { RichText } from "@/components/social/rich-text";
 import { VideoComment, VoiceMessage } from "@/features/social/comment-media";
-import { StickerPicker } from "@/features/social/sticker-picker";
+import { StickerPicker, toggleLibrarySticker, useStickerLibrary, type PickedSticker } from "@/features/social/sticker-picker";
+import { VideoSticker } from "@/features/social/video-sticker";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import type { TypingHandle } from "@/features/social/comment-typing-indicator";
 import { floatReaction } from "@/features/ui/reaction-float";
@@ -49,7 +52,7 @@ import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { COMMENT_MOODS, COMMENT_REACTIONS, commentMood, pinLabel } from "@/lib/social/comment-meta";
 import type { CommentNode } from "@/lib/social/engagement";
 import type { SearchPerson } from "@/lib/social/search";
-import { stickerGlyph, type Sticker } from "@/lib/social/stickers";
+import { stickerGlyph } from "@/lib/social/stickers";
 import { supportsRecording } from "@/lib/media/comment-recording";
 import { haptic } from "@/lib/motion/haptics";
 import { createClient } from "@/lib/supabase/client";
@@ -169,6 +172,7 @@ export function Comments({
   disabledReason,
   count,
   variant = "page",
+  composerExtra,
 }: {
   postId: string;
   comments: CommentNode[];
@@ -177,6 +181,8 @@ export function Comments({
   disabledReason: string | null;
   count: number;
   variant?: "page" | "sheet";
+  /** an extra tool at the end of the top composer's row, beside the mic (the reel's sticker gift button) */
+  composerExtra?: ReactNode;
 }) {
   const [nodes, setNodes] = useState<CommentNode[]>(comments);
   const [total, setTotal] = useState(count);
@@ -483,6 +489,7 @@ export function Comments({
             onClearTyping={clearTyping}
             quotedNode={quoting}
             onClearQuote={() => setQuoting(null)}
+            extra={composerExtra}
           />
           {/* Live typing indicator — only the top-level composer broadcasts;
               a per-reply-target "who's typing where" breakdown is a fancier
@@ -570,7 +577,9 @@ function Composer({
   onClearTyping,
   quotedNode,
   onClearQuote,
+  extra,
 }: {
+  extra?: ReactNode;
   postId: string;
   parentId?: string;
   onPosted: () => void | Promise<void>;
@@ -587,7 +596,7 @@ function Composer({
   onClearQuote?: () => void;
 }) {
   const [body, setBody] = useState("");
-  const [sticker, setSticker] = useState<Sticker | null>(null);
+  const [sticker, setSticker] = useState<PickedSticker | null>(null);
   const [image, setImage] = useState<string | null>(null);
   const [mood, setMood] = useState<string | null>(null);
   const [showMoods, setShowMoods] = useState(false);
@@ -852,13 +861,6 @@ function Composer({
 
   return (
     <div className={cn("mb-5", parentId && "mt-3")}>
-      <AnimatePresence>
-        {showStickers ? (
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="mb-2">
-            <StickerPicker onPick={(s) => { setSticker(s); setShowStickers(false); }} onClose={() => setShowStickers(false)} />
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
 
       {/* Mood chooser */}
       <AnimatePresence>
@@ -913,7 +915,7 @@ function Composer({
           ) : null}
           {sticker ? (
             <span className="relative inline-flex items-center justify-center rounded-2xl bg-secondary/60 p-2 text-3xl ring-1 ring-inset ring-border/60">
-              {sticker.glyph}
+              {sticker.video ? <VideoSticker videoUrl={sticker.video.videoUrl} posterUrl={sticker.video.posterUrl} size={64} /> : sticker.glyph}
               <button type="button" onClick={() => setSticker(null)} aria-label="Remove sticker" className="absolute -right-1.5 -top-1.5 rounded-full bg-foreground/80 p-0.5 text-background"><X className="h-3 w-3" /></button>
             </span>
           ) : null}
@@ -954,7 +956,7 @@ function Composer({
           gets the full width below them, beside the send button.
         */}
         <div className="flex items-center gap-1">
-        <button type="button" onClick={() => setShowStickers((s) => !s)} aria-label="Stickers" className={cn("shrink-0 rounded-full p-2 transition hover:bg-secondary", showStickers ? "text-primary" : "text-muted-foreground")}>
+        <button type="button" onClick={() => { if (!showStickers) textareaRef.current?.blur(); setShowStickers((s) => !s); }} aria-label="Stickers" className={cn("shrink-0 rounded-full p-2 transition hover:bg-secondary", showStickers ? "text-primary" : "text-muted-foreground")}>
           <Smile className="h-5 w-5" />
         </button>
         <button type="button" onClick={() => fileRef.current?.click()} aria-label="Add a picture" disabled={uploading} className="shrink-0 rounded-full p-2 text-muted-foreground transition hover:bg-secondary disabled:opacity-60">
@@ -978,6 +980,7 @@ function Composer({
             <Mic className="h-5 w-5" />
           </button>
         ) : null}
+        {extra}
         </div>
         <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => pickImage(e.target.files?.[0])} />
         <div className="flex items-end gap-1 border-t border-border/50 pt-1.5">
@@ -1045,6 +1048,12 @@ function Composer({
         </div>
       </div>
       )}
+      {/* the sticker panel takes the keyboard's place, inside the sheet (owner, 2026-10-28) — never a popover above it */}
+      {showStickers ? (
+        <div className="mt-2">
+          <StickerPicker onPick={(s) => { setSticker(s); setShowStickers(false); }} onClose={() => setShowStickers(false)} />
+        </div>
+      ) : null}
       <div className="mt-1.5 flex items-center gap-3 pl-1">
         {onDone ? <button type="button" onClick={() => { clearDraft(); onDone(); }} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button> : null}
         {err ? <span className="text-xs text-red-400">{err}</span> : null}
@@ -1571,7 +1580,7 @@ function CommentItemImpl({
                   </span>
                 </button>
               ) : null}
-              {glyph ? <p className="mt-1 text-5xl leading-tight">{glyph}</p> : null}
+              {node.stickerMedia ? <CommentVideoSticker id={node.sticker!} media={node.stickerMedia} /> : glyph ? <p className="mt-1 text-5xl leading-tight">{glyph}</p> : null}
               {node.body ? <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed"><RichText text={node.body} /></p> : null}
             </>
           )}
@@ -1671,5 +1680,28 @@ function MenuRow({ icon: Icon, label, onClick, danger }: { icon: typeof Copy; la
     <button type="button" onClick={onClick} className={cn("flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition hover:bg-secondary", danger ? "text-rose-500" : "text-foreground")}>
       <Icon className="h-4 w-4" /> {label}
     </button>
+  );
+}
+
+/** A video sticker in a comment (0303), with a bookmark that saves it to — or removes it from — your sticker library. */
+function CommentVideoSticker({ id, media }: { id: string; media: { videoUrl: string; posterUrl: string } }) {
+  const lib = useStickerLibrary();
+  const saved = !!lib?.saved.includes(id);
+  return (
+    <div className="relative mt-1 inline-block">
+      <VideoSticker videoUrl={media.videoUrl} posterUrl={media.posterUrl} size={120} />
+      <button
+        type="button"
+        onClick={async () => {
+          haptic("selection");
+          const ok = await toggleLibrarySticker({ id, ...media }, !saved);
+          toast(ok ? (saved ? "Removed from your stickers" : "Saved to your stickers") : "Couldn't update your stickers.", ok ? "success" : "error");
+        }}
+        aria-label={saved ? "Remove from your stickers" : "Save to your stickers"}
+        className="absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full bg-card text-foreground shadow ring-1 ring-border/60 transition active:scale-90"
+      >
+        {saved ? <BookmarkCheck className="h-4 w-4 text-primary" /> : <Bookmark className="h-4 w-4" />}
+      </button>
+    </div>
   );
 }

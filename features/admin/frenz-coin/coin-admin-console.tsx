@@ -12,18 +12,21 @@ import { CoinSettings } from "./coin-settings";
 // each tab's code is fetched the first time it opens; the settings tab is the one that renders first
 const CoinWithdrawals = dynamic(() => import("./coin-withdrawals").then((m) => m.CoinWithdrawals), { loading: () => <p className="text-sm text-muted-foreground">Loading…</p> });
 const CoinTransfers = dynamic(() => import("./coin-transfers").then((m) => m.CoinTransfers), { loading: () => <p className="text-sm text-muted-foreground">Loading…</p> });
+// 0301: manual funding through the guarded door (unlocked dashboard + PIN per funding)
+const CoinFund = dynamic(() => import("./coin-fund").then((m) => m.CoinFund), { loading: () => <p className="text-sm text-muted-foreground">Loading…</p> });
 const CoinReversals = dynamic(() => import("./coin-reversals").then((m) => m.CoinReversals), { loading: () => <p className="text-sm text-muted-foreground">Loading…</p> });
 // Frenz Gift Coin Part 3: the conversion rules and the sticker catalogue
 const GiftSettings = dynamic(() => import("../frenz-gift/gift-settings").then((m) => m.GiftSettings), { loading: () => <p className="text-sm text-muted-foreground">Loading…</p> });
 const GiftGifting = dynamic(() => import("../frenz-gift/gift-gifting").then((m) => m.GiftGifting), { loading: () => <p className="text-sm text-muted-foreground">Loading…</p> });
 const GiftStickers = dynamic(() => import("../frenz-gift/gift-stickers").then((m) => m.GiftStickers), { loading: () => <p className="text-sm text-muted-foreground">Loading…</p> });
 
-type Tab = "settings" | "withdrawals" | "transfers" | "reversals" | "gift" | "stickers";
+type Tab = "settings" | "withdrawals" | "transfers" | "reversals" | "fund" | "gift" | "stickers";
 const TABS: { id: Tab; label: string }[] = [
   { id: "settings", label: "Settings" },
   { id: "withdrawals", label: "Withdrawals" },
   { id: "transfers", label: "Transfers" },
   { id: "reversals", label: "Deposit reversals" },
+  { id: "fund", label: "Fund a wallet" },
   { id: "gift", label: "Gift Coin" },
   { id: "stickers", label: "Stickers" },
 ];
@@ -72,6 +75,7 @@ export function CoinAdminConsole({ config, pinConfigured = true }: { config: Fre
           {t.id === "withdrawals" ? <CoinWithdrawals sensitiveFetch={sensitiveFetch} payoutRateApproved={payoutRateApproved} /> : null}
           {t.id === "transfers" ? <CoinTransfers sensitiveFetch={sensitiveFetch} /> : null}
           {t.id === "reversals" ? <CoinReversals sensitiveFetch={sensitiveFetch} /> : null}
+          {t.id === "fund" ? <CoinFund sensitiveFetch={sensitiveFetch} /> : null}
           {t.id === "gift" ? (
             <div className="space-y-5">
               <GiftSettings sensitiveFetch={sensitiveFetch} />

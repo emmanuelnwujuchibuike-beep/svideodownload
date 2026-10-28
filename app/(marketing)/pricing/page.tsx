@@ -2,6 +2,7 @@ import { Check, Crown, Gem, Minus, Zap, Rocket, type LucideIcon } from "lucide-r
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { INK, NEU_CHIP, NEU_RAISED, SECONDARY_ACTION } from "@/components/landing/landing-classes";
 import { SiteHeader } from "@/components/layout/site-header";
 import { UpgradeButton } from "@/features/monetization/upgrade-button";
 import { ProBadge } from "@/features/monetization/pro-badge";
@@ -219,12 +220,12 @@ export default async function PricingPage() {
                 key={t.id}
                 id={t.id}
                 className={cn(
-                  "relative flex flex-col scroll-mt-24 rounded-3xl p-7 transition-all",
+                  "relative flex flex-col scroll-mt-24 rounded-[28px] p-7 transition-all",
                   t.prestige
                     ? "border border-amber-300/40 bg-gradient-to-b from-slate-900 via-slate-950 to-black text-white shadow-luxury ring-1 ring-amber-300/30 lg:z-10 lg:scale-[1.06] lg:-translate-y-1"
                     : t.highlight
-                      ? "border border-amber-500/30 bg-card bg-gradient-to-b from-amber-500/[0.08] to-transparent shadow-card ring-1 ring-amber-500/15 lg:scale-[1.02]"
-                      : "border border-border/80 bg-card shadow-card",
+                      ? `${NEU_RAISED} ring-1 ring-amber-500/25 lg:scale-[1.02]`
+                      : NEU_RAISED,
                 )}
               >
                 {t.prestige ? (
@@ -253,7 +254,7 @@ export default async function PricingPage() {
                         ? "bg-gradient-to-br from-amber-200 via-amber-400 to-amber-500 text-slate-900 shadow-amber-400/40 ring-1 ring-amber-200/40"
                         : t.highlight
                           ? "bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-amber-500/30"
-                          : "bg-secondary text-muted-foreground",
+                          : `${NEU_CHIP} text-frenz-violet`,
                     )}
                   >
                     <t.icon className="h-5 w-5" />
@@ -330,9 +331,7 @@ export default async function PricingPage() {
                         "group relative inline-flex w-full items-center justify-center overflow-hidden rounded-2xl px-4 py-3.5 text-sm font-semibold transition-all active:scale-[0.99] disabled:opacity-70",
                         t.prestige
                           ? "bg-gradient-to-r from-amber-200 via-amber-400 to-amber-300 text-slate-900 shadow-lg shadow-amber-400/30 hover:shadow-amber-400/50 hover:shadow-xl"
-                          : t.highlight
-                            ? "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white shadow-lg shadow-amber-500/30 hover:shadow-amber-500/50 hover:shadow-xl"
-                            : "bg-primary text-primary-foreground shadow-md shadow-primary/20 hover:shadow-primary/35",
+                          : INK,
                       )}
                     >
                       <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
@@ -342,7 +341,7 @@ export default async function PricingPage() {
                 ) : (
                   <Link
                     href={t.href}
-                    className="mt-auto inline-flex items-center justify-center rounded-2xl border border-border/80 bg-background/60 px-4 py-3.5 text-sm font-semibold transition hover:bg-secondary active:scale-[0.99]"
+                    className={cn(SECONDARY_ACTION, "mt-auto w-full")}
                   >
                     {t.cta}
                   </Link>
@@ -373,7 +372,7 @@ export default async function PricingPage() {
               never blocks the actual horizontal scroll it's hinting at.
             */}
             <div className="relative">
-              <div className="overflow-x-auto rounded-3xl border border-border/80 bg-card shadow-card">
+              <div className={cn("overflow-x-auto rounded-[28px]", NEU_RAISED)}>
                 <table className="w-full min-w-[560px] border-collapse text-sm">
                   <thead>
                     <tr className="border-b border-border/60">
@@ -428,7 +427,7 @@ export default async function PricingPage() {
               </div>
               <span
                 aria-hidden
-                className="pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-3xl bg-gradient-to-l from-card to-transparent sm:hidden"
+                className="pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-[28px] bg-gradient-to-l from-frenz-card to-transparent sm:hidden"
               />
             </div>
           </section>

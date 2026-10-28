@@ -50,7 +50,22 @@ export function fireWowFeedback(): void {
   playSound("wow");
 }
 
-export function WowBurst({ burstKey, anchorRef }: { burstKey: number; anchorRef: RefObject<HTMLElement | null> }) {
+/** The reels' double-tap heart (owner, 2026-10-28: "the reels should use heart/love instead of the WOW system, only the feed should use the wow"). */
+function BurstHeart() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-[110px] w-[110px]" aria-hidden>
+      <defs>
+        <linearGradient id="reel-heart-burst" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#FF6B8B" />
+          <stop offset="1" stopColor="#FF2D55" />
+        </linearGradient>
+      </defs>
+      <path d="M12 20.5s-8-4.7-8-10.6A4.6 4.6 0 0 1 12 7a4.6 4.6 0 0 1 8 2.9c0 5.9-8 10.6-8 10.6z" fill="url(#reel-heart-burst)" />
+    </svg>
+  );
+}
+
+export function WowBurst({ burstKey, anchorRef, variant = "wow" }: { burstKey: number; anchorRef: RefObject<HTMLElement | null>; variant?: "wow" | "heart" }) {
   const [rect, setRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
 
   // Re-measure every time a burst actually fires — the anchor may have
@@ -85,7 +100,7 @@ export function WowBurst({ burstKey, anchorRef }: { burstKey: number; anchorRef:
             transition={{ duration: 1.05, ease: [0.16, 1, 0.3, 1], times: [0, 0.2, 0.65, 1] }}
             className="drop-shadow-[0_16px_28px_rgba(0,0,0,0.5)]"
           >
-            <WowSolid className="h-20 w-20 sm:h-24 sm:w-24" />
+            {variant === "heart" ? <BurstHeart /> : <WowSolid className="h-20 w-20 sm:h-24 sm:w-24" />}
           </motion.span>
         </span>
       ) : null}

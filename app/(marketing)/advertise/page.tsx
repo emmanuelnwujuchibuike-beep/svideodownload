@@ -1,15 +1,16 @@
 import { ArrowRight, BadgeCheck, CreditCard, Eye, ImageUp, LayoutGrid, Lock, ShieldCheck, Zap } from "lucide-react";
 import type { Metadata } from "next";
 
+import { NEU_CHIP, NEU_RAISED, PRIMARY_ACTION, SECONDARY_ACTION } from "@/components/landing/landing-classes";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { AdvertiseFormats } from "@/features/ads-platform/advertise-formats";
 import { AdvertisePlacementsPricing } from "@/features/ads-platform/advertise-placements-pricing";
-import { AiButtonLink } from "@/features/ai/design/ai-button";
 import { AiDisplayTitle } from "@/features/ai/design/ai-surface";
 import { AUTOMATED_VALIDATION_NOTICE } from "@/lib/ads-platform/rules";
 import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { jsonLd } from "@/lib/seo/json-ld";
+import { cn } from "@/lib/utils";
 
 /*
   Static: the page reads no cookie and no price at build. The live part — the
@@ -95,12 +96,12 @@ export default function AdvertisePage() {
             Reach people around the world who are downloading, creating, scrolling, chatting and posting on Frenzsave. Set up an ad in a few minutes.
           </p>
           <div className="mt-6 flex flex-wrap items-center gap-2.5">
-            <AiButtonLink tapOnce href="/advertise/create" prefetch={false} size="lg" iconEnd={<ArrowRight className="h-4 w-4" />}>
-              Start Advertising
-            </AiButtonLink>
-            <AiButtonLink tapOnce href="/advertise/rules" prefetch={false} variant="secondary" size="lg">
+            <TapOnceLink href="/advertise/create" prefetch={false} className={PRIMARY_ACTION}>
+              Start Advertising <ArrowRight className="h-4 w-4" aria-hidden />
+            </TapOnceLink>
+            <TapOnceLink href="/advertise/rules" prefetch={false} className={SECONDARY_ACTION}>
               Advertising Rules
-            </AiButtonLink>
+            </TapOnceLink>
           </div>
           {/*
             §10/§44 (owner, 2026-10-08): say up front when an account comes in, so
@@ -120,8 +121,8 @@ export default function AdvertisePage() {
             </h2>
             <ol className="mt-4 grid gap-3 sm:grid-cols-2">
               {STEPS.map(({ icon: Icon, title, body }, i) => (
-                <li key={title} className="flex gap-3.5 rounded-[1.4rem] bg-card p-4 ring-1 ring-inset ring-black/[0.07] dark:ring-white/10">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-50 to-sky-50 text-indigo-600 ring-1 ring-inset ring-indigo-100 dark:from-indigo-500/15 dark:to-sky-500/10 dark:text-indigo-300 dark:ring-indigo-400/20" aria-hidden>
+                <li key={title} className={`flex gap-3.5 rounded-[22px] p-4 ${NEU_RAISED}`}>
+                  <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] text-frenz-violet ${NEU_CHIP}`} aria-hidden>
                     <Icon className="h-5 w-5" />
                   </span>
                   <div className="min-w-0">
@@ -157,7 +158,7 @@ export default function AdvertisePage() {
             </h2>
             <ul className="mt-4 grid gap-3 sm:grid-cols-3">
               {TRUST.map(({ icon: Icon, title, body }) => (
-                <li key={title} className="rounded-[1.4rem] bg-card p-4 ring-1 ring-inset ring-black/[0.07] dark:ring-white/10">
+                <li key={title} className={`rounded-[22px] p-4 ${NEU_RAISED}`}>
                   <Icon className="h-5 w-5 text-indigo-600" aria-hidden />
                   <p className="mt-2 text-[14.5px] font-semibold">{title}</p>
                   <p className="mt-1 text-[13px] leading-snug text-muted-foreground">{body}</p>
@@ -178,7 +179,7 @@ export default function AdvertisePage() {
             <h2 id="faq" className="font-brand text-[1.35rem] font-bold tracking-[-0.03em]">
               Questions advertisers ask
             </h2>
-            <div className="mt-4 divide-y divide-border/70 rounded-[1.4rem] bg-card ring-1 ring-inset ring-black/[0.07] dark:ring-white/10">
+            <div className={`mt-4 divide-y divide-frenz-line rounded-[22px] ${NEU_RAISED}`}>
               {AD_FAQ.map(({ q, a }) => (
                 <details key={q} className="group px-4 py-3">
                   <summary className="flex min-h-[2.75rem] cursor-pointer list-none items-center justify-between gap-3 text-[14.5px] font-semibold [&::-webkit-details-marker]:hidden">
@@ -201,12 +202,13 @@ export default function AdvertisePage() {
             />
           </section>
 
-          <div className="mt-12 rounded-[1.75rem] bg-gradient-to-br from-indigo-600 via-violet-600 to-blue-600 p-6 text-white">
+          <div className="relative mt-12 overflow-hidden rounded-[28px] bg-[linear-gradient(150deg,#15162A_0%,#221B4E_60%,#2E1C66_100%)] p-6 text-white shadow-[0_24px_48px_rgba(20,16,60,.28),inset_0_1px_0_rgba(255,255,255,.1)]">
             <p className="font-brand text-[1.3rem] font-bold tracking-[-0.03em]">Ready when you are</p>
             <p className="mt-1 text-[14px] text-white/85">Use the Frenzsave account you already have — or create one in a minute.</p>
-            <AiButtonLink tapOnce href="/advertise/create" prefetch={false} variant="secondary" className="mt-4" iconEnd={<ArrowRight className="h-4 w-4" />}>
-              Start Advertising
-            </AiButtonLink>
+            {/* on the dark band the ink button inverts to white, as on the landing's app band */}
+            <TapOnceLink href="/advertise/create" prefetch={false} className={cn(PRIMARY_ACTION, "mt-4 bg-white text-frenz-ink shadow-none dark:bg-white dark:text-[#12111A]")}>
+              Start Advertising <ArrowRight className="h-4 w-4" aria-hidden />
+            </TapOnceLink>
           </div>
         </div>
       </main>

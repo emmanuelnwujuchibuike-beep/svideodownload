@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import { SettingsPage } from "@/features/account/settings-page";
 import { PaidVerificationCard } from "@/features/account/paid-verification-card";
 import { VerificationFlow } from "@/features/account/verification-flow";
 import { paidVerificationOffer } from "@/lib/social/paid-verification";
@@ -13,12 +12,14 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Verification", robots: { index: false, follow: false } };
 
 /**
- * Verification — apply for the blue tick.
+ * Verification — design/frenz-verification.html (owner, 2026-10-28), without the ID document step.
  *
- * No eligibility rules (owner, 2026-10-24): any member can buy the tick (the paid card, when the admin has priced it)
- * or apply for a review — the form starts at Identity.
+ * No eligibility rules (owner, 2026-10-24): any member may apply. When the admin has priced the tick, payment is the
+ * last step and the application goes to review once it is confirmed; otherwise it goes to review straight away.
+ * The return from checkout (`?paid=<reference>`) is settled by the existing PaidVerificationCard, which asks the
+ * server — never this URL — whether the payment landed.
  */
-export default async function VerificationSettingsPage() {
+export default async function VerificationSettingsPage({ searchParams }: { searchParams: Promise<{ paid?: string }> }) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -26,23 +27,27 @@ export default async function VerificationSettingsPage() {
   if (!user) redirect("/login");
 
   const admin = createAdminClient();
-  const [state, { data: profile }, offer] = await Promise.all([
+  const [state, { data: profile }, offer, { paid }] = await Promise.all([
     getVerificationState(user.id),
-    admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
-    // 0268: the admin's paid-verification offer, and this member's paid tick
+    admin.from("profiles").select("display_name, handle, avatar_url").eq("id", user.id).maybeSingle(),
     paidVerificationOffer(user.id),
+    searchParams,
   ]);
   const paidTick = state.verified && state.request?.decisionReason === "Paid verification";
-  // the card: offered when on and not verified (or verified BY a payment, to renew); a reviewed or admin tick shows none
-  const showPaid = offer.config.enabled && (!state.verified || paidTick);
 
   return (
-    <SettingsPage title="Verification" description="Prove who you are and get the blue tick." bare>
-      {showPaid ? <PaidVerificationCard priceCents={offer.config.priceCents} periodDays={offer.config.periodDays} verified={paidTick} paidUntil={offer.lifetime ? null : offer.paidUntil} /> : null}
-      <VerificationFlow
-        state={state}
-        displayName={(profile?.display_name as string | null) ?? user.email ?? "your account"}
-      />
-    </SettingsPage>
+    <VerificationFlow
+      state={state}
+      displayName={(profile?.display_name as string | null) ?? user.email ?? "your account"}
+      handle={(profile?.handle as string | null) ?? null}
+      avatarUrl={(profile?.avatar_url as string | null) ?? null}
+      offer={{ enabled: offer.config.enabled, priceCents: offer.config.priceCents, periodDays: offer.config.periodDays }}
+      paidUntil={paidTick && !offer.lifetime ? offer.paidUntil : null}
+      paidReturn={
+        paid && offer.config.enabled ? (
+          <PaidVerificationCard priceCents={offer.config.priceCents} periodDays={offer.config.periodDays} verified={paidTick} paidUntil={offer.lifetime ? null : offer.paidUntil} />
+        ) : null
+      }
+    />
   );
 }

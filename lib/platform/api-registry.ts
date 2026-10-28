@@ -167,6 +167,9 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   // Frenz Coin closeout (0283)
   { method: "GET", path: "/api/coin/withdrawals", auth: "session", category: "payments", description: "The member’s own Frenz Coin withdrawals: status, gross / fee / net, the recorded naira payout, the bank by name and last four digits." },
   { method: "POST", path: "/api/coin/withdrawals", auth: "session", category: "payments", description: "Withdraw Frenz Coins to a Nigerian bank (typed, or one of the member's saved accounts by id): confirmed email, bank-named account holder, the transaction PIN; held with the admin's fee from the gross. An admin pays." },
+  { method: "GET", path: "/api/admin/wallet/coin-fund", auth: "admin", category: "payments", description: "0301: who a 10-digit wallet number belongs to, and the recent manual Frenz Coin fundings. Unlocked dashboard only." },
+  { method: "POST", path: "/api/admin/wallet/coin-fund", auth: "admin", category: "payments", description: "0301: manually fund a wallet with Frenz Coins — unlocked dashboard, fresh password, the admin PIN for this funding; capped, once per key, append-only, audited." },
+  { method: "POST", path: "/api/admin/lock", auth: "admin", category: "security", description: "0301: the admin dashboard lock — dashboard password, PIN, lock now, emailed setup and PIN-reset links, password change." },
   { method: "GET", path: "/api/admin/wallet/coin-withdrawals", auth: "admin", category: "payments", description: "Frenz Coin withdrawals: open first, then recent, with gross / fee / net, the recorded payout and the reference. Actions: the existing withdrawal routes." },
   { method: "GET", path: "/api/admin/wallet/coin-transfers", auth: "admin", category: "payments", description: "Frenz Coin Part 6: recent coin transfers (or one by ?id=) with sender, recipient, amount, fee, total, the corrections already made and what is still correctable. Read-only." },
   // Frenz Gift Coin Part 4 (0293): sticker gifts
@@ -207,6 +210,7 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   { method: "POST", path: "/api/admin/flutterwave/transactions", auth: "admin", category: "payments", description: "Part 5: recheck ONE attempt by reference through its purpose's existing idempotent settle path (fresh password, rate limited, audited)." },
 
   /* ── story highlights (Stories Part 5, 0289 — lib/social/story-highlights.ts) ── */
+  { method: "POST", path: "/api/stickers/video", auth: "session", category: "feed", description: "0303: save a video sticker the member made in the browser (a ≤3 s square silent clip + poster, both their own uploads); it goes into their sticker library." },
   { method: "POST", path: "/api/stories/[id]/gift-conversation", auth: "session", category: "feed", description: "The 1:1 chat a sticker gift for this story is sent into, found or created only when Send is pressed. The same gates as a story reply: the caller can see the story, it is not their own, and every direct-message rule applies." },
   { method: "GET", path: "/api/stories/highlights", auth: "session-optional", category: "feed", description: "A member's highlights as the caller may see them (the stories visibility rule); empty, never an error, when they may not." },
   { method: "POST", path: "/api/stories/highlights", auth: "session", category: "feed", description: "A new highlight from the caller's own stories (title up to 30 characters)." },

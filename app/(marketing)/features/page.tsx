@@ -13,6 +13,7 @@ import {
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { NEU_CHIP, NEU_RAISED, NEU_WELL, PRIMARY_ACTION } from "@/components/landing/landing-classes";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { getClaimableProfiles, isRealStage } from "@/lib/content/genome/queries";
@@ -117,9 +118,9 @@ export default function FeaturesPage() {
         */}
         <Link
           href="/"
-          className="inline-flex items-center gap-2 rounded-full bg-white py-2 pl-2 pr-4 text-sm font-semibold text-slate-700 shadow-[0_2px_10px_-4px_rgba(15,23,42,0.15)] ring-1 ring-inset ring-slate-900/[0.06] transition hover:text-slate-900 active:scale-[0.98] dark:bg-white/[0.06] dark:text-white/80 dark:ring-white/10 dark:hover:text-white"
+          className={`inline-flex items-center gap-2 rounded-full py-2 pl-2 pr-4 text-sm font-semibold text-frenz-ink transition active:scale-[0.98] ${NEU_CHIP}`}
         >
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 dark:bg-white/10">
+          <span className={`flex h-7 w-7 items-center justify-center rounded-full ${NEU_WELL}`}>
             <ArrowLeft className="h-4 w-4" />
           </span>
           Back to home
@@ -173,7 +174,7 @@ export default function FeaturesPage() {
                   a native grouped list announces its section with a surface, not
                   with a font size.
                 */}
-                <div className="flex items-start gap-3.5 rounded-3xl bg-violet-500/[0.07] p-4 ring-1 ring-inset ring-violet-500/[0.12] dark:bg-violet-400/[0.08] dark:ring-violet-300/15">
+                <div className={`flex items-start gap-3.5 rounded-[28px] p-4 ${NEU_WELL}`}>
                   <span
                     className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${platform.accent} text-white shadow-lg shadow-violet-600/25`}
                   >
@@ -219,7 +220,7 @@ export default function FeaturesPage() {
                       return (
                         <li
                           key={cap.id}
-                          className="flex items-start gap-3.5 rounded-3xl bg-white p-4 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-900/[0.06] dark:bg-white/[0.04] dark:ring-white/10"
+                          className={`flex items-start gap-3.5 rounded-[22px] p-4 ${NEU_RAISED}`}
                         >
                           <span
                             aria-hidden
@@ -274,14 +275,14 @@ export default function FeaturesPage() {
           })}
         </div>
 
-        <div className="mt-16 rounded-3xl border border-border bg-card p-8 text-center shadow-soft">
+        <div className={`mt-16 rounded-[28px] p-8 text-center ${NEU_RAISED}`}>
           <h2 className="text-xl font-bold tracking-tight">Start with a link</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
             No account needed to download. Paste a link and go.
           </p>
           <Link
             href="/#download"
-            className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 via-violet-600 to-fuchsia-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-600/25 transition hover:opacity-95 active:scale-[0.99]"
+            className={`mt-5 ${PRIMARY_ACTION}`}
           >
             Start Saving
           </Link>

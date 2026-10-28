@@ -221,7 +221,10 @@ export function AppTopbar() {
         // a gradient here without a fresh, explicit ask — this exact feature
         // was built, reshaped twice for seam/intensity issues, and then
         // explicitly removed in one conversation.
-        glassBar ? "pointer-events-none border-b border-transparent bg-transparent lg:pointer-events-auto lg:border-border/20 lg:bg-background" : "border-b border-border/20 bg-background",
+        /* The glass bar is FIXED on phones (owner, 2026-10-28: "the floating buttons on the feed page sometimes swipe away
+           instead of sticking"). Sticky rides the document, so iOS's elastic overscroll and momentum dragged the floating
+           circles with the page; fixed holds them to the screen. The spacer after this header keeps the layout's 4rem. */
+        glassBar ? "pointer-events-none border-b border-transparent bg-transparent max-lg:fixed max-lg:inset-x-0 lg:pointer-events-auto lg:border-border/20 lg:bg-background" : "border-b border-border/20 bg-background",
         // the Download page's slide-away (see above): transform only — no layout shift, GPU-cheap
         "transition-transform duration-300 ease-out motion-reduce:transition-none lg:translate-y-0",
         slideAway && "-translate-y-full",
@@ -520,6 +523,7 @@ export function AppTopbar() {
           portals to <body>, so this header's own stacking can't trap it. */}
       {createUsed ? <CreateActionSheet open={createOpen} onClose={() => setCreateOpen(false)} /> : null}
     </header>
+    {glassBar ? <div aria-hidden className="h-[calc(4rem+var(--frenz-safe-top))] shrink-0 lg:hidden" /> : null}
     </>
   );
 }

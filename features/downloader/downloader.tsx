@@ -478,7 +478,7 @@ export function Downloader({
           <button
             type="submit"
             disabled={isBusy}
-            className="group relative inline-flex h-16 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-primary px-8 text-base font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:shadow-glow-blue active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100"
+            className="group relative inline-flex h-16 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-frenz-ink px-8 text-base font-semibold text-frenz-page shadow-[0_14px_28px_-14px_rgb(18_17_26/0.6)] transition-all active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100"
           >
             <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
             {isBusy ? (

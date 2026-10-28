@@ -114,8 +114,10 @@ export function NotificationBell({ glass = false }: { glass?: boolean } = {}) {
 
       {open ? (
         <>
-          <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />
-          <div className="absolute right-0 z-50 mt-2 max-h-[28rem] w-80 overflow-y-auto rounded-2xl border border-border/70 bg-card shadow-elevated">
+          {/* pointer-events-auto: on the feed this sits in the glass header, which lets taps pass through (pointer-events-none);
+              without it the panel was visible but every tap — "See all" included — fell through to the page beneath. */}
+          <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="pointer-events-auto fixed inset-0 z-40 cursor-default" />
+          <div className="pointer-events-auto absolute right-0 z-50 mt-2 max-h-[28rem] w-80 overflow-y-auto rounded-2xl border border-border/70 bg-card shadow-elevated">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border/60 bg-card px-4 py-3">
               <span className="text-sm font-semibold">Notifications</span>
               {/* owner, 2026-10-27: "Notification see all button is not pressing" — it was 12px text with no padding (a tiny target)

@@ -26,10 +26,18 @@ describe("wallpaper thumbnail", () => {
     expect(THUMB_QUALITY).toBeGreaterThanOrEqual(80);
     expect(THUMB_WIDTH).toBeGreaterThanOrEqual(585);
   });
-  it("the featured header uses the ORIGINAL, never the thumbnail", async () => {
+  // owner, 2026-10-28: "the wallpaper itself shouldn't load unless clicked" — the header is a 1170 px render of the
+  // original (still full phone width at 3x), never the small thumbnail and never the multi-megabyte original
+  it("the featured header uses a full-width render, never the thumbnail or the raw original", async () => {
     const { readFileSync } = await import("node:fs");
     const src = readFileSync("features/wallpapers/wallpaper-explore.tsx", "utf8");
-    expect(src).toContain("<img src={featured.url}");
+    expect(src).toContain("<img src={sizedWallpaperUrl(featured.url, WALLPAPER_HEADER_WIDTH)}");
     expect(src).not.toContain("<img src={featured.thumbUrl}");
+    expect(src).not.toContain("<img src={featured.url}");
+  });
+  it("a sized wallpaper is a contain render of a Supabase object, and anything else is left alone", async () => {
+    const { sizedWallpaperUrl } = await import("@/lib/wallpapers");
+    expect(sizedWallpaperUrl("https://x.supabase.co/storage/v1/object/public/wallpapers/a.jpg", 420)).toBe("https://x.supabase.co/storage/v1/render/image/public/wallpapers/a.jpg?width=420&resize=contain&quality=72");
+    expect(sizedWallpaperUrl("/api/wallpaper?id=1&size=thumb", 420)).toBe("/api/wallpaper?id=1&size=thumb");
   });
 });

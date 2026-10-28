@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
 
 import { isAdmin } from "@/lib/admin";
+import { adminLockStage } from "@/lib/admin/lock";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -50,6 +51,22 @@ import { createClient } from "@/lib/supabase/server";
  * though the cookie is still in the browser.
  */
 export async function getAdminUser(): Promise<User | null> {
+  const user = await getAdminIdentity();
+  /*
+    🔴 THE DASHBOARD LOCK (0301, owner 2026-10-28): an administrator is an administrator HERE only once this browser
+    has passed the dashboard password and the PIN (lib/admin/lock.ts). Every admin page, API route and action reads
+    this function, so none of them can be reached signed-in-but-locked. Any doubt (no cookie, migration not run, a
+    database error) is "locked".
+  */
+  if (!user) return null;
+  return (await adminLockStage(user.id)) === "unlocked" ? user : null;
+}
+
+/**
+ * The administrator by ROLE, before the dashboard lock — only for the lock's own screens and routes
+ * (app/admin/unlock, app/api/admin/lock). Everything else uses getAdminUser.
+ */
+export async function getAdminIdentity(): Promise<User | null> {
   const supabase = await createClient();
 
   const {
@@ -112,8 +129,10 @@ export async function requireAdminPage(nextPath = "/admin"): Promise<User> {
     redirect(`/admin/login?next=${encodeURIComponent(nextPath)}`);
   }
 
-  const admin = await getAdminUser();
+  const admin = await getAdminIdentity();
   if (!admin) redirect("/");
+  // signed in as an admin but this browser hasn't passed the dashboard password and PIN: held at the lock screen
+  if ((await adminLockStage(admin.id)) !== "unlocked") redirect(`/admin/unlock?next=${encodeURIComponent(nextPath)}`);
 
   return admin;
 }
@@ -142,7 +161,13 @@ export type AdminGate =
   | { ok: false; response: NextResponse };
 
 export async function requireAdminApi(): Promise<AdminGate> {
-  const user = await getAdminUser();
+  const identity = await getAdminIdentity();
+  // a known administrator whose dashboard is locked gets 423, so the dashboard can send them to the lock screen
+  // (a non-admin still gets the 404 below — nothing about the surface is confirmed to them)
+  if (identity && (await adminLockStage(identity.id)) !== "unlocked") {
+    return { ok: false, response: NextResponse.json({ error: "locked", unlock: "/admin/unlock" }, { status: 423 }) };
+  }
+  const user = identity;
   if (!user) {
     return {
       ok: false,

@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 
+import { NEU_RAISED, PRIMARY_ACTION } from "@/components/landing/landing-classes";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
-import { AiButtonLink } from "@/features/ai/design/ai-button";
+import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { ADVERTISING_RULES, ADVERTISING_RULES_VERSION, AUTOMATED_VALIDATION_NOTICE, TRAFFIC_QUALITY_NOTE, TRAFFIC_QUALITY_POLICY, VIEWS_DELIVERY_TERMS } from "@/lib/ads-platform/rules";
 
 export const dynamic = "force-static";
@@ -45,7 +46,7 @@ export default function AdvertisingRulesPage() {
             ))}
           </div>
           {/* Part 8 (2026-10-09): how we count - linked from the advertiser dashboard */}
-          <section id="traffic-quality" aria-labelledby="traffic-quality-title" className="mt-10 rounded-[1.4rem] bg-card p-5 ring-1 ring-inset ring-black/[0.07] dark:ring-white/10">
+          <section id="traffic-quality" aria-labelledby="traffic-quality-title" className={`mt-10 rounded-[22px] p-5 ${NEU_RAISED}`}>
             <h2 id="traffic-quality-title" className="text-[1.1rem] font-bold tracking-[-0.02em]">
               How we count your results
             </h2>
@@ -60,7 +61,7 @@ export default function AdvertisingRulesPage() {
             <p className="mt-3 text-[13.5px] leading-relaxed text-muted-foreground">{TRAFFIC_QUALITY_NOTE}</p>
           </section>
           {/* 0240: the terms of a views campaign - linked from the campaign summary */}
-          <section id="views-delivery" aria-labelledby="views-delivery-title" className="mt-6 rounded-[1.4rem] bg-card p-5 ring-1 ring-inset ring-black/[0.07] dark:ring-white/10">
+          <section id="views-delivery" aria-labelledby="views-delivery-title" className={`mt-6 rounded-[22px] p-5 ${NEU_RAISED}`}>
             <h2 id="views-delivery-title" className="text-[1.1rem] font-bold tracking-[-0.02em]">
               Views campaigns: delivery terms
             </h2>
@@ -74,9 +75,9 @@ export default function AdvertisingRulesPage() {
             </dl>
           </section>
           <div className="mt-10">
-            <AiButtonLink tapOnce href="/advertise/create" prefetch={false}>
+            <TapOnceLink href="/advertise/create" prefetch={false} className={PRIMARY_ACTION}>
               Create an Ad
-            </AiButtonLink>
+            </TapOnceLink>
           </div>
         </article>
       </main>

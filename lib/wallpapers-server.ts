@@ -2,7 +2,7 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { getBuiltInWallpaper, type Wallpaper, type WallpaperComment } from "./wallpapers";
+import { getBuiltInWallpaper, sizedWallpaperUrl, WALLPAPER_THUMB_WIDTH, type Wallpaper, type WallpaperComment } from "./wallpapers";
 import { wallpaperIsProOnly } from "./wallpapers-limits";
 
 /**
@@ -65,7 +65,8 @@ function toWallpaper(row: Row): Wallpaper {
     name: row.title,
     category: row.category,
     url: row.image_url,
-    thumbUrl: row.thumb_url || row.image_url,
+    // never the original as a grid thumbnail: an upload without its own thumb gets a resized copy
+    thumbUrl: row.thumb_url || sizedWallpaperUrl(row.image_url, WALLPAPER_THUMB_WIDTH),
     // Routed through our own endpoint so the response carries a filename and
     // the browser saves rather than navigates.
     downloadUrl: `/api/wallpaper?id=${row.id}&dl=1`,

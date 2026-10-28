@@ -1,0 +1,820 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Frenz — Creator Analytics UI</title>
+<!--
+  FRENZ · CREATOR ANALYTICS — UI reference for implementation
+  ------------------------------------------------------------------
+  10 screens (390pt wide, iPhone; tall screens scroll):
+    MAIN OVERVIEW
+      #overview   1  Creator analytics (overview)
+      #social     2  Social engagement
+      #views      2a Views                 (from Social)
+      #audience   2b Audience              (from Social)
+      #exclusive  3  Exclusive post earnings
+      #gifting    4  Gifting
+    MORE INSIGHTS
+      #wallpapers 5  Wallpaper engagement
+      #post       5a Wallpaper insights    (from Wallpapers)
+      #ai         6  AI creations
+      #feature    7  Feature of the month
+
+  Tokens and components: <style>.  Charts: smooth()/series() in <script>.
+  All numbers are SAMPLE data in the DATA object, except the creator's real
+  numbers from the old page (79 posts, 907K total views, 19 downloads, 32K
+  followers, 322 views 7d, 1.3K views 30d, 20% eng. rate, 9 saves).
+  Totals are kept consistent across screens.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Brand */
+  --blue:#2563EB; --blue-ink:#1D4ED8; --blue-soft:#EAF1FF; --blue-tint:#D9E3FB;
+  --violet:#7C3AED; --violet-soft:#F1EBFF; --violet-ink:#6D28D9;
+  --magenta:#DB2777; --magenta-ink:#9D174D; --magenta-soft:#FCE7F3;
+  --sky:#0EA5E9; --amber:#F59E0B; --amber-ink:#B45309;
+  --brand-grad:linear-gradient(135deg,#3B5BFD 0%,#7C3AED 55%,#C026D3 100%);
+  --hero-dark:linear-gradient(160deg,#15162A 0%,#1C1A3D 55%,#241A4A 100%);
+  --hero-violet:linear-gradient(160deg,#1A1538 0%,#2A1A5C 60%,#3B1F70 100%);
+  --hero-gold:linear-gradient(160deg,#1A1530 0%,#2B1D3F 55%,#3D2A1F 100%);
+  --gold-card:linear-gradient(135deg,rgba(255,250,240,.92),rgba(255,241,216,.92));
+  --gold-ink:#8A4B06; --gold-sub:#6B5A3E;
+
+  /* Neutrals */
+  --bg:#F4F5F9; --ink:#0E0F14; --sub:#5F6170; --muted:#6B6D7B; --line:rgba(14,15,20,.06);
+  --track:#ECEEF5; --chip:#EEF0F6;
+
+  /* Status */
+  --up:#15803D; --up-bg:#E7F7EE; --down:#B91C1C; --down-bg:#FDECEC;
+  --up-on-dark:#86EFAC; --up-on-dark-bg:rgba(34,197,94,.16);
+
+  /* Glass */
+  --glass:rgba(255,255,255,.78);
+  --glass-blur:blur(24px) saturate(180%);
+  --shadow:0 8px 24px rgba(16,18,40,.06),0 0 0 .5px rgba(14,15,20,.05);
+  --shadow-hero:0 24px 50px rgba(20,16,60,.28),inset 0 1px 0 rgba(255,255,255,.12);
+
+  --r-hero:28px; --r-card:26px; --r-tile:20px;
+  --font:Inter,-apple-system,"SF Pro Text",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:var(--font);color:var(--ink);background:#E4E5EC;-webkit-font-smoothing:antialiased}
+button,input{font-family:inherit}
+button{cursor:pointer}
+a{color:var(--blue)}
+.num{font-variant-numeric:tabular-nums}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* ---------- Document chrome (not part of the app) ---------- */
+.doc-head{max-width:1200px;margin:0 auto;padding:40px 24px 8px}
+.doc-head h1{margin:0;font-size:32px;font-weight:800;letter-spacing:-.8px}
+.doc-head p{margin:8px 0 0;color:var(--sub);font-size:15px;line-height:1.5;max-width:760px}
+.group-title{max-width:1200px;margin:24px auto 0;padding:0 24px;font-size:22px;font-weight:800;letter-spacing:-.4px}
+.screens{display:flex;flex-wrap:wrap;gap:48px 40px;justify-content:center;align-items:flex-start;padding:28px 24px 40px}
+.phone-wrap{display:flex;flex-direction:column;gap:12px;scroll-margin-top:24px}
+.phone-label{font-size:14px;font-weight:700;color:var(--sub)}
+.phone-label b{color:var(--ink)}
+
+/* ---------- Screen ---------- */
+.screen{position:relative;width:390px;overflow:hidden;background:var(--bg);border-radius:44px;padding-bottom:40px;box-shadow:0 30px 60px rgba(20,12,60,.18),0 0 0 10px #111,0 0 0 11px #333}
+.phone-wrap:target .screen{outline:3px solid var(--blue);outline-offset:14px}
+.blob{position:absolute;border-radius:50%;pointer-events:none}
+
+/* Top bars */
+.topbar{position:relative;padding:54px 16px 0;display:flex;align-items:center;gap:10px}
+.round-btn{position:relative;width:44px;height:44px;border-radius:50%;border:1px solid #fff;background:rgba(255,255,255,.7);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 4px 14px rgba(16,18,40,.06);display:flex;align-items:center;justify-content:center;color:var(--ink)}
+.badge-count{position:absolute;top:-4px;right:-6px;min-width:22px;height:20px;padding:0 5px;border-radius:10px;background:#D61F5B;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--bg)}
+.navbar{position:relative;padding:54px 12px 0 8px;display:flex;align-items:center}
+.back{display:flex;align-items:center;gap:2px;height:44px;padding:0 8px;font-size:17px;font-weight:500;text-decoration:none}
+.page-head{position:relative;padding:10px 20px 0}
+.page-head h1{margin:0;font-size:34px;font-weight:800;letter-spacing:-1.1px;line-height:1.1}
+.page-head p{margin:6px 0 0;font-size:15px;color:var(--sub)}
+
+/* Segmented control */
+.seg{position:relative;margin:18px 16px 0;padding:4px;border-radius:16px;background:rgba(255,255,255,.6);border:1px solid #fff;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:4px}
+.seg button{height:38px;border:0;border-radius:12px;font-size:14px;font-weight:700;background:transparent;color:var(--sub);transition:background .2s,color .2s}
+.seg button[aria-selected="true"]{background:var(--ink);color:#fff;box-shadow:0 4px 12px rgba(14,15,20,.2)}
+.mini-seg{display:flex;padding:3px;border-radius:12px;background:var(--chip)}
+.mini-seg button{height:30px;padding:0 12px;border:0;border-radius:9px;font-size:13px;font-weight:600;background:transparent;color:var(--sub)}
+.mini-seg button[aria-selected="true"]{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(16,18,40,.12)}
+
+/* Cards */
+.card{position:relative;display:block;margin:12px 16px 0;padding:18px;border-radius:var(--r-card);background:var(--glass);border:1px solid #fff;backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);box-shadow:var(--shadow);text-decoration:none;color:var(--ink)}
+a.card,a.tile{transition:transform .15s ease}
+a.card:active,a.tile:active{transform:scale(.98)}
+.card h2,.h2{margin:0;font-size:17px;font-weight:700;letter-spacing:-.2px}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.card-head .aside{font-size:13px;color:var(--sub)}
+.hero{position:relative;margin:14px 16px 0;padding:20px;border-radius:var(--r-hero);color:#fff;overflow:hidden;box-shadow:var(--shadow-hero);display:block;text-decoration:none}
+.hero .glow{position:absolute;right:-60px;top:-80px;width:240px;height:240px;border-radius:50%}
+.hero > *{position:relative}
+.hero .eyebrow{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:rgba(255,255,255,.8)}
+.big{font-size:46px;font-weight:800;letter-spacing:-1.6px}
+.big-sm{font-size:44px;font-weight:800;letter-spacing:-1.5px}
+.unit{font-size:15px;font-weight:600;color:rgba(255,255,255,.78)}
+.row-baseline{display:flex;align-items:baseline;gap:8px;margin-top:6px;flex-wrap:wrap}
+.delta{display:inline-flex;align-items:center;height:24px;padding:0 9px;border-radius:12px;font-size:13px;font-weight:700}
+.delta.up{color:var(--up);background:var(--up-bg)}
+.delta.down{color:var(--down);background:var(--down-bg)}
+.hero .delta.up{color:var(--up-on-dark);background:var(--up-on-dark-bg)}
+.hero .delta.down{color:#FCA5A5;background:rgba(239,68,68,.16)}
+.caption{font-size:13px;color:var(--sub);margin-top:2px}
+.hero .caption{color:rgba(255,255,255,.72)}
+.ticks{display:flex;justify-content:space-between;margin-top:8px;font-size:11px;font-weight:500;color:var(--muted)}
+.hero .ticks{color:rgba(255,255,255,.66)}
+.stat3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.stat3 > div + div{border-left:1px solid var(--line);padding-left:14px}
+.hero .stat3,.hero .stat3 > div + div{border-color:rgba(255,255,255,.12)}
+.stat3 .v{font-size:18px;font-weight:700}
+.stat3 .l{font-size:12px;color:var(--sub);margin-top:2px}
+.hero .stat3 .l{color:rgba(255,255,255,.72)}
+.icon-chip{width:40px;height:40px;flex:none;border-radius:13px;display:flex;align-items:center;justify-content:center}
+.chev{flex:none}
+.section-title{position:relative;display:flex;align-items:baseline;justify-content:space-between;padding:28px 20px 0}
+.section-title h2{margin:0;font-size:21px;font-weight:800;letter-spacing:-.5px}
+.section-title span{font-size:13px;color:var(--sub)}
+.grid2{position:relative;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 16px 0}
+.grid3{position:relative;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 16px 0}
+.tile{display:flex;flex-direction:column;padding:14px 12px;border-radius:var(--r-tile);background:var(--glass);border:1px solid #fff;box-shadow:0 6px 18px rgba(16,18,40,.05);text-decoration:none;color:var(--ink)}
+.tile .v{font-size:21px;font-weight:800;letter-spacing:-.6px}
+.tile .l{font-size:12px;color:var(--sub);margin-top:3px;line-height:1.3}
+.tile .d{font-size:12px;font-weight:700;color:var(--up);margin-top:6px}
+.bar-track{height:8px;border-radius:4px;background:var(--track);margin-top:6px;overflow:hidden}
+.bar-track > i{display:block;height:100%;border-radius:4px}
+.list-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);text-decoration:none;color:var(--ink)}
+.list-row .t{display:block;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-row .m{display:block;font-size:13px;color:var(--sub);margin-top:2px}
+.list-row .grow{flex:1;min-width:0}
+.thumb{width:48px;height:48px;flex:none;border-radius:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.5)}
+.pill{font-size:14px;font-weight:800;padding:6px 9px;border-radius:11px}
+.pill.blue{color:var(--blue-ink);background:var(--blue-soft)}
+.pill.pink{color:var(--magenta-ink);background:var(--magenta-soft);display:inline-flex;align-items:center;gap:4px}
+.tip{position:relative;display:flex;align-items:flex-start;gap:12px;margin:12px 16px 0;padding:16px 18px;border-radius:22px;border:1px solid #fff;text-decoration:none;color:var(--ink)}
+.tip .ic{width:36px;height:36px;flex:none;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center}
+.tip b{display:block;font-size:15px}
+.tip span span{display:block;font-size:13px;line-height:1.45;color:#4A4C5A;margin-top:3px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--sub)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.vbars{display:grid;gap:10px;align-items:end;margin-top:16px}
+.vbars .col{display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end}
+.vbars .col i{display:block;width:100%;border-radius:9px 9px 5px 5px}
+.vbars .col span{font-size:11px;color:var(--sub)}
+.hero .vbars .col span{color:rgba(255,255,255,.7)}
+.vbars .col b{font-size:11px;font-weight:700}
+.hero .vbars .col b{color:rgba(255,255,255,.78);font-weight:600}
+svg.chart{display:block;overflow:visible}
+
+/* Tab bar */
+.tabbar{position:relative;margin:24px 12px 0;display:flex;align-items:center;gap:10px}
+.tabbar .tabs{flex:1;height:70px;border-radius:35px;background:rgba(255,255,255,.78);backdrop-filter:blur(30px) saturate(180%);-webkit-backdrop-filter:blur(30px) saturate(180%);border:1px solid #fff;box-shadow:0 14px 34px rgba(16,18,40,.14),inset 0 1px 0 #fff;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:center}
+.tabbar .tabs a{display:flex;flex-direction:column;align-items:center;gap:3px;text-decoration:none;color:var(--ink);font-size:11px;font-weight:600}
+.fbtn{width:70px;height:70px;flex:none;border-radius:24px;padding:3px;background:var(--brand-grad);box-shadow:0 14px 30px rgba(91,60,230,.35);display:flex}
+.fbtn span{flex:1;border-radius:21px;background:#fff;display:flex;align-items:center;justify-content:center}
+
+/* Heatmap */
+.heat{display:grid;grid-template-columns:36px repeat(6,minmax(0,1fr));gap:5px;margin-top:14px;align-items:center}
+.heat span{font-size:11px;color:var(--muted);text-align:center}
+.heat .d{font-size:12px;color:var(--sub);font-weight:500;text-align:left}
+.heat i{display:block;height:30px;border-radius:8px}
+
+/* Bars chart (Views) */
+.bars{position:relative;height:170px;margin-top:12px}
+.bars .grid{position:absolute;left:0;right:0;border-top:1px dashed #E3E5EE}
+.bars .row{position:absolute;inset:0;display:flex;align-items:flex-end}
+.bars button{flex:1;min-width:0;padding:0;border:0;background:var(--blue-tint);transition:height .3s ease,background .2s}
+.bars button[aria-pressed="true"]{background:linear-gradient(180deg,var(--blue),var(--violet));box-shadow:0 6px 14px rgba(37,99,235,.35)}
+.readout{margin-top:16px;height:44px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:14px;background:#F4F6FB}
+
+/* Wallpaper list */
+.chips{position:relative;display:flex;gap:8px;padding:14px 16px 0;overflow-x:auto;scrollbar-width:none}
+.chips button{flex:none;height:36px;padding:0 14px;border-radius:18px;font-size:14px;font-weight:600;border:1px solid #fff;background:rgba(255,255,255,.75);color:#3B3D4A}
+.chips button[aria-selected="true"]{border:0;background:var(--ink);color:#fff}
+.search{position:relative;margin:16px 16px 0;height:44px;border-radius:14px;background:rgba(255,255,255,.75);border:1px solid #fff;display:flex;align-items:center;gap:8px;padding:0 14px;box-shadow:0 4px 14px rgba(16,18,40,.05)}
+.search input{flex:1;min-width:0;border:0;background:transparent;font-size:16px;color:var(--ink);outline:none}
+.wp-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);text-decoration:none;color:var(--ink)}
+.wp-row .wthumb{width:56px;height:72px;flex:none;border-radius:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.5)}
+.wp-row .metrics{display:flex;gap:12px;margin-top:6px;font-size:13px;color:#3B3D4A}
+.wp-row .metrics span{display:inline-flex;align-items:center;gap:4px}
+.wp-row .rank{flex:none;min-width:48px;text-align:center;padding:6px 8px;border-radius:12px;font-size:14px;font-weight:800;color:var(--blue-ink);background:var(--blue-soft)}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<header class="doc-head">
+  <h1>Frenz · Creator Analytics</h1>
+  <p>UI reference. The overview is organised into a <b>Main overview</b> (Social engagement, Exclusive post earnings, Gifting) and <b>More insights</b> (Wallpapers, AI creations, Feature of the month). Every card links to its detail page — tap through. Tokens are in &lt;style&gt;; sample data is in the DATA object.</p>
+</header>
+
+<div class="group-title">Main overview</div>
+<div class="screens">
+
+<!-- ================= 1 · OVERVIEW ================= -->
+<div class="phone-wrap" id="overview">
+<div class="phone-label"><b>1 · Creator analytics</b> — overview</div>
+<div class="screen">
+  <div class="blob" style="top:-120px;left:-80px;width:360px;height:360px;background:radial-gradient(circle,rgba(37,99,235,.16),transparent 70%)"></div>
+  <div class="blob" style="top:-60px;right:-120px;width:380px;height:380px;background:radial-gradient(circle,rgba(124,58,237,.13),transparent 70%)"></div>
+
+  <div class="topbar">
+    <button class="round-btn" aria-label="Search"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button>
+    <button class="round-btn" aria-label="New post"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+    <div style="flex:1"></div>
+    <button class="round-btn" aria-label="Notifications, more than 9 new"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v3.6L4.4 15.3A1 1 0 0 0 5.3 17h13.4a1 1 0 0 0 .9-1.7L18 12.6V9a6 6 0 0 0-6-6zM9.5 18.5a2.5 2.5 0 0 0 5 0z"/></svg><span class="badge-count">9+</span></button>
+  </div>
+
+  <section class="page-head" style="padding-top:22px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <span style="display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px 0 8px;border-radius:14px;background:rgba(255,247,235,.9);border:1px solid #FCE3BE;font-size:13px;font-weight:700;color:#A3570A"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l10 10-10 10L2 12z" fill="#F59E0B"/><path d="M12 7l5 5-5 5-5-5z" fill="#FFF7EB"/></svg>Business</span>
+      <a href="#overview" style="display:inline-flex;align-items:center;gap:4px;font-size:14px;font-weight:600;text-decoration:none">Creator Lounge <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></a>
+    </div>
+    <h1 style="margin-top:14px;font-size:36px;letter-spacing:-1.2px">Creator analytics</h1>
+    <p>Your engagement, earnings and creations in one place.</p>
+  </section>
+
+  <div class="seg" role="tablist" aria-label="Time period" id="ovSeg"></div>
+
+  <div class="hero" style="background:var(--hero-dark)">
+    <div class="glow" style="background:radial-gradient(circle,rgba(124,58,237,.45),transparent 70%)"></div>
+    <div class="eyebrow"><span data-coin="18"></span>Total earnings · <span id="ovCaption"></span></div>
+    <div class="row-baseline"><span class="big num" id="ovTotal"></span><span class="unit">coins</span><span class="delta up" id="ovDelta"></span></div>
+    <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px;margin-top:14px"><span id="ovExBar" style="background:#A78BFA"></span><span id="ovGiftBar" style="background:#FBBF2E"></span></div>
+    <div style="display:flex;gap:18px;margin-top:10px;font-size:13px">
+      <span style="display:inline-flex;align-items:center;gap:6px"><i style="width:8px;height:8px;border-radius:50%;background:#A78BFA"></i><span style="color:rgba(255,255,255,.75)">Exclusive</span><strong class="num" id="ovEx"></strong></span>
+      <span style="display:inline-flex;align-items:center;gap:6px"><i style="width:8px;height:8px;border-radius:50%;background:#FBBF2E"></i><span style="color:rgba(255,255,255,.75)">Gifts</span><strong class="num" id="ovGift"></strong></span>
+    </div>
+    <svg class="chart" width="310" height="110" viewBox="0 0 310 110" role="img" aria-label="Earnings trend" style="margin-top:14px">
+      <defs><linearGradient id="ovLine" x1="0" x2="1"><stop offset="0" stop-color="#A78BFA"/><stop offset="1" stop-color="#FBBF2E"/></linearGradient>
+      <linearGradient id="ovFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#A78BFA" stop-opacity=".35"/><stop offset="1" stop-color="#A78BFA" stop-opacity="0"/></linearGradient></defs>
+      <path d="M0 36.5H310M0 73.5H310" stroke="rgba(255,255,255,.08)" stroke-dasharray="3 5"/>
+      <path id="ovArea" fill="url(#ovFill)"/><path id="ovPath" fill="none" stroke="url(#ovLine)" stroke-width="2.6" stroke-linecap="round"/>
+      <circle id="ovDot1" r="9" fill="#FBBF2E" opacity=".25"/><circle id="ovDot2" r="4.5" fill="#fff" stroke="#FBBF2E" stroke-width="2.5"/>
+    </svg>
+    <div class="ticks" id="ovTicks"></div>
+  </div>
+
+  <div class="section-title"><h2>Main overview</h2><span>Last 30 days</span></div>
+
+  <a href="#social" class="card">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="icon-chip" style="background:var(--blue-soft)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7.5-4.4-7.5-10A4.3 4.3 0 0 1 12 7.4 4.3 4.3 0 0 1 19.5 10c0 5.6-7.5 10-7.5 10z"/></svg></span>
+      <span style="flex:1"><span style="display:block;font-size:17px;font-weight:700">Social engagement</span><span class="caption" style="display:block">Views, followers and interactions</span></span>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9A9CA8" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:16px">
+      <div><div style="font-size:22px;font-weight:800;letter-spacing:-.6px">1.3K</div><div class="caption">Views</div></div>
+      <div><div style="font-size:22px;font-weight:800;letter-spacing:-.6px">32K</div><div class="caption">Followers</div></div>
+      <div><div style="font-size:22px;font-weight:800;letter-spacing:-.6px">20%</div><div class="caption">Eng. rate</div></div>
+    </div>
+    <svg class="chart" width="320" height="54" viewBox="0 0 320 54" aria-hidden="true" style="margin-top:14px"><defs><linearGradient id="socF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2563EB" stop-opacity=".18"/><stop offset="1" stop-color="#2563EB" stop-opacity="0"/></linearGradient></defs><path data-chart="social-area" fill="url(#socF)"/><path data-chart="social-line" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round"/></svg>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <span style="font-size:12px;font-weight:600;color:var(--up);background:var(--up-bg);padding:4px 9px;border-radius:9px">+318 followers</span>
+      <span style="font-size:12px;font-weight:600;color:#3B3D4A;background:var(--chip);padding:4px 9px;border-radius:9px">Likes 66% of interactions</span>
+    </div>
+  </a>
+
+  <a href="#exclusive" class="card">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="icon-chip" style="background:var(--violet-soft)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg></span>
+      <span style="flex:1"><span style="display:block;font-size:17px;font-weight:700">Exclusive post earnings</span><span class="caption" style="display:block">Coins from unlocked posts</span></span>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9A9CA8" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </div>
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:16px">
+      <div><div style="display:flex;align-items:baseline;gap:6px"><span class="num" style="font-size:30px;font-weight:800;letter-spacing:-1px">8,360</span><span style="font-size:14px;font-weight:600;color:var(--sub)">coins</span></div>
+      <div class="caption"><strong style="color:var(--up)">+26%</strong> vs last period</div></div>
+      <div id="exMini" aria-hidden="true" style="display:flex;align-items:flex-end;gap:5px;height:56px"></div>
+    </div>
+    <div class="stat3"><div><div class="v">167</div><div class="l">Unlocks</div></div><div><div class="v">12</div><div class="l">Exclusive posts</div></div><div><div class="v">4.2%</div><div class="l">Unlock rate</div></div></div>
+  </a>
+
+  <a href="#gifting" class="card" style="background:var(--gold-card);box-shadow:0 8px 24px rgba(160,100,10,.10)">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="icon-chip" style="background:#fff"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B45309" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="9" width="16" height="11" rx="2"/><path d="M3 9h18M12 9v11M12 9c-1.5-3.5-6-3.5-5 0M12 9c1.5-3.5 6-3.5 5 0"/></svg></span>
+      <span style="flex:1"><span style="display:block;font-size:17px;font-weight:700">Gifting</span><span class="caption" style="display:block;color:var(--gold-sub)">Sticker gifts you received</span></span>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A4B06" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </div>
+    <div style="display:flex;align-items:baseline;gap:6px;margin-top:16px"><span class="num" style="font-size:30px;font-weight:800;letter-spacing:-1px">4,280</span><span style="font-size:14px;font-weight:600;color:var(--gold-sub)">coins</span><span style="font-size:13px;font-weight:700;color:var(--up);margin-left:4px">+18%</span></div>
+    <div class="stat3" style="border-color:rgba(138,75,6,.12)"><div><div class="v">86</div><div class="l" style="color:var(--gold-sub)">Gifts</div></div><div style="border-color:rgba(138,75,6,.12)"><div class="v">41</div><div class="l" style="color:var(--gold-sub)">Supporters</div></div><div style="border-color:rgba(138,75,6,.12)"><div class="v">Red Rose</div><div class="l" style="color:var(--gold-sub)">Top sticker</div></div></div>
+  </a>
+
+  <div class="section-title" style="padding-top:30px"><h2>More insights</h2></div>
+  <div class="grid2">
+    <a href="#wallpapers" class="tile" style="padding:16px;border-radius:24px">
+      <span class="icon-chip" style="width:38px;height:38px;border-radius:12px;background:#E6F6FD"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#0369A1" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M6 15l3.5-3.5 3 3 2-2L18 16"/></svg></span>
+      <span style="font-size:15px;font-weight:700;margin-top:12px">Wallpapers</span>
+      <span style="font-size:26px;font-weight:800;letter-spacing:-.8px;margin-top:8px">19</span>
+      <span class="l">Downloads · 9 saves</span>
+    </a>
+    <a href="#ai" class="tile" style="padding:16px;border-radius:24px">
+      <span class="icon-chip" style="width:38px;height:38px;border-radius:12px;background:#FCEBF6"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#BE185D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.3L19 10l-5.1 1.7L12 17l-1.9-5.3L5 10l5.1-1.7z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></svg></span>
+      <span style="font-size:15px;font-weight:700;margin-top:12px">AI creations</span>
+      <span style="font-size:26px;font-weight:800;letter-spacing:-.8px;margin-top:8px">46</span>
+      <span class="l">Created · 230 remixes</span>
+    </a>
+  </div>
+
+  <a href="#feature" class="hero" style="background:var(--brand-grad);display:flex;align-items:center;gap:14px;margin-top:12px;padding:18px;border-radius:26px;box-shadow:0 16px 34px rgba(91,60,230,.30),inset 0 1px 0 rgba(255,255,255,.3)">
+    <span style="width:52px;height:52px;flex:none;border-radius:16px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);display:flex;align-items:center;justify-content:center" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.5 20.5h7M10 17h4v3.5h-4z"/></svg></span>
+    <span style="flex:1;min-width:0"><span style="display:block;font-size:12px;font-weight:700;letter-spacing:.6px;color:rgba(255,255,255,.85)">FEATURE OF THE MONTH</span><span style="display:block;font-size:20px;font-weight:800;letter-spacing:-.4px;margin-top:4px">Sticker gifts</span><span style="display:block;font-size:13px;color:rgba(255,255,255,.9);margin-top:2px">Used by 64% of your audience in October</span></span>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+  </a>
+
+  <a href="#audience" class="tip" style="background:rgba(234,241,255,.85)">
+    <span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span>
+    <span style="flex:1"><b>Best time to post: 8–10 PM</b><span>Exclusive posts published then unlock 2× more often.</span></span>
+  </a>
+
+  <nav class="tabbar" aria-label="Main">
+    <div class="tabs">
+      <a href="#overview"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M4 10.5L12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z"/></svg>Home</a>
+      <a href="#overview"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3.5"/><path d="M10 9.2v5.6l4.6-2.8z" fill="currentColor"/></svg>Feed</a>
+      <a href="#overview"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5M4 4v4.5h4.5M12 8v4.5l3 1.8"/></svg>History</a>
+      <a href="#overview"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 4a8 8 0 0 0-6.9 12.1L4 20l4-1.1A8 8 0 1 0 12 4z"/></svg>Chats</a>
+    </div>
+    <a href="#overview" class="fbtn" aria-label="Frenz"><span><svg width="34" height="34" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="fLogo" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3B5BFD"/><stop offset=".55" stop-color="#7C3AED"/><stop offset="1" stop-color="#E0369B"/></linearGradient></defs><path d="M9 5h17l-2.5 5.5H15.5v4.5h7.5L20.5 20.5H15.5V28L9 30z" fill="url(#fLogo)"/></svg></span></a>
+  </nav>
+</div>
+</div>
+
+<!-- ================= 2 · SOCIAL ================= -->
+<div class="phone-wrap" id="social">
+<div class="phone-label"><b>2 · Social engagement</b></div>
+<div class="screen">
+  <div class="blob" style="top:-140px;right:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(37,99,235,.15),transparent 70%)"></div>
+  <div class="navbar"><a href="#overview" class="back" data-back>Analytics</a></div>
+  <section class="page-head"><h1>Social engagement</h1><p>How people interact with your posts.</p></section>
+  <div class="seg" role="tablist" aria-label="Time period" id="soSeg"></div>
+  <div class="card" style="margin-top:14px;padding:20px 18px 16px;border-radius:28px">
+    <div style="font-size:14px;font-weight:600;color:var(--sub)">Engagement rate</div>
+    <div class="row-baseline" style="margin-top:4px"><span class="big-sm num" id="soRate"></span><span class="delta up" id="soDelta"></span></div>
+    <div class="caption" id="soCaption"></div>
+    <svg class="chart" width="322" height="110" viewBox="0 0 322 110" role="img" aria-label="Engagement rate trend" style="margin-top:14px"><defs><linearGradient id="soF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2563EB" stop-opacity=".2"/><stop offset="1" stop-color="#2563EB" stop-opacity="0"/></linearGradient></defs><path id="soArea" fill="url(#soF)"/><path id="soLine" fill="none" stroke="#2563EB" stroke-width="2.6" stroke-linecap="round"/><circle id="soDot" r="4.5" fill="#fff" stroke="#2563EB" stroke-width="2.5"/></svg>
+    <div class="ticks" id="soTicks"></div>
+  </div>
+  <div class="grid3" id="soTiles"></div>
+  <div class="grid2">
+    <a href="#views" class="tile" style="padding:16px;border-radius:24px"><span style="display:flex;justify-content:space-between;font-size:14px;font-weight:600;color:var(--sub)">Views <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9A9CA8" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span><span style="font-size:26px;font-weight:800;letter-spacing:-.8px;margin-top:6px" id="soViews">1.3K</span><svg class="chart" width="140" height="36" viewBox="0 0 140 36" aria-hidden="true" style="margin-top:8px"><path id="soViewsSpark" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round"/></svg></a>
+    <a href="#audience" class="tile" style="padding:16px;border-radius:24px"><span style="display:flex;justify-content:space-between;font-size:14px;font-weight:600;color:var(--sub)">Followers <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9A9CA8" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span><span style="font-size:26px;font-weight:800;letter-spacing:-.8px;margin-top:6px">32K</span><svg class="chart" width="140" height="36" viewBox="0 0 140 36" aria-hidden="true" style="margin-top:8px"><path data-chart="foll-spark" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round"/></svg></a>
+  </div>
+  <div class="card">
+    <h2>Interaction mix</h2>
+    <div style="display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px;margin-top:16px"><span style="flex:66;background:var(--blue)"></span><span style="flex:18;background:var(--sky)"></span><span style="flex:16;background:var(--amber)"></span></div>
+    <div class="legend" style="margin-top:12px;font-size:13px;color:var(--ink)"><span><i style="background:var(--blue)"></i>Likes <b>66%</b></span><span><i style="background:var(--sky)"></i>Comments <b>18%</b></span><span><i style="background:var(--amber)"></i>Shares <b>16%</b></span></div>
+  </div>
+  <div class="card" style="padding-bottom:8px"><h2 style="margin-bottom:4px">Most engaging posts</h2><div id="soTop"></div></div>
+</div>
+</div>
+
+<!-- ================= 2a · VIEWS ================= -->
+<div class="phone-wrap" id="views">
+<div class="phone-label"><b>2a · Views</b> — from Social</div>
+<div class="screen">
+  <div class="blob" style="top:-140px;right:-100px;width:380px;height:380px;background:radial-gradient(circle,rgba(37,99,235,.14),transparent 70%)"></div>
+  <div class="navbar"><a href="#social" class="back" data-back>Social</a><div style="flex:1"></div><button class="round-btn" aria-label="Share report"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4M8 7.5l4-4 4 4M5 12v6.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V12"/></svg></button></div>
+  <section class="page-head"><h1>Views</h1><p>How often your posts were seen.</p></section>
+  <div class="seg" role="tablist" aria-label="Time period" id="viSeg"></div>
+  <div class="card" style="margin-top:14px;padding:20px 18px 16px;border-radius:28px">
+    <div class="row-baseline" style="margin-top:0"><span class="big-sm num" id="viTotal"></span><span class="delta" id="viDelta"></span></div>
+    <div class="caption" id="viCaption"></div>
+    <div class="readout" role="status"><span style="width:8px;height:8px;border-radius:50%;background:var(--blue)"></span><span style="font-size:13px;color:var(--sub);flex:1" id="viPickLabel"></span><span class="num" style="font-size:15px;font-weight:700" id="viPickValue"></span></div>
+    <div class="bars"><div class="grid" style="top:0"></div><div class="grid" style="top:85px"></div><div class="row" id="viBars"></div></div>
+    <div class="ticks" id="viTicks"></div>
+  </div>
+  <div class="grid3" id="viStats"></div>
+  <div class="card">
+    <h2>Where views come from</h2>
+    <div id="viSrcBar" style="display:flex;height:12px;border-radius:6px;overflow:hidden;margin-top:16px;gap:2px"></div>
+    <div id="viSrc" style="margin-top:10px"></div>
+  </div>
+  <a href="#audience" class="tip" style="background:rgba(234,241,255,.85)"><span style="flex:1"><b>72% of views are from non-followers</b><span>See who is watching in Audience.</span></span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></a>
+</div>
+</div>
+
+<!-- ================= 2b · AUDIENCE ================= -->
+<div class="phone-wrap" id="audience">
+<div class="phone-label"><b>2b · Audience</b> — from Social</div>
+<div class="screen">
+  <div class="blob" style="top:-140px;left:-100px;width:380px;height:380px;background:radial-gradient(circle,rgba(124,58,237,.14),transparent 70%)"></div>
+  <div class="navbar"><a href="#social" class="back" data-back>Social</a></div>
+  <section class="page-head"><h1>Audience</h1><p>Who follows you and when they are active.</p></section>
+  <div class="card" style="margin-top:18px;padding:20px 18px 16px;border-radius:28px">
+    <div style="font-size:14px;font-weight:600;color:var(--sub)">Followers</div>
+    <div class="row-baseline" style="margin-top:4px"><span class="big-sm">32K</span><span class="delta up">+318 this month</span></div>
+    <svg class="chart" width="322" height="110" viewBox="0 0 322 110" role="img" aria-label="Followers growth over 30 days" style="margin-top:14px"><defs><linearGradient id="auF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7C3AED" stop-opacity=".22"/><stop offset="1" stop-color="#7C3AED" stop-opacity="0"/></linearGradient></defs><path data-chart="aud-area" fill="url(#auF)"/><path data-chart="aud-line" fill="none" stroke="#7C3AED" stroke-width="2.6" stroke-linecap="round"/></svg>
+    <div class="ticks"><span>Sep 28</span><span>Oct 7</span><span>Oct 17</span><span>Oct 27</span></div>
+    <div class="stat3"><div><div class="v" style="color:var(--up)">+402</div><div class="l">New</div></div><div><div class="v" style="color:var(--down)">−84</div><div class="l">Unfollowed</div></div><div><div class="v">28%</div><div class="l">Of viewers follow</div></div></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>Top locations</h2><div class="mini-seg" role="tablist" aria-label="Location type" id="auLocSeg"><button role="tab" aria-selected="true" data-mode="countries">Countries</button><button role="tab" aria-selected="false" data-mode="cities">Cities</button></div></div>
+    <div id="auLocs" style="display:flex;flex-direction:column;gap:14px;margin-top:16px"></div>
+  </div>
+  <div class="card"><h2>Age range</h2><div class="vbars" id="auAges" style="grid-template-columns:repeat(5,minmax(0,1fr));height:150px"></div></div>
+  <div class="card">
+    <div class="card-head"><h2>Most active times</h2><span class="aside">WAT</span></div>
+    <div class="heat" id="auHeat" role="img" aria-label="Activity by day and time. Peak: weekdays 8 to 10 PM."></div>
+    <div class="legend" style="margin-top:12px;align-items:center">Less <i style="background:rgba(37,99,235,.1);width:14px"></i><i style="background:rgba(37,99,235,.4);width:14px"></i><i style="background:rgba(37,99,235,.75);width:14px"></i><i style="background:#2563EB;width:14px"></i> More</div>
+  </div>
+</div>
+</div>
+
+<!-- ================= 3 · EXCLUSIVE ================= -->
+<div class="phone-wrap" id="exclusive">
+<div class="phone-label"><b>3 · Exclusive post earnings</b></div>
+<div class="screen">
+  <div class="blob" style="top:-140px;left:-100px;width:420px;height:420px;background:radial-gradient(circle,rgba(124,58,237,.16),transparent 70%)"></div>
+  <div class="navbar"><a href="#overview" class="back" data-back>Analytics</a></div>
+  <section class="page-head"><h1>Exclusive post earnings</h1><p>Coins from people unlocking your exclusive posts.</p></section>
+  <div class="hero" style="background:var(--hero-violet);margin-top:18px">
+    <div class="glow" style="background:radial-gradient(circle,rgba(167,139,250,.5),transparent 70%)"></div>
+    <div class="eyebrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C4B5FD" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>Last 30 days</div>
+    <div class="row-baseline"><span class="big num">8,360</span><span class="unit">coins</span><span class="delta up">+26%</span></div>
+    <div style="font-size:12px;color:rgba(255,255,255,.7);margin-top:16px">Weekly coins · last 8 weeks</div>
+    <div class="vbars" id="exWeeks" style="grid-template-columns:repeat(8,minmax(0,1fr));gap:8px;height:120px;margin-top:8px"></div>
+    <div class="stat3"><div><div class="v">167</div><div class="l">Unlocks</div></div><div><div class="v">131</div><div class="l">Buyers</div></div><div><div class="v">50</div><div class="l">Avg. coins</div></div></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>Unlock funnel</h2><span style="font-size:13px;font-weight:700;color:var(--violet-ink)">4.2% unlock rate</span></div>
+    <div id="exFunnel" style="display:flex;flex-direction:column;gap:12px;margin-top:16px"></div>
+  </div>
+  <div class="card" style="padding-bottom:8px"><div class="card-head"><h2>Top exclusive posts</h2><span class="aside">12 posts</span></div><div id="exPosts" style="margin-top:4px"></div></div>
+  <div class="grid2">
+    <div class="tile" style="padding:16px;border-radius:22px"><div style="font-size:13px;color:var(--sub)">Repeat buyers</div><div style="font-size:26px;font-weight:800;letter-spacing:-.8px;margin-top:6px">28%</div><div class="bar-track" style="height:6px;margin-top:10px"><i style="width:28%;background:var(--violet)"></i></div></div>
+    <div class="tile" style="padding:16px;border-radius:22px;background:rgba(241,235,255,.85)"><div style="font-size:13px;font-weight:700;color:var(--violet-ink)">Pricing tip</div><div style="font-size:13px;line-height:1.45;color:#3B3D4A;margin-top:6px">Posts priced 40–60 coins unlock most often for your audience.</div></div>
+  </div>
+</div>
+</div>
+
+<!-- ================= 4 · GIFTING ================= -->
+<div class="phone-wrap" id="gifting">
+<div class="phone-label"><b>4 · Gifting</b></div>
+<div class="screen">
+  <div class="blob" style="top:-140px;right:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(245,158,11,.16),transparent 70%)"></div>
+  <div class="navbar"><a href="#overview" class="back" data-back>Analytics</a></div>
+  <section class="page-head"><h1>Gifting</h1><p>Frenz coins from sticker gifts you received.</p></section>
+  <div class="hero" style="background:var(--hero-gold);margin-top:18px">
+    <div class="glow" style="background:radial-gradient(circle,rgba(251,191,46,.4),transparent 70%);width:220px;height:220px;right:-50px;top:-70px"></div>
+    <div class="eyebrow"><span data-coin="20"></span>October</div>
+    <div class="row-baseline"><span class="big num">4,280</span><span class="unit">coins</span><span class="delta up">+18%</span></div>
+    <div class="caption">From 86 sticker gifts · 41 supporters</div>
+    <div class="vbars" id="giMonths" style="grid-template-columns:repeat(6,minmax(0,1fr));height:130px;margin-top:20px"></div>
+  </div>
+  <div class="card"><h2>By sticker</h2><div id="giStickers" style="margin-top:8px"></div></div>
+  <div class="card" style="padding-bottom:8px"><div class="card-head"><h2>Top supporters</h2><a href="#gifting" style="font-size:14px;font-weight:600;text-decoration:none;padding:8px 0">View all gifts</a></div><div id="giFans"></div></div>
+</div>
+</div>
+
+</div>
+
+<div class="group-title">More insights</div>
+<div class="screens">
+
+<!-- ================= 5 · WALLPAPERS ================= -->
+<div class="phone-wrap" id="wallpapers">
+<div class="phone-label"><b>5 · Wallpaper engagement</b></div>
+<div class="screen">
+  <div class="blob" style="top:-140px;right:-100px;width:380px;height:380px;background:radial-gradient(circle,rgba(37,99,235,.13),transparent 70%)"></div>
+  <div class="navbar"><a href="#overview" class="back" data-back>Analytics</a></div>
+  <section class="page-head"><h1>Wallpapers</h1><p>79 wallpapers · 19 downloads · 9 saves</p></section>
+  <div class="search"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6B6D7B" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><label class="sr" for="wpq">Search wallpapers</label><input id="wpq" placeholder="Search your wallpapers"></div>
+  <div class="chips" role="tablist" aria-label="Sort by" id="wpSort"></div>
+  <div class="card" style="padding:0;overflow:hidden;margin-top:14px" id="wpList"></div>
+  <button style="position:relative;display:block;margin:14px auto 0;height:44px;padding:0 20px;border-radius:22px;border:1px solid #fff;background:rgba(255,255,255,.75);font-size:15px;font-weight:600;color:var(--ink)">Show more wallpapers</button>
+</div>
+</div>
+
+<!-- ================= 5a · POST ================= -->
+<div class="phone-wrap" id="post">
+<div class="phone-label"><b>5a · Wallpaper insights</b> — from Wallpapers</div>
+<div class="screen">
+  <div class="blob" style="top:-160px;left:-60px;width:460px;height:460px;background:radial-gradient(circle,rgba(124,58,237,.18),transparent 70%)"></div>
+  <div class="navbar"><a href="#wallpapers" class="back" data-back>Wallpapers</a><div style="flex:1;text-align:center;font-size:17px;font-weight:700;margin-right:52px">Post insights</div></div>
+  <div class="card" style="display:flex;gap:16px;padding:14px;border-radius:28px;margin-top:16px">
+    <div role="img" aria-label="Post preview" style="width:112px;height:180px;flex:none;border-radius:18px;background:linear-gradient(160deg,#1E1B4B 0%,#4C1D95 40%,#7C3AED 70%,#F472B6 100%);box-shadow:0 10px 24px rgba(76,29,149,.35)"></div>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <span style="align-self:flex-start;padding:3px 9px;border-radius:9px;font-size:11px;font-weight:700;color:var(--blue-ink);background:var(--blue-soft)">#1 THIS MONTH</span>
+      <h1 style="margin:10px 0 0;font-size:22px;font-weight:800;letter-spacing:-.6px;line-height:1.15">Neon Lagos Skyline</h1>
+      <div class="caption" style="margin-top:6px">Published Oct 21 · Wallpaper</div>
+      <div style="flex:1"></div>
+      <div style="display:flex;gap:8px"><a href="#post" style="flex:1;height:40px;border-radius:20px;background:var(--ink);color:#fff;text-decoration:none;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600">View post</a><button class="round-btn" style="width:40px;height:40px;background:#fff;border-color:#E3E5EE" aria-label="Share"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4M8 7.5l4-4 4 4M5 12v6.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V12"/></svg></button></div>
+    </div>
+  </div>
+  <div class="hero" style="background:linear-gradient(135deg,#15162A,#2A1E5C);display:flex;align-items:center;gap:12px;margin-top:12px;padding:14px 16px;border-radius:22px">
+    <span style="width:40px;height:40px;flex:none;border-radius:13px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C4B5FD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg></span>
+    <span><span style="display:block;font-size:16px;font-weight:700">3.4× your average views</span><span class="caption" style="display:block">Your best-performing post this month.</span></span>
+  </div>
+  <div class="grid3" id="poMetrics"></div>
+  <div class="card">
+    <div class="card-head"><h2>Views since publishing</h2><span class="legend"><span><i style="height:3px;width:14px;background:var(--blue)"></i>This post</span><span><i style="height:0;width:14px;border-top:2px dashed #9A9CA8;border-radius:0"></i>Avg.</span></span></div>
+    <svg class="chart" width="320" height="140" viewBox="0 0 320 140" role="img" aria-label="Daily views for this post compared with your average" style="margin-top:16px"><defs><linearGradient id="poF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2563EB" stop-opacity=".2"/><stop offset="1" stop-color="#2563EB" stop-opacity="0"/></linearGradient></defs><path data-chart="post-avg" fill="none" stroke="#9A9CA8" stroke-width="2" stroke-dasharray="4 5"/><path data-chart="post-area" fill="url(#poF)"/><path data-chart="post-line" fill="none" stroke="#2563EB" stroke-width="2.6" stroke-linecap="round"/></svg>
+    <div class="ticks"><span>Oct 21</span><span>Oct 23</span><span>Oct 25</span><span>Oct 27</span></div>
+  </div>
+  <div class="card">
+    <h2>Download funnel</h2>
+    <div id="poFunnel" style="display:flex;flex-direction:column;gap:12px;margin-top:16px"></div>
+    <p class="caption" style="margin:14px 0 0;line-height:1.45">0.05% of viewers downloaded this post. Previews that show the full design usually convert better.</p>
+  </div>
+</div>
+</div>
+
+<!-- ================= 6 · AI ================= -->
+<div class="phone-wrap" id="ai">
+<div class="phone-label"><b>6 · AI creations</b></div>
+<div class="screen">
+  <div class="blob" style="top:-140px;right:-100px;width:420px;height:420px;background:radial-gradient(circle,rgba(219,39,119,.13),transparent 70%)"></div>
+  <div class="blob" style="top:40px;left:-160px;width:360px;height:360px;background:radial-gradient(circle,rgba(124,58,237,.12),transparent 70%)"></div>
+  <div class="navbar"><a href="#overview" class="back" data-back>Analytics</a></div>
+  <section class="page-head"><h1>AI creations</h1><p>What you create with AI and how people respond.</p></section>
+  <div style="position:relative;margin:18px 16px 0;padding:1.5px;border-radius:28px;background:linear-gradient(140deg,#fff,rgba(219,39,119,.5) 55%,rgba(124,58,237,.7));box-shadow:0 14px 34px rgba(124,58,237,.14)">
+    <div id="aiStats" style="border-radius:26.5px;background:rgba(255,255,255,.9);padding:18px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 12px"></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>Creations per week</h2><span class="legend"><span><i style="background:#F5D0E6"></i>Created</span><span><i style="background:#BE185D"></i>Published</span></span></div>
+    <div class="vbars" id="aiWeeks" style="grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;height:150px"></div>
+  </div>
+  <div class="card"><h2>Your top styles</h2><div id="aiStyles" style="display:flex;flex-direction:column;gap:13px;margin-top:16px"></div></div>
+  <div class="card" style="padding-bottom:8px"><h2 style="margin-bottom:4px">Most remixed creations</h2><div id="aiTop"></div></div>
+  <div class="tip" style="background:rgba(252,231,243,.8)"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#BE185D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg></span><span style="flex:1"><b>AI posts get 1.6× more shares</b><span>than your other posts. Publishing more of your 34 unpublished creations could lift reach.</span></span></div>
+</div>
+</div>
+
+<!-- ================= 7 · FEATURE ================= -->
+<div class="phone-wrap" id="feature">
+<div class="phone-label"><b>7 · Feature of the month</b></div>
+<div class="screen">
+  <div class="blob" style="top:-140px;left:-60px;width:460px;height:460px;background:radial-gradient(circle,rgba(91,60,230,.16),transparent 70%)"></div>
+  <div class="navbar"><a href="#overview" class="back" data-back>Analytics</a></div>
+  <section class="page-head"><h1>Feature of the month</h1><p>The Frenz features your audience used most in October.</p></section>
+  <div class="hero" style="background:var(--brand-grad);margin-top:18px;padding:22px 20px 20px;border-radius:30px;box-shadow:0 24px 50px rgba(91,60,230,.32),inset 0 1px 0 rgba(255,255,255,.3)">
+    <div class="glow" style="background:radial-gradient(circle,rgba(255,255,255,.28),transparent 70%);width:220px;height:220px;right:-50px;top:-60px"></div>
+    <div style="display:flex;align-items:center;gap:14px">
+      <span style="width:60px;height:60px;flex:none;border-radius:18px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);display:flex;align-items:center;justify-content:center" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.5 20.5h7M10 17h4v3.5h-4z"/></svg></span>
+      <span><span style="display:block;font-size:12px;font-weight:700;letter-spacing:.6px;color:rgba(255,255,255,.85)">OCTOBER WINNER</span><span style="display:block;font-size:26px;font-weight:800;letter-spacing:-.6px;margin-top:2px">Sticker gifts</span></span>
+    </div>
+    <p style="margin:14px 0 0;font-size:14px;line-height:1.5;color:rgba(255,255,255,.92)">Most of your audience sent or received a sticker gift this month, ahead of AI create and wallpapers.</p>
+    <div class="stat3" style="border-color:rgba(255,255,255,.22)"><div><div class="v" style="font-size:20px;font-weight:800">64%</div><div class="l" style="color:rgba(255,255,255,.85)">Audience used it</div></div><div style="border-color:rgba(255,255,255,.22)"><div class="v" style="font-size:20px;font-weight:800">86</div><div class="l" style="color:rgba(255,255,255,.85)">Gifts to you</div></div><div style="border-color:rgba(255,255,255,.22)"><div class="v" style="font-size:20px;font-weight:800">4,280</div><div class="l" style="color:rgba(255,255,255,.85)">Coins earned</div></div></div>
+    <a href="#gifting" style="margin-top:16px;height:46px;border-radius:23px;background:#fff;color:#4C1D95;text-decoration:none;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700">See gifting analysis</a>
+  </div>
+  <div class="card" style="padding-bottom:8px"><div class="card-head"><h2>Feature ranking</h2><span class="aside">% of your audience</span></div><div id="feRank" style="margin-top:8px"></div></div>
+  <div class="card"><h2>Past winners</h2><div id="fePast" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px"></div></div>
+  <div class="tip" style="background:rgba(234,241,255,.85)"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.9V16h5v-.2c0-.8.4-1.5 1-1.9A6 6 0 0 0 12 3z"/></svg></span><span style="flex:1"><b>Make the most of it</b><span>Thank your top supporters in a story and post an exclusive while gifting is at its peak.</span></span></div>
+</div>
+</div>
+
+</div>
+
+<script>
+/* =================== SAMPLE DATA (replace with your analytics API) =================== */
+const DATA = {
+  overview: {
+    '7D':  { caption: 'last 7 days',    total: '2,940',  ex: '1,950',  gift: '990',    exP: 66, delta: '+6%',   ticks: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'], n: 7,  seed: 3 },
+    '30D': { caption: 'last 30 days',   total: '12,640', ex: '8,360',  gift: '4,280',  exP: 66, delta: '+22%',  ticks: ['Sep 28','Oct 7','Oct 17','Oct 27'],     n: 30, seed: 7 },
+    '90D': { caption: 'last 90 days',   total: '31,200', ex: '20,100', gift: '11,100', exP: 64, delta: '+15%',  ticks: ['Aug','Sep','Oct'],                      n: 30, seed: 11 },
+    '1Y':  { caption: 'last 12 months', total: '64,800', ex: '39,500', gift: '25,300', exP: 61, delta: '+140%', ticks: ['Nov','Feb','May','Aug','Oct'],          n: 12, seed: 5 }
+  },
+  exclusiveWeekly: [620, 780, 700, 940, 1010, 1180, 1290, 1640],
+  social: {
+    '7D':  { rate: '19.4%', delta: '+0.8 pts', interactions: '62',  views: '322',  ticks: ['Mon','Wed','Fri','Sun'], n: 7, seed: 4,
+             tiles: [['41','Likes','+5%','#2563EB'],['12','Comments','+9%','#0EA5E9'],['9','Shares','+3%','#F59E0B']] },
+    '30D': { rate: '20%',   delta: '+2.1 pts', interactions: '260', views: '1.3K', ticks: ['Sep 28','Oct 7','Oct 17','Oct 27'], n: 30, seed: 8,
+             tiles: [['172','Likes','+14%','#2563EB'],['47','Comments','+21%','#0EA5E9'],['41','Shares','+9%','#F59E0B']] },
+    '90D': { rate: '18.2%', delta: '+0.6 pts', interactions: '837', views: '4.6K', ticks: ['Aug','Sep','Oct'], n: 30, seed: 12,
+             tiles: [['552','Likes','+6%','#2563EB'],['151','Comments','+8%','#0EA5E9'],['134','Shares','+4%','#F59E0B']] }
+  },
+  socialTop: [
+    ['Neon Lagos Skyline', '12.4K views · 2.9K interactions', '24%', 'linear-gradient(150deg,#1E1B4B,#7C3AED 60%,#F472B6)'],
+    ['AI Afro-Futurist Portrait', '7.2K views · 1.6K interactions', '22%', 'linear-gradient(150deg,#FBCFE8,#DB2777 60%,#4C1D95)'],
+    ['Soft Dunes Wallpaper', '8.9K views · 1.7K interactions', '19%', 'linear-gradient(150deg,#FDE68A,#F59E0B 55%,#B45309)']
+  ],
+  views: {
+    '7D':  { total: '322',  delta: '+8.1%',  up: true,  label: '7 days',  n: 7,  seed: 3,  base: 46,  unique: '281', ticks: ['Mon','Wed','Fri','Sun'] },
+    '30D': { total: '1.3K', delta: '+12.4%', up: true,  label: '30 days', n: 30, seed: 7,  base: 38,  unique: '1.1K', ticks: ['Sep 28','Oct 7','Oct 17','Oct 27'] },
+    '90D': { total: '4.6K', delta: '−3.2%',  up: false, label: '90 days', n: 13, seed: 11, base: 350, unique: '3.9K', ticks: ['Jul 29','Aug 30','Sep 30','Oct 27'] }
+  },
+  sources: [['Feed',46,'#2563EB'],['Profile',22,'#7C3AED'],['Search',18,'#0EA5E9'],['Shares',9,'#F59E0B'],['Other',5,'#B6BAC8']],
+  locations: {
+    countries: [['Nigeria',58],['Ghana',12],['United States',9],['United Kingdom',7],['Kenya',4]],
+    cities: [['Lagos',34],['Abuja',11],['Accra',8],['Port Harcourt',6],['London',4]]
+  },
+  ages: [['13–17',6],['18–24',41],['25–34',33],['35–44',14],['45+',6]],
+  exFunnel: [['Saw a locked preview','3,980',100,'#C4B5FD'],['Tapped unlock','612',15.4,'#8B5CF6'],['Unlocked','167',4.2,'#6D28D9']],
+  exPosts: [
+    ['Midnight Bloom Pack','80 coins · 38 unlocks','3,040','linear-gradient(150deg,#312E81,#DB2777)'],
+    ['Lagos Nights 4K Set','60 coins · 41 unlocks','2,460','linear-gradient(150deg,#1E1B4B,#7C3AED)'],
+    ['Behind the Design: Neon','40 coins · 37 unlocks','1,480','linear-gradient(150deg,#0F766E,#22D3EE)'],
+    ['AI Portrait Presets','30 coins · 26 unlocks','780','linear-gradient(150deg,#BE185D,#F9A8D4)'],
+    ['8 other posts','25 unlocks','600','linear-gradient(150deg,#9CA3AF,#4B5563)']
+  ],
+  giftMonths: [['May',1240],['Jun',1980],['Jul',2150],['Aug',2890],['Sep',3630],['Oct',4280]],
+  giftStickers: [
+    ['Red Rose','22 gifts','1,100','radial-gradient(circle at 40% 35%,#FF6C8C,#C8133F)'],
+    ['Royal Crown','2 gifts','1,000','linear-gradient(180deg,#FFE27E,#F29A12)'],
+    ['Diamond','3 gifts','900','linear-gradient(135deg,#A6ECFF,#6E9BFF 50%,#6A3FE0)'],
+    ['Big Heart','31 gifts','620','linear-gradient(180deg,#FF7EA6,#E0245E)'],
+    ['Other stickers','28 gifts','660','linear-gradient(135deg,#E5E7EB,#B6BAC8)']
+  ],
+  giftFans: [['Tolu','14 gifts','1,050','linear-gradient(135deg,#FFB86B,#EE6B2F)'],['Ada','9 gifts','620','linear-gradient(135deg,#60A5FA,#2563EB)'],['Kemi','7 gifts','480','linear-gradient(135deg,#A78BFA,#7C3AED)']],
+  wallpapers: [
+    ['Neon Lagos Skyline','Oct 21',21,12400,6,3,'linear-gradient(150deg,#1E1B4B,#7C3AED 60%,#F472B6)'],
+    ['Soft Dunes Wallpaper','Oct 18',18,8900,4,2,'linear-gradient(150deg,#FDE68A,#F59E0B 60%,#B45309)'],
+    ['Ocean Glass Pack','Oct 14',14,6100,3,1,'linear-gradient(150deg,#A5F3FC,#3B82F6 60%,#1E3A8A)'],
+    ['Midnight Bloom','Oct 25',25,4700,2,1,'linear-gradient(150deg,#312E81,#DB2777 60%,#FB7185)'],
+    ['Forest Mist 4K','Oct 9',9,3800,2,1,'linear-gradient(150deg,#D1FAE5,#10B981 60%,#065F46)'],
+    ['Chrome Hearts Set','Oct 26',26,2900,1,1,'linear-gradient(150deg,#E5E7EB,#9CA3AF 60%,#374151)'],
+    ['Sunset Over Lekki','Oct 3',3,2100,1,0,'linear-gradient(150deg,#FED7AA,#F97316 60%,#7C2D12)'],
+    ['Pastel Grid Minimal','Sep 30',0,1600,0,0,'linear-gradient(150deg,#FBCFE8,#C4B5FD 60%,#93C5FD)']
+  ],
+  post: {
+    metrics: [['12.4K','Views'],['6','Downloads'],['3','Saves'],['41','Shares'],['24%','Eng. rate'],['9.2s','Avg. view']],
+    daily: [800, 3100, 2600, 1900, 1500, 1200, 900], avg: [400, 900, 760, 600, 480, 420, 380],
+    funnel: [['Viewed','12,400',100,'#2563EB'],['Opened full preview','1,860',15,'#7C3AED'],['Downloaded','6',1.5,'#F59E0B']]
+  },
+  ai: {
+    stats: [['46','Created','+12 vs Sep'],['12','Published','+4 vs Sep'],['230','Remixes by others','+38%'],['38%','Of your views','+6 pts']],
+    weeks: [['22',5,1],['29',6,2],['6',9,2],['13',7,3],['20',11,3],['27',8,1]],
+    styles: [['Anime',34],['3D render',26],['Watercolor',18],['Cyberpunk',14],['Other',8]],
+    top: [
+      ['AI Afro-Futurist Portrait','7.2K views · Anime','112','linear-gradient(150deg,#FBCFE8,#DB2777 60%,#4C1D95)'],
+      ['Dreamy Lagoon at Dusk','3.9K views · Watercolor','64','linear-gradient(150deg,#BAE6FD,#818CF8 60%,#F0ABFC)'],
+      ['Chrome Butterfly','2.1K views · 3D render','31','linear-gradient(150deg,#F3F4F6,#A1A1AA 50%,#52525B)']
+    ]
+  },
+  features: [['Sticker gifts',64,'▲ 3'],['AI create',48,'▼ 1'],['Wallpapers',41,'▼ 1'],['Exclusive posts',22,'▲ 1'],['Stories',18,'▼ 2'],['Chats',15,'—']],
+  pastWinners: [['September','AI create','52% used it'],['August','Wallpapers','47% used it'],['July','Exclusive posts','31% used it']]
+};
+
+/* =================== HELPERS =================== */
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+const CHEV_BACK = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';
+
+function series(seed, n, base, amp, growth = 0.015) {
+  let s = seed * 1013; const out = [];
+  for (let i = 0; i < n; i++) {
+    s = (s * 9301 + 49297) % 233280;
+    out.push(Math.max(1, base + amp * (0.6 * Math.sin(i / 2.2 + seed) + 0.8 * (s / 233280 - 0.5)) + i * base * growth));
+  }
+  return out;
+}
+/* Smooth Catmull-Rom → Bézier path. max/min optional (for shared scales). */
+function smooth(vals, w, h, pt = 6, pb = 4, fixedMax, fixedMin) {
+  const max = fixedMax ?? Math.max(...vals), min = fixedMin ?? Math.min(...vals), n = vals.length;
+  const P = vals.map((v, i) => [i * w / (n - 1), pt + (1 - (v - min) / ((max - min) || 1)) * (h - pt - pb)]);
+  let d = `M${P[0][0].toFixed(1)} ${P[0][1].toFixed(1)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const p0 = P[i - 1] || P[i], p1 = P[i], p2 = P[i + 1], p3 = P[i + 2] || p2;
+    d += ' C' + [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6, p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6, p2[0], p2[1]].map(x => x.toFixed(1)).join(' ');
+  }
+  return { line: d, area: `${d} L${w} ${h} L0 ${h} Z`, end: P[n - 1] };
+}
+function coinSVG(size) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="cg${size}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFE27E"/><stop offset=".55" stop-color="#FBBF2E"/><stop offset="1" stop-color="#EE8F0E"/></linearGradient></defs><circle cx="12" cy="12" r="11.2" fill="url(#cg${size})"/><path d="M10 7.6h4.8M10 7.6v8.8M10 11.7h3.8" fill="none" stroke="#7A4300" stroke-width="2.1" stroke-linecap="round"/></svg>`;
+}
+function segmented(el, keys, initial, onPick) {
+  el.innerHTML = keys.map(k => `<button role="tab" aria-selected="${k === initial}" data-k="${k}">${k}</button>`).join('');
+  el.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    [...el.children].forEach(c => c.setAttribute('aria-selected', c === b));
+    onPick(b.dataset.k);
+  });
+  onPick(initial);
+}
+const progress = (label, value, pct, color) => `<div><div style="display:flex;justify-content:space-between;font-size:14px"><span style="font-weight:500">${label}</span><span class="num" style="font-weight:700">${value}</span></div><div class="bar-track" style="height:10px;border-radius:5px"><i style="width:${pct}%;background:${color}"></i></div></div>`;
+
+$$('[data-back]').forEach(a => a.insertAdjacentHTML('afterbegin', CHEV_BACK));
+$$('[data-coin]').forEach(el => { el.style.display = 'inline-flex'; el.innerHTML = coinSVG(+el.dataset.coin); });
+
+/* =================== 1 · OVERVIEW =================== */
+segmented($('#ovSeg'), ['7D', '30D', '90D', '1Y'], '30D', k => {
+  const d = DATA.overview[k];
+  $('#ovCaption').textContent = d.caption; $('#ovTotal').textContent = d.total; $('#ovDelta').textContent = d.delta;
+  $('#ovEx').textContent = d.ex; $('#ovGift').textContent = d.gift;
+  $('#ovExBar').style.flex = d.exP; $('#ovGiftBar').style.flex = 100 - d.exP;
+  const c = smooth(series(d.seed, d.n, 40, 16, 0.02), 310, 110, 10, 6);
+  $('#ovPath').setAttribute('d', c.line); $('#ovArea').setAttribute('d', c.area);
+  ['#ovDot1', '#ovDot2'].forEach(s => { $(s).setAttribute('cx', c.end[0]); $(s).setAttribute('cy', c.end[1]); });
+  $('#ovTicks').innerHTML = d.ticks.map(t => `<span>${t}</span>`).join('');
+});
+{ const s = smooth(series(17, 30, 40, 14, 0.012), 320, 54, 4, 2);
+  $('[data-chart="social-line"]').setAttribute('d', s.line); $('[data-chart="social-area"]').setAttribute('d', s.area); }
+{ const m = Math.max(...DATA.exclusiveWeekly);
+  $('#exMini').innerHTML = DATA.exclusiveWeekly.map((v, i) => `<span style="width:9px;border-radius:4px;height:${Math.round(v / m * 52 + 4)}px;background:${i === DATA.exclusiveWeekly.length - 1 ? 'linear-gradient(180deg,#A78BFA,#7C3AED)' : '#E4DAFD'}"></span>`).join(''); }
+
+/* =================== 2 · SOCIAL =================== */
+segmented($('#soSeg'), ['7D', '30D', '90D'], '30D', k => {
+  const d = DATA.social[k];
+  $('#soRate').textContent = d.rate; $('#soDelta').textContent = d.delta;
+  $('#soCaption').textContent = `${d.interactions} interactions on ${d.views} views`;
+  $('#soViews').textContent = d.views;
+  const c = smooth(series(d.seed, d.n, 20, 4, 0.012), 322, 110, 8, 6);
+  $('#soLine').setAttribute('d', c.line); $('#soArea').setAttribute('d', c.area);
+  $('#soDot').setAttribute('cx', c.end[0]); $('#soDot').setAttribute('cy', c.end[1]);
+  $('#soTicks').innerHTML = d.ticks.map(t => `<span>${t}</span>`).join('');
+  $('#soViewsSpark').setAttribute('d', smooth(series(d.seed + 2, 14, 40, 14), 140, 36, 2, 2).line);
+  $('#soTiles').innerHTML = d.tiles.map(t => `<div class="tile"><i style="display:block;width:10px;height:10px;border-radius:3px;background:${t[3]}"></i><div class="v num" style="margin-top:10px">${t[0]}</div><div class="l">${t[1]}</div><div class="d">${t[2]}</div></div>`).join('');
+});
+$('[data-chart="foll-spark"]').setAttribute('d', smooth([1,2,2.5,3,3.2,4,4.6,5,5.3,6,6.8,7.1,7.8,8.4], 140, 36, 2, 2).line);
+$('#soTop').innerHTML = DATA.socialTop.map(t => `<a href="#post" class="list-row"><span class="thumb" style="background:${t[3]}"></span><span class="grow"><span class="t">${t[0]}</span><span class="m">${t[1]}</span></span><span class="pill blue">${t[2]}</span></a>`).join('');
+
+/* =================== 2a · VIEWS =================== */
+segmented($('#viSeg'), ['7D', '30D', '90D'], '30D', k => {
+  const d = DATA.views[k];
+  const days = i => k === '7D' ? ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i]
+    : k === '30D' ? new Date(2026, 8, 28 + i).toLocaleString('en', { month: 'short', day: 'numeric' }) : `Week ${i + 1}`;
+  const vals = series(d.seed, d.n, d.base, d.base * 0.45).map(Math.round);
+  const max = Math.max(...vals);
+  $('#viTotal').textContent = d.total;
+  $('#viDelta').textContent = d.delta; $('#viDelta').className = 'delta ' + (d.up ? 'up' : 'down');
+  $('#viCaption').textContent = `vs. previous ${d.label}`;
+  $('#viTicks').innerHTML = d.ticks.map(t => `<span>${t}</span>`).join('');
+  const row = $('#viBars'); row.style.gap = d.n > 20 ? '3px' : '8px';
+  row.innerHTML = vals.map((v, i) => `<button aria-label="${days(i)}: ${v} views" aria-pressed="false" data-i="${i}" style="height:${Math.round(v / max * 160 + 6)}px;border-radius:${d.n > 20 ? '3px 3px 2px 2px' : '8px 8px 4px 4px'}"></button>`).join('');
+  const pick = i => {
+    [...row.children].forEach((b, j) => b.setAttribute('aria-pressed', j === i));
+    $('#viPickLabel').textContent = days(i); $('#viPickValue').textContent = `${vals[i]} views`;
+  };
+  row.onclick = e => { const b = e.target.closest('button'); if (b) pick(+b.dataset.i); };
+  pick(vals.indexOf(max));
+  const sum = vals.reduce((a, b) => a + b, 0);
+  $('#viStats').innerHTML = [[Math.round(sum / d.n), k === '90D' ? 'Avg / week' : 'Avg / day'], [max, 'Peak · ' + days(vals.indexOf(max))], [d.unique, 'Unique viewers']]
+    .map(s => `<div class="tile"><div class="v num">${s[0]}</div><div class="l">${s[1]}</div></div>`).join('');
+  const totalN = { '7D': 322, '30D': 1300, '90D': 4600 }[k];
+  $('#viSrcBar').innerHTML = DATA.sources.map(s => `<span style="flex:${s[1]};background:${s[2]}"></span>`).join('');
+  $('#viSrc').innerHTML = DATA.sources.map(s => `<div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)"><i style="width:10px;height:10px;border-radius:3px;background:${s[2]}"></i><span style="flex:1;font-size:15px;font-weight:500">${s[0]}</span><span class="num" style="font-size:14px;color:var(--sub)">${Math.round(totalN * s[1] / 100).toLocaleString('en')}</span><span class="num" style="width:44px;text-align:right;font-size:15px;font-weight:700">${s[1]}%</span></div>`).join('');
+});
+
+/* =================== 2b · AUDIENCE =================== */
+{ const g = []; let v = 31682; for (let i = 0; i < 30; i++) { v += 6 + Math.round(8 * Math.sin(i / 3) + (i % 5) * 2); g.push(v); }
+  const c = smooth(g, 322, 110, 8, 4);
+  $('[data-chart="aud-line"]').setAttribute('d', c.line); $('[data-chart="aud-area"]').setAttribute('d', c.area); }
+function renderLocs(mode) {
+  $('#auLocs').innerHTML = DATA.locations[mode].map(l => `<div><div style="display:flex;justify-content:space-between;font-size:15px"><span style="font-weight:500">${l[0]}</span><span class="num" style="font-weight:700">${l[1]}%</span></div><div class="bar-track"><i style="width:${l[1]}%;background:linear-gradient(90deg,#2563EB,#7C3AED)"></i></div></div>`).join('');
+}
+$('#auLocSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; [...$('#auLocSeg').children].forEach(c => c.setAttribute('aria-selected', c === b)); renderLocs(b.dataset.mode); });
+renderLocs('countries');
+$('#auAges').innerHTML = DATA.ages.map(a => `<div class="col"><b class="num">${a[1]}%</b><i style="height:${Math.round(a[1] / 41 * 92 + 4)}px;background:${a[1] === 41 ? 'linear-gradient(180deg,#2563EB,#7C3AED)' : '#D9E3FB'}"></i><span>${a[0]}</span></div>`).join('');
+{ const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'], prof = [.18,.06,.32,.45,.62,.95];
+  let h = '<span></span>' + ['12a','4a','8a','12p','4p','8p'].map(t => `<span>${t}</span>`).join('');
+  days.forEach((d, di) => { h += `<span class="d">${d}</span>`; prof.forEach((p, ti) => {
+    const wk = di >= 5 ? (ti === 3 ? .25 : ti === 5 ? -.15 : .05) : 0;
+    const a = Math.max(.08, Math.min(1, p + wk + ((di * 7 + ti * 3) % 5 - 2) * .03));
+    h += `<i style="background:rgba(37,99,235,${a.toFixed(2)})"></i>`; }); });
+  $('#auHeat').innerHTML = h; }
+
+/* =================== 3 · EXCLUSIVE =================== */
+{ const w = DATA.exclusiveWeekly, m = Math.max(...w);
+  $('#exWeeks').innerHTML = w.map((v, i) => `<div class="col"><i style="height:${Math.round(v / m * 88 + 4)}px;border-radius:8px 8px 4px 4px;background:${i === w.length - 1 ? 'linear-gradient(180deg,#C4B5FD,#8B5CF6)' : 'rgba(255,255,255,.18)'}"></i><span style="font-size:10px">W${i + 1}</span></div>`).join(''); }
+$('#exFunnel').innerHTML = DATA.exFunnel.map(f => progress(...f)).join('');
+$('#exPosts').innerHTML = DATA.exPosts.map(p => `<div class="list-row"><span class="thumb" style="width:44px;height:44px;border-radius:13px;background:${p[3]};display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg></span><span class="grow"><span class="t">${p[0]}</span><span class="m">${p[1]}</span></span><span style="text-align:right"><span class="num" style="display:block;font-size:15px;font-weight:800">${p[2]}</span><span style="display:block;font-size:11px;color:var(--muted)">coins</span></span></div>`).join('');
+
+/* =================== 4 · GIFTING =================== */
+{ const m = Math.max(...DATA.giftMonths.map(x => x[1]));
+  $('#giMonths').innerHTML = DATA.giftMonths.map((x, i, a) => `<div class="col"><b class="num">${(x[1] / 1000).toFixed(1)}K</b><i style="height:${Math.round(x[1] / m * 82 + 4)}px;background:${i === a.length - 1 ? 'linear-gradient(180deg,#FFE27E,#F29A12)' : 'rgba(255,255,255,.18)'}"></i><span>${x[0]}</span></div>`).join(''); }
+$('#giStickers').innerHTML = DATA.giftStickers.map((s, i) => `<div class="list-row" style="${i === 0 ? 'border-top:0' : ''}"><span class="thumb" style="width:40px;height:40px;border-radius:12px;background:${s[3]}"></span><span class="grow"><span class="t">${s[0]}</span><span class="m" style="font-size:12px">${s[1]}</span></span><span class="num" style="font-size:15px;font-weight:700">${s[2]}</span></div>`).join('');
+$('#giFans').innerHTML = DATA.giftFans.map((f, i) => `<div class="list-row"><span style="width:18px;font-size:14px;font-weight:700;color:var(--muted);text-align:center">${i + 1}</span><span style="width:38px;height:38px;flex:none;border-radius:50%;background:${f[3]};color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700" aria-hidden="true">${f[0][0]}</span><span class="grow"><span class="t">${f[0]}</span><span class="m" style="font-size:12px">${f[1]}</span></span><span class="num" style="font-size:15px;font-weight:700">${f[2]}</span></div>`).join('');
+
+/* =================== 5 · WALLPAPERS =================== */
+const fmt = n => n >= 1000 ? (n / 1000).toFixed(1).replace('.0', '') + 'K' : String(n);
+const ICONS = {
+  eye: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6B6D7B" stroke-width="2" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  dl: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6B6D7B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10.5l5 5 5-5M4 19.5h16"/></svg>',
+  save: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6B6D7B" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h12v17l-6-4-6 4z"/></svg>'
+};
+const SORTS = [['views','Most viewed',3],['downloads','Downloads',4],['saves','Saves',5],['newest','Newest',2]];
+function renderWallpapers(key) {
+  const s = SORTS.find(x => x[0] === key);
+  const rows = [...DATA.wallpapers].sort((a, b) => b[s[2]] - a[s[2]]);
+  $('#wpList').innerHTML = rows.map(r => {
+    const metric = key === 'views' ? fmt(r[3]) : key === 'downloads' ? r[4] : key === 'saves' ? r[5] : 'New';
+    return `<a href="#post" class="wp-row"><span class="wthumb" style="background:${r[6]}"></span><span style="flex:1;min-width:0"><span class="t" style="display:block;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r[0]}</span><span style="display:block;font-size:12px;color:var(--muted);margin-top:2px">Published ${r[1]}</span><span class="metrics num"><span>${ICONS.eye}${fmt(r[3])}</span><span>${ICONS.dl}${r[4]}</span><span>${ICONS.save}${r[5]}</span></span></span><span class="rank num">${metric}</span></a>`;
+  }).join('');
+}
+$('#wpSort').innerHTML = SORTS.map((s, i) => `<button role="tab" aria-selected="${i === 0}" data-k="${s[0]}">${s[1]}</button>`).join('');
+$('#wpSort').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; [...$('#wpSort').children].forEach(c => c.setAttribute('aria-selected', c === b)); renderWallpapers(b.dataset.k); });
+renderWallpapers('views');
+
+/* =================== 5a · POST =================== */
+$('#poMetrics').innerHTML = DATA.post.metrics.map(m => `<div class="tile"><div class="v num" style="font-size:20px">${m[0]}</div><div class="l">${m[1]}</div></div>`).join('');
+{ const p = smooth(DATA.post.daily, 320, 140, 6, 0, 3300, 0), a = smooth(DATA.post.avg, 320, 140, 6, 0, 3300, 0);
+  $('[data-chart="post-line"]').setAttribute('d', p.line); $('[data-chart="post-area"]').setAttribute('d', p.area); $('[data-chart="post-avg"]').setAttribute('d', a.line); }
+$('#poFunnel').innerHTML = DATA.post.funnel.map(f => progress(...f)).join('');
+
+/* =================== 6 · AI =================== */
+$('#aiStats').innerHTML = DATA.ai.stats.map(s => `<div><div class="num" style="font-size:28px;font-weight:800;letter-spacing:-.9px">${s[0]}</div><div class="caption">${s[1]}</div><div style="font-size:12px;font-weight:700;color:var(--up);margin-top:4px">${s[2]}</div></div>`).join('');
+$('#aiWeeks').innerHTML = DATA.ai.weeks.map(w => `<div class="col"><b class="num">${w[1]}</b><i style="height:${Math.round(w[1] / 11 * 100 + 4)}px;background:#F5D0E6;display:flex;align-items:flex-end;overflow:hidden"><i style="width:100%;height:${Math.round(w[2] / w[1] * 100)}%;border-radius:0;background:linear-gradient(180deg,#DB2777,#9D174D)"></i></i><span>${w[0]}</span></div>`).join('');
+$('#aiStyles').innerHTML = DATA.ai.styles.map(s => `<div><div style="display:flex;justify-content:space-between;font-size:15px"><span style="font-weight:500">${s[0]}</span><span class="num" style="font-weight:700">${s[1]}%</span></div><div class="bar-track" style="background:#F1ECF3"><i style="width:${s[1] / 34 * 100}%;background:linear-gradient(90deg,#7C3AED,#DB2777)"></i></div></div>`).join('');
+$('#aiTop').innerHTML = DATA.ai.top.map(t => `<div class="list-row"><span class="thumb" style="background:${t[3]}"></span><span class="grow"><span class="t">${t[0]}</span><span class="m">${t[1]}</span></span><span class="pill pink"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3l4 4-4 4M3 11V9a2 2 0 0 1 2-2h16M7 21l-4-4 4-4M21 13v2a2 2 0 0 1-2 2H3"/></svg>${t[2]}</span></div>`).join('');
+
+/* =================== 7 · FEATURE =================== */
+$('#feRank').innerHTML = DATA.features.map((f, i) => {
+  const c = f[2].startsWith('▲') ? 'var(--up)' : f[2].startsWith('▼') ? 'var(--down)' : 'var(--muted)';
+  return `<div class="list-row" style="padding:11px 0"><span style="width:18px;font-size:14px;font-weight:800;color:var(--muted);text-align:center">${i + 1}</span><span class="grow"><span style="display:flex;justify-content:space-between;font-size:15px"><span style="font-weight:600">${f[0]}</span><span class="num" style="font-weight:700">${f[1]}%</span></span><span class="bar-track" style="display:block;height:6px;margin-top:7px"><i style="width:${f[1]}%;background:${i === 0 ? 'linear-gradient(90deg,#3B5BFD,#C026D3)' : '#C7D2FE'}"></i></span></span><span style="width:40px;text-align:right;font-size:12px;font-weight:700;color:${c}">${f[2]}</span></div>`;
+}).join('');
+$('#fePast').innerHTML = DATA.pastWinners.map(p => `<div style="padding:12px;border-radius:18px;background:#F6F7FB;border:1px solid #EEF0F6"><div style="font-size:12px;font-weight:600;color:var(--sub)">${p[0]}</div><div style="font-size:14px;font-weight:700;margin-top:6px;line-height:1.25">${p[1]}</div><div style="font-size:12px;color:var(--sub);margin-top:4px">${p[2]}</div></div>`).join('');
+</script>
+</body>
+</html>

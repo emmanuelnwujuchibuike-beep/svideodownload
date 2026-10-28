@@ -167,6 +167,13 @@ export function useVisualViewportPin(): ViewportPin | null {
       const editing = ae instanceof HTMLElement && (ae.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName));
       if (heightGap < 80 || !editing) {
         setPin(null);
+        /*
+          🔴 THE KEYBOARD CLOSED, THE PAGE STAYED SCROLLED (owner, 2026-10-28, a PWA screenshot: the chat header under
+          the clock, white space under the composer). iOS scrolls the layout viewport up to keep the field above the
+          keyboard and does not always scroll it back, so the fixed thread stays shifted up by that much. The thread
+          covers the screen and the page under it never needs a scroll offset: put it back.
+        */
+        if (!editing && window.scrollY > 0) requestAnimationFrame(() => window.scrollTo(window.scrollX, 0));
         return;
       }
       const next: ViewportPin = {

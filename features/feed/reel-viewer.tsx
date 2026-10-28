@@ -9,12 +9,10 @@ import {
   type MotionValue } from "framer-motion";
 import {
   BadgeCheck,
-  Gift,
   BellOff,
   Bookmark,
   Calendar,
   Check,
-  ChevronDown,
   Compass,
   Download,
   EyeOff,
@@ -30,9 +28,6 @@ import {
   Info,
   Link2,
   Loader2,
-  MessageCircle,
-  MoreVertical,
-  Music,
   Pause,
   Pencil,
   Play,
@@ -70,6 +65,7 @@ import { useSlotProvider } from "@/features/ads-platform/serve/use-slot-provider
 import { glass, layer, scrimForLuminance } from "@/features/reels/viewer/design";
 import { GlassButton } from "@/features/reels/viewer/glass-button";
 import { ReelProgress } from "@/features/reels/viewer/reel-progress";
+import { CommentGlyph, HeartGlyph, RailAct, RailCreator, SaveGlyph, ShareGlyph, SoundDisc } from "@/features/reels/viewer/design-rail";
 import { LivingPlayback } from "@/features/reels/viewer/living-playback";
 import { clampFeedRatio, isReelsShaped } from "@/lib/media/aspect";
 import {
@@ -94,7 +90,6 @@ import { SmartVideo } from "@/features/media/smart-video";
 import { useAdaptiveSource } from "@/features/media/use-adaptive-source";
 import { GlassSheetShell } from "@/features/ui/glass-sheet-shell";
 import { PostGiftButton } from "@/features/gift/post-gift-button";
-import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { AnimatedCount } from "@/features/ui/animated-count";
 import { floatReaction } from "@/features/ui/reaction-float";
 /*
@@ -114,11 +109,11 @@ import { floatReaction } from "@/features/ui/reaction-float";
 const ReelMoreSheet = dynamic(() => import("@/features/feed/reel-sheets").then((m) => m.ReelMoreSheet));
 
 import { WhyThisChip } from "@/features/social/repost/why-this";
-import { makeEmotionIcon, reactionGlyph, ReactionPicker, type ReactionEmotion } from "@/features/social/reaction-picker";
 // Code-split, each gated behind its own "ready" flag (never mounted until
 // the corresponding action is actually tapped) — reels are the main video
 // feed, so static imports here put every one of these sheets' full weight
 // into every route that renders it.
+const ReelShareSheet = dynamic(() => import("@/features/reels/viewer/reel-share-sheet").then((m) => m.ReelShareSheet), { ssr: false });
 const ShareSheet = dynamic(() => import("@/features/social/share-sheet").then((m) => m.ShareSheet), { ssr: false });
 const ShareQrSheet = dynamic(() => import("@/features/social/share-qr-sheet").then((m) => m.ShareQrSheet), { ssr: false });
 const CollectionPicker = dynamic(() => import("@/features/social/collection-picker").then((m) => m.CollectionPicker), { ssr: false });
@@ -146,7 +141,7 @@ import { suppressReel } from "@/lib/social/reels-session";
 import { streamHlsUrl, streamThumbnailUrl } from "@/lib/media/stream";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
-import { fireWowFeedback, WowBurst } from "@/features/ui/wow-burst";
+import { WowBurst } from "@/features/ui/wow-burst";
 import { springs } from "@/lib/motion/springs";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
 import { useEntitlements } from "@/features/auth/use-entitlements";
@@ -1094,6 +1089,8 @@ function ReelCard({
   const [repostersReady, setRepostersReady] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareReady, setShareReady] = useState(false);
+  // the design's Share sheet (gift, repost, chats, copy link, download, story, more) — its code loads on the first tap
+  const [reelShareOpen, setReelShareOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   // Long-press Wow → the reaction picker; the picked glyph replaces the icon.
   // Two independent instances: the action rail (visible on every size) and the
@@ -1101,10 +1098,6 @@ function ReelCard({
   // can be on screen together on large screens, so each needs its own picker
   // state or opening one would pop both simultaneously.
   const [myEmotion, setMyEmotion] = useState<string | null>(item.viewerReactionEmotion ?? null);
-  const [reactionsOpen, setReactionsOpen] = useState(false);
-  const wowPress = useLongPress(() => setReactionsOpen(true));
-  const [sidebarReactionsOpen, setSidebarReactionsOpen] = useState(false);
-  const sidebarWowPress = useLongPress(() => setSidebarReactionsOpen(true));
   const repostState = useRepostState(item.id, item.viewerReposted ?? false, item.repostsCount ?? 0);
   // Holding the Repost button opens the advanced options sheet.
   const repostPress = useLongPress(() => {
@@ -1433,30 +1426,6 @@ function ReelCard({
     }
   };
 
-  // Reaction picker: always ends in a Wow (liked=true) with a specific flavor.
-  const reactWithEmotion = async (emotion: ReactionEmotion) => {
-    const wasLiked = liked;
-    const prevEmotion = myEmotion;
-    setLiked(true);
-    if (!wasLiked) setLikes((n) => n + 1);
-    setMyEmotion(emotion);
-    if (!viewerHandle) return; // guest — the local flip is the whole interaction
-    try {
-      const res = await fetch(`/api/posts/${item.id}/react`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "like", emotion }),
-      });
-      if (!res.ok) throw new Error();
-    } catch {
-      if (!wasLiked) {
-        setLiked(false);
-        setLikes((n) => n - 1);
-      }
-      setMyEmotion(prevEmotion);
-    }
-  };
-
   // Gates the code-split ShareSheet/ShareQrSheet mount — never fetched until
   // one of the Send/Share entry points below is actually tapped.
   const openShare = () => {
@@ -1721,9 +1690,9 @@ function ReelCard({
     scheduleHide();
   };
 
-  // Double-tap to like: fires the shared Wow burst, centered over the media; never un-likes.
+  // Double-tap to like: the design's heart burst, centered over the media; never un-likes (reels use the heart, not Wow).
   const likeBurst = () => {
-    fireWowFeedback();
+    haptic("light");
     setLikeBurstKey((k) => k + 1);
     if (!liked) void react("like");
   };
@@ -2122,7 +2091,8 @@ function ReelCard({
         onClick={onClose}
         aria-label="Close reels"
         className={cn(
-          "absolute left-4 top-[max(1rem,var(--frenz-safe-top))] z-40 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition-opacity duration-200 hover:bg-black/60 active:scale-95",
+          // design/frenz-reels.html: a 40 px glass circle
+          "absolute left-4 top-[max(1rem,var(--frenz-safe-top))] z-40 flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.16] bg-[rgba(20,20,28,0.38)] text-white backdrop-blur-[20px] backdrop-saturate-[1.7] transition-[opacity,transform] duration-200 active:scale-[0.92]",
           ui ? "opacity-100" : "pointer-events-none opacity-0",
         )}
       >
@@ -2133,17 +2103,17 @@ function ReelCard({
           screens it escapes past the video column's edge into the same right
           gutter the action rail already uses (`lg:overflow-visible` on the
           column ancestor) instead of sitting cramped on top of the video. */}
-      <button
-        type="button"
-        onClick={() => setMoreOpen(true)}
-        aria-label="More options"
+      {/* design/frenz-reels.html: Search in the top-right glass circle. The options sheet (•••) is in Share → More and on press-and-hold. */}
+      <Link
+        href="/search"
+        aria-label="Search"
         className={cn(
-          "absolute right-4 top-[max(1rem,var(--frenz-safe-top))] z-40 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition-opacity duration-200 hover:bg-black/60 active:scale-95 lg:-right-[4.5rem]",
+          "absolute right-4 top-[max(1rem,var(--frenz-safe-top))] z-40 flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.16] bg-[rgba(20,20,28,0.38)] text-white backdrop-blur-[20px] backdrop-saturate-[1.7] transition-[opacity,transform] duration-200 active:scale-[0.92] lg:-right-[4.5rem]",
           ui ? "opacity-100" : "pointer-events-none opacity-0",
         )}
       >
-        <MoreVertical className="h-5 w-5" />
-      </button>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+      </Link>
 
       {/* The incoming neighbor's poster — sits behind the current slide, always
           mounted (cheap: just images) but off-screen at rest (dragX === 0), so
@@ -2394,7 +2364,7 @@ function ReelCard({
             `mediaStage` instead is what "one animation" actually requires,
             and matches how Instagram's own double-tap heart reads in
             practice — centered, not pinned under the finger. */}
-        <WowBurst burstKey={likeBurstKey} anchorRef={mediaStage} />
+        <WowBurst burstKey={likeBurstKey} anchorRef={mediaStage} variant="heart" />
       </motion.div>
 
       {/* Action rail — auto-hides over the video on mobile; on lg it lives OUTSIDE
@@ -2467,55 +2437,41 @@ function ReelCard({
           is gone from THIS rail to match — "Add to collection" in the •••
           sheet covers the same intent.
         */}
-        <span className="relative inline-flex">
-          <RailButton
-            icon={myEmotion ? makeEmotionIcon(reactionGlyph(myEmotion)!) : liked ? WowSolid : WowOutline}
-            active={liked}
-            activeClass="text-violet-300"
-            count={likes}
-            label="Wow"
-            onClick={(e) => {
-              // 🔴 Haptic+sound on a DIRECT tap too, not just double-tap-on-
-              // video (owner, 2026-08-18: "clicking the wow button directly
-              // should make haptic sound too"). GlassButton (under RailButton)
-              // already fires a generic "light" haptic on every click; this
-              // supersedes it with the real "wow" pattern+chime double-tap
-              // already gets — navigator.vibrate() calling a new pattern
-              // replaces the pending one, so the two calls don't double-buzz.
-              fireWowFeedback();
-              if (!liked) floatReaction(e.clientX, e.clientY);
-              void react("like");
-            }}
-            press={wowPress}
-          />
-          <ReactionPicker
-            open={reactionsOpen}
-            onClose={() => setReactionsOpen(false)}
-            align="left"
-            onPick={(emotion, _glyph, e) => {
-              floatReaction(e.clientX, e.clientY);
-              void reactWithEmotion(emotion);
-            }}
-          />
-        </span>
-        <RailButton icon={MessageCircle} count={item.commentsCount} label="Comment" onClick={openComments} />
-        {/* owner, 2026-10-28: sticker gifting on reels and AI reels — warmed while the reel is on screen, opens instantly */}
-        {isActive ? (
-          <PostGiftButton
-            postId={item.id}
-            author={{ userId: item.publisher.id, name: item.publisher.displayName || `@${item.publisher.handle}`, avatarUrl: item.publisher.avatarUrl ?? null }}
-            authorHandle={item.publisher.handle}
-            render={(open) => <RailButton icon={Gift} label="Gift" onClick={(e) => { e.stopPropagation(); open(); }} />}
-          />
-        ) : null}
-        {/* The stacked-avatars badge (who-you-follow reposted this) is purely
-            conditional social proof — it simply doesn't render when a reel has
-            none, which is why the reference screenshot shows no trace of it. */}
+        {/* design/frenz-reels.html (owner, 2026-10-28): creator · like · comment · save · share · sound — Gift and Repost are in the Share sheet */}
+        <RailCreator
+          avatarUrl={item.publisher.avatarUrl ?? null}
+          name={`@${item.publisher.handle}`}
+          profileHref={profilePath(item.publisher.handle)}
+          following={following}
+          showFollow={!item.isOwner}
+          onFollow={() => void toggleFollow()}
+          renderLink={({ href, className, children, label }) => (
+            <Link href={href} aria-label={label} className={className}>
+              {children}
+            </Link>
+          )}
+        />
+        {/* a plain heart on reels — the Wow reactions are the feed's (owner, 2026-10-28) */}
+        <RailAct
+          label="Like"
+          on={liked}
+          count={likes}
+          onClick={(e) => {
+            haptic("light");
+            if (!liked) floatReaction(e.clientX, e.clientY, "❤️");
+            void react("like");
+          }}
+        >
+          <HeartGlyph on={liked} />
+        </RailAct>
+        <RailAct label="Comments" count={item.commentsCount} onClick={openComments}>
+          <CommentGlyph />
+        </RailAct>
+        <RailAct label="Save" on={saved} onClick={() => void react("save")}>
+          <SaveGlyph on={saved} />
+        </RailAct>
         <div className="relative flex flex-col items-center gap-1">
           <RepostBurst triggerKey={repostBurst} />
-          {/* owner, 2026-10-27: "the circle of mutual users who reposted should animate and disappear up the same way the story
-              reaction animates" — shown while this reel is on screen, it holds ~2 s, then floats up, grows and fades (transform +
-              opacity only), and plays again each time the reel comes back. Reduce Motion: a plain fade. */}
           {isActive && item.repostBadge && item.repostBadge.count > 0 ? (
             <button
               key={item.id}
@@ -2539,49 +2495,17 @@ function ReelCard({
               {item.repostBadge.count > 3 ? <span className="ml-1 text-[10px] font-bold text-white drop-shadow">+{item.repostBadge.count - 3}</span> : null}
             </button>
           ) : null}
-          <RailButton icon={Repeat2} count={repostState.count} active={repostState.reposted} activeClass="text-emerald-400" label="Repost" onClick={repost} press={repostPress} />
+          <RailAct label="Share" count={repostState.count} onClick={() => setReelShareOpen(true)}>
+            <ShareGlyph />
+          </RailAct>
         </div>
-        {/* Plain Send, no count — a send is private by definition, counting it
-            would be both meaningless and a privacy leak (unchanged reasoning
-            from before the split). */}
-        <RailButton icon={SendIcon} label="Send" onClick={openShare} />
-        {/*
-          🔴 MENU RAIL BUTTON REMOVED (owner, 2026-08-18: "remove the reels
-          menu from the engagement tray, there is already a menu at the
-          top"). The reference image's rail had one, but this app already has
-          the top-right ••• for the same destination — a second one on the
-          rail was pure duplication, not matching a real gap.
-        */}
-        {/*
-          The sound thumbnail — a small square rather than the rail's round
-          discs, matching the reference. Links to the sound's own page when
-          this post carries one (Feature 15 Part 7); falls back to the
-          creator's profile for the vast majority of posts that don't, same
-          honesty rule the caption's own sound row already follows.
-
-          🔴 NO `onClick={onClose}` (owner: "the sound button doesn't open the
-          sound page, it just go back to feed"). The avatar Link above this
-          one carries the same handler, and it raced exactly like this: a
-          synchronous `onClose()` (unmounting this whole overlay, since it's
-          plain React state in the parent) fired in the SAME click as the
-          Link's own client-side navigation, and the unmount won — the
-          overlay vanished back to the feed before `/sound/:id` ever finished
-          navigating to. Removing it fixes the race; the overlay unmounts on
-          its own once the route actually changes, since it lives inside the
-          page it's routing away from.
-        */}
+        {/* the sound: its own page when the post carries one, else the creator (the same rule as the caption's sound chip) */}
         <Link
           href={item.sound ? `/sound/${item.sound.id}` : `${profilePath(item.publisher.handle)}`}
-          aria-label={item.sound ? `Sound: ${item.sound.title}` : "View profile"}
-          className="mt-1 block h-8 w-8 shrink-0 overflow-hidden rounded-md ring-1 ring-white/50"
+          aria-label={item.sound ? `Sound: ${item.sound.title}` : `Original sound by @${item.publisher.handle}`}
+          className="block"
         >
-          {item.thumbnailUrl ? (
-            <Image src={item.thumbnailUrl} alt="" width={32} height={32} className="h-full w-full object-cover" />
-          ) : (
-            <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-500 to-violet-600">
-              <Music className="h-4 w-4 text-white" />
-            </span>
-          )}
+          <SoundDisc playing={isActive && !paused} thumbnailUrl={item.publisher.avatarUrl ?? null} />
         </Link>
       </div>
 
@@ -2687,40 +2611,20 @@ function ReelCard({
           logic the rail's copy used to carry, just smaller (32px, matching
           the reference's own proportions relative to the username line).
         */}
+        {/* design/frenz-reels.html: the name, the tick and Follow — the avatar is on the tray now */}
         <div className="flex items-center gap-2">
-          <Link href={`${profilePath(item.publisher.handle)}`} onClick={onClose} className="shrink-0">
-            <span
-              className={cn(
-                "block rounded-full",
-                item.publisherHasStory ? "bg-gradient-to-tr from-blue-500 via-violet-500 to-fuchsia-500 p-[2px]" : "p-0",
-              )}
-            >
-              {item.publisher.avatarUrl ? (
-                <Image
-                  src={item.publisher.avatarUrl}
-                  alt=""
-                  width={32}
-                  height={32}
-                  className={cn("h-8 w-8 rounded-full object-cover", item.publisherHasStory ? "ring-2 ring-black/70" : "ring-2 ring-white")}
-                />
-              ) : (
-                <span className={cn("flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-xs font-bold text-white", item.publisherHasStory ? "ring-2 ring-black/70" : "ring-2 ring-white")}>
-                  {item.publisher.displayName.charAt(0).toUpperCase()}
-                </span>
-              )}
-            </span>
-          </Link>
-          <Link href={`${profilePath(item.publisher.handle)}`} onClick={onClose} className="inline-flex items-center gap-1.5 text-white">
-            <span className="font-bold">@{item.publisher.handle}</span>
+          <Link href={`${profilePath(item.publisher.handle)}`} onClick={onClose} className="inline-flex items-center gap-1.5 text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.55),0_0_10px_rgba(0,0,0,0.25)]">
+            <span className="text-[17px] font-bold tracking-[-0.01em]">@{item.publisher.handle}</span>
             {item.publisher.isVerified ? <VerifiedTick className="h-4 w-4" /> : null}
           </Link>
           {!item.isOwner ? (
             <button
               type="button"
               onClick={() => void toggleFollow()}
+              aria-pressed={following}
               className={cn(
-                "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition",
-                following ? "border-white/30 text-white/70" : "border-white text-white",
+                "inline-flex h-[30px] items-center rounded-[10px] border-[1.5px] px-[13px] text-[13.5px] font-bold transition-colors",
+                following ? "border-transparent bg-white/[0.18] text-white/[0.72]" : "border-white/[0.85] text-white",
               )}
             >
               {following ? "Following" : "Follow"}
@@ -2736,7 +2640,7 @@ function ReelCard({
           </p>
         ) : null}
         {title ? (
-          <p className={cn("mt-1.5 max-w-md text-sm text-white/90", !infoOpen && "line-clamp-2")}>
+          <p className={cn("mt-2 max-w-md text-[14.5px] leading-[1.4] text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.55),0_0_10px_rgba(0,0,0,0.25)]", !infoOpen && "line-clamp-2")}>
             <RichText text={title} linkClassName="font-semibold text-white hover:underline" />
           </p>
         ) : null}
@@ -2746,10 +2650,9 @@ function ReelCard({
           type="button"
           onClick={() => setInfoOpen((v) => !v)}
           aria-expanded={infoOpen}
-          className="mt-1 flex items-center gap-1 text-xs font-semibold text-white/60 transition hover:text-white/90"
+          className="mt-0.5 text-[14px] font-semibold text-white/[0.72] [text-shadow:0_1px_2px_rgba(0,0,0,0.55)]"
         >
-          {infoOpen ? "Show less" : "More"}
-          <ChevronDown className={cn("h-3 w-3 transition-transform", infoOpen && "rotate-180")} />
+          {infoOpen ? "less" : "more"}
         </button>
         {infoOpen ? (
           <p className="mt-1 flex items-center gap-1 text-[11px] text-white/50">
@@ -2773,14 +2676,20 @@ function ReelCard({
         <Link
           href={item.sound ? `/sound/${item.sound.id}` : `${profilePath(item.publisher.handle)}`}
           onClick={onClose}
-          className={cn(
-            "mt-2 inline-flex max-w-[min(70vw,20rem)] items-center gap-2 rounded-full px-2.5 py-1",
-            glass.ambient,
-          )}
+          // design/frenz-reels.html: a glass chip whose title scrolls while the reel plays (CSS only, stops when paused)
+          className="mt-2.5 inline-flex h-[30px] max-w-full items-center gap-[7px] overflow-hidden rounded-full border border-white/[0.16] bg-[rgba(20,20,28,0.38)] pl-1.5 pr-3 text-[13px] font-semibold text-white backdrop-blur-[20px]"
         >
-          <Music className="h-3 w-3 shrink-0 text-white/80" aria-hidden />
-          <span className="truncate text-[11px] font-semibold text-white/85">
-            {item.sound ? `${item.sound.title} · ${item.sound.artistLabel}` : `Original sound · @${item.publisher.handle}`}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" aria-hidden className="shrink-0"><path d="M9 18V5l11-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="17" cy="16" r="3" /></svg>
+          <span className="max-w-[150px] overflow-hidden whitespace-nowrap [mask-image:linear-gradient(90deg,transparent,#000_8%,#000_92%,transparent)]">
+            <span
+              style={{ animationPlayState: isActive && !paused ? "running" : "paused" }}
+              className="inline-block pl-2 motion-safe:animate-[reel-marquee_9s_linear_infinite]"
+            >
+              {(() => {
+                const label = item.sound ? `${item.sound.title} · ${item.sound.artistLabel}` : `Original sound · @${item.publisher.handle}`;
+                return `${label}  ·  ${label}  ·  `;
+              })()}
+            </span>
           </span>
         </Link>
         {/*
@@ -2911,6 +2820,14 @@ function ReelCard({
                 disabledReason={comments.canComment ? null : "Comments are unavailable."}
                 count={item.commentsCount}
                 variant="sheet"
+                composerExtra={
+                  <PostGiftButton
+                    postId={item.id}
+                    author={{ userId: item.publisher.id, name: item.publisher.displayName || `@${item.publisher.handle}`, avatarUrl: item.publisher.avatarUrl ?? null }}
+                    authorHandle={item.publisher.handle}
+                    className="shrink-0 rounded-full p-2 text-muted-foreground transition hover:bg-secondary"
+                  />
+                }
               />
             </>
           ) : null}
@@ -2967,32 +2884,18 @@ function ReelCard({
               </p>
 
               <div className="mt-4 flex items-center gap-1 border-y border-border/50 py-1.5">
-                <span className="relative inline-flex">
-                  <SidebarAct
-                    icon={myEmotion ? makeEmotionIcon(reactionGlyph(myEmotion)!) : liked ? WowSolid : WowOutline}
-                    label="Wow"
-                    active={liked}
-                    activeClass="text-violet-500"
-                    count={likes}
-                    onClick={(e) => {
-                      // Same direct-tap haptic+sound as the mobile rail's Wow
-                      // above — SidebarAct (unlike RailButton/GlassButton) had
-                      // no haptic wrapper of its own at all.
-                      fireWowFeedback();
-                      if (!liked) floatReaction(e.clientX, e.clientY);
-                      void react("like");
-                    }}
-                    press={sidebarWowPress}
-                  />
-                  <ReactionPicker
-                    open={sidebarReactionsOpen}
-                    onClose={() => setSidebarReactionsOpen(false)}
-                    onPick={(emotion, _glyph, e) => {
-                      floatReaction(e.clientX, e.clientY);
-                      void reactWithEmotion(emotion);
-                    }}
-                  />
-                </span>
+                <SidebarAct
+                  icon={Heart}
+                  label="Like"
+                  active={liked}
+                  activeClass="text-rose-500"
+                  count={likes}
+                  onClick={(e) => {
+                    haptic("light");
+                    if (!liked) floatReaction(e.clientX, e.clientY, "❤️");
+                    void react("like");
+                  }}
+                />
                 <SidebarAct icon={Repeat2} label="Repost" active={repostState.reposted} activeClass="text-emerald-500" count={repostState.count} onClick={repost} press={repostPress} />
                 <SidebarAct icon={SendIcon} label="Send" onClick={openShare} />
                 <SidebarAct icon={Bookmark} label="Save" active={saved} fill={saved} activeClass="text-amber-400" onClick={() => react("save")} />
@@ -3020,6 +2923,14 @@ function ReelCard({
                       canComment={comments.canComment}
                       disabledReason={comments.canComment ? null : "Comments are unavailable."}
                       count={item.commentsCount}
+                      composerExtra={
+                        <PostGiftButton
+                          postId={item.id}
+                          author={{ userId: item.publisher.id, name: item.publisher.displayName || `@${item.publisher.handle}`, avatarUrl: item.publisher.avatarUrl ?? null }}
+                          authorHandle={item.publisher.handle}
+                          className="shrink-0 rounded-full p-2 text-muted-foreground transition hover:bg-secondary"
+                        />
+                      }
                     />
                   </>
                 ) : (
@@ -3034,6 +2945,26 @@ function ReelCard({
       {/* Both sheets are DYNAMIC — see reel-sheets.tsx for the measured
           reason (they took /home 3.8 kB over its first-load budget while only
           ever appearing on a tap). */}
+      {reelShareOpen ? (
+        <ReelShareSheet
+          open
+          onClose={() => setReelShareOpen(false)}
+          postId={item.id}
+          author={{ userId: item.publisher.id, name: item.publisher.displayName || `@${item.publisher.handle}`, avatarUrl: item.publisher.avatarUrl ?? null }}
+          authorHandle={item.publisher.handle}
+          reposted={repostState.reposted}
+          onRepost={repost}
+          onChats={openShare}
+          onCopyLink={() => void copyLink()}
+          onDownload={() =>
+            void import("@/lib/media/download-post").then((m) =>
+              m.downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title: title ?? undefined, isOwner: !!item.isOwner }),
+            )
+          }
+          onStory={repost}
+          onMore={() => setMoreOpen(true)}
+        />
+      ) : null}
       <ReelMoreSheet
         open={moreOpen}
         onClose={() => setMoreOpen(false)}
@@ -3238,81 +3169,6 @@ function AlbumNeighborPreview({
         className={mediaFitClassName}
       />
     </motion.div>
-  );
-}
-
-function RailButton({
-  icon: Icon,
-  count,
-  active,
-  fill,
-  activeClass,
-  label,
-  onClick,
-  press,
-}: {
-  icon: typeof Heart;
-  count?: number;
-  active?: boolean;
-  fill?: boolean;
-  activeClass?: string;
-  label: string;
-  onClick: (e: React.MouseEvent) => void;
-  /** Long-press handlers (from useLongPress) for buttons with a hold action. */
-  press?: ReturnType<typeof useLongPress>;
-}) {
-  /*
-    ── Feature 15: every rail control is a GlassButton, now bare ─────────────
-
-    Delegating to one shared button means the whole rail changes together and
-    cannot drift button-to-button — most recently proven when the glass disc
-    itself was removed (owner, 2026-08-18, matching a reference screenshot):
-    one edit to `glass-button.tsx` and all seven rail controls below went bare
-    at once, rather than needing seven separate edits that could disagree.
-    What every button still gets for free from that one place:
-
-      • the adaptive ACTIVE colour, tinted from `--reel-accent`, so a liked
-        button is lit by the video instead of by a hardcoded violet;
-      • haptics routed through the app's shared `haptic()` vocabulary rather
-        than raw `navigator.vibrate`;
-      • a visible focus ring, which this never had — the rail was reachable by
-        keyboard and gave no indication of where focus was.
-
-    `countNode` keeps `AnimatedCount` — a like should tick up, not jump — which is
-    the one thing the generic button does not do on its own.
-
-    🔴 26px glyph, up from 21px (owner, 2026-08-18, once the glass disc was
-    gone: "make the icon in the engagement tray to be a bit more bigger,
-    bolder and more visible" — a bare icon on a busy video frame needs more
-    visual weight than the same glyph used to need sitting inside a glass
-    disc, which supplied its own contrast/definition. `size` (the touch
-    target) grows to match rather than leaving a bigger glyph inside the
-    same-diameter target it would otherwise crowd; still comfortably WCAG
-    2.5.5-sized either way. `strokeWidth` bumped 2.1 -> 2.6 at the call
-    below is the other half of "bolder" — a thicker line reads as more
-    confident at this size than a bigger glyph with a thin stroke would.
-  */
-  return (
-    <GlassButton
-      icon={Icon}
-      size={46}
-      glyphClassName="h-[26px] w-[26px]"
-      strokeWidth={2.6}
-      label={label}
-      onClick={onClick}
-      active={active}
-      fill={fill}
-      activeClassName={activeClass}
-      press={press}
-      countNode={
-        count !== undefined && count > 0 ? (
-          <AnimatedCount
-            value={count}
-            className="text-[11px] font-bold tabular-nums text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
-          />
-        ) : undefined
-      }
-    />
   );
 }
 

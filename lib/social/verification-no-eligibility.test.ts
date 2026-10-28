@@ -11,9 +11,13 @@ describe("verification has no eligibility gate", () => {
       expect(src).not.toMatch(/checkEligibility|EligibilityStep|Not (yet )?eligible|MIN_FOLLOWERS|MIN_ACCOUNT_AGE_DAYS/);
     });
   }
-  it("the form opens at Identity", () => {
+  // design/frenz-verification.html (owner, 2026-10-28): intro, who you are, selfie, review, payment — and NO ID step
+  it("the flow is the design's, without the ID document step", () => {
     const flow = readFileSync("features/account/verification-flow.tsx", "utf8");
-    expect(flow).toContain('const STEPS = ["Identity", "Document", "Selfie", "Review"] as const;');
-    expect(flow).toContain("useState<Step>(1)");
+    expect(flow).toContain('const STEPS = ["Identity", "Selfie", "Review", "Payment"] as const;');
+    expect(flow).toContain("useState<Step>(0)");
+    expect(flow).not.toMatch(/Photo of your ID|idFrontPath|id_front_path|DocumentUpload/);
+    const api = readFileSync("app/api/verification/route.ts", "utf8");
+    expect(api).not.toMatch(/idFrontPath|Upload the front of your document/);
   });
 });

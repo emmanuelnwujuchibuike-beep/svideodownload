@@ -40,6 +40,8 @@ import { revalidate } from "@/features/data";
 import { ContactPickerSheet } from "@/features/social/contact-picker-sheet";
 import { DocumentAttachmentCard } from "@/features/social/document-attachment-card";
 import { GiftBubble, type GiftMeta } from "@/features/gift/gift-bubble";
+import { GiftThanksBubble, thanksBody, type GiftThanksMeta } from "@/features/gift/gift-thanks-bubble";
+import { SubPostChatCard } from "@/features/sub/sub-post-chat-card";
 import { GiftComposerButton } from "@/features/gift/gift-composer-button";
 import { EmojiPickerButton } from "@/features/social/emoji-picker-button";
 import { ForwardSheet } from "@/features/social/forward-sheet";
@@ -303,7 +305,7 @@ export function ConversationRoom({
   // The server's `initial` can be newer than the session copy (it is fetched on
   // this navigation), so rows only it has are merged in rather than ignored.
   const [cachedThread] = useState(() => {
-    const c = getCachedThread(conversationId);
+    const c = getCachedThread(viewerId, conversationId);
     return c ? { ...c, messages: mergeMissing(c.messages, initial) } : undefined;
   });
   const [messages, setMessages] = useState<MessageItem[]>(cachedThread?.messages ?? initial);
@@ -408,7 +410,18 @@ export function ConversationRoom({
     if (type === "direct") return otherId ? [{ userId: otherId, name: otherName || "them", avatarUrl: members.find((x) => x.id === otherId)?.avatarUrl ?? null }] : [];
     return members.filter((x) => x.id !== viewerId).map((x) => ({ userId: x.id, name: x.displayName || `@${x.handle}`, avatarUrl: x.avatarUrl }));
   }, [type, members, viewerId, otherId, otherName]);
-  const memberName = useCallback((id: string) => { const x = members.find((mm) => mm.id === id); return x ? x.displayName || `@${x.handle}` : "someone"; }, [members]);
+  // a 1:1 thread has no `members` (only groups load them) — the two names come from the viewer and `otherName`, or
+  // every gift there read "someone sent you…" / "You sent someone…" (owner screenshots, 2026-10-28)
+  const memberName = useCallback(
+    (id: string) => {
+      const x = members.find((mm) => mm.id === id);
+      if (x) return x.displayName || `@${x.handle}`;
+      if (id && id === otherId && otherName) return otherName;
+      if (id && id === viewerId && viewerName) return viewerName;
+      return "someone";
+    },
+    [members, otherId, otherName, viewerId, viewerName],
+  );
   const [uploadingCount, setUploadingCount] = useState(0);
   const [recordingVoice, setRecordingVoice] = useState(false);
   const [mediaSheetOpen, setMediaSheetOpen] = useState(false);
@@ -530,8 +543,8 @@ export function ConversationRoom({
   const lastSyncedAt = useRef(cachedThread?.syncedAt ?? initialSyncedAt);
   useEffect(() => {
     messagesRef.current = messages;
-    cacheThread(conversationId, { messages, syncedAt: lastSyncedAt.current });
-  }, [messages, conversationId]);
+    cacheThread(viewerId, conversationId, { messages, syncedAt: lastSyncedAt.current });
+  }, [messages, conversationId, viewerId]);
 
   // Ghost Mode is reciprocal (owner, 2026-10-18): typing off ⇒ this thread joins NO typing
   // channel, so it neither sends nor shows typing. A block or messaging restriction made
@@ -1429,7 +1442,31 @@ export function ConversationRoom({
   // string through it. No offline-queue support (matching attachments) —
   // a location/contact share made offline just fails with a toast; retrying
   // a stale GPS fix later isn't meaningfully "the same" send anyway.
-  const sendMetadataMessage = async (metadata: Record<string, unknown>) => {
+  // each gift's sticker, by gift id — the thank-you card borrows it from the gift message (it carries no picture)
+  const giftArtById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const x of messages) {
+      const g = x.metadata?.kind === "gift" ? (x.metadata as GiftMeta) : null;
+      const art = g ? (g.animationUrl ?? g.imageUrl) : null;
+      if (g?.giftId && art) map.set(g.giftId, art);
+    }
+    return map;
+  }, [messages]);
+
+  // "Say thanks" on the reveal sends the decorated thank-you straight away (owner, 2026-10-28) — once per gift: a
+  // second tap on the same gift opens the composer instead of sending it again
+  const sayThanks = (g: GiftMeta) => {
+    const already = messagesRef.current.some((x) => x.mine && x.metadata?.kind === "gift_thanks" && (x.metadata as GiftThanksMeta).giftId === g.giftId);
+    if (!g.giftId || !g.name || already || sendLocked) {
+      requestAnimationFrame(() => textareaRef.current?.focus());
+      return;
+    }
+    const quantity = Math.min(10, Math.max(1, Math.trunc(g.quantity ?? 1)));
+    const name = g.name.slice(0, 80);
+    void sendMetadataMessage({ kind: "gift_thanks", giftId: g.giftId, name, quantity }, thanksBody(name, quantity));
+  };
+
+  const sendMetadataMessage = async (metadata: Record<string, unknown>, body = "") => {
     haptic("light");
     playSound("tap");
     const clientId = crypto.randomUUID();
@@ -1443,7 +1480,7 @@ export function ConversationRoom({
       ...prev,
       {
         id: optimisticId,
-        body: "",
+        body,
         createdAt: clientSentAt,
         mine: true,
         senderId: viewerId,
@@ -1465,7 +1502,7 @@ export function ConversationRoom({
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId, clientId, clientSentAt, metadata }),
+        body: JSON.stringify({ conversationId, clientId, clientSentAt, metadata, ...(body ? { body } : {}) }),
       });
       if (!res.ok) {
         setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
@@ -1992,12 +2029,16 @@ export function ConversationRoom({
               carries `animate-message-send` + `animate-scale-in` (see
               welcomedIds), and this layout keeps it.
             */
+            // a gift and a gift's thank-you are cards of their own — no bubble around them, and the body (the inbox and
+            // push preview's words, "Sent a sticker gift: …") is not repeated under the card
+            const giftCard = !deleted && (m.metadata?.kind === "gift" || m.metadata?.kind === "gift_thanks" || m.metadata?.kind === "sub_post");
             const frameless =
-              !deleted &&
-              hasMediaAttachment &&
-              !m.body &&
-              !shared &&
-              m.attachments.every((a) => a.kind === "image" || a.kind === "video");
+              giftCard ||
+              (!deleted &&
+                hasMediaAttachment &&
+                !m.body &&
+                !shared &&
+                m.attachments.every((a) => a.kind === "image" || a.kind === "video"));
             /*
               ONE TIME PER GROUP (owner brief, 2026-10-18: "group consecutive messages, one timestamp per
               group"). This replaces the per-bubble time (2026-09-13): the time — and on your newest
@@ -2049,6 +2090,8 @@ export function ConversationRoom({
                 : null;
             const pollMeta = !deleted && m.metadata?.kind === "poll" ? (m.metadata as { pollId: string }) : null;
             const giftMeta = !deleted && m.metadata?.kind === "gift" ? (m.metadata as GiftMeta) : null;
+            const thanksMeta = !deleted && m.metadata?.kind === "gift_thanks" ? (m.metadata as GiftThanksMeta) : null;
+            const subPostMeta = !deleted && m.metadata?.kind === "sub_post" ? (m.metadata as { postId: string }) : null;
             // WhatsApp-style "X turned on/off disappearing messages" notice
             // (owner ask, 2026-07-14) — a real message row like any other
             // metadata kind, but rendered as a centered plain-text pill with
@@ -2300,8 +2343,18 @@ export function ConversationRoom({
                             viewerIsRecipient={giftMeta.recipientId === viewerId}
                             senderName={memberName(m.senderId)}
                             recipientName={memberName(giftMeta.recipientId ?? "")}
-                            onSayThanks={() => requestAnimationFrame(() => textareaRef.current?.focus())}
+                            onSayThanks={() => sayThanks(giftMeta)}
                             onSendBack={giftRecipients.length > 0 && !sendLocked ? (stickerId) => { setGiftStickerId(stickerId); setGiftOpen(true); } : undefined}
+                          />
+                        ) : subPostMeta ? (
+                          <SubPostChatCard postId={subPostMeta.postId} mine={m.mine} />
+                        ) : thanksMeta ? (
+                          <GiftThanksBubble
+                            meta={thanksMeta}
+                            mine={m.mine}
+                            art={giftArtById.get(thanksMeta.giftId ?? "") ?? null}
+                            senderName={memberName(m.senderId)}
+                            otherName={type === "group" ? "them" : otherName ?? "them"}
                           />
                         ) : null}
                         {m.attachments.length > 0 ? (
@@ -2380,7 +2433,7 @@ export function ConversationRoom({
                             <MessagePostEmbed postId={shared.postId} mine={m.mine} />
                             {footMeta}
                           </>
-                        ) : m.body ? (
+                        ) : m.body && !giftCard ? (
                           // A caption sitting under an attachment needs its own
                           // inset now that the bubble itself is only a hairline
                           // frame — without this the text would sit 4px off the

@@ -19,7 +19,7 @@ import {
   Heart,
   Info,
   Link2,
-  MessageCircle,
+  MessageSquareText,
   MoreVertical,
   Pencil,
   Share2,
@@ -54,6 +54,7 @@ const ShareQrSheet = dynamic(() => import("@/features/social/share-qr-sheet").th
 const CollectionPicker = dynamic(() => import("@/features/social/collection-picker").then((m) => m.CollectionPicker), { ssr: false });
 const PostEditSheet = dynamic(() => import("@/features/social/post-edit-sheet").then((m) => m.PostEditSheet), { ssr: false });
 const ReportSheet = dynamic(() => import("@/features/social/report-sheet").then((m) => m.ReportSheet), { ssr: false });
+import { rememberedReaction, rememberReaction } from "@/lib/social/reaction-memory";
 import { getQualityPreference, getSyncConditions } from "@/lib/media/network-conditions";
 import { clampFeedRatio, isReelsShaped } from "@/lib/media/aspect";
 import { claimPlayback, releasePlayback, suspendPlayback } from "@/lib/media/video-coordinator";
@@ -147,9 +148,14 @@ function ImageStage({
   const albumItems = item.mediaItems && item.mediaItems.length > 1 ? item.mediaItems : null;
   const [slide, setSlide] = useState(() => Math.max(0, Math.min((albumItems?.length ?? 1) - 1, startIndex)));
   const [ui, setUi] = useState(true);
-  const [liked, setLiked] = useState(item.viewerLiked);
-  const [saved, setSaved] = useState(item.viewerSaved);
-  const [likes, setLikes] = useState(item.likesCount);
+  // the viewer's own reaction this session beats a cached page's stale one (lib/social/reaction-memory.ts)
+  const [liked, setLiked] = useState(() => rememberedReaction(item.id)?.liked ?? item.viewerLiked);
+  const [saved, setSaved] = useState(() => rememberedReaction(item.id)?.saved ?? item.viewerSaved);
+  const [likes, setLikes] = useState(() => rememberedReaction(item.id)?.likes ?? item.likesCount);
+  useEffect(() => {
+    if (liked !== item.viewerLiked || saved !== item.viewerSaved) rememberReaction(item.id, { liked, saved, likes });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the reaction itself is the trigger
+  }, [liked, saved, likes]);
   const following = useFollowState(item.publisher.id, item.isFollowing);
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<CommentsData | null>(null);
@@ -604,7 +610,7 @@ function ImageStage({
               void react("like");
             }}
           />
-          <RailBtn icon={MessageCircle} count={item.commentsCount} label="Comments" onClick={openComments} />
+          <RailBtn icon={MessageSquareText} count={item.commentsCount} label="Comments" onClick={openComments} />
           <RailBtn icon={Share2} count={item.sharesCount} label="Share" onClick={share} />
           <RailBtn icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
         </div>

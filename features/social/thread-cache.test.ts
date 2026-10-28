@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { MessageItem } from "@/lib/social/messages";
 
-import { mergeMissing } from "./thread-cache";
+import { cacheThread, getCachedThread, mergeMissing } from "./thread-cache";
 
 const msg = (id: string, at: string) => ({ id, createdAt: at }) as unknown as MessageItem;
 
@@ -22,5 +22,13 @@ describe("mergeMissing", () => {
   it("returns the same array when there is nothing new (no repaint)", () => {
     const cached = [msg("a", "2026-10-14T12:26:00Z")];
     expect(mergeMissing(cached, cached)).toBe(cached);
+  });
+});
+
+describe("the session copy is per account", () => {
+  it("🔴 a thread cached by one account is never served to another (owner, 2026-10-28: a received gift on the right)", () => {
+    cacheThread("account-a", "conv-1", { messages: [msg("a", "2026-10-28T17:04:00Z")], syncedAt: "2026-10-28T17:04:00Z" });
+    expect(getCachedThread("account-a", "conv-1")?.messages).toHaveLength(1);
+    expect(getCachedThread("account-b", "conv-1")).toBeUndefined();
   });
 });

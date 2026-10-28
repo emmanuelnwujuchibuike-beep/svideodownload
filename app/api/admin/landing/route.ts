@@ -456,6 +456,8 @@ const schema = z.object({
       pin: z.object({ maxAttempts: z.number().int().min(3).max(10).optional(), lockMinutes: z.number().int().min(5).max(1_440).optional(), resetTtlMinutes: z.number().int().min(5).max(30).optional(), resetMaxPerHour: z.number().int().min(1).max(10).optional(), resetCodeMaxAttempts: z.number().int().min(3).max(10).optional() }).strict().optional(),
       // Part 5: how admins hear about each coin transfer / withdrawal and its fee
       adminAlerts: z.enum(["both", "push", "email", "off"]).optional(),
+      // 2026-10-28: which rail pays a coin withdrawal (Flutterwave by default)
+      payoutProvider: z.enum(["flutterwave", "paystack", "by_country"]).optional(),
     })
     .strict()
     .optional(),

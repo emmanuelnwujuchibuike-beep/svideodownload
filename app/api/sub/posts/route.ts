@@ -46,6 +46,8 @@ const body = z
     audience: z.enum(["locked", "hidden"]).optional(),
     // 0261: Mature (18+) — only viewers who confirmed they're 18+ can open it; explicit content is never allowed
     mature: z.boolean().optional(),
+    // 0305: the 24 px blurred clip a locked video plays to non-subscribers (made in the creator's browser)
+    blurVideoUrl: z.string().max(600).optional(),
   })
   .strict();
 

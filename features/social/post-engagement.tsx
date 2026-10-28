@@ -1,6 +1,6 @@
 "use client";
 
-import { Bookmark, Heart, MessageCircle, Share2 } from "lucide-react";
+import { Bookmark, Heart, MessageSquareText, Share2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 
@@ -99,7 +99,7 @@ export function PostEngagement({
         href="#comments"
         className="inline-flex h-10 items-center gap-1.5 rounded-2xl border border-border/70 bg-card/70 px-4 text-sm font-semibold text-muted-foreground shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-px hover:text-foreground hover:shadow-md active:translate-y-0"
       >
-        <MessageCircle className="h-[18px] w-[18px]" /> {formatCompactNumber(initial.comments)}
+        <MessageSquareText className="h-[18px] w-[18px]" /> {formatCompactNumber(initial.comments)}
       </a>
 
       {/* Not mounted at all until the first tap — dynamic() alone only

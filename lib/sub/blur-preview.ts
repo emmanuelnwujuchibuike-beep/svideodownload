@@ -70,3 +70,16 @@ export async function readBlurPreviews(postIds: string[]): Promise<Map<string, s
   for (const r of (data ?? []) as Row[]) if (typeof r.blur_preview === "string" && r.blur_preview.startsWith("data:image/webp;base64,")) out.set(r.id as string, r.blur_preview);
   return out;
 }
+
+/**
+ * 0305: the blurred MOVING previews of these posts (a 24 px clip made in the creator's browser — lib/media/make-blur-clip.ts).
+ * Sent only where the still preview is, to a viewer without access. A database without 0305 answers none.
+ */
+export async function readBlurVideos(postIds: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!postIds.length) return out;
+  const { data, error } = await createAdminClient().from("sub_posts").select("id, blur_video_url").in("id", postIds);
+  if (error) return out;
+  for (const r of (data ?? []) as Row[]) if (typeof r.blur_video_url === "string" && r.blur_video_url.startsWith("https://")) out.set(r.id as string, r.blur_video_url);
+  return out;
+}

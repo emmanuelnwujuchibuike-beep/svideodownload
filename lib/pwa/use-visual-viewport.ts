@@ -122,9 +122,40 @@ export function useVisualViewportPin(): ViewportPin | null {
     // Matches the `lg:` breakpoint the thread page uses to drop out of its
     // fixed-overlay mode.
     const desktop = window.matchMedia("(min-width: 1024px)");
+    /*
+      🔴 AN OFFSET LEFT BY A KEYBOARD ELSEWHERE (owner, 2026-10-28, second report: "the chat issue only appears on the
+      admin account" — header under the clock, composer flush at the bottom, no keyboard). The admin is the one account
+      that types into the admin unlock screen; iOS can leave the visual viewport offset after that keyboard, and the
+      thread is entered with it already there. The scroll reset below only ran when THIS thread's field lost focus,
+      so it never undid it. Now, with no field focused and no finger down, a viewport still offset after the scroll
+      reset gets the thread pinned to what is actually visible; the pin lets go once the offset is back to 0.
+      Never during a touch: that is the overscroll transient the 80px gate below exists for.
+    */
+    const stuck = { on: false };
+    let touching = false;
+    const isEditing = () => {
+      const ae = document.activeElement;
+      return ae instanceof HTMLElement && (ae.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName));
+    };
+    const pinToVisible = (): ViewportPin => ({ top: `${Math.round(vv.offsetTop)}px`, height: `${Math.round(vv.height)}px`, bottom: "auto" });
+    const settle = () => {
+      if (desktop.matches || touching || isEditing()) return;
+      if (window.scrollY > 0) window.scrollTo(window.scrollX, 0);
+      requestAnimationFrame(() => {
+        if (touching || isEditing() || vv.offsetTop <= 1) return;
+        stuck.on = true;
+        const next = pinToVisible();
+        setPin((prev) => (prev && prev.top === next.top && prev.height === next.height ? prev : next));
+      });
+    };
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const settleSoon = () => {
+      timers.push(setTimeout(settle, 0), setTimeout(settle, 450));
+    };
 
     const update = () => {
       if (desktop.matches) {
+        stuck.on = false;
         setPin(null);
         return;
       }
@@ -163,9 +194,18 @@ export function useVisualViewportPin(): ViewportPin | null {
         while an editable element has focus; that is a certainty where the
         height gap is a guess, so it now gates the pin as well.
       */
-      const ae = document.activeElement;
-      const editing = ae instanceof HTMLElement && (ae.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName));
+      const editing = isEditing();
       if (heightGap < 80 || !editing) {
+        if (!editing && stuck.on) {
+          // hold the correction still under a finger; let go only once the viewport is really back at 0
+          if (touching) return;
+          if (vv.offsetTop > 1) {
+            const next = pinToVisible();
+            setPin((prev) => (prev && prev.top === next.top && prev.height === next.height ? prev : next));
+            return;
+          }
+          stuck.on = false;
+        }
         setPin(null);
         /*
           🔴 THE KEYBOARD CLOSED, THE PAGE STAYED SCROLLED (owner, 2026-10-28, a PWA screenshot: the chat header under
@@ -176,6 +216,7 @@ export function useVisualViewportPin(): ViewportPin | null {
         if (!editing && window.scrollY > 0) requestAnimationFrame(() => window.scrollTo(window.scrollX, 0));
         return;
       }
+      stuck.on = false;
       const next: ViewportPin = {
         top: `${Math.round(vv.offsetTop)}px`,
         height: `${Math.round(vv.height)}px`,
@@ -202,7 +243,32 @@ export function useVisualViewportPin(): ViewportPin | null {
     document.addEventListener("focusin", onFocusChange);
     document.addEventListener("focusout", onFocusChange);
     window.addEventListener("resize", update);
+    // the leftover-offset check: on entry, once a keyboard has gone, on return to the app, and after a finger lifts
+    const onFocusOut = () => settleSoon();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") settleSoon();
+    };
+    const onTouchStart = () => {
+      touching = true;
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length > 0) return;
+      touching = false;
+      if (stuck.on) timers.push(setTimeout(update, 350));
+    };
+    document.addEventListener("focusout", onFocusOut);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
+    window.addEventListener("touchcancel", onTouchEnd, { passive: true });
+    settleSoon();
     return () => {
+      timers.forEach(clearTimeout);
+      document.removeEventListener("focusout", onFocusOut);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchEnd);
       vv.removeEventListener("resize", update);
       vv.removeEventListener("scroll", update);
       desktop.removeEventListener("change", update);

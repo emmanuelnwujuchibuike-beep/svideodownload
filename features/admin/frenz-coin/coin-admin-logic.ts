@@ -4,7 +4,7 @@
  * anything: /api/admin/landing normalises and audits every setting, and each money route re-checks its own rules in
  * the database. These only stop an operator sending something the server would refuse.
  */
-import type { CoinAdminAlerts, FrenzCoinConfig } from "@/lib/coin/config";
+import type { CoinAdminAlerts, CoinPayoutProvider, FrenzCoinConfig } from "@/lib/coin/config";
 
 // ── money in the form: dollars typed, integer cents sent ─────────────────────
 
@@ -36,6 +36,7 @@ export function wholeNumber(raw: string): number | null {
 export interface CoinSettingsForm {
   enabled: boolean;
   adminAlerts: CoinAdminAlerts;
+  payoutProvider: CoinPayoutProvider;
   deposits: { enabled: boolean; holdHours: string; min: string; max: string };
   transfers: { enabled: boolean; percent: string; low: string; high: string; flatBelow: string; flatMid: string; flatAbove: string; min: string; max: string; dailyMax: string };
   withdrawals: { enabled: boolean; percent: string; flat: string; min: string; max: string; maxPerDay: string; maxMonth: string; requireQualification: boolean; requireEmailConfirmed: boolean; rateSource: "none" | "fixed" | "market"; nairaPerUsd: string };
@@ -48,6 +49,7 @@ export function formFromConfig(c: FrenzCoinConfig): CoinSettingsForm {
   return {
     enabled: c.enabled,
     adminAlerts: c.adminAlerts,
+    payoutProvider: c.payoutProvider,
     deposits: { enabled: c.deposits.enabled, holdHours: String(c.deposits.holdHours), min: centsToDollars(c.deposits.minCents), max: centsToDollars(c.deposits.maxCents) },
     transfers: { enabled: t.enabled, percent: bpToPercent(t.percentBp), low: centsToDollars(t.lowThresholdCents), high: centsToDollars(t.highThresholdCents), flatBelow: centsToDollars(t.flatBelowCents), flatMid: centsToDollars(t.flatMidCents), flatAbove: centsToDollars(t.flatAboveCents), min: centsToDollars(t.minCents), max: centsToDollars(t.maxCents), dailyMax: centsToDollars(t.dailyMaxCents) },
     withdrawals: {
@@ -99,6 +101,7 @@ export function buildCoinPatch(form: CoinSettingsForm, current: FrenzCoinConfig)
   const next = {
     enabled: form.enabled,
     adminAlerts: form.adminAlerts,
+    payoutProvider: form.payoutProvider,
     deposits: { enabled: d.enabled, holdHours: whole("deposits.holdHours", d.holdHours, 0, 2_160), minCents: money("deposits.min", d.min, 1), maxCents: money("deposits.max", d.max, 1) },
     transfers: {
       enabled: t.enabled,

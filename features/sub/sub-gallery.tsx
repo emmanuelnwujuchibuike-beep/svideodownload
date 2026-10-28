@@ -17,6 +17,10 @@ import { forgetSubPosts, loadSubPosts } from "./sub-posts-cache";
 import { CreatorSubscribeCard } from "./subscribe-card";
 import { profilePath } from "@/lib/social/profile-url";
 import type { SubOption } from "@/lib/sub/pricing";
+import { CommentGiftCard } from "@/features/gift/comment-gift-card";
+import { BlurredClip } from "@/features/sub/blurred-clip";
+import { SendSubPostSheet } from "@/features/sub/send-sub-post-sheet";
+import type { CommentGift } from "@/lib/gift/comment-gifts";
 import { PostGiftButton } from "@/features/gift/post-gift-button";
 import type { GiftRecipient } from "@/features/gift/gift-sheet";
 
@@ -64,6 +68,8 @@ interface Card {
   ageLocked?: true;
   /** 0263: for a viewer without access, the post's tiny blurred preview (a data URL) — never the file */
   blurUrl?: string;
+  /** 0305: a locked video's blurred clip, for a viewer without access */
+  blurVideoUrl?: string;
 }
 
 // 0261: the age check loads only when a Mature post is tapped
@@ -244,6 +250,9 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
                 ) : p.thumbUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- a five-minute private link to the small preview
                   <img src={p.thumbUrl} alt="" loading={idx < 9 ? "eager" : "lazy"} decoding="async" draggable={false} onContextMenu={(e) => e.preventDefault()} className="pointer-events-none h-full w-full object-cover" />
+                ) : p.blurVideoUrl ? (
+                  /* 0305: a locked video plays blurred to a non-subscriber — a 24 px clip, no detail to recover */
+                  <BlurredClip src={p.blurVideoUrl} poster={p.blurUrl} className="h-full w-full scale-125" />
                 ) : p.blurUrl ? (
                   /* 0263 (owner, REQUIRED): a non-subscriber's tile is the server's 20 px blurred preview, scaled
                      up and blurred again — the only picture of the post they ever receive */
@@ -335,6 +344,8 @@ export function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted, 
   const [covered, setCovered] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [reporting, setReporting] = useState(false);
+  // 0305: the creator sends this post into chats — each viewer's card is gated on its own
+  const [sharing, setSharing] = useState(false);
   // Part 3 (0248): the creator switches who may know this post exists
   const [audience, setAudience] = useState<"locked" | "hidden" | null>(null);
   const [savingAudience, setSavingAudience] = useState(false);
@@ -539,6 +550,11 @@ export function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted, 
               </button>
             ) : null}
             {isCreator ? (
+              <button type="button" aria-label="Send this post to chats" onClick={() => setSharing(true)} className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/35 transition active:bg-white/10">
+                <Send className="h-5 w-5" aria-hidden />
+              </button>
+            ) : null}
+            {isCreator ? (
               <button type="button" aria-label="Delete this post" disabled={deleting} onClick={() => void del()} className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/35 transition active:bg-white/10">
                 {deleting ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <Trash2 className="h-5 w-5" aria-hidden />}
               </button>
@@ -553,6 +569,7 @@ export function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted, 
           </span>
         </div>
         {reporting ? <ReportSheet targetType="sub_post" targetId={postId} open={reporting} onClose={() => setReporting(false)} /> : null}
+        {sharing ? <SendSubPostSheet postId={postId} open={sharing} onClose={() => setSharing(false)} /> : null}
         {editing !== null ? (
           <div className="absolute inset-x-0 bottom-0 z-[9] rounded-t-[24px] bg-zinc-950/95 p-4 text-white ring-1 ring-white/10" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }} role="dialog" aria-label="Edit caption">
             <label htmlFor="sub-edit-caption" className="text-[13px] font-semibold">Caption</label>
@@ -600,6 +617,8 @@ interface PrivateComment {
   createdAt: string;
   mine: boolean;
   author: { name: string; handle: string | null; avatarUrl: string | null };
+  /** a sticker gift sent on this post (0304), from the gift row */
+  gift?: CommentGift | null;
 }
 
 /**
@@ -773,7 +792,9 @@ function PrivateInteractions({ postId, isCreator, giftTo }: { postId: string; is
                           <span className="truncate font-semibold">{c.author.name}</span>
                           <span className="shrink-0 text-[11.5px] text-white/45">{shortAgo(c.createdAt)}</span>
                         </p>
-                        <p className="mt-0.5 whitespace-pre-line break-words text-[14.5px] leading-snug text-white/90">{c.body}</p>
+                        {c.gift ? <CommentGiftCard gift={c.gift} /> : null}
+                        {/* a gift with no note carries the server's "Sent a sticker gift: …" body (the table needs one) — the sticker says it already */}
+                        {c.gift && c.body.startsWith("Sent a sticker gift:") ? null : <p className="mt-0.5 whitespace-pre-line break-words text-[14.5px] leading-snug text-white/90">{c.body}</p>}
                       </div>
                       {c.mine || isCreator ? (
                         <button type="button" aria-label="Delete comment" onClick={() => remove(c)} className="-mr-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/45 transition active:bg-white/10 active:text-rose-400">
@@ -812,7 +833,7 @@ function PrivateInteractions({ postId, isCreator, giftTo }: { postId: string; is
                 />
                 {/* owner, 2026-10-28: "add the sticker gifting in … exclusive posts' comments" — to the creator, warmed while open */}
                 {giftTo && !isCreator ? (
-                  <PostGiftButton author={giftTo} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/85 transition active:scale-90 active:bg-white/10 motion-reduce:active:scale-100" />
+                  <PostGiftButton author={giftTo} subPostId={postId} onSent={() => { commentsRequested.current = false; loadComments(); setSum((s) => (s ? { ...s, comments: s.comments + 1 } : s)); }} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/85 transition active:scale-90 active:bg-white/10 motion-reduce:active:scale-100" />
                 ) : null}
                 <button type="button" onClick={() => void send()} disabled={!draft.trim() || sending} aria-label="Post comment" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-[0_6px_18px_-6px_rgba(124,58,237,0.8)] transition active:scale-90 disabled:from-white/15 disabled:to-white/15 disabled:shadow-none motion-reduce:active:scale-100">
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}
@@ -913,7 +934,9 @@ function LockedGrid({ posts, more }: { posts: Card[]; more: boolean }) {
               aria-label={`Locked ${kind(p).toLowerCase()}${p.mature ? ", Mature (18+)" : ""} — subscribe to view`}
               className="relative block h-[220px] overflow-hidden rounded-[20px] bg-[#1A1430]"
             >
-              {p.coverUrl || p.blurUrl ? (
+              {p.blurVideoUrl ? (
+                <BlurredClip src={p.blurVideoUrl} poster={p.coverUrl ?? p.blurUrl} className="absolute -inset-5 h-[calc(100%+2.5rem)] w-[calc(100%+2.5rem)]" />
+              ) : p.coverUrl || p.blurUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element -- the creator's public cover or the server's blurred preview
                 <img src={p.coverUrl ?? p.blurUrl} alt="" aria-hidden draggable={false} className="pointer-events-none absolute -inset-5 h-[calc(100%+2.5rem)] w-[calc(100%+2.5rem)] object-cover blur-xl" />
               ) : null}

@@ -24,15 +24,24 @@ export interface ThreadCacheEntry {
 }
 
 const THREAD_CACHE_LIMIT = 10;
+/*
+  🔴 KEYED BY VIEWER TOO (owner, 2026-10-28: "received gift should appear on the left side … and the send on the
+  right"). The owner switches between two of their own accounts in one PWA and chats between them, so both open the
+  SAME conversation id. Every row's `mine` (left/right, "You sent…", ticks) is the viewer's, and a copy cached by one
+  account painted the other account's sides — a received gift on the right, as if sent. A copy is only ever served
+  back to the account that fetched it.
+*/
 const threadCache = new Map<string, ThreadCacheEntry>();
+const keyOf = (viewerId: string, conversationId: string) => `${viewerId}:${conversationId}`;
 
-export function getCachedThread(conversationId: string): ThreadCacheEntry | undefined {
-  return threadCache.get(conversationId);
+export function getCachedThread(viewerId: string, conversationId: string): ThreadCacheEntry | undefined {
+  return threadCache.get(keyOf(viewerId, conversationId));
 }
 
-export function cacheThread(conversationId: string, entry: ThreadCacheEntry): void {
-  threadCache.delete(conversationId); // re-insert so Map's insertion order tracks MRU
-  threadCache.set(conversationId, entry);
+export function cacheThread(viewerId: string, conversationId: string, entry: ThreadCacheEntry): void {
+  const key = keyOf(viewerId, conversationId);
+  threadCache.delete(key); // re-insert so Map's insertion order tracks MRU
+  threadCache.set(key, entry);
   if (threadCache.size > THREAD_CACHE_LIMIT) {
     const oldestKey = threadCache.keys().next().value;
     if (oldestKey) threadCache.delete(oldestKey);
@@ -40,8 +49,8 @@ export function cacheThread(conversationId: string, entry: ThreadCacheEntry): vo
 }
 
 /** Is this thread already warm? Lets the inbox skip re-fetching one it has. */
-export function isThreadWarm(conversationId: string): boolean {
-  return threadCache.has(conversationId);
+export function isThreadWarm(viewerId: string, conversationId: string): boolean {
+  return threadCache.has(keyOf(viewerId, conversationId));
 }
 
 /**
@@ -63,15 +72,16 @@ export function isThreadWarm(conversationId: string): boolean {
  */
 const inFlight = new Map<string, Promise<void>>();
 
-export async function warmThread(conversationId: string): Promise<void> {
-  if (threadCache.has(conversationId)) return;
+export async function warmThread(viewerId: string, conversationId: string): Promise<void> {
+  const key = keyOf(viewerId, conversationId);
+  if (threadCache.has(key)) return;
   // Share an in-flight warm rather than starting a second one. The inbox's
   // warm loop restarts whenever the conversation ORDER changes (a new message
   // bumps a thread to the top), which cancels the loop mid-thread — the thread
   // it was fetching isn't in the cache yet, so the restarted loop would fetch
   // it again. Observed live: two duplicate fetches per inbox load. Harmless
   // (peek reads are idempotent) but pure waste on a phone's connection.
-  const existing = inFlight.get(conversationId);
+  const existing = inFlight.get(key);
   if (existing) return existing;
 
   const run = (async () => {
@@ -80,14 +90,14 @@ export async function warmThread(conversationId: string): Promise<void> {
       if (!res.ok) return;
       const d = (await res.json()) as { messages?: MessageItem[]; syncedAt?: string };
       if (!d.messages) return;
-      cacheThread(conversationId, { messages: d.messages, syncedAt: d.syncedAt ?? new Date().toISOString() });
+      cacheThread(viewerId, conversationId, { messages: d.messages, syncedAt: d.syncedAt ?? new Date().toISOString() });
     } catch {
       /* a failed warm is a non-event — the room fetches normally on open */
     } finally {
-      inFlight.delete(conversationId);
+      inFlight.delete(key);
     }
   })();
-  inFlight.set(conversationId, run);
+  inFlight.set(key, run);
   return run;
 }
 

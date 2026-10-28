@@ -1,6 +1,8 @@
 import "server-only";
 
 import { isAdult } from "@/lib/age/server";
+import { giftCommentId, type CommentGift } from "@/lib/gift/comment-gifts";
+import { loadCommentGifts } from "@/lib/gift/comment-gifts-server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { visibleTo } from "./guards";
@@ -36,6 +38,8 @@ export interface PrivateComment {
   createdAt: string;
   mine: boolean;
   author: { name: string; handle: string | null; avatarUrl: string | null };
+  /** a sticker gift sent on this post (0304) — from the gift row, never from the comment */
+  gift?: CommentGift | null;
 }
 
 export async function interactionSummary(postId: string, userId: string | null): Promise<{ ok: true; likes: number; liked: boolean; comments: number } | Fail> {
@@ -69,21 +73,26 @@ export async function listComments(postId: string, userId: string | null): Promi
   const a = await access(postId, userId);
   if (!a.ok) return a;
   const db = createAdminClient();
-  const read = () => db.from("sub_post_comments").select("id, user_id, body, created_at").eq("post_id", postId).order("created_at", { ascending: true }).limit(200);
+  const read = (cols = "id, user_id, body, created_at, gift_id") => db.from("sub_post_comments").select(cols).eq("post_id", postId).order("created_at", { ascending: true }).limit(200);
   // taken-down comments (0247 hidden_at) never reach anyone; before 0247 the column is absent
   let res = await read().is("hidden_at", null);
-  if (res.error && /hidden_at/.test(res.error.message)) res = await read();
+  // before 0304 there is no gift_id, before 0247 no hidden_at
+  if (res.error && /gift_id/.test(res.error.message)) res = await read("id, user_id, body, created_at").is("hidden_at", null);
+  if (res.error && /hidden_at/.test(res.error.message)) res = await read("id, user_id, body, created_at");
   const { data, error } = res;
   if (error) return MISSING(error.message) ? fail("Comments arrive with the next update.", 503) : fail("Couldn't load comments.", 500);
-  const rows = (data ?? []) as { id: string; user_id: string; body: string; created_at: string }[];
+  const rows = (data ?? []) as unknown as { id: string; user_id: string; body: string; created_at: string; gift_id?: string | null }[];
   const ids = [...new Set(rows.map((r) => r.user_id))];
-  const { data: people } = ids.length ? await db.from("profiles").select("id, display_name, handle, avatar_url").in("id", ids) : { data: [] };
+  const [{ data: people }, gifts] = await Promise.all([
+    ids.length ? db.from("profiles").select("id, display_name, handle, avatar_url").in("id", ids) : Promise.resolve({ data: [] }),
+    loadCommentGifts(rows.map((r) => (r.gift_id ? giftCommentId(r.gift_id) : null))),
+  ]);
   const byId = new Map(((people ?? []) as { id: string; display_name: string | null; handle: string | null; avatar_url: string | null }[]).map((p) => [p.id, p]));
   return {
     ok: true,
     comments: rows.map((r) => {
       const p = byId.get(r.user_id);
-      return { id: r.id, body: r.body, createdAt: r.created_at, mine: r.user_id === userId, author: { name: p?.display_name || (p?.handle ? `@${p.handle}` : "Someone"), handle: p?.handle ?? null, avatarUrl: p?.avatar_url ?? null } };
+      return { id: r.id, body: r.body, createdAt: r.created_at, mine: r.user_id === userId, author: { name: p?.display_name || (p?.handle ? `@${p.handle}` : "Someone"), handle: p?.handle ?? null, avatarUrl: p?.avatar_url ?? null }, gift: r.gift_id ? (gifts.get(giftCommentId(r.gift_id)) ?? null) : null };
     }),
   };
 }
@@ -108,3 +117,6 @@ export async function deleteComment(postId: string, commentId: string, userId: s
   const { error } = await q;
   return error ? fail("Couldn't delete that.", 500) : { ok: true };
 }
+
+/** The same gate, for the gift route (0304): a sticker gift on an exclusive post needs what a comment needs. */
+export const subPostAccess = access;

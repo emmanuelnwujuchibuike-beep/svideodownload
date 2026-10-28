@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 /*
   The reels engagement tray from design/frenz-reels.html (owner, 2026-10-28: "use exactly what's in the design").
-  Creator (+ follow) · like · comment · save · share · sound disc, in that order, bare filled glyphs with a soft drop
+  Like · comment · save · share · sound disc, in that order, bare filled glyphs with a soft drop
   shadow and a count under each. Gift and Repost live in the Share sheet (reel-share-sheet.tsx).
 
   Light on purpose ("everything must be light weight, fast and never over heat"): plain buttons and inline SVG, no
@@ -69,12 +69,12 @@ export const HeartGlyph = ({ on }: { on: boolean }) => (
   </svg>
 );
 
+// a comment is a NOTE — a square box with lines of text (owner, 2026-10-28), not the round chat bubble Chats uses
 export const CommentGlyph = () => (
-  <svg width="34" height="34" viewBox="0 0 24 24" aria-hidden>
-    <path d="M12 3.3c5 0 9 3.5 9 7.9s-4 7.9-9 7.9c-1 0-2-.1-2.9-.4L4.6 21l1-3.9C4 15.6 3 13.5 3 11.2c0-4.4 4-7.9 9-7.9z" fill="#fff" />
-    <circle cx="8.2" cy="11.3" r="1.35" fill="#1a1a22" />
-    <circle cx="12" cy="11.3" r="1.35" fill="#1a1a22" />
-    <circle cx="15.8" cy="11.3" r="1.35" fill="#1a1a22" />
+  <svg width="32" height="32" viewBox="0 0 24 24" aria-hidden>
+    <path d="M4.2 3.5h15.6A1.7 1.7 0 0 1 21.5 5.2v10.6a1.7 1.7 0 0 1-1.7 1.7h-8.4l-5.2 4V17.5H4.2a1.7 1.7 0 0 1-1.7-1.7V5.2a1.7 1.7 0 0 1 1.7-1.7z" fill="#fff" />
+    <rect x="6.5" y="8" width="11" height="1.7" rx="0.85" fill="#1a1a22" />
+    <rect x="6.5" y="11.6" width="7" height="1.7" rx="0.85" fill="#1a1a22" />
   </svg>
 );
 
@@ -89,61 +89,6 @@ export const ShareGlyph = () => (
     <path d="M13.5 3.6l8 7.4-8 7.4v-4.2c-5.3-.2-8.4 1.7-10.5 5.4.6-6.1 3.6-10.3 10.5-11.1z" fill="#fff" />
   </svg>
 );
-
-/** The creator's avatar on a white ring, with the red + that turns into a white ✓ (one spin) once followed. */
-export function RailCreator({
-  avatarUrl,
-  name,
-  profileHref,
-  following,
-  showFollow,
-  onFollow,
-  renderLink,
-}: {
-  avatarUrl: string | null;
-  name: string;
-  profileHref: string;
-  following: boolean;
-  showFollow: boolean;
-  onFollow: () => void;
-  /** the caller's own Link (keeps its prefetch and close rules) */
-  renderLink: (props: { href: string; className: string; children: ReactNode; label: string }) => ReactNode;
-}) {
-  return (
-    <div className="relative mb-2.5 h-[50px] w-[50px]">
-      {renderLink({
-        href: profileHref,
-        label: `Open ${name}'s profile`,
-        className: "block h-[50px] w-[50px] rounded-full bg-white p-[2px] shadow-[0_4px_14px_rgba(0,0,0,0.35)]",
-        children: avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatarUrl} alt="" width={46} height={46} decoding="async" className="h-full w-full rounded-full object-cover" />
-        ) : (
-          <span className="flex h-full w-full items-center justify-center rounded-full bg-neutral-900 text-base font-bold text-white">{name.replace(/^@/, "").charAt(0).toUpperCase()}</span>
-        ),
-      })}
-      {showFollow ? (
-        <button
-          type="button"
-          aria-label={following ? `Following ${name}` : `Follow ${name}`}
-          aria-pressed={following}
-          onClick={(e) => {
-            e.stopPropagation();
-            onFollow();
-          }}
-          className={cn(
-            "absolute -bottom-2.5 left-1/2 -ml-[11px] flex h-[22px] w-[22px] items-center justify-center rounded-full border-2 border-white shadow-[0_2px_6px_rgba(0,0,0,0.3)] transition-[transform,background-color] duration-[350ms] ease-[cubic-bezier(0.34,1.56,0.64,1)]",
-            following ? "rotate-[360deg] bg-white" : "bg-[#FF3B5C]",
-          )}
-        >
-          <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden>
-            <path d={following ? "M2.5 6.3l2.3 2.3L9.5 3.8" : "M6 1.5v9M1.5 6h9"} stroke={following ? "#111" : "#fff"} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-          </svg>
-        </button>
-      ) : null}
-    </div>
-  );
-}
 
 /** The sound disc: a record that turns while the reel plays. */
 export function SoundDisc({ playing, thumbnailUrl }: { playing: boolean; thumbnailUrl: string | null }) {

@@ -7,6 +7,7 @@ import { parseMentionedHandles } from "@/lib/social/message-meta";
 import { ALLOWED_MIME, MAX_ATTACHMENTS_PER_MESSAGE, MAX_SIZE_BYTES } from "@/lib/social/message-media";
 import { listIncomingFriendRequests } from "@/lib/social/friends";
 import { listConversations, sendMessage, viewerTypingIndicatorsEnabled, type AttachmentInput } from "@/lib/social/messages";
+import { readSubPostGate } from "@/lib/sub/posts";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -116,6 +117,21 @@ const metadataSchema = z.union([
     handle: z.string().max(60),
     avatarUrl: z.string().url().nullable(),
   }),
+  // The recipient's "Say thanks" on a gift (owner, 2026-10-28: "the sender sees a decorated thank you message").
+  // Only the gift's id, its name and how many — no picture URL: the bubble takes the sticker from the gift
+  // message already in the thread, so nothing here can point a member's phone at an outside image.
+  z.object({
+    kind: z.literal("gift_thanks"),
+    giftId: z.string().uuid(),
+    name: z.string().trim().min(1).max(80),
+    quantity: z.number().int().min(1).max(10),
+  }),
+  // 0305: a creator sends one of their OWN exclusive posts (checked below). Each viewer's card is gated on its own: a
+  // subscriber sees the post, anyone else its blurred preview (features/sub/sub-post-chat-card.tsx).
+  z.object({
+    kind: z.literal("sub_post"),
+    postId: z.string().uuid(),
+  }),
 ]);
 
 const schema = z
@@ -159,6 +175,10 @@ export async function POST(request: Request) {
   }
   const parsed = schema.safeParse(json);
   if (!parsed.success) return NextResponse.json({ error: "Write a message." }, { status: 400 });
+  if (parsed.data.metadata?.kind === "sub_post") {
+    const gate = await readSubPostGate(parsed.data.metadata.postId);
+    if (!gate || gate.creatorId !== user.id) return NextResponse.json({ error: "You can only send your own exclusive posts." }, { status: 403 });
+  }
 
   const res = await sendMessage(user.id, parsed.data.conversationId, parsed.data.body, {
     replyToId: parsed.data.replyToId,
@@ -220,6 +240,7 @@ function previewFor(
   const text = body.length > 140 ? `${body.slice(0, 140)}…` : body;
   if (metadata?.kind === "location") return "Location";
   if (metadata?.kind === "contact") return `Contact: ${metadata.displayName}`;
+  if (metadata?.kind === "sub_post") return "Shared an exclusive post";
   if (!attachments || attachments.length === 0) return text;
   const kind = attachments[0]!.mediaKind;
   const label =

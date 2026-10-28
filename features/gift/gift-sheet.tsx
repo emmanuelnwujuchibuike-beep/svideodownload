@@ -26,8 +26,9 @@ import { confirmSkipped, dismissCoach, rememberGiftReturn, skipConfirmForAWeek }
   recipient) and reused on retry, so a retry can never send twice.
 
   Part 6 (owner, 2026-10-27): no PIN — "they send a gift like a normal sticker". Instead the first send asks "are you
-  sure?", with the choice to skip that question for a week (gift-prefs.ts). The Total and Balance after shown are the
-  sheet's arithmetic on the server's figures, for the member to read; the server's own answer replaces them.
+  sure?", with the choice to skip that question for a week (gift-prefs.ts). No Price / Available / Total / Balance-after rows any more (owner, 2026-10-28: "remove this calculation … I don't want the
+  gift card to be scrollable"): the total rides on the Send button, the balance on its pill, and the stage is compact so the
+  whole card fits without a scroll.
 */
 
 export interface GiftRecipient {
@@ -82,7 +83,7 @@ async function fetchGallery(): Promise<Gallery> {
  * chat with its author, called only when Send is pressed (opening the sheet never creates a chat). `backHref`: where the
  * top-up screens return to (the chat, unless given).
  */
-export function GiftSheet({ conversationId, recipients, requireChoice, onClose, onSent, initialStickerId, backHref, zIndex }: { conversationId: string | (() => Promise<string>); recipients: GiftRecipient[]; requireChoice: boolean; onClose: () => void; onSent: () => void; initialStickerId?: string | null; backHref?: string; zIndex?: number }) {
+export function GiftSheet({ conversationId = null, place = null, recipients, requireChoice, onClose, onSent, initialStickerId, backHref, zIndex }: { conversationId?: string | (() => Promise<string>) | null; /** 0304: a gift from a post goes on the post (its comments), never into a chat */ place?: { kind: "post" | "sub_post"; id: string } | null; recipients: GiftRecipient[]; requireChoice: boolean; onClose: () => void; onSent: () => void; initialStickerId?: string | null; backHref?: string; zIndex?: number }) {
   const [resolvedId, setResolvedId] = useState<string | null>(typeof conversationId === "string" ? conversationId : null);
   const gallery = useQuery<Gallery>(GIFT_GALLERY_KEY, fetchGallery, { revalidateOnFocus: false });
   const data = gallery.data ?? null;
@@ -124,7 +125,6 @@ export function GiftSheet({ conversationId, recipients, requireChoice, onClose, 
   const featured = useMemo(() => (data?.stickers ?? []).find((s) => s.featured) ?? null, [data]);
   const available = data?.wallet.available ?? 0;
   const total = chosen ? giftTotal(chosen.priceFgc, quantity) : 0;
-  const after = available - total;
   const short = !!chosen && total > available;
   const noteCheck = normalizeGiftNote(note);
   const noteChars = noteLength(note.trim());
@@ -144,14 +144,14 @@ export function GiftSheet({ conversationId, recipients, requireChoice, onClose, 
 
   const send = async () => {
     if (!chosen || !recipient || sending || short || !noteCheck.ok) return;
-    const sig = `${resolvedId ?? "story"}:${recipient.userId}:${chosen.id}:${chosen.revision}:${chosen.priceFgc}:${quantity}:${noteCheck.note ?? ""}`;
+    const sig = `${place ? `${place.kind}:${place.id}` : (resolvedId ?? "story")}:${recipient.userId}:${chosen.id}:${chosen.revision}:${chosen.priceFgc}:${quantity}:${noteCheck.note ?? ""}`;
     if (!key.current || key.current.sig !== sig) key.current = { sig, key: giftKey() };
     setSending(true);
     setError(null);
     let res: Response;
     let chatId = resolvedId;
     try {
-      if (!chatId && typeof conversationId === "function") {
+      if (!place && !chatId && typeof conversationId === "function") {
         try {
           chatId = await conversationId();
           setResolvedId(chatId);
@@ -165,7 +165,7 @@ export function GiftSheet({ conversationId, recipients, requireChoice, onClose, 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ conversationId: chatId, recipientId: requireChoice ? recipient.userId : null, stickerId: chosen.id, expectedRevision: chosen.revision, expectedPriceFgc: chosen.priceFgc, quantity, note: noteCheck.note, idempotencyKey: key.current.key }),
+        body: JSON.stringify({ ...(place ? { place } : { conversationId: chatId }), recipientId: requireChoice ? recipient.userId : null, stickerId: chosen.id, expectedRevision: chosen.revision, expectedPriceFgc: chosen.priceFgc, quantity, note: noteCheck.note, idempotencyKey: key.current.key }),
       });
     } catch {
       setSending(false);
@@ -245,12 +245,12 @@ export function GiftSheet({ conversationId, recipients, requireChoice, onClose, 
 
             {/* the stage (screen 3): the sticker pops in once — a plain fade under Reduce Motion */}
             <div className="flex flex-col items-center gap-2 text-center">
-              <div className="flex h-44 w-full items-center justify-center rounded-[28px] bg-[radial-gradient(circle_at_50%_40%,hsl(var(--frenz-violet)/0.16),transparent_70%)]">
+              <div className="flex h-32 w-full items-center justify-center rounded-[28px] bg-[radial-gradient(circle_at_50%_40%,hsl(var(--frenz-violet)/0.16),transparent_70%)]">
                 {/* eslint-disable-next-line @next/next/no-img-element -- uploaded sticker artwork, already a sized WebP */}
-                {chosen.animationUrl || chosen.imageUrl ? <img key={chosen.id} src={(chosen.animationUrl ?? chosen.imageUrl)!} alt="" className="h-40 w-40 object-contain motion-safe:animate-in motion-safe:zoom-in-75 motion-safe:duration-300 motion-reduce:animate-in motion-reduce:fade-in" /> : <span className="text-5xl" aria-hidden>🎁</span>}
+                {chosen.animationUrl || chosen.imageUrl ? <img key={chosen.id} src={(chosen.animationUrl ?? chosen.imageUrl)!} alt="" className="h-28 w-28 object-contain motion-safe:animate-in motion-safe:zoom-in-75 motion-safe:duration-300 motion-reduce:animate-in motion-reduce:fade-in" /> : <span className="text-5xl" aria-hidden>🎁</span>}
               </div>
               {RARITY_TAG[chosen.rarity] ? <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide", RARITY_TAG[chosen.rarity]!.className)}>{RARITY_TAG[chosen.rarity]!.label}</span> : null}
-              <h3 className="text-[26px] font-extrabold leading-tight tracking-tight">{chosen.name}</h3>
+              <h3 className="text-[22px] font-extrabold leading-tight tracking-tight">{chosen.name}</h3>
               {chosen.description ? <p className="max-w-[290px] text-[15px] leading-snug text-frenz-muted">{chosen.description}</p> : null}
             </div>
 
@@ -313,25 +313,6 @@ export function GiftSheet({ conversationId, recipients, requireChoice, onClose, 
               </div>
             </div>
 
-            <dl className="flex flex-col gap-1.5 px-1 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-frenz-muted">{quantity > 1 ? `${quantity} × ${fgcText(chosen.priceFgc)}` : "Price"}</dt>
-                <dd className="font-semibold tabular-nums">{fgcText(chosen.priceFgc * quantity)} FGC</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-frenz-muted">Available</dt>
-                <dd className="tabular-nums">{fgcText(available)} FGC</dd>
-              </div>
-              <div className="flex justify-between text-base">
-                <dt className="font-bold">Total</dt>
-                <dd className="font-extrabold tabular-nums">{fgcText(total)} FGC</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-frenz-muted">Balance after</dt>
-                <dd className={cn("font-semibold tabular-nums", short && "text-rose-600")}>{short ? "Not enough" : `${fgcText(after)} FGC`}</dd>
-              </div>
-            </dl>
-
             {error ? <p role="alert" className="rounded-xl bg-rose-500/10 px-3 py-2 text-sm text-rose-800 dark:text-rose-200">{error}</p> : null}
 
             {short ? (
@@ -377,7 +358,7 @@ export function GiftSheet({ conversationId, recipients, requireChoice, onClose, 
                     </>
                   )}
                 </button>
-                <p className="-mt-2 text-center text-xs text-frenz-muted">{recipient ? `Delivered instantly to your chat with ${recipient.name}.` : "Choose who the gift is for."}</p>
+                <p className="-mt-2 text-center text-xs text-frenz-muted">{recipient ? (place ? `Shows in the comments for ${recipient.name} to see.` : `Delivered instantly to your chat with ${recipient.name}.`) : "Choose who the gift is for."}</p>
               </>
             )}
           </div>

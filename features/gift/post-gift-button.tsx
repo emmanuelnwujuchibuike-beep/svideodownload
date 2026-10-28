@@ -14,17 +14,16 @@ import type { GiftRecipient } from "./gift-sheet";
   posts' comments so users can gift through there — the buttons must warm up and open instantly").
 
   The same sheet as chat and stories. Warm: the sheet's code and the sticker gallery (the shared cache) load as soon as
-  the button is on screen, so a tap opens it filled. The gift lands in the 1:1 chat with the creator, found or created
-  only when Send is pressed (app/api/posts/[id]/gift-conversation). Shown to signed-in members while Frenz Coin is on,
-  never on their own post.
+  the button is on screen, so a tap opens it filled. A gift on a feed post or an exclusive post lands ON that post, in
+  its comments (0304 — owner, 2026-10-28: "gift sent from comment shows in comment, not chat"), so the creator's message
+  setting no longer stops a post from being gifted. Only a gift with no post (a person) still goes through their chat.
+  Shown to signed-in members while Frenz Coin is on, never on their own post.
 */
 const GiftSheet = dynamic(() => import("./gift-sheet").then((m) => m.GiftSheet), { ssr: false });
 
-async function giftConversation(postId: string | undefined, to: string): Promise<string> {
-  // a feed post asks through the post (its own checks); anything else names the person (app/api/gift/conversation)
-  const r = postId
-    ? await fetch(`/api/posts/${encodeURIComponent(postId)}/gift-conversation`, { method: "POST", credentials: "same-origin" })
-    : await fetch("/api/gift/conversation", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to }) });
+async function giftConversation(to: string): Promise<string> {
+  // no post: the chat with the person (app/api/gift/conversation)
+  const r = await fetch("/api/gift/conversation", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to }) });
   const body = (await r.json().catch(() => null)) as { conversationId?: string; error?: string } | null;
   if (!r.ok || !body?.conversationId) throw new Error(body?.error || "Couldn't reach this chat. Try again.");
   return body.conversationId;
@@ -32,6 +31,8 @@ async function giftConversation(postId: string | undefined, to: string): Promise
 
 export function PostGiftButton({
   postId,
+  subPostId,
+  onSent,
   author,
   viewerId,
   authorHandle,
@@ -44,8 +45,12 @@ export function PostGiftButton({
   authorHandle?: string | null;
   /** a surface with its own button (the reel rail): it gets the open action and draws the control itself */
   render?: (open: () => void) => ReactNode;
-  /** the feed post the gift is for; omitted for content outside the posts table (exclusive posts) — then it goes to `author` */
+  /** the feed post the gift is for — the gift shows in its comments */
   postId?: string;
+  /** an exclusive post (sub_posts) the gift is for — the gift shows in its comments */
+  subPostId?: string;
+  /** after a gift is sent (a comment list can show it at once) */
+  onSent?: () => void;
   author: GiftRecipient;
   /** the signed-in viewer, when the surface already knows it (else the entitlements decide) */
   viewerId?: string | null;
@@ -87,7 +92,8 @@ export function PostGiftButton({
       </button>}
       {open ? (
         <GiftSheet
-          conversationId={() => giftConversation(postId, author.userId)}
+          place={postId ? { kind: "post", id: postId } : subPostId ? { kind: "sub_post", id: subPostId } : null}
+          conversationId={postId || subPostId ? null : () => giftConversation(author.userId)}
           recipients={[author]}
           requireChoice={false}
           backHref={typeof window === "undefined" ? undefined : window.location.pathname + window.location.search}
@@ -96,7 +102,7 @@ export function PostGiftButton({
             setOpen(false);
             onOpenChange?.(false);
           }}
-          onSent={() => {}}
+          onSent={() => onSent?.()}
         />
       ) : null}
     </>

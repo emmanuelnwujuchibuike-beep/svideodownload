@@ -1,3 +1,5 @@
+import type { CommentGift } from "@/lib/gift/comment-gifts";
+import { loadCommentGifts } from "@/lib/gift/comment-gifts-server";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { flagsOf, isAccountVisibleTo, relationTo } from "@/lib/social/account-visibility";
 import { loadVideoStickers } from "@/lib/social/video-stickers-server";
@@ -100,6 +102,8 @@ export interface CommentNode {
   sticker: string | null;
   /** The clip behind a video sticker (`vs:<uuid>`, 0303); null for an emoji sticker or none. */
   stickerMedia?: { videoUrl: string; posterUrl: string } | null;
+  /** A sticker gift sent on this post (`gf:<gift id>`, 0304) — drawn from the gift row, never from the comment. */
+  gift?: CommentGift | null;
   /** Attached image URL when the comment carries a picture. */
   imageUrl: string | null;
   /** Voice-note attachment (recorded in-app — see features/social/voice-recorder.tsx). */
@@ -257,8 +261,8 @@ export async function listComments(
       }
     }
 
-    // 0303: the clips behind any video stickers on this page of comments — one query
-    const stickerClips = await loadVideoStickers(rows.map((r) => r.sticker));
+    // 0303 + 0304: the clips behind video stickers and the gifts behind gift comments on this page — one query each
+    const [stickerClips, gifts] = await Promise.all([loadVideoStickers(rows.map((r) => r.sticker)), loadCommentGifts(rows.map((r) => r.sticker))]);
     const planById = new Map<string, BillingPlan>();
     for (const s of (subs ?? []) as { user_id: string; plan: BillingPlan }[]) planById.set(s.user_id, s.plan);
     const blockedIds = new Set<string>();
@@ -323,6 +327,7 @@ export async function listComments(
         body: r.body,
         sticker: r.sticker ?? null,
         stickerMedia: r.sticker ? (stickerClips.get(r.sticker) ?? null) : null,
+        gift: r.sticker ? (gifts.get(r.sticker) ?? null) : null,
         imageUrl: r.image_url ?? null,
         voiceUrl: r.voice_url ?? null,
         voiceDurationMs: r.voice_duration_ms ?? null,

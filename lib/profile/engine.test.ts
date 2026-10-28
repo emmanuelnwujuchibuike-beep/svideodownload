@@ -104,7 +104,14 @@ describe("module audience", () => {
 describe("effectiveModules", () => {
   it("gives an unconfigured profile its type's defaults, in order", () => {
     const on = effectiveModules("business", []).filter((m) => m.enabled).map((m) => m.key);
-    expect(on).toEqual(profileType("business").defaultModules);
+    // plus Saved, on for everyone (2026-10-28) — after the type's own, never before them
+    expect(on).toEqual([...profileType("business").defaultModules, "saved"]);
+  });
+
+  it("🔴 Saved is on by default, but a member who switched it off keeps it off", () => {
+    expect(effectiveModules("personal", []).find((m) => m.key === "saved")?.enabled).toBe(true);
+    const off = effectiveModules("personal", [{ moduleKey: "saved", enabled: false, position: 3, audience: "private" }]);
+    expect(off.find((m) => m.key === "saved")?.enabled).toBe(false);
   });
 
   it("only offers modules the type actually has", () => {

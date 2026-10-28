@@ -41,6 +41,7 @@ import { createPortal } from "react-dom";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { RichText } from "@/components/social/rich-text";
+import { CommentGiftCard } from "@/features/gift/comment-gift-card";
 import { VideoComment, VoiceMessage } from "@/features/social/comment-media";
 import { StickerPicker, toggleLibrarySticker, useStickerLibrary, type PickedSticker } from "@/features/social/sticker-picker";
 import { VideoSticker } from "@/features/social/video-sticker";
@@ -1580,7 +1581,7 @@ function CommentItemImpl({
                   </span>
                 </button>
               ) : null}
-              {node.stickerMedia ? <CommentVideoSticker id={node.sticker!} media={node.stickerMedia} /> : glyph ? <p className="mt-1 text-5xl leading-tight">{glyph}</p> : null}
+              {node.gift ? <CommentGiftCard gift={node.gift} /> : node.stickerMedia ? <CommentVideoSticker id={node.sticker!} media={node.stickerMedia} /> : glyph ? <p className="mt-1 text-5xl leading-tight">{glyph}</p> : null}
               {node.body ? <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed"><RichText text={node.body} /></p> : null}
             </>
           )}

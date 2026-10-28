@@ -53,6 +53,17 @@ export async function payoutProvider(): Promise<"flutterwave" | "paystack"> {
   }
 }
 
+/** The rail for a Frenz Coin withdrawal: the admin's choice (frenzCoin.payoutProvider), Flutterwave when unreadable. */
+async function coinPayoutChoice(w: Row): Promise<"flutterwave" | "paystack"> {
+  let choice: "flutterwave" | "paystack" | "by_country" = "flutterwave";
+  try {
+    choice = (await getLandingSettings()).frenzCoin.payoutProvider;
+  } catch {
+    /* the default rail */
+  }
+  return choice === "by_country" ? coinPayoutRail(payoutDestinationCountry(w)) : choice;
+}
+
 /**
  * Pay one withdrawal through the admin's rail. The only door every payout uses (the instant auto-payout and the
  * admin's Pay button). Flutterwave first by default; Paystack only after Flutterwave definitely sent nothing.
@@ -64,7 +75,12 @@ export async function payWithdrawal(withdrawalId: string, adminId: string | null
   */
   const { data: head } = await createAdminClient().from("withdrawal_requests").select("source, payout_method, payout_details").eq("id", withdrawalId).maybeSingle();
   const w = head as Row | null;
-  if (w?.source === "coin" && coinPayoutRail(payoutDestinationCountry(w)) === "paystack") {
+  /*
+    2026-10-28 (owner: "Paystack is blocking withdrawal, let's use Flutterwave for the global withdrawal, and I can switch
+    which for withdrawal"): the admin's Frenz Coin payout rail — Flutterwave by default (Paystack only as the backup when
+    Flutterwave definitely sent nothing), Paystack only, or by the bank's country (the 2026-10-27 rule above).
+  */
+  if (w?.source === "coin" && (await coinPayoutChoice(w)) === "paystack") {
     const p = await payWithdrawalViaPaystack(withdrawalId, adminId);
     return p.ok ? { ...p, provider: "paystack" } : p;
   }

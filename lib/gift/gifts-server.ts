@@ -4,6 +4,7 @@ import { isCoinTransferAuthorized, type CoinTransferAuthorization } from "@/lib/
 import type { FrenzCoinConfig } from "@/lib/coin/config";
 import { pinPolicy } from "@/lib/coin/pin";
 import { isGiftQuantity, normalizeGiftNote } from "@/lib/gift/batch";
+import { giftCommentId } from "@/lib/gift/comment-gifts";
 import { checkGiftingRules, type GiftingCheck } from "@/lib/gift/gifting-rules";
 import { sendMessage } from "@/lib/social/messages";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -118,6 +119,7 @@ const REFUSED: Record<string, [number, string]> = {
   note_invalid: [400, "That note can't be sent. Use plain text on one line."],
   authorization_required: [403, "Confirm this gift with your transaction PIN. Nothing was sent."],
   authorization_failed: [403, "That PIN wasn't accepted. Check it, or try again later. Nothing was sent."],
+  post_unavailable: [404, "That post isn't available any more. Nothing was sent."],
 };
 
 const refuse = (reason: string, extra: Record<string, unknown> = {}) => {
@@ -264,6 +266,102 @@ export async function sendGiftBatch(input: {
     balanceAfter: r.balance_after === undefined ? null : Number(r.balance_after),
     holdUntil: String(r.hold_until),
   };
+}
+
+export type SendPlaceGiftResult =
+  | { ok: true; batchId: string; giftId: string; giftIds: string[]; quantity: number; duplicate: boolean; priceFgc: number; totalFgc: number; recipientId: string; commentId: string | null; balanceAfter: number | null }
+  | { ok: false; status: number; reason: string; error: string; current?: { revision: number; priceFgc: number }; failedAt?: number };
+
+/**
+ * 0304 — a gift sent on a POST (a feed post, or an exclusive post) lives on that post, never in a chat (owner,
+ * 2026-10-28: "make gift sent from comment show in comment not chat"). The same batch, the same money rules
+ * (send_place_gift_batch → send_gift_batch → send_gift), with the post's creator as the recipient — so the creator's
+ * MESSAGE setting no longer decides whether their post can be gifted. After the gift commits, ONE comment shows it
+ * (the batch's first gift): a feed post's is a post_comments row with sticker `gf:<gift id>`, an exclusive post's a
+ * sub_post_comments row with gift_id. The caller checks an exclusive post is visible to the sender first.
+ */
+export async function sendPlaceGiftBatch(input: {
+  senderId: string;
+  kind: "post" | "sub_post";
+  placeId: string;
+  stickerId: string;
+  expectedRevision: number;
+  expectedPriceFgc: number;
+  quantity: number;
+  note: string | null;
+  idempotencyKey: string;
+  rules: GiftingCheck;
+}): Promise<SendPlaceGiftResult> {
+  if (!UUID.test(input.placeId) || !UUID.test(input.stickerId)) return refuse("invalid");
+  if (!BATCH_KEY.test(input.idempotencyKey) || !Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1 || !Number.isSafeInteger(input.expectedPriceFgc) || input.expectedPriceFgc < 1) return refuse("invalid");
+  if (!isGiftQuantity(input.quantity)) return refuse("quantity_invalid");
+  const note = normalizeGiftNote(input.note);
+  if (!note.ok) return refuse(note.reason);
+  const { data, error } = await createAdminClient().rpc("send_place_gift_batch", {
+    p_sender: input.senderId,
+    p_kind: input.kind,
+    p_place: input.placeId,
+    p_sticker: input.stickerId,
+    p_expected_revision: input.expectedRevision,
+    p_expected_price: input.expectedPriceFgc,
+    p_quantity: input.quantity,
+    p_note: note.note,
+    p_idempotency: input.idempotencyKey,
+    p_rules: input.rules.ok ? input.rules.rules : null,
+  });
+  if (error) {
+    if (MISSING.test(error.message) || /send_place_gift_batch/.test(error.message)) return { ok: false, status: 503, reason: "not_available", error: "Gifts on posts arrive with the next update." };
+    console.error("[gift/place] failed", { sender: input.senderId, code: error.code });
+    return { ok: false, status: 503, reason: "error", error: "Couldn't send the gift right now. Nothing was taken." };
+  }
+  const r = (data ?? {}) as {
+    ok?: boolean; reason?: string; duplicate?: boolean; batch_id?: string; gift_id?: string; gift_ids?: string[]; quantity?: number; recipient_id?: string;
+    revision?: number; price?: number; total?: number; note?: string | null; balance_after?: number; failed_at?: number;
+    sticker?: { name?: string };
+  };
+  if (!r.ok || !r.batch_id || !r.gift_id) {
+    if (r.reason === "sticker_changed") return refuse("sticker_changed", { current: { revision: Number(r.revision), priceFgc: Number(r.price) }, failedAt: r.failed_at });
+    return refuse(r.reason ?? "error", r.failed_at ? { failedAt: r.failed_at } : {});
+  }
+  const commentId = await postGiftComment({ kind: input.kind, placeId: input.placeId, senderId: input.senderId, giftId: r.gift_id, note: r.note ?? null, name: r.sticker?.name ?? "a sticker" });
+  return {
+    ok: true,
+    batchId: r.batch_id,
+    giftId: r.gift_id,
+    giftIds: Array.isArray(r.gift_ids) ? r.gift_ids.map(String) : [r.gift_id],
+    quantity: Number(r.quantity),
+    duplicate: !!r.duplicate,
+    priceFgc: Number(r.price),
+    totalFgc: Number(r.total),
+    recipientId: String(r.recipient_id),
+    commentId,
+    balanceAfter: r.balance_after === undefined ? null : Number(r.balance_after),
+  };
+}
+
+/** The comment that shows a post gift — once per gift (a replay finds the one already there). Never touches the gift. */
+async function postGiftComment(input: { kind: "post" | "sub_post"; placeId: string; senderId: string; giftId: string; note: string | null; name: string }): Promise<string | null> {
+  const db = createAdminClient();
+  try {
+    if (input.kind === "post") {
+      const sticker = giftCommentId(input.giftId);
+      const { data: existing } = await db.from("post_comments").select("id").eq("post_id", input.placeId).eq("sticker", sticker).maybeSingle();
+      if (existing) return (existing as { id: string }).id;
+      const { data, error } = await db.from("post_comments").insert({ post_id: input.placeId, author_id: input.senderId, parent_id: null, body: input.note ?? "", sticker }).select("id").single();
+      if (error) throw error;
+      return (data as { id: string }).id;
+    }
+    const { data: existing } = await db.from("sub_post_comments").select("id").eq("gift_id", input.giftId).maybeSingle();
+    if (existing) return (existing as { id: string }).id;
+    // the table needs 1 to 1,000 characters: the note, or what was sent
+    const body = (input.note ?? `Sent a sticker gift: ${input.name}`).slice(0, 1000);
+    const { data, error } = await db.from("sub_post_comments").insert({ post_id: input.placeId, user_id: input.senderId, body, gift_id: input.giftId }).select("id").single();
+    if (error) throw error;
+    return (data as { id: string }).id;
+  } catch (e) {
+    console.error("[gift/place] comment not posted", { gift: input.giftId, code: (e as { code?: string } | null)?.code ?? null });
+    return null;
+  }
 }
 
 /** The gift's chat message (idempotent on the gift's client id). A failure here never touches the gift: retrying posts it. */

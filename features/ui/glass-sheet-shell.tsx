@@ -152,10 +152,18 @@ export function GlassSheetShell({
   // dialog pattern (focus enters, Escape exits) — NOT a full focus trap
   // (Tab can still leave the dialog into the page behind it); that's a
   // real, larger addition left undone here rather than shipped half-right.
+  /*
+    🔴 THE EFFECT RUNS ON `open` ONLY (owner, 2026-10-28: "writing the wallet transfer PIN closes the keyboard every time
+    I write one number"). It used to depend on `onClose` too, and callers pass an inline arrow — a new function on every
+    render. Each digit typed re-rendered the page, the effect re-ran, and its focus timer pulled focus from the PIN field
+    back onto the panel: the keyboard dropped after every key. Escape reads the latest onClose through a ref instead.
+  */
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     };
     window.addEventListener("keydown", onKey);
     /*
@@ -170,13 +178,17 @@ export function GlassSheetShell({
     */
     const prevOverflowY = document.body.style.overflowY;
     document.body.style.overflowY = "hidden";
-    const focusTimer = window.setTimeout(() => panelRef.current?.focus(), 50);
+    // into the panel once, on open — and never away from a field inside it that already has focus (an autoFocus PIN)
+    const focusTimer = window.setTimeout(() => {
+      const panel = panelRef.current;
+      if (panel && !panel.contains(document.activeElement)) panel.focus();
+    }, 50);
     return () => {
       window.removeEventListener("keydown", onKey);
       document.body.style.overflowY = prevOverflowY;
       window.clearTimeout(focusTimer);
     };
-  }, [open, onClose]);
+  }, [open]);
 
   const onGrabStart = (clientY: number) => {
     setDragging(true);

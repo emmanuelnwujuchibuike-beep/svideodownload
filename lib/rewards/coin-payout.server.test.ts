@@ -14,6 +14,7 @@ let db: FakeDb;
 const W = "11111111-1111-4111-8111-111111111111";
 let source: "none" | "fixed" | "market" = "none";
 let fixedMinor: number | null = null;
+let coinRail: "flutterwave" | "paystack" | "by_country" = "by_country";
 let perUsd = 1500;
 const sent: number[] = [];
 
@@ -21,7 +22,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => db.client() }));
 vi.mock("@/lib/ai/character-replace/fx-rate-server", () => ({ marketRate: async () => ({ rate: { perUsd }, source: "stored" }) }));
 vi.mock("@/lib/landing/settings", () => ({
-  getLandingSettings: async () => ({ frenzRewards: { sub: { payoutProvider: "flutterwave" } }, frenzCoin: { withdrawals: { payoutRateSource: source, payoutMinorPerUsd: fixedMinor } } }),
+  getLandingSettings: async () => ({ frenzRewards: { sub: { payoutProvider: "flutterwave" } }, frenzCoin: { payoutProvider: coinRail, withdrawals: { payoutRateSource: source, payoutMinorPerUsd: fixedMinor } } }),
 }));
 vi.mock("@/lib/flutterwave/config", () => ({ getFlutterwaveConfig: async () => ({ secretKey: "FLWSECK_TEST-x" }) }));
 vi.mock("@/lib/flutterwave/client", async (orig) => ({
@@ -120,6 +121,7 @@ describe("a Frenz Coin payout", () => {
 describe("which rail pays a Frenz Coin withdrawal", () => {
   beforeEach(() => {
     source = "market";
+    coinRail = "by_country";
     vi.mocked(payWithdrawalViaPaystack).mockClear();
   });
   it("a Nigerian bank (every coin withdrawal today): Paystack — Flutterwave is never asked", async () => {
@@ -140,6 +142,20 @@ describe("which rail pays a Frenz Coin withdrawal", () => {
     expect((await payWithdrawal(W, "admin-1")).ok).toBe(true);
     expect(payWithdrawalViaPaystack).not.toHaveBeenCalled();
     expect(sent).toHaveLength(1);
+  });
+  // 2026-10-28 (owner: "Paystack is blocking withdrawal, let's use Flutterwave … and I can switch"): the admin's rail
+  it("the admin's Flutterwave rail pays even a Nigerian bank through Flutterwave — Paystack is not asked", async () => {
+    coinRail = "flutterwave";
+    expect((await payWithdrawal(W, "admin-1")).ok).toBe(true);
+    expect(payWithdrawalViaPaystack).not.toHaveBeenCalled();
+    expect(sent).toHaveLength(1);
+  });
+  it("the admin's Paystack rail pays even a bank beyond Paystack's countries through Paystack", async () => {
+    coinRail = "paystack";
+    db.tables.withdrawal_requests = [coinRow({ payout_details: { bankCode: "058", accountNumber: "0123456789", accountName: "ADA OBI", country: "US" } })];
+    await payWithdrawal(W, "admin-1");
+    expect(payWithdrawalViaPaystack).toHaveBeenCalledWith(W, "admin-1");
+    expect(sent).toEqual([]);
   });
   it("an Exclusive (SUB) withdrawal keeps the admin's provider (Flutterwave here), even to a Nigerian bank", async () => {
     db.tables.withdrawal_requests = [coinRow({ source: "sub" })];

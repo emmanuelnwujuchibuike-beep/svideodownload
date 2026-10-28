@@ -31,6 +31,10 @@ export const HomeIcon = (p: GlyphProps) => <Glyph {...p}><path d="M3 11l9-7 9 7v
 export const FeedIcon = (p: GlyphProps) => <Glyph {...p}><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M10 9.5v5l4.5-2.5z" /></Glyph>;
 export const HistoryIcon = (p: GlyphProps) => <Glyph {...p}><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" /><path d="M12 8v4l3 2" /></Glyph>;
 export const ChatIcon = (p: GlyphProps) => <Glyph {...p}><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z" /></Glyph>;
+// two distinct glyphs (owner, 2026-10-28: "they must not be the same … they should look more like their functions"):
+// Chats is a CONVERSATION — two speech bubbles, one answering the other; a comment is a NOTE — a square box with lines of text
+export const ChatsIcon = (p: GlyphProps) => <Glyph {...p}><path d="M14.5 4.5h-9A2.5 2.5 0 0 0 3 7v5.5A2.5 2.5 0 0 0 5.5 15H6v3l3.5-3h5a2.5 2.5 0 0 0 2.5-2.5V7a2.5 2.5 0 0 0-2.5-2.5z" /><path d="M17 9h1.5A2.5 2.5 0 0 1 21 11.5V16a2.5 2.5 0 0 1-2.5 2.5H18v2.5l-3-2.5h-3.5a2.5 2.5 0 0 1-2-1" /></Glyph>;
+export const CommentIcon = (p: GlyphProps) => <Glyph {...p}><path d="M4 4h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-9l-5 4v-4H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" /><path d="M7.5 9h9" /><path d="M7.5 12.5h6" /></Glyph>;
 export const BellIcon = (p: GlyphProps) => <Glyph {...p}><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9z" /><path d="M10 20a2 2 0 0 0 4 0" /></Glyph>;
 export const MegaphoneIcon = (p: GlyphProps) => <Glyph {...p}><path d="M3 10v4h3l7 5V5L6 10z" /><path d="M17 9a4 4 0 0 1 0 6" /><path d="M20 6.5a8 8 0 0 1 0 11" /></Glyph>;
 export const LinkIcon = (p: GlyphProps) => <Glyph {...p}><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></Glyph>;

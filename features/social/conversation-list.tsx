@@ -305,15 +305,15 @@ export function ConversationList({
     (async () => {
       for (const id of ids) {
         if (cancelled) return;
-        if (isThreadWarm(id)) continue;
-        await warmThread(id);
+        if (isThreadWarm(viewerId, id)) continue;
+        await warmThread(viewerId, id);
       }
     })();
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- orderKey IS the dependency
-  }, [orderKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- orderKey (and the account) IS the dependency
+  }, [orderKey, viewerId]);
 
   const pathname = usePathname();
   const online = usePresence();

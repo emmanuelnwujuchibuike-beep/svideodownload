@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import { PressIcon } from "@/components/motion/press-icon";
 import { useAiGlassTier } from "@/features/ai/design/glass-tier";
 import { FrenzPersonSolid } from "@/components/icons/frenz-icons";
-import { ChatIcon, FeedIcon, HistoryIcon, HomeIcon } from "@/features/frenz-ui/icons";
+import { ChatsIcon, FeedIcon, HistoryIcon, HomeIcon } from "@/features/frenz-ui/icons";
 import { FIRST_WARM_ROUTE, GUEST_WARM_ROUTES, afterPageLoad } from "@/features/app-shell/warm-routes";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useQuery } from "@/features/data";
@@ -414,7 +414,7 @@ export function MobileNav({
         <NavTab label="History" href="/history" icon={HistoryIcon} activeIcon={HistoryIcon} active={pathname.startsWith("/history")} prefetch={false} onWarm={router.prefetch} onGo={go} />
         {/* Chats for everyone (owner, 2026-10-16: Support → Chats on the landing too). A guest sees an empty
             inbox and a sign-in modal (features/social/guest-chat.tsx); Support stays in the menu. */}
-        <NavTab label="Chats" href="/messages" icon={ChatIcon} activeIcon={ChatIcon} active={pathname.startsWith("/messages")} badge={handle ? unread : 0} prefetch={false} onWarm={router.prefetch} onGo={go} />
+        <NavTab label="Chats" href="/messages" icon={ChatsIcon} activeIcon={ChatsIcon} active={pathname.startsWith("/messages")} badge={handle ? unread : 0} prefetch={false} onWarm={router.prefetch} onGo={go} />
 
       </nav>
       {/* Profile — the design's gradient button beside the bar (design/*.dc.html, 2026-10-18): a

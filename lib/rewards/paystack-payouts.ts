@@ -183,7 +183,11 @@ export async function rejectPaystackWithdrawal(input: { id: string; status: "rej
   }
   if (v.kind === "not_found") {
     const age = Date.now() - Date.parse(w.updated_at ?? "");
-    if (!(age >= NOT_SENT_MIN_AGE_MS)) return { ok: false, error: "Paystack doesn't list this transfer yet, but it was attempted less than an hour ago and may still be accepted. It stays held; try again later.", reason: "too_soon" };
+    if (!(age >= NOT_SENT_MIN_AGE_MS)) {
+      // the guard stays (returning the coins while Paystack may still pay would pay twice) — but it says WHEN (owner, 2026-10-28)
+      const mins = Number.isFinite(age) ? Math.max(1, Math.ceil((NOT_SENT_MIN_AGE_MS - age) / 60_000)) : null;
+      return { ok: false, error: `${railName(reference)} doesn't list this transfer, but it was attempted less than an hour ago and could still go through — rejecting now could pay the member AND return the coins. Reject opens ${mins ? `in about ${mins} minute${mins === 1 ? "" : "s"}` : "an hour after the attempt"}; the coins stay held until then.`, reason: "too_soon" };
+    }
     if (recorded) {
       if (!input.confirmNotSent) return { ok: false, error: "Paystack has no transfer with this reference. Confirm it was never sent to release the money.", reason: "confirm_not_sent" };
       const why = (input.note ?? "").trim();

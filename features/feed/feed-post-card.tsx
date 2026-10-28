@@ -24,7 +24,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { FrenzLogo } from "@/components/brand/frenz-logo";
-import { BookmarkIcon, ChatIcon, DotsIcon, PlayIcon, RepostIcon, SendIcon as FrenzSendIcon, LockIcon } from "@/features/frenz-ui/icons";
+import { BookmarkIcon, CommentIcon, DotsIcon, PlayIcon, RepostIcon, SendIcon as FrenzSendIcon, LockIcon } from "@/features/frenz-ui/icons";
 import { VerifiedBadge } from "@/features/frenz-ui/primitives";
 import Link from "next/link";
 import { memo, useEffect, useRef, useState } from "react";
@@ -46,6 +46,7 @@ import Image from "next/image";
 import { makeEmotionIcon, reactionGlyph, ReactionPicker, type ReactionEmotion } from "@/features/social/reaction-picker";
 import { RepostBurst } from "@/features/social/repost-burst";
 import { WhyThisChip } from "@/features/social/repost/why-this";
+import { rememberedReaction, rememberReaction } from "@/lib/social/reaction-memory";
 import { attributeRepost } from "@/lib/social/repost/attribution-client";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
@@ -144,11 +145,13 @@ function FeedPostCardImpl({
    *  see `FeedVideo`'s `nextSrc`. */
   nextVideoSrc?: string | null;
 }) {
-  const [liked, setLiked] = useState(item.viewerLiked);
-  const [saved, setSaved] = useState(item.viewerSaved);
+  // the viewer's own reaction this session beats a cached page's stale one (lib/social/reaction-memory.ts, 2026-10-28)
+  const mem = rememberedReaction(item.id);
+  const [liked, setLiked] = useState(mem?.liked ?? item.viewerLiked);
+  const [saved, setSaved] = useState(mem?.saved ?? item.viewerSaved);
   const following = useFollowState(item.publisher.id, item.isFollowing);
   const repostState = useRepostState(item.id, item.viewerReposted ?? false, item.repostsCount ?? 0);
-  const [likes, setLikes] = useState(item.likesCount);
+  const [likes, setLikes] = useState(mem?.likes ?? item.likesCount);
   const articleRef = useRef<HTMLElement>(null);
   // without the fade-in there is no animation end to strip framer's resting transform (see the article): strip it now
   useEffect(() => {
@@ -174,7 +177,12 @@ function FeedPostCardImpl({
   const [qrReady, setQrReady] = useState(false);
   // Long-press Wow → the reaction picker; the picked glyph replaces the icon.
   const [reactionsOpen, setReactionsOpen] = useState(false);
-  const [myEmotion, setMyEmotion] = useState<string | null>(item.viewerReactionEmotion ?? null);
+  const [myEmotion, setMyEmotion] = useState<string | null>(mem?.emotion !== undefined ? mem.emotion : (item.viewerReactionEmotion ?? null));
+  // every change to the viewer's own reaction is remembered for the session (a re-mount from a cached page reads it)
+  useEffect(() => {
+    if (liked !== item.viewerLiked || saved !== item.viewerSaved || mem) rememberReaction(item.id, { liked, saved, likes, emotion: myEmotion });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the reaction itself is the trigger
+  }, [liked, saved, likes, myEmotion]);
   const wowPress = useLongPress(() => setReactionsOpen(true));
   // Gate the code-split sheets: mount only after first open (keeps their chunks
   // out of the feed until actually needed, then stays mounted for exit animations).
@@ -537,7 +545,7 @@ function FeedPostCardImpl({
           />
         </span>
         <ActionButton
-          icon={ChatIcon as typeof Heart}
+          icon={CommentIcon as typeof Heart}
           count={exclusive ? undefined : item.commentsCount}
           onClick={() => {
             if (!requireAuth()) return;

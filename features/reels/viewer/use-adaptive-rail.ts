@@ -105,43 +105,45 @@ function resolve(w: number, h: number): RailLayout {
   // Landscape: height is scarce. Keep the rail close to the edge and tighten it
   // vertically so it does not eat the video.
   if (landscape && short < 600) {
-    return { inset: 6, gap: 10, compact: true, form: "large-phone" };
+    return { inset: 6, gap: 2, compact: true, form: "large-phone" };
   }
 
   if (short < 360) {
     // Small phone. The edge is already within reach and there is no width to
     // spare — almost no correction, or the rail starts covering the video.
-    return { inset: 4, gap: 14, compact: false, form: "phone" };
+    return { inset: 4, gap: 4, compact: false, form: "phone" };
   }
   if (short < 412) {
-    return { inset: 7, gap: 16, compact: false, form: "phone" };
+    return { inset: 7, gap: 6, compact: false, form: "phone" };
   }
   if (short < 500) {
     // Large phone — the case this system exists for. The top of a flush rail is
     // out of the thumb arc here.
-    return { inset: 12, gap: 18, compact: false, form: "large-phone" };
+    return { inset: 12, gap: 8, compact: false, form: "large-phone" };
   }
   if (short < 700) {
     // Unfolded foldable. Wide, and usually held with both hands, but the rail
     // still wants to be nearer the middle than the bezel.
-    return { inset: 19, gap: 20, compact: false, form: "foldable" };
+    return { inset: 19, gap: 10, compact: false, form: "foldable" };
   }
   if (short < 1024) {
     // Tablet. The edge is genuinely unreachable one-handed.
-    return { inset: 26, gap: 22, compact: false, form: "tablet" };
+    return { inset: 26, gap: 12, compact: false, form: "tablet" };
   }
   // Desktop — a pointer, so reach is irrelevant and the inset is purely
   // compositional: the rail sits off the video's shoulder rather than on it.
-  return { inset: 21, gap: 20, compact: false, form: "desktop" };
+  return { inset: 21, gap: 10, compact: false, form: "desktop" };
 }
 
+// 🔴 2026-10-28 (owner: "too much space between these engagement buttons in the tray"): every gap came down ~10px — each
+// button already carries its own 44px target and count line, so the rail reads as one tight column, as the design draws it.
 export function useAdaptiveRail(): RailLayout {
   // SSR-safe seed. Matches the `short < 412` phone case, which is the most
   // common real device — so the first client paint is already right for most
   // visitors and there is nothing to correct.
   const [layout, setLayout] = useState<RailLayout>({
     inset: 7,
-    gap: 22,
+    gap: 6,
     compact: false,
     form: "phone",
   });

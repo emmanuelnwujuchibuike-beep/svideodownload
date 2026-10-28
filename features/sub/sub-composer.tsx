@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { exDanger, exField, exPrimary, exQuiet } from "@/features/sub/ui";
 import { haptic } from "@/lib/motion/haptics";
 import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
+import { makeBlurClip } from "@/lib/media/make-blur-clip";
 import { makeThumb } from "@/lib/media/make-thumb";
 import { presignUpload, uploadWithPlan } from "@/lib/storage/client-upload";
 import { cn } from "@/lib/utils";
@@ -127,8 +128,17 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
         setBusy("Uploading the cover…");
         coverUrl = await uploadWithPlan(await presignUpload("image", extOf(cover)), cover, cover.type || "image/jpeg");
       }
+      // a locked video plays BLURRED for non-subscribers (owner, 2026-10-28): a 24 px clip made here, the detail gone
+      // before it leaves this device (lib/media/make-blur-clip.ts). Best effort — without it the still preview shows.
+      let blurVideoUrl: string | null = null;
+      const firstVideo = items[0]?.kind === "video" ? items[0].file : null;
+      if (firstVideo && audience === "locked") {
+        setBusy("Making the blurred preview…");
+        const clip = await makeBlurClip(firstVideo);
+        if (clip) blurVideoUrl = await uploadWithPlan(await presignUpload("video", clip.ext), clip.blob, clip.type).catch(() => null);
+      }
       setBusy("Publishing…");
-      const res = await fetch("/api/sub/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caption: caption.trim() || null, coverUrl, media, audience, mature }) });
+      const res = await fetch("/api/sub/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caption: caption.trim() || null, coverUrl, media, audience, mature, ...(blurVideoUrl ? { blurVideoUrl } : {}) }) });
       const j = (await res.json().catch(() => null)) as { error?: string; code?: string } | null;
       // the server checks the creator's age too: show the check rather than a dead end
       if (res.status === 403 && j?.code === "age_required") {

@@ -10,7 +10,7 @@ import {
   Download,
   Heart,
   Loader2,
-  MessageCircle,
+  MessageSquareText,
   Pencil,
   Play,
   Share2,
@@ -29,6 +29,7 @@ import { floatReaction } from "@/features/ui/reaction-float";
 import { Comments } from "@/features/social/comments";
 import { makeEmotionIcon, reactionGlyph, ReactionPicker, type ReactionEmotion } from "@/features/social/reaction-picker";
 import { useEntitlements } from "@/features/auth/use-entitlements";
+import { rememberedReaction, rememberReaction } from "@/lib/social/reaction-memory";
 import { useLongPress } from "@/lib/hooks/use-long-press";
 import { suspendPlayback } from "@/lib/media/video-coordinator";
 import type { CommentNode } from "@/lib/social/engagement";
@@ -102,13 +103,18 @@ function ViewerInner({
   // moments after it started.
   useLayoutEffect(() => suspendPlayback(), []);
   const { isPremium } = useEntitlements();
-  const [liked, setLiked] = useState(item.viewerLiked);
-  const [saved, setSaved] = useState(item.viewerSaved);
+  // the viewer's own reaction this session beats a cached page's stale one (lib/social/reaction-memory.ts)
+  const [liked, setLiked] = useState(() => rememberedReaction(item.id)?.liked ?? item.viewerLiked);
+  const [saved, setSaved] = useState(() => rememberedReaction(item.id)?.saved ?? item.viewerSaved);
   const [myEmotion, setMyEmotion] = useState<string | null>(item.viewerReactionEmotion ?? null);
   const [reactionsOpen, setReactionsOpen] = useState(false);
   const wowPress = useLongPress(() => setReactionsOpen(true));
   const following = useFollowState(item.publisher.id, item.isFollowing);
-  const [likes, setLikes] = useState(item.likesCount);
+  const [likes, setLikes] = useState(() => rememberedReaction(item.id)?.likes ?? item.likesCount);
+  useEffect(() => {
+    if (liked !== item.viewerLiked || saved !== item.viewerSaved) rememberReaction(item.id, { liked, saved, likes });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the reaction itself is the trigger
+  }, [liked, saved, likes]);
   const [title, setTitle] = useState(item.title);
   const [editOpen, setEditOpen] = useState(false);
   const [editReady, setEditReady] = useState(false);
@@ -377,7 +383,7 @@ function ViewerInner({
               }}
             />
           </span>
-          <Act icon={MessageCircle} label="Comments" count={item.commentsCount} onClick={() => setShowComments(true)} />
+          <Act icon={MessageSquareText} label="Comments" count={item.commentsCount} onClick={() => setShowComments(true)} />
           <Act icon={Share2} label="Share" count={item.sharesCount} onClick={share} />
           <Act icon={Bookmark} label="Save" active={saved} fill={saved} activeClass="text-primary" onClick={() => react("save")} />
           {item.platform === "frenz" && item.mediaUrl ? (

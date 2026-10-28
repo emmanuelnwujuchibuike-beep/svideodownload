@@ -60,12 +60,13 @@ import { EDGE_ZONE_PX } from "@/features/app-shell/edge-swipe-back";
 import { loadZoneAd } from "@/features/monetization/ad-cache";
 import { ReelsAdSlide } from "@/features/monetization/reels-ad-slide";
 import { useShowAds } from "@/features/monetization/use-show-ads";
+import { rememberedReaction, rememberReaction } from "@/lib/social/reaction-memory";
 import { insertAdSlots, REELS_AD_INTERVAL } from "@/lib/feed/ad-slots";
 import { useSlotProvider } from "@/features/ads-platform/serve/use-slot-provider";
 import { glass, layer, scrimForLuminance } from "@/features/reels/viewer/design";
 import { GlassButton } from "@/features/reels/viewer/glass-button";
 import { ReelProgress } from "@/features/reels/viewer/reel-progress";
-import { CommentGlyph, HeartGlyph, RailAct, RailCreator, SaveGlyph, ShareGlyph, SoundDisc } from "@/features/reels/viewer/design-rail";
+import { CommentGlyph, HeartGlyph, RailAct, SaveGlyph, ShareGlyph, SoundDisc } from "@/features/reels/viewer/design-rail";
 import { LivingPlayback } from "@/features/reels/viewer/living-playback";
 import { clampFeedRatio, isReelsShaped } from "@/lib/media/aspect";
 import {
@@ -1027,8 +1028,9 @@ function ReelCard({
   // it, and closing the sheet (any of its many close paths) correctly resumes.
   const [pausedForMore, setPausedForMore] = useState(false);
 
-  const [liked, setLiked] = useState(item.viewerLiked);
-  const [saved, setSaved] = useState(item.viewerSaved);
+  // the viewer's own reaction this session beats a cached page's stale one (lib/social/reaction-memory.ts)
+  const [liked, setLiked] = useState(() => rememberedReaction(item.id)?.liked ?? item.viewerLiked);
+  const [saved, setSaved] = useState(() => rememberedReaction(item.id)?.saved ?? item.viewerSaved);
   const following = useFollowState(item.publisher.id, item.isFollowing);
   /*
     🔴 GUEST INTERACTIONS ARE LOCAL-ONLY, NEVER A REDIRECT (owner, 2026-08-18:
@@ -1043,7 +1045,11 @@ function ReelCard({
     going to be accepted.
   */
   const { handle: viewerHandle } = useEntitlements();
-  const [likes, setLikes] = useState(item.likesCount);
+  const [likes, setLikes] = useState(() => rememberedReaction(item.id)?.likes ?? item.likesCount);
+  useEffect(() => {
+    if (liked !== item.viewerLiked || saved !== item.viewerSaved) rememberReaction(item.id, { liked, saved, likes });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the reaction itself is the trigger
+  }, [liked, saved, likes]);
   const [showComments, setShowComments] = useState(false);
   const [sheetVideoPaused, setSheetVideoPaused] = useState(false);
   const [comments, setComments] = useState<CommentsData | null>(null);
@@ -2437,20 +2443,8 @@ function ReelCard({
           is gone from THIS rail to match — "Add to collection" in the •••
           sheet covers the same intent.
         */}
-        {/* design/frenz-reels.html (owner, 2026-10-28): creator · like · comment · save · share · sound — Gift and Repost are in the Share sheet */}
-        <RailCreator
-          avatarUrl={item.publisher.avatarUrl ?? null}
-          name={`@${item.publisher.handle}`}
-          profileHref={profilePath(item.publisher.handle)}
-          following={following}
-          showFollow={!item.isOwner}
-          onFollow={() => void toggleFollow()}
-          renderLink={({ href, className, children, label }) => (
-            <Link href={href} aria-label={label} className={className}>
-              {children}
-            </Link>
-          )}
-        />
+        {/* design/frenz-reels.html (owner, 2026-10-28): like · comment · save · share · sound — Gift and Repost are in the Share sheet.
+            No creator ring or follow here (owner, 2026-10-28: "there is already a profile button and follow at the bottom"). */}
         {/* a plain heart on reels — the Wow reactions are the feed's (owner, 2026-10-28) */}
         <RailAct
           label="Like"

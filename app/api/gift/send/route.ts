@@ -4,9 +4,10 @@ import { z } from "zod";
 import { authorizeGift } from "@/lib/coin/authorization";
 import { GIFT_BATCH_MAX, GIFT_NOTE_MAX } from "@/lib/gift/batch";
 import { dispatchGiftBatchNotifications, dispatchGiftNotifications } from "@/lib/gift/gift-notify";
-import { loadGiftingRules, sendGift, sendGiftBatch } from "@/lib/gift/gifts-server";
+import { loadGiftingRules, sendGift, sendGiftBatch, sendPlaceGiftBatch } from "@/lib/gift/gifts-server";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { aiJobCreateLimiter, clientId, pinLimiter } from "@/lib/rate-limit";
+import { subPostAccess } from "@/lib/sub/interactions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -20,7 +21,9 @@ export const dynamic = "force-dynamic";
 */
 const batchSchema = z
   .object({
-    conversationId: z.string().uuid(),
+    // a chat, OR (0304) the post the gift is sent on — a gift from a post lives in its comments, never in a chat
+    conversationId: z.string().uuid().optional(),
+    place: z.object({ kind: z.enum(["post", "sub_post"]), id: z.string().uuid() }).strict().optional(),
     recipientId: z.string().uuid().nullable().optional(),
     stickerId: z.string().uuid(),
     expectedRevision: z.number().int().positive(),
@@ -31,7 +34,8 @@ const batchSchema = z
     note: z.string().max(GIFT_NOTE_MAX * 4).nullable().optional(),
     idempotencyKey: z.string().max(76),
   })
-  .strict();
+  .strict()
+  .refine((v) => !!v.conversationId !== !!v.place, { message: "A chat or a post." });
 
 const schema = z
   .object({
@@ -73,9 +77,33 @@ export async function POST(request: Request) {
     }
     const [settings, rules] = await Promise.all([getLandingSettings(), loadGiftingRules()]);
     if (!settings.frenzCoin.enabled) return NextResponse.json({ error: "Frenz Coin isn't available right now.", reason: "disabled" }, { status: 503 });
+    const place = b.data.place;
+    if (place) {
+      // an exclusive post: only someone who may see it (an active subscriber — the same rule as its comments) can gift on it
+      if (place.kind === "sub_post") {
+        const seen = await subPostAccess(place.id, user.id);
+        if (!seen.ok) return NextResponse.json({ error: seen.error, reason: "post_unavailable" }, { status: seen.status });
+      }
+      const placed = await sendPlaceGiftBatch({
+        senderId: user.id,
+        kind: place.kind,
+        placeId: place.id,
+        stickerId: b.data.stickerId,
+        expectedRevision: b.data.expectedRevision,
+        expectedPriceFgc: b.data.expectedPriceFgc,
+        quantity: b.data.quantity,
+        note: b.data.note ?? null,
+        idempotencyKey: b.data.idempotencyKey,
+        rules,
+      });
+      if (!placed.ok) return NextResponse.json({ error: placed.error, reason: placed.reason, ...(placed.current ? { current: placed.current } : {}) }, { status: placed.status });
+      const placedIds = placed.giftIds;
+      after(() => dispatchGiftBatchNotifications(placedIds).then(() => undefined));
+      return NextResponse.json(placed, { headers: { "cache-control": "no-store" } });
+    }
     const out = await sendGiftBatch({
       senderId: user.id,
-      conversationId: b.data.conversationId,
+      conversationId: b.data.conversationId!,
       recipientId: b.data.recipientId ?? null,
       stickerId: b.data.stickerId,
       expectedRevision: b.data.expectedRevision,

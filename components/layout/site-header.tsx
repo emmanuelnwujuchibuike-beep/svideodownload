@@ -438,7 +438,7 @@ export function SiteHeader({
             like every Install now), the account, and the menu. Go Pro, search, language, the theme switch and Promote
             are all in the drawer.
           */}
-          <InstallHeaderCta label="Install" />
+          <InstallHeaderCta label="Install" gradient />
           <UserMenu />
           {/*
             The menu button now renders on DESKTOP too, for signed-out visitors
@@ -493,7 +493,7 @@ export function SiteHeader({
               streak, so a first-time visitor’s header is byte-for-byte
               unchanged and there is no layout shift either way.
             */}
-            {landing ? <InstallHeaderCta label="Install" /> : <SearchTriggerIcon />}
+            {landing ? <InstallHeaderCta label="Install" gradient /> : <SearchTriggerIcon />}
             {/* Promote, fixed beside Install (owner, 2026-10-09: "make it be close to
                 the install button in the landing page"). */}
             {landing ? <PromoteButton size="header" /> : null}

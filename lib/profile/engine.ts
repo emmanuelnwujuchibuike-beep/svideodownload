@@ -118,7 +118,10 @@ export function effectiveModules(type: ProfileTypeKey, stored: StoredModule[]): 
         spec: m,
         // A member who has never touched a module gets their type's default —
         // so a brand-new Business profile is useful before it is configured.
-        enabled: row ? row.enabled : onByDefault,
+        // Saved is on for everyone by default (owner, 2026-10-28: "put saved posts in the profile tray so users can
+        // rewatch them") — it is the owner's own shelf: a visitor still never sees it unless the owner's privacy
+        // setting shares it (the governed gate below). A member who switched it off keeps it off.
+        enabled: row ? row.enabled : onByDefault || m.key === "saved",
         // Stored order wins; otherwise the type's default order, and anything
         // the type doesn't name falls in behind it in catalogue order.
         position: row?.position ?? (onByDefault ? defaultIndex : 100 + catalogueIndex),

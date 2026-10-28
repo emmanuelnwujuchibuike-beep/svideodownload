@@ -97,12 +97,23 @@ export interface FrenzCoinConfig {
    * does not bump the version.
    */
   adminAlerts: CoinAdminAlerts;
+  /**
+   * Which rail pays a Frenz Coin withdrawal (owner, 2026-10-28: "Paystack is blocking withdrawal, let's use Flutterwave
+   * for the global withdrawal, and I can switch which for withdrawal"). `flutterwave` (the default): every coin payout
+   * goes through Flutterwave, with Paystack as the backup only when Flutterwave definitely sent nothing. `paystack`:
+   * Paystack only. `by_country`: the 2026-10-27 rule (Nigeria, Ghana, South Africa, Kenya by Paystack, beyond by
+   * Flutterwave — lib/rewards/payout-rail.ts). Prices nothing, so it does not bump the version.
+   */
+  payoutProvider: CoinPayoutProvider;
   version: number;
   updatedAt: string | null;
 }
 
 export type CoinAdminAlerts = "both" | "push" | "email" | "off";
 export const COIN_ADMIN_ALERTS: readonly CoinAdminAlerts[] = ["both", "push", "email", "off"];
+
+export type CoinPayoutProvider = "flutterwave" | "paystack" | "by_country";
+export const COIN_PAYOUT_PROVIDERS: readonly CoinPayoutProvider[] = ["flutterwave", "paystack", "by_country"];
 
 export const COIN_DEFAULTS: FrenzCoinConfig = {
   enabled: false,
@@ -113,6 +124,7 @@ export const COIN_DEFAULTS: FrenzCoinConfig = {
   deposits: { enabled: false, holdHours: 1, minCents: 100, maxCents: 500_000 },
   pin: { maxAttempts: 5, lockMinutes: 15, resetTtlMinutes: 10, resetMaxPerHour: 3, resetCodeMaxAttempts: 5 },
   adminAlerts: "both",
+  payoutProvider: "flutterwave",
   version: 1,
   updatedAt: null,
 };
@@ -182,6 +194,7 @@ export function normalizeCoinConfig(raw: unknown): FrenzCoinConfig {
       resetCodeMaxAttempts: int(pin.resetCodeMaxAttempts, d.pin.resetCodeMaxAttempts, 3, 10),
     },
     adminAlerts: (COIN_ADMIN_ALERTS as readonly unknown[]).includes(r.adminAlerts) ? (r.adminAlerts as CoinAdminAlerts) : d.adminAlerts,
+    payoutProvider: (COIN_PAYOUT_PROVIDERS as readonly unknown[]).includes(r.payoutProvider) ? (r.payoutProvider as CoinPayoutProvider) : d.payoutProvider,
     version: int(r.version, d.version, 1, Number.MAX_SAFE_INTEGER),
     updatedAt: typeof r.updatedAt === "string" ? r.updatedAt : null,
   };

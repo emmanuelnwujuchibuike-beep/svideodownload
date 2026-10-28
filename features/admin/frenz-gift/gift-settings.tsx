@@ -56,6 +56,15 @@ export function GiftSettings({ sensitiveFetch }: { sensitiveFetch: SensitiveFetc
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
+  // FGC → FC as the exact reverse of FC → FGC — offered under a round-trip error when the way back isn't already that
+  const reverseFix = (() => {
+    const a = Number(form.fcToFgc.rateNum);
+    const b = Number(form.fcToFgc.rateDen);
+    if (!Number.isSafeInteger(a) || !Number.isSafeInteger(b) || a < 1 || b < 1) return null;
+    if (Number(form.fgcToFc.rateNum) === b && Number(form.fgcToFc.rateDen) === a) return null;
+    return { num: b, den: a };
+  })();
+
   const set = (leg: LegName, k: keyof LegForm, v: string) => {
     setMsg(null);
     setForm((f) => ({ ...f, [leg]: { ...f[leg], [k]: v } }));
@@ -113,10 +122,10 @@ export function GiftSettings({ sensitiveFetch }: { sensitiveFetch: SensitiveFetc
         return (
           <Card key={l.name} title={l.title}>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Field htmlFor={`g-${l.name}-num`} label="Rate: output units" hint={`1 ${l.inLabel.replace(" ($)", "")} → ${rateText(num, den)} ${l.outLabel.replace(" ($)", "")} before fees`} error={e("rateNum")}>
+              <Field htmlFor={`g-${l.name}-num`} label={`Rate: ${l.outLabel.replace(" ($)", "")} you get`} hint={`1 ${l.inLabel.replace(" ($)", "")} → ${rateText(num, den)} ${l.outLabel.replace(" ($)", "")} before fees`} error={e("rateNum")}>
                 <input id={`g-${l.name}-num`} inputMode="numeric" className={INPUT} value={f.rateNum} onChange={(ev) => set(l.name, "rateNum", ev.target.value)} />
               </Field>
-              <Field htmlFor={`g-${l.name}-den`} label="Rate: per input units" hint="Whole numbers, 1 to 999,999,999" error={e("rateDen")}>
+              <Field htmlFor={`g-${l.name}-den`} label={`… for this many ${l.inLabel.replace(" ($)", "")}`} hint={l.name === "fcToFgc" ? "e.g. 100 for 1 = 100 FGC per 1 FC" : "e.g. 1 for 100 = 1 FC per 100 FGC (the reverse)"} error={e("rateDen")}>
                 <input id={`g-${l.name}-den`} inputMode="numeric" className={INPUT} value={f.rateDen} onChange={(ev) => set(l.name, "rateDen", ev.target.value)} />
               </Field>
               <Field htmlFor={`g-${l.name}-pct`} label={`Fee (%) — from the ${l.outLabel}`} hint="0 to 50, up to 2 decimals" error={e("feePercent")}>
@@ -150,7 +159,24 @@ export function GiftSettings({ sensitiveFetch }: { sensitiveFetch: SensitiveFetc
             ) : null}
           </div>
         ) : result.ok ? null : result.rules ? (
-          <Message kind="error">{result.rules}</Message>
+          <div className="space-y-2">
+            <Message kind="error">{result.rules}</Message>
+            {/*
+              owner, 2026-10-28 (a screenshot of "keeps 820800.0000%"): the usual cause is the SAME rate typed in both
+              directions (1 FC → 100 FGC, and 1 FGC → 100 FC). The way back must be the reverse fraction. One tap fills it;
+              nothing is saved until Save.
+            */}
+            {reverseFix ? (
+              <div className="rounded-xl border border-border p-3 text-sm">
+                <p>
+                  Gift Coin → Frenz Coin should be the reverse of Frenz Coin → Gift Coin: if 1 FC gives {rateText(reverseFix.den, reverseFix.num)} FGC, then {rateText(reverseFix.den, reverseFix.num)} FGC gives 1 FC back (before fees).
+                </p>
+                <button type="button" className={`${BTN} mt-2 border border-border`} onClick={() => setForm((cur) => ({ ...cur, fgcToFc: { ...cur.fgcToFc, rateNum: String(reverseFix.num), rateDen: String(reverseFix.den) } }))}>
+                  Use the reverse rate ({reverseFix.num} per {reverseFix.den})
+                </button>
+              </div>
+            ) : null}
+          </div>
         ) : (
           <Message kind="info">Fill in every box in both directions to check the rules.</Message>
         )}

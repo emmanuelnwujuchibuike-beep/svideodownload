@@ -1162,10 +1162,10 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
             phase === "done"
               ? "bg-emerald-600 text-white shadow-emerald-600/25"
               : isBatchable && selected.size !== 1
-                ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-violet-500/30 hover:shadow-violet-500/50 hover:shadow-xl disabled:opacity-70"
+                ? "bg-frenz-ink text-frenz-page shadow-[0_14px_28px_-14px_rgb(18_17_26/0.6)] disabled:opacity-70"
                 : gatedAdCount > 0
                   ? "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white shadow-amber-500/30 hover:shadow-amber-500/50 hover:shadow-xl disabled:opacity-70"
-                  : "bg-primary text-primary-foreground shadow-primary/25 hover:shadow-glow-blue disabled:opacity-70",
+                  : "bg-frenz-ink text-frenz-page shadow-[0_14px_28px_-14px_rgb(18_17_26/0.6)] disabled:opacity-70",
           )}
         >
           {/* shimmer sweep */}

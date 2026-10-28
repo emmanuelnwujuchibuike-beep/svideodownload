@@ -409,7 +409,7 @@ export function DownloadBox({
             type="submit"
             disabled={isBusy}
             aria-busy={isBusy || undefined}
-            className="flex h-[54px] items-center justify-center gap-2.5 rounded-2xl bg-frenz-gradient-x font-heading text-[17px] font-bold text-white shadow-frenz-card transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2 disabled:opacity-60"
+            className="flex h-[54px] items-center justify-center gap-2.5 rounded-2xl bg-frenz-ink text-frenz-page shadow-[0_14px_28px_-14px_rgb(18_17_26/0.6)] font-heading text-[17px] font-bold transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2 disabled:opacity-60"
           >
             {isBusy ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <DownloadIcon size={20} strokeWidth={2.4} />} Download
           </button>

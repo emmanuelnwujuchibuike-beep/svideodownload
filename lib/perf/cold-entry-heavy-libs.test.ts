@@ -9,8 +9,7 @@ import { describe, expect, it } from "vitest";
   Measured 2026-10-26: framer-motion (121 kB, via the bottom nav's PressIcon) and zod (56 kB, via the paste
   box's URL check) were both there. A lazy `import()` / `next/dynamic` is not followed, and is fine.
 */
-// the landing is app/route.ts since 2026-10-27 — static HTML with no React bundle at all (lib/perf/landing-static.test.ts)
-const ENTRIES = ["app/layout.tsx", "app/(marketing)/layout.tsx", "app/(marketing)/[downloader]/page.tsx"];
+const ENTRIES = ["app/layout.tsx", "app/(marketing)/layout.tsx", "app/(marketing)/page.tsx", "app/(marketing)/[downloader]/page.tsx"];
 const HEAVY = /^(framer-motion|motion\/.*|zod)$/;
 
 type Read = (file: string) => string | null;

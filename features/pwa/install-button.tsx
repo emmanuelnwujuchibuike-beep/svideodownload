@@ -143,7 +143,7 @@ export function InstallHeaderCta({ className, label = "Install Frenz" }: { class
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         className={cn(
-          "hide-when-installed inline-flex h-10 shrink-0 items-center whitespace-nowrap rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 text-sm font-bold text-white shadow-md shadow-violet-500/25 transition active:scale-[0.97]",
+          "hide-when-installed inline-flex h-10 shrink-0 items-center whitespace-nowrap rounded-xl bg-frenz-ink text-frenz-page shadow-[0_14px_28px_-14px_rgb(18_17_26/0.6)] px-4 text-sm font-bold transition active:scale-[0.97]",
           className,
         )}
       >

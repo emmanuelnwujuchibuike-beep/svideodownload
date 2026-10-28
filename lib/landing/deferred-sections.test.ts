@@ -16,18 +16,24 @@ import { getPrimaryPages } from "@/lib/seo/seo-pages";
  * scrolled near. These pin that, and that nothing was lost on the way.
  */
 const src = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
-// 2026-10-27: the landing is the static app/route.ts (lib/landing-static/html.ts) — it carries its own FAQ and downloader
-// links in the document; /landing-sections stays for any cached copy of the old page still fetching it
-const page = src("lib/landing-static/html.ts");
+const page = src("app/(marketing)/page.tsx");
 const parts = renderDeferredSections();
 
+/** Every part the module renders has a placeholder on the page, and no section renders inline. */
+function pageDefersEverything(pageSrc: string) {
+  const missing = DEFERRED_PARTS.filter((p) => !pageSrc.includes(`<DeferredSection part="${p}"`));
+  const inline = /<(FeaturesGrid|HowItWorks|Faq|FrenzAiSection|DiscoverSection|CtaBanner|DownloaderLinks)\b/.exec(pageSrc)?.[1] ?? null;
+  return { missing, inline };
+}
+
 describe("the landing's deferred sections", () => {
-  it("the static landing keeps what these sections said: every FAQ question and every platform's downloader page", async () => {
-    const { renderLanding } = await import("@/lib/landing-static/html");
-    const html = renderLanding({ siteUrl: "https://frenzsave.com", jsVersion: "t", downloadOrigin: "https://dl.example", direct: true, googleTagId: null });
-    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-    for (const f of FAQS) expect(html).toContain(esc(f.q));
-    expect(html).toMatch(/href="\/[a-z-]+-downloader"/);
+  it("every part has a placeholder on the page and none is rendered inline", () => {
+    expect(pageDefersEverything(page)).toEqual({ missing: [], inline: null });
+  });
+
+  it("teeth: a dropped placeholder or a section put back inline is caught", () => {
+    expect(pageDefersEverything(page.replace('<DeferredSection part="faq"', "<div")).missing).toEqual(["faq"]);
+    expect(pageDefersEverything(page + "\n<FeaturesGrid />").inline).toBe("FeaturesGrid");
   });
 
   it("each part is real markup with its heading, and carries no script and no gradient text", () => {
@@ -49,7 +55,7 @@ describe("the landing's deferred sections", () => {
   });
 
   it("the FAQ's structured data stays in the document itself", () => {
-    expect(page).toContain("faqJsonLd");
+    expect(page).toContain("<FaqJsonLd />");
   });
 
   it("the route is static: built once, no request, cookie or database read", () => {

@@ -5,17 +5,13 @@ import { describe, expect, it } from "vitest";
 
 import { ancestorEntries, buildExists, entryWeight, formatKb, routeWeights } from "./budget";
 
-/**
- * The JS chunks a cold-entry React page loads, straight from the manifest. Since 2026-10-27 the landing itself is the
- * static app/route.ts with no React bundle (its own budget: lib/perf/landing-static.test.ts), so this reads the
- * platform downloader pages — the cold-entry pages still built with React.
- */
+/** The JS chunks the landing page actually loads, straight from the manifest. */
 function landingChunks(): string[] {
   try {
     const manifest = JSON.parse(readFileSync(join(".next", "app-build-manifest.json"), "utf8")) as {
       pages?: Record<string, string[]>;
     };
-    return (manifest.pages?.["/(marketing)/[downloader]/page"] ?? []).filter((f) => f.endsWith(".js"));
+    return (manifest.pages?.["/(marketing)/page"] ?? []).filter((f) => f.endsWith(".js"));
   } catch {
     return [];
   }
@@ -681,8 +677,8 @@ const GLOBAL_CEILING = 380 * 1024;
  */
 const ENTRY_CEILING = 218 * 1024;
 
-// "/(marketing)/page" left this list 2026-10-27: the landing is the static app/route.ts (lib/perf/landing-static.test.ts)
 const ENTRY_ROUTES = [
+  "/(marketing)/page",
   "/(marketing)/[downloader]/page",
   "/(marketing)/academy/page",
   "/(marketing)/trust/page",
@@ -868,6 +864,8 @@ describe.skipIf(!buildExists())("route weight budget", () => {
  * Ceilings sit a few kB above, the same ratchet rule: they only move down.
  */
 const FULL_ENTRY_CEILINGS: Record<string, number> = {
+  // the landing is React again (owner, 2026-10-28: "why didn't you use the existing React") — its measured 243,637 B
+  "/(marketing)/page": 248 * 1024,
   "/(marketing)/[downloader]/page": 248 * 1024,
   "/(app)/downloads/page": 262 * 1024,
   "/(app)/home/page": 330 * 1024,

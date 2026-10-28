@@ -549,10 +549,9 @@ describe("Ad slots — no decorated empty boxes", () => {
      * The requirement is unchanged: this page must not be able to render a
      * wrapper around an empty zone.
      */
-    // 2026-10-27: the landing is static HTML (lib/landing-static/html.ts) with NO slot in its markup — nothing can
-    // render a decorated empty box there; its ad units are self-placing, loaded after load + idle (public/landing/extras.js)
-    const src = readFileSync(path.join(ROOT, "lib/landing-static/html.ts"), "utf8");
-    expect(src, "the static landing renders an ad slot").not.toMatch(/AdSlot|AdSurface|data-zone|ad-slot/);
+    const src = stripComments(readFileSync(path.join(ROOT, "app/(marketing)/page.tsx"), "utf8"));
+    expect(src, "landing page renders a raw AdSlot again").not.toMatch(/<AdSlot\b/);
+    expect(src).toMatch(/<AdSurface\b/);
   });
 
   it("puts the site-wide furniture in the layout, not on individual pages", () => {
@@ -605,6 +604,7 @@ describe("Ad slots — no decorated empty boxes", () => {
       "features/monetization/deferred-ad-furniture.tsx",
       "app/(app)/layout.tsx",
       "app/(marketing)/layout.tsx",
+      "app/(marketing)/page.tsx",
       "app/(app)/downloads/page.tsx",
     ]) {
       const src = stripComments(readFileSync(path.join(ROOT, file), "utf8"));
@@ -612,8 +612,8 @@ describe("Ad slots — no decorated empty boxes", () => {
       expect(src, `${file} mounts a second bottom banner`).not.toMatch(/<AppBottomAd\b/);
     }
 
-    const home = readFileSync(path.join(ROOT, "lib/landing-static/html.ts"), "utf8");
-    expect(home, "the static landing mounts an interstitial of its own").not.toMatch(/IdleInterstitial|interstitial/i);
+    const home = stripComments(readFileSync(path.join(ROOT, "app/(marketing)/page.tsx"), "utf8"));
+    expect(home, "landing page mounts a second idle interstitial").not.toMatch(/<IdleInterstitial\b/);
   });
 
   it("puts the download-history slot on every surface that shows the history", () => {

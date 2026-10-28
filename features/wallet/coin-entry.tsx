@@ -23,7 +23,9 @@ export function CoinHeaderPill({ className }: { className?: string }) {
   return (
     <Link
       href="/wallet"
-      prefetch={false}
+      // owner, 2026-10-28: "wallet button should prefetch and open fast" — the WHOLE page (it is dynamic, so the default
+      // prefetch stops at the layout); the router keeps it 6 h (staleTimes.dynamic), so one render per session
+      prefetch
       aria-label="Frenz Coin wallet"
       // set INTO the header like the search and bell icons (owner, 2026-10-25: "make the wallet button embed on the header")
       className={cn("inline-flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full outline-none transition active:scale-90 focus-visible:ring-2 focus-visible:ring-frenz-blue motion-reduce:transition-none", className)}
@@ -93,7 +95,7 @@ function RowBody({ title, description }: { title: string; description: string })
 export function CoinMenuCard({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="mx-4 mt-3">
-      <Link href="/wallet" className={ROW}>
+      <Link href="/wallet" prefetch className={ROW}>
         <RowBody title="Frenz Coin wallet" description="Your balance, deposits, withdrawals and transfers" />
         <CloseWhenOpened onOpened={onNavigate} />
       </Link>
@@ -107,7 +109,7 @@ export function CoinMenuCard({ onNavigate }: { onNavigate?: () => void }) {
  */
 export function CoinChatSend({ recipientId, name, onNavigate }: { recipientId: string; name: string; onNavigate?: () => void }) {
   return (
-    <Link href={`/wallet/transfer?to=${encodeURIComponent(recipientId)}`} className={cn(ROW, "mt-4")}>
+    <Link href={`/wallet/transfer?to=${encodeURIComponent(recipientId)}`} prefetch className={cn(ROW, "mt-4")}>
       <RowBody title="Send Frenz Coin" description={`Send money to ${name} from your wallet`} />
       <CloseWhenOpened onOpened={onNavigate} />
     </Link>

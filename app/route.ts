@@ -21,7 +21,7 @@ import { SITE_URL } from "@/lib/site";
 export const dynamic = "force-static";
 export const revalidate = 86400;
 
-const FILES = ["core.js", "result.js", "sheets.js", "extras.js"];
+const FILES = ["ads.js", "core.js", "result.js", "sheets.js", "extras.js"];
 
 function scriptsVersion(): string {
   const h = createHash("sha256");

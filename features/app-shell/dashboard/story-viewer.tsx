@@ -7,10 +7,8 @@
   Viewer design since 2026-10-26 (design/Frenz-Story-Viewer-design.zip).
 */
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
-import { FastForward, Loader2, Rewind, Send } from "lucide-react";
+import { FastForward, Gift, Loader2, Rewind, Send } from "lucide-react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -19,8 +17,8 @@ import type { EligibleAd } from "@/lib/ads-platform/eligibility";
 import { getEntry, mutate } from "@/features/data";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { faceGradient, useStoryViewers, viewersLine } from "@/features/social/story-viewers-data";
-import { TapPending } from "@/features/wallet/tap-pending";
 import { toast } from "@/features/ui/toast";
+import type { GiftRecipient } from "@/features/gift/gift-sheet";
 import { fireWowFeedback, WowBurst } from "@/features/ui/wow-burst";
 
 // Sheets a story viewer opens on a tap: loaded then, not with /home (2026-10-16, /home weight).
@@ -937,7 +935,7 @@ export function StoryViewer({
           name={firstName}
           allowReplies={allowReplies}
           canShare={effectiveAllow}
-          coinGift={entitlementsReady && frenzCoin ? `/wallet/transfer?to=${encodeURIComponent(group.userId)}&story=${encodeURIComponent(story.id)}` : null}
+          gift={entitlementsReady && frenzCoin ? { userId: group.userId, name: group.displayName, avatarUrl: group.avatarUrl ?? null } : null}
           onShare={() => setResharing(true)}
           onFocusChange={setReplying}
           onEmoji={(emoji) => setRise({ id: Date.now(), emoji })}
@@ -1128,22 +1126,34 @@ function EmojiRise({ emoji, onDone }: { emoji: string; onDone: () => void }) {
  * One outlined pill — "Reply to Ada…" with the coin button inside it — then the
  * heart and the paper plane. Typing swaps the heart and the plane for Send.
  *
- *   coin    sends Frenz Coin to the author FOR this story (owner, 2026-10-26: "should
- *           be gifting of Frenz coin not AI credit"): the ordinary transfer screen,
- *           with the story named so their notification opens it (lib/coin/story-gift.ts).
- *           Shown only while Frenz Coin is switched on.
+ *   gift    the sticker gift sheet (owner, 2026-10-28: "replace the story Frenz Coin
+ *           button … with the Frenz gifting, and it must prefetch and open instantly"):
+ *           the sheet's code and the sticker gallery are warmed while this bar shows, so a
+ *           tap opens it with stickers already in. The gift lands in the 1:1 chat with the
+ *           author, found or created only when Send is pressed. Shown only while Frenz
+ *           Coin is on (gifts are paid in Gift Coins, which come from Frenz Coins).
  *   heart   a like: one ❤️ reaction to the author, once per story
  *   plane   reshare / send to a chat — only when the author allows resharing
  *
  * With the author's "Allow replies" off, the pill says so and takes no text.
  */
+const GiftSheet = dynamic(() => import("@/features/gift/gift-sheet").then((m) => m.GiftSheet), { ssr: false });
+
+/** The chat a story gift lands in — found or created on Send only (app/api/stories/[id]/gift-conversation). */
+async function storyGiftConversation(storyId: string): Promise<string> {
+  const r = await fetch(`/api/stories/${encodeURIComponent(storyId)}/gift-conversation`, { method: "POST", credentials: "same-origin" });
+  const body = (await r.json().catch(() => null)) as { conversationId?: string; error?: string } | null;
+  if (!r.ok || !body?.conversationId) throw new Error(body?.error || "Couldn't reach this chat. Try again.");
+  return body.conversationId;
+}
+
 function StoryReplyBar({
   toUserId,
   storyId,
   name,
   allowReplies,
   canShare,
-  coinGift,
+  gift,
   onShare,
   onFocusChange,
   onEmoji,
@@ -1153,14 +1163,19 @@ function StoryReplyBar({
   name: string;
   allowReplies: boolean;
   canShare: boolean;
-  /** the transfer screen for a gift to this story, or null (Frenz Coin off) */
-  coinGift: string | null;
+  /** who a sticker gift for this story goes to, or null (Frenz Coin off) */
+  gift: GiftRecipient | null;
   onShare: () => void;
   onFocusChange: (v: boolean) => void;
   /** the reply was one emoji: the viewer plays its rise */
   onEmoji?: (emoji: string) => void;
 }) {
-  const router = useRouter();
+  const [giftOpen, setGiftOpen] = useState(false);
+  // warm the sheet's code AND the sticker gallery (the shared cache) while the bar shows: the tap opens it filled
+  useEffect(() => {
+    if (!gift) return;
+    void import("@/features/gift/gift-sheet").then((m) => m.warmGiftSheet()).catch(() => {});
+  }, [gift]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -1196,6 +1211,7 @@ function StoryReplyBar({
   const typing = text.trim().length > 0;
   const isLiked = liked.has(storyId);
   return (
+    <>
     <form
       aria-label={`Reply to ${name}`}
       onSubmit={(e) => {
@@ -1224,34 +1240,20 @@ function StoryReplyBar({
           ) : (
             <span className="min-w-0 flex-1 truncate text-[15px] text-white/60">Replies are off</span>
           )}
-          {coinGift && !typing ? (
-            <Link
-              href={coinGift}
-              // warmed as soon as the reply bar shows it (the viewer only ever opens after a tap, never during a page load)
-              aria-label={`Send Frenz Coin to ${name} for this story`}
-              // the screen starts loading as the finger lands — a tap's ~100 ms head start (2026-10-26: "open faster")
-              onPointerDown={() => router.prefetch(coinGift)}
+          {gift && !typing ? (
+            <button
+              type="button"
+              aria-label={`Send ${name} a sticker gift for this story`}
+              onPointerDown={() => void import("@/features/gift/gift-sheet")}
               onClick={() => {
-                // Back from the transfer comes back to THIS story: the page's address names it (stories-row.tsx reads ?story=)
-                try {
-                  const url = new URL(window.location.href);
-                  url.searchParams.set("story", storyId);
-                  window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
-                } catch {
-                  /* the transfer still opens */
-                }
+                setGiftOpen(true);
+                // the story holds still while the sheet is up (the same pause as typing a reply)
+                onFocusChange(true);
               }}
               className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-white/[0.12] text-white transition active:scale-95"
             >
-              {/* the spinner answers the tap on the same frame, until the transfer screen opens */}
-              <TapPending size={17}>
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 7v10" />
-                  <path d="M15 9.5c-.6-1-1.7-1.5-3-1.5-1.7 0-3 .8-3 2s1.3 1.7 3 2 3 .8 3 2-1.3 2-3 2c-1.3 0-2.4-.5-3-1.5" />
-                </svg>
-              </TapPending>
-            </Link>
+              <Gift className="h-[18px] w-[18px]" strokeWidth={2.2} aria-hidden />
+            </button>
           ) : null}
         </label>
       </div>
@@ -1286,5 +1288,20 @@ function StoryReplyBar({
         </div>
       )}
     </form>
+    {giftOpen && gift ? (
+      <GiftSheet
+        conversationId={() => storyGiftConversation(storyId)}
+        recipients={[gift]}
+        requireChoice={false}
+        backHref={typeof window === "undefined" ? undefined : window.location.pathname + window.location.search}
+        zIndex={130}
+        onClose={() => {
+          setGiftOpen(false);
+          onFocusChange(false);
+        }}
+        onSent={() => {}}
+      />
+    ) : null}
+    </>
   );
 }

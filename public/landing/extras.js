@@ -3,11 +3,16 @@
 //   analytics  features/monetization/google-tag.tsx — gtag init + loader (the page_view is queued at once)
 //   Monetag    features/monetization/monetag-tags.tsx — the standard tags when Monetag allows "/" (all pages, or the
 //              "home" surface); In-Page Push under its daily cap
-//   HilltopAds features/monetization/hilltop-video-slider.tsx — the slider, with the pop-under guard installed FIRST
+//   HilltopAds features/monetization/hilltop-video-slider.tsx — the slider, with the app's own pop-under guard installed FIRST
+//   Adsterra   features/monetization/ad-scripts.tsx — the admin's site-wide scripts (zone global: social bar, multitag…)
+//   (ads.js is the app's own ad modules, bundled by scripts/build-landing-ads.mjs — never a hand copy)
 //   SW         features/notifications/register-sw.tsx — /sw.js (repeat visits open from cache; it never caches API
 //              answers or media)
 // Ads never for a paying member (showAds from /api/me), and only after this point. Every step fails quietly.
 const data = JSON.parse(document.getElementById("ld-data")?.textContent || "{}");
+const V = new URL(import.meta.url).searchParams.get("v") || "0";
+// the SAME module instance result.js uses (same URL), so the guard and the spot taps share one allow window
+const ads = () => import(new URL(`./ads.js?v=${V}`, import.meta.url).href);
 
 function script(src, attrs = {}, where = document.head) {
   const s = document.createElement("script");
@@ -41,14 +46,6 @@ async function showAds() {
   return !!(me && me.showAds === true);
 }
 
-// window.open only inside a short window our own code opens (lib/monetization/popunder-guard.ts) — never for a
-// network's pop-under on a stray tap
-let guarded = false;
-function popunderGuard() {
-  if (guarded) return;
-  guarded = true;
-  window.open = function () { return null; };
-}
 
 function inPagePushAllowed(limit) {
   const cap = typeof limit === "number" ? (limit === 0 ? Infinity : limit) : 5; // lib/monetization/inpage-push-cap.ts DEFAULT_IN_PAGE_PUSH_DAILY_LIMIT
@@ -81,7 +78,9 @@ async function hilltop() {
   const cfg = await fetch("/api/ads/config").then((r) => (r.ok ? r.json() : null)).catch(() => null);
   const tag = cfg && cfg.hilltopVideoSlider;
   if (!tag || typeof tag.src !== "string" || !/^https:\/\//.test(tag.src)) return;
-  popunderGuard();
+  // lib/monetization/popunder-guard.ts: a network's window.open on a stray tap is refused, but our own spot taps
+  // (the pop-under, the Direct Link, the Smartlink) open it for a second — the old copy here refused them all, for good
+  (await ads()).installPopunderGuard();
   const s = document.createElement("script");
   s.src = tag.src;
   s.async = true;
@@ -102,5 +101,5 @@ export async function start() {
   serviceWorker();
   analytics();
   if (!(await showAds())) return;
-  await Promise.allSettled([monetag(), hilltop()]);
+  await Promise.allSettled([monetag(), hilltop(), ads().then((m) => m.globalScripts())]);
 }

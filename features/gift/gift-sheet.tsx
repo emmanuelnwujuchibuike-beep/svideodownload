@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { useQuery } from "@/features/data";
+import { getEntry, revalidate, useQuery } from "@/features/data";
 import { GlassSheetShell } from "@/features/ui/glass-sheet-shell";
 import { toast } from "@/features/ui/toast";
 import { Spinner } from "@/features/wallet/tap-pending";
@@ -59,6 +59,12 @@ interface Gallery {
  * server's; the database decides every send whatever the cached figure said.
  */
 export const GIFT_GALLERY_KEY = "gift:gallery";
+
+/** Fill the shared cache with the sticker gallery before the sheet opens (the story reply bar calls it). Fails quietly. */
+export function warmGiftSheet(): void {
+  if (getEntry(GIFT_GALLERY_KEY).data) return;
+  void revalidate(GIFT_GALLERY_KEY, fetchGallery).catch(() => {});
+}
 async function fetchGallery(): Promise<Gallery> {
   let res: Response;
   try {
@@ -71,7 +77,13 @@ async function fetchGallery(): Promise<Gallery> {
   return body;
 }
 
-export function GiftSheet({ conversationId, recipients, requireChoice, onClose, onSent, initialStickerId }: { conversationId: string; recipients: GiftRecipient[]; requireChoice: boolean; onClose: () => void; onSent: () => void; initialStickerId?: string | null }) {
+/**
+ * `conversationId`: the chat the gift lands in — or, from a story (2026-10-28), a function that finds or creates the 1:1
+ * chat with its author, called only when Send is pressed (opening the sheet never creates a chat). `backHref`: where the
+ * top-up screens return to (the chat, unless given).
+ */
+export function GiftSheet({ conversationId, recipients, requireChoice, onClose, onSent, initialStickerId, backHref, zIndex }: { conversationId: string | (() => Promise<string>); recipients: GiftRecipient[]; requireChoice: boolean; onClose: () => void; onSent: () => void; initialStickerId?: string | null; backHref?: string; zIndex?: number }) {
+  const [resolvedId, setResolvedId] = useState<string | null>(typeof conversationId === "string" ? conversationId : null);
   const gallery = useQuery<Gallery>(GIFT_GALLERY_KEY, fetchGallery, { revalidateOnFocus: false });
   const data = gallery.data ?? null;
   // an error only matters when there is nothing cached to show
@@ -122,17 +134,28 @@ export function GiftSheet({ conversationId, recipients, requireChoice, onClose, 
 
   const send = async () => {
     if (!chosen || !recipient || sending || short || !noteCheck.ok) return;
-    const sig = `${conversationId}:${recipient.userId}:${chosen.id}:${chosen.revision}:${chosen.priceFgc}:${quantity}:${noteCheck.note ?? ""}`;
+    const sig = `${resolvedId ?? "story"}:${recipient.userId}:${chosen.id}:${chosen.revision}:${chosen.priceFgc}:${quantity}:${noteCheck.note ?? ""}`;
     if (!key.current || key.current.sig !== sig) key.current = { sig, key: giftKey() };
     setSending(true);
     setError(null);
     let res: Response;
+    let chatId = resolvedId;
     try {
+      if (!chatId && typeof conversationId === "function") {
+        try {
+          chatId = await conversationId();
+          setResolvedId(chatId);
+        } catch (e) {
+          setSending(false);
+          setConfirming(false);
+          return setError(e instanceof Error && e.message ? e.message : giftFailureText("network", null));
+        }
+      }
       res = await fetch("/api/gift/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ conversationId, recipientId: requireChoice ? recipient.userId : null, stickerId: chosen.id, expectedRevision: chosen.revision, expectedPriceFgc: chosen.priceFgc, quantity, note: noteCheck.note, idempotencyKey: key.current.key }),
+        body: JSON.stringify({ conversationId: chatId, recipientId: requireChoice ? recipient.userId : null, stickerId: chosen.id, expectedRevision: chosen.revision, expectedPriceFgc: chosen.priceFgc, quantity, note: noteCheck.note, idempotencyKey: key.current.key }),
       });
     } catch {
       setSending(false);
@@ -173,7 +196,7 @@ export function GiftSheet({ conversationId, recipients, requireChoice, onClose, 
   };
 
   return (
-    <GlassSheetShell open onClose={onClose} title={chosen ? chosen.name : "Sticker gifts"} defaultHeightVh={88}>
+    <GlassSheetShell open onClose={onClose} title={chosen ? chosen.name : "Sticker gifts"} defaultHeightVh={88} {...(zIndex ? { backdropZ: zIndex, panelZ: zIndex + 1 } : {})}>
       <div className="flex flex-col gap-4 px-4 pb-6">
         {!chosen ? (
           <div className="flex items-center justify-between gap-2 rounded-2xl bg-frenz-fill px-3 py-2">
@@ -302,7 +325,7 @@ export function GiftSheet({ conversationId, recipients, requireChoice, onClose, 
             {error ? <p role="alert" className="rounded-xl bg-rose-500/10 px-3 py-2 text-sm text-rose-800 dark:text-rose-200">{error}</p> : null}
 
             {short ? (
-              <TopUp conversationId={conversationId} sticker={chosen} quantity={quantity} available={available} needed={total} />
+              <TopUp back={backHref ?? (resolvedId ? `/messages/${resolvedId}` : "/messages")} sticker={chosen} quantity={quantity} available={available} needed={total} />
             ) : confirming ? (
               <div role="alertdialog" aria-labelledby="gift-confirm-title" aria-describedby="gift-confirm-desc" className="flex flex-col gap-3 rounded-[22px] border border-frenz-violet/25 bg-frenz-violet/[0.06] p-4 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2">
                 <h4 id="gift-confirm-title" className="text-[15px] font-bold">
@@ -412,8 +435,7 @@ function BalancePill({ available }: { available: number | null }) {
  * each button only OPENS the screen where the member confirms that step, and the chat is remembered so the Gift Box can
  * bring them back. No coin packs — the design's App Store packs don't exist on the web.
  */
-function TopUp({ conversationId, sticker, quantity, available, needed }: { conversationId: string; sticker: Sticker; quantity: number; available: number; needed: number }) {
-  const back = `/messages/${conversationId}`;
+function TopUp({ back, sticker, quantity, available, needed }: { back: string; sticker: Sticker; quantity: number; available: number; needed: number }) {
   const pct = needed > 0 ? Math.min(100, Math.round((available / needed) * 100)) : 0;
   return (
     <section aria-labelledby="gift-topup-title" className="flex flex-col gap-3 rounded-[22px] border border-white/60 bg-white/75 p-4 shadow-frenz-card dark:bg-white/5">

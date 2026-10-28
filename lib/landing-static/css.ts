@@ -48,8 +48,8 @@ a{color:inherit}button,input{font:inherit;color:inherit}button{cursor:pointer;-w
 .nav-links{display:none;gap:4px;margin-right:auto}
 .nav-links a{padding:12px 14px;border-radius:12px;font-size:15px;font-weight:500;color:var(--sub);text-decoration:none}
 .nav-links a:hover{color:var(--ink);background:var(--accent-soft)}
-.btn-install{height:44px;padding:0 18px;border:0;border-radius:14px;background:var(--brand);color:#fff;font-size:15px;font-weight:650;letter-spacing:-.1px;
-box-shadow:0 8px 18px rgba(79,70,229,.32),inset 0 1px 0 rgba(255,255,255,.35);transition:transform .15s var(--ease)}
+.btn-install{height:44px;padding:0 18px;border:0;border-radius:14px;background:var(--ink);color:var(--ground);font-size:15px;font-weight:650;letter-spacing:-.1px;
+box-shadow:0 10px 22px -12px rgba(16,17,24,.6);transition:transform .15s var(--ease)}
 .btn-install:active{transform:translateY(1px) scale(.98)}
 .icon-btn{position:relative;width:44px;height:44px;flex:none;border:0;border-radius:14px;background:var(--ground);box-shadow:var(--neu-out-sm);display:flex;align-items:center;justify-content:center;color:var(--ink)}
 .icon-btn:active,.icon-btn[aria-expanded="true"]{background:var(--well);box-shadow:var(--neu-in-sm)}
@@ -75,9 +75,8 @@ h1 .grad{background:var(--brand);-webkit-background-clip:text;background-clip:te
 .field.has-value .btn-clear{display:flex}.field.has-value .btn-paste{display:none}
 .helper{min-height:22px;margin:10px 6px 0;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px}
 .helper.err{color:var(--err)}.helper.ok{color:var(--ok)}
-.btn-dl{position:relative;width:100%;height:62px;margin-top:6px;border:0;border-radius:22px;overflow:hidden;background:var(--brand);color:#fff;font-size:18px;font-weight:700;letter-spacing:-.2px;
-display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 14px 28px rgba(79,70,229,.34),inset 0 1px 0 rgba(255,255,255,.35),inset 0 -2px 0 rgba(0,0,0,.08);transition:transform .15s var(--ease)}
-.btn-dl::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.18),transparent 55%);pointer-events:none}
+.btn-dl{position:relative;width:100%;height:62px;margin-top:6px;border:0;border-radius:22px;overflow:hidden;background:var(--ink);color:var(--ground);font-size:18px;font-weight:700;letter-spacing:-.2px;
+display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 14px 28px -14px rgba(16,17,24,.6);transition:transform .15s var(--ease)}
 .btn-dl:active{transform:translateY(1px) scale(.992)}
 .btn-dl[aria-busy="true"]{pointer-events:none}
 .spinner{width:20px;height:20px;border-radius:50%;border:2.5px solid rgba(255,255,255,.35);border-top-color:#fff;animation:spin .8s linear infinite}
@@ -107,7 +106,7 @@ display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 14p
 .btn-save{width:100%;height:54px;margin-top:12px;border:0;border-radius:18px;background:var(--ink);color:var(--ground);font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 10px 22px rgba(16,17,24,.22);transition:transform .15s var(--ease)}
 .btn-save:active{transform:scale(.99)}
 .btn-save[aria-busy="true"]{pointer-events:none;opacity:.8}
-.btn-save .spinner{border-color:rgba(127,127,140,.35);border-top-color:currentColor}
+.btn-save .spinner,.btn-dl .spinner{border-color:rgba(127,127,140,.35);border-top-color:currentColor}
 .more-link{display:block;margin-top:10px;text-align:center;font-size:14px;font-weight:600;color:var(--accent);text-decoration:none;padding:12px}
 .shake{animation:shake .32s var(--ease)}
 @keyframes shake{20%{transform:translateX(-7px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(2px)}}

@@ -285,7 +285,10 @@ html,body{height:100%;background:#fff;color:#0f172a}
     var q = new URLSearchParams(location.search).get("next");
     var next = q && /^\/[^/\\]/.test(q) ? q : null;
     // one experience since 2026-10-09: every launch opens the download page
-    if (!next) next = "/downloads";
+    // owner, 2026-10-28: "anonymous users get forced to log in". /downloads is a member page, so a signed-out launch
+    // went straight to the login form. A guest opens the landing (the downloader is on it); a member opens /downloads.
+    // The Supabase session cookie is readable (not httpOnly) — the same test the landing and middleware use.
+    if (!next) next = /(^|;\s*)sb-[^=]*-auth-token/.test(document.cookie) ? "/downloads" : "/";
     /*
       🔴 NAVIGATE AFTER THE LOADER HAS PAINTED, NOT BEFORE IT.
 

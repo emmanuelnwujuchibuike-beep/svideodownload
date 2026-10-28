@@ -147,6 +147,9 @@ export async function middleware(request: NextRequest) {
     // `guestMustLogin`: member pages whose own first line is a /login
     // redirect — answered here so a guest never pays a server render for it.
     // See lib/auth/guest-login-paths.ts (and why it is NOT `needsGuard`).
+    // owner, 2026-10-28: a guest asking for the member Home (/downloads — an old link, a bookmark, a nav tap) gets the
+    // landing, which IS the downloader for guests — never a login wall in front of a free download
+    if (path === "/downloads") return NextResponse.redirect(new URL("/", request.url));
     if (needsGuard || guestMustLogin(path)) {
       const redirectUrl = new URL("/login", request.url);
       redirectUrl.searchParams.set("next", path);

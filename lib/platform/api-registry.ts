@@ -205,6 +205,7 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   { method: "POST", path: "/api/admin/flutterwave/transactions", auth: "admin", category: "payments", description: "Part 5: recheck ONE attempt by reference through its purpose's existing idempotent settle path (fresh password, rate limited, audited)." },
 
   /* ── story highlights (Stories Part 5, 0289 — lib/social/story-highlights.ts) ── */
+  { method: "POST", path: "/api/stories/[id]/gift-conversation", auth: "session", category: "feed", description: "The 1:1 chat a sticker gift for this story is sent into, found or created only when Send is pressed. The same gates as a story reply: the caller can see the story, it is not their own, and every direct-message rule applies." },
   { method: "GET", path: "/api/stories/highlights", auth: "session-optional", category: "feed", description: "A member's highlights as the caller may see them (the stories visibility rule); empty, never an error, when they may not." },
   { method: "POST", path: "/api/stories/highlights", auth: "session", category: "feed", description: "A new highlight from the caller's own stories (title up to 30 characters)." },
   { method: "GET", path: "/api/stories/highlights/[id]", auth: "session-optional", category: "feed", description: "One highlight with its stories, if the caller may see its owner's stories." },

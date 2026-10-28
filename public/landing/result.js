@@ -139,13 +139,13 @@ export async function run(d, ctx) {
   const meta = [md.platformName || d.platform, dur(md.durationSeconds), opts.items ? `${opts.list.length} items` : ""].filter(Boolean).join(" · ");
   const full = d.page ? `${d.page}?url=${encodeURIComponent(md.sourceUrl || d.url)}` : null;
   ctx.result.innerHTML =
-    '<div class="media"><div class="thumb" aria-hidden="true">' +
+    '<div class="media"><div class="thumb" aria-hidden="true" data-ad-spot="resultPreview">' +
     (md.thumbnail ? `<img src="${esc(md.thumbnail)}" alt="" referrerpolicy="no-referrer" decoding="async">` : '<svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M8 5.5v13l11-6.5z"/></svg>') +
     `</div><div><h3>${esc(md.title || "Ready to save")}</h3><p>${esc(meta)}</p></div></div>` +
     `<fieldset class="qualities"><legend class="sr">${opts.items ? "Choose an item" : "Choose quality"}</legend>` +
     opts.list.map((o, i) => `<label class="q"><input type="radio" name="q" value="${i}"${i === 0 ? " checked" : ""}><span class="radio"></span><b>${esc(o.label)}</b><span class="meta">${esc(o.meta)}</span></label>`).join("") +
     "</fieldset>" +
-    `<button type="button" class="btn-save" id="saveBtn">${DL}<span>Save to device</span></button>` +
+    `<button type="button" class="btn-save" id="saveBtn" data-ad-spot="download">${DL}<span>Save to device</span></button>` +
     (opts.items && full ? `<a class="more-link" href="${esc(full)}">Save all ${opts.list.length} at once</a>` : "");
   ctx.result.classList.add("show");
   ctx.result.scrollIntoView({ behavior: ctx.reduce ? "auto" : "smooth", block: "nearest" });
@@ -153,9 +153,24 @@ export async function run(d, ctx) {
   const btn = ctx.result.querySelector("#saveBtn");
   let gate = null;
   const gateReady = gateConfig().then((g) => (gate = g)).catch(() => (gate = { showAds: false, network: "none" }));
+  /*
+    The app's spot ads (features/downloader/preview-card.tsx: data-ad-spot "resultPreview" and "download"): the
+    pop-under, else the Monetag Direct Link / Adsterra Smartlink, on the admin's spots and chances. Never for a member
+    who pays (showAds). Opened INSIDE the tap, before anything awaits — a pop-up outside a gesture is blocked.
+  */
+  let spots = null;
+  gateReady.then((g) => {
+    if (!g.showAds) return;
+    import(new URL(`./ads.js?v=${new URL(import.meta.url).searchParams.get("v") || "0"}`, import.meta.url).href)
+      .then((m) => m.armSpots(["resultPreview", "download"]).then(() => (spots = m)))
+      .catch(() => {});
+  });
+  const thumb = ctx.result.querySelector(".thumb");
+  if (thumb) thumb.addEventListener("click", () => spots && spots.openSpot("resultPreview"), true);
   let saving = false;
   btn.addEventListener("click", async () => {
     if (saving) return;
+    if (spots) spots.openSpot("download");
     const picked = ctx.result.querySelector('input[name="q"]:checked');
     const o = opts.list[Number(picked ? picked.value : 0)];
     if (!o) return;

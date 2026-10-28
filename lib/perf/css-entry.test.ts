@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { reachableFiles } from "./css-entry";
+import { reachableFiles, writeEntryContent } from "./css-entry";
 
 /**
  * The cold-entry stylesheet split (2026-10-27). Pins:
@@ -75,11 +75,7 @@ describe("every page gets a stylesheet", () => {
     expect(readFileSync(path.join(app, "(marketing)/layout.tsx"), "utf8")).toMatch(/^import "\.\.\/entry\.css";/m);
     expect(readFileSync(path.join(app, "(app)/layout.tsx"), "utf8")).toMatch(/^import "\.\.\/app\.css";/m);
     expect(readFileSync(path.join(app, "app.css"), "utf8")).toMatch(/@import "\.\/globals\.css";[\s\S]*@config "\.\.\/tailwind\.config\.ts";/);
-    // 2026-10-28: the landing sheet uses the FULL config — the reach-walked one went stale in Vercel's build cache and the
-    // React landing shipped without its own classes. A stale-proof smaller sheet needs a build that tracks its inputs.
-    const entry = readFileSync(path.join(app, "entry.css"), "utf8");
-    expect(entry).toMatch(/@import "\.\/globals\.css";[\s\S]*@config "\.\.\/tailwind\.config\.ts";/);
-    expect(entry).not.toMatch(/@config "\.\.\/tailwind\.entry\.config\.ts"/);
+    expect(readFileSync(path.join(app, "entry.css"), "utf8")).toMatch(/@import "\.\/globals\.css";[\s\S]*@config "\.\.\/tailwind\.entry\.config\.ts";/);
   });
   it("nothing imports globals.css directly — both sheets go through their own @config (measured: a direct import got the entry config)", () => {
     const offenders: string[] = [];
@@ -122,4 +118,19 @@ describe.skipIf(!existsSync(path.join(ROOT, ".next/app-build-manifest.json")))("
     expect(full.length).toBeGreaterThan(entry.length * 1.1);
     expect(cssOf("/layout").length).toBeLessThan(20_000);
   });
+});
+
+// 2026-10-28: the raw-text content list went stale in Vercel's build cache (the React landing shipped without its classes)
+describe("the landing sheet's input is a tracked file, never raw text", () => {
+  it("tailwind.entry.config.ts reads ONE generated file by path, refreshed at the start of every build", () => {
+    const cfg = readFileSync(path.join(process.cwd(), "tailwind.entry.config.ts"), "utf8");
+    expect(cfg).toContain("content: [writeEntryContent(root)");
+    expect(cfg).not.toContain("raw: readFileSync");
+    expect(readFileSync(path.join(process.cwd(), "next.config.ts"), "utf8")).toContain("writeEntryContent(process.cwd());");
+  });
+  it("the generated file holds what the landing reaches — the hero and the new bands included, not the signed-in app", () => {
+    const body = readFileSync(writeEntryContent(process.cwd()), "utf8");
+    for (const f of ["components/landing/hero.tsx", "components/landing/creator-app-bands.tsx", "features/downloads/download-box.tsx"]) expect(body).toContain(`/* @@file ${f} */`);
+    expect(body).not.toContain("/* @@file features/social/conversation-room.tsx */");
+  }, 60_000);
 });

@@ -73,3 +73,6 @@ signing-key-info.txt
 # stopped being a safe instruction. Ignored so the working tree stays honest.
 scripts/_*.tmp.*
 scripts/_*.png
+
+# the landing stylesheet's generated Tailwind input (lib/perf/css-entry.ts)
+/.cache/

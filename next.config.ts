@@ -1,7 +1,15 @@
 import { scanMigrations, scanRoutes } from "./lib/content/sync/scan";
 import type { NextConfig } from "next";
 
+import { writeEntryContent } from "./lib/perf/css-entry";
 import { REMOVED_SEO_PAGES } from "./lib/seo/removed-seo-pages";
+
+// the landing stylesheet's input, refreshed before anything compiles (lib/perf/css-entry.ts) — never fatal
+try {
+  writeEntryContent(process.cwd());
+} catch {
+  /* tailwind.entry.config.ts writes it again itself */
+}
 
 // A per-deploy build stamp, baked into BOTH the client bundle and the server at
 // build time. The client compares its own stamp against /api/app-version and

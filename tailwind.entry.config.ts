@@ -1,9 +1,8 @@
-import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { Config } from "tailwindcss";
 
-import { reachableFiles } from "./lib/perf/css-entry";
+import { writeEntryContent } from "./lib/perf/css-entry";
 import base from "./tailwind.config";
 
 /**
@@ -11,14 +10,19 @@ import base from "./tailwind.config";
  * Identical to `tailwind.config.ts` except `content`: just the files the root layout and the marketing tree can
  * reach — see lib/perf/css-entry.ts for why and how.
  *
- * Passed as `raw` text rather than paths: route-group folders like `(marketing)` are glob syntax to Tailwind's
- * content scanner, so a path list could silently match nothing and ship a landing with no utilities at all.
+ * Read through ONE generated file by path (not raw text): Tailwind records it as a build input, so the build cache
+ * recompiles whenever anything the landing reaches changes (2026-10-28 — the raw-text version went stale on Vercel).
  */
 const root = path.resolve(__dirname);
 
 const config: Config = {
   ...base,
-  content: reachableFiles(root).map((file) => ({ raw: readFileSync(file, "utf8"), extension: path.extname(file).slice(1) })),
+  /*
+    ONE real file holding every source the landing can reach (lib/perf/css-entry.ts writeEntryContent) — by path, so
+    Tailwind records it as a build input and a changed landing can never reuse a stale cached sheet (2026-10-28).
+    Forward slashes and no route-group folder in the path: nothing here is glob syntax.
+  */
+  content: [writeEntryContent(root).replace(/\\/g, "/")],
 };
 
 export default config;

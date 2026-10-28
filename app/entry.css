@@ -8,9 +8,8 @@
 */
 @import "./globals.css";
 /*
-  2026-10-28: compiled with the FULL config again. The reach-walked config (tailwind.entry.config.ts) passed its files as
-  raw text, so the build cache never saw them change: after the landing went back to React, Vercel reused the sheet
-  compiled for the static page and the landing shipped without its own classes (its hero slid under the header).
-  Correct styles first; a smaller sheet only with a build that tracks its inputs.
+  2026-10-28: the light config again, now stale-proof. It used to pass the landing's files as raw text, which the build
+  cache never tracked, so Vercel once served a sheet compiled for an older tree. It now reads one real, tracked file
+  (lib/perf/css-entry.ts writeEntryContent), refreshed at the start of every build.
 */
-@config "../tailwind.config.ts";
+@config "../tailwind.entry.config.ts";

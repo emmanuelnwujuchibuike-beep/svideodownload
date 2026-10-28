@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 /**
@@ -81,4 +81,34 @@ export function reachableFiles(rootDir: string, roots: readonly string[] = ENTRY
     }
   }
   return [...seen].sort();
+}
+
+/**
+ * Where the landing's Tailwind input lives (git-ignored). 2026-10-28: the config used to hand Tailwind the reachable
+ * files as RAW TEXT, which it does not record as build inputs — so Vercel's restored build cache served a sheet compiled
+ * for an older tree (the React landing shipped without its own classes). A real file IS recorded: when anything the
+ * landing reaches changes, this file changes, and the cached sheet is thrown away.
+ */
+export const ENTRY_CONTENT_FILE = ".cache/entry-css-content.txt";
+
+/**
+ * Write every file the landing tree can reach into ENTRY_CONTENT_FILE (only when it changed, so an unchanged tree keeps
+ * its cache). Called at the start of every build (next.config.ts) and by the Tailwind config. Returns the absolute path.
+ */
+export function writeEntryContent(rootDir: string): string {
+  const out = path.join(rootDir, ENTRY_CONTENT_FILE);
+  const body = reachableFiles(rootDir)
+    .map((f) => `/* @@file ${path.relative(rootDir, f).replace(/\\/g, "/")} */\n${readFileSync(f, "utf8")}`)
+    .join("\n");
+  let current: string | null = null;
+  try {
+    current = readFileSync(out, "utf8");
+  } catch {
+    current = null;
+  }
+  if (current !== body) {
+    mkdirSync(path.dirname(out), { recursive: true });
+    writeFileSync(out, body);
+  }
+  return out;
 }

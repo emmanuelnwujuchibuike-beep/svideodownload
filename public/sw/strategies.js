@@ -21,12 +21,25 @@ function looksLikeCaptivePortalResponse(response) {
 // build output, self-hosted fonts) where the URL itself changes whenever
 // the content does — a cache hit is ALWAYS correct here, so it's never
 // worth re-checking the network. Fastest possible repeat load.
+/*
+  In-flight warm-ups (2026-10-28, owner: "fix the white screen on the PWA"). warmAppShellCss below starts the app's
+  stylesheet download the moment /launch.html opens; when the app page then asks for the same URL, it waits on that
+  download instead of starting a second one. URL -> promise, removed when it settles.
+*/
+const WARMING = new Map();
+
 SWX.cacheFirst = async function cacheFirst(request, cacheName) {
   const cache = await caches.open(cacheName);
   const hit = await cache.match(request);
   // `canServe`, not a bare truthiness check — a cached OPAQUE entry handed to a
   // non-`no-cors` request is a network error, not a cache hit (cache-utils.js).
   if (SWX.canServe(hit, request)) return hit;
+  const warming = WARMING.get(request.url);
+  if (warming) {
+    await warming.catch(() => {});
+    const warmed = await cache.match(request);
+    if (SWX.canServe(warmed, request)) return warmed;
+  }
   const res = await fetch(request);
   if (SWX.isCacheable(res) && !looksLikeCaptivePortalResponse(res)) {
     await SWX.safePut(cacheName, request, res.clone());
@@ -34,6 +47,51 @@ SWX.cacheFirst = async function cacheFirst(request, cacheName) {
     SWX.log("skipped caching a static asset that responded with HTML — likely a captive portal", request.url);
   }
   return res;
+};
+
+/*
+  ═══════════════════════════════════════════════════════════════════════════
+   🔴 THE WHITE SCREEN BETWEEN /launch.html AND THE APP (owner, 2026-10-28)
+  ═══════════════════════════════════════════════════════════════════════════
+
+  A document paints NOTHING — the #frenz-boot loader included — until its render-blocking stylesheets have loaded.
+  /launch.html's loader dies the moment /downloads commits, so the screen is blank for as long as the app's CSS takes
+  over the network. It is cached cache-first here, but every deploy ships it under a new URL, so the first launch
+  after each deploy downloaded ~50 kB of CSS on a blank screen.
+
+  So /launch.html posts "frenz-warm-app-shell" as it opens, in parallel with its navigation: this reads a static page
+  of the same (app) group — /history, CDN-cached, the same stylesheets as /downloads — revalidated so it names THIS
+  deploy's files, and downloads any stylesheet not cached yet. By the time /downloads asks for it (its server render
+  takes longer than this), it is cached or already in flight (cacheFirst above waits on it). Already cached = nothing
+  but one small revalidation. Runs in the worker, so it survives /launch.html going away. Never throws.
+*/
+const APP_SHELL_SOURCE = "/history";
+SWX.warmAppShellCss = async function warmAppShellCss() {
+  try {
+    const page = await fetch(new Request(APP_SHELL_SOURCE, { cache: "no-cache", credentials: "omit", headers: { Accept: "text/html" } }));
+    if (!page.ok) return;
+    const html = await page.text();
+    const hrefs = [...new Set([...html.matchAll(/<link[^>]+rel="stylesheet"[^>]*href="(\/_next\/static\/css\/[^"]+)"/g)].map((m) => m[1].replace(/&amp;/g, "&")))].slice(0, 8);
+    const cache = await caches.open(SWX.STATIC_CACHE);
+    await Promise.allSettled(
+      hrefs.map(async (href) => {
+        const url = new URL(href, self.location.origin).href;
+        if (WARMING.has(url) || (await cache.match(url))) return;
+        const job = (async () => {
+          const res = await fetch(url, { credentials: "same-origin" });
+          if (SWX.isCacheable(res) && !looksLikeCaptivePortalResponse(res)) await SWX.safePut(SWX.STATIC_CACHE, new Request(url), res.clone());
+        })();
+        WARMING.set(url, job);
+        try {
+          await job;
+        } finally {
+          WARMING.delete(url);
+        }
+      }),
+    );
+  } catch {
+    // a warm-up is only ever a head start
+  }
 };
 
 // A history thumbnail the page already kept (config.js HISTORY_THUMB_CACHE).

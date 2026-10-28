@@ -43,6 +43,11 @@ self.addEventListener("message", (event) => {
   if (event.data === "SKIP_WAITING" || (event.data && event.data.type === "SKIP_WAITING")) {
     self.skipWaiting();
   }
+  // /launch.html opening: fetch the app's stylesheet now, so the app paints its loader the moment it arrives
+  // (strategies.js warmAppShellCss). waitUntil keeps it going after /launch.html has navigated away.
+  if (event.data && event.data.type === "frenz-warm-app-shell" && typeof SWX.warmAppShellCss === "function") {
+    event.waitUntil(SWX.warmAppShellCss());
+  }
 });
 
 self.addEventListener("activate", (event) => {

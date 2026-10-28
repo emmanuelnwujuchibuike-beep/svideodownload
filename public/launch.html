@@ -289,6 +289,12 @@ html,body{height:100%;background:#fff;color:#0f172a}
     // went straight to the login form. A guest opens the landing (the downloader is on it); a member opens /downloads.
     // The Supabase session cookie is readable (not httpOnly) — the same test the landing and middleware use.
     if (!next) next = /(^|;\s*)sb-[^=]*-auth-token/.test(document.cookie) ? "/downloads" : "/";
+    // owner, 2026-10-28: "fix the white screen on the PWA". The app paints nothing — its loader included — until its
+    // stylesheet has loaded; ask the worker to start that download NOW, in parallel with the navigation below
+    // (public/sw/strategies.js warmAppShellCss). Members only: a guest goes to the landing, which needs none of it.
+    try {
+      if (next !== "/" && navigator.serviceWorker && navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage({ type: "frenz-warm-app-shell" });
+    } catch (e) {}
     /*
       🔴 NAVIGATE AFTER THE LOADER HAS PAINTED, NOT BEFORE IT.
 

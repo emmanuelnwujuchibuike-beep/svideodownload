@@ -12,6 +12,11 @@
  * file, bump BOTH the version number in this comment AND SWX.VERSION in
  * config.js, so this entry file's bytes always change too.
  *
+ * rev 2026-10-28 (v31 kept on purpose): strategies.js + lifecycle.js gained the app-shell CSS warm-up for the PWA
+ * launch. Behaviour is only added, so the caches keep their names — a VERSION bump would rename STATIC_CACHE and throw
+ * away every device's cached stylesheet, causing the very white launch this fixes. This line changes this file's bytes,
+ * which is what makes installed workers update.
+ *
  *   config.js          cache names, versioning, limits, allowlists
  *   log.js              dev-only diagnostics
  *   cache-utils.js       trim / quota-safe write / cacheable-response checks

@@ -19,7 +19,10 @@ export const GUEST_WARM_ROUTES = ["/history", "/profile"] as const;
  */
 export const FIRST_WARM_ROUTE = "/history";
 
-/** Run `fn` once the page has loaded and the browser is idle. Returns a cancel. */
+/** The latest the warm-up waits after the page shows (see afterPageLoad). */
+export const WARM_AFTER_MS = 1000;
+
+/** Run `fn` once the page has loaded (or a second has passed, or the first touch) and the browser is idle. Returns a cancel. */
 export function afterPageLoad(fn: () => void): () => void {
   let cancelled = false;
   let idleId: number | null = null;
@@ -30,11 +33,33 @@ export function afterPageLoad(fn: () => void): () => void {
     if (w.requestIdleCallback) idleId = w.requestIdleCallback(() => !cancelled && fn(), { timeout: 2000 });
     else timer = setTimeout(() => !cancelled && fn(), 300);
   };
-  if (document.readyState === "complete") go();
-  else window.addEventListener("load", go, { once: true });
+  /*
+    Owner, 2026-10-28: "the Friends navigation and other navigation now load on tap instead of opening instantly".
+    `load` waits for EVERY image and ad on the page — many seconds on /downloads — so the tabs were often not warm
+    yet when tapped. Now whichever comes first: the load, WARM_AFTER_MS after the page shows (the first screen has had
+    the connection to itself by then), or the member's first touch. Runs once.
+  */
+  let fallback: ReturnType<typeof setTimeout> | null = null;
+  let started = false;
+  const once = () => {
+    if (started) return;
+    started = true;
+    window.removeEventListener("load", once);
+    window.removeEventListener("pointerdown", once, true);
+    if (fallback) clearTimeout(fallback);
+    go();
+  };
+  if (document.readyState === "complete") once();
+  else {
+    window.addEventListener("load", once, { once: true });
+    window.addEventListener("pointerdown", once, { capture: true, once: true, passive: true });
+    fallback = setTimeout(once, WARM_AFTER_MS);
+  }
   return () => {
     cancelled = true;
-    window.removeEventListener("load", go);
+    if (fallback) clearTimeout(fallback);
+    window.removeEventListener("load", once);
+    window.removeEventListener("pointerdown", once, true);
     if (idleId !== null) w.cancelIdleCallback?.(idleId);
     if (timer) clearTimeout(timer);
   };

@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
 const SW_DIR = path.resolve(process.cwd(), "public/sw");
 const ORIGIN = "https://frenz.example";
 const CSS = ["/_next/static/css/aaa111.css?dpl=dpl_X", "/_next/static/css/bbb222.css?dpl=dpl_X"];
-const PAGE = `<html><head><link rel="stylesheet" href="${CSS[0].replace("&", "&amp;")}" data-precedence="next"><link rel="stylesheet" href="${CSS[1]}" data-precedence="next"></head><body></body></html>`;
+const PAGE = `<html><head><link rel="stylesheet" href="${CSS[0]!.replace("&", "&amp;")}" data-precedence="next"><link rel="stylesheet" href="${CSS[1]}" data-precedence="next"></head><body></body></html>`;
 
 type Res = { ok: boolean; status: number; type: string; headers: { get: (k: string) => string | null }; text: () => Promise<string>; clone: () => Res; body: string };
 const res = (body: string, type: string): Res => {

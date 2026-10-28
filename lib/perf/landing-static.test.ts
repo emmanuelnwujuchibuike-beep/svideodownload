@@ -46,7 +46,7 @@ describe("the static landing's byte budget", () => {
     expect(firstScreen).not.toMatch(/<img\b/);
   });
   it("the headline (the LCP element) and the download box are in the HTML, not drawn by script", () => {
-    expect(html).toMatch(/<h1>Save\. <span class="grad">Discover\.<\/span><br>Create and earn\.<\/h1>/);
+    expect(html).toContain('<h1><span>Save.</span> <span class="grad">Discover.</span> <span>Create and earn.</span></h1>');
     expect(html).toContain('<form class="dl" id="dlForm" novalidate>');
   });
   it("teeth: the budget check does fail on an over-budget page", () => {

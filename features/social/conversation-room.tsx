@@ -401,10 +401,13 @@ export function ConversationRoom({
   const [giftOpen, setGiftOpen] = useState(false);
   // Part 6: "Send one back" from the reveal opens the sheet straight on that sticker
   const [giftStickerId, setGiftStickerId] = useState<string | null>(null);
-  const giftRecipients = useMemo(
-    () => (type === "secret" ? [] : members.filter((x) => x.id !== viewerId).map((x) => ({ userId: x.id, name: x.displayName || `@${x.handle}`, avatarUrl: x.avatarUrl }))),
-    [type, members, viewerId],
-  );
+  const giftRecipients = useMemo(() => {
+    if (type === "secret") return [];
+    // 🔴 a DIRECT chat carries no member list (lib/social/messages.ts fills only `other`), so the gift button never
+    // showed in a 1:1 chat (owner, 2026-10-28: "no even sticker button"). The other person comes from otherId there.
+    if (type === "direct") return otherId ? [{ userId: otherId, name: otherName || "them", avatarUrl: members.find((x) => x.id === otherId)?.avatarUrl ?? null }] : [];
+    return members.filter((x) => x.id !== viewerId).map((x) => ({ userId: x.id, name: x.displayName || `@${x.handle}`, avatarUrl: x.avatarUrl }));
+  }, [type, members, viewerId, otherId, otherName]);
   const memberName = useCallback((id: string) => { const x = members.find((mm) => mm.id === id); return x ? x.displayName || `@${x.handle}` : "someone"; }, [members]);
   const [uploadingCount, setUploadingCount] = useState(0);
   const [recordingVoice, setRecordingVoice] = useState(false);

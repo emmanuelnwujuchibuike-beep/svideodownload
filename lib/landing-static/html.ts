@@ -110,7 +110,7 @@ ${o.direct && originHost ? `<link rel="preconnect" href="${esc(originHost)}" cro
   <div class="hero">
     <div>
       <span class="eyebrow"><i aria-hidden="true"></i>One app for saving, sharing and creating</span>
-      <h1>Save. <span class="grad">Discover.</span><br>Create and earn.</h1>
+      <h1><span>Save.</span> <span class="grad">Discover.</span> <span>Create and earn.</span></h1>
       <p class="lede">Save from the platforms you already use, discover what people share, and create with AI — all in <strong>one super app</strong>.</p>
     </div>
     <div id="download">
@@ -211,7 +211,7 @@ ${o.direct && originHost ? `<link rel="preconnect" href="${esc(originHost)}" cro
     <a href="/history"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5M4 4v4.5h4.5M12 8v4.5l3 1.8"/></svg>History</a>
     <a href="/messages"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 4a8 8 0 0 0-6.9 12.1L4 20l4-1.1A8 8 0 1 0 12 4z"/></svg>Chats</a>
   </div>
-  <a href="/account" class="me" aria-label="Your profile"><span><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20.5c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5z"/></svg></span></a>
+  <a href="/profile" class="me" aria-label="Your profile"><span><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20.5c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5z"/></svg></span></a>
 </nav>
 
 <dialog id="platSheet" aria-labelledby="platH">

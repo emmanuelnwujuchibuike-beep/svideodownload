@@ -1,4 +1,5 @@
 import { BatchIcon, ChevronRightIcon } from "@/features/frenz-ui/icons";
+import type { BillingPlan } from "@/lib/monetization/types";
 import { cn } from "@/lib/utils";
 
 /**
@@ -11,15 +12,20 @@ export function FrenzBatchRow({
   onToggle,
   sourceLimit,
   proLimit,
-  isPro,
+  plan,
 }: {
   open: boolean;
   onToggle: () => void;
   sourceLimit: number;
   proLimit: number;
-  isPro: boolean;
+  /**
+   * The visitor's own plan (owner, 2026-10-28: "it should show depending on the user's plan — anonymous users get the
+   * Free badge, Pro gets Pro, Business gets just the Business badge"). null until it is known: no badge rather than a
+   * wrong one for a moment.
+   */
+  plan: BillingPlan | null;
 }) {
-  const showPro = isPro || proLimit > sourceLimit;
+  const badge = plan === "business" ? { label: "BUSINESS", cls: "bg-frenz-ink text-frenz-page" } : plan === "pro" ? { label: "PRO", cls: "bg-frenz-gradient-x text-white" } : plan === "free" ? { label: "FREE", cls: "bg-frenz-fill text-frenz-muted" } : null;
   return (
     <button
       type="button"
@@ -35,10 +41,10 @@ export function FrenzBatchRow({
         <span className="text-[15px] font-bold">Batch download</span>
         <span className="text-[13px] text-frenz-muted">Up to {sourceLimit} links at once</span>
       </span>
-      {showPro ? (
-        <span title={`Pro plan: up to ${proLimit} links`} className="shrink-0 rounded-full bg-frenz-gradient-x px-2.5 py-1 text-[11px] font-extrabold tracking-[0.5px] text-white">
-          PRO
-          <span className="sr-only">: up to {proLimit} links</span>
+      {badge ? (
+        <span title={plan === "free" && proLimit > sourceLimit ? `Pro plan: up to ${proLimit} links` : undefined} className={cn("shrink-0 rounded-full px-2.5 py-1 text-[11px] font-extrabold tracking-[0.5px]", badge.cls)}>
+          {badge.label}
+          <span className="sr-only"> plan</span>
         </span>
       ) : null}
       <ChevronRightIcon size={16} strokeWidth={2.4} className={cn("shrink-0 text-frenz-muted transition-transform duration-200 motion-reduce:transition-none", open && "rotate-90")} />

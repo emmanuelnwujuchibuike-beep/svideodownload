@@ -2,6 +2,8 @@
 
 import { ChevronDown, Download } from "lucide-react";
 
+import type { BillingPlan } from "@/lib/monetization/types";
+
 import { FrenzBatchRow } from "./multi-link-frenz-row";
 
 import { ProBadge } from "@/features/monetization/pro-badge";
@@ -41,6 +43,7 @@ export function MultiLinkIntro({
   sourceLimit,
   proLimit,
   isPro,
+  plan,
   surface = "card",
 }: {
   open: boolean;
@@ -50,10 +53,12 @@ export function MultiLinkIntro({
   /** What the Pro plan allows — the number the pill shows. */
   proLimit: number;
   isPro: boolean;
+  /** the visitor's own plan once known (the redesigned row shows it as its badge) */
+  plan?: BillingPlan | null;
   surface?: "hero" | "card" | "frenz";
 }) {
   if (surface === "frenz") {
-    return <FrenzBatchRow open={open} onToggle={onToggle} sourceLimit={sourceLimit} proLimit={proLimit} isPro={isPro} />;
+    return <FrenzBatchRow open={open} onToggle={onToggle} sourceLimit={sourceLimit} proLimit={proLimit} plan={plan ?? null} />;
   }
   const onHero = surface === "hero";
   // The badge says "this needs Pro" only when Pro actually unlocks more — or,

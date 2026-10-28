@@ -75,7 +75,11 @@ describe("every page gets a stylesheet", () => {
     expect(readFileSync(path.join(app, "(marketing)/layout.tsx"), "utf8")).toMatch(/^import "\.\.\/entry\.css";/m);
     expect(readFileSync(path.join(app, "(app)/layout.tsx"), "utf8")).toMatch(/^import "\.\.\/app\.css";/m);
     expect(readFileSync(path.join(app, "app.css"), "utf8")).toMatch(/@import "\.\/globals\.css";[\s\S]*@config "\.\.\/tailwind\.config\.ts";/);
-    expect(readFileSync(path.join(app, "entry.css"), "utf8")).toMatch(/@import "\.\/globals\.css";[\s\S]*@config "\.\.\/tailwind\.entry\.config\.ts";/);
+    // 2026-10-28: the landing sheet uses the FULL config — the reach-walked one went stale in Vercel's build cache and the
+    // React landing shipped without its own classes. A stale-proof smaller sheet needs a build that tracks its inputs.
+    const entry = readFileSync(path.join(app, "entry.css"), "utf8");
+    expect(entry).toMatch(/@import "\.\/globals\.css";[\s\S]*@config "\.\.\/tailwind\.config\.ts";/);
+    expect(entry).not.toMatch(/@config "\.\.\/tailwind\.entry\.config\.ts"/);
   });
   it("nothing imports globals.css directly — both sheets go through their own @config (measured: a direct import got the entry config)", () => {
     const offenders: string[] = [];

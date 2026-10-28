@@ -7,4 +7,10 @@
   Every other route group imports globals.css itself — lib/perf/css-entry.test.ts fails if one does not.
 */
 @import "./globals.css";
-@config "../tailwind.entry.config.ts";
+/*
+  2026-10-28: compiled with the FULL config again. The reach-walked config (tailwind.entry.config.ts) passed its files as
+  raw text, so the build cache never saw them change: after the landing went back to React, Vercel reused the sheet
+  compiled for the static page and the landing shipped without its own classes (its hero slid under the header).
+  Correct styles first; a smaller sheet only with a build that tracks its inputs.
+*/
+@config "../tailwind.config.ts";

@@ -131,6 +131,7 @@ export function MultiLinkButton({
         sourceLimit={sourceLimit}
         proLimit={Math.max(config.proSourceLimit, sourceLimit)}
         isPro={isPro}
+        plan={ready ? plan : null}
         surface={surface}
       />
 

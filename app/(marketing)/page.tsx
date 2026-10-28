@@ -273,16 +273,12 @@ export default async function HomePage() {
           Kept in the document: the Promote card (its facts are the live ad catalogue), the
           section-break ad slots, and the FAQ's structured data.
         */}
-        <DeferredSection part="ai" id="products" minHeight={571} />
-
-        <SectionAd />
-
-        <PromoteSection ads={ads} />
-
-        <SectionAd />
-
-        <DeferredSection part="features" id="features" minHeight={796} />
-
+        {/*
+          2026-10-28 (owner: "the landing page is terrible while the Download page is okay"): the order of
+          design/frenz-landing.html — hero (download box, result card, batch, Tools), How it works, Creator Lounge,
+          the app, the platform links, FAQ. The big Frenz AI band and "Powerful features" are gone (the Tools grid
+          carries Frenz AI); the Promote card moved down beside the FAQ. Every ad break stays.
+        */}
         <SectionAd />
 
         <DeferredSection part="how" id="how-it-works" minHeight={619} />
@@ -302,6 +298,8 @@ export default async function HomePage() {
         <CreatorBand />
         <AppBand />
 
+        <SectionAd />
+
         {/* An ad above the platform links — the section the hero's "All platforms" lands on. */}
         <div className="container max-w-5xl px-3 py-2">
           <AdSurface zone="homepage_top" maxWidth="max-w-3xl" />
@@ -311,6 +309,8 @@ export default async function HomePage() {
         <DeferredSection part="platforms" id="platforms" minHeight={918} />
 
         <SectionAd />
+
+        <PromoteSection ads={ads} />
 
         <FaqJsonLd />
         <DeferredSection part="faq" id="faq" minHeight={768} />

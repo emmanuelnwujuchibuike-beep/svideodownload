@@ -49,9 +49,6 @@ describe("the landing's deferred sections", () => {
     const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     for (const f of FAQS) expect(parts.faq).toContain(esc(f.q));
     for (const d of getPrimaryPages()) expect(parts.platforms).toContain(`href="/${d.slug}"`);
-    // the AI tools and both AI doors keep their analytics tags
-    expect(parts.ai).toContain('data-track="ai_reels_clicked"');
-    expect(parts.ai.match(/data-track="ai_clicked"/g)!.length).toBeGreaterThan(2);
   });
 
   it("the FAQ's structured data stays in the document itself", () => {

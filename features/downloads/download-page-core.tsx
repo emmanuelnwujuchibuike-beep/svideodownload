@@ -84,7 +84,10 @@ export function DownloadPageCore({
    */
   showFrenzAi = false,
   aiPromo = null,
+  showStorage = true,
 }: {
+  /** the Cloud storage row — off on the landing, where a guest has none (owner, 2026-10-28) */
+  showStorage?: boolean;
   platformStatus?: PlatformStatusMap;
   rotateUrls?: string[];
   showDisclaimer?: boolean;
@@ -138,7 +141,7 @@ export function DownloadPageCore({
           </RotatingAdStack>
         </div>
       ) : null}
-      <StorageRow items={items} />
+      {showStorage ? <StorageRow items={items} /> : null}
       {/* below Cloud storage, given room (owner, 2026-08-30); fullBleed — no white frame round the unit */}
       <AdSurface zone="under_download" fullBleed className="mt-6" />
       {hideEmptyStats && items.length === 0 ? null : (

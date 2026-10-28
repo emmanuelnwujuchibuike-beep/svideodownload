@@ -186,10 +186,14 @@ function faq() {
   )}<div class="${LANDING_CARD} divide-y divide-frenz-line overflow-hidden">${rows}</div></section>`;
 }
 
-/** The parts, by the name each `DeferredSection` asks for. */
-export const DEFERRED_PARTS = ["ai", "features", "how", "platforms", "faq"] as const;
+/**
+ * The parts, by the name each `DeferredSection` asks for. 2026-10-28 (owner: "the landing page is terrible while the
+ * Download page is okay"): the landing follows design/frenz-landing.html now — the big Frenz AI band and "Powerful
+ * features" left it (the hero's Tools grid carries Frenz AI); their renderers stay for a page that wants them back.
+ */
+export const DEFERRED_PARTS = ["how", "platforms", "faq"] as const;
 export type DeferredPart = (typeof DEFERRED_PARTS)[number];
 
 export function renderDeferredSections(): Record<DeferredPart, string> {
-  return { ai: frenzAi(), features: features(), how: howItWorks(), platforms: platforms(), faq: faq() };
+  return { how: howItWorks(), platforms: platforms(), faq: faq() };
 }

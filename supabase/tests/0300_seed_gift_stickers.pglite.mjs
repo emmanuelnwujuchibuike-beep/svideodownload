@@ -35,7 +35,30 @@ await run([
   "create trigger gift_sticker_revisions_writer before insert on public.gift_sticker_revisions for each row execute function public.gift_sticker_guard()",
 ]);
 
+// production as found (owner, 2026-10-28): the table came from an earlier 0291 draft whose artwork check used a regex
+// repetition above 255 — Postgres stores it, then refuses it on the first insert ("invalid repetition count(s)")
+await run([
+  "alter table public.gift_stickers drop constraint gift_stickers_image_chk",
+  "alter table public.gift_stickers add constraint gift_stickers_image_chk check (image_url is null or image_url ~ '^https://[^[:space:]]{1,2048}$')",
+]);
+let reproduced = false;
+try {
+  await db.exec("select set_config('frenz.sticker_writer', 'on', false)");
+  await db.exec("insert into gift_stickers (slug, name, price_fgc, image_url) values ('probe', 'Probe', 1, 'https://x.test/a.svg')");
+} catch (e) {
+  reproduced = /invalid repetition count/.test(e.message);
+}
+await db.exec("select set_config('frenz.sticker_writer', 'off', false)");
+ok(reproduced, "the production error is reproduced before 0300 (invalid repetition count)");
+
 let seed = read("0300_seed_gift_stickers.sql");
+if (MUTANT === "no-heal") {
+  // drop the repair block: everything from its first constraint drop to the end of that DO block
+  const a = seed.indexOf("do $$\nbegin\n  execute 'alter table public.gift_stickers drop constraint if exists gift_stickers_slug_chk'");
+  const b = seed.indexOf("\nend\n$$;", a);
+  if (a < 0 || b < 0) throw new Error("mutant did not apply");
+  seed = seed.slice(0, a) + seed.slice(b + "\nend\n$$;".length);
+}
 if (MUTANT === "no-skip") seed = seed.replace("if exists (select 1 from public.gift_stickers where slug = r.slug) then continue; end if;", "");
 await run(split(seed));
 

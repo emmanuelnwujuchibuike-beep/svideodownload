@@ -13,11 +13,54 @@
 -- Never overwrites: a slug that already exists is skipped, so an admin's later price, name or artwork change survives a
 -- re-run. Every later change goes through Admin, Gift Coin, Stickers (admin_save_gift_sticker, versioned and audited).
 --
+-- ── Repair first (owner's run, 2026-10-28: "invalid regular expression: invalid repetition count(s)") ─────────────
+-- The live gift_stickers table was created by an earlier draft of 0291 whose text checks used a regex repetition above
+-- 255 (Postgres refuses those). Because 0291 says "create table if not exists", the corrected checks never replaced
+-- them, so EVERY sticker with artwork failed to save, the admin screen included. Below, the four text checks are
+-- dropped and re-added exactly as 0291 now defines them, and the field check function is restated from 0291, before
+-- anything is inserted.
+--
 -- Depends on 0291. Safe to run twice. No semicolon inside any quoted string or comment. Dollar-quoted blocks last.
 
 -- ═════════════════════════════════════════════════════════════════════════════
 --  EVERY DOLLAR-QUOTED BLOCK FROM HERE DOWN.
 -- ═════════════════════════════════════════════════════════════════════════════
+
+do $$
+begin
+  execute 'alter table public.gift_stickers drop constraint if exists gift_stickers_slug_chk';
+  execute 'alter table public.gift_stickers add constraint gift_stickers_slug_chk check (slug ~ ''^[a-z0-9][a-z0-9-]{1,47}$'')';
+  execute 'alter table public.gift_stickers drop constraint if exists gift_stickers_image_chk';
+  execute 'alter table public.gift_stickers add constraint gift_stickers_image_chk check (image_url is null or (char_length(image_url) <= 2048 and image_url ~ ''^https://[^[:space:]"<>]+$''))';
+  execute 'alter table public.gift_stickers drop constraint if exists gift_stickers_animation_chk';
+  execute 'alter table public.gift_stickers add constraint gift_stickers_animation_chk check (animation_url is null or (char_length(animation_url) <= 2048 and animation_url ~ ''^https://[^[:space:]"<>]+$''))';
+  execute 'alter table public.gift_stickers drop constraint if exists gift_stickers_category_chk';
+  execute 'alter table public.gift_stickers add constraint gift_stickers_category_chk check (category is null or category ~ ''^[a-z0-9][a-z0-9-]{0,23}$'')';
+end
+$$;
+
+-- the field check the admin save uses, restated from 0291 (the draft's copy may carry the same bad regex)
+create or replace function public.gift_sticker_field_problem(p_key text, p_value jsonb) returns text
+language plpgsql immutable as $$
+begin
+  case p_key
+    when 'slug' then if jsonb_typeof(p_value) <> 'string' or (p_value #>> '{}') !~ '^[a-z0-9][a-z0-9-]{1,47}$' then return 'slug'; end if;
+    when 'name' then if jsonb_typeof(p_value) <> 'string' or char_length(btrim(p_value #>> '{}')) not between 1 and 40 or (p_value #>> '{}') ~ '[[:cntrl:]]' then return 'name'; end if;
+    when 'description' then if not (jsonb_typeof(p_value) = 'null' or (jsonb_typeof(p_value) = 'string' and char_length(p_value #>> '{}') <= 200 and (p_value #>> '{}') !~ '[[:cntrl:]]')) then return 'description'; end if;
+    when 'rarity' then if jsonb_typeof(p_value) <> 'string' or (p_value #>> '{}') not in ('common', 'rare', 'epic', 'legendary') then return 'rarity'; end if;
+    when 'priceFgc' then if jsonb_typeof(p_value) <> 'number' or (p_value #>> '{}') !~ '^[1-9][0-9]{0,10}$' then return 'priceFgc'; end if;
+    when 'imageUrl' then if not (jsonb_typeof(p_value) = 'null' or (jsonb_typeof(p_value) = 'string' and char_length(p_value #>> '{}') <= 2048 and (p_value #>> '{}') ~ '^https://[^[:space:]"<>]+$')) then return 'imageUrl'; end if;
+    when 'animationUrl' then if not (jsonb_typeof(p_value) = 'null' or (jsonb_typeof(p_value) = 'string' and char_length(p_value #>> '{}') <= 2048 and (p_value #>> '{}') ~ '^https://[^[:space:]"<>]+$')) then return 'animationUrl'; end if;
+    when 'category' then if not (jsonb_typeof(p_value) = 'null' or (jsonb_typeof(p_value) = 'string' and (p_value #>> '{}') ~ '^[a-z0-9][a-z0-9-]{0,23}$')) then return 'category'; end if;
+    when 'featured' then if jsonb_typeof(p_value) <> 'boolean' then return 'featured'; end if;
+    when 'sortOrder' then if jsonb_typeof(p_value) <> 'number' or (p_value #>> '{}') !~ '^[0-9]{1,6}$' or (p_value #>> '{}')::int > 100000 then return 'sortOrder'; end if;
+    when 'published' then if jsonb_typeof(p_value) <> 'boolean' then return 'published'; end if;
+    when 'archived' then if jsonb_typeof(p_value) <> 'boolean' then return 'archived'; end if;
+    else return 'unknown:' || p_key;
+  end case;
+  return null;
+end;
+$$;
 
 do $$
 declare

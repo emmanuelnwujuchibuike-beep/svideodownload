@@ -44,8 +44,8 @@ export const RESERVED_HANDLES: ReadonlySet<string> = new Set([
   ...CATEGORIES,
   // public/ folders and special files
   "brand", "splash", "sw", "launch", "robots", "sitemap", "manifest", "favicon", "icon", "apple_icon",
-  // the static landing page's scripts (public/landing/, 2026-10-27)
-  "landing",
+  // the old static landing's scripts folder (public/landing/, gone 2026-10-28 — kept reserved), the sticker artwork (public/stickers/)
+  "landing", "stickers",
   // reserved before 2026-10-17 (lib/social/profile.ts), kept
   "logout", "settings", "go", "frenzsave", "trending",
   // obvious future routes, so they stay free

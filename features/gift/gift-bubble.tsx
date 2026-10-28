@@ -74,7 +74,7 @@ export function GiftBubble({ meta, mine, viewerIsRecipient, senderName, recipien
         <span className="relative">
           {art ? (
             // eslint-disable-next-line @next/next/no-img-element -- the sticker artwork, already a sized WebP
-            <img key={bounce} src={art} alt="" className={cn("h-28 w-28 object-contain", bounce > 0 && "motion-safe:animate-[gift-bounce_0.45s_ease-out]")} />
+            <img key={bounce} src={art} alt="" className={cn("h-28 w-28 object-contain", bounce > 0 ? "motion-safe:animate-[gift-bounce_0.45s_ease-out]" : "origin-bottom motion-safe:animate-sticker")} />
           ) : (
             <span className="flex h-20 w-20 items-center justify-center rounded-full bg-amber-400/20 text-2xl" aria-hidden>
               🎁

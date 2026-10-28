@@ -67,7 +67,9 @@ export function GiftReveal({ meta, senderName, onClose, onSayThanks, onSendBack 
         <div className="mt-6 flex h-56 w-56 items-center justify-center rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.35),transparent_68%)]">
           {art ? (
             // eslint-disable-next-line @next/next/no-img-element -- the sticker as it was when gifted (the message's snapshot)
-            <img src={art} alt="" className="h-48 w-48 object-contain drop-shadow-[0_18px_30px_rgba(0,0,0,0.35)] motion-safe:animate-in motion-safe:zoom-in-50 motion-safe:duration-500" />
+            <span className="block origin-bottom motion-safe:animate-sticker">
+              <img src={art} alt="" className="h-48 w-48 object-contain drop-shadow-[0_18px_30px_rgba(0,0,0,0.35)] motion-safe:animate-in motion-safe:zoom-in-50 motion-safe:duration-500" />
+            </span>
           ) : (
             <span className="text-6xl" aria-hidden>
               🎁

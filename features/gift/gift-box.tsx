@@ -163,7 +163,7 @@ export function GiftBox({ wallet, initial, counts, conversion, fc = null, initia
                   <Link key={it.id} href={`/messages/${it.conversationId}`} prefetch={false} className="flex items-center gap-3 rounded-[20px] border border-white bg-white/80 py-2.5 pl-2.5 pr-3.5 shadow-[0_4px_14px_rgba(40,24,110,0.05)]">
                     <span className="flex h-[54px] w-[54px] flex-none items-center justify-center rounded-2xl bg-frenz-fill">
                       {/* eslint-disable-next-line @next/next/no-img-element -- the sticker as it was when gifted (snapshot) */}
-                      {it.sticker.imageUrl ? <img src={it.sticker.imageUrl} alt="" loading="lazy" className="h-[42px] w-[42px] object-contain" /> : <span aria-hidden>🎁</span>}
+                      {it.sticker.imageUrl ? <img src={it.sticker.imageUrl} alt="" loading="lazy" className="h-[42px] w-[42px] object-contain origin-bottom motion-safe:animate-sticker" /> : <span aria-hidden>🎁</span>}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[15px] font-bold">{it.sticker.name}</span>

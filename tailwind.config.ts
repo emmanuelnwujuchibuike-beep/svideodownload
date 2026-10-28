@@ -116,6 +116,15 @@ const config: Config = {
       },
       keyframes: {
         // the who-reposted badge on a reel: holds, then floats up and fades like a story reaction (owner, 2026-10-27)
+        // a sticker gift's play (owner, 2026-10-28: "animation should last 3 secs … every 3 secs in chat") — a pop and a
+        // wiggle in the first second, then still; transform only, so it runs on the compositor
+        "sticker-play": {
+          "0%, 40%, 100%": { transform: "none" },
+          "8%": { transform: "scale(1.14) rotate(-7deg)" },
+          "16%": { transform: "scale(1.1) rotate(6deg)" },
+          "24%": { transform: "scale(1.08) rotate(-4deg)" },
+          "32%": { transform: "scale(1.04) rotate(2deg)" },
+        },
         "badge-rise": {
           "0%, 62%": { opacity: "1", transform: "translateY(0) scale(1)" },
           "70%": { opacity: "1", transform: "translateY(-14px) scale(1.15)" },
@@ -150,6 +159,10 @@ const config: Config = {
         },
       },
       animation: {
+        // every sent sticker, everywhere: a 3 s play, again and again
+        sticker: "sticker-play 3s ease-in-out infinite",
+        // the gift sheet's grid: one play per turn (gift-sheet.tsx moves the turn every 3 s)
+        "sticker-once": "sticker-play 3s ease-in-out 1",
         "fade-up": "fade-up 0.5s ease-out both",
         float: "float 3.5s ease-in-out infinite",
         "pulse-glow": "pulse-glow 3s ease-in-out infinite",

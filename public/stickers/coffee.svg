@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="-8 -8 116 116">
+  <title>coffee</title>
+  <defs><filter id="drop-coffee" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#3C146E" flood-opacity=".22"/></filter></defs>
+  <g filter="url(#drop-coffee)"><path d="M42 26q-5-8 1-16M56 26q-5-8 1-16" stroke="#B9B3D9" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <path d="M76 44q16 0 14 14-2 12-18 10" stroke="#fff" stroke-width="11" fill="none"/>
+      <path d="M76 44q16 0 14 14-2 12-18 10" stroke="#5B44F2" stroke-width="5" fill="none"/>
+      <path d="M20 34h60l-6 46q-1 9-10 9H36q-9 0-10-9z" fill="#F6F4FF" stroke="#fff" stroke-width="6" stroke-linejoin="round"/>
+      <path d="M20 34h60l-6 46q-1 9-10 9H36q-9 0-10-9z" fill="none" stroke="#5B44F2" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M23 52h54l-1.5 13h-51z" fill="#7B3FE4"/>
+      <path d="M50 62.5s-4.5-2.7-4.5-5.6a2.3 2.3 0 0 1 4.5-.9 2.3 2.3 0 0 1 4.5.9c0 2.9-4.5 5.6-4.5 5.6z" fill="#fff"/></g>
+</svg>

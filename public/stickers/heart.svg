@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="-8 -8 116 116">
+  <title>heart</title>
+  <defs><filter id="drop-heart" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#3C146E" flood-opacity=".22"/></filter></defs>
+  <g filter="url(#drop-heart)"><defs><linearGradient id="heart-heart62" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF7EA6"/><stop offset="1" stop-color="#E0245E"/></linearGradient></defs>
+      <path d="M50 88C20 68 8 52 8 35 8 21 19 11 31 11c9 0 15 5 19 12 4-7 10-12 19-12 12 0 23 10 23 24 0 17-12 33-42 53z" fill="url(#heart-heart62)" stroke="#fff" stroke-width="6" stroke-linejoin="round"/>
+      <ellipse cx="30" cy="30" rx="9" ry="5.5" fill="#fff" opacity=".55" transform="rotate(-35 30 30)"/></g>
+</svg>

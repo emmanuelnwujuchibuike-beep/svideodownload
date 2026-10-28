@@ -110,6 +110,16 @@ export function GiftSheet({ conversationId, recipients, requireChoice, onClose, 
   }, [data, initialStickerId]);
 
   const cats = useMemo(() => categoriesOf(data?.stickers ?? []), [data]);
+  /*
+    The grid's play (owner, 2026-10-28: "animated one at a time starting from the first to the last, or any one the user
+    hovers"): the turn moves every 3 s — the length of one play — and a hovered or focused sticker takes over.
+  */
+  const [turn, setTurn] = useState(0);
+  const [hovered, setHovered] = useState<string | null>(null);
+  useEffect(() => {
+    const t = window.setInterval(() => setTurn((n) => n + 1), 3000);
+    return () => window.clearInterval(t);
+  }, []);
   const shown = useMemo(() => (data?.stickers ?? []).filter((s) => !category || s.category === category), [data, category]);
   const featured = useMemo(() => (data?.stickers ?? []).find((s) => s.featured) ?? null, [data]);
   const available = data?.wallet.available ?? 0;
@@ -237,7 +247,7 @@ export function GiftSheet({ conversationId, recipients, requireChoice, onClose, 
             <div className="flex flex-col items-center gap-2 text-center">
               <div className="flex h-44 w-full items-center justify-center rounded-[28px] bg-[radial-gradient(circle_at_50%_40%,hsl(var(--frenz-violet)/0.16),transparent_70%)]">
                 {/* eslint-disable-next-line @next/next/no-img-element -- uploaded sticker artwork, already a sized WebP */}
-                {chosen.animationUrl || chosen.imageUrl ? <img key={chosen.id} src={(chosen.animationUrl ?? chosen.imageUrl)!} alt="" className="h-40 w-40 object-contain motion-safe:animate-in motion-safe:zoom-in-75 motion-safe:duration-300 motion-reduce:animate-in motion-reduce:fade-in" /> : <span className="text-5xl" aria-hidden>🎁</span>}
+                {chosen.animationUrl || chosen.imageUrl ? <img key={chosen.id} src={(chosen.animationUrl ?? chosen.imageUrl)!} alt="" className="origin-bottom motion-safe:animate-sticker h-40 w-40 object-contain motion-safe:animate-in motion-safe:zoom-in-75 motion-safe:duration-300 motion-reduce:animate-in motion-reduce:fade-in" /> : <span className="text-5xl" aria-hidden>🎁</span>}
               </div>
               {RARITY_TAG[chosen.rarity] ? <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide", RARITY_TAG[chosen.rarity]!.className)}>{RARITY_TAG[chosen.rarity]!.label}</span> : null}
               <h3 className="text-[26px] font-extrabold leading-tight tracking-tight">{chosen.name}</h3>
@@ -387,7 +397,7 @@ export function GiftSheet({ conversationId, recipients, requireChoice, onClose, 
             {featured && !category ? (
               <button type="button" onClick={() => pick(featured)} className="flex items-center gap-3 rounded-[22px] bg-frenz-gradient-x p-4 text-left text-white shadow-frenz-card transition active:scale-[0.98]">
                 {/* eslint-disable-next-line @next/next/no-img-element -- uploaded sticker artwork */}
-                {featured.imageUrl ? <img src={featured.imageUrl} alt="" className="h-16 w-16 object-contain" /> : null}
+                {featured.imageUrl ? <img src={featured.imageUrl} alt="" className="h-16 w-16 object-contain origin-bottom motion-safe:animate-sticker" /> : null}
                 <span className="min-w-0 flex-1">
                   <span className="block text-xs opacity-80">Featured</span>
                   <span className="block truncate text-base font-bold">{featured.name}</span>
@@ -399,13 +409,15 @@ export function GiftSheet({ conversationId, recipients, requireChoice, onClose, 
               <p className="rounded-2xl bg-frenz-fill p-4 text-sm text-frenz-muted">No stickers in this category.</p>
             ) : (
               <div className="grid grid-cols-3 gap-3">
-                {shown.map((s) => {
+                {shown.map((s, i) => {
                   const locked = s.priceFgc > available;
                   const tag = RARITY_TAG[s.rarity];
+                  // one plays at a time, first to last — or the one under the finger / pointer
+                  const playing = hovered === null ? turn % shown.length === i : hovered === s.id;
                   return (
-                    <button key={s.id} type="button" onClick={() => pick(s)} aria-label={`${s.name}, ${fgcText(s.priceFgc)} Gift Coins${locked ? ", more Gift Coins needed" : ""}`} className="flex min-h-[44px] flex-col items-center gap-1 rounded-[22px] bg-white/70 p-2 text-center shadow-frenz-card transition active:scale-[0.96] dark:bg-white/5">
-                      {/* eslint-disable-next-line @next/next/no-img-element -- the static frame in the grid (design: no animation here) */}
-                      {s.imageUrl ? <img src={s.imageUrl} alt="" loading="lazy" className="h-16 w-16 object-contain" /> : <span className="h-16 w-16" />}
+                    <button key={s.id} type="button" onClick={() => pick(s)} onPointerEnter={() => setHovered(s.id)} onPointerLeave={() => setHovered(null)} onFocus={() => setHovered(s.id)} onBlur={() => setHovered(null)} aria-label={`${s.name}, ${fgcText(s.priceFgc)} Gift Coins${locked ? ", more Gift Coins needed" : ""}`} className="flex min-h-[44px] flex-col items-center gap-1 rounded-[22px] bg-white/70 p-2 text-center shadow-frenz-card transition active:scale-[0.96] dark:bg-white/5">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- uploaded sticker artwork */}
+                      {s.imageUrl ? <img key={playing ? `p${turn}-${hovered ?? ""}` : "still"} src={s.imageUrl} alt="" loading="lazy" className={cn("h-16 w-16 origin-bottom object-contain", playing && "motion-safe:animate-sticker-once")} /> : <span className="h-16 w-16" />}
                       <span className="line-clamp-1 text-xs font-semibold">{s.name}</span>
                       <span className={cn("text-[13px] font-bold", locked && "text-frenz-muted")}>{fgcText(s.priceFgc)}</span>
                       {tag ? <span className={cn("rounded-full px-1.5 text-[10px] font-semibold", tag.className)}>{tag.label}</span> : null}
@@ -442,7 +454,7 @@ function TopUp({ back, sticker, quantity, available, needed }: { back: string; s
       <div className="flex items-center gap-3">
         <span className="flex h-14 w-14 flex-none items-center justify-center rounded-2xl bg-amber-400/15">
           {/* eslint-disable-next-line @next/next/no-img-element -- uploaded sticker artwork */}
-          {sticker.imageUrl ? <img src={sticker.imageUrl} alt="" className="h-11 w-11 object-contain" /> : <span aria-hidden>🎁</span>}
+          {sticker.imageUrl ? <img src={sticker.imageUrl} alt="" className="h-11 w-11 object-contain origin-bottom motion-safe:animate-sticker" /> : <span aria-hidden>🎁</span>}
         </span>
         <div className="min-w-0 flex-1">
           <h4 id="gift-topup-title" className="text-[15px] font-bold">

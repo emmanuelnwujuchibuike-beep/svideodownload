@@ -2032,9 +2032,13 @@ export function ConversationRoom({
             // a gift and a gift's thank-you are cards of their own — no bubble around them, and the body (the inbox and
             // push preview's words, "Sent a sticker gift: …") is not repeated under the card
             const giftCard = !deleted && (m.metadata?.kind === "gift" || m.metadata?.kind === "gift_thanks" || m.metadata?.kind === "sub_post");
+            // owner, 2026-10-29: "chat colour should affect … the media card, everything on chat" — with a colour or a theme
+            // chosen, my photos and videos sit in a thin frame of it like every other bubble; with none they stay frameless
+            const chatColoured = m.mine && (!!chatAppearance.bubbleColor || !!liveTheme);
             const frameless =
               giftCard ||
               (!deleted &&
+                !chatColoured &&
                 hasMediaAttachment &&
                 !m.body &&
                 !shared &&
@@ -2420,7 +2424,7 @@ export function ConversationRoom({
                                 // Frameless (owner, 2026-10-08: "make record card frameless like the
                                 // media card"): no inner bordered card — the player sits on the
                                 // bubble itself, one surface, in the bubble's own theme colour.
-                                <VoiceMessage key={att.id} url={att.url} durationMs={att.durationMs} waveform={att.waveform} surface="bg-transparent !px-2 !pb-0.5 !pt-1" onColor={m.mine} />
+                                <VoiceMessage key={att.id} url={att.url} durationMs={att.durationMs} waveform={att.waveform} surface="bg-transparent !px-2 !pb-0.5 !pt-1" onColor={m.mine} accent={chatAppearance.bubbleColor ?? null} accentClass={liveTheme ? THEME_BUBBLE_CLASS[liveTheme] : null} />
                               ) : (
                                 <DocumentAttachmentCard key={att.id} url={att.url} filename={att.filename} sizeBytes={att.sizeBytes} mine={m.mine} />
                               ),

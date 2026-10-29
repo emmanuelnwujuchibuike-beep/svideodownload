@@ -944,6 +944,33 @@ export function SmartFeed({
     setPull(0);
   };
 
+  /*
+    🔴 A pull the system took away (owner, 2026-10-29: after leaving the app and coming back, "much gap between the top
+    nav and the feed card"). Swiping up to the home screen, a call or a notification CANCELS the touch: no touchend ever
+    comes, so the pull spacer (up to 110 px) stayed open above the content. A cancelled touch, or the page going to the
+    background, drops the pull.
+  */
+  const cancelPull = () => {
+    pullStart.current = null;
+    swipeStart.current = null;
+    swipeAxis.current = null;
+    if (!refreshing) setPull(0);
+  };
+  useEffect(() => {
+    // a refresh in flight holds its spinner at the threshold — that one ends on its own
+    const drop = () => {
+      pullStart.current = null;
+      setPull((p) => (p === PULL_THRESHOLD ? p : 0));
+    };
+    const onVisibility = () => document.visibilityState === "hidden" && drop();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", drop);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", drop);
+    };
+  }, []);
+
   const pullProgress = Math.min(1, pull / PULL_THRESHOLD);
 
   /* ── Build the smart stream from the loaded items ─────────────────────── */
@@ -1007,6 +1034,7 @@ export function SmartFeed({
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
+      onTouchCancel={cancelPull}
       // Vertical scroll/pull-to-refresh stays entirely native; horizontal
       // swipes are read in JS only (never blocked), same as the reel viewer.
       style={{ touchAction: "pan-y" }}

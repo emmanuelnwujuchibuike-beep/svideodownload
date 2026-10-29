@@ -17,7 +17,8 @@
  *     serves (HEAD 200). Nothing referenced by a non-R2 URL is touched.
  *
  * The media columns scanned: posts(media_url, thumbnail_url),
- * profiles(avatar_url, banner_url), stories(media_url), post_comments(image_url).
+ * profiles(avatar_url, banner_url), stories(media_url), post_comments(image_url),
+ * message_attachments(media_url, thumbnail_url).
  *
  * Usage (env in .env.local or the real environment):
  *   node scripts/backfill-r2.mjs                          # migrate everything pending
@@ -84,6 +85,8 @@ const TARGETS = [
   { table: "profiles", cols: ["avatar_url", "banner_url"] },
   { table: "stories", cols: ["media_url"] },
   { table: "post_comments", cols: ["image_url"] },
+  // chat media (owner, 2026-10-29: old voice notes stopped playing) — left out of the first move, so it kept r2.dev links
+  { table: "message_attachments", cols: ["media_url", "thumbnail_url"] },
 ];
 
 const db = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });

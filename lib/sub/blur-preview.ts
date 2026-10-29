@@ -59,6 +59,112 @@ export async function ensureBlurPreview(postId: string): Promise<void> {
   } catch {
     /* the tile stays a plain locked tile */
   }
+  await ensureItemBlurPreviews(postId);
+}
+
+/**
+ * 0306: the same blurred still for EVERY item (owner, 2026-10-29: "slide through a multi post sideways, but blurred").
+ * Only items without one, each made from its own thumb (a video) or itself (a photo). Before 0306 the read fails and
+ * nothing happens; any one failure leaves that slide plain and the rest still made.
+ */
+export async function ensureItemBlurPreviews(postId: string): Promise<void> {
+  try {
+    const db = createAdminClient();
+    const { data, error } = await db.from("sub_post_media").select("id, idx, media_kind, object_key, thumb_key, blur_preview").eq("post_id", postId).is("blur_preview", null).order("idx");
+    if (error) return;
+    for (const item of ((data ?? []) as Row[]).slice(0, MAX_SLIDES)) {
+      const key = sourceKey(item);
+      if (!key) continue;
+      try {
+        const res = await fetch(await presignPrivateGet(key, 120));
+        if (!res.ok) continue;
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        if (bytes.byteLength > MAX_SOURCE_BYTES) continue;
+        const preview = await makeBlurPreview(bytes);
+        if (preview) await db.from("sub_post_media").update({ blur_preview: preview }).eq("id", item.id as string).is("blur_preview", null);
+      } catch {
+        /* this slide stays plain */
+      }
+    }
+  } catch {
+    /* every slide stays plain */
+  }
+}
+
+/** One slide of a locked post: its blurred still and, for a video, its blurred clip. Never the file. */
+export interface BlurSlide {
+  kind: "image" | "video";
+  blurUrl?: string;
+  blurVideoUrl?: string;
+}
+const MAX_SLIDES = 20;
+
+/**
+ * 0306: each post's slides, in order, one per item. The first slide falls back to the post-level preview. A database
+ * before 0306 answers none, and the caller shows the post-level preview as its one slide.
+ */
+export async function readBlurSlides(postIds: string[]): Promise<Map<string, BlurSlide[]>> {
+  const out = new Map<string, BlurSlide[]>();
+  if (!postIds.length) return out;
+  const db = createAdminClient();
+  const [items, posts] = await Promise.all([
+    db.from("sub_post_media").select("post_id, idx, media_kind, blur_preview, blur_video_url").in("post_id", postIds).order("idx"),
+    db.from("sub_posts").select("id, blur_preview, blur_video_url").in("id", postIds),
+  ]);
+  if (items.error) return out;
+  const postLevel = new Map(((posts.data ?? []) as Row[]).map((r) => [r.id as string, r]));
+  const byPost = new Map<string, Row[]>();
+  for (const r of (items.data ?? []) as Row[]) byPost.set(r.post_id as string, [...(byPost.get(r.post_id as string) ?? []), r]);
+  for (const [id, rows] of byPost) {
+    const slides = rows.slice(0, MAX_SLIDES).map((r, i): BlurSlide => {
+      const post = i === 0 ? postLevel.get(id) : undefined;
+      const still = goodStill(r.blur_preview) ?? goodStill(post?.blur_preview);
+      const clip = r.media_kind === "video" ? (goodClip(r.blur_video_url) ?? goodClip(post?.blur_video_url)) : null;
+      return { kind: r.media_kind === "video" ? "video" : "image", ...(still ? { blurUrl: still } : {}), ...(clip ? { blurVideoUrl: clip } : {}) };
+    });
+    out.set(id, slides);
+  }
+  return out;
+}
+
+/**
+ * The creator's own video items that still lack a blurred clip (older posts, made before every video got one): their
+ * browser makes them on a visit (features/sub/blur-clip-backfill.ts). At most `limit`, newest posts first.
+ */
+export async function missingBlurClips(creatorId: string, limit = 2): Promise<{ postId: string; idx: number; key: string }[]> {
+  const db = createAdminClient();
+  const { data, error } = await db
+    .from("sub_post_media")
+    .select("post_id, idx, object_key, sub_posts!inner(creator_id, status, audience, created_at)")
+    .eq("media_kind", "video")
+    .is("blur_video_url", null)
+    .eq("sub_posts.creator_id", creatorId)
+    .eq("sub_posts.status", "published")
+    .eq("sub_posts.audience", "locked")
+    .limit(40);
+  if (error) return [];
+  const rows = (data ?? []) as (Row & { sub_posts: Row | Row[] })[];
+  const created = (r: (typeof rows)[number]) => String((Array.isArray(r.sub_posts) ? r.sub_posts[0] : r.sub_posts)?.created_at ?? "");
+  return rows
+    .sort((a, b) => created(b).localeCompare(created(a)) || Number(a.idx) - Number(b.idx))
+    .slice(0, limit)
+    .map((r) => ({ postId: r.post_id as string, idx: Number(r.idx), key: r.object_key as string }));
+}
+
+/** Stores one item's clip (the creator's own browser made it). Only an empty one is filled; the first video's also on the post. */
+export async function saveItemBlurClip(postId: string, idx: number, url: string): Promise<boolean> {
+  const db = createAdminClient();
+  const { data, error } = await db.from("sub_post_media").update({ blur_video_url: url }).eq("post_id", postId).eq("idx", idx).eq("media_kind", "video").is("blur_video_url", null).select("idx");
+  if (error || !data?.length) return false;
+  await db.from("sub_posts").update({ blur_video_url: url }).eq("id", postId).is("blur_video_url", null).then(() => undefined, () => undefined);
+  return true;
+}
+
+function goodStill(v: unknown): string | null {
+  return typeof v === "string" && v.startsWith("data:image/webp;base64,") ? v : null;
+}
+function goodClip(v: unknown): string | null {
+  return typeof v === "string" && v.startsWith("https://") ? v : null;
 }
 
 /** The stored previews of these posts. A database without 0263, or a failed read, answers none. */

@@ -137,6 +137,10 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
     everyone. Shown at once here from the local image.
   */
   const backfilling = useRef(false);
+  // 0306: and the blurred clips older locked videos lack — two per session, on idle (features/sub/blur-clip-backfill.ts)
+  useEffect(() => {
+    if (state?.isCreator) void import("@/features/sub/blur-clip-backfill").then((m) => m.backfillBlurClips()).catch(() => {});
+  }, [state?.isCreator]);
   useEffect(() => {
     if (!state?.isCreator || backfilling.current) return;
     const todo = state.posts.filter((p) => !p.thumbUrl && !p.coverUrl && p.open?.media[0]?.kind === "video");

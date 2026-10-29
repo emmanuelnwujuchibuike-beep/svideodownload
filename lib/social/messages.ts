@@ -1,3 +1,4 @@
+import { currentMediaUrl } from "@/lib/storage/current-media-url";
 import { liveStreakDays } from "@/lib/social/chat-streak";
 import { after } from "next/server";
 
@@ -1856,8 +1857,9 @@ export function groupAttachments(rows: RawAttachmentRow[]): Map<string, MessageA
     list.push({
       id: r.id,
       kind: r.media_kind,
-      url: r.media_url,
-      thumbnailUrl: r.thumbnail_url,
+      // older chat media still names the old r2.dev address — served from today's media domain (current-media-url.ts)
+      url: currentMediaUrl(r.media_url),
+      thumbnailUrl: currentMediaUrl(r.thumbnail_url),
       width: r.media_width,
       height: r.media_height,
       durationMs: r.duration_ms,

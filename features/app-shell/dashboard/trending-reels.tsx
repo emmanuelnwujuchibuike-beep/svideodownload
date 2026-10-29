@@ -119,7 +119,7 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
       </div>
 
       {startId && items ? (
-        <ReelsFeed initialItems={items} initialOffset={null} startId={startId} onClose={() => setStartId(null)} />
+        <ReelsFeed collection initialItems={items} initialOffset={null} startId={startId} onClose={() => setStartId(null)} />
       ) : null}
     </section>
   );

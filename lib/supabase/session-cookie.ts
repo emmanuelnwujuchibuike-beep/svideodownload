@@ -118,3 +118,26 @@ export function sessionIsComfortablyFresh(cookies: { name: string; value: string
   if (expiresAt === null) return false;
   return expiresAt - Date.now() / 1000 > REFRESH_SKEW_SECONDS;
 }
+
+/**
+ * 🔴 SIGNED IN UNTIL THE BROWSER IS CLEARED (owner, 2026-10-29: "users should never log out unless they clear their
+ * browser … like TikTok, even for years").
+ *
+ * The session cookie already asks for 400 days (the browser maximum). But auth-js renews the session from the page,
+ * and a cookie written from script (`document.cookie`) is capped by Safari at SEVEN DAYS — so a member who didn't open
+ * Frenz in Safari for a week came back signed out. A cookie the SERVER sets keeps its full life. So once a day per
+ * browser (KEEP_MARKER), middleware sets the same session cookies back, unchanged, from the server.
+ *
+ * Only while the access token has KEEP_MIN_FRESH_SECONDS left: auth-js renews only near expiry, so it cannot rotate
+ * the token while this response is in flight — a response must never put back a refresh token the page has already
+ * replaced (Supabase would read the old one's reuse as theft and end the session).
+ */
+export const KEEP_MARKER = "frenz-session-kept";
+const KEEP_MIN_FRESH_SECONDS = 10 * 60;
+
+export function sessionCookiesToKeep<T extends { name: string; value: string }>(cookies: T[], nowSeconds = Date.now() / 1000): T[] {
+  if (cookies.some((c) => c.name === KEEP_MARKER)) return [];
+  const expiresAt = readSessionExpiry(cookies);
+  if (expiresAt === null || expiresAt - nowSeconds <= KEEP_MIN_FRESH_SECONDS) return [];
+  return cookies.filter((c) => SESSION_COOKIE.test(c.name));
+}

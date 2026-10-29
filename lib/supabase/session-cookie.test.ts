@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { readSessionExpiry, sessionIsComfortablyFresh } from "./session-cookie";
+import { KEEP_MARKER, readSessionExpiry, sessionCookiesToKeep, sessionIsComfortablyFresh } from "./session-cookie";
 
 /**
  * These guard a format this repo does NOT own: @supabase/ssr's session cookie
@@ -78,5 +78,24 @@ describe("sessionIsComfortablyFresh", () => {
   it("fails safe (false) when the expiry can't be read", () => {
     expect(sessionIsComfortablyFresh([])).toBe(false);
     expect(sessionIsComfortablyFresh([{ name: NAME, value: "base64-garbage!!" }])).toBe(false);
+  });
+});
+
+describe("sessionCookiesToKeep — the server re-sets the session once a day (Safari's 7-day script-cookie cap)", () => {
+  const fresh = encode({ expires_at: inFuture(3600) });
+  it("hands back every session cookie, chunks included, and nothing else", () => {
+    const list = [
+      { name: `${NAME}.0`, value: fresh.slice(0, 20) },
+      { name: `${NAME}.1`, value: fresh.slice(20) },
+      { name: "theme", value: "dark" },
+    ];
+    expect(sessionCookiesToKeep(list).map((c) => c.name)).toEqual([`${NAME}.0`, `${NAME}.1`]);
+  });
+  it("not again the same day (the marker is there)", () => {
+    expect(sessionCookiesToKeep([{ name: NAME, value: fresh }, { name: KEEP_MARKER, value: "1" }])).toEqual([]);
+  });
+  it("never near expiry, when the page may be replacing the token (teeth: a stale write could end the session)", () => {
+    expect(sessionCookiesToKeep([{ name: NAME, value: encode({ expires_at: inFuture(300) }) }])).toEqual([]);
+    expect(sessionCookiesToKeep([{ name: NAME, value: "garbage" }])).toEqual([]);
   });
 });

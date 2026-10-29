@@ -23,7 +23,7 @@ import { isIos } from "./platform";
  */
 export function repairViewport(
   win: Pick<Window, "scrollX" | "scrollY" | "scrollTo" | "innerHeight"> & { visualViewport?: { height: number } | null } = window,
-  doc: Pick<Document, "activeElement"> = document,
+  doc: Pick<Document, "activeElement"> & { documentElement?: { style: { minHeight: string } } } = document,
 ): void {
   const active = doc.activeElement as (Element & { type?: string; blur?: () => void; tagName?: string; isContentEditable?: boolean }) | null;
   if (active?.type === "file") active.blur?.();
@@ -39,29 +39,39 @@ export function repairViewport(
   const typing = tag === "textarea" || active?.isContentEditable || (tag === "input" && !["button", "checkbox", "radio", "range", "file", "submit", "reset", "color"].includes(active?.type ?? "text"));
   const vv = win.visualViewport;
   if (typing && vv && win.innerHeight && vv.height >= win.innerHeight * 0.85) active?.blur?.();
+  /*
+    🔴 2026-10-29 (owner: the chat header slid under the clock and the bottom nav rose after minimising). A page that
+    cannot scroll — a chat thread is one fixed screen — ignored the one-pixel nudge, so nothing was laid out again. For
+    the nudge only, the page is one pixel taller than the screen, then put back.
+  */
+  const root = doc.documentElement;
+  const prev = root?.style.minHeight ?? "";
+  if (root) root.style.minHeight = "calc(100% + 1px)";
   const x = win.scrollX;
   const y = win.scrollY;
   win.scrollTo(x, y + 1);
   win.scrollTo(x, y);
+  if (root) root.style.minHeight = prev;
 }
 
 /** Mount once, app-wide (the bottom nav does). */
 export function useResumeViewportRepair(): void {
   useEffect(() => {
     if (!isIos()) return;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let timers: ReturnType<typeof setTimeout>[] = [];
     const run = () => {
       if (document.visibilityState !== "visible") return;
       requestAnimationFrame(() => repairViewport());
-      clearTimeout(timer);
-      timer = setTimeout(() => repairViewport(), 350);
+      timers.forEach(clearTimeout);
+      // iOS settles the size a beat after it shows the page — and on a slow resume, a second beat after that
+      timers = [setTimeout(() => repairViewport(), 350), setTimeout(() => repairViewport(), 900)];
     };
     const onShow = (e: PageTransitionEvent) => e.persisted && run();
     document.addEventListener("visibilitychange", run);
     window.addEventListener("pageshow", onShow);
     window.addEventListener("focus", run);
     return () => {
-      clearTimeout(timer);
+      timers.forEach(clearTimeout);
       document.removeEventListener("visibilitychange", run);
       window.removeEventListener("pageshow", onShow);
       window.removeEventListener("focus", run);

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -40,6 +40,8 @@ const ProfileHubModal = dynamic(() => import("@/features/profile/profile-hub-mod
 export function ProfileHub({ handle, entries, owner = false, className }: { handle: string; entries: HubEntry[]; owner?: boolean; className?: string }) {
   const [open, setOpen] = useState<HubKey | null>(null);
   const [mounted, setMounted] = useState(false);
+  // the one group open under the row — none until a button is pressed
+  const [group, setGroup] = useState<string | null>(null);
 
   const openKey = useCallback((key: HubKey) => {
     haptic("selection");
@@ -53,40 +55,62 @@ export function ProfileHub({ handle, entries, owner = false, className }: { hand
   if (groups.length === 0) return null;
 
   /*
-    Three iOS lists (ProfileExclusive.dc.html, 2026-10-18): Showcase, Insights and Only you, each a white
-    card of rows under a small titled header; an owner's empty section says "Add" instead of "Nothing here
-    yet". Appearance is in Settings now and is not listed. Each row still opens its section in the one lazy
-    sheet, and still prefetches as it comes into view.
+    Three small buttons in one row (owner, 2026-10-29: "put all these cards in 3 buttons that show on click, just like
+    Multi-Link … small so the three fit in one row, and two shouldn't open at the same time"). Showcase, Insights and
+    Only you each open their own card of rows under the row; opening one closes the other, and a second tap closes it.
+    Each row still opens its section in the one lazy sheet, and still prefetches as it comes into view.
   */
+  const shownGroup = groups.find((g) => g.id === group) ?? null;
   return (
     <section aria-label="More on this profile" className={cn("frenz-ui mt-6", className)}>
-      <h2 className="mb-1 px-1 text-[11px] font-bold uppercase tracking-[0.1em] text-frenz-muted">More on this profile</h2>
-      {groups.map((g) => (
-        <div key={g.id} className="mt-3">
-          <div className="mb-2 flex items-center gap-2.5 px-1">
-            <span
-              aria-hidden
+      <h2 className="mb-2 px-1 text-[11px] font-bold uppercase tracking-[0.1em] text-frenz-muted">More on this profile</h2>
+      <div className="flex gap-2">
+        {groups.map((g) => {
+          const on = g.id === group;
+          return (
+            <button
+              key={g.id}
+              type="button"
+              aria-expanded={on}
+              aria-controls="profile-hub-group"
+              onClick={() => {
+                haptic("selection");
+                setGroup(on ? null : g.id);
+              }}
               className={cn(
-                "flex h-7 w-7 items-center justify-center rounded-lg font-heading text-[13px] font-extrabold text-white",
-                g.id === "showcase" ? "bg-frenz-blue" : g.id === "insights" ? "bg-frenz-violet" : "bg-frenz-ink",
+                "flex min-h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full border px-2.5 text-[13px] font-bold transition active:scale-[0.97] motion-reduce:active:scale-100",
+                on ? "border-frenz-ink bg-frenz-ink text-white dark:border-white dark:bg-white dark:text-frenz-ink" : "border-frenz-line bg-frenz-card text-frenz-ink hover:bg-frenz-fill",
               )}
             >
-              {g.mark}
-            </span>
-            <span className="flex min-w-0 flex-col">
-              <span className="font-heading text-[15px] font-bold text-frenz-ink">{g.title}</span>
-              {owner ? <span className="text-xs text-frenz-muted">{g.ownerSub}</span> : null}
-            </span>
+              <span
+                aria-hidden
+                className={cn(
+                  "flex h-5 w-5 shrink-0 items-center justify-center rounded-md font-heading text-[10.5px] font-extrabold text-white",
+                  g.id === "showcase" ? "bg-frenz-blue" : g.id === "insights" ? "bg-frenz-violet" : on ? "bg-white/20" : "bg-frenz-ink",
+                )}
+              >
+                {g.mark}
+              </span>
+              <span className="truncate">{g.title}</span>
+              <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 transition-transform motion-reduce:transition-none", on && "rotate-180")} aria-hidden />
+            </button>
+          );
+        })}
+      </div>
+      <div id="profile-hub-group">
+        {shownGroup ? (
+          <div key={shownGroup.id} className="mt-3">
+            {owner ? <p className="mb-2 px-1 text-xs text-frenz-muted">{shownGroup.ownerSub}</p> : null}
+            <ul className="overflow-hidden rounded-[20px] border border-frenz-line bg-frenz-card">
+              {shownGroup.rows.map((entry, i) => (
+                <li key={entry.key} className={cn(i > 0 && "border-t border-frenz-line")}>
+                  <HubButton handle={handle} entry={entry} onOpen={openKey} />
+                </li>
+              ))}
+            </ul>
           </div>
-          <ul className="overflow-hidden rounded-[20px] border border-frenz-line bg-frenz-card">
-            {g.rows.map((entry, i) => (
-              <li key={entry.key} className={cn(i > 0 && "border-t border-frenz-line")}>
-                <HubButton handle={handle} entry={entry} onOpen={openKey} />
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
+        ) : null}
+      </div>
       {mounted ? <ProfileHubModal handle={handle} open={open} onClose={close} /> : null}
     </section>
   );

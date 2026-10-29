@@ -51,6 +51,7 @@ import { floatReaction } from "@/features/ui/reaction-float";
 import { toast } from "@/features/ui/toast";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { COMMENT_MOODS, COMMENT_REACTIONS, commentMood, pinLabel } from "@/lib/social/comment-meta";
+import { POST_COMMENTS_CHANGED } from "@/lib/social/comments-cache";
 import type { CommentNode } from "@/lib/social/engagement";
 import type { SearchPerson } from "@/lib/social/search";
 import { stickerGlyph } from "@/lib/social/stickers";
@@ -300,6 +301,15 @@ export function Comments({
       if (timer) clearTimeout(timer);
       void supabase.removeChannel(channel);
     };
+  }, [postId, refresh]);
+
+  // a gift sent on this post (0304) lands as a comment — re-read at once rather than waiting on the live channel
+  useEffect(() => {
+    const onChanged = (e: Event) => {
+      if ((e as CustomEvent<{ postId?: string }>).detail?.postId === postId) void refresh();
+    };
+    window.addEventListener(POST_COMMENTS_CHANGED, onChanged);
+    return () => window.removeEventListener(POST_COMMENTS_CHANGED, onChanged);
   }, [postId, refresh]);
 
   const react = useCallback(

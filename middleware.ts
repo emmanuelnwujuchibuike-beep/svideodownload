@@ -7,7 +7,7 @@ import { guestMustLogin } from "@/lib/auth/guest-login-paths";
 import { CORS_HEADERS } from "@/lib/api/cors";
 import { SUPABASE_COOKIE_OPTIONS } from "@/lib/supabase/cookie-options";
 import { profileRoute } from "@/lib/social/profile-url";
-import { sessionIsComfortablyFresh } from "@/lib/supabase/session-cookie";
+import { KEEP_MARKER, sessionCookiesToKeep, sessionIsComfortablyFresh } from "@/lib/supabase/session-cookie";
 
 /**
  * Refreshes the Supabase auth session on each request (so access tokens stay
@@ -136,6 +136,18 @@ export async function middleware(request: NextRequest) {
     !request.nextUrl.searchParams.has("url") &&
     !request.nextUrl.searchParams.has("text");
   const toHome = () => NextResponse.redirect(new URL("/downloads", request.url));
+  /*
+    Signed in until the browser is cleared (owner, 2026-10-29): once a day, the session cookies go back out from the
+    SERVER with their full 400 days — Safari caps the ones auth-js writes from the page at 7 days. Headers only: no
+    request to Supabase, nothing changed in the cookie. See sessionCookiesToKeep.
+  */
+  const keepSession = (res: NextResponse) => {
+    const keep = sessionCookiesToKeep(request.cookies.getAll());
+    if (!keep.length) return res;
+    for (const c of keep) res.cookies.set(c.name, c.value, { ...SUPABASE_COOKIE_OPTIONS, maxAge: 400 * 24 * 60 * 60 });
+    res.cookies.set(KEEP_MARKER, "1", { ...SUPABASE_COOKIE_OPTIONS, httpOnly: true, maxAge: 24 * 60 * 60 });
+    return res;
+  };
 
   // No Supabase auth cookie → the visitor is definitely signed out. Skip the
   // getUser() network round-trip entirely (the biggest latency on a cold entry).
@@ -183,10 +195,10 @@ export async function middleware(request: NextRequest) {
   // A comfortably-fresh access token means signed in — the same trust this
   // fast path already extends to every unguarded route. Bounce to /home without
   // paying for a getUser() round-trip; /home guards itself regardless.
-  if (isLandingRedirect && sessionIsComfortablyFresh(cookies)) return toHome();
+  if (isLandingRedirect && sessionIsComfortablyFresh(cookies)) return keepSession(toHome());
 
   if (!needsGuard && sessionIsComfortablyFresh(cookies)) {
-    return proceed({ request });
+    return keepSession(proceed({ request }));
   }
 
   let response = proceed({ request });

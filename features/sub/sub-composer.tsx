@@ -100,7 +100,7 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
     setError(null);
     const end = beginCriticalActivity();
     try {
-      const media: { key: string; kind: "image" | "video"; width: number | null; height: number | null; thumbKey?: string }[] = [];
+      const media: { key: string; kind: "image" | "video"; width: number | null; height: number | null; thumbKey?: string; blurVideoUrl?: string }[] = [];
       for (let i = 0; i < items.length; i++) {
         const it = items[i]!;
         setBusy(`Uploading ${i + 1} of ${items.length}…`);
@@ -129,13 +129,20 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
         coverUrl = await uploadWithPlan(await presignUpload("image", extOf(cover)), cover, cover.type || "image/jpeg");
       }
       // a locked video plays BLURRED for non-subscribers (owner, 2026-10-28): a 24 px clip made here, the detail gone
-      // before it leaves this device (lib/media/make-blur-clip.ts). Best effort — without it the still preview shows.
+      // before it leaves this device (lib/media/make-blur-clip.ts). EVERY video gets one (0306, owner 2026-10-29: an album
+      // slides sideways, blurred, no cover needed). Best effort — without one, that slide shows its still preview.
       let blurVideoUrl: string | null = null;
-      const firstVideo = items[0]?.kind === "video" ? items[0].file : null;
-      if (firstVideo && audience === "locked") {
-        setBusy("Making the blurred preview…");
-        const clip = await makeBlurClip(firstVideo);
-        if (clip) blurVideoUrl = await uploadWithPlan(await presignUpload("video", clip.ext), clip.blob, clip.type).catch(() => null);
+      if (audience === "locked") {
+        const videos = items.map((it, i) => ({ it, i })).filter(({ it }) => it.kind === "video");
+        for (const [n, { it, i }] of videos.entries()) {
+          setBusy(videos.length > 1 ? `Making the blurred previews… ${n + 1} of ${videos.length}` : "Making the blurred preview…");
+          const clip = await makeBlurClip(it.file).catch(() => null);
+          const url = clip ? await uploadWithPlan(await presignUpload("video", clip.ext), clip.blob, clip.type).catch(() => null) : null;
+          if (!url) continue;
+          media[i]!.blurVideoUrl = url;
+          // the post's own clip (0305) stays the first item's, as before
+          if (i === 0) blurVideoUrl = url;
+        }
       }
       setBusy("Publishing…");
       const res = await fetch("/api/sub/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caption: caption.trim() || null, coverUrl, media, audience, mature, ...(blurVideoUrl ? { blurVideoUrl } : {}) }) });
@@ -307,10 +314,14 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
               <figure>
                 <figcaption className="mb-1.5 text-[12px] font-semibold text-muted-foreground">What visitors see</figcaption>
                 {audience === "locked" ? (
-                  <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-accent to-primary/80">
-                    {coverPreview ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- a local preview of the public cover
-                      <img src={coverPreview} alt="" className="h-full w-full object-cover" />
+                  <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-[#1A1430]">
+                    {/* thick blur, as visitors get it (owner, 2026-10-29) — the cover if one is set, else the post itself,
+                        a video playing behind the frost. Local only: nothing here is uploaded. */}
+                    {coverPreview || first?.kind === "image" ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- a local preview
+                      <img src={coverPreview ?? first!.preview} alt="" aria-hidden className="absolute -inset-6 h-[calc(100%+3rem)] w-[calc(100%+3rem)] object-cover blur-[28px]" />
+                    ) : first ? (
+                      <video src={first.preview} muted autoPlay loop playsInline aria-hidden className="absolute -inset-6 h-[calc(100%+3rem)] w-[calc(100%+3rem)] object-cover blur-[28px]" />
                     ) : null}
                     <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/35 text-white">
                       <Lock className="h-5 w-5" aria-hidden />

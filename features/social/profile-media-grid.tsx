@@ -79,7 +79,7 @@ export function ProfileMediaGrid({
   */
   const player = viewer.items ? (
     viewer.isVideo ? (
-      <ReelsFeed initialItems={viewer.items} initialOffset={null} startId={viewer.startId ?? undefined} onClose={viewer.close} />
+      <ReelsFeed collection initialItems={viewer.items} initialOffset={null} startId={viewer.startId ?? undefined} onClose={viewer.close} />
     ) : viewer.isImage ? (
       <ImageViewer item={viewer.items.find((i) => i.id === viewer.startId) ?? viewer.items[0]!} onClose={viewer.close} />
     ) : (

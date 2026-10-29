@@ -78,6 +78,7 @@ export function ReelsFeed({
   startSlideIndex,
   commentsId,
   onClose,
+  collection = false,
 }: {
   initialItems: FeedItem[];
   initialOffset: number | null;
@@ -94,6 +95,13 @@ export function ReelsFeed({
   commentsId?: string | null;
   /** When rendered as an in-place overlay (from the feed), closes via state. */
   onClose?: () => void;
+  /**
+   * A fixed set opened from a grid (a profile's reels, an Explore tile, the trending rail): exactly these clips, in
+   * this order. It never resumes from, or writes, the Reels tab's own snapshot (owner, 2026-10-29: after a profile's
+   * reels, the Reels tab "continues from the user's own and doesn't scroll"), never drops watched clips, and takes
+   * `initialItems` again when the opener fills in the neighbours after the tap.
+   */
+  collection?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -144,7 +152,7 @@ export function ReelsFeed({
     identity (only what comes AFTER it gets reshuffled/filtered), and the
     index `ReelDeck` locks onto is the right one from the start.
   */
-  const resumingFromCache = !startId && !!resumeDeck;
+  const resumingFromCache = !collection && !startId && !!resumeDeck;
   const [items, setItems] = useState<FeedItem[]>(() => {
     if (resumingFromCache) return resumeDeck!.items;
     if (!startId) return initialItems;
@@ -336,6 +344,8 @@ export function ReelsFeed({
     before anyone reaches it.
   */
   useEffect(() => {
+    // A grid's own set is shown as it is: nothing filtered, nothing fetched, and the session's seed left alone.
+    if (collection) return;
     // Resumed verbatim by the state initializers above — nothing to compute.
     // (Still updates `lastRenderedSeed` so the NEXT mount's replay detection,
     // if this session goes on to open a deep-linked video instead, stays
@@ -449,6 +459,7 @@ export function ReelsFeed({
     // visibilitychange alone can't see that case, the tab was never actually
     // hidden. `lastReelsFetchAt` is module-level so it's correct regardless of
     // whether this component instance persisted or got a fresh mount.
+    if (collection) return; // a grid's set never grows with the Reels tab's clips
     if (lastReelsFetchAt === 0) lastReelsFetchAt = Date.now(); // true first mount — SSR data is already fresh
     else if (Date.now() - lastReelsFetchAt >= STALE_MS) void revive();
 
@@ -468,7 +479,28 @@ export function ReelsFeed({
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("online", onOnline);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `collection` is fixed for an open
   }, [fetchPage, acceptPage]);
+
+  /*
+    A grid opens on the tapped clip at once and fills in its neighbours a beat later (use-profile-media-viewer).
+    `items` is state seeded once, so without this the deck stayed one clip long and could not scroll. ReelDeck
+    locks its index on mount, so it is remounted on the new list at the clip on screen, never a different one.
+  */
+  const [deckKey, setDeckKey] = useState(0);
+  const lastCollection = useRef(initialItems);
+  useEffect(() => {
+    if (!collection || initialItems === lastCollection.current) return;
+    lastCollection.current = initialItems;
+    const onScreen = items[lastIndexRef.current.for_you]?.id ?? startId;
+    const at = Math.max(0, initialItems.findIndex((i) => i.id === onScreen));
+    seen.current = new Set(initialItems.map((i) => i.id));
+    lastIndexRef.current.for_you = at;
+    forYouSeeded.current = true;
+    setItems(initialItems);
+    setDeckKey((k) => k + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new set from the opener
+  }, [collection, initialItems]);
 
   return (
     <>
@@ -596,6 +628,7 @@ export function ReelsFeed({
             className="pointer-events-none fixed inset-0 z-30"
           >
             <ReelDeck
+              key={deckKey}
               items={items}
               // First time For You mounts, seed on the tapped clip (deep link from
               // the feed); every other mount (a return visit after switching away)
@@ -621,7 +654,10 @@ export function ReelsFeed({
               }}
               onActiveIndexChange={(i) => {
                 lastIndexRef.current[tab] = i;
-                if (tab === "for_you") {
+                if (tab === "for_you" && collection) {
+                  forYouSeeded.current = true;
+                  // a grid's set is not the Reels tab's deck — the Reels tab must never resume into it
+                } else if (tab === "for_you") {
                   forYouSeeded.current = true;
                   // Keep the resume snapshot current so the NEXT open (a
                   // plain Reels-tab tap, no startId) picks up right here

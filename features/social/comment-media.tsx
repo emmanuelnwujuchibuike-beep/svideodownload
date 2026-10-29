@@ -32,6 +32,8 @@ export function VoiceMessage({
   surface,
   onColor = false,
   meta,
+  accent = null,
+  accentClass = null,
 }: {
   url: string;
   durationMs: number | null;
@@ -39,6 +41,11 @@ export function VoiceMessage({
   surface?: string;
   onColor?: boolean;
   meta?: ReactNode;
+  /** the chat's colour (owner, 2026-10-29: "chat colour should affect the voice note too") — the play button and the
+   *  played part of the waveform, on a light surface; the brand gradient when the chat has none */
+  accent?: string | null;
+  /** a chat THEME's colour as its class (a theme is a class, a personal colour a value) */
+  accentClass?: string | null;
 }) {
   const ref = useRef<HTMLAudioElement | null>(null);
   const barsRef = useRef<HTMLDivElement | null>(null);
@@ -64,6 +71,21 @@ export function VoiceMessage({
       });
     } else el.pause();
   };
+  /*
+    A voice note that would not load is tried again on a tap (owner, 2026-10-29: old voice notes "don't make sound") —
+    a dropped connection or a rate-limited media host is temporary, so it is never a dead end.
+  */
+  const retry = () => {
+    const el = ref.current;
+    if (!el) return;
+    setFailed(false);
+    el.load();
+    el.play().catch((e: unknown) => {
+      if (!(e instanceof DOMException && e.name === "NotAllowedError")) setFailed(true);
+    });
+  };
+  const tint = !onColor && accent ? accent : null;
+  const tintClass = !onColor && !tint && accentClass ? accentClass : null;
   const cycleSpeed = () => {
     const next = (speedIdx + 1) % SPEEDS.length;
     setSpeedIdx(next);
@@ -87,9 +109,10 @@ export function VoiceMessage({
           type="button"
           onClick={toggle}
           aria-label={playing ? "Pause voice note" : "Play voice note"}
+          style={tint ? { backgroundImage: "none", backgroundColor: tint } : onColor && accent ? { color: accent } : undefined}
           className={cn(
             "flex h-9 w-9 shrink-0 items-center justify-center rounded-full shadow-sm",
-            onColor ? "bg-white text-violet-600" : "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-violet-500/30",
+            onColor ? "bg-white text-violet-600" : tintClass ? cn(tintClass, "text-white") : "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-violet-500/30",
           )}
         >
           {playing ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
@@ -142,12 +165,12 @@ export function VoiceMessage({
                 i / peaks.length <= progress
                   ? onColor
                     ? "bg-white"
-                    : "bg-gradient-to-b from-blue-500 to-violet-500"
+                    : (tintClass ?? "bg-gradient-to-b from-blue-500 to-violet-500")
                   : onColor
                     ? "bg-white/40"
                     : "bg-border",
               )}
-              style={{ height: `${Math.max(12, (pk / maxPeak) * 100)}%` }}
+              style={{ height: `${Math.max(12, (pk / maxPeak) * 100)}%`, ...(tint && i / peaks.length <= progress ? { backgroundImage: "none", backgroundColor: tint } : {}) }}
             />
           ))}
         </div>
@@ -164,9 +187,9 @@ export function VoiceMessage({
         </button>
       </div>
       {failed ? (
-        <p role="alert" className={cn("mt-1.5 text-[11.5px] font-medium", onColor ? "text-white/90" : "text-rose-600")}>
-          This voice note can&apos;t play on this device.
-        </p>
+        <button type="button" role="alert" onClick={retry} className={cn("mt-1.5 block text-left text-[11.5px] font-medium underline-offset-2 hover:underline", onColor ? "text-white/90" : "text-rose-600")}>
+          Couldn&apos;t play this voice note. Tap to try again.
+        </button>
       ) : null}
       {meta ? <div className="mt-1 flex justify-end">{meta}</div> : null}
     </div>

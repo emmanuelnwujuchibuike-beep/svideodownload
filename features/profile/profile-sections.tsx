@@ -137,7 +137,12 @@ export function ProfileSections({
   const sections: ProfileSection[] = media.map((m) => ({ key: m.key, label: m.spec.label, icon: m.spec.icon }));
   // SUB POSTS sits beside the media tabs, clearly labelled, never inside the feed grid
   // "Exclusive" with its lock (design/Profile.dc.html, updated 2026-10-18: the Private tab is Exclusive)
-  if (sub) sections.push({ key: SUB_TAB_KEY, label: "Exclusive", icon: "Lock" });
+  // Right after Downloads, so it shows without scrolling the row (owner, 2026-10-29) — after Reels where there is no
+  // Downloads tab, else last.
+  if (sub) {
+    const after = ["downloads", "reels", "posts"].map((k) => sections.findIndex((s) => s.key === k)).find((i) => i >= 0) ?? sections.length - 1;
+    sections.splice(after + 1, 0, { key: SUB_TAB_KEY, label: "Exclusive", icon: "Lock" });
+  }
 
   /*
     The hub: the engine's other modules, then — for the owner, and only the

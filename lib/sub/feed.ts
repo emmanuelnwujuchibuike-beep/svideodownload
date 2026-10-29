@@ -6,7 +6,7 @@ import { flagsOf, isAccountVisibleTo } from "@/lib/social/account-visibility";
 import { hasPrivateR2, presignPrivateGet } from "@/lib/storage/r2";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { readBlurPreviews, readBlurVideos } from "./blur-preview";
+import { readBlurPreviews, readBlurSlides, readBlurVideos, type BlurSlide } from "./blur-preview";
 import { afterCursorFilter, audienceOf, decodeSubCursor, encodeSubCursor, isUuid } from "./guards";
 import { subConfig } from "./server";
 
@@ -132,6 +132,8 @@ export interface DiscoverCard {
   blurUrl?: string;
   /** 0305: a locked video's 24 px blurred clip — autoplays behind a blur; withheld like the cover */
   blurVideoUrl?: string;
+  /** 0306: one blurred slide per item (an album slides sideways); withheld like the cover */
+  slides?: BlurSlide[];
 }
 
 export interface DiscoverCreator extends FeedCreator {
@@ -423,11 +425,12 @@ export async function discover(viewerId: string | null, subscribed: Set<string>,
   if (postsR.error) return empty;
   // the newest locked posts across them — several per creator now, not one — of visible accounts only
   const latest = ((postsR.data ?? []) as unknown as Row[]).filter((r) => people.has(r.creator_id as string)).slice(0, DISCOVER_CARDS);
-  const [media, adult, blurs, blurVideos] = await Promise.all([
+  const [media, adult, blurs, blurVideos, slides] = await Promise.all([
     mediaOf(latest.map((r) => r.id as string), false),
     latest.some((r) => r.mature === true) ? (viewerId ? isAdult(viewerId).catch(() => false) : Promise.resolve(false)) : Promise.resolve(true),
     readBlurPreviews(latest.map((r) => r.id as string)).catch(() => new Map<string, string>()),
     readBlurVideos(latest.map((r) => r.id as string)).catch(() => new Map<string, string>()),
+    readBlurSlides(latest.map((r) => r.id as string)).catch(() => new Map<string, BlurSlide[]>()),
   ]);
   const totals = new Map<string, number | null>(
     await Promise.all(
@@ -445,7 +448,7 @@ export async function discover(viewerId: string | null, subscribed: Set<string>,
   }
   return {
     // 0261: a Mature post's public cover only for a viewer who confirmed they're 18+
-    cards: latest.map((r) => ({ id: r.id as string, creatorId: r.creator_id as string, createdAt: r.created_at as string, coverUrl: r.mature === true && !adult ? null : ((r.cover_url as string | null) ?? null), items: media.get(r.id as string)?.n ?? 0, hasVideo: media.get(r.id as string)?.video ?? false, ...(r.mature === true ? { mature: true as const } : {}), ...(blurs.has(r.id as string) && !(r.mature === true && !adult) ? { blurUrl: blurs.get(r.id as string)! } : {}), ...(blurVideos.has(r.id as string) && !(r.mature === true && !adult) ? { blurVideoUrl: blurVideos.get(r.id as string)! } : {}) })),
+    cards: latest.map((r) => ({ id: r.id as string, creatorId: r.creator_id as string, createdAt: r.created_at as string, coverUrl: r.mature === true && !adult ? null : ((r.cover_url as string | null) ?? null), items: media.get(r.id as string)?.n ?? 0, hasVideo: media.get(r.id as string)?.video ?? false, ...(r.mature === true ? { mature: true as const } : {}), ...(blurs.has(r.id as string) && !(r.mature === true && !adult) ? { blurUrl: blurs.get(r.id as string)! } : {}), ...(blurVideos.has(r.id as string) && !(r.mature === true && !adult) ? { blurVideoUrl: blurVideos.get(r.id as string)! } : {}), ...(slides.has(r.id as string) && !(r.mature === true && !adult) ? { slides: slides.get(r.id as string)! } : {}) })),
     creators,
   };
 }

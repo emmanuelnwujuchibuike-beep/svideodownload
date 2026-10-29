@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { profilePath } from "@/lib/social/profile-url";
 import { cn } from "@/lib/utils";
 
-import { BlurredClip } from "./blurred-clip";
+import { BlurredSlides, type BlurSlideView } from "./blurred-slides";
 
 /*
   An exclusive post a creator sent in a chat (0305 — owner, 2026-10-28: "if they're not a subscriber it should autoplay
@@ -20,7 +20,7 @@ import { BlurredClip } from "./blurred-clip";
   an old card, or a lapsed subscription all fall back to the blurred face.
 */
 
-type Preview = { access: boolean; creator: { handle: string | null; name: string; avatarUrl: string | null }; coverUrl: string | null; blurUrl: string | null; blurVideoUrl: string | null; items: number; hasVideo: boolean; mature: boolean };
+type Preview = { access: boolean; creator: { handle: string | null; name: string; avatarUrl: string | null }; coverUrl: string | null; blurUrl: string | null; blurVideoUrl: string | null; slides?: BlurSlideView[]; items: number; hasVideo: boolean; mature: boolean };
 type Opened = { caption: string | null; media: { kind: "image" | "video"; url: string }[] };
 
 export function SubPostChatCard({ postId, mine }: { postId: string; mine: boolean }) {
@@ -66,14 +66,10 @@ export function SubPostChatCard({ postId, mine }: { postId: string; mine: boolea
           )
         ) : (
           <>
-            {preview.blurVideoUrl ? (
-              <BlurredClip src={preview.blurVideoUrl} poster={preview.coverUrl ?? preview.blurUrl} className="absolute -inset-5 h-[calc(100%+2.5rem)] w-[calc(100%+2.5rem)]" />
-            ) : preview.coverUrl || preview.blurUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element -- the public cover or the server's blurred preview
-              <img src={preview.coverUrl ?? preview.blurUrl ?? undefined} alt="" aria-hidden className="absolute -inset-5 h-[calc(100%+2.5rem)] w-[calc(100%+2.5rem)] object-cover blur-xl" />
-            ) : null}
+            {/* every item blurred, sliding sideways (0306, owner 2026-10-29) */}
+            <BlurredSlides slides={preview.slides} cover={preview.coverUrl} fallbackStill={preview.blurUrl} fallbackClip={preview.blurVideoUrl} />
             {preview.access ? null : (
-              <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/25 px-4 text-center">
+              <span className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/25 px-4 text-center">
                 <span className="flex h-11 w-11 items-center justify-center rounded-full border border-white/30 bg-black/30">
                   <Lock className="h-5 w-5" aria-hidden />
                 </span>

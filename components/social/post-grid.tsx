@@ -214,7 +214,7 @@ export function PostGrid({
       ) : null}
 
       {isVideo ? (
-        <ReelsFeed initialItems={[openItem!]} initialOffset={null} startId={openItem!.id} onClose={() => setOpenItem(null)} />
+        <ReelsFeed collection initialItems={[openItem!]} initialOffset={null} startId={openItem!.id} onClose={() => setOpenItem(null)} />
       ) : isImage ? (
         <ImageViewer item={openItem} onClose={() => setOpenItem(null)} />
       ) : openItem ? (

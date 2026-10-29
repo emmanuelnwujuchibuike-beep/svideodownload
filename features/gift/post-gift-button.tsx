@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { haptic } from "@/lib/motion/haptics";
+import { postCommentsChanged } from "@/lib/social/comments-cache";
 
 import type { GiftRecipient } from "./gift-sheet";
 
@@ -102,7 +103,11 @@ export function PostGiftButton({
             setOpen(false);
             onOpenChange?.(false);
           }}
-          onSent={() => onSent?.()}
+          onSent={() => {
+            // the gift is now a comment on the post: the cached list is stale, and an open one re-reads
+            if (postId) postCommentsChanged(postId);
+            onSent?.();
+          }}
         />
       ) : null}
     </>

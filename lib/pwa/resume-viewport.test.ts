@@ -46,6 +46,16 @@ describe("resume viewport repair", () => {
     expect(blur).not.toHaveBeenCalled();
   });
 
+  // owner 2026-10-29: chat header under the clock after minimising — a one-screen page ignored the nudge
+  it("a page that cannot scroll is one pixel taller during the nudge, and put back after", () => {
+    const style = { minHeight: "" };
+    const seen: string[] = [];
+    const win = { scrollX: 0, scrollY: 0, innerHeight: 800, visualViewport: { height: 800 }, scrollTo: vi.fn(() => void seen.push(style.minHeight)) as unknown as Window["scrollTo"] };
+    repairViewport(win, { activeElement: null, documentElement: { style } });
+    expect(seen).toEqual(["calc(100% + 1px)", "calc(100% + 1px)"]);
+    expect(style.minHeight).toBe("");
+  });
+
   it("the bottom nav mounts the repair, so it runs on every page with the nav", () => {
     const nav = readFileSync("features/app-shell/mobile-nav.tsx", "utf8");
     expect(nav).toContain("useResumeViewportRepair()");

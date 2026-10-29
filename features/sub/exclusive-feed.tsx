@@ -11,7 +11,7 @@ import { firstPageIsReplay, type LinkBirth, mayAutoRefresh, refreshPreview } fro
 import { cancelOpening, startOpening } from "@/features/sub/opened-cache";
 import { exQuiet } from "@/features/sub/ui";
 import { GuestLock } from "@/features/social/guest-chat";
-import { BlurredClip } from "@/features/sub/blurred-clip";
+import { BlurredSlides, type BlurSlideView } from "@/features/sub/blurred-slides";
 import { cn } from "@/lib/utils";
 import { profilePath } from "@/lib/social/profile-url";
 
@@ -85,6 +85,8 @@ interface Card {
   /** 0263: the post's tiny blurred preview (a data URL made on the server) — never the file */
   blurUrl?: string;
   blurVideoUrl?: string;
+  /** 0306: one blurred slide per item — the card slides sideways */
+  slides?: BlurSlideView[];
 }
 type DiscoverCreator = Creator & { priceCents: number; feeCents: number; feePercent: number; totalCents: number; periodDays: number; totalPosts?: number | null };
 export interface ExclusiveFeedPageView {
@@ -551,15 +553,11 @@ export function LockedPreviewCard({ card, creator }: { card: Card; creator: Disc
       </div>
       {/* the server's blurred preview (0263) or the creator's public cover — never the file */}
       <div className="relative aspect-[4/5] overflow-hidden bg-[#1A1430]">
-        {card.blurVideoUrl ? (
-          // 0305: a locked video plays blurred (a 24 px clip — nothing to un-blur), the cover as its first frame
-          <BlurredClip src={card.blurVideoUrl} poster={card.coverUrl ?? card.blurUrl} className="absolute -inset-5 h-[calc(100%+2.5rem)] w-[calc(100%+2.5rem)]" />
-        ) : card.coverUrl || card.blurUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- public cover or an inline data URL
-          <img src={card.coverUrl ?? card.blurUrl} alt="" aria-hidden loading="lazy" decoding="async" className="absolute -inset-5 h-[calc(100%+2.5rem)] w-[calc(100%+2.5rem)] object-cover blur-xl" />
-        ) : null}
-        <span aria-hidden className="absolute inset-0 bg-black/25" />
-        <span className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 px-6 text-center text-white">
+        {/* 0305 + 0306: every item, blurred — a video plays (a 24 px clip, nothing to un-blur), an album slides sideways
+            (owner, 2026-10-29). The overlay lets a swipe through to the slides. */}
+        <BlurredSlides slides={card.slides} cover={card.coverUrl} fallbackStill={card.blurUrl} fallbackClip={card.blurVideoUrl} />
+        <span aria-hidden className="pointer-events-none absolute inset-0 bg-black/25" />
+        <span className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2.5 px-6 text-center text-white">
           <span aria-hidden className="flex h-12 w-12 items-center justify-center rounded-full border border-white/30 bg-black/30">
             <Lock className="h-5 w-5" />
           </span>

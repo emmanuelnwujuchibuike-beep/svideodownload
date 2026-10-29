@@ -84,8 +84,10 @@ function ScrollUpTabs({ children }: { children: ReactNode }) {
               aria-hidden={!shown}
               inert={!shown}
               className={cn(
-                "fixed inset-x-0 top-[calc(var(--frenz-safe-top)+4rem)] z-40 bg-frenz-page/90 backdrop-blur-xl [&>nav]:!mx-0 transition-[transform,opacity] duration-300 ease-out motion-reduce:transition-none lg:hidden",
-                shown ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-[calc(100%+4rem)] opacity-0",
+                // from the very top, under the floating buttons (the header is z-30): the strip behind the buttons is the
+                // bar too, so a post never shows through between the clock, the buttons and the tabs (owner, 2026-10-29)
+                "fixed inset-x-0 top-0 z-[29] bg-frenz-page/95 pt-[calc(var(--frenz-safe-top)+4rem)] shadow-[0_1px_0_rgb(0_0_0/0.04)] backdrop-blur-xl [&>nav]:!mx-0 transition-[transform,opacity] duration-300 ease-out motion-reduce:transition-none lg:hidden",
+                shown ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-full opacity-0",
               )}
             >
               {children}

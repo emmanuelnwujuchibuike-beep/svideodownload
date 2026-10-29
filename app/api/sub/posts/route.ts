@@ -41,7 +41,7 @@ const body = z
   .object({
     caption: z.string().max(4400).nullable().optional(),
     coverUrl: z.string().max(600).nullable().optional(),
-    media: z.array(z.object({ key: z.string().max(300), kind: z.enum(["image", "video"]), width: z.number().int().positive().max(20000).nullable().optional(), height: z.number().int().positive().max(20000).nullable().optional(), thumbKey: z.string().max(300).optional() }).strict()).min(1).max(10),
+    media: z.array(z.object({ key: z.string().max(300), kind: z.enum(["image", "video"]), width: z.number().int().positive().max(20000).nullable().optional(), height: z.number().int().positive().max(20000).nullable().optional(), thumbKey: z.string().max(300).optional(), blurVideoUrl: z.string().max(600).optional() }).strict()).min(1).max(10),
     // 0248: locked (default) = non-subscribers see the public tile; hidden = they get nothing at all
     audience: z.enum(["locked", "hidden"]).optional(),
     // 0261: Mature (18+) — only viewers who confirmed they're 18+ can open it; explicit content is never allowed

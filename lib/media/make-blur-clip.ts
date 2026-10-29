@@ -22,12 +22,18 @@ function pickMime(): { mime: string; type: "video/mp4" | "video/webm"; ext: "mp4
   return null;
 }
 
-export async function makeBlurClip(file: File): Promise<{ blob: Blob; ext: "mp4" | "webm"; type: string } | null> {
+/**
+ * `source` is the picked file, or (0306 — an older post's video, made on the creator's own visit) a short-lived link to
+ * their private file: read with CORS, so the canvas stays readable, and only the first seconds are ever streamed.
+ */
+export async function makeBlurClip(source: File | string): Promise<{ blob: Blob; ext: "mp4" | "webm"; type: string } | null> {
   if (typeof document === "undefined" || !("captureStream" in HTMLCanvasElement.prototype)) return null;
   const m = pickMime();
   if (!m) return null;
-  const url = URL.createObjectURL(file);
+  const own = typeof source !== "string";
+  const url = own ? URL.createObjectURL(source) : source;
   const v = document.createElement("video");
+  if (!own) v.crossOrigin = "anonymous";
   v.muted = true;
   v.playsInline = true;
   v.preload = "auto";
@@ -76,6 +82,6 @@ export async function makeBlurClip(file: File): Promise<{ blob: Blob; ext: "mp4"
   } finally {
     v.removeAttribute("src");
     v.load();
-    URL.revokeObjectURL(url);
+    if (own) URL.revokeObjectURL(url);
   }
 }

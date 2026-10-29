@@ -33,6 +33,18 @@ export async function loadPostComments<T = unknown>(postId: string): Promise<T |
   return p as Promise<T | null>;
 }
 
+/** The event an open comment list listens for: something outside its composer (a gift, 0304) added a comment. */
+export const POST_COMMENTS_CHANGED = "frenz:post-comments-changed";
+
+/**
+ * Something outside the composer added a comment to this post (a sticker gift lands as one, 0304). Drop the cached
+ * copy, so the next open reads it, and tell an open list to re-read now.
+ */
+export function postCommentsChanged(postId: string): void {
+  cache.delete(postId);
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(POST_COMMENTS_CHANGED, { detail: { postId } }));
+}
+
 /** Fire-and-forget warm-up — no-op if already fresh in cache. */
 export function prefetchPostComments(postId: string): void {
   const hit = cache.get(postId);

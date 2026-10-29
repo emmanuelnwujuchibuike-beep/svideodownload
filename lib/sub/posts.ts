@@ -8,7 +8,7 @@ import { deletePrivate, hasPrivateR2, presignPrivateGet, presignPrivatePut, read
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { afterCursorFilter, audienceOf, decodeSubCursor, encodeSubCursor, isSubAudience, isUuid, type SubAudience, visibleTo } from "./guards";
-import { ensureBlurPreview, readBlurPreviews, readBlurVideos } from "./blur-preview";
+import { ensureBlurPreview, missingBlurClips, readBlurPreviews, readBlurSlides, readBlurVideos, saveItemBlurClip, type BlurSlide } from "./blur-preview";
 import { hasActiveSub, subConfig } from "./server";
 import { checkUpload } from "./upload-check";
 import { recordSubPostView } from "./visits";
@@ -84,7 +84,7 @@ function validCover(url: string | null | undefined): string | null | false {
   }
 }
 
-export async function createSubPost(creatorId: string, input: { caption?: string | null; coverUrl?: string | null; blurVideoUrl?: string | null; media: { key: string; kind: string; width?: number | null; height?: number | null; thumbKey?: string | null }[]; audience?: unknown; mature?: unknown }): Promise<{ ok: true; id: string; audience: SubAudience; mature: boolean } | Fail> {
+export async function createSubPost(creatorId: string, input: { caption?: string | null; coverUrl?: string | null; blurVideoUrl?: string | null; media: { key: string; kind: string; width?: number | null; height?: number | null; thumbKey?: string | null; blurVideoUrl?: string | null }[]; audience?: unknown; mature?: unknown }): Promise<{ ok: true; id: string; audience: SubAudience; mature: boolean } | Fail> {
   if (!hasPrivateR2) return fail("Private storage isn't set up yet.", 503);
   const db = createAdminClient();
   const { data: s } = await db.from("creator_membership_settings").select("sub_price_cents").eq("creator_id", creatorId).maybeSingle();
@@ -142,6 +142,14 @@ export async function createSubPost(creatorId: string, input: { caption?: string
   if (mErr) {
     await db.from("sub_posts").delete().eq("id", id);
     return fail("Couldn't post that.", 500);
+  }
+  // 0306: each video's own blurred clip (owner, 2026-10-29: every video plays blurred, and an album slides). Our own
+  // public media only, like the cover; best effort — before 0306, or a refused URL, that slide keeps its still.
+  if (audience === "locked") {
+    for (const [idx, m] of input.media.entries()) {
+      const clip = m.kind === "video" ? validCover(m.blurVideoUrl) : null;
+      if (clip) await db.from("sub_post_media").update({ blur_video_url: clip }).eq("post_id", id).eq("idx", idx).then(() => undefined, () => undefined);
+    }
   }
   // 0263: the blurred preview non-subscribers see — made right after the response, never in its way
   after(() => ensureBlurPreview(id));
@@ -210,6 +218,8 @@ export interface SubPostCard {
   blurUrl?: string;
   /** 0305: the blurred moving clip of a locked video, for a viewer without access (autoplays behind a blur) */
   blurVideoUrl?: string;
+  /** 0306: one blurred slide per item, for the same viewers (a locked album slides sideways) */
+  slides?: BlurSlide[];
   coverUrl: string | null;
   items: number;
   hasVideo: boolean;
@@ -317,6 +327,8 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
   const blurs = (!access && !isCreator) || isCreator ? await readBlurPreviews(ids).catch(() => new Map<string, string>()) : new Map<string, string>();
   // 0305: and the blurred clip a locked video plays to the same viewers (owner, 2026-10-28)
   const blurVideos = !access && !isCreator ? await readBlurVideos(ids).catch(() => new Map<string, string>()) : new Map<string, string>();
+  // 0306: and one blurred slide per item, so a locked album slides sideways (owner, 2026-10-29)
+  const slides = !access && !isCreator ? await readBlurSlides(ids).catch(() => new Map<string, BlurSlide[]>()) : new Map<string, BlurSlide[]>();
   if (isCreator) {
     const missing = page.filter((r) => r.status === "published" && !blurs.has(r.id as string)).slice(0, 4);
     if (missing.length) after(async () => {
@@ -353,7 +365,7 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
     );
   }
   return {
-    posts: page.map((r) => ({ id: r.id as string, ...(access ? { audience: audienceOf(r.audience) } : {}), ...(r.mature === true ? { mature: true as const } : {}), ...(ageLocked(r) ? { ageLocked: true as const } : {}), ...(!access && !isCreator && !ageLocked(r) && blurs.has(r.id as string) ? { blurUrl: blurs.get(r.id as string)! } : {}), ...(!access && !isCreator && !ageLocked(r) && blurVideos.has(r.id as string) ? { blurVideoUrl: blurVideos.get(r.id as string)! } : {}), caption: access && !ageLocked(r) ? ((r.caption as string | null) ?? null) : null, coverUrl: ageLocked(r) ? null : ((r.cover_url as string | null) ?? null), items: counts.get(r.id as string)?.n ?? 0, hasVideo: counts.get(r.id as string)?.video ?? false, createdAt: r.created_at as string, ...(r.status === "archived" ? { removed: true } : {}), ...(opened.has(r.id as string) ? { open: opened.get(r.id as string) } : {}), ...(thumbs.has(r.id as string) ? { thumbUrl: thumbs.get(r.id as string) } : {}) })),
+    posts: page.map((r) => ({ id: r.id as string, ...(access ? { audience: audienceOf(r.audience) } : {}), ...(r.mature === true ? { mature: true as const } : {}), ...(ageLocked(r) ? { ageLocked: true as const } : {}), ...(!access && !isCreator && !ageLocked(r) && blurs.has(r.id as string) ? { blurUrl: blurs.get(r.id as string)! } : {}), ...(!access && !isCreator && !ageLocked(r) && blurVideos.has(r.id as string) ? { blurVideoUrl: blurVideos.get(r.id as string)! } : {}), ...(!access && !isCreator && !ageLocked(r) && slides.has(r.id as string) ? { slides: slides.get(r.id as string)! } : {}), caption: access && !ageLocked(r) ? ((r.caption as string | null) ?? null) : null, coverUrl: ageLocked(r) ? null : ((r.cover_url as string | null) ?? null), items: counts.get(r.id as string)?.n ?? 0, hasVideo: counts.get(r.id as string)?.video ?? false, createdAt: r.created_at as string, ...(r.status === "archived" ? { removed: true } : {}), ...(opened.has(r.id as string) ? { open: opened.get(r.id as string) } : {}), ...(thumbs.has(r.id as string) ? { thumbUrl: thumbs.get(r.id as string) } : {}) })),
     access,
     isCreator,
     next: rows.length > PAGE ? encodeSubCursor(page[page.length - 1]!.created_at as string, page[page.length - 1]!.id as string) : null,
@@ -504,7 +516,7 @@ export async function setSubPostCaption(creatorId: string, postId: string, raw: 
  * file, never the caption. A HIDDEN post answers like one that does not exist; a Mature post withholds the pictures
  * from a viewer who hasn't confirmed they're 18+. A viewer WITH access opens the post through openSubPost instead.
  */
-export async function previewSubPost(postId: string, viewerId: string | null): Promise<{ ok: true; access: boolean; creator: { id: string; handle: string | null; name: string; avatarUrl: string | null }; coverUrl: string | null; blurUrl: string | null; blurVideoUrl: string | null; items: number; hasVideo: boolean; mature: boolean } | Fail> {
+export async function previewSubPost(postId: string, viewerId: string | null): Promise<{ ok: true; access: boolean; creator: { id: string; handle: string | null; name: string; avatarUrl: string | null }; coverUrl: string | null; blurUrl: string | null; blurVideoUrl: string | null; slides: BlurSlide[]; items: number; hasVideo: boolean; mature: boolean } | Fail> {
   const gate = await readSubPostGate(postId);
   if (!gate) return fail("This post isn't available.", 404);
   const db = createAdminClient();
@@ -518,6 +530,7 @@ export async function previewSubPost(postId: string, viewerId: string | null): P
     readBlurPreviews([postId]).catch(() => new Map<string, string>()),
     readBlurVideos([postId]).catch(() => new Map<string, string>()),
   ]);
+  const slides = access || !adult ? [] : ((await readBlurSlides([postId]).catch(() => new Map<string, BlurSlide[]>())).get(postId) ?? []);
   const p = prof as Row | null;
   const kinds = ((media ?? []) as Row[]).map((m) => m.media_kind);
   return {
@@ -527,8 +540,30 @@ export async function previewSubPost(postId: string, viewerId: string | null): P
     coverUrl: adult ? (((post as Row | null)?.cover_url as string | null) ?? null) : null,
     blurUrl: adult ? (blurs.get(postId) ?? null) : null,
     blurVideoUrl: adult ? (clips.get(postId) ?? null) : null,
+    slides,
     items: kinds.length,
     hasVideo: kinds.includes("video"),
     mature: gate.mature,
   };
+}
+
+/**
+ * 0306 — the creator's older videos that still lack a blurred clip, each with a five-minute link to their OWN private
+ * file, so their browser can make the clip (owner, 2026-10-29: every locked video plays blurred). Two per visit at most.
+ */
+export async function blurClipsToMake(creatorId: string): Promise<{ postId: string; idx: number; url: string }[]> {
+  if (!hasPrivateR2) return [];
+  const todo = await missingBlurClips(creatorId).catch(() => []);
+  // only the creator's own folder, as every other private read
+  const own = todo.filter((t) => t.key?.startsWith(`sub/${creatorId}/`));
+  return Promise.all(own.map(async (t) => ({ postId: t.postId, idx: t.idx, url: await presignPrivateGet(t.key, 300) })));
+}
+
+/** Stores a clip the creator's browser made for their own post: our public media host only, an empty slot only. */
+export async function saveBlurClip(creatorId: string, postId: string, idx: number, url: string): Promise<{ ok: true } | Fail> {
+  const clip = validCover(url);
+  if (!clip) return fail("That clip can't be used.");
+  const { data } = await createAdminClient().from("sub_posts").select("creator_id").eq("id", postId).maybeSingle();
+  if ((data as Row | null)?.creator_id !== creatorId) return fail("This post isn't yours.", 403);
+  return (await saveItemBlurClip(postId, idx, clip)) ? { ok: true } : fail("Nothing to save.", 409);
 }

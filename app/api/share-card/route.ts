@@ -1,9 +1,8 @@
 import { isAppOnlyPath } from "@/lib/auth/app-only-paths";
 import { safeNext } from "@/lib/auth/safe-next";
-import { SITE_NAME } from "@/lib/seo/page-metadata";
 import { genericShareCard, renderShareCard, signInPathFor, type ShareCard } from "@/lib/seo/share-card";
 import { SITE_URL } from "@/lib/site";
-import { titleFromCaption } from "@/lib/social/caption";
+import { postCaptionTitle, uncaptionedPostTitle } from "@/lib/social/post-metadata";
 import { getPost } from "@/lib/social/posts";
 import { getPublicProfile } from "@/lib/social/profile";
 import { profilePath } from "@/lib/social/profile-url";
@@ -55,7 +54,7 @@ async function ownCard(path: string, shared: string): Promise<ShareCard | null> 
     if (!post) return null;
     // the content alone: its caption and its own picture — the creator's name and photo stay on their profile's card
     return {
-      title: titleFromCaption(post.title) || post.title || `A reel on ${SITE_NAME}`,
+      title: postCaptionTitle(post) ?? uncaptionedPostTitle(post),
       description: post.description ?? `Watch & save from ${post.platform} on FrenzSave.`,
       url: `/p/${post.id}`,
       image: post.thumbnail_url ?? null,

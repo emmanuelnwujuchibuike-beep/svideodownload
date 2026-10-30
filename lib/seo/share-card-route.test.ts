@@ -12,6 +12,7 @@ import { SITE_URL } from "@/lib/site";
  * The share-card route is driven for real, with the profile/post/sound reads stubbed.
  */
 const REEL = "0b5f2a52-6d1e-4c43-9c1f-2f7a3c0d9e11";
+const REEL_NO_CAPTION = "1c6a3b63-7e2f-4d54-8d2a-3a8b4d1eaf22";
 const SOUND = "6a3e2b10-1c2d-4e5f-8a9b-0c1d2e3f4a5b";
 const AVATAR = "https://media.example/ada-avatar.jpg";
 const THUMB = "https://media.example/reel-thumb.jpg";
@@ -32,7 +33,17 @@ vi.mock("@/lib/social/posts", () => ({
           media_kind: "video",
           publisher: { id: "u1", handle: "ada", displayName: "Ada Obi", avatarUrl: AVATAR, isVerified: false, isFollowing: false },
         }
-      : null,
+      : id === REEL_NO_CAPTION
+        ? {
+            id: REEL_NO_CAPTION,
+            title: "",
+            description: null,
+            platform: "tiktok",
+            thumbnail_url: THUMB,
+            media_kind: "video",
+            publisher: { id: "u1", handle: "ada", displayName: "Ada Obi", avatarUrl: AVATAR, isVerified: false, isFollowing: false },
+          }
+        : null,
 }));
 vi.mock("@/lib/social/sounds", () => ({
   getSound: async (id: string) => (id === SOUND ? { id: SOUND, title: "Calm Waves", artistLabel: "Ada Obi", coverArtUrl: COVER, isPublic: true } : null),
@@ -77,6 +88,13 @@ describe("a CONTENT link is the content's own picture — never the creator's pr
     expect(html).not.toContain("Ada Obi");
   });
 
+  it("a reel with no caption is titled by its kind — never blank, never the creator", async () => {
+    const { html, meta } = await card("/reels", `/reels?start=${REEL_NO_CAPTION}`);
+    expect(meta("og:title")).toBe("Video on Frenzsave");
+    expect(meta("og:image")).toBe(THUMB);
+    expect(html).not.toContain("Ada Obi");
+  });
+
   it("a shared sound: its cover, large", async () => {
     const { html, meta } = await card(`/sound/${SOUND}`, `/sound/${SOUND}`);
     expect(meta("og:type")).toBe("music.song");
@@ -111,5 +129,22 @@ describe("a post page's own preview (photo posts stay public at /p/<id>)", () =>
     // set explicitly: left out, X inherited the ROOT layout's site headline for every post
     expect(meta.twitter).toMatchObject({ card: "summary_large_image", title: titleFromCaption("Lagos at night. Shot on a phone"), images: [{ url: THUMB }] });
     expect(JSON.stringify(meta)).not.toContain(AVATAR);
+  });
+
+  /*
+    Measured live on 2026-10-30: a video posted without a caption previewed as " · Frenzsave" — the site's title
+    template around an empty caption, in <title>, og:title and twitter:title alike.
+  */
+  it("with no caption: titled by its kind, as an ABSOLUTE title (teeth: the template would wrap an empty one)", () => {
+    for (const [kind, label] of [["video", "Video"], ["image", "Photo"], ["text", "Post"]] as const) {
+      const meta = postPageMetadata({ ...post, title: "  ", media_kind: kind } as unknown as PublicPost, "/p/p1");
+      const expected = { absolute: `${label} on Frenzsave` };
+      expect(meta.title, kind).toEqual(expected);
+      expect(meta.openGraph?.title, kind).toEqual(expected);
+      expect(meta.twitter?.title, kind).toEqual(expected);
+      expect(JSON.stringify(meta), kind).not.toContain("Ada Obi");
+    }
+    // a captioned post keeps its caption as the title, as before
+    expect(postPageMetadata(post, "/p/p1").title).toBe(titleFromCaption("Lagos at night. Shot on a phone"));
   });
 });

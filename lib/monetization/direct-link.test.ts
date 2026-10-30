@@ -53,19 +53,21 @@ describe("Monetag direct link (owner, 2026-10-16)", () => {
     const SMART = "https://www.profitableratecpmnetwork.com/rg0sjh3g?key=0123456789abcdef";
     const on = { enabled: true, url: SMART, spots: { download: true, resultPreview: false, wallpaper: false, rewardAdClose: true, downloadAdClose: false }, chancePercent: 30 };
     // a config saved before 2026-10-25 has no batchSave key: the Smartlink default (ON, owner 2026-10-25) applies
-    expect(publicAdsterraSmartlink(on)).toEqual({ url: SMART, spots: ["download", "rewardAdClose", "batchSave"], chancePercent: 30 });
+    expect(publicAdsterraSmartlink(on, true)).toEqual({ url: SMART, spots: ["download", "rewardAdClose", "batchSave"], chancePercent: 30 });
     // ...and the admin can switch it off, like every spot
-    expect(publicAdsterraSmartlink({ ...on, spots: { ...on.spots, batchSave: false } })).toEqual({ url: SMART, spots: ["download", "rewardAdClose"], chancePercent: 30 });
-    expect(publicAdsterraSmartlink({ ...on, url: "" })).toBeNull();
-    expect(publicAdsterraSmartlink({ ...on, enabled: false })).toBeNull();
-    expect(publicAdsterraSmartlink({ ...on, url: "javascript:alert(1)" })).toBeNull();
+    expect(publicAdsterraSmartlink({ ...on, spots: { ...on.spots, batchSave: false } }, true)).toEqual({ url: SMART, spots: ["download", "rewardAdClose"], chancePercent: 30 });
+    expect(publicAdsterraSmartlink({ ...on, url: "" }, true)).toBeNull();
+    // 🔴 owner, 2026-10-30: the Adsterra switch off stops it, whatever its own switch says (teeth: it used to be served)
+    expect(publicAdsterraSmartlink(on, false)).toBeNull();
+    expect(publicAdsterraSmartlink({ ...on, enabled: false }, true)).toBeNull();
+    expect(publicAdsterraSmartlink({ ...on, url: "javascript:alert(1)" }, true)).toBeNull();
     // off until set up (enabled: false); every spot off by default except the batch save buttons (owner, 2026-10-25)
     expect(DEFAULT_ADSTERRA_SMARTLINK.enabled).toBe(false);
     expect(DEFAULT_ADSTERRA_SMARTLINK.spots).toEqual({ download: false, resultPreview: false, wallpaper: false, rewardAdClose: false, downloadAdClose: false, batchSave: true });
     expect(normalizeAdsterraSmartlink(undefined)).toEqual(DEFAULT_ADSTERRA_SMARTLINK);
     expect(Object.entries(DEFAULT_ADSTERRA_SMARTLINK.spots).filter(([k]) => k !== "batchSave").every(([, v]) => v === false)).toBe(true);
     // served by the config route alongside the Monetag link
-    expect(code("app/api/ads/config/route.ts")).toContain("adsterraSmartlink: publicAdsterraSmartlink(settings.adsterraSmartlink),");
+    expect(code("app/api/ads/config/route.ts")).toContain("adsterraSmartlink: publicAdsterraSmartlink(settings.adsterraSmartlink, settings.adsterra === true),");
   });
 
   it("a row saved before 2026-10-24 (one 'adClose' switch) keeps that choice for BOTH ad X spots; the Download button starts off", () => {

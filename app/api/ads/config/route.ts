@@ -250,11 +250,13 @@ export async function GET() {
       interstitialSkipSeconds: normalizeSkipSeconds(settings.interstitialSkipSeconds),
       // Monetag Direct Link: null unless Monetag is on and the admin set a URL. Public, like every tag here.
       monetagDirectLink: publicDirectLink(settings.monetagDirectLink, settings.monetag === true),
-      // Adsterra Smartlink (2026-10-24): a SEPARATE backup at the same spots, on its own switch (never the Adsterra banner switch).
-      adsterraSmartlink: publicAdsterraSmartlink(settings.adsterraSmartlink),
+      // Adsterra Smartlink (2026-10-24): a SEPARATE backup at the same spots, on its own switch — and, since 2026-10-30, only
+      // while the Adsterra network switch is on (owner: "turned off adsterra general but the reward X button is still
+      // showing the ad"). Off is off for every Adsterra format.
+      adsterraSmartlink: publicAdsterraSmartlink(settings.adsterraSmartlink, settings.adsterra === true),
       // The spot pop-under (the main format at the direct-link spots; the link is its backup) — Monetag or Adsterra, the
-      // admin's pick: the parsed tag, null when off (Monetag also needs its master switch; Adsterra never needs the banner switch).
-      monetagSpotPopunder: publicSpotPopunder(settings.monetagSpotPopunder, settings.monetag === true),
+      // admin's pick: the parsed tag, null when off — and each network's master switch must be on (Monetag's, Adsterra's).
+      monetagSpotPopunder: publicSpotPopunder(settings.monetagSpotPopunder, settings.monetag === true, settings.adsterra === true),
       // The per-moment switches (wallpaper downloads, history video watches).
       // Public and non-user-specific, like the skip delay — the client needs
       // them before an ad fills to know whether to arm the trigger at all.

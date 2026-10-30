@@ -96,11 +96,13 @@ export function parseAdsterraSnippet(snippet: string | null | undefined): { src:
 
 /**
  * What /api/ads/config serves: null unless it can actually load — switched on, a valid tag for the chosen network, a
- * spot, and for Monetag its master switch. Adsterra at a spot needs only its own switch + code — NOT the Adsterra banner switch, which would also turn on Adsterra banners (owner, 2026-10-24: "turn off monetag pop under and use adsterra pop under and use monetag direct link").
+ * spot, and that network's master switch: Monetag's for Monetag, ADSTERRA's for Adsterra (owner, 2026-10-30: "turned
+ * off adsterra general but the reward X button is still showing the ad" — the Adsterra pop-under used to need only its
+ * own switch + code, so switching Adsterra off never stopped it).
  */
-export function publicSpotPopunder(raw: unknown, monetagOn: boolean): PublicSpotPopunder | null {
+export function publicSpotPopunder(raw: unknown, monetagOn: boolean, adsterraOn: boolean): PublicSpotPopunder | null {
   const c = normalizeSpotPopunder(raw);
-  if (!c.enabled || (c.provider === "monetag" && !monetagOn)) return null;
+  if (!c.enabled || (c.provider === "monetag" && !monetagOn) || (c.provider === "adsterra" && !adsterraOn)) return null;
   const adsterra = c.provider === "adsterra" ? parseAdsterraSnippet(c.adsterraSnippet) : null;
   const tag = c.provider === "adsterra" ? (adsterra ? { src: adsterra.src, zone: null, cfAsync: false } : null) : parseMonetagSnippet(c.snippet);
   if (!tag) return null;

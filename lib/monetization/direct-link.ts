@@ -18,7 +18,8 @@
  * Lives in the `monetization` settings row, so no migration. Served through
  * /api/ads/config only when Monetag's master switch is on too.
  *
- * The Adsterra SMARTLINK (owner, 2026-10-24) is a SEPARATE backup with its own switch, chance and spots
+ * The Adsterra SMARTLINK (owner, 2026-10-24) is a SEPARATE backup with its own switch, chance and spots — served only
+ * while the Adsterra network switch is on too (owner, 2026-10-30: off stops every Adsterra format)
  * (`AdsterraSmartlinkConfig` below): "the smart link will be as a separate backup that show randomly … Not all part
  * should be separated so I can decide to turn off some". At a tap: the pop-under first, then the Monetag link (its
  * chance), then the Smartlink (its chance) — at most ONE of them per tap.
@@ -167,10 +168,16 @@ export function normalizeAdsterraSmartlink(raw: unknown): AdsterraSmartlinkConfi
 }
 
 /**
- * Served on its OWN switch and URL — never the Adsterra banner switch (that would also turn Adsterra banners on) nor
- * Monetag's. Null unless it can actually open.
+ * Served on its OWN switch and URL, never Monetag's — and only while the ADSTERRA network switch is on. Null unless it
+ * can actually open.
+ *
+ * 🔴 THE ADSTERRA SWITCH IS THE MASTER (owner, 2026-10-30: "turned off adsterra general but the reward X button is still
+ * showing the ad", and the Download button waited on it). It used to be served on its own switch alone, so switching
+ * Adsterra off left the Smartlink opening at every spot it was on. Off now stops every Adsterra format; its own switch
+ * still turns just the Smartlink off.
  */
-export function publicAdsterraSmartlink(raw: unknown): PublicDirectLink | null {
+export function publicAdsterraSmartlink(raw: unknown, adsterraOn: boolean): PublicDirectLink | null {
+  if (!adsterraOn) return null;
   const c = normalizeAdsterraSmartlink(raw);
   if (!c.enabled || !c.url) return null;
   const spots = DIRECT_LINK_SPOTS.filter((id) => c.spots[id]);

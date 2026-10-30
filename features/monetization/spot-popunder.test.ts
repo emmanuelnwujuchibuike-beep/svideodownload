@@ -66,7 +66,7 @@ const monetagOpens = () => window.open("https://pop.example/ad", "_blank");
 
 const DIRECT = { url: "https://direct.example/go", spots: ["wallpaper", "resultPreview", "downloadAdClose"], chancePercent: 100 };
 const ON = { ...DEFAULT_SPOT_POPUNDER, enabled: true };
-const POP = publicSpotPopunder(ON, true)!;
+const POP = publicSpotPopunder(ON, true, false)!;
 
 async function opener(spot: "wallpaper" | "resultPreview" | "downloadAdClose" = "downloadAdClose") {
   const m = await import("./direct-link-runtime");
@@ -105,20 +105,32 @@ describe("Adsterra at the spots (owner, 2026-10-24: \"I want to try adsterra out
     expect(parseAdsterraSnippet("")).toBeNull();
   });
 
-  it("🔴 Adsterra is served on its OWN switch + code — never needs the Adsterra banner switch (that would turn banners on too) nor Monetag's", () => {
-    expect(publicSpotPopunder(AON, false)).toEqual({ provider: "adsterra", src: "https://pl27012345.profitableratecpm.com/0a/1b/2c/0a1b2c3d4e5f.js", zone: null, cfAsync: false, spots: ["resultPreview", "wallpaper", "rewardAdClose", "downloadAdClose"], spotsOnly: true, cooldownMinutes: 30 });
-    expect(publicSpotPopunder(AON, true)).toMatchObject({ provider: "adsterra" });
-    expect(publicSpotPopunder({ ...AON, adsterraSnippet: "" }, true)).toBeNull();
-    expect(publicSpotPopunder({ ...AON, enabled: false }, true)).toBeNull();
+  it("Adsterra is served on its own switch + code, never Monetag's switch", () => {
+    expect(publicSpotPopunder(AON, false, true)).toEqual({ provider: "adsterra", src: "https://pl27012345.profitableratecpm.com/0a/1b/2c/0a1b2c3d4e5f.js", zone: null, cfAsync: false, spots: ["resultPreview", "wallpaper", "rewardAdClose", "downloadAdClose"], spotsOnly: true, cooldownMinutes: 30 });
+    expect(publicSpotPopunder(AON, true, true)).toMatchObject({ provider: "adsterra" });
+    expect(publicSpotPopunder({ ...AON, adsterraSnippet: "" }, true, true)).toBeNull();
+    expect(publicSpotPopunder({ ...AON, enabled: false }, true, true)).toBeNull();
+  });
+
+  /*
+    Owner, 2026-10-30: "turned off adsterra general but the reward X button is still showing the ad". The Adsterra
+    network switch is the MASTER for every Adsterra format: with it off, the Adsterra pop-under is not served at all,
+    whatever its own switch says. Monetag's pop-under never depends on it.
+  */
+  it("🔴 the Adsterra switch off → no Adsterra pop-under, even with its own switch on (teeth: the old rule served it)", () => {
+    expect(publicSpotPopunder(AON, true, false)).toBeNull();
+    expect(publicSpotPopunder(AON, false, false)).toBeNull();
+    // Monetag's pop-under is untouched by the Adsterra switch
+    expect(publicSpotPopunder(ON, true, false)).toMatchObject({ provider: "monetag" });
   });
 
   it("the owner's mix (2026-10-24): Adsterra pop-under + Monetag direct link, Monetag's pop-under tag left unused", () => {
-    expect(publicSpotPopunder(AON, true)).toMatchObject({ provider: "adsterra", src: expect.stringContaining("profitableratecpm.com") });
-    expect(publicSpotPopunder(AON, true)!.src).not.toContain("al5sm.com");
+    expect(publicSpotPopunder(AON, true, true)).toMatchObject({ provider: "adsterra", src: expect.stringContaining("profitableratecpm.com") });
+    expect(publicSpotPopunder(AON, true, true)!.src).not.toContain("al5sm.com");
   });
 
   it("Monetag stays the pick unless the admin chose Adsterra, and still needs Monetag's switch; a row saved before has no provider", () => {
-    expect(publicSpotPopunder(ON, false)).toBeNull();
+    expect(publicSpotPopunder(ON, false, true)).toBeNull();
     expect(normalizeSpotPopunder({ enabled: true }).provider).toBe("monetag");
     expect(normalizeSpotPopunder({ provider: "something" }).provider).toBe("monetag");
     expect(normalizeSpotPopunder({ provider: "adsterra" }).provider).toBe("adsterra");
@@ -140,8 +152,8 @@ describe("Adsterra at the spots (owner, 2026-10-24: \"I want to try adsterra out
 describe("the config — OFF unless an admin switched it on", () => {
   it("default OFF, the owner's zone still pre-filled; nothing is served while off", () => {
     expect(DEFAULT_SPOT_POPUNDER).toEqual({ enabled: false, provider: "monetag", snippet: OWNER_POPUNDER_SNIPPET, adsterraSnippet: "", spots: { download: false, resultPreview: true, wallpaper: true, rewardAdClose: true, downloadAdClose: true, batchSave: false }, spotsOnly: true, cooldownMinutes: 30 });
-    expect(publicSpotPopunder(DEFAULT_SPOT_POPUNDER, true)).toBeNull();
-    expect(publicSpotPopunder(undefined, true)).toBeNull();
+    expect(publicSpotPopunder(DEFAULT_SPOT_POPUNDER, true, true)).toBeNull();
+    expect(publicSpotPopunder(undefined, true, true)).toBeNull();
   });
   it("a saved row without the key, or with anything but a literal true, is OFF", () => {
     expect(normalizeSpotPopunder(undefined).enabled).toBe(false);
@@ -153,10 +165,10 @@ describe("the config — OFF unless an admin switched it on", () => {
   });
   it("explicitly ON: served with the parsed tag — only with Monetag on, a valid tag and a spot", () => {
     expect(POP).toEqual({ provider: "monetag", src: "https://al5sm.com/tag.min.js", zone: "12054432", cfAsync: false, spots: ["resultPreview", "wallpaper", "rewardAdClose", "downloadAdClose"], spotsOnly: true, cooldownMinutes: 30 });
-    expect(publicSpotPopunder(ON, false)).toBeNull();
-    expect(publicSpotPopunder({ ...ON, snippet: "<script>alert(1)</script>" }, true)).toBeNull();
-    expect(publicSpotPopunder({ ...ON, snippet: "" }, true)).toBeNull();
-    expect(publicSpotPopunder({ ...ON, spots: { wallpaper: false, resultPreview: false, adClose: false } }, true)).toBeNull();
+    expect(publicSpotPopunder(ON, false, true)).toBeNull();
+    expect(publicSpotPopunder({ ...ON, snippet: "<script>alert(1)</script>" }, true, true)).toBeNull();
+    expect(publicSpotPopunder({ ...ON, snippet: "" }, true, true)).toBeNull();
+    expect(publicSpotPopunder({ ...ON, spots: { wallpaper: false, resultPreview: false, adClose: false } }, true, true)).toBeNull();
   });
   it("the one rule: pop-under wins; else the direct link; never both", () => {
     expect(spotOutcome({ popunderOpened: true, directOpened: true })).toBe("popunder");
@@ -357,9 +369,9 @@ describe("wiring", () => {
     expect(src("features/downloader/preview-card.tsx")).toContain('data-ad-spot="download"');
     expect(src("features/downloader/preview-card.tsx")).toContain('const openDownloadSpot = useDirectLink("download");');
     expect(src("features/monetization/fullscreen-interstitial.tsx")).toContain("data-ad-spot={directLinkSpot}");
-    expect(src("app/api/ads/config/route.ts")).toContain("monetagSpotPopunder: publicSpotPopunder(settings.monetagSpotPopunder, settings.monetag === true)");
-    // the spots never read the Adsterra BANNER switch
-    expect(src("app/api/ads/config/route.ts")).not.toMatch(/publicSpotPopunder\([^)]*settings\.adsterra/);
+    expect(src("app/api/ads/config/route.ts")).toContain("monetagSpotPopunder: publicSpotPopunder(settings.monetagSpotPopunder, settings.monetag === true, settings.adsterra === true)");
+    // owner, 2026-10-30: the Adsterra switch is the master — both Adsterra formats at the spots read it
+    expect(src("app/api/ads/config/route.ts")).toContain("adsterraSmartlink: publicAdsterraSmartlink(settings.adsterraSmartlink, settings.adsterra === true),");
     expect(src("lib/monetization/settings.ts")).toContain("merged.monetagSpotPopunder = normalizeSpotPopunder(merged.monetagSpotPopunder)");
     expect(src("app/api/admin/monetization/route.ts")).toContain("monetagSpotPopunder: z");
     expect(src("features/admin/monetization-settings.tsx")).toContain("<SpotPopunderEditor");

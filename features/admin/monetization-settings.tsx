@@ -77,7 +77,7 @@ const ROWS: { key: ToggleKey; label: string; hint: string }[] = [
     label: "Offerium",
     hint: "Rewarded ads / offerwall. Needs the SDK URL and IDs below AND the two server env secrets before it can serve — see the panel below.",
   },
-  { key: "adsterra", label: "Adsterra", hint: "Adsterra network banners (retired — off by default)" },
+  { key: "adsterra", label: "Adsterra", hint: "Master switch for every Adsterra format — banners, the Smartlink and the pop-under. Off stops them all." },
   { key: "propellerads", label: "PropellerAds", hint: "PropellerAds network units (retired — off by default)" },
   { key: "affiliates", label: "Affiliate offers", hint: "Affiliate CTA on the download-result page" },
   { key: "recommendedTools", label: "Recommended tools", hint: "Curated tool sections (home/footer/sidebar)" },
@@ -1607,7 +1607,7 @@ export function MonetizationSettings({
             <LinkSpotEditor
               idPrefix="adsterra-smartlink"
               title="Adsterra Smartlink (separate backup)"
-              description="Tried after the Monetag link when neither the pop-under nor the Monetag link opened on that tap — at most one thing opens per tap. Its own chance and spots. Free plan only; needs only this switch (Adsterra banners stay off)."
+              description="Tried after the Monetag link when neither the pop-under nor the Monetag link opened on that tap — at most one thing opens per tap. Its own chance and spots. Free plan only; needs this switch AND the Adsterra switch at the top (the master for every Adsterra format — off stops this too)."
               urlLabel="Adsterra Smartlink URL"
               value={state.adsterraSmartlink ?? DEFAULT_ADSTERRA_SMARTLINK}
               busy={busy}
@@ -2725,8 +2725,8 @@ function VastRow({
  */
 /**
  * Which network fills a spot format (owner, 2026-10-24: "I want to try adsterra out") — one pick per format, saved with
- * the form. Monetag also needs its master switch; Adsterra runs on this format's own switch alone — the Adsterra
- * master switch is the BANNER switch, and coupling the two would turn the retired banners back on (spot-popunder.test).
+ * the form. Each network also needs its master switch — Monetag's for Monetag, Adsterra's for Adsterra (owner,
+ * 2026-10-30: "turned off adsterra general but the reward X button is still showing the ad"; spot-popunder.test).
  * A switch turned off reaches open sessions within 5 minutes (lib/monetization/ads-config-client.ts).
  */
 function SpotProviderPicker({ id, value, busy, onChange }: { id: string; value: SpotAdProvider; busy: boolean; onChange: (next: SpotAdProvider) => void }) {

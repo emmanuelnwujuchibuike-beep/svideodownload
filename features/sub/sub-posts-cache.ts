@@ -13,8 +13,8 @@
  * Memory only, never storage: nothing private outlives the tab. A tiny module, so
  * the profile can import it without pulling the gallery in.
  */
-export const SUB_POSTS_FRESH_MS = 4 * 60_000;
-const FRESH_MS = SUB_POSTS_FRESH_MS;
+const FRESH_MS = 4 * 60_000;
+export const SUB_POSTS_FRESH_MS = FRESH_MS;
 const pages = new Map<string, { at: number; p: Promise<unknown> }>();
 
 /** When the cached page (and so its private links) was asked for — null when none is cached. */

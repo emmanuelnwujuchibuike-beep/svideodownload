@@ -6,7 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 
 import { toast } from "@/features/ui/toast";
 import { TransferResultModal, type TransferResult } from "@/features/ai/wallet/transfer-result-modal";
-import { formatKind, KIND_NAME, KindSymbol, type WalletKind } from "@/features/ai/wallet/wallet-kinds";
+import { formatKind, KIND_NAME, KindSymbol, kindTitle, type WalletKind } from "@/features/ai/wallet/wallet-kinds";
 import { transferFeeFor } from "@/lib/ai/credits/wallet-config";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -44,8 +44,7 @@ export interface TransferRules {
 
 export type TransferKind = WalletKind;
 
-// 2026-10-09 (owner): the send sheet names the kinds Tokens (non-withdrawable) and Credits (withdrawable)
-const KIND_LABEL: Record<TransferKind, string> = { usable: KIND_NAME.usable.title, withdrawable: KIND_NAME.withdrawable.title };
+// the send sheet names the kinds by kindTitle: AI credits, and Withdrawable (an affiliate) or Deposit credits (2026-10-30)
 
 interface TransferRow {
   id: string;
@@ -98,7 +97,7 @@ function writeKept(patch: Partial<NonNullable<typeof kept>>) {
 
 const feeOf = (amount: number, pct: number) => (amount > 0 && pct > 0 ? Math.ceil((Math.floor(amount) * pct) / 100) : 0);
 
-export function TransferPanel({ rules, balance, withdrawable = null, deposited = null, onChanged, className }: { rules: TransferRules | null; balance: number | null; withdrawable?: number | null; deposited?: number | null; onChanged: () => void; className?: string }) {
+export function TransferPanel({ rules, balance, withdrawable = null, deposited = null, onChanged, className, affiliate = false }: { rules: TransferRules | null; balance: number | null; withdrawable?: number | null; deposited?: number | null; onChanged: () => void; className?: string; affiliate?: boolean }) {
   const [account, setAccount] = useState<string | null>(null);
   const [history, setHistory] = useState<TransferRow[] | null>(null);
   const [showAll, setShowAll] = useState(false);
@@ -279,6 +278,7 @@ export function TransferPanel({ rules, balance, withdrawable = null, deposited =
           rules={rules}
           balance={balance}
           withdrawable={withdrawable}
+          affiliate={affiliate}
           deposited={deposited}
           onClose={() => setSheetOpen(false)}
           onSent={() => {
@@ -308,6 +308,7 @@ export function SendSheet({
   deposited = null,
   onClose,
   onSent,
+  affiliate = false,
   recipient = null,
   backdropZ,
   panelZ,
@@ -323,6 +324,8 @@ export function SendSheet({
   deposited?: number | null;
   onClose: () => void;
   onSent: () => void;
+  /** an approved affiliate: the withdrawable kind is named Withdrawable and can be cashed out (2026-10-30) */
+  affiliate?: boolean;
   recipient?: PresetRecipient | null;
 }) {
   const [number, setNumber] = useState("");
@@ -431,7 +434,7 @@ export function SendSheet({
             </div>
             <fieldset className="mt-4">
               <legend className="text-[13px] font-semibold">What to send</legend>
-              <div role="radiogroup" aria-label="Send tokens or credits" className="mt-1 grid grid-cols-2 gap-2">
+              <div role="radiogroup" aria-label="Which credits to send" className="mt-1 grid grid-cols-2 gap-2">
                 {(["usable", "withdrawable"] as const).map((k) => {
                   const have = balance === null ? null : withdrawable === null ? (k === "usable" ? balance : null) : k === "withdrawable" ? withdrawable : Math.max(0, balance - withdrawable);
                   const on = kind === k;
@@ -453,7 +456,7 @@ export function SendSheet({
                     >
                       <span className={cn("flex items-center gap-1 text-[13px] font-semibold", on ? "text-indigo-700 dark:text-indigo-300" : "")}>
                         <KindSymbol kind={k} />
-                        {KIND_LABEL[k]}
+                        {kindTitle(k, affiliate)}
                       </span>
                       <span className="block text-[11.5px] tabular-nums text-muted-foreground">{have === null ? "—" : `${formatKind(have, k)} available`}</span>
                     </button>
@@ -468,13 +471,13 @@ export function SendSheet({
             <dl className="mt-2 space-y-1 text-[13px]">
               <div className="flex justify-between"><dt className="text-muted-foreground">{usesDeposit ? `Transfer fee (${rules.feePercent}% · ${rules.depositedFeePercent}% on deposited)` : `Transfer fee (${rules.feePercent}%)`}</dt><dd className="tabular-nums">{formatKind(fee, kind)}</dd></div>
               <div className="flex justify-between font-semibold"><dt>Total</dt><dd className="tabular-nums">{formatKind(total, kind)}</dd></div>
-              {available !== null ? <div className="flex justify-between text-muted-foreground"><dt>{KIND_LABEL[kind]} available</dt><dd className="tabular-nums">{formatKind(available, kind)}</dd></div> : null}
+              {available !== null ? <div className="flex justify-between text-muted-foreground"><dt>{kindTitle(kind, affiliate)} available</dt><dd className="tabular-nums">{formatKind(available, kind)}</dd></div> : null}
             </dl>
             <label className="mt-3 block text-[13px] font-semibold">
               Note <span className="font-normal text-muted-foreground">(optional)</span>
               <input value={note} maxLength={120} onChange={(e) => setNote(e.target.value)} className={field} />
             </label>
-            <p className="mt-2 text-[11.5px] text-muted-foreground">{who.name} receives the full amount as {KIND_NAME[kind].many}{kind === "withdrawable" ? " (can be cashed out)" : " (for Frenz AI tools)"}. Transfers can&apos;t be undone.</p>
+            <p className="mt-2 text-[11.5px] text-muted-foreground">{who.name} receives the full amount as {kindTitle(kind, affiliate)}{kind === "withdrawable" ? "" : " (for Frenz AI tools)"}. Transfers can&apos;t be undone.</p>
             <button
               type="button"
               onClick={() => void send()}

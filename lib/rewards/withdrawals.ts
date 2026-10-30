@@ -3,6 +3,7 @@ import "server-only";
 import { emailMember } from "@/lib/email/member-email";
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import { splitWithdrawalUsdCents, withdrawalFlatFeeCents, withdrawalUsdCents, type RewardsConfig } from "@/lib/rewards/config";
+import { AFFILIATE_ONLY_MESSAGE, getAffiliateState } from "@/lib/rewards/affiliate-status";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { resolveAccount } from "./paystack-banks";
@@ -96,14 +97,18 @@ const MISSING_FN = (m: string) => /request_credit_withdrawal|schema cache|does n
  */
 async function withdrawalEligibility(userId: string): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   const db = createAdminClient();
-  const [who, prof] = await Promise.all([
+  const [who, prof, affiliate] = await Promise.all([
     db.from("profiles").select("is_suspended").eq("id", userId).maybeSingle(),
     db.from("reward_profiles").select("qualified_at, qualification_status, restricted").eq("user_id", userId).maybeSingle(),
+    getAffiliateState(userId),
   ]);
   if (who.error || prof.error || !who.data) return { ok: false, status: 503, error: "Couldn't submit that. Try again in a moment." };
   if ((who.data as { is_suspended?: boolean }).is_suspended) return { ok: false, status: 403, error: REFUSED.suspended![1] };
   const p = prof.data as { qualified_at: string | null; qualification_status: string | null; restricted: boolean } | null;
   if (p?.restricted) return { ok: false, status: 403, error: REFUSED.restricted![1] };
+  // 🔴 owner, 2026-10-30: AI credits cash out for APPROVED AFFILIATES only (lib/rewards/affiliate-status.ts) — the
+  // reward qualification alone no longer opens it; everyone else spends their credits on Frenz AI
+  if (!affiliate.approved) return { ok: false, status: 403, error: AFFILIATE_ONLY_MESSAGE };
   // the rewards page's rule (features/rewards/rewards-page.tsx): approved = qualified_at set OR status approved
   if (!p || !(p.qualified_at || p.qualification_status === "approved")) return { ok: false, status: 403, error: REFUSED.not_qualified![1] };
   return { ok: true };

@@ -31,6 +31,8 @@ beforeEach(() => {
     reward_profiles: [{ user_id: U, qualified_at: null, qualification_status: "approved", restricted: false }],
     withdrawal_requests: [],
     ai_product_balances: [{ user_id: U, product: "character_replace", withdrawable_cents: 50_000, deposited_cents: 0 }],
+    // owner, 2026-10-30: only an approved affiliate cashes out AI credits
+    affiliate_accounts: [{ user_id: U, status: "approved", rate_bp: 1000 }],
   });
   db.rpc.request_credit_withdrawal = vi.fn(() => ({ data: { ok: true, id: "w-0278" }, error: null }));
   db.rpc.request_withdrawal = vi.fn(() => ({ data: { ok: true, id: "w-old" }, error: null }));
@@ -107,5 +109,30 @@ describe("M3: the limits are counted in the transaction", () => {
     db.rpc.request_credit_withdrawal = vi.fn(() => ({ data: null, error: { message: "deadlock detected" } }));
     expect(await ask()).toMatchObject({ ok: false, status: 503 });
     expect(db.rpc.request_withdrawal).not.toHaveBeenCalled();
+  });
+});
+
+describe("owner, 2026-10-30: AI credits cash out for APPROVED AFFILIATES only", () => {
+  const refusal = "Cashing out AI credits is for approved affiliates. Contact support to join the affiliate program.";
+  it("teeth: a member approved under the old qualification but not an affiliate is refused before anything is held", async () => {
+    db.tables.affiliate_accounts = [];
+    expect(await ask()).toMatchObject({ ok: false, status: 403, error: refusal });
+    expect(db.rpc.request_credit_withdrawal).not.toHaveBeenCalled();
+    expect(db.rpc.request_withdrawal).not.toHaveBeenCalled();
+  });
+  it("a pending, declined or revoked affiliate is refused too", async () => {
+    for (const status of ["pending", "declined", "revoked"]) {
+      db.tables.affiliate_accounts = [{ user_id: U, status, rate_bp: 1000 }];
+      expect(await ask(), status).toMatchObject({ ok: false, status: 403, error: refusal });
+    }
+    expect(db.rpc.request_credit_withdrawal).not.toHaveBeenCalled();
+  });
+  it("an unreadable affiliate record is NOT an approval (fails closed)", async () => {
+    db.failOn.affiliate_accounts = "connection reset";
+    expect((await ask()).ok).toBe(false);
+    expect(db.rpc.request_credit_withdrawal).not.toHaveBeenCalled();
+  });
+  it("an approved affiliate withdraws", async () => {
+    expect(await ask()).toMatchObject({ ok: true, id: "w-0278" });
   });
 });

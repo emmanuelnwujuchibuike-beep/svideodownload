@@ -13,6 +13,7 @@ import { QUEST_EVENT_LABELS, QUEST_EVENTS, QUEST_PERIOD_LABELS, questId, type Qu
 import { cn } from "@/lib/utils";
 import { useSensitiveAction } from "@/features/admin/use-sensitive-action";
 
+import { AffiliatesAdmin } from "./affiliates-admin";
 import { SubAdmin } from "./sub-admin";
 
 // 0278: loaded with the panel's own chunk, only when the Rewards tab opens
@@ -203,6 +204,8 @@ export function RewardsPanel({ settings }: { settings: LandingSettings }) {
           {msg ? <p className={cn("text-sm", msg.ok ? "text-emerald-600" : "text-rose-600")}>{msg.text}</p> : null}
         </div>
       </section>
+      {/* owner, 2026-10-30: only approved affiliates cash out AI credits — approved here after they contact support */}
+      <AffiliatesAdmin defaultRatePercent={cfg.affiliate.rateBp / 100} />
       <RewardsActivity minAge={cfg.qualification.minAccountAgeDays} minEngagements={cfg.qualification.minEngagements} />
       {/* 0227: SUB — the rules, every purchase with its fee, creator balances, reversal and the audit log */}
       <TopupReversals />

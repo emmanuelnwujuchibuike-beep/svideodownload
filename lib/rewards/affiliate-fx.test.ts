@@ -57,3 +57,34 @@ describe("the 10-minute cron runs both Rewards v2 sweeps", () => {
     expect(sweeps).toContain("p_credits_per_usd: creditsPerUsd");
   });
 });
+
+describe("0309: a share of DEPOSITED CREDITS SPENT ON AI", () => {
+  const spend = { amount_minor: 120, currency: "CREDIT", fx_minor_per_usd: null };
+  it("is valued at the top-up price per credit (120 credits at 10¢ = $12.00)", () => {
+    expect(commissionUsdCents(spend, null, 10)).toBe(1_200);
+  });
+  it("teeth: without the credit price it is never guessed — it stays queued (null)", () => {
+    expect(commissionUsdCents(spend, null)).toBeNull();
+    expect(commissionUsdCents(spend, 1_500)).toBeNull();
+  });
+  it("never asks the market for a rate", () => {
+    expect(needsMarketRate(spend)).toBe(false);
+  });
+});
+
+describe("0309: the database only queues commissions on AI spending and AI plans", () => {
+  const sql = readFileSync("supabase/migrations/0309_affiliate_on_ai_spend.sql", "utf8");
+  it("a top-up no longer queues a commission (the payment trigger keeps ai_subscription only)", () => {
+    const fn = sql.slice(sql.indexOf("create or replace function public.queue_affiliate_commission()"));
+    expect(fn).toMatch(/coalesce\(new\.purpose, 'wallet_topup'\) = 'ai_subscription'/);
+    expect(fn.slice(0, fn.indexOf("$$;"))).not.toMatch(/'wallet_topup', 'ai_subscription'/);
+  });
+  it("a spend commission is queued only when the AI charge SETTLES, from its deposited part", () => {
+    const fn = sql.slice(sql.indexOf("create or replace function public.queue_affiliate_spend_commission()"));
+    expect(fn).toMatch(/new\.status = 'settled' and coalesce\(new\.deposited_part, 0\) > 0/);
+  });
+  it("the deposited-debit tracker runs AFTER 0202's clamp (triggers fire by name)", () => {
+    expect("ai_product_balances_zz_deposited_debit" > "ai_product_balances_deposited_clamp").toBe(true);
+    expect(sql).toMatch(/create trigger ai_product_balances_zz_deposited_debit before insert or update/);
+  });
+});

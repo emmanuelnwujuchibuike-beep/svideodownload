@@ -60,7 +60,17 @@ export async function sweepAffiliateCommissions(): Promise<{ granted: number; sk
   const rows = (data ?? []) as QueuedCommission[];
   if (!rows.length) return { granted: 0, skipped: 0, waiting: 0 };
 
-  const creditsPerUsd = (await getLandingSettings()).frenzRewards.withdrawals.creditsPerUsd;
+  const settings = await getLandingSettings();
+  const creditsPerUsd = settings.frenzRewards.withdrawals.creditsPerUsd;
+  // 0309: a share of deposited credits spent on AI is valued at the top-up price per credit
+  const centsPerCredit = settings.frenzAiPlans.credits.centsPerCredit;
+  // 0309: an AI charge refunded after it settled earns nothing — its row is skipped, never paid
+  const spendRefs = rows.filter((r) => r.reference.startsWith("spend:")).map((r) => r.reference.slice("spend:".length));
+  const stillSettled = new Set<string>();
+  if (spendRefs.length) {
+    const { data: led } = await db.from("ai_product_ledger").select("id").in("id", spendRefs).eq("status", "settled");
+    for (const l of (led ?? []) as { id: string }[]) stillSettled.add(l.id);
+  }
   // one market-rate lookup per currency per run, only for rows with no pinned rate
   const rates = new Map<string, number | null>();
   for (const cur of new Set(rows.filter(needsMarketRate).map((r) => r.currency.toUpperCase()))) {
@@ -71,7 +81,12 @@ export async function sweepAffiliateCommissions(): Promise<{ granted: number; sk
   let skipped = 0;
   let waiting = 0;
   for (const row of rows) {
-    const usdCents = commissionUsdCents(row, rates.get(row.currency.toUpperCase()) ?? null);
+    if (row.reference.startsWith("spend:") && !stillSettled.has(row.reference.slice("spend:".length))) {
+      await db.from("affiliate_commissions").update({ status: "skipped", reason: "charge_refunded" }).eq("reference", row.reference).eq("status", "queued");
+      skipped++;
+      continue;
+    }
+    const usdCents = commissionUsdCents(row, rates.get(row.currency.toUpperCase()) ?? null, centsPerCredit);
     if (usdCents === null) {
       waiting++;
       console.warn("[rewards/v2] no rate for an affiliate commission yet (stays queued)", { reference: row.reference, currency: row.currency });

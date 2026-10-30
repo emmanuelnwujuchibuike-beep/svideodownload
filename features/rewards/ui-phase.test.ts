@@ -57,16 +57,18 @@ describe("🔴 a reward is shown only after the server granted it", () => {
 
 describe("two credit classes, said plainly", () => {
   const page = code("features/rewards/rewards-page.tsx");
-  it("Tokens and Credits are separate figures (renamed 2026-10-09: tokens = non-withdrawable, credits = withdrawable)", () => {
-    expect(page).toContain('label="Tokens" value={wallet.usableCredits}');
-    expect(page).toContain('label="Credits" value={wallet.withdrawableCredits}');
+  // owner, 2026-10-30: "remove the AI token, so only AI credit is there" — cashing out is for approved affiliates only
+  it("one AI credits figure for everyone; an approved affiliate also sees Withdrawable — never Tokens", () => {
+    expect(page).toContain('label="AI credits" value={wallet.balanceCredits}');
+    expect(page).toContain('label="Withdrawable" value={wallet.withdrawableCredits}');
+    expect(page).not.toContain('label="Tokens"');
   });
-  it("before qualifying: the brief's sentence, and that earlier rewards never become withdrawable", () => {
-    expect(page).toContain("Your referral rewards can be used for AI features. Withdrawable rewards unlock after you meet the withdrawal requirements.");
-    expect(page).toContain("they don&apos;t become withdrawable later");
+  it("a member who is not an affiliate is shown the affiliate program (through support), never the withdraw form", () => {
+    expect(page).toContain("{aff.approved ? <WithdrawSection summary={summary} /> : <AffiliateSection summary={summary} />}");
+    expect(page).toContain("Contact support to join");
   });
-  it("withdrawing is offered only to an approved, unrestricted member with enough withdrawable credits", () => {
-    expect(page).toContain("const canWithdraw = approved && !q.restricted && !!w && wallet.withdrawableCredits >= w.minCredits;");
+  it("withdrawing is offered only to an unrestricted affiliate with enough withdrawable credits", () => {
+    expect(page).toContain("const canWithdraw = !q.restricted && !!w && wallet.withdrawableCredits >= w.minCredits;");
   });
 });
 

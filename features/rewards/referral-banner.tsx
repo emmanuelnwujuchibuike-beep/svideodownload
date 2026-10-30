@@ -153,8 +153,9 @@ export function ReferralBanner({ onClose }: { onClose: () => void }) {
           <p className="mt-2 text-[13px] leading-relaxed text-slate-600">{referralSentence(rules, n)}</p>
           <p className="mt-1.5 text-[12px] leading-relaxed text-slate-500">
             {signedIn
-              ? `Use credits for Frenz AI videos, or withdraw once you have been active on ${rules.qualification.minAccountAgeDays} days with ${rules.qualification.minEngagements} qualifying engagements. Rewards go to your account automatically.`
-              : `Use credits for Frenz AI videos, or withdraw once you have been active on ${rules.qualification.minAccountAgeDays} days with ${rules.qualification.minEngagements} qualifying engagements. Sign in to get your link.`}
+              /* owner, 2026-10-30: credits are for Frenz AI; cashing out is for approved affiliates, through support */
+              ? "Use your credits for Frenz AI. Rewards go to your account automatically. Want to cash out? Approved affiliates can — contact support to join."
+              : "Use your credits for Frenz AI. Sign in to get your link."}
           </p>
 
           {signedIn ? (

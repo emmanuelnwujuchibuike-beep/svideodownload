@@ -16,6 +16,7 @@ import { resolveCheckoutRate } from "@/lib/ai/character-replace/fx-rate-server";
 import { aiCurrencySymbol, getLandingSettings, isAiCurrency } from "@/lib/landing/settings";
 import { reconcileMemberTopups } from "@/lib/ai/wallet/reconcile-topups";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
+import { getAffiliateState } from "@/lib/rewards/affiliate-status";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,10 +65,12 @@ export async function GET(request: Request) {
       same wave, so it costs nothing when nothing is pending; when something
       was credited the balance and statement are read again.
     */
-    const [settings, wallet, ledger] = await Promise.all([
+    const [settings, wallet, ledger, affiliate] = await Promise.all([
       getLandingSettings(),
       getCharacterReplaceWallet(subject.userId),
       listCharacterReplaceLedger(subject.userId, ledgerLimit),
+      // owner, 2026-10-30: only an approved affiliate sees a withdrawable part and can cash out AI credits
+      getAffiliateState(subject.userId),
     ]);
     // 2026-10-07 (owner: "since the last push everything is slow"): the deposit check ran IN this
     // read and could hold every AI page's credits strip up to 4 s on Paystack. It runs after the
@@ -126,6 +129,7 @@ export async function GET(request: Request) {
         withdrawableCents: wallet.withdrawable,
         // 0202: the part of Credits that came from a paid deposit (withdrawn and sent at its own rate)
         depositedCents: wallet.deposited,
+        affiliate: affiliate.approved,
         currency: settings.frenzAiCurrency,
         symbol: aiCurrencySymbol(settings.frenzAiCurrency),
         unit: WALLET_UNIT,

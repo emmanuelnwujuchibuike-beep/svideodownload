@@ -15,9 +15,11 @@ export interface CommissionAmount {
   fx_minor_per_usd: number | null;
 }
 
-export function commissionUsdCents(row: CommissionAmount, marketPerUsd: number | null): number | null {
+export function commissionUsdCents(row: CommissionAmount, marketPerUsd: number | null, centsPerCredit: number | null = null): number | null {
   const amount = Number(row.amount_minor);
   if (!Number.isFinite(amount) || amount <= 0) return null;
+  // 0309: a share of DEPOSITED CREDITS SPENT ON AI — worth what the member paid for them (the top-up price per credit)
+  if (row.currency.toUpperCase() === "CREDIT") return centsPerCredit !== null && Number.isFinite(centsPerCredit) && centsPerCredit > 0 ? Math.floor(amount * centsPerCredit) : null;
   if (row.currency.toUpperCase() === "USD") return Math.floor(amount);
   const pinned = Number(row.fx_minor_per_usd);
   if (Number.isFinite(pinned) && pinned > 0) return Math.floor((amount * 100) / pinned);
@@ -27,5 +29,6 @@ export function commissionUsdCents(row: CommissionAmount, marketPerUsd: number |
 
 /** Whether a row needs a market rate at all (so the sweep only asks for the currencies it must). */
 export function needsMarketRate(row: CommissionAmount): boolean {
-  return row.currency.toUpperCase() !== "USD" && !(Number(row.fx_minor_per_usd) > 0);
+  const cur = row.currency.toUpperCase();
+  return cur !== "USD" && cur !== "CREDIT" && !(Number(row.fx_minor_per_usd) > 0);
 }

@@ -1,7 +1,6 @@
 "use client";
 
-import { ArrowLeft, Check, Clock, Coins, Gift, Lock, Share2 } from "lucide-react";
-import Link from "next/link";
+import { ArrowLeft, Clock, Coins, Gift, Lock, Share2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { KindSymbol } from "@/features/ai/wallet/wallet-kinds";
@@ -75,7 +74,7 @@ function howToEarn(rules: Summary["rules"]): string[] {
 const panel = "ai-glass rounded-[1.6rem] p-4 text-slate-900 ring-1 ring-inset ring-white/70 shadow-[0_18px_48px_-30px_rgba(49,46,129,0.45)]";
 
 export function RewardsPage({ summary }: { summary: Summary }) {
-  const { wallet, qualification: q, referrals, recentRewards, withdrawals, rules, earned } = summary;
+  const { wallet, qualification: q, referrals, recentRewards, withdrawals, rules, earned, affiliate: aff } = summary;
   const earn = howToEarn(rules);
 
   return (
@@ -95,23 +94,24 @@ export function RewardsPage({ summary }: { summary: Summary }) {
           Earn credits · daily &amp; weekly quests
         </TapOnceLink>
 
-        {/* ── the two classes, side by side ── */}
-        <section aria-label="Your credits" className="mt-5 grid grid-cols-2 gap-3">
-          <Figure icon={<KindSymbol kind="usable" className="h-4 w-4" />} label="Tokens" value={wallet.usableCredits} hint="For any Frenz AI tool — not cashable" />
-          <Figure icon={<KindSymbol kind="withdrawable" className="h-4 w-4" />} label="Credits" value={wallet.withdrawableCredits} hint="Rewards you can cash out" accent={wallet.withdrawableCredits > 0} />
-        </section>
+        {/* ── the balance: one AI credits figure; an approved affiliate also sees the part they can cash out (owner,
+               2026-10-30: "remove the AI token, so only AI credit is there") ── */}
+        {aff.approved ? (
+          <section aria-label="Your credits" className="mt-5 grid grid-cols-2 gap-3">
+            <Figure icon={<KindSymbol kind="usable" className="h-4 w-4" />} label="AI credits" value={wallet.usableCredits} hint="For any Frenz AI tool" />
+            <Figure icon={<KindSymbol kind="withdrawable" className="h-4 w-4" />} label="Withdrawable" value={wallet.withdrawableCredits} hint="Affiliate earnings you can cash out" accent={wallet.withdrawableCredits > 0} />
+          </section>
+        ) : (
+          <section aria-label="Your credits" className="mt-5">
+            <Figure icon={<KindSymbol kind="usable" className="h-4 w-4" />} label="AI credits" value={wallet.balanceCredits} hint="Rewards, bonuses and deposits — for any Frenz AI tool" />
+          </section>
+        )}
 
         {q.restricted ? (
           <p className="mt-3 rounded-2xl bg-rose-500/10 px-4 py-3 text-[13px] text-rose-700 dark:text-rose-300">Rewards are paused on this account. Contact support if you think this is a mistake.</p>
-        ) : !q.qualified ? (
-          /* §8 — the pre-qualification sentence, exactly, and the rule that matters most */
-          <div className={cn(panel, "mt-3 text-[13px] leading-relaxed")}>
-            <p>Your referral rewards can be used for AI features. Withdrawable rewards unlock after you meet the withdrawal requirements.</p>
-            <p className="mt-1.5 text-slate-500">Rewards earned before you&apos;re approved stay usable for AI features — they don&apos;t become withdrawable later.</p>
-          </div>
         ) : null}
 
-        <WithdrawSection summary={summary} />
+        {aff.approved ? <WithdrawSection summary={summary} /> : <AffiliateSection summary={summary} />}
 
         {/* ── §19: how to earn, from the live rules ── */}
         {earn.length ? (
@@ -137,9 +137,14 @@ export function RewardsPage({ summary }: { summary: Summary }) {
           <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
             <Stat label="Link clicks" value={referrals.clicks} />
             <Stat label="Joined" value={referrals.referredMembers} />
-            <Stat label="Qualifying" value={q.engagements} />
-            <Stat label="Usable earned" value={earned.usable} />
-            <Stat label="Withdrawable earned" value={earned.withdrawable} />
+            {aff.approved ? (
+              <>
+                <Stat label="AI credits earned" value={earned.usable} />
+                <Stat label="Withdrawable earned" value={earned.withdrawable} />
+              </>
+            ) : (
+              <Stat label="Credits earned" value={earned.usable + earned.withdrawable} />
+            )}
             <Stat label="Links" value={referrals.links} />
           </dl>
           <ShareAppButton />
@@ -155,7 +160,7 @@ export function RewardsPage({ summary }: { summary: Summary }) {
                   <div className="min-w-0">
                     <p className="truncate text-[13.5px] font-medium">{r.role === "referrer" ? `Referral · ${LABEL[r.event_type] ?? r.event_type}` : (LABEL[r.event_type] ?? r.event_type)}</p>
                     <p className="text-[11.5px] text-slate-500">
-                      {new Date(r.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short" })} · {r.credit_class === "withdrawable" ? "withdrawable" : "AI credits"}
+                      {new Date(r.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short" })} · {aff.approved && r.credit_class === "withdrawable" ? "withdrawable" : "AI credits"}
                     </p>
                   </div>
                   <span className="shrink-0 text-[14px] font-semibold tabular-nums text-emerald-700">+{r.amount} credits</span>
@@ -188,52 +193,20 @@ export function RewardsPage({ summary }: { summary: Summary }) {
 }
 
 /**
- * The withdrawal path, always on screen, one step lit at a time (owner,
- * 2026-10-07: "it should be greyed out when a user hasn't reached
- * requirements"): requirements → apply → under review → approved → withdraw.
+ * Cashing out — an APPROVED AFFILIATE only (owner, 2026-10-30: "AI withdraw only works for affiliate system, users who
+ * apply and get approval"). The old path here — requirements → apply → review → withdraw (0191) — is closed: nobody
+ * applies from the app any more (app/api/rewards/qualification), and the server refuses anyone who isn't an affiliate
+ * (lib/rewards/withdrawals.ts). The rate, minimum and fee are the operator's live rule.
  */
 function WithdrawSection({ summary }: { summary: Summary }) {
-  const { wallet, qualification: q, rules } = summary;
+  const { wallet, qualification: q, rules, affiliate } = summary;
   const w = rules.withdrawals;
-  const [status, setStatus] = useState(q.status);
-  const [busy, setBusy] = useState(false);
-  const metAge = q.activeDays >= q.requiredActiveDays;
-  const metEng = q.engagements >= q.requiredEngagements;
-  const approved = q.qualified || status === "approved";
-  const canWithdraw = approved && !q.restricted && !!w && wallet.withdrawableCredits >= w.minCredits;
-
-  async function apply() {
-    if (busy) return;
-    setBusy(true);
-    haptic("selection");
-    try {
-      const res = await fetch("/api/rewards/qualification", { method: "POST" });
-      const json = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) toast(json.error ?? "Couldn't send your application.", "error");
-      else {
-        setStatus("applied");
-        haptic("medium");
-        toast("Application sent — we'll let you know.", "success");
-      }
-    } catch {
-      toast("Network error — try again.", "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
+  const canWithdraw = !q.restricted && !!w && wallet.withdrawableCredits >= w.minCredits;
   return (
-    <section id="withdraw" aria-label="Withdraw rewards" className={cn(panel, "mt-4 scroll-mt-20", !canWithdraw && "opacity-[0.97]")}>
+    <section id="withdraw" aria-label="Withdraw affiliate earnings" className={cn(panel, "mt-4 scroll-mt-20")}>
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-[15px] font-semibold">Withdraw rewards</h2>
-        {canWithdraw ? (
-          <span className="rounded-full bg-emerald-500/12 px-2.5 py-0.5 text-[11.5px] font-semibold text-emerald-700">Available</span>
-        ) : (
-          <span className="inline-flex items-center gap-1 rounded-full bg-slate-900/[0.06] px-2.5 py-0.5 text-[11.5px] font-semibold text-slate-500">
-            <Lock className="h-3 w-3" aria-hidden />
-            Locked
-          </span>
-        )}
+        <h2 className="text-[15px] font-semibold">Withdraw</h2>
+        <span className="rounded-full bg-emerald-500/12 px-2.5 py-0.5 text-[11.5px] font-semibold text-emerald-700">Affiliate · {affiliate.ratePercent}%</span>
       </div>
       {w ? (
         <p className="mt-0.5 text-[12px] text-slate-500">
@@ -242,63 +215,44 @@ function WithdrawSection({ summary }: { summary: Summary }) {
       ) : (
         <p className="mt-0.5 text-[12px] text-slate-500">Withdrawals open soon.</p>
       )}
+      {w ? <WithdrawForm enabled={canWithdraw} max={Math.min(wallet.withdrawableCredits, w.maxCredits)} min={w.minCredits} creditsPerUsd={w.creditsPerUsd} methods={w.methods} withdrawable={wallet.withdrawableCredits} approved flatFees={w.flatFees} /> : null}
+    </section>
+  );
+}
 
-      {/* step 1 — the requirements */}
-      <div className="mt-3 space-y-3">
-        <Progress label="Active days" value={q.activeDays} max={q.requiredActiveDays} unit="days" done={metAge || approved} />
-        <Progress label="Qualifying engagements" value={q.engagements} max={q.requiredEngagements} done={metEng || approved} />
-        <p className="text-[11.5px] text-slate-500">Each rewarded action by someone you invited counts as one qualifying engagement.</p>
-        {/* the operator's own requirements (admin-editable) — checked by the team at review */}
-        {rules.qualification.extraRequirements?.length ? (
-          <div>
-            <p className="text-[12.5px] font-medium">Also checked by our team</p>
-            <ul className="mt-1 space-y-1 text-[12.5px] text-slate-600">
-              {rules.qualification.extraRequirements.map((line) => (
-                <li key={line} className="flex gap-2">
-                  <span aria-hidden className="text-indigo-500">•</span>
-                  {line}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </div>
-
-      {/* step 2 — apply, then review */}
-      <div className="mt-4">
-        {approved ? (
-          <p className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-emerald-700">
-            <Check className="h-4 w-4" aria-hidden />
-            Approved — rewards you earn now are withdrawable.
-          </p>
-        ) : status === "applied" ? (
-          <p className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-indigo-700">
-            <Clock className="h-4 w-4" aria-hidden />
-            Application under review — we&apos;ll notify you.
-          </p>
+/**
+ * Everyone who isn't an approved affiliate: what their credits are for, and how to join the affiliate program —
+ * through support, where the owner approves it (owner, 2026-10-30: "they only contact support to join the affiliate AI
+ * earnings where they earn 10% or any amount set by admin").
+ */
+function AffiliateSection({ summary }: { summary: Summary }) {
+  const { affiliate } = summary;
+  return (
+    <section id="withdraw" aria-label="Affiliate program" className={cn(panel, "mt-4 scroll-mt-20 text-[13px] leading-relaxed")}>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-[15px] font-semibold">Affiliate program</h2>
+        {affiliate.status === "pending" ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500/10 px-2.5 py-0.5 text-[11.5px] font-semibold text-indigo-700">
+            <Clock className="h-3 w-3" aria-hidden />
+            Under review
+          </span>
         ) : (
-          <>
-            <button
-              type="button"
-              onClick={() => void apply()}
-              disabled={busy || !q.canApply || q.restricted}
-              className="inline-flex min-h-[2.75rem] w-full items-center justify-center rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500 text-[14px] font-semibold text-white shadow-[0_12px_28px_-16px_rgba(79,70,229,0.9)] transition disabled:cursor-not-allowed disabled:bg-none disabled:bg-slate-900/[0.08] disabled:text-slate-400 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
-            >
-              {busy ? "Sending…" : "Apply for withdrawals"}
-            </button>
-            <p className="mt-1.5 text-[11.5px] text-slate-500">
-              {status === "rejected"
-                ? "Your last application wasn't approved. You can apply again once you meet the requirements."
-                : q.canApply
-                  ? "You meet the requirements. Our team reviews every application."
-                  : "Unlocks when both requirements above are met. Our team then reviews your account."}
-            </p>
-          </>
+          <span className="inline-flex items-center gap-1 rounded-full bg-slate-900/[0.06] px-2.5 py-0.5 text-[11.5px] font-semibold text-slate-500">
+            <Lock className="h-3 w-3" aria-hidden />
+            By approval
+          </span>
         )}
       </div>
-
-      {/* step 3 — withdraw (greyed until approved and above the minimum) */}
-      {w ? <WithdrawForm enabled={canWithdraw} max={Math.min(wallet.withdrawableCredits, w.maxCredits)} min={w.minCredits} creditsPerUsd={w.creditsPerUsd} methods={w.methods} withdrawable={wallet.withdrawableCredits} approved={approved} flatFees={w.flatFees} /> : null}
+      <p className="mt-1.5">Your credits from quests, bonuses and deposits are for Frenz AI tools.</p>
+      <p className="mt-1.5 text-slate-600">
+        Approved affiliates earn {affiliate.ratePercent}% of every deposit made by people who join with their link, and can cash those earnings out.
+      </p>
+      <TapOnceLink
+        href="/support"
+        className="mt-3 inline-flex min-h-[2.75rem] w-full items-center justify-center rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500 text-[14px] font-semibold text-white shadow-[0_12px_28px_-16px_rgba(79,70,229,0.9)] data-[pending]:opacity-80"
+      >
+        Contact support to join
+      </TapOnceLink>
     </section>
   );
 }
@@ -312,28 +266,6 @@ function Figure({ icon, label, value, hint, accent }: { icon: React.ReactNode; l
       </p>
       <p className="mt-1.5 text-[28px] font-bold leading-none tabular-nums tracking-[-0.02em]">{value.toLocaleString("en-US")}</p>
       <p className={cn("mt-1 text-[12px]", accent ? "text-white/85" : "text-slate-500")}>{hint}</p>
-    </div>
-  );
-}
-
-function Progress({ label, value, max, unit, done }: { label: string; value: number; max: number; unit?: string; done: boolean }) {
-  const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 100;
-  const shown = Math.min(value, max);
-  return (
-    <div>
-      <div className="flex items-baseline justify-between text-[13px]">
-        <span className="inline-flex items-center gap-1.5">
-          {done ? <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden /> : null}
-          {label}
-        </span>
-        <span className="font-semibold tabular-nums">
-          {shown} / {max}
-          {unit ? ` ${unit}` : ""}
-        </span>
-      </div>
-      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-900/[0.07]" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={shown}>
-        <div className={cn("h-full rounded-full", done ? "bg-emerald-500" : "bg-gradient-to-r from-blue-600 to-violet-500")} style={{ width: `${done ? 100 : pct}%` }} />
-      </div>
     </div>
   );
 }

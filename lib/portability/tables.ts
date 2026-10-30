@@ -262,6 +262,8 @@ export const OWNER_COLUMN: Record<string, string> = {
   reward_events: "beneficiary_id",
   // 0255: your affiliate status, the commissions you earned, and the one-time rewards update
   affiliate_accounts: "user_id",
+  // 0308: the sounds a member saved
+  sound_saves: "user_id",
   affiliate_commissions: "affiliate_id",
   reward_recompute_log: "user_id",
   withdrawal_requests: "user_id",

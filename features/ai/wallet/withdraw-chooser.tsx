@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Coins, Lock, X } from "lucide-react";
+import { ChevronRight, Coins, Lock, Users, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState } from "react";
@@ -18,12 +18,13 @@ const SubWithdrawSheet = dynamic(() => import("@/features/sub/sub-withdraw").the
  *
  * Two balances can be cashed out, and they are never mixed:
  *   · AI Credits (the withdrawable kind) — through the rewards withdrawal, with
- *     its rate, fee and the reward qualification;
+ *     its rate and fee — for an APPROVED AFFILIATE only (owner, 2026-10-30); anyone
+ *     else is shown how to join the affiliate program through support;
  *   · SUB earnings — money paid by the member's own subscribers, out through
  *     Paystack less the SUB withdrawal fee.
  * Each row says what it holds; the figures come from the server.
  */
-export function WithdrawChooser({ onClose, creditsLabel }: { onClose: () => void; creditsLabel: string | null }) {
+export function WithdrawChooser({ onClose, creditsLabel, affiliate }: { onClose: () => void; creditsLabel: string | null; affiliate: boolean }) {
   const { data, failed } = useSubEarnings();
   const [sub, setSub] = useState(false);
   const e = data?.earnings;
@@ -43,16 +44,29 @@ export function WithdrawChooser({ onClose, creditsLabel }: { onClose: () => void
         <p className="mb-3 text-[13px] text-muted-foreground">Choose what to cash out. Each balance has its own fee and rules.</p>
         <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/70">
           <li>
+            {affiliate ? (
             <Link href="/rewards#withdraw" prefetch={false} onClick={() => haptic("selection")} className="flex min-h-[64px] items-center gap-3 px-3.5 py-3 transition active:bg-black/[0.04]">
               <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/12 text-emerald-700 dark:text-emerald-400">
                 <Coins className="h-5 w-5" />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-[14.5px] font-semibold">AI Credits</span>
-                <span className="block text-[12.5px] text-muted-foreground">{creditsLabel ? `${creditsLabel} withdrawable` : "Withdrawable credits"} · rewards approval, rate and fee apply · history</span>
+                <span className="block text-[12.5px] text-muted-foreground">{creditsLabel ? `${creditsLabel} withdrawable` : "Withdrawable credits"} · affiliate rate and fee apply · history</span>
               </span>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
             </Link>
+            ) : (
+              <Link href="/support" prefetch={false} onClick={() => haptic("selection")} className="flex min-h-[64px] items-center gap-3 px-3.5 py-3 transition active:bg-black/[0.04]">
+                <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/12 text-emerald-700 dark:text-emerald-400">
+                  <Users className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[14.5px] font-semibold">AI affiliate earnings</span>
+                  <span className="block text-[12.5px] text-muted-foreground">Your AI credits are for Frenz AI tools. Approved affiliates earn on every deposit their link brings and can cash out — contact support to join.</span>
+                </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              </Link>
+            )}
           </li>
           <li>
             {hasSub ? (

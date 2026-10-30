@@ -91,7 +91,6 @@ const LEDGER_COPY: Record<LedgerKind, { label: string; Icon: LucideIcon; tone: "
 };
 
 // 2026-10-07 (owner): the subscription celebration + optional survey — its chunk loads only when there is a plan to celebrate
-const WithdrawEligibilityNote = dynamic(() => import("@/features/ai/wallet/withdraw-eligibility-note").then((m) => m.WithdrawEligibilityNote), { ssr: false });
 const WithdrawChooser = dynamic(() => import("@/features/ai/wallet/withdraw-chooser").then((m) => m.WithdrawChooser), { ssr: false });
 const PlanCelebration = dynamic(() => import("@/features/ai/credits/plan-celebration").then((m) => m.PlanCelebration), { ssr: false });
 
@@ -341,10 +340,11 @@ export function FrenzAIUsagePage({
                   {hidden ? <EyeOff className="h-5 w-5" aria-hidden /> : <Eye className="h-5 w-5" aria-hidden />}
                 </button>
               </div>
-              {/* 0199 (owner, 2026-10-08): the two kinds apart — the total above is what every tool spends from */}
-              {typeof balance.withdrawableCents === "number" ? (
+              {/* 0199 (owner, 2026-10-08): the two kinds apart — the total above is what every tool spends from. 2026-10-30 (owner:
+                  "remove the AI token, so only AI credit is there"): the split shows for an approved AFFILIATE only — the one member
+                  who can cash out; for everyone else the total above is simply their AI credits */}
+              {balance.affiliate && typeof balance.withdrawableCents === "number" ? (
                 <dl aria-label="Your credits by kind" className="relative mt-4 grid grid-cols-2 gap-2">
-                  {/* 2026-10-09 (owner): non-withdrawable = Tokens, withdrawable = Credits — same value, own name and symbol */}
                   <KindFigure kind="usable" hint="For Frenz AI tools" value={hidden ? HIDDEN_AMOUNT : formatKind(Math.max(0, balance.balanceCents - balance.withdrawableCents), "usable")} />
                   <KindFigure
                     kind="withdrawable"
@@ -378,7 +378,7 @@ export function FrenzAIUsagePage({
                   <ArrowDownLeft className="h-4 w-4" aria-hidden />
                   Withdraw
                 </button>
-                {withdrawOpen ? <WithdrawChooser onClose={() => setWithdrawOpen(false)} creditsLabel={typeof balance.withdrawableCents === "number" && !hidden ? formatKind(balance.withdrawableCents, "withdrawable") : null} /> : null}
+                {withdrawOpen ? <WithdrawChooser onClose={() => setWithdrawOpen(false)} affiliate={!!balance.affiliate} creditsLabel={typeof balance.withdrawableCents === "number" && !hidden ? formatKind(balance.withdrawableCents, "withdrawable") : null} /> : null}
               </div>
               {balance.offer.packs.length > 0 ? (
                 <div className="relative mt-3 grid grid-cols-4 gap-1.5" aria-label="Quick credit packs">
@@ -396,8 +396,8 @@ export function FrenzAIUsagePage({
               ) : null}
             </section>
 
-            {/* 2026-10-14 (owner): not qualified for withdrawals yet -> what credits are for until then; the design's white card with the real progress */}
-            <WithdrawEligibilityNote uid={uid} />
+            {/* 2026-10-14 the qualification progress card stood here — removed 2026-10-30 (owner): cashing out AI credits is for
+                approved affiliates, through support; nobody works towards a qualification any more */}
 
             {/* ── 0167: the AI plan and its allowance — or the door to one ─────── */}
             {/* design/Credits.dc.html: AI plans and Rewards & referrals share ONE bordered card, a hairline between them */}
@@ -422,7 +422,7 @@ export function FrenzAIUsagePage({
             </div>
 
             {/* 0193 (owner 2026-10-07): send credits to a wallet number, and the transfer history */}
-            <TransferPanel className="mt-4" rules={balance?.offer?.transfers ?? null} balance={balance?.balanceCents ?? null} withdrawable={balance?.withdrawableCents ?? null} deposited={balance?.depositedCents ?? null} onChanged={() => void load()} />
+            <TransferPanel className="mt-4" affiliate={!!balance?.affiliate} rules={balance?.offer?.transfers ?? null} balance={balance?.balanceCents ?? null} withdrawable={balance?.withdrawableCents ?? null} deposited={balance?.depositedCents ?? null} onChanged={() => void load()} />
 
             {/* ── three figures, from the statement itself ─────────────────── */}
             {figures ? (
@@ -564,7 +564,7 @@ function UsageSkeleton() {
   );
 }
 
-/** One kind inside the hero (0199) — its name and symbol (Tokens / Credits), the figure, what it is for. */
+/** One kind inside the hero (0199) — its name and symbol (AI credits / Withdrawable — an affiliate only), the figure, what it is for. */
 function KindFigure({ kind, hint, value }: { kind: WalletKind; hint: string; value: string }) {
   return (
     <div className="min-w-0 rounded-2xl bg-white/12 px-3 py-2.5 ring-1 ring-inset ring-white/20">

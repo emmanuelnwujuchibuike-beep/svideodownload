@@ -32,15 +32,16 @@ describe("the kind travels with the credits", () => {
     expect(src("app/api/ai/wallet/transfer/route.ts")).toContain('kind: parsed.data.kind ?? parsed.data.creditClass ?? "usable",');
   });
 
-  it("the sender chooses between Tokens and Credits", () => {
+  it("the sender chooses the kind, named AI credits and Withdrawable / Deposit credits (2026-10-30)", () => {
     const p = src("features/ai/wallet/transfer-panel.tsx");
     expect(p).toContain("credits: n, kind, idempotencyKey: key.current");
-    expect(p).toContain("usable: KIND_NAME.usable.title, withdrawable: KIND_NAME.withdrawable.title");
+    expect(p).toContain("{kindTitle(k, affiliate)}");
   });
 
-  it("the split shows on the credits page and the rewards dashboard; the download/AI cards keep the total", () => {
+  it("the split shows for an approved affiliate only (credits page and rewards); the download/AI cards keep the total", () => {
+    expect(src("features/ai/frenz-ai-usage-page.tsx")).toContain("{balance.affiliate && typeof balance.withdrawableCents === \"number\" ? (");
     expect(src("features/ai/frenz-ai-usage-page.tsx")).toContain('<KindFigure kind="usable"');
-    expect(src("features/rewards/rewards-page.tsx")).toContain('label="Tokens"');
+    expect(src("features/rewards/rewards-page.tsx")).toContain('label="Withdrawable"');
     expect(src("features/ai/design/ai-credit-strip.tsx")).not.toMatch(/withdrawable/i);
   });
 

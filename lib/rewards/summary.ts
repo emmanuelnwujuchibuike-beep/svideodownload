@@ -2,6 +2,7 @@ import "server-only";
 
 import { publicRewardsConfig, type RewardsConfig } from "@/lib/rewards/config";
 import { loadActiveDays } from "@/lib/rewards/active-days";
+import { getAffiliateState } from "@/lib/rewards/affiliate-status";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -12,7 +13,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  */
 export async function loadRewardsSummary(userId: string, config: RewardsConfig) {
   const db = createAdminClient();
-  const [wallet, profile, activeDays, links, referred, rewards, withdrawals] = await Promise.all([
+  const [wallet, profile, activeDays, links, referred, rewards, withdrawals, affiliate] = await Promise.all([
     db.from("ai_product_balances").select("balance_cents, withdrawable_cents, currency").eq("user_id", userId).eq("product", "character_replace").maybeSingle(),
     // 0189: the earned totals are running counters on the profile row, not a scan of reward_events
     db.from("reward_profiles").select("qualified_at, qualifying_engagements, restricted, earned_usable, earned_withdrawable, qualification_status, qualification_applied_at").eq("user_id", userId).maybeSingle(),
@@ -21,6 +22,8 @@ export async function loadRewardsSummary(userId: string, config: RewardsConfig) 
     db.from("referral_attributions").select("referred_user_id", { count: "exact", head: false }).eq("referrer_id", userId).eq("status", "active").limit(1),
     db.from("reward_events").select("id, event_type, role, amount, credit_class, created_at").eq("beneficiary_id", userId).order("created_at", { ascending: false }).limit(10),
     db.from("withdrawal_requests").select("id, credits, amount_usd_cents, status, payout_method, created_at, completed_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(5),
+    // owner, 2026-10-30: cashing out AI credits is for approved affiliates only (lib/rewards/affiliate-status.ts)
+    getAffiliateState(userId),
   ]);
   const w = (wallet.data ?? null) as { balance_cents: number; withdrawable_cents: number; currency: string } | null;
   const p = profile.error ? await legacyProfile(userId) : ((profile.data ?? null) as ProfileRow | null);
@@ -49,6 +52,7 @@ export async function loadRewardsSummary(userId: string, config: RewardsConfig) 
     referrals: { links: linkRows.length, clicks: linkRows.reduce((a, r) => a + r.clicks, 0), signups: linkRows.reduce((a, r) => a + r.signups, 0), referredMembers: referred.count ?? 0 },
     recentRewards: (rewards.data ?? []) as { id: string; event_type: string; role: string; amount: number; credit_class: string; created_at: string }[],
     withdrawals: (withdrawals.data ?? []) as { id: string; credits: number; amount_usd_cents: number; status: string; payout_method: string; created_at: string; completed_at: string | null }[],
+    affiliate: { approved: affiliate.approved, status: affiliate.status, ratePercent: (affiliate.rateBp ?? config.affiliate.rateBp) / 100 },
     rules: publicRewardsConfig(config),
   };
 }

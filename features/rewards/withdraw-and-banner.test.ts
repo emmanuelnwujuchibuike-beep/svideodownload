@@ -43,7 +43,9 @@ describe("the referral banner after a download", () => {
     expect(live).not.toMatch(/earn \d+ credit/);
     expect(live).toContain("Earn credits with Frenzsave");
     expect(live).toContain("{referralSentence(rules, n)}");
-    expect(live).toContain("withdraw once you have been active on");
+    // owner, 2026-10-30: credits are for Frenz AI; cashing out is for approved affiliates (no qualification promise)
+    expect(live).toContain("Approved affiliates can — contact support to join.");
+    expect(live).not.toContain("withdraw once you have been active on");
     // owner, 2026-10-16: "it should be skipable instantly" — no countdown, no locked Skip, Escape works at once
     expect(live).not.toMatch(/SKIP_AFTER_S|Skip in|setLeft|disabled=\{!canSkip\}/);
     expect(live).toContain('onClick={onClose}');
@@ -89,10 +91,12 @@ describe("🔴 withdrawal qualification is applied for and granted by an admin (
 
 describe("the withdrawal section is always there, greyed until each step is met", () => {
   const page = code("features/rewards/rewards-page.tsx");
-  it("locked until approved and above the minimum", () => {
-    expect(page).toContain("const canWithdraw = approved && !q.restricted && !!w && wallet.withdrawableCredits >= w.minCredits;");
+  it("locked below the minimum; only an affiliate sees it, and nobody applies from the app (owner, 2026-10-30)", () => {
+    expect(page).toContain("const canWithdraw = !q.restricted && !!w && wallet.withdrawableCredits >= w.minCredits;");
     expect(page).toContain("<fieldset disabled={!enabled}");
-    expect(page).toContain("disabled={busy || !q.canApply || q.restricted}");
+    expect(page).not.toContain('fetch("/api/rewards/qualification"');
+    // the application route itself is closed — teeth: it no longer calls the application logic
+    expect(code("app/api/rewards/qualification/route.ts")).not.toMatch(/applyForQualification\(/);
   });
   it("sends the payout keys the server validates", () => {
     expect(page).toContain('["accountName", "Account name"]');

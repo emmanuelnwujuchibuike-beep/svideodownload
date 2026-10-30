@@ -371,6 +371,8 @@ export interface CharacterReplaceBalance {
   withdrawableCents?: number;
   /** 0202: the deposited part of withdrawableCents. */
   depositedCents?: number;
+  /** owner, 2026-10-30: an approved affiliate — the only member who sees a withdrawable part and can cash out credits. */
+  affiliate?: boolean;
   unit: "CREDIT";
   /** The list-price currency packs are priced in (USD). */
   currency: string;

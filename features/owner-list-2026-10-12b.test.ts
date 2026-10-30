@@ -119,7 +119,8 @@ describe("SUB tiles load a small preview, not the original", () => {
   });
   it("cover first: a tile shows the cover or preview and never loads the original media", () => {
     const g = code("features/sub/sub-gallery.tsx");
-    expect(g).toContain("p.thumbUrl ? (");
+    // 2026-10-30: a tile whose private link failed twice shows its plain frame, never the broken-image icon
+    expect(g).toContain("p.thumbUrl && !deadThumbs.has(p.id) ? (");
     expect(g).not.toContain("src={p.open.media[0].url}");
     expect(g).not.toContain("p.open.media[0].url}#t=0.1");
     // the first post's first photo is pre-loaded only once the browser is idle

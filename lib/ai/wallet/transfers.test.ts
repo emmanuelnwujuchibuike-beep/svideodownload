@@ -121,10 +121,11 @@ describe("🔴 0199 — the kind sent is the kind received", () => {
   });
   it("the credits page shows the two kinds apart; the AI and download strip keeps the total", () => {
     const u = code("features/ai/frenz-ai-usage-page.tsx");
-    // 2026-10-09 (owner): named Tokens (non-withdrawable) and Credits (withdrawable) on the dashboard
+    // 2026-10-30 (owner): "remove the AI token" — AI credits, and Withdrawable for an approved affiliate only
     expect(u).toContain('<KindFigure kind="usable"');
     expect(u).toMatch(/<KindFigure\s+kind="withdrawable"/);
-    expect(code("features/ai/wallet/wallet-kinds.tsx")).toContain('usable: { one: "token", many: "tokens", title: "Tokens" },');
+    expect(code("features/ai/wallet/wallet-kinds.tsx")).toContain('usable: { one: "credit", many: "credits", title: "AI credits" },');
+    expect(code("features/ai/wallet/wallet-kinds.tsx")).not.toMatch(/title: "Tokens"/);
     expect(code("app/api/ai/character-replace/balance/route.ts")).toContain("withdrawableCents: wallet.withdrawable,");
     expect(code("features/ai/design/ai-credit-strip.tsx")).not.toContain("withdrawable");
   });

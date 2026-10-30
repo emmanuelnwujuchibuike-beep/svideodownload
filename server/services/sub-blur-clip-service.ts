@@ -19,6 +19,17 @@ const MAX_STILLS_PER_RUN = 20;
 const RETRY_AFTER_MS = 6 * 60 * 60 * 1000;
 
 let running = false;
+/** The last run's outcome on this worker (for the admin check) — null until one has run. */
+let lastRun: { at: string; result: Awaited<ReturnType<typeof runSubBlurClips>> } | null = null;
+
+/** What this worker has for the job — booleans only — and how its last run went (the admin check, 2026-10-30). */
+export async function blurClipReadiness(): Promise<{ storage: boolean; privateBucket: boolean; ffmpeg: boolean; running: boolean; lastRun: typeof lastRun }> {
+  const ffmpeg = await run(FFMPEG, ["-hide_banner", "-version"], 10_000).then(
+    () => true,
+    () => false,
+  );
+  return { storage: hasR2, privateBucket: hasPrivateR2, ffmpeg, running, lastRun };
+}
 /** item (`post:idx`) or post id → when it last failed (or, for a still, was last tried). Pruned on every run. */
 const failedAt = new Map<string, number>();
 
@@ -41,7 +52,10 @@ export function pruneFailedAt(map: Map<string, number>, now: number, windowMs: n
  */
 export async function runSubBlurClips(): Promise<{ clips: number; stillsTried: number; failed: number; alreadyFilled: number; skipped?: string }> {
   if (running) return { clips: 0, stillsTried: 0, failed: 0, alreadyFilled: 0, skipped: "already running" };
-  if (!hasR2 || !hasPrivateR2) return { clips: 0, stillsTried: 0, failed: 0, alreadyFilled: 0, skipped: "storage not configured" };
+  if (!hasR2 || !hasPrivateR2) {
+    lastRun = { at: new Date().toISOString(), result: { clips: 0, stillsTried: 0, failed: 0, alreadyFilled: 0, skipped: "storage not configured" } };
+    return lastRun.result;
+  }
   running = true;
   let clips = 0;
   let stillsTried = 0;
@@ -105,7 +119,9 @@ export async function runSubBlurClips(): Promise<{ clips: number; stillsTried: n
   } finally {
     running = false;
   }
-  return { clips, stillsTried, failed, alreadyFilled };
+  const result = { clips, stillsTried, failed, alreadyFilled };
+  lastRun = { at: new Date().toISOString(), result };
+  return result;
 }
 
 /** Runs a binary with a hard timeout; rejects on a non-zero exit. Output is discarded (`-loglevel error`). */

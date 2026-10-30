@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { WORKER_SECRET } from "@/lib/worker";
-import { runSubBlurClips } from "@/server/services/sub-blur-clip-service";
+import { blurClipReadiness, runSubBlurClips } from "@/server/services/sub-blur-clip-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +24,16 @@ export const maxDuration = 300;
  * fly.toml's deploy steps set it on the worker). Nothing is lost while it refuses: the creator's browser still makes
  * clips on publish and on visits (features/sub/blur-clip-backfill.ts).
  */
+/**
+ * GET — the worker's own readiness for this job, for the admin check (app/api/admin/sub/blur-clips): storage, the private
+ * bucket and ffmpeg, as booleans only (never a key or a bucket name). Same secret as the job.
+ */
+export async function GET(request: Request) {
+  if (!WORKER_SECRET) return NextResponse.json({ ok: false, error: "Worker secret not configured" }, { status: 503 });
+  if (request.headers.get("x-worker-secret") !== WORKER_SECRET) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  return NextResponse.json({ ok: true, ...(await blurClipReadiness()) }, { headers: { "cache-control": "no-store" } });
+}
+
 export async function POST(request: Request) {
   if (!WORKER_SECRET) {
     console.error("[sub/blur-clips] WORKER_SECRET is not set on this worker — refusing (set it with `fly secrets set WORKER_SECRET=…`).");

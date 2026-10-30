@@ -16,6 +16,17 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * whose audio can't be a sound (saved from another platform, private, before 0308) goes to its creator's profile, as
  * the ring always did.
  */
+/**
+ * POST — the same answer as JSON ({ soundId } or null), for the reel viewer's warm-up (owner, 2026-10-30: "the sound
+ * button is supposed to warm and prefetch so it opens instantly"): asked once a reel has been the ACTIVE one for a
+ * moment — never for reels scrolled past — so the ring can prefetch the sound page before it is tapped.
+ */
+export async function POST(_request: Request, { params }: { params: Promise<{ postId: string }> }) {
+  const { postId } = await params;
+  if (!UUID.test(postId)) return NextResponse.json({ soundId: null }, { status: 400 });
+  return NextResponse.json({ soundId: await ensureOriginalSound(postId) }, { headers: { "cache-control": "no-store" } });
+}
+
 export async function GET(request: Request, { params }: { params: Promise<{ postId: string }> }) {
   const { postId } = await params;
   const home = new URL("/sounds", request.url);

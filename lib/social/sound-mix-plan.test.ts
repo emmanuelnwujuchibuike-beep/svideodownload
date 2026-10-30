@@ -93,10 +93,16 @@ describe("the Sounds library's vocabulary (design/frenz-sounds.html)", () => {
     expect(route).toMatch(/personal \? "private, no-store"/);
   });
 
-  it("the reel's sound ring never prefetches the route that makes a sound (a prefetch would make one per reel scrolled past)", () => {
-    const src = readFileSync("features/feed/reel-viewer.tsx", "utf8");
-    const ring = src.slice(src.indexOf("/api/sounds/from-post/") - 200, src.indexOf("/api/sounds/from-post/") + 50);
-    expect(ring).toMatch(/<a\s/);
-    expect(ring).not.toMatch(/<Link\s/);
+  it("the sound ring opens at once: a prefetching Link to the sound page, warmed only for the ACTIVE reel (owner, 2026-10-30)", () => {
+    const src = readFileSync("features/feed/sound-ring-link.tsx", "utf8");
+    // the sound page is prefetched once its sound is known
+    expect(src).toMatch(/<Link href=\{href\} prefetch/);
+    // teeth: the route that MAKES a sound is never a prefetching Link (a prefetch would make one per reel scrolled past)
+    const fallback = src.slice(src.indexOf("/api/sounds/from-post/${postId}`} aria-label") - 40);
+    expect(fallback).toMatch(/^[\s\S]*<a href=/);
+    expect(src).not.toMatch(/<Link href=\{`\/api\/sounds\/from-post/);
+    // warmed only while the reel is the active one, after a moment
+    expect(src).toContain("if (soundId || warmed || !active) return;");
+    expect(readFileSync("features/feed/reel-viewer.tsx", "utf8")).toContain("<SoundRingLink postId={item.id} soundId={item.sound?.id ?? null} active={isActive}");
   });
 });

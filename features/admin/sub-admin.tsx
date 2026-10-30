@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { BlurClipsCheck } from "@/features/admin/blur-clips-check";
 import { SubAdminReviews } from "@/features/admin/sub-admin-reviews";
 import { usd } from "@/lib/creator/membership/engine";
 import type { LandingSettings } from "@/lib/landing/settings";
@@ -191,6 +192,7 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
       {reauthPrompt}
       <h2 className="font-semibold">Private posts — paid subscriptions</h2>
       <SubAdminReviews />
+      <BlurClipsCheck />
       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Real money through Flutterwave or Paystack, separate from AI credits. The subscriber pays the creator&apos;s price plus the purchase fee; a private post withdrawal pays out less the withdrawal fee.</p>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2">

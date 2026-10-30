@@ -68,6 +68,7 @@ import { glass, layer, scrimForLuminance } from "@/features/reels/viewer/design"
 import { GlassButton } from "@/features/reels/viewer/glass-button";
 import { ReelProgress } from "@/features/reels/viewer/reel-progress";
 import { CommentGlyph, HeartGlyph, RailAct, SaveGlyph, ShareGlyph, SoundDisc } from "@/features/reels/viewer/design-rail";
+import { SoundRingLink } from "@/features/feed/sound-ring-link";
 import { LivingPlayback } from "@/features/reels/viewer/living-playback";
 import { clampFeedRatio, isReelsShaped } from "@/lib/media/aspect";
 import {
@@ -2494,18 +2495,13 @@ function ReelCard({
             <ShareGlyph />
           </RailAct>
         </div>
-        {/* the sound page: the one the post carries, else the reel's own original sound (0308 — made on the first tap
-            for an older reel; a post saved from another platform still lands on its creator). The ONLY sound control —
+        {/* the sound page: the one the post carries, else the reel's own original sound (0308). The ONLY sound control —
             the caption's "Original sound · @handle" chip was removed (owner, 2026-10-30: "it clustered the page, the
-            spinning music ring is enough"). A plain <a>, never a prefetching <Link>: a prefetch would make a sound for
-            every reel scrolled past. */}
-        <a
-          href={item.sound ? `/sound/${item.sound.id}` : `/api/sounds/from-post/${item.id}`}
-          aria-label={item.sound ? `Sound: ${item.sound.title}` : `Original sound by @${item.publisher.handle}`}
-          className="block"
-        >
+            spinning music ring is enough"). Warmed and prefetched so it opens at once (sound-ring-link.tsx) — a sound is
+            made only for a reel that was the active one, never for reels scrolled past. */}
+        <SoundRingLink postId={item.id} soundId={item.sound?.id ?? null} active={isActive} label={item.sound ? `Sound: ${item.sound.title}` : `Original sound by @${item.publisher.handle}`}>
           <SoundDisc playing={isActive && !paused} thumbnailUrl={item.publisher.avatarUrl ?? null} />
-        </a>
+        </SoundRingLink>
       </div>
 
       {/*

@@ -1,6 +1,16 @@
 import { z } from "zod";
 
+import { clampTitle, TITLE_MAX_CHARS } from "@/lib/downloads/title";
 import { SOURCE_URL_EMPTY, SOURCE_URL_MAX, SOURCE_URL_TOO_LONG, sourceUrlProblem } from "@/lib/source-url";
+
+/**
+ * A text field that is SHORTENED to `max` characters rather than refused (lib/downloads/title.ts): a post's caption is
+ * data we pass along, never something the member typed against a limit. A runaway input is cut before any work is done
+ * on it. `inner` adds the field's own rules (e.g. min(1)) to the shortened value.
+ */
+export function clampedString(max: number, inner: z.ZodString = z.string()) {
+  return z.preprocess((v) => (typeof v === "string" ? clampTitle(v.slice(0, 20_000), max) : v), inner);
+}
 
 /**
  * URL validation shared by the metadata and download endpoints. The rules live in lib/source-url.ts
@@ -39,8 +49,11 @@ export const downloadRequestSchema = z.object({
     .max(64)
     .regex(/^[a-zA-Z0-9_+\-./]+$/, "Invalid format selector."),
   kind: z.enum(["video", "audio", "image"]).default("video"),
-  /** Optional title from the preview, used only for the download filename. */
-  title: z.string().trim().max(300).optional(),
+  /**
+   * Optional title from the preview, used only for the download filename. A long caption is SHORTENED, never a reason
+   * to refuse the download (lib/downloads/title.ts — it used to fail every post captioned over 300 characters).
+   */
+  title: clampedString(TITLE_MAX_CHARS).optional(),
 });
 
 export type MetadataRequest = z.infer<typeof metadataRequestSchema>;

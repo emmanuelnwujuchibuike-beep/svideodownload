@@ -12,6 +12,7 @@ import { toast } from "@/features/ui/toast";
 import { isIosDevice, saveBlob, saveFilesToDevice, saveToDevice } from "@/lib/client-download";
 import { DOWNLOAD_COMPLETED_EVENT, DOWNLOAD_PREPARING_EVENT } from "@/lib/downloads/completion-event";
 import { DOWNLOAD_502_MESSAGE, DOWNLOAD_FAILED_MESSAGE, downloadFailureMessage } from "@/lib/downloads/failure-copy";
+import { clampTitle } from "@/lib/downloads/title";
 import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
 import type { MediaKind, PlatformId } from "@/types";
 
@@ -364,7 +365,8 @@ export function getServerSnapshot(): DownloadTask[] {
 }
 
 function buildUrl(t: Pick<DownloadTask, "url" | "formatId" | "kind" | "title" | "id" | "batchId">): string {
-  const sp = new URLSearchParams({ url: t.url, formatId: t.formatId, kind: t.kind, title: t.title });
+  // the caption is only the file name — shortened before it rides in the URL (lib/downloads/title.ts, 2026-10-30)
+  const sp = new URLSearchParams({ url: t.url, formatId: t.formatId, kind: t.kind, title: clampTitle(t.title) });
   /*
     `b` — the BATCH this download belongs to, when it belongs to one.
 

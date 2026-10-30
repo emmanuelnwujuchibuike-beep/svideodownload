@@ -3,9 +3,11 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { TITLE_MAX_CHARS } from "@/lib/downloads/title";
 import { getHomeFeed, type HomeFeedSort } from "@/lib/social/home-feed";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { clampedString } from "@/lib/validation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -90,7 +92,8 @@ export async function GET(request: Request) {
 const schema = z.object({
   mediaUrl: z.string().url().max(2048),
   mediaKind: z.enum(["video", "audio", "image"]).default("video"),
-  title: z.string().trim().min(1).max(300),
+  // a downloaded post's full caption: shortened to 300, never a reason to refuse publishing (lib/downloads/title.ts)
+  title: clampedString(TITLE_MAX_CHARS, z.string().min(1)),
   thumbnailUrl: z.string().url().max(2048).nullable().optional(),
   sourceUrl: z.string().url().max(2048).nullable().optional(),
 });

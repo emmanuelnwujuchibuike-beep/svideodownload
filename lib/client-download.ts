@@ -1,4 +1,5 @@
 import { mimeForExtension, safeDownloadFilename } from "@/lib/download-filename";
+import { clampTitle } from "@/lib/downloads/title";
 import { isIos } from "@/lib/pwa/platform";
 import type { MediaKind } from "@/types";
 
@@ -16,7 +17,8 @@ export function downloadUrl(payload: DownloadPayload): string {
     formatId: payload.formatId,
     kind: payload.kind,
   });
-  if (payload.title) params.set("title", payload.title);
+  // only the file name — shortened, so a long caption can never make the request refused (lib/downloads/title.ts)
+  if (payload.title) params.set("title", clampTitle(payload.title));
   return `/api/download?${params.toString()}`;
 }
 

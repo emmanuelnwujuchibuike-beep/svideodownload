@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { TITLE_MAX_CHARS } from "@/lib/downloads/title";
+import { clampedString } from "@/lib/validation";
 import { storePostMedia } from "@/server/services/store-media-service";
 import { WORKER_SECRET } from "@/lib/worker";
 
@@ -15,7 +17,8 @@ const schema = z.object({
   url: z.string().url().max(2048),
   formatId: z.string().min(1).max(64),
   kind: z.enum(["video", "audio", "image"]),
-  title: z.string().max(300).default("video"),
+  // the post's title — a long caption is shortened, never a reason to refuse storing the media (lib/downloads/title.ts)
+  title: clampedString(TITLE_MAX_CHARS).default("video"),
 });
 
 /**

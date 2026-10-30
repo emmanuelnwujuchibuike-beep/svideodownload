@@ -18,6 +18,7 @@ import { RecommendedToolsClient } from "@/components/monetization/recommended-to
 import { useGatewayMemory } from "@/features/download-hub/use-gateway-memory";
 import { MultiLinkButton } from "@/features/downloader/multi-link/multi-link-button";
 import type { MultiLinkPublicConfig } from "@/lib/downloads/multi-link-config";
+import { PASTE_LINK_PLACEHOLDER } from "@/lib/downloads/paste-placeholder";
 import {
   getServerSnapshot as getServerDownloads,
   getSnapshot as getDownloads,
@@ -33,10 +34,10 @@ import { PreparingAd } from "@/features/monetization/preparing-ad";
 import { ResultOffer } from "@/features/monetization/result-offer";
 import { useUser } from "@/features/auth/use-user";
 import { useEntitlements } from "@/features/auth/use-entitlements";
-import { PLATFORMS, detectPlatform } from "@/lib/platforms";
+import { detectPlatform } from "@/lib/platforms";
 import { useHasDownloadActivity, warmFloatingProgress } from "@/features/downloads/use-download-activity";
 import { checkSourceUrl } from "@/lib/source-url";
-import type { MediaKind, PlatformId } from "@/types";
+import type { MediaKind } from "@/types";
 
 import type { DownloadOptions } from "./preview-card";
 import { useDownloader } from "./use-downloader";
@@ -88,27 +89,15 @@ const QuotaGate = dynamic(() => import("@/features/downloads/quota-gate").then((
 // a download is actually reviewed.
 const ReviewPlayerMount = dynamic(() => import("@/features/downloads/review-player-mount").then((m) => m.ReviewPlayerMount), { ssr: false });
 
-// Cycled through in the input placeholder for a lively, on-brand prompt.
-const PLACEHOLDER_PLATFORMS = [
-  "TikTok",
-  "Instagram",
-  "X (Twitter)",
-  "Snapchat",
-  "LinkedIn",
-  "Facebook",
-  "Pinterest",
-];
 
 export function Downloader({
   initialUrl,
-  platformId,
   hideDisclaimer,
   resultOnly,
   heroHandlesFetching,
   multiLink,
 }: {
   initialUrl?: string;
-  platformId?: PlatformId;
   hideDisclaimer?: boolean;
   /**
    * The CALLER renders the fetching state (the landing hero puts it in its own
@@ -330,37 +319,6 @@ export function Downloader({
   */
   useScrollToResult(previewRef, metadata?.id);
 
-  /*
-    Rotate the placeholder platform every couple of seconds — but ONLY where the
-    page is not about a specific platform.
-
-    On the ~148 generated SEO pages this rotation was actively wrong: someone who
-    searched "youtube shorts downloader" and landed on that page was told to
-    "Paste your TikTok link…", because the cycle ran regardless of context. The
-    rotation is a homepage idea (we support many platforms); on a platform page
-    the answer is already known, so the interval never starts.
-  */
-  /*
-    🔴 PART 10 (2026-10-09): the rotation used to be React STATE — every 2.2 s,
-    for as long as the page was open, it re-rendered this whole component (and
-    everything under it) to change one word in a placeholder, on the two
-    busiest pages in the app, hidden tab or not. It now writes the attribute on
-    the input directly: no render at all, and no tick while the tab is hidden,
-    the field is focused or it already holds a link.
-  */
-  useEffect(() => {
-    if (platformId) return;
-    let i = 0;
-    const id = setInterval(() => {
-      const el = urlInputRef.current;
-      if (!el || document.hidden || el.value || document.activeElement === el) return;
-      i = (i + 1) % PLACEHOLDER_PLATFORMS.length;
-      el.placeholder = `Paste your ${PLACEHOLDER_PLATFORMS[i]} link…`;
-    }, 2200);
-    return () => clearInterval(id);
-  }, [platformId]);
-
-  const placeholderPlatform = platformId ? PLATFORMS[platformId].name : PLACEHOLDER_PLATFORMS[0];
 
   const handlePaste = async () => {
     try {
@@ -432,7 +390,8 @@ export function Downloader({
               autoComplete="off"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder={`Paste your ${placeholderPlatform} link…`}
+              // the landing's own placeholder (owner, 2026-10-29: "the card and placeholder should be shared with the landing")
+              placeholder={PASTE_LINK_PLACEHOLDER}
               aria-label="Video URL"
               className={`h-16 w-full rounded-2xl bg-background/60 px-5 ${url ? "pr-36" : "pr-28"} text-base outline-none ring-1 ring-inset ring-border/80 transition-all focus:bg-background/90 focus:ring-2 focus:ring-primary sm:text-lg`}
             />
@@ -526,7 +485,9 @@ export function Downloader({
         opening under a bare result card would have no field it belongs to.
       */}
       {resultOnly ? null : (
-        <MultiLinkButton config={multiLink} surface="card" />
+        /* the landing's batch card (owner, 2026-10-29): "Batch download · FREE" for a free member — the old card
+           advertised the Pro limit with a PRO badge to everyone */
+        <MultiLinkButton config={multiLink} surface="frenz" className="frenz-ui mt-3" />
       )}
 
       {/*

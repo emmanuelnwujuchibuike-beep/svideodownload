@@ -120,7 +120,8 @@ export default async function BlogPostPage({
           <div className="relative">
             <div className="flex items-center gap-3 text-xs font-medium text-white/80">
               <time dateTime={post.date}>
-                {new Date(post.date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+                {/* in UTC: the ISO date is midnight UTC, so a local-time format printed the day before west of UTC */}
+                {new Date(post.date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })}
               </time>
               <span>·</span>
               <span>{post.readingMinutes} min read</span>

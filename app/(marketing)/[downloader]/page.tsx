@@ -290,13 +290,8 @@ export default async function DownloaderPage({
                 </p>
 
                 <div className="mt-10 w-full max-w-2xl scroll-mt-24" id="download">
-                  {/*
-                    The placeholder used to cycle through all seven platforms every
-                    2.2s, so this page advertised "Paste your TikTok link…" to
-                    someone who searched for a YouTube downloader. Passing the
-                    platform pins it to the one the page is actually about.
-                  */}
-                  <Downloader platformId={page.platformId} multiLink={publicMultiLinkConfig(multiLink)} />
+                  {/* the landing's placeholder and batch card (owner, 2026-10-29 — lib/downloads/paste-placeholder.ts) */}
+                  <Downloader multiLink={publicMultiLinkConfig(multiLink)} />
                 </div>
 
                 <p className={`mt-5 text-sm ${onDark ? "text-white/75" : "text-black/70"}`}>

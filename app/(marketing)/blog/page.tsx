@@ -76,7 +76,7 @@ export default function BlogIndex() {
                 <div className="flex flex-1 flex-col p-5">
                   <div className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
                     <time dateTime={post.date}>
-                      {new Date(post.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      {new Date(post.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}
                     </time>
                     <span>·</span>
                     <span>{post.readingMinutes} min read</span>

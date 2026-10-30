@@ -3,16 +3,10 @@ import {
   BadgeCheck,
   CalendarDays,
   Camera,
-  Eye,
-  Grid3x3,
-  Heart,
   Lock,
   Mail,
   MessageCircle,
   Phone,
-  UserPlus,
-  Users,
-  type LucideIcon,
 } from "lucide-react";
 import type { Metadata } from "next";
 import { cookies, headers } from "next/headers";

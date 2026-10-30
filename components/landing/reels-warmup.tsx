@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
+
 /**
  * Warms the first reels ahead of the tap, so opening /reels (from the bottom nav or
  * the hero phone's reels tile) lands on video, not a spinner (owner: "make the reels
@@ -87,7 +89,11 @@ export function ReelsWarmup({ urls }: { urls: string[] }) {
   const [origins, setOrigins] = useState<string[]>([]);
 
   useEffect(() => {
-    if (urls.length === 0 || !shouldWarm()) return;
+    /*
+      Members only (2026-10-29): /reels is a signed-in page now (lib/auth/app-only-paths.ts), so a guest's tap goes to
+      sign-in — warming clips for it would spend a stranger's data on a video they cannot open.
+    */
+    if (urls.length === 0 || !hasAuthCookie() || !shouldWarm()) return;
     const controller = new AbortController();
     let idleId = 0;
     let timerId = 0;

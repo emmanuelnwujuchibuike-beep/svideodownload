@@ -7,8 +7,7 @@
  *   · the visible byline under the title (components/seo/author-byline.tsx);
  *   · the Article JSON-LD `author` (lib/seo/article-ld.ts).
  *
- * 🔴 The values below are PLACEHOLDERS (2026-10-29). Replace each bracketed value with the real person before the
- * site is deployed or submitted for review — a byline reading "[Author name]" is worse than none.
+ * The author is Michael Phillip (owner, 2026-10-29). Add an avatar file and a profile link below whenever ready.
  *
  *   name    — the real name readers and Google will see.
  *   bio     — one or two sentences: who writes these guides and why they know the subject.
@@ -24,8 +23,10 @@ export interface SiteAuthor {
 }
 
 export const SITE_AUTHOR: SiteAuthor = {
-  name: "[Author name]",
-  bio: "[Short bio — one or two sentences about who writes these guides and why they know the subject.]",
+  // the guide author (owner, 2026-10-29)
+  name: "Michael Phillip",
+  // a role, not invented credentials — replace with a fuller bio whenever you like
+  bio: "Writes Frenzsave's guides to saving, organising and archiving your own videos.",
   avatar: "",
   url: "",
 };

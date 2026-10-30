@@ -125,7 +125,7 @@ export const CLUSTERS: SeoCluster[] = [
         slug: "video-downloader",
         title: "TikTok Video Downloader (Original Quality)",
         keyword: "TikTok video downloader",
-        h1: "TikTok Video Downloader — Save Public Videos in Original Quality",
+        h1: "Save TikTok Videos in Original Quality",
         tagline: "Back up your own TikToks and keep public videos for offline viewing, at the resolution they were uploaded.",
         angle:
           "Our TikTok video downloader saves a public TikTok as an MP4 at its original resolution, or its audio as MP3. Use it to back up videos you posted, keep a clip to watch offline, or archive a post you have permission to keep. There's nothing to install and no account — paste a link and the file saves to your device.",

@@ -8,7 +8,6 @@ import { quoteCheckout } from "@/lib/ai/character-replace/topup-fx";
 import { subscriptionCharge, usd, validatePrice, withdrawalSplit } from "@/lib/creator/membership/engine";
 import { normalizePaymentRouting, type PaymentMarket } from "@/lib/ai/credits/wallet-config";
 import { createFlutterwaveCheckout, flutterwaveFailureIsDefinite, verifyFlutterwaveByReference } from "@/lib/flutterwave/client";
-import { FLUTTERWAVE_CHECKOUT_CURRENCY } from "@/lib/flutterwave/config";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { chargeMatches, type VerifiedCharge } from "@/lib/payments/charge";
 import { usableRails } from "@/lib/payments/rails";

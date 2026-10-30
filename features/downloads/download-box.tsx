@@ -28,6 +28,7 @@ import { detectPlatform, platformLinkPhrase } from "@/lib/platforms";
 import { cn } from "@/lib/utils";
 import { checkSourceUrl } from "@/lib/source-url";
 import type { MediaKind, PlatformId } from "@/types";
+import { PASTE_LINK_PLACEHOLDER } from "@/lib/downloads/paste-placeholder";
 
 /*
   🔴 CODE-SPLIT, ALL OF IT (owner, 2026-08-16: "make the download page…
@@ -387,7 +388,7 @@ export function DownloadBox({
               enterKeyHint="go"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder={picked ? `Paste ${picked}` : "Paste a video or image link"}
+              placeholder={picked ? `Paste ${picked}` : PASTE_LINK_PLACEHOLDER}
               aria-label="Video or image link"
               className="min-w-0 flex-1 bg-transparent text-base text-frenz-ink outline-none text-ellipsis placeholder:text-frenz-muted"
             />
@@ -463,7 +464,7 @@ export function DownloadBox({
                 enterKeyHint="go"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder={picked ? `Paste ${picked}...` : "Paste a video or image link..."}
+                placeholder={picked ? `Paste ${picked}...` : `${PASTE_LINK_PLACEHOLDER}...`}
                 aria-label="Video or image link"
                 className={`h-[3.25rem] w-full rounded-[0.7rem] bg-background px-4 ${url ? "pr-36" : "pr-[6.25rem]"} text-base text-foreground outline-none text-ellipsis placeholder:text-[15px] placeholder:text-slate-400 dark:placeholder:text-white/40`}
               />

@@ -214,7 +214,7 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
         <label className="text-xs text-muted-foreground">Hold before withdrawable (days)<input inputMode="numeric" value={f.holdDays} onChange={(e) => setF({ ...f, holdDays: e.target.value })} className={cn(input, "mt-1 block")} /></label>
         <label className="text-xs text-muted-foreground">Access per payment (days)<input inputMode="numeric" value={f.periodDays} onChange={(e) => setF({ ...f, periodDays: e.target.value })} className={cn(input, "mt-1 block")} /></label>
         {/* one clean path per withdrawal (owner, 2026-10-29): Flutterwave only by default; a backup only if picked */}
-        <label className="text-xs text-muted-foreground">Payout provider (Nigerian banks)
+        <label className="text-xs text-muted-foreground">Payout provider — Exclusive and AI-credit withdrawals (Nigerian banks)
           <select value={f.payoutProvider} onChange={(e) => setF({ ...f, payoutProvider: normalizePayoutRoute(e.target.value) })} className={cn(input, "mt-1 block w-full")}>
             {PAYOUT_ROUTES.map((r) => (
               <option key={r} value={r}>

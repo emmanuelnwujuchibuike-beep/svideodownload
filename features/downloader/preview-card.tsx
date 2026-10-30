@@ -24,7 +24,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { MONETAG_MOMENT_EVENTS } from "@/lib/monetization/monetag-events";
 
 import { BatchAdGate, type BatchAuthorization } from "@/features/downloader/batch-ad-gate";
-import { startDownload as enqueueDownload } from "@/features/downloads/manager";
+import { startDownload as enqueueDownload, warmDownloadPath } from "@/features/downloads/manager";
 import { ResultAd } from "@/features/monetization/result-ad";
 import { ResultProBanner } from "@/features/monetization/result-pro-banner";
 import { RewardConsentSheet } from "@/features/monetization/reward-consent-sheet";
@@ -149,6 +149,9 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
   const openDownloadSpot = useDirectLink("download");
   const isPremiumBatch = !adsReady || !showAds;
   useEffect(() => setSelected(new Set()), [metadata.id]);
+  // the Save tap's code and session read load NOW, while the card is read — not on the tap (owner, 2026-10-30: the Save
+  // button "doesn't respond immediately", free accounts on iPhone; see warmDownloadPath)
+  useEffect(() => void warmDownloadPath(), []);
 
 
   /*

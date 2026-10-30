@@ -848,6 +848,27 @@ export function dismissTask(id: string) {
   emit();
 }
 
+let warming: Promise<void> | null = null;
+
+/**
+ * Loads what a Save tap needs BEFORE the tap: the fetch code and the signed-in session read (owner, 2026-10-30: "the
+ * save button on the result card still doesn't respond immediately when clicked" — free accounts, iPhone Safari).
+ * Measured in WebKit as an iPhone 13 on production: the tap waited for that code to DOWNLOAD before the request could
+ * leave — 0.8 to 2.6 s, longer on a free page that is also loading its ads, while a premium page (no ads) finished it
+ * quickly. Called once a result card is on screen (after first paint, so no cold-entry weight); the tap then sends at
+ * once. Once per page, and silent: a warm-up that fails just leaves the tap to load it, as before.
+ */
+export function warmDownloadPath(): Promise<void> {
+  warming ??= import("@/features/downloads/fetch-download")
+    .then(() => import("@/features/downloads/worker-direct"))
+    .then((m) => m.accessToken())
+    .then(
+      () => undefined,
+      () => undefined,
+    );
+  return warming;
+}
+
 export function startDownload(input: {
   url: string;
   formatId: string;

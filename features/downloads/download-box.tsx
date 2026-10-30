@@ -625,7 +625,10 @@ export function DownloadBox({
       {/* Live progress / completion card (singleton — no-op if the app shell
           already mounted one). Mounted only once this tab has a download: rendering it
           fetches its code, and framer-motion with it, on every visit (2026-10-26). */}
-      {hasDownloadActivity ? <FloatingDownloadProgress /> : null}
+      {/* mounted with the RESULT, not after the first download (owner, 2026-10-30: the Save button "doesn't respond
+          immediately"): its chunk loaded on the tap, so on a phone the card appeared up to a second late. It renders
+          nothing until a download exists, and a result only exists after the visitor fetched — no cold-entry weight. */}
+      {hasDownloadActivity || metadata ? <FloatingDownloadProgress /> : null}
 
       {/* After-download ad — renders nothing until a transfer completes AND the
           download_complete zone is filled. */}

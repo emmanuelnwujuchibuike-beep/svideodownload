@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 
 import { canBecomeOriginalSound, type OriginalSoundSource } from "@/lib/social/original-sound";
-import { LIBRARY_CHIPS, LIBRARY_GENRE_TILES, chipById, isLibraryTab, isPersonalTab } from "@/lib/social/sound-library-shared";
+import { LIBRARY_CHIPS, LIBRARY_GENRE_TILES, chipById, isLibraryTab, isPersonalTab, reelsLabel } from "@/lib/social/sound-library-shared";
 import { buildSoundMixArgs, SOUND_MIX_MAX_SECONDS, soundMixKey } from "@/lib/social/sound-mix-plan";
 import { SOUND_GENRES, SOUND_MOODS } from "@/lib/social/sounds-shared";
 
@@ -104,5 +104,26 @@ describe("the Sounds library's vocabulary (design/frenz-sounds.html)", () => {
     // warmed only while the reel is the active one, after a moment
     expect(src).toContain("if (soundId || warmed || !active) return;");
     expect(readFileSync("features/feed/reel-viewer.tsx", "utf8")).toContain("<SoundRingLink postId={item.id} soundId={item.sound?.id ?? null} active={isActive}");
+  });
+});
+
+describe("the sound pages (owner, 2026-10-30: \"remove the footer from the sound page\" · \"I still see the old sound page\")", () => {
+  const code = (p: string) => readFileSync(p, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  it("neither the sound page nor the Sounds library renders the site footer (teeth: the old page did)", () => {
+    for (const p of ["app/sound/[id]/page.tsx", "app/sounds/page.tsx"]) {
+      expect(code(p), p).not.toMatch(/<SiteFooter\b/);
+      expect(code(p), p).not.toMatch(/import \{ SiteFooter \}/);
+    }
+  });
+
+  it("the sound page is the design's dark card: its actions inside it, the counts said in proper English", () => {
+    const hero = code("features/social/sound-hero.tsx");
+    expect(hero).toContain("bg-zinc-950");
+    expect(hero).toContain("Use this sound");
+    expect(hero).toContain('fetch("/api/sounds/saves", { method: "POST"');
+    expect(hero).toContain("{reelsLabel(usageCount)}");
+    expect(reelsLabel(1)).toBe("1 reel");
+    expect(reelsLabel(2)).toBe("2 reels");
   });
 });

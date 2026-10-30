@@ -61,6 +61,12 @@ async function withVerified(sounds: Sound[]): Promise<LibrarySound[]> {
   }));
 }
 
+/** The sound page's verified tick for its creator. A failed read is "not verified" — never a tick it can't prove. */
+export async function isCreatorVerified(userId: string): Promise<boolean> {
+  const { data, error } = await createAdminClient().from("profiles").select("is_verified").eq("id", userId).maybeSingle();
+  return !error && data?.is_verified === true;
+}
+
 /** The member's saved sound ids, most recently saved first. A database before 0308 answers none. */
 export async function savedSoundIds(viewerId: string, limit = 500): Promise<string[]> {
   const { data, error } = await createAdminClient().from("sound_saves").select("sound_id").eq("user_id", viewerId).order("created_at", { ascending: false }).limit(limit);

@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import nextDynamic from "next/dynamic";
 import { notFound } from "next/navigation";
 
-import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { SoundHero } from "@/features/social/sound-hero";
+import { SoundTopBar } from "@/features/social/sound-top-bar";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { PLATFORMS } from "@/lib/platforms";
+import { isCreatorVerified } from "@/lib/social/sound-library";
 import { getSound, listPostsForSound } from "@/lib/social/sounds";
 import { SITE_URL } from "@/lib/site";
 import { createClient } from "@/lib/supabase/server";
@@ -63,12 +64,14 @@ export default async function SoundPage({ params }: { params: Promise<{ id: stri
   // missing id would produce, never a "this is private" tell.
   if (!sound.isPublic && sound.createdBy !== me) notFound();
 
-  const related = await listPostsForSound(sound.id, 24);
+  const [related, verified] = await Promise.all([listPostsForSound(sound.id, 24), isCreatorVerified(sound.createdBy).catch(() => false)]);
 
   const attribution =
     sound.sourceType === "downloaded" && sound.sourcePlatform
       ? `From ${PLATFORMS[sound.sourcePlatform as keyof typeof PLATFORMS]?.name ?? sound.sourcePlatform}`
       : null;
+  // the card's eyebrow: a downloaded sound is always credited (Feature 15 Part 7); a reel's own audio says so
+  const label = attribution ?? (sound.sourceType === "original" ? "Original audio" : "Sound");
 
   const ld = {
     "@context": "https://schema.org",
@@ -84,41 +87,34 @@ export default async function SoundPage({ params }: { params: Promise<{ id: stri
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(ld) }} />
       <SiteHeader social />
-      <main className="container max-w-2xl pb-24 pt-[calc(var(--frenz-safe-top)+1.25rem)] lg:pt-24">
-        <SoundHero
-          soundId={sound.id}
-          title={sound.title}
-          artistLabel={sound.artistLabel}
-          coverArtUrl={sound.coverArtUrl}
-          audioUrl={sound.audioUrl}
-          waveformPeaks={sound.waveformPeaks}
-          durationSec={sound.durationSec}
-          usageCount={sound.usageCount}
-          playsCount={sound.playsCount}
-          attribution={attribution}
-        />
+      {/* design/frenz-sounds.html (owner, 2026-10-30): the library's dark card for one sound, its section label for the
+          reels, and NO site footer — this is an app screen, the bottom nav owns navigation */}
+      <main className="mx-auto max-w-[480px] pb-[calc(var(--frenz-nav-clearance)+2rem)] pt-[var(--frenz-safe-top)] text-frenz-ink lg:pb-16 lg:pt-16">
+        <SoundTopBar />
+        <div className="px-5">
+          <SoundHero
+            soundId={sound.id}
+            label={label}
+            title={sound.title}
+            artistLabel={sound.artistLabel}
+            verified={verified}
+            coverArtUrl={sound.coverArtUrl}
+            audioUrl={sound.audioUrl}
+            waveformPeaks={sound.waveformPeaks}
+            durationSec={sound.durationSec}
+            usageCount={sound.usageCount}
+            playsCount={sound.playsCount}
+          />
+        </div>
 
-        {/* "Use this sound" — the same reel composer every other creation
-            entry point uses, pre-seeded via the query param (see
-            reel-composer.tsx). Signing in first if needed, same as any other
-            create action. */}
-        <a
-          href={`/create/reel?sound=${sound.id}`}
-          className="mt-4 flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-violet-600/30 transition hover:opacity-95 active:scale-[0.99]"
-        >
-          Use this sound
-        </a>
-
-        {related.length > 0 ? (
-          <section className="mt-10">
-            <h2 className="mb-3 text-lg font-semibold tracking-[-0.02em]">Reels using this sound</h2>
-            <PostGrid posts={related} />
-          </section>
-        ) : (
-          <p className="mt-10 text-center text-sm text-muted-foreground">No reels use this sound yet.</p>
-        )}
+        <div className="flex items-center gap-2.5 px-5 pb-3.5 pt-[34px]">
+          <span className="h-2 w-2 rounded-full bg-frenz-blue" aria-hidden />
+          <h2 className="text-[13px] font-bold uppercase tracking-[0.16em] text-frenz-muted">Reels using this sound</h2>
+        </div>
+        <div className="px-5">
+          {related.length > 0 ? <PostGrid posts={related} /> : <p className="py-8 text-center text-sm text-frenz-muted">No reels use this sound yet. Be the first.</p>}
+        </div>
       </main>
-      <SiteFooter />
     </>
   );
 }

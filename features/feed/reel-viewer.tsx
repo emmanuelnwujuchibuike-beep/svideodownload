@@ -2494,16 +2494,18 @@ function ReelCard({
             <ShareGlyph />
           </RailAct>
         </div>
-        {/* the sound: its own page when the post carries one, else the creator. The ONLY sound control — the caption's
-            "Original sound · @handle" chip was removed (owner, 2026-10-30: "it clustered the page, the spinning music ring is
-            enough") */}
-        <Link
-          href={item.sound ? `/sound/${item.sound.id}` : `${profilePath(item.publisher.handle)}`}
+        {/* the sound page: the one the post carries, else the reel's own original sound (0308 — made on the first tap
+            for an older reel; a post saved from another platform still lands on its creator). The ONLY sound control —
+            the caption's "Original sound · @handle" chip was removed (owner, 2026-10-30: "it clustered the page, the
+            spinning music ring is enough"). A plain <a>, never a prefetching <Link>: a prefetch would make a sound for
+            every reel scrolled past. */}
+        <a
+          href={item.sound ? `/sound/${item.sound.id}` : `/api/sounds/from-post/${item.id}`}
           aria-label={item.sound ? `Sound: ${item.sound.title}` : `Original sound by @${item.publisher.handle}`}
           className="block"
         >
           <SoundDisc playing={isActive && !paused} thumbnailUrl={item.publisher.avatarUrl ?? null} />
-        </Link>
+        </a>
       </div>
 
       {/*

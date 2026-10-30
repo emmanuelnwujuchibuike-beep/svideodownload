@@ -96,6 +96,8 @@ export const DATA_DOMAINS: DataDomain[] = [
       // page, discoverable/searchable. Feature 15 Part 7, migration 0125.
       "sounds",
       "sound_plays",
+      // 0308: a member's saved sounds (the Sounds page's Save button and Saved tab)
+      "sound_saves",
       "follows",
       // 0297: unfollows, written by a trigger on follows (creator analytics)
       "follow_events",

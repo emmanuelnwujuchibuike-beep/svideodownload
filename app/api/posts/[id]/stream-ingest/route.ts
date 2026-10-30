@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getRequestUser } from "@/lib/auth/request-user";
 import { DEFAULT_CAPTION_LANGUAGES, copyToStream, generateStreamCaptionsMulti, hasStream } from "@/lib/media/stream";
+import { soundMixPending } from "@/lib/social/sound-mix";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -37,6 +38,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (post.publisher_id !== me.id) return NextResponse.json({ ok: false, error: "Not allowed." }, { status: 403 });
   if (post.media_kind !== "video") return NextResponse.json({ ok: false, skipped: "not-video" });
   if (post.stream_uid) return NextResponse.json({ ok: true, uid: post.stream_uid as string });
+  // 0308: a reel waiting for its "Use this sound" audio would be copied with its OLD audio — the worker swaps the file
+  // first (server/services/sound-mix-service.ts) and the reel then plays that MP4
+  if (await soundMixPending(id)) return NextResponse.json({ ok: false, skipped: "sound-mix-pending" });
   if (!hasStream) return NextResponse.json({ ok: false, skipped: "stream-disabled" });
 
   // A public URL Cloudflare can fetch: the stored MP4, or (for our own studio

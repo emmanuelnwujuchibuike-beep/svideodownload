@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sounds · Frenz</title>
+<!--
+  Frenz — Sounds page (reference design, owner 2026-10-30)
+  Self-contained HTML/CSS/vanilla JS. Mobile-first (designed at 390px wide).
+  Font: Inter. Accent: --accent (#5B3FE6). Matches the Feed page's tab underline,
+  section labels ("• FROM SOMEONE YOU FOLLOW" style) and floating bottom nav.
+  Data below (SOUNDS, MOODS, GENRES) is sample data — wire to the real sounds API.
+  Cover tiles are solid placeholders — swap in each sound's real thumbnail.
+  Built in React at app/sounds + features/social/sounds-library/ — this file is the reference only.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --accent:#5B3FE6; --accent-soft:#E9E6FB; --lilac:#B9B0FF;
+    --ink:#0E0E12; --ink-2:#2B2B33; --muted:#5E5E6B; --muted-2:#6B6B78; --faint:#9A9AA6;
+    --line:#ECECF0; --line-2:#E1E1E7; --fill:#F4F4F6; --btn:#EFEFF2;
+    --dark:#111116; --dark-2:#2A2540; --verified:#5B8CFF;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--ink);font-family:'Inter',-apple-system,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  button{font-family:inherit;cursor:pointer;color:inherit}
+  a{color:var(--accent)}
+  .page{max-width:480px;margin:0 auto;padding-bottom:calc(120px + env(safe-area-inset-bottom))}
+  .topbar{display:flex;justify-content:space-between;align-items:center;padding:20px 20px 8px}
+  .round{width:48px;height:48px;border-radius:999px;border:none;background:var(--btn);display:flex;align-items:center;justify-content:center}
+  .round.dark{background:var(--ink)}
+  .row{display:flex;gap:10px}
+  .eyebrow{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+  .head{padding:14px 20px 0}
+  h1{margin:8px 0 0;font-size:38px;line-height:1.05;font-weight:800;letter-spacing:-.03em}
+  .lede{margin:10px 0 0;font-size:15px;line-height:1.5;color:var(--muted)}
+  .search{margin:20px 20px 0;display:flex;align-items:center;gap:10px;height:52px;padding:0 16px;border-radius:16px;background:var(--fill);border:1px solid #E8E8EC}
+  .search input{flex:1;border:none;background:transparent;outline:none;font:inherit;font-size:15px;color:var(--ink)}
+  .tabs{display:flex;gap:28px;padding:22px 20px 0;border-bottom:1px solid var(--line)}
+  .tab{background:none;border:none;padding:0 0 14px;margin-bottom:-1px;font-size:17px;font-weight:600;letter-spacing:-.01em;color:#7A7A88;border-bottom:3px solid transparent}
+  .tab[aria-selected="true"]{color:var(--ink);font-weight:700;border-bottom-color:var(--accent)}
+  .chips{display:flex;gap:8px;overflow-x:auto;padding:18px 20px 4px;scrollbar-width:none}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{flex-shrink:0;height:38px;padding:0 16px;border-radius:999px;font-size:14px;font-weight:600;white-space:nowrap;background:#fff;color:var(--ink-2);border:1px solid var(--line-2)}
+  .chip[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .featured{margin:20px 20px 0;border-radius:24px;background:var(--dark);color:#fff;padding:20px;display:flex;flex-direction:column;gap:18px}
+  .f-top{display:flex;justify-content:space-between;align-items:center}
+  .f-label{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--lilac)}
+  .f-count{font-size:12px;color:#A3A3B2}
+  .f-id{display:flex;gap:14px;align-items:center}
+  .f-cover{width:76px;height:76px;border-radius:16px;background:var(--dark-2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .f-title{font-size:20px;font-weight:700;letter-spacing:-.01em}
+  .f-handle{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:14px;color:#C9C9D4}
+  .f-player{display:flex;align-items:center;gap:12px}
+  .play-white{width:44px;height:44px;border-radius:999px;border:none;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .wave{flex:1;height:40px;display:flex;align-items:center;gap:3px}
+  .wave span{flex:1;border-radius:2px;background:#3A3A48;transition:background .2s}
+  .wave span.on{background:var(--lilac)}
+  .f-actions{display:flex;gap:10px}
+  .use-main{flex:1;height:48px;border-radius:14px;border:none;background:var(--accent);color:#fff;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px}
+  .save-ghost{width:48px;height:48px;border-radius:14px;border:1px solid #34343F;background:transparent;display:flex;align-items:center;justify-content:center}
+  .save-ghost[aria-pressed="true"] svg{fill:#fff}
+  .section{display:flex;align-items:center;justify-content:space-between;padding:34px 20px 6px}
+  .section .l{display:flex;align-items:center;gap:10px}
+  .dot{width:8px;height:8px;border-radius:999px;background:var(--verified)}
+  h2{margin:0;font-size:13px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#4A4A55}
+  .see-all{font-size:14px;font-weight:600;text-decoration:none}
+  .list{padding:0 20px}
+  .item{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid #F0F0F3}
+  .rank{width:22px;text-align:center;font-size:15px;font-weight:700;color:var(--faint);font-variant-numeric:tabular-nums}
+  .cover{width:56px;height:56px;flex-shrink:0;border-radius:14px;border:none;display:flex;align-items:center;justify-content:center;background-size:cover;background-position:center}
+  .cover.playing{box-shadow:0 0 0 3px var(--accent)}
+  .meta{flex:1;min-width:0}
+  .title{font-size:16px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sub{margin-top:3px;font-size:13px;color:var(--muted-2)}
+  .use{height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--line-2);background:#fff;font-size:13px;font-weight:600}
+  .genres{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:0 20px}
+  .genre{display:flex;flex-direction:column;justify-content:flex-end;gap:4px;height:96px;padding:16px;border-radius:18px;text-decoration:none}
+  .genre b{font-size:16px;letter-spacing:-.01em}
+  .genre small{font-size:12px;opacity:.75}
+  .cta{margin:28px 20px 0;border-radius:20px;border:1px solid #E8E8EC;padding:20px;display:flex;align-items:center;gap:16px}
+  .cta .t{font-size:16px;font-weight:700}
+  .cta .d{margin-top:4px;font-size:14px;line-height:1.45;color:var(--muted)}
+  .pill-dark{height:44px;padding:0 18px;border-radius:999px;border:none;background:var(--ink);color:#fff;font-size:14px;font-weight:700}
+  .dock{position:fixed;left:0;right:0;bottom:calc(16px + env(safe-area-inset-bottom));max-width:480px;margin:0 auto;padding:0 12px;display:flex;flex-direction:column;gap:8px;z-index:10}
+  .mini{display:none;align-items:center;gap:12px;padding:10px 12px;border-radius:18px;background:var(--dark);color:#fff;box-shadow:0 10px 30px rgba(14,14,18,.25)}
+  .mini.show{display:flex}
+  .mini .c{width:40px;height:40px;border-radius:10px;background:var(--dark-2);display:flex;align-items:center;justify-content:center}
+  .mini .h{font-size:12px;color:#A3A3B2}
+  .nav{display:flex;justify-content:space-around;align-items:center;height:72px;border-radius:36px;background:rgba(244,244,246,.92);border:1px solid #E6E6EB;box-shadow:0 8px 24px rgba(14,14,18,.08);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+  .nav a{display:flex;flex-direction:column;align-items:center;gap:3px;text-decoration:none;color:var(--ink-2);font-size:12px;font-weight:600;padding:8px 14px;border-radius:26px}
+  .nav a[aria-current="page"]{color:var(--accent);background:var(--accent-soft);font-weight:700}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body>
+<main class="page">
+  <div class="topbar">
+    <button class="round" aria-label="Back" onclick="history.back()">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0E0E12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <div class="row">
+      <button class="round" aria-label="Saved sounds">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0E0E12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+      </button>
+      <button class="round dark" aria-label="Upload a sound">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </div>
+  </div>
+  <header class="head">
+    <div class="eyebrow">Frenz Audio Library</div>
+    <h1>Sounds</h1>
+    <p class="lede">Original audio from creators you follow. Preview, save, and build your next Reel around it.</p>
+  </header>
+  <label class="search" for="sound-search">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B6B78" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    <input id="sound-search" type="search" placeholder="Search sounds, creators, moods" autocomplete="off">
+  </label>
+  <div class="tabs" role="tablist" id="tabs"></div>
+  <div class="chips" id="chips" aria-label="Filter by mood"></div>
+  <section class="featured" aria-label="Sound of the week">
+    <div class="f-top"><span class="f-label">Sound of the week</span><span class="f-count">2 reels</span></div>
+    <div class="f-id">
+      <div class="f-cover"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#B9B0FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+      <div>
+        <div class="f-title">Original audio</div>
+        <div class="f-handle">@frenz <svg width="15" height="15" viewBox="0 0 24 24" role="img" aria-label="Verified"><circle cx="12" cy="12" r="10" fill="#5B8CFF"/><path d="M8 12.5l2.6 2.5L16 9.5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      </div>
+    </div>
+    <div class="f-player"><button class="play-white" id="featured-play" aria-label="Play preview"></button><div class="wave" id="wave" aria-hidden="true"></div></div>
+    <div class="f-actions">
+      <button class="use-main"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg> Use this sound</button>
+      <button class="save-ghost" aria-label="Save sound" aria-pressed="false" onclick="this.setAttribute('aria-pressed', this.getAttribute('aria-pressed')!=='true')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
+    </div>
+  </section>
+  <div class="section"><div class="l"><span class="dot"></span><h2>Top charts</h2></div><a class="see-all" href="#all">See all</a></div>
+  <div class="list" id="list"></div>
+  <div class="section" style="padding-bottom:14px"><div class="l"><span class="dot"></span><h2>Browse by genre</h2></div></div>
+  <div class="genres" id="genres"></div>
+  <div class="cta">
+    <div style="flex:1"><div class="t">Make your own sound</div><div class="d">Post a Reel with original audio and it's credited to you here.</div></div>
+    <button class="pill-dark">Create</button>
+  </div>
+</main>
+<div class="dock">
+  <div class="mini" id="mini" role="status">
+    <div class="c"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#B9B0FF" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+    <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">Original audio</div><div class="h" id="mini-handle"></div></div>
+    <button class="play-white" style="width:40px;height:40px" id="mini-stop" aria-label="Pause"></button>
+  </div>
+  <nav class="nav" aria-label="Main">
+    <a href="/"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Home</a>
+    <a href="/feed"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M10 9l5 3-5 3z"/></svg>Feed</a>
+    <a href="/sounds" aria-current="page"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>Sounds</a>
+    <a href="/chats"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>Chats</a>
+  </nav>
+</div>
+<script>
+(() => {
+  // ---- Sample data: replace with real API data ----
+  const TABS = ['Trending', 'New', 'For you', 'Saved'];
+  const MOODS = ['All','Afrobeats','Hip-Hop','Comedy','Romantic','Energetic','Lofi','Spoken-Word','Motivational','Ambient','Pop','Workout'];
+  const SOUNDS = [
+    { id:'a', title:'Original audio', handle:'@frenz', reels:2, cover:null },
+    { id:'b', title:'Original audio', handle:'@priceless', reels:1, cover:null },
+    { id:'c', title:'Original audio', handle:'@anthonia', reels:1, cover:null },
+    { id:'d', title:'Original audio', handle:'@frenz', reels:2, cover:null },
+    { id:'e', title:'Original audio', handle:'@juliengozi', reels:1, cover:null },
+    { id:'f', title:'Original audio', handle:'@priceless', reels:1, cover:null },
+  ];
+  const TILE_COLORS = ['#2E2A4F','#1F3A5F','#4A2C3F','#23453B','#3D3524','#2B2B33'];
+  const GENRES = [
+    ['Afrobeats','Lagos to the world','#0E0E12','#FFFFFF'],
+    ['Comedy','Skits & punchlines','#E9E6FB','#2A1F7A'],
+    ['Hip-Hop','Bars and beats','#F4F4F6','#0E0E12'],
+    ['Romantic','Slow & soft','#FBE9EC','#6B1A2B'],
+    ['Motivational','Speeches & hype','#E6F0FB','#123A66'],
+    ['Lofi','Late-night calm','#EEF4EC','#1F4024'],
+  ];
+  const WAVE = [10,16,24,14,30,22,36,18,28,12,20,34,26,16,30,38,22,14,26,32,18,24,12,28,20,34,16,22,30,14,24,18,10,16];
+  const ICON_PLAY  = c => `<svg width="16" height="16" viewBox="0 0 24 24" fill="${c}" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>`;
+  const ICON_PAUSE = c => `<svg width="16" height="16" viewBox="0 0 24 24" fill="${c}" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>`;
+  const state = { tab:'Trending', mood:'All', playing:null };
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  $('tabs').innerHTML = TABS.map(t => `<button class="tab" role="tab" data-tab="${t}">${t}</button>`).join('');
+  $('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) { state.tab = b.dataset.tab; render(); } });
+  $('chips').innerHTML = MOODS.map(m => `<button class="chip" data-mood="${m}">${m}</button>`).join('');
+  $('chips').addEventListener('click', e => { const b = e.target.closest('[data-mood]'); if (b) { state.mood = b.dataset.mood; render(); } });
+  $('wave').innerHTML = WAVE.map(h => `<span style="height:${h}px"></span>`).join('');
+  $('genres').innerHTML = GENRES.map(([l,s,bg,fg]) => `<a class="genre" href="#genre-${l.toLowerCase()}" style="background:${bg};color:${fg}"><b>${l}</b><small>${s}</small></a>`).join('');
+  const toggle = id => { state.playing = state.playing === id ? null : id; render(); };
+  $('featured-play').addEventListener('click', () => toggle('featured'));
+  $('mini-stop').addEventListener('click', () => { state.playing = null; render(); });
+  $('mini-stop').innerHTML = ICON_PAUSE('#111116');
+  $('list').addEventListener('click', e => { const b = e.target.closest('[data-play]'); if (b) toggle(b.dataset.play); });
+  function render() {
+    document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === state.tab));
+    document.querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', b.dataset.mood === state.mood));
+    const fp = state.playing === 'featured';
+    $('featured-play').innerHTML = fp ? ICON_PAUSE('#111116') : ICON_PLAY('#111116');
+    $('featured-play').setAttribute('aria-label', fp ? 'Pause preview' : 'Play preview');
+    [...$('wave').children].forEach((s, i) => s.classList.toggle('on', fp && i < 14));
+    $('list').innerHTML = SOUNDS.map((s, i) => {
+      const on = state.playing === s.id;
+      const bg = s.cover ? `background-image:url('${esc(s.cover)}')` : `background:${TILE_COLORS[i % TILE_COLORS.length]}`;
+      return `<div class="item"><span class="rank">${i + 1}</span><button class="cover${on ? ' playing' : ''}" style="${bg}" data-play="${s.id}" aria-label="${on ? 'Pause' : 'Play'} preview">${on ? ICON_PAUSE('#fff') : ICON_PLAY('#fff')}</button><div class="meta"><div class="title">${esc(s.title)}</div><div class="sub">${esc(s.handle)} · ${s.reels} ${s.reels === 1 ? 'reel' : 'reels'}</div></div><button class="use">Use</button></div>`;
+    }).join('');
+    const cur = state.playing === 'featured' ? { handle:'@frenz' } : SOUNDS.find(s => s.id === state.playing);
+    $('mini').classList.toggle('show', !!cur);
+    $('mini-handle').textContent = cur ? cur.handle : '';
+  }
+  render();
+})();
+</script>
+</body>
+</html>

@@ -249,6 +249,8 @@ export function ReelComposer() {
               </button>
             </div>
           ) : null}
+          {/* 0308: a reel made with a sound PLAYS it — the worker replaces the video's own audio (owner, 2026-10-30) */}
+          {sound ? <p className="mt-1 text-[11px] text-white/50">This sound replaces your video&apos;s own audio once it&apos;s posted.</p> : null}
 
           <p className="mt-2 flex items-center gap-1.5 text-[11px] text-white/40">
             <Music2 className="h-3 w-3" /> Cover is taken from the first frame

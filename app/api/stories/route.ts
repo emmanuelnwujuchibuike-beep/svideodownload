@@ -7,6 +7,9 @@ import { cacheDelete, getCached } from "@/lib/cache";
 import { CAPTION_MAX_CHARS, normalizeCaption } from "@/lib/social/caption";
 import { notifyNewStory } from "@/lib/social/creator-notify-emit";
 import { bustHomeFeedCache } from "@/lib/social/home-feed";
+import { ensureOriginalSound } from "@/lib/social/original-sound";
+import { markSoundMix } from "@/lib/social/sound-mix";
+import { kickSoundMix } from "@/lib/social/sound-mix-kick";
 import { getActiveStories, type StoryScope } from "@/lib/social/stories";
 import { checkStoryVideo } from "@/lib/social/story-media";
 import { isOwnUpload, storageBasesFromEnv } from "@/lib/storage/owned-media";
@@ -267,6 +270,18 @@ export async function POST(request: Request) {
           (r) => r,
           () => null,
         );
+        // 0308: a reel made with "Use this sound" PLAYS that sound — the worker replaces the video's own audio with it
+        // (owner, 2026-10-30), after the response; until then the reel plays as uploaded
+        if (format === "reel" && mediaKind === "video") {
+          const id = postId;
+          after(async () => {
+            if (await markSoundMix(id, soundId)) kickSoundMix();
+          });
+        }
+      } else if (postId && format === "reel" && mediaKind === "video") {
+        // 0308: every reel's own audio is a sound others can reuse — "Original sound · @handle" (lib/social/original-sound.ts)
+        const id = postId;
+        after(() => ensureOriginalSound(id).then(() => undefined));
       }
     } else if (!wantStory) {
       return NextResponse.json({ error: "Finish setting up your profile to post." }, { status: 403 });

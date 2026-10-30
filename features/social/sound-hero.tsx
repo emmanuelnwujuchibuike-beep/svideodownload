@@ -50,7 +50,9 @@ export function SoundHero({
 
   const peaks = waveformPeaks.length ? waveformPeaks : Array.from({ length: 48 }, () => 28);
   const maxPeak = Math.max(1, ...peaks);
-  const totalMs = durationSec * 1000;
+  // an original sound (0308) may carry no stored length: the file's own, once its metadata loads
+  const [measuredSec, setMeasuredSec] = useState(0);
+  const totalMs = (durationSec || measuredSec) * 1000;
 
   const toggle = () => {
     const el = ref.current;
@@ -117,6 +119,7 @@ export function SoundHero({
           ref={ref}
           src={audioUrl}
           preload="metadata"
+          onLoadedMetadata={(e) => setMeasuredSec(Number.isFinite(e.currentTarget.duration) ? Math.round(e.currentTarget.duration) : 0)}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
           onEnded={() => setPlaying(false)}

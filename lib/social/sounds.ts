@@ -200,6 +200,39 @@ export async function listNewSounds(limit = 30): Promise<Sound[]> {
   }
 }
 
+/**
+ * Public sounds for the Sounds library (design/frenz-sounds.html, 0308): one query every tab shares — trending or
+ * newest first, narrowed by a mood or genre tag, a set of creators (For you), a set of ids (Saved), or a title/artist
+ * search. An empty `createdBy` / `ids` list means "none of them": the answer is empty, never everything.
+ */
+export async function listSounds(opts: {
+  order: "trend" | "new";
+  mood?: SoundMood | null;
+  genre?: SoundGenre | null;
+  createdBy?: string[];
+  ids?: string[];
+  q?: string | null;
+  limit?: number;
+}): Promise<Sound[]> {
+  if (!hasSupabase) return [];
+  if ((opts.createdBy && !opts.createdBy.length) || (opts.ids && !opts.ids.length)) return [];
+  try {
+    let q = createAdminClient().from("sounds").select(SOUND_SELECT).eq("is_public", true);
+    if (opts.mood) q = q.eq("mood_tag", opts.mood);
+    if (opts.genre) q = q.eq("genre_tag", opts.genre);
+    if (opts.createdBy) q = q.in("created_by", opts.createdBy);
+    if (opts.ids) q = q.in("id", opts.ids);
+    const term = opts.q ? sanitize(opts.q) : "";
+    if (term) q = q.or(`title.ilike.%${term}%,artist_label.ilike.%${term}%`);
+    q = opts.order === "trend" ? q.order("trend_score", { ascending: false }).order("usage_count", { ascending: false }) : q.order("created_at", { ascending: false });
+    const { data, error } = await q.limit(opts.limit ?? 30);
+    if (error || !data) return [];
+    return (data as SoundRow[]).map(fromRow);
+  } catch {
+    return [];
+  }
+}
+
 /** A creator's own sounds (public or not — this is their own list). */
 export async function listMySounds(createdBy: string, limit = 60): Promise<Sound[]> {
   if (!hasSupabase) return [];

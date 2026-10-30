@@ -8,6 +8,8 @@ import { deletePrivate, hasPrivateR2, presignPrivateGet, presignPrivatePut, read
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { afterCursorFilter, audienceOf, decodeSubCursor, encodeSubCursor, isSubAudience, isUuid, type SubAudience, visibleTo } from "./guards";
+import { kickBlurClips } from "./blur-clip-kick";
+import { postNeedsBlurWork } from "./blur-clip-plan";
 import { ensureBlurPreview, missingBlurClips, readBlurPreviews, readBlurSlides, readBlurVideos, saveItemBlurClip, type BlurSlide } from "./blur-preview";
 import { hasActiveSub, subConfig } from "./server";
 import { checkUpload } from "./upload-check";
@@ -322,13 +324,16 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
   }
   // a subscriber's page arrives opened (access already checked above, once)
   // 0263: the blurred previews — sent to a viewer without access (never the creator or a subscriber, who
-  // get the real thumbs); a Mature post's only to a confirmed adult. The creator's own visit fills in
-  // the ones older posts lack, a few at a time, after the response.
+  // get the real thumbs), a Mature post's too since 2026-10-29 (owner: every exclusive post autoplays blurred
+  // to a non-subscriber, "no optionals" — a 20 px still / 24 px clip hold nothing to recover; the cover and
+  // caption stay age-gated). The worker fills the ones older posts lack (lib/sub/blur-clip-kick.ts).
   const blurs = (!access && !isCreator) || isCreator ? await readBlurPreviews(ids).catch(() => new Map<string, string>()) : new Map<string, string>();
   // 0305: and the blurred clip a locked video plays to the same viewers (owner, 2026-10-28)
   const blurVideos = !access && !isCreator ? await readBlurVideos(ids).catch(() => new Map<string, string>()) : new Map<string, string>();
   // 0306: and one blurred slide per item, so a locked album slides sideways (owner, 2026-10-29)
   const slides = !access && !isCreator ? await readBlurSlides(ids).catch(() => new Map<string, BlurSlide[]>()) : new Map<string, BlurSlide[]>();
+  // a locked video still without its blurred clip: the worker makes it (throttled, after the response — never awaited)
+  if (!access && !isCreator && page.some((r) => postNeedsBlurWork(slides.get(r.id as string), counts.get(r.id as string)?.video ?? false, blurVideos.get(r.id as string)))) kickBlurClips();
   if (isCreator) {
     const missing = page.filter((r) => r.status === "published" && !blurs.has(r.id as string)).slice(0, 4);
     if (missing.length) after(async () => {
@@ -365,7 +370,7 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
     );
   }
   return {
-    posts: page.map((r) => ({ id: r.id as string, ...(access ? { audience: audienceOf(r.audience) } : {}), ...(r.mature === true ? { mature: true as const } : {}), ...(ageLocked(r) ? { ageLocked: true as const } : {}), ...(!access && !isCreator && !ageLocked(r) && blurs.has(r.id as string) ? { blurUrl: blurs.get(r.id as string)! } : {}), ...(!access && !isCreator && !ageLocked(r) && blurVideos.has(r.id as string) ? { blurVideoUrl: blurVideos.get(r.id as string)! } : {}), ...(!access && !isCreator && !ageLocked(r) && slides.has(r.id as string) ? { slides: slides.get(r.id as string)! } : {}), caption: access && !ageLocked(r) ? ((r.caption as string | null) ?? null) : null, coverUrl: ageLocked(r) ? null : ((r.cover_url as string | null) ?? null), items: counts.get(r.id as string)?.n ?? 0, hasVideo: counts.get(r.id as string)?.video ?? false, createdAt: r.created_at as string, ...(r.status === "archived" ? { removed: true } : {}), ...(opened.has(r.id as string) ? { open: opened.get(r.id as string) } : {}), ...(thumbs.has(r.id as string) ? { thumbUrl: thumbs.get(r.id as string) } : {}) })),
+    posts: page.map((r) => ({ id: r.id as string, ...(access ? { audience: audienceOf(r.audience) } : {}), ...(r.mature === true ? { mature: true as const } : {}), ...(ageLocked(r) ? { ageLocked: true as const } : {}), ...(!access && !isCreator && blurs.has(r.id as string) ? { blurUrl: blurs.get(r.id as string)! } : {}), ...(!access && !isCreator && blurVideos.has(r.id as string) ? { blurVideoUrl: blurVideos.get(r.id as string)! } : {}), ...(!access && !isCreator && slides.has(r.id as string) ? { slides: slides.get(r.id as string)! } : {}), caption: access && !ageLocked(r) ? ((r.caption as string | null) ?? null) : null, coverUrl: ageLocked(r) ? null : ((r.cover_url as string | null) ?? null), items: counts.get(r.id as string)?.n ?? 0, hasVideo: counts.get(r.id as string)?.video ?? false, createdAt: r.created_at as string, ...(r.status === "archived" ? { removed: true } : {}), ...(opened.has(r.id as string) ? { open: opened.get(r.id as string) } : {}), ...(thumbs.has(r.id as string) ? { thumbUrl: thumbs.get(r.id as string) } : {}) })),
     access,
     isCreator,
     next: rows.length > PAGE ? encodeSubCursor(page[page.length - 1]!.created_at as string, page[page.length - 1]!.id as string) : null,
@@ -530,7 +535,8 @@ export async function previewSubPost(postId: string, viewerId: string | null): P
     readBlurPreviews([postId]).catch(() => new Map<string, string>()),
     readBlurVideos([postId]).catch(() => new Map<string, string>()),
   ]);
-  const slides = access || !adult ? [] : ((await readBlurSlides([postId]).catch(() => new Map<string, BlurSlide[]>())).get(postId) ?? []);
+  // blurred previews for every viewer without access, Mature included (2026-10-29) — the cover stays age-gated below
+  const slides = access ? [] : ((await readBlurSlides([postId]).catch(() => new Map<string, BlurSlide[]>())).get(postId) ?? []);
   const p = prof as Row | null;
   const kinds = ((media ?? []) as Row[]).map((m) => m.media_kind);
   return {
@@ -538,8 +544,8 @@ export async function previewSubPost(postId: string, viewerId: string | null): P
     access,
     creator: { id: gate.creatorId, handle: (p?.handle as string | null) ?? null, name: (p?.display_name as string | null) || (p?.handle ? `@${p.handle as string}` : "A creator"), avatarUrl: (p?.avatar_url as string | null) ?? null },
     coverUrl: adult ? (((post as Row | null)?.cover_url as string | null) ?? null) : null,
-    blurUrl: adult ? (blurs.get(postId) ?? null) : null,
-    blurVideoUrl: adult ? (clips.get(postId) ?? null) : null,
+    blurUrl: blurs.get(postId) ?? null,
+    blurVideoUrl: clips.get(postId) ?? null,
     slides,
     items: kinds.length,
     hasVideo: kinds.includes("video"),

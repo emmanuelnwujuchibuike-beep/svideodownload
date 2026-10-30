@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { BlurredClip } from "@/features/sub/blurred-clip";
 import { cn } from "@/lib/utils";
@@ -12,19 +12,77 @@ export interface BlurSlideView {
   blurVideoUrl?: string;
 }
 
+/** How long a slide holds before the show moves on — one loop of a blurred clip (lib/sub/blur-clip-plan.ts, 4 s). */
+const SLIDE_MS = 4000;
+
 /*
   A locked exclusive post, every item of it, BLURRED (owner, 2026-10-29: "unsubscribers should be able to slide through a
   multi post sideways but it will be blurred", and a video "plays but blurred" with no cover needed). Each slide is the
   item's own 20 px still or its 24 px clip — nothing in either to un-blur, so the CSS blur is the look, never the gate.
   Native scroll-snap (no gesture library), dots under it, and only the slide on screen plays (BlurredClip watches its
   own visibility). One slide, or none from the server, is the single preview it always was.
+
+  🔴 IT PLAYS BY ITSELF (owner, 2026-10-29: "slide show doesn't auto play … nothing less than that"): an album moves to
+  its next item every SLIDE_MS and wraps to the first, while the card is on screen and the tab is visible. A finger on it
+  holds the show; it carries on SLIDE_MS after the finger lifts. One interval, no animation library, and nothing runs for
+  a card off screen.
 */
 export function BlurredSlides({ slides, cover, fallbackStill, fallbackClip, className }: { slides?: BlurSlideView[]; cover?: string | null; fallbackStill?: string | null; fallbackClip?: string | null; className?: string }) {
   const list: BlurSlideView[] = slides?.length ? slides : fallbackClip || fallbackStill || cover ? [{ kind: fallbackClip ? "video" : "image", blurUrl: fallbackStill ?? undefined, blurVideoUrl: fallbackClip ?? undefined }] : [];
   const row = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState(0);
-  if (!list.length) return null;
-  const many = list.length > 1;
+  const count = list.length;
+  const many = count > 1;
+
+  useEffect(() => {
+    const el = row.current;
+    if (!el || count < 2) return;
+    let visible = false;
+    let holding = false;
+    let last = Date.now();
+    const io =
+      typeof IntersectionObserver === "undefined"
+        ? null
+        : new IntersectionObserver(
+            ([e]) => {
+              visible = !!e?.isIntersecting;
+              if (visible) last = Date.now();
+            },
+            { threshold: 0.5 },
+          );
+    if (io) io.observe(el);
+    else visible = true;
+    const hold = () => {
+      holding = true;
+    };
+    const release = () => {
+      holding = false;
+      last = Date.now();
+    };
+    el.addEventListener("pointerdown", hold, { passive: true });
+    el.addEventListener("pointerup", release, { passive: true });
+    el.addEventListener("pointercancel", release, { passive: true });
+    el.addEventListener("touchend", release, { passive: true });
+    const tick = window.setInterval(() => {
+      if (!visible || holding || document.hidden || Date.now() - last < SLIDE_MS) return;
+      const w = el.clientWidth;
+      if (!w) return;
+      const next = (Math.round(el.scrollLeft / w) + 1) % count;
+      // the wrap back to the first slide jumps; every other step glides
+      el.scrollTo({ left: next * w, behavior: next === 0 ? "auto" : "smooth" });
+      last = Date.now();
+    }, 500);
+    return () => {
+      window.clearInterval(tick);
+      io?.disconnect();
+      el.removeEventListener("pointerdown", hold);
+      el.removeEventListener("pointerup", release);
+      el.removeEventListener("pointercancel", release);
+      el.removeEventListener("touchend", release);
+    };
+  }, [count]);
+
+  if (!count) return null;
   return (
     <div className={cn("absolute inset-0", className)}>
       <div

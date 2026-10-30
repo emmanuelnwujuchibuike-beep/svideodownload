@@ -189,3 +189,95 @@ export async function readBlurVideos(postIds: string[]): Promise<Map<string, str
   for (const r of (data ?? []) as Row[]) if (typeof r.blur_video_url === "string" && r.blur_video_url.startsWith("https://")) out.set(r.id as string, r.blur_video_url);
   return out;
 }
+
+/*
+  ═══════════════════════════════════════════════════════════════════════════
+   EVERY locked video gets its blurred clip — made on the WORKER (2026-10-29)
+  ═══════════════════════════════════════════════════════════════════════════
+  Owner: "the 18+ and all exclusive should auto play in the exclusive feed like normal feed but blurred on unsubscriber,
+  nothing less than that". Until now a clip existed only if the creator's browser made one — at publish, or two per
+  visit to their own gallery — so older videos sat black for everyone else. The worker now makes the missing ones from
+  the private file (server/services/sub-blur-clip-service.ts, lib/sub/blur-clip-plan.ts), for every creator, and remakes
+  the WebM clips some browsers recorded, which an iPhone may not play.
+*/
+
+/** Locked, published video items with no clip, or a WebM one — newest posts first, any creator. */
+export async function lockedVideosNeedingClips(limit: number): Promise<{ postId: string; idx: number; key: string }[]> {
+  const db = createAdminClient();
+  const { data, error } = await db
+    .from("sub_post_media")
+    .select("post_id, idx, object_key, blur_video_url, sub_posts!inner(status, audience, created_at)")
+    .eq("media_kind", "video")
+    .or("blur_video_url.is.null,blur_video_url.ilike.*.webm")
+    .eq("sub_posts.status", "published")
+    .eq("sub_posts.audience", "locked")
+    .limit(400);
+  if (error) return [];
+  const rows = (data ?? []) as (Row & { sub_posts: Row | Row[] })[];
+  const created = (r: (typeof rows)[number]) => String((Array.isArray(r.sub_posts) ? r.sub_posts[0] : r.sub_posts)?.created_at ?? "");
+  return rows
+    .filter((r) => typeof r.object_key === "string" && r.object_key)
+    .sort((a, b) => created(b).localeCompare(created(a)) || Number(a.idx) - Number(b.idx))
+    .slice(0, limit)
+    .map((r) => ({ postId: r.post_id as string, idx: Number(r.idx), key: r.object_key as string }));
+}
+
+/**
+ * Locked, published posts still missing a blurred still — the post-level one, OR any slide's (owner, 2026-10-29: "the
+ * blur issue also happens with multiple posts … in a slide show"). Only items a still CAN be made from count (a photo, or
+ * a video with a thumb), so an item with no source never holds a place. Newest first, any creator.
+ */
+export async function lockedPostsNeedingStills(limit: number): Promise<string[]> {
+  const db = createAdminClient();
+  const [posts, items] = await Promise.all([
+    db.from("sub_posts").select("id, created_at").eq("status", "published").eq("audience", "locked").is("blur_preview", null).order("created_at", { ascending: false }).limit(limit),
+    db
+      .from("sub_post_media")
+      .select("post_id, media_kind, thumb_key, sub_posts!inner(status, audience, created_at)")
+      .is("blur_preview", null)
+      .eq("sub_posts.status", "published")
+      .eq("sub_posts.audience", "locked")
+      .limit(400),
+  ]);
+  const created = new Map<string, string>();
+  if (!posts.error) for (const r of (posts.data ?? []) as Row[]) created.set(r.id as string, String(r.created_at ?? ""));
+  // before 0306 (no per-item still) this read fails and only the post-level ones are worked on
+  if (!items.error) {
+    for (const r of (items.data ?? []) as (Row & { sub_posts: Row | Row[] })[]) {
+      if (r.media_kind !== "image" && !(typeof r.thumb_key === "string" && r.thumb_key)) continue;
+      const post = Array.isArray(r.sub_posts) ? r.sub_posts[0] : r.sub_posts;
+      created.set(r.post_id as string, String(post?.created_at ?? ""));
+    }
+  }
+  return [...created.entries()]
+    .sort((a, b) => b[1].localeCompare(a[1]))
+    .slice(0, limit)
+    .map(([id]) => id);
+}
+
+/**
+ * Stores a clip the WORKER made: fills an empty slot or replaces a WebM one — never a good MP4 a browser already made.
+ * The post-level clip (the first video's) follows the same rule.
+ */
+export async function saveServerBlurClip(postId: string, idx: number, url: string): Promise<boolean> {
+  const db = createAdminClient();
+  const { data, error } = await db
+    .from("sub_post_media")
+    .update({ blur_video_url: url })
+    .eq("post_id", postId)
+    .eq("idx", idx)
+    .eq("media_kind", "video")
+    .or("blur_video_url.is.null,blur_video_url.ilike.*.webm")
+    .select("idx");
+  if (error || !data?.length) return false;
+  await db
+    .from("sub_posts")
+    .update({ blur_video_url: url })
+    .eq("id", postId)
+    .or("blur_video_url.is.null,blur_video_url.ilike.*.webm")
+    .then(
+      () => undefined,
+      () => undefined,
+    );
+  return true;
+}

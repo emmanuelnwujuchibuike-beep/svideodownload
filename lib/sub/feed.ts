@@ -6,6 +6,8 @@ import { flagsOf, isAccountVisibleTo } from "@/lib/social/account-visibility";
 import { hasPrivateR2, presignPrivateGet } from "@/lib/storage/r2";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { kickBlurClips } from "./blur-clip-kick";
+import { postNeedsBlurWork } from "./blur-clip-plan";
 import { readBlurPreviews, readBlurSlides, readBlurVideos, type BlurSlide } from "./blur-preview";
 import { afterCursorFilter, audienceOf, decodeSubCursor, encodeSubCursor, isUuid } from "./guards";
 import { subConfig } from "./server";
@@ -446,9 +448,19 @@ export async function discover(viewerId: string | null, subscribed: Set<string>,
     const charge = subscriptionCharge(price.get(id)!, cfg.purchaseFeePercent);
     creators[id] = { ...people.get(id)!, priceCents: charge.priceCents, feeCents: charge.feeCents, feePercent: cfg.purchaseFeePercent, totalCents: charge.totalCents, periodDays: cfg.periodDays, totalPosts: totals.get(id) ?? null };
   }
+  /*
+    A locked video with no blurred clip yet: the worker makes every missing one (owner, 2026-10-29 — every exclusive
+    post autoplays blurred). Throttled, after the response; this read never waits on it.
+  */
+  if (latest.some((r) => postNeedsBlurWork(slides.get(r.id as string), media.get(r.id as string)?.video ?? false, blurVideos.get(r.id as string)))) kickBlurClips();
   return {
-    // 0261: a Mature post's public cover only for a viewer who confirmed they're 18+
-    cards: latest.map((r) => ({ id: r.id as string, creatorId: r.creator_id as string, createdAt: r.created_at as string, coverUrl: r.mature === true && !adult ? null : ((r.cover_url as string | null) ?? null), items: media.get(r.id as string)?.n ?? 0, hasVideo: media.get(r.id as string)?.video ?? false, ...(r.mature === true ? { mature: true as const } : {}), ...(blurs.has(r.id as string) && !(r.mature === true && !adult) ? { blurUrl: blurs.get(r.id as string)! } : {}), ...(blurVideos.has(r.id as string) && !(r.mature === true && !adult) ? { blurVideoUrl: blurVideos.get(r.id as string)! } : {}), ...(slides.has(r.id as string) && !(r.mature === true && !adult) ? { slides: slides.get(r.id as string)! } : {}) })),
+    /*
+      0261: a Mature post's public COVER (a full-size picture) only for a viewer who confirmed they're 18+. Its blurred
+      previews go to EVERY non-subscriber (owner, 2026-10-29: "the 18+ and all exclusive should auto play … blurred on
+      unsubscriber, nothing less than that, no optionals"): a 20 px still and a 24 px clip hold no detail to recover —
+      the post itself, and its cover, stay behind the subscription and the age check.
+    */
+    cards: latest.map((r) => ({ id: r.id as string, creatorId: r.creator_id as string, createdAt: r.created_at as string, coverUrl: r.mature === true && !adult ? null : ((r.cover_url as string | null) ?? null), items: media.get(r.id as string)?.n ?? 0, hasVideo: media.get(r.id as string)?.video ?? false, ...(r.mature === true ? { mature: true as const } : {}), ...(blurs.has(r.id as string) ? { blurUrl: blurs.get(r.id as string)! } : {}), ...(blurVideos.has(r.id as string) ? { blurVideoUrl: blurVideos.get(r.id as string)! } : {}), ...(slides.has(r.id as string) ? { slides: slides.get(r.id as string)! } : {}) })),
     creators,
   };
 }

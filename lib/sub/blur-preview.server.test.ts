@@ -116,11 +116,20 @@ describe("who receives it", () => {
     expect(presignGet).not.toHaveBeenCalled();
   });
 
-  it("a Mature post's preview goes only to a confirmed adult", async () => {
+  /*
+    Owner, 2026-10-29: "the 18+ and all exclusive should auto play … blurred on unsubscriber, nothing less than that, no
+    optionals". The BLURRED preview of a Mature post now goes to every non-subscriber (a 20 px still holds nothing to
+    recover); its caption, and the file, still never reach a viewer who hasn't confirmed 18+.
+  */
+  it("a Mature post's blurred preview goes to every non-subscriber — its caption and file never do", async () => {
     sessionUser = { id: STRANGER };
-    expect((await gallery()).posts.find((x) => x.id === MATURE)!.blurUrl).toBeUndefined();
+    const before = (await gallery()).posts.find((x) => x.id === MATURE)!;
+    expect(before.blurUrl).toBe(BLUR);
+    expect(before.caption ?? null).toBeNull();
+    expect(JSON.stringify(before)).not.toMatch(/mature\.jpg|"caption":"mature"/);
     db.tables.age_checks!.push({ user_id: STRANGER, result: "adult", method: "self_declared_dob", eligible_on: null });
     expect((await gallery()).posts.find((x) => x.id === MATURE)!.blurUrl).toBe(BLUR);
+    expect(presignGet).not.toHaveBeenCalled();
   });
 
   it("a subscriber gets the real (signed) thumb, not the blur", async () => {

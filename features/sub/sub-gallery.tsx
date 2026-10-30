@@ -248,7 +248,11 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
                 aria-label={p.removed ? "Removed by Frenzsave. Under review." : state.access && p.ageLocked ? "Mature (18+). Confirm your age to open." : state.access ? `Open subscriber post${p.caption ? `: ${p.caption.slice(0, 60)}` : ""}` : p.mature ? "Mature (18+). Subscriber only." : "Subscriber only. Subscribe to unlock."}
                 className="relative block aspect-[3/4] w-full overflow-hidden bg-frenz-fill transition active:scale-[0.98] sm:rounded-lg motion-reduce:active:scale-100"
               >
-                {p.coverUrl ? (
+                {!state.access && p.blurVideoUrl ? (
+                  /* a locked video PLAYS blurred to a non-subscriber, ahead of any still cover (owner, 2026-10-29: "auto
+                     play … like normal feed but blurred on unsubscriber") — a 24 px clip, no detail to recover */
+                  <BlurredClip src={p.blurVideoUrl} poster={p.coverUrl ?? p.blurUrl} className="h-full w-full scale-125" />
+                ) : p.coverUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- the creator's PUBLIC cover, never the private file
                   <img src={p.coverUrl} alt="" loading={idx < 9 ? "eager" : "lazy"} decoding="async" draggable={false} className="h-full w-full object-cover" />
                 ) : p.thumbUrl ? (

@@ -20,7 +20,10 @@ import { RightsNotice } from "@/components/legal/rights-notice";
 import { RecommendedTools } from "@/components/monetization/recommended-tools";
 import { DownloaderLinks } from "@/components/seo/downloader-links";
 import { RelatedLinks } from "@/components/seo/related-links";
-import { Downloader } from "@/features/downloader/downloader";
+import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
+import { MultiLinkButton } from "@/features/downloader/multi-link/multi-link-button";
+import { DownloadBox } from "@/features/downloads/download-box";
+import { Card } from "@/features/frenz-ui/primitives";
 import { getMultiLinkSettings, publicMultiLinkConfig } from "@/lib/downloads/multi-link";
 import { categoryHubMetadata, CategoryHubView } from "@/features/social/category-hub-view";
 import { BRAND_ICONS } from "@/lib/platform-icons";
@@ -289,9 +292,17 @@ export default async function DownloaderPage({
                   {page.tagline}
                 </p>
 
-                <div className="mt-10 w-full max-w-2xl scroll-mt-24" id="download">
-                  {/* the landing's placeholder and batch card (owner, 2026-10-29 — lib/downloads/paste-placeholder.ts) */}
-                  <Downloader multiLink={publicMultiLinkConfig(multiLink)} />
+                {/*
+                  THE LANDING'S OWN TOOL (owner, 2026-10-29: "the card and placeholder should be shared with the landing
+                  page"): the same white card, DownloadBox and batch card as features/downloads/download-page-core.tsx —
+                  shared components, not a look-alike, so the paste box, its placeholder and the plan badge ("FREE" for a
+                  free member) can never drift from the landing again.
+                */}
+                <div className="frenz-ui mt-10 w-full max-w-2xl scroll-mt-24 text-left text-frenz-ink" id="download">
+                  <Card as="section" raised aria-label="Download a link" className="rounded-[26px] p-3.5">
+                    <DownloadBox surface="frenz" multiLink={publicMultiLinkConfig(multiLink)} />
+                  </Card>
+                  <MultiLinkButton config={publicMultiLinkConfig(multiLink)} surface="frenz" className="mt-3" />
                 </div>
 
                 <p className={`mt-5 text-sm ${onDark ? "text-white/75" : "text-black/70"}`}>
@@ -301,6 +312,8 @@ export default async function DownloaderPage({
                 <RightsNotice className={`mt-2 max-w-xl ${onDark ? "text-white/85" : "text-black/75"}`} />
               </div>
             </div>
+            {/* the non-affiliation note the old tool printed inside the hero, where its muted text sat on the brand colour */}
+            <DownloadDisclaimer variant="card" className="mt-4" />
           </div>
         </section>
 

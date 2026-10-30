@@ -28,9 +28,13 @@ const rows = {
   ensureBlurPreview: vi.fn(async () => {}),
 };
 let ffmpegExit = 0;
+let ffmpegStderr = "";
 const spawn = vi.fn(() => {
   const child = Object.assign(new EventEmitter(), { stderr: new EventEmitter(), kill: vi.fn() });
-  setTimeout(() => child.emit("close", ffmpegExit), 0);
+  setTimeout(() => {
+    if (ffmpegStderr) child.stderr.emit("data", Buffer.from(ffmpegStderr));
+    child.emit("close", ffmpegExit);
+  }, 0);
   return child;
 });
 
@@ -106,6 +110,20 @@ describe("the blurred-clip job", () => {
     spawn.mockClear();
     expect(await runSubBlurClips()).toMatchObject({ clips: 0, failed: 0 });
     expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("🔴 a failure says WHY (admin check + log) — with the signed link to the private file removed", async () => {
+    ffmpegExit = 1;
+    ffmpegStderr = "https://acct.r2.cloudflarestorage.com/frenzsave-private/v.mp4?X-Amz-Signature=abc: Server returned 403 Forbidden";
+    const { runSubBlurClips } = await freshService();
+    const r = await runSubBlurClips();
+    ffmpegExit = 0;
+    ffmpegStderr = "";
+    expect(r).toMatchObject({ failed: 1 });
+    expect(r.firstError).toContain("403 Forbidden");
+    expect(r.firstError).toContain("<link>");
+    // teeth: the signature never reaches the admin or the log
+    expect(r.firstError).not.toContain("X-Amz-Signature");
   });
 
   it("a real failure (ffmpeg exits non-zero) still waits out the retry window", async () => {

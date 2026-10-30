@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { MediaFormat } from "@/types";
 
-import { audioDonorCandidates, audioMuxInputArgs, donorAudioArgs, muxVideoArgs } from "./audio-donor";
+import { audioDonorCandidates, audioMuxInputArgs, donorAudioArgs, hevcDelivery, muxVideoArgs } from "./audio-donor";
 
 /**
  * vt.tiktok.com/ZSg7YNcy3 (owner, 2026-10-30: "some tiktok video doesn't download with sound"), measured: TikTok's
@@ -67,5 +67,14 @@ describe("the command", () => {
     expect(donorAudioArgs({ audio: "aac", audioProfile: "HE-AACv2" })).toEqual(["-c:a", "aac", "-b:a", "128k"]);
     expect(donorAudioArgs({ audio: "aac", audioProfile: "LC" })).toEqual(["-c:a", "copy"]);
     expect(donorAudioArgs({ audio: "mp3", audioProfile: null })).toEqual(["-c:a", "aac", "-b:a", "192k"]);
+  });
+  it("a device that plays HEVC never gets its picture re-encoded: raw, or only the HE-AAC sound converted", () => {
+    // TikTok's Best tier, measured: HEVC + HE-AACv2 — was a whole re-encode (9.5 s to the first byte), now a copy
+    expect(hevcDelivery(true, "hevc", true)).toBe("copyPicture");
+    expect(hevcDelivery(true, "hevc", false)).toBe("raw");
+    // teeth: a device that does NOT claim HEVC still gets the compatibility path, and non-HEVC is never this case
+    expect(hevcDelivery(false, "hevc", true)).toBeNull();
+    expect(hevcDelivery(true, "vp9", true)).toBeNull();
+    expect(hevcDelivery(true, null, false)).toBeNull();
   });
 });

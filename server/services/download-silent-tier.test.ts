@@ -75,12 +75,14 @@ describe("🔴 a video-only tier downloads WITH the post's sound", () => {
     expect(args.join(" ")).toContain("-c:a aac -b:a 128k");
   }, 20_000);
 
-  it("another device: the same sound, the picture converted to H.264", async () => {
+  // owner, 2026-10-30: "Send the original HEVC to everyone … I need faster and full quality" (HEVC_TO_EVERY_DEVICE)
+  it("a device whose browser does not claim HEVC: the same sound, and STILL the original picture — never re-encoded", async () => {
     const { resolveDownload } = await import("./download-service");
     await resolveDownload("https://vt.tiktok.com/ZSg7YNcy3/", "tt-0", "video", "v", {});
     const args = encodes[0]!;
     expect(maps(args)).toEqual(["0:v:0", "1:a:0"]);
-    expect(args).toContain("libx264");
+    expect(args.join(" ")).toContain("-c:v copy -tag:v hvc1");
+    expect(args).not.toContain("libx264");
   });
 
   it("a smaller tier made from a silent rendition gets the sound too", async () => {

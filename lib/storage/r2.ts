@@ -118,6 +118,17 @@ export async function presignR2Put(
 const PRIVATE_BUCKET = process.env.R2_PRIVATE_BUCKET?.trim();
 export const hasPrivateR2 = hasR2 && !!PRIVATE_BUCKET && PRIVATE_BUCKET !== BUCKET;
 
+/**
+ * The NAMES of the storage variables this process cannot see (never a value) — for the admin's worker check (owner,
+ * 2026-10-30: "find which R2 variable the worker can't see"; the readiness answered only true/false).
+ */
+export function r2MissingEnv(env: Record<string, string | undefined> = process.env): string[] {
+  const names = ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET", "R2_PUBLIC_BASE_URL", "R2_PRIVATE_BUCKET"];
+  const missing = names.filter((n) => !env[n]?.trim());
+  if (!missing.includes("R2_PRIVATE_BUCKET") && env.R2_PRIVATE_BUCKET?.trim() === env.R2_BUCKET) missing.push("R2_PRIVATE_BUCKET (same as R2_BUCKET)");
+  return missing;
+}
+
 function privateEndpoint(key: string): string {
   return `https://${ACCOUNT_ID}.r2.cloudflarestorage.com/${PRIVATE_BUCKET}/${encodeURI(key)}`;
 }

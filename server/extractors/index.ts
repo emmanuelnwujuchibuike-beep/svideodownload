@@ -70,8 +70,10 @@ const METADATA_TTL_SECONDS = Number(
  * (quality-ladder.ts) — the ORDER is cached, and the default is formats[0].
  * v6 — 2026-10-08: TikTok video prefers the native route (preferTikTokRoute).
  * v7 — 2026-10-16: TikWM's HD tier is first (tiktok.ts) — the ORDER is cached.
+ * v8 — 2026-10-30: TikTok HEVC tiers no longer say "converts on download" (the original goes to every device), and a
+ * yt-dlp tier is named by its short side (a portrait 1080×1920 reel was "2160p") — the LABELS are cached.
  */
-const EXTRACTOR_SHAPE_VERSION = "v7";
+const EXTRACTOR_SHAPE_VERSION = "v8";
 
 function metadataKey(url: string): string {
   return `meta:${EXTRACTOR_SHAPE_VERSION}:${url}`;

@@ -354,7 +354,8 @@ export function buildFormats(item: TikTokItem, pageCookie: string | null = null)
   });
 
   for (const [height, tier] of ordered) {
-    const fast = tier.codec === "h264";
+    // HEVC is delivered as-is to every device now (owner, 2026-10-30 — download-service HEVC_TO_EVERY_DEVICE): only AV1 converts
+    const fast = tier.codec !== "av1";
     const best = formats.length === 0;
     formats.push({
       formatId: `tt-${formats.length}`,

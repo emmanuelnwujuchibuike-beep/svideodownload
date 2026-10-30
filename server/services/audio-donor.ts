@@ -58,6 +58,21 @@ export function isHevcCodec(codec: string | null | undefined): boolean {
 }
 
 /**
+ * An HEVC picture for a device that PLAYS HEVC (the browser's own canPlayType): "raw" — the original bytes, straight
+ * through; "copyPicture" — the picture copied untouched and only HE-AAC sound converted to AAC-LC (phones' gallery
+ * players mangle HE-AAC); null — not this case (the compatibility re-encode decides).
+ *
+ * 🔴 NEVER a re-encode of a picture the device already plays (owner, 2026-10-30: "why does hevc re-encode … I don't want
+ * anything that breaks down quality and consume time"). TikTok's Best tier is HEVC + HE-AACv2 (measured on
+ * @tiktok/video/7106594312292453675): it was re-encoded whole — 9.5 s before the first byte and 2.9x the source's size —
+ * for an iPhone that plays the original. Copying the picture gives the original 1080x1920, 3.6 MB.
+ */
+export function hevcDelivery(clientPlaysHevc: boolean, videoCodec: string | null | undefined, heAac: boolean): "raw" | "copyPicture" | null {
+  if (!clientPlaysHevc || !isHevcCodec(videoCodec)) return null;
+  return heAac ? "copyPicture" : "raw";
+}
+
+/**
  * The picture, as delivered: H.264 copied; HEVC copied too when the DEVICE plays it (tagged hvc1, the tag Apple's
  * players require in MP4); anything else re-encoded to H.264 at the same settings as transcodeToH264.
  */

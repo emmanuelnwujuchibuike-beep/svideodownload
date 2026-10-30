@@ -38,11 +38,14 @@ export async function POST() {
   if (!ready.ok) return checks.push({ ok: false, step: "Worker reachable", detail: `The worker answered ${ready.status}.` }), done();
   checks.push({ ok: true, step: "Worker reachable, secret matches", detail: "Yes." });
 
-  const r = (await ready.json().catch(() => ({}))) as { storage?: boolean; privateBucket?: boolean; ffmpeg?: boolean; running?: boolean; lastRun?: { at: string; result: Record<string, unknown> } | null };
-  checks.push({ ok: !!r.storage, step: "Media storage on the worker", detail: r.storage ? "Set." : "R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET and R2_PUBLIC_BASE_URL must all be set on the worker." });
-  checks.push({ ok: !!r.privateBucket, step: "Private bucket on the worker", detail: r.privateBucket ? "Set." : "R2_PRIVATE_BUCKET must be set on the worker (frenzsave-private), different from R2_BUCKET." });
+  const r = (await ready.json().catch(() => ({}))) as { storage?: boolean; privateBucket?: boolean; missing?: string[]; ffmpeg?: boolean; running?: boolean; lastRun?: { at: string; result: Record<string, unknown> } | null };
+  // the worker names what it cannot see (names only — an older worker build sends none, and the general hint stays)
+  const missing = Array.isArray(r.missing) && r.missing.length ? ` Missing on the worker: ${r.missing.join(", ")}.` : "";
+  checks.push({ ok: !!r.storage, step: "Media storage on the worker", detail: r.storage ? "Set." : "R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET and R2_PUBLIC_BASE_URL must all be set on the worker." + missing });
+  checks.push({ ok: !!r.privateBucket, step: "Private bucket on the worker", detail: r.privateBucket ? "Set." : "R2_PRIVATE_BUCKET must be set on the worker (frenzsave-private), different from R2_BUCKET." + missing });
   checks.push({ ok: !!r.ffmpeg, step: "ffmpeg on the worker", detail: r.ffmpeg ? "Installed." : "ffmpeg is missing from the worker image." });
-  if (r.lastRun) checks.push({ ok: !r.lastRun.result.skipped, step: "Last run", detail: `${r.lastRun.at}: ${JSON.stringify(r.lastRun.result)}` });
+  // red when it skipped OR any clip failed (a run with failed: 10 was green); the worker's firstError says why
+  if (r.lastRun) checks.push({ ok: !r.lastRun.result.skipped && !r.lastRun.result.failed, step: "Last run", detail: `${r.lastRun.at}: ${JSON.stringify(r.lastRun.result)}` });
   if (!r.storage || !r.privateBucket || !r.ffmpeg) return done();
 
   const kick = await fetch(`${WORKER_URL}/api/internal/sub/blur-clips`, { method: "POST", headers, body: "{}", signal: AbortSignal.timeout(20_000) }).catch(() => null);

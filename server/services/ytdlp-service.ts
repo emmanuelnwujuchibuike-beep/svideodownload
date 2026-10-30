@@ -255,9 +255,9 @@ function mapSingleFile(info: RawInfo): MediaFormat[] {
     ? {
         formatId: String(info.height),
         kind: "video",
-        label: `${info.height}p`,
+        label: `${shortSide(info.width, info.height)}p`,
         ext: "mp4",
-        resolution: `${info.height}p`,
+        resolution: `${shortSide(info.width, info.height)}p`,
         fps: info.fps ?? null,
         filesize: size,
         tbr: info.tbr ?? null,
@@ -286,6 +286,17 @@ function mapSingleFile(info: RawInfo): MediaFormat[] {
  *  the card shows clean, correct labels (e.g. 1072p → "1080p") and never lists
  *  two near-duplicate heights as separate options. */
 const STD_TIERS = [4320, 2160, 1440, 1080, 720, 480, 360, 240, 144] as const;
+
+/**
+ * The side a quality is NAMED by: the SHORT one — "1080p" is a 1920×1080 landscape AND a 1080×1920 portrait reel.
+ * 🔴 Naming by height called every portrait 1080×1920 Instagram reel "2160p" (4K) and its 720×1280 rendition "1440p"
+ * (measured on production, 2026-10-30): a quality the file does not have (owner: "TikTok/Instagram download in low
+ * quality even if I select high quality" — the file was the best there is; the label promised more). The tier's ID stays
+ * its height, which is what the download selector filters on (`height<=…`), so only the words change.
+ */
+function shortSide(width: number | null | undefined, height: number): number {
+  return width && width > 0 ? Math.min(width, height) : height;
+}
 
 function snapTier(height: number): number {
   let best: number = STD_TIERS[0];
@@ -317,7 +328,8 @@ function estimateSize(tbrKbps: number, reported: number | null, durationSec: num
 /** How many quality options we ever surface — keep the picker tight and clean. */
 const MAX_VIDEO_TIERS = 4;
 
-function mapFormats(info: RawInfo): MediaFormat[] {
+/** Exported for its test (ytdlp-format-labels.test.ts). */
+export function mapFormats(info: RawInfo): MediaFormat[] {
   const raw = info.formats;
   if (!raw?.length) {
     return info.url ? mapSingleFile(info) : [];
@@ -326,8 +338,9 @@ function mapFormats(info: RawInfo): MediaFormat[] {
   // Collapse video formats into ONE entry per standard quality tier, preferring
   // the variant with the highest bitrate so the displayed size is representative.
   // Snapping raw heights to standard tiers dedupes near-duplicates (1072 & 1080)
-  // and keeps labels clean/correct.
-  const byTier = new Map<number, { fps: number | null; tbr: number; filesize: number | null }>();
+  // and keeps labels clean/correct. The tier KEY is the height (the selector's filter);
+  // its NAME is the short side (shortSide above).
+  const byTier = new Map<number, { fps: number | null; tbr: number; filesize: number | null; short: number }>();
   let hasAnyAudio = false;
   // Some platforms (Instagram, Facebook, X) return video formats WITHOUT a
   // height. We must still offer a video option for those, or the UI would only
@@ -355,7 +368,7 @@ function mapFormats(info: RawInfo): MediaFormat[] {
       const tier = snapTier(f.height);
       const existing = byTier.get(tier);
       if (!existing || tbr > existing.tbr) {
-        byTier.set(tier, { fps: f.fps ?? null, tbr, filesize: size });
+        byTier.set(tier, { fps: f.fps ?? null, tbr, filesize: size, short: shortSide(f.width, f.height) });
       }
     } else if (!bestHeightless || tbr > bestHeightless.tbr) {
       bestHeightless = { tbr, filesize: size };
@@ -370,6 +383,7 @@ function mapFormats(info: RawInfo): MediaFormat[] {
     .slice(0, MAX_VIDEO_TIERS)
     .map(([tier, meta]) => ({
       tier,
+      named: snapTier(meta.short),
       fps: meta.fps,
       tbr: meta.tbr || null,
       size: estimateSize(meta.tbr, meta.filesize, durationSec),
@@ -389,9 +403,9 @@ function mapFormats(info: RawInfo): MediaFormat[] {
   let video: MediaFormat[] = tiers.map((t) => ({
     formatId: String(t.tier),
     kind: "video" as const,
-    label: `${t.tier}p`,
+    label: `${t.named}p`,
     ext: "mp4",
-    resolution: `${t.tier}p`,
+    resolution: `${t.named}p`,
     fps: t.fps,
     filesize: t.size,
     tbr: t.tbr,

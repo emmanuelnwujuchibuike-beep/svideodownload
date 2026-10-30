@@ -5,7 +5,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { deleteR2, hasPrivateR2, hasR2, presignPrivateGet, putR2, r2KeyOfPublicUrl } from "@/lib/storage/r2";
+import { deleteR2, hasPrivateR2, hasR2, presignPrivateGet, putR2, r2KeyOfPublicUrl, r2MissingEnv } from "@/lib/storage/r2";
 import { BLUR_CLIP_MAX_BYTES, blurClipKey, buildBlurClipArgs } from "@/lib/sub/blur-clip-plan";
 import { blurClipSlotOpen, ensureBlurPreview, lockedPostsNeedingStills, lockedVideosNeedingClips, saveServerBlurClip } from "@/lib/sub/blur-preview";
 
@@ -22,13 +22,14 @@ let running = false;
 /** The last run's outcome on this worker (for the admin check) — null until one has run. */
 let lastRun: { at: string; result: Awaited<ReturnType<typeof runSubBlurClips>> } | null = null;
 
-/** What this worker has for the job — booleans only — and how its last run went (the admin check, 2026-10-30). */
-export async function blurClipReadiness(): Promise<{ storage: boolean; privateBucket: boolean; ffmpeg: boolean; running: boolean; lastRun: typeof lastRun }> {
+/** What this worker has for the job — booleans, plus the NAMES of storage variables it cannot see — and how its last run went (the admin check, 2026-10-30). */
+export async function blurClipReadiness(): Promise<{ storage: boolean; privateBucket: boolean; missing: string[]; ffmpeg: boolean; running: boolean; lastRun: typeof lastRun }> {
   const ffmpeg = await run(FFMPEG, ["-hide_banner", "-version"], 10_000).then(
     () => true,
     () => false,
   );
-  return { storage: hasR2, privateBucket: hasPrivateR2, ffmpeg, running, lastRun };
+  // the NAMES of unset variables only — never a value
+  return { storage: hasR2, privateBucket: hasPrivateR2, missing: r2MissingEnv(), ffmpeg, running, lastRun };
 }
 /** item (`post:idx`) or post id → when it last failed (or, for a still, was last tried). Pruned on every run. */
 const failedAt = new Map<string, number>();
@@ -50,7 +51,17 @@ export function pruneFailedAt(map: Map<string, number>, now: number, windowMs: n
  * (lib/sub/blur-clip-plan.ts) is the only thing stored, on the public media host, exactly like the clip a creator's
  * browser uploads. One run at a time per worker; the outcome lands on the rows, which the feed reads.
  */
-export async function runSubBlurClips(): Promise<{ clips: number; stillsTried: number; failed: number; alreadyFilled: number; skipped?: string }> {
+/**
+ * Why a clip failed, safe to show the admin and the log (owner, 2026-10-30: the worker answered "failed: 10" and nothing
+ * else — every failure was swallowed). Links are removed: an ffmpeg error quotes its input, which is a signed link to the
+ * private file.
+ */
+export function failureReason(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  return msg.replace(/https?:\/\/\S+/g, "<link>").replace(/\s+/g, " ").trim().slice(0, 240);
+}
+
+export async function runSubBlurClips(): Promise<{ clips: number; stillsTried: number; failed: number; alreadyFilled: number; skipped?: string; firstError?: string }> {
   if (running) return { clips: 0, stillsTried: 0, failed: 0, alreadyFilled: 0, skipped: "already running" };
   if (!hasR2 || !hasPrivateR2) {
     lastRun = { at: new Date().toISOString(), result: { clips: 0, stillsTried: 0, failed: 0, alreadyFilled: 0, skipped: "storage not configured" } };
@@ -62,6 +73,7 @@ export async function runSubBlurClips(): Promise<{ clips: number; stillsTried: n
   let failed = 0;
   // filled by the creator's own browser while this run worked — not a failure, and nothing is left behind
   let alreadyFilled = 0;
+  let firstError: string | undefined;
   try {
     const now = Date.now();
     pruneFailedAt(failedAt, now);
@@ -99,9 +111,13 @@ export async function runSubBlurClips(): Promise<{ clips: number; stillsTried: n
           alreadyFilled++;
         }
         failedAt.delete(id);
-      } catch {
+      } catch (e) {
         failed++;
         failedAt.set(id, Date.now());
+        if (!firstError) {
+          firstError = failureReason(e);
+          console.error("[sub/blur-clips] clip failed", id, firstError);
+        }
       } finally {
         await rm(dir, { recursive: true, force: true }).catch(() => {});
       }
@@ -119,7 +135,7 @@ export async function runSubBlurClips(): Promise<{ clips: number; stillsTried: n
   } finally {
     running = false;
   }
-  const result = { clips, stillsTried, failed, alreadyFilled };
+  const result = { clips, stillsTried, failed, alreadyFilled, ...(firstError ? { firstError } : {}) };
   lastRun = { at: new Date().toISOString(), result };
   return result;
 }

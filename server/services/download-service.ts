@@ -5,7 +5,7 @@ import { isTooLarge } from "@/lib/downloads/size-cap";
 import { getCachedMetadata, getMetadata } from "@/server/extractors";
 import type { MediaFormat, MediaKind, VideoMetadata } from "@/types";
 
-import { audioDonorCandidates, audioMuxInputArgs, donorAudioArgs, isHevcCodec, MAX_DONOR_PROBES, muxVideoArgs } from "./audio-donor";
+import { audioDonorCandidates, audioMuxInputArgs, donorAudioArgs, hevcDelivery, isHevcCodec, MAX_DONOR_PROBES, muxVideoArgs } from "./audio-donor";
 import { getOrProduce, type DownloadResult } from "./download-cache";
 import { downloadTelegramMedia, downloadTelegramStream } from "./telegram-mtproto";
 import { prepareDownload, YtDlpError } from "./ytdlp-service";
@@ -494,8 +494,8 @@ async function transcodeToH264(format: MediaFormat, knownCodec?: string | null, 
               "-map", "0:v:0",
               "-map", "0:a:0?",
             ]),
-        // with a donor, an HEVC picture is copied untouched for a device that plays it (tagged hvc1)
-        ...(opts.donor ? muxVideoArgs(codec ?? null, !!opts.keepHevc, threads) : videoArgs),
+        // an HEVC picture is copied untouched for a device that plays it (tagged hvc1) — with a donor, or with HE-AAC sound
+        ...(opts.donor || opts.keepHevc ? muxVideoArgs(codec ?? null, !!opts.keepHevc, threads) : videoArgs),
         // 2026-10-30: with a donor, the DONOR's audio codec decides (same rule as audioArgs — audio-donor.ts donorAudioArgs)
         ...(opts.donor ? donorAudioArgs(opts.donor.codecs) : audioArgs),
         "-movflags",
@@ -679,6 +679,17 @@ export interface DownloadClientCapabilities {
   maxBytes?: number;
 }
 
+/**
+ * 🔴 THE ORIGINAL HEVC GOES TO EVERY DEVICE (owner, 2026-10-30: "Send the original HEVC to everyone (fast and full
+ * quality)" — "I don't want anything that breaks down quality and consume time"). The browser's canPlayType answer
+ * (`clientPlaysHevc`) used to decide, and a "no" re-encoded the whole picture: 89 s before the first byte and a 121 MB
+ * file for a 4:45 TikTok (32 MB original), measured on production — and when that encode failed, the rescue handed out
+ * the 576p H.264 sibling ("TikTok downloads in low quality even if I select high quality"). Every iPhone and Mac plays
+ * HEVC, and most Android and Windows players do; the owner accepted that some old devices may not. VP9, AV1 and a
+ * codec the probe can't name still convert — almost nothing plays those.
+ */
+const HEVC_TO_EVERY_DEVICE = true;
+
 export async function resolveDownload(
   url: string,
   formatId: string,
@@ -688,6 +699,7 @@ export async function resolveDownload(
 ): Promise<ResolvedDownload> {
   const meta = (await getCachedMetadata(url)) ?? (await getMetadata(url));
   const title = meta.title || fallbackTitle;
+  const playsHevc = HEVC_TO_EVERY_DEVICE || !!caps.clientPlaysHevc;
   const format = findFormat(meta, formatId, kind);
   if (caps.maxBytes !== undefined && isTooLarge(format?.filesize, caps.maxBytes)) {
     throw new DownloadTooLargeError(format!.filesize!);
@@ -768,7 +780,7 @@ export async function resolveDownload(
     const donor = await audioDonorIfSilent(meta.formats, format!, probedCodecs);
     if (donor) {
       try {
-        return { ...(await transcodeToH264(format!, probed, { donor, keepHevc: !!caps.clientPlaysHevc && isHevcCodec(probed) })), title };
+        return { ...(await transcodeToH264(format!, probed, { donor, keepHevc: playsHevc && isHevcCodec(probed) })), title };
       } catch {
         // fall through — a picture without sound beats no file
       }
@@ -805,7 +817,8 @@ export async function resolveDownload(
       🔴 THREE THINGS MAKE THIS SAFE, and removing any one reintroduces the
       audio-only bug the note above is about:
 
-        1. The CLIENT asked. `clientPlaysHevc` is the browser's own
+        1. The DEVICE plays it — every device now, by the owner's choice (HEVC_TO_EVERY_DEVICE above). Before
+           that: `clientPlaysHevc` is the browser's own
            `canPlayType` answer, not a user-agent guess, and it is a
            conservative proxy for the gallery app that will really open the
            file. Absent ⇒ re-encode, exactly as today.
@@ -816,18 +829,22 @@ export async function resolveDownload(
         3. It is HEVC ONLY. VP9, bytevc1 with no readable codec, and everything
            else still take the long, validated road.
     */
-    const HEVC = new Set(["hevc", "h265", "hvc1", "hev1"]);
     // Raw HEVC only when its audio is not HE-AAC either — the same rule as the
-    // H.264 fast path. An HE-AAC HEVC source for an HEVC-capable client is the
-    // one case that now costs a video encode (transcodeToH264 re-encodes
-    // non-H.264 video). Rare — TikWM's HD tier — and a correct file beats a
-    // fast one that plays wrong.
-    if (caps.clientPlaysHevc && probed && HEVC.has(probed) && !heAac) {
+    // H.264 fast path. With HE-AAC sound only the SOUND is converted (audio-donor.ts hevcDelivery).
+    const hevc = hevcDelivery(playsHevc, probed, heAac);
+    if (hevc === "raw") {
       try {
         return { ...(await proxyDownload(format!)), title };
       } catch {
         // Died between probe and fetch — fall through and re-encode rather
         // than fail the download.
+      }
+    }
+    if (hevc === "copyPicture") {
+      try {
+        return { ...(await transcodeToH264(format!, probed, { keepHevc: true })), title };
+      } catch {
+        // fall through to the full re-encode below — a slower file beats none
       }
     }
 

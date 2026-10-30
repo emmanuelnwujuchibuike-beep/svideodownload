@@ -2,15 +2,18 @@
 
 import dynamic from "next/dynamic";
 import { ArrowLeft, Camera, EyeOff, ImagePlus, Images, Loader2, Lock, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { ROUNDED_CLIP } from "@/features/sub/blur-frame";
+import { BlurLevelPicker, VisitorBlurPreview } from "@/features/sub/blur-level-picker";
 import { exDanger, exField, exPrimary, exQuiet } from "@/features/sub/ui";
 import { haptic } from "@/lib/motion/haptics";
 import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
 import { makeBlurClip } from "@/lib/media/make-blur-clip";
 import { makeThumb } from "@/lib/media/make-thumb";
 import { presignUpload, uploadWithPlan } from "@/lib/storage/client-upload";
+import { BLUR_CLIP_WIDTH_FOR, DEFAULT_BLUR_LEVEL, type BlurLevel } from "@/lib/sub/blur-level";
 import { cn } from "@/lib/utils";
 
 /**
@@ -46,6 +49,8 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
   const [audience, setAudience] = useState<"locked" | "hidden">("locked");
   // 0261: Mature (18+) — opened only by subscribers who confirmed they're 18+. Never explicit.
   const [mature, setMature] = useState(false);
+  // 0307: how blurry visitors see the locked post (owner, 2026-10-30) — chosen on the preview step, where it shows live
+  const [blurLevel, setBlurLevel] = useState<BlurLevel>(DEFAULT_BLUR_LEVEL);
   // the creator's own age check: asked when Mature is switched on, never before (no fetch on open)
   const [ageGate, setAgeGate] = useState(false);
   const adultKnown = useRef(false);
@@ -69,8 +74,6 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const dirty = items.length > 0 || caption.trim() !== "" || !!cover;
-  const coverPreview = useMemo(() => (cover ? URL.createObjectURL(cover) : null), [cover]);
-  useEffect(() => () => void (coverPreview && URL.revokeObjectURL(coverPreview)), [coverPreview]);
   const close = () => {
     if (busy) return;
     // an unpublished draft is never lost to a stray tap — and closing never publishes anything
@@ -136,7 +139,8 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
         const videos = items.map((it, i) => ({ it, i })).filter(({ it }) => it.kind === "video");
         for (const [n, { it, i }] of videos.entries()) {
           setBusy(videos.length > 1 ? `Making the blurred previews… ${n + 1} of ${videos.length}` : "Making the blurred preview…");
-          const clip = await makeBlurClip(it.file).catch(() => null);
+          // at the size the chosen blur level stores (lib/sub/blur-level.ts — 24 px unless Light)
+          const clip = await makeBlurClip(it.file, BLUR_CLIP_WIDTH_FOR[blurLevel]).catch(() => null);
           const url = clip ? await uploadWithPlan(await presignUpload("video", clip.ext), clip.blob, clip.type).catch(() => null) : null;
           if (!url) continue;
           media[i]!.blurVideoUrl = url;
@@ -145,7 +149,7 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
         }
       }
       setBusy("Publishing…");
-      const res = await fetch("/api/sub/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caption: caption.trim() || null, coverUrl, media, audience, mature, ...(blurVideoUrl ? { blurVideoUrl } : {}) }) });
+      const res = await fetch("/api/sub/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caption: caption.trim() || null, coverUrl, media, audience, mature, ...(blurVideoUrl ? { blurVideoUrl } : {}), ...(audience === "locked" ? { blurLevel } : {}) }) });
       const j = (await res.json().catch(() => null)) as { error?: string; code?: string } | null;
       // the server checks the creator's age too: show the check rather than a dead end
       if (res.status === 403 && j?.code === "age_required") {
@@ -314,15 +318,10 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
               <figure>
                 <figcaption className="mb-1.5 text-[12px] font-semibold text-muted-foreground">What visitors see</figcaption>
                 {audience === "locked" ? (
-                  <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-[#1A1430]">
-                    {/* thick blur, as visitors get it (owner, 2026-10-29) — the cover if one is set, else the post itself,
-                        a video playing behind the frost. Local only: nothing here is uploaded. */}
-                    {coverPreview || first?.kind === "image" ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- a local preview
-                      <img src={coverPreview ?? first!.preview} alt="" aria-hidden className="absolute -inset-6 h-[calc(100%+3rem)] w-[calc(100%+3rem)] object-cover blur-[28px]" />
-                    ) : first ? (
-                      <video src={first.preview} muted autoPlay loop playsInline aria-hidden className="absolute -inset-6 h-[calc(100%+3rem)] w-[calc(100%+3rem)] object-cover blur-[28px]" />
-                    ) : null}
+                  <div className={cn("relative aspect-[4/5] rounded-2xl bg-[#1A1430]", ROUNDED_CLIP)}>
+                    {/* EXACTLY as visitors get it at the chosen level (owner, 2026-10-30) — the first item drawn at the size
+                        the level stores and blurred the same way, a video still playing. Local only: nothing is uploaded. */}
+                    {first ? <VisitorBlurPreview src={first.preview} kind={first.kind} level={blurLevel} /> : null}
                     <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/35 text-white">
                       <Lock className="h-5 w-5" aria-hidden />
                       <span className="text-[10.5px] font-bold uppercase tracking-[0.08em]">Subscriber only</span>
@@ -336,6 +335,8 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
                 )}
               </figure>
             </div>
+            {/* 0307: the creator sets how blurry visitors see it — the preview above follows the choice live */}
+            {audience === "locked" ? <BlurLevelPicker value={blurLevel} onChange={setBlurLevel} disabled={!!busy} className="mt-3" /> : null}
             {progress !== null ? (
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-black/[0.05] dark:bg-white/[0.07]" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)} aria-label="Upload progress">
                 <div className="h-full w-full origin-left rounded-full bg-gradient-to-r from-primary to-accent transition-transform duration-300 motion-reduce:transition-none" style={{ transform: `scaleX(${Math.max(0.06, progress)})` }} />

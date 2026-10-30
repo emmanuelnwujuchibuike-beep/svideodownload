@@ -2,26 +2,31 @@
 
 import { useEffect, useRef } from "react";
 
+import { blurClass } from "@/lib/sub/blur-level";
 import { cn } from "@/lib/utils";
 
 /*
   A locked exclusive video, playing BLURRED and SILENT for a viewer without a subscription (0305 — owner, 2026-10-28:
   "it should auto play and be blurred"; 2026-10-29: "auto play like feed posts … blurred while it plays but without
-  sound"). The file is a 24 px clip made in the creator's browser (lib/media/make-blur-clip.ts): no detail exists in it
-  to un-blur, so the CSS blur on top is only the look, never the gate. Muted, looped, inline, never controls; it plays
-  while on screen, like a feed video.
+  sound"). The file is a tiny clip (24 px, or 48 px when the creator chose Light — lib/sub/blur-level.ts): no detail
+  exists in it to un-blur, so the CSS blur on top is only the look, never the gate. Muted, looped, inline, never
+  controls; it plays while on screen, like a feed video.
+
+  🔴 THE MOVEMENT MUST SHOW (owner, 2026-10-30: "the auto play should be obvious movement not too much thick blurred that
+  the auto play doesn't even show"). The CSS blur used to be blur-xl (24 px) on top of the 24 px clip, which washed the
+  motion out. It is now the creator's level — light 3 px, medium (default) 7 px, strong 16 px.
 
   ── Why it used to sit black on an iPhone (2026-10-29) ──────────────────────────
   · iOS starts a video without a tap only if it is muted AND inline when play() runs. React writes `muted` as a DOM
     property on a client render but not when it hydrates server HTML, and never as an attribute — so play() could be
     refused, and with no poster and nothing played, the tile stayed black. All of it is now set here, every way Safari
-    reads it, before the first play().
+    reads it, before the first play(); `autoPlay` is on too, the path Safari honours without any script.
   · `preload="metadata"` and no poster left nothing on screen until playback: the clip is a few KB, so it preloads, and
     without a poster a `#t=0.001` fragment makes Safari paint the first frame.
   · Low Power Mode refuses every autoplay: the viewer's next touch anywhere starts the clips on screen.
   · Reduce Motion no longer stops it — feed videos autoplay under it too, and the owner asked for the same behaviour.
 */
-export function BlurredClip({ src, poster, className }: { src: string; poster?: string | null; className?: string }) {
+export function BlurredClip({ src, poster, level, className }: { src: string; poster?: string | null; level?: unknown; className?: string }) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     const v = ref.current;
@@ -40,6 +45,7 @@ export function BlurredClip({ src, poster, className }: { src: string; poster?: 
     v.addEventListener("canplay", tryPlay);
     // autoplay refused (Low Power Mode, a data saver): the next touch on the page is a gesture, and play() is allowed
     document.addEventListener("pointerdown", tryPlay, { passive: true });
+    document.addEventListener("touchend", tryPlay, { passive: true });
 
     let io: IntersectionObserver | null = null;
     if (inView) tryPlay();
@@ -59,6 +65,7 @@ export function BlurredClip({ src, poster, className }: { src: string; poster?: 
       v.removeEventListener("loadeddata", tryPlay);
       v.removeEventListener("canplay", tryPlay);
       document.removeEventListener("pointerdown", tryPlay);
+      document.removeEventListener("touchend", tryPlay);
       v.pause();
     };
   }, [src]);
@@ -69,13 +76,14 @@ export function BlurredClip({ src, poster, className }: { src: string; poster?: 
       src={poster ? src : `${src}#t=0.001`}
       poster={poster ?? undefined}
       muted
+      autoPlay
       loop
       playsInline
       preload="auto"
       aria-hidden
       tabIndex={-1}
       disablePictureInPicture
-      className={cn("pointer-events-none object-cover blur-xl", className)}
+      className={cn("pointer-events-none object-cover", blurClass(level), className)}
     />
   );
 }

@@ -30,9 +30,10 @@ export function backfillBlurClips(): void {
 
 async function run(): Promise<void> {
   const r = await fetch("/api/sub/posts/blur-clips", { credentials: "same-origin" }).catch(() => null);
-  const j = (await r?.json().catch(() => null)) as { todo?: { postId: string; idx: number; url: string }[] } | null;
+  const j = (await r?.json().catch(() => null)) as { todo?: { postId: string; idx: number; url: string; width?: number }[] } | null;
   for (const t of j?.todo ?? []) {
-    const clip = await makeBlurClip(t.url).catch(() => null);
+    // at the size the post's blur level stores (0307 — 24 px unless the creator chose Light)
+    const clip = await makeBlurClip(t.url, t.width).catch(() => null);
     if (!clip) continue;
     const url = await uploadWithPlan(await presignUpload("video", clip.ext), clip.blob, clip.type).catch(() => null);
     if (!url) continue;

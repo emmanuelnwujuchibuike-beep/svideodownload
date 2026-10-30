@@ -306,8 +306,10 @@ describe("locked previews and checkout", () => {
     if (!out.ok || !out.discover) throw new Error("no discover");
     expect(out.discover.cards.map((c) => c.creatorId)).toEqual([C.discover]);
     const card = out.discover.cards[0]!;
-    // 0306: `slides` (one blurred slide per item) — and a slide carries nothing but its kind and blurred previews
-    expect(Object.keys(card).filter((k) => k !== "slides").sort()).toEqual(["coverUrl", "createdAt", "creatorId", "hasVideo", "id", "items"]);
+    // 0306: `slides` (one blurred slide per item) — and a slide carries nothing but its kind and blurred previews.
+    // 0307: `blurLevel` — the creator's light | medium | strong, a display setting, never content
+    expect(Object.keys(card).filter((k) => k !== "slides").sort()).toEqual(["blurLevel", "coverUrl", "createdAt", "creatorId", "hasVideo", "id", "items"]);
+    expect(["light", "medium", "strong"]).toContain(card.blurLevel);
     for (const s of card.slides ?? []) expect(Object.keys(s).every((k) => ["kind", "blurUrl", "blurVideoUrl"].includes(k))).toBe(true);
     expect(out.discover.creators[C.discover]).toMatchObject({ priceCents: 500, totalCents: 550, periodDays: 30 });
     const json = JSON.stringify(out.discover);

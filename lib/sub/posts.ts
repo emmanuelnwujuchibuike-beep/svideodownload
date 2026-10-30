@@ -4,13 +4,14 @@ import { after } from "next/server";
 
 import { isAdult } from "@/lib/age/server";
 import { makeSizedWebp } from "@/lib/media/thumbnail";
-import { deletePrivate, hasPrivateR2, presignPrivateGet, presignPrivatePut, readPrivatePrefix } from "@/lib/storage/r2";
+import { deletePrivate, deleteR2, hasPrivateR2, presignPrivateGet, presignPrivatePut, r2PublicUrl, readPrivatePrefix } from "@/lib/storage/r2";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { afterCursorFilter, audienceOf, decodeSubCursor, encodeSubCursor, isSubAudience, isUuid, type SubAudience, visibleTo } from "./guards";
 import { kickBlurClips } from "./blur-clip-kick";
 import { postNeedsBlurWork } from "./blur-clip-plan";
-import { ensureBlurPreview, missingBlurClips, readBlurPreviews, readBlurSlides, readBlurVideos, saveItemBlurClip, type BlurSlide } from "./blur-preview";
+import { blurPreviewsChange, DEFAULT_BLUR_LEVEL, isBlurLevel, normalizeBlurLevel, type BlurLevel } from "./blur-level";
+import { ensureBlurPreview, missingBlurClips, readBlurLevels, readBlurPreviews, readBlurSlides, readBlurVideos, saveItemBlurClip, type BlurSlide } from "./blur-preview";
 import { hasActiveSub, subConfig } from "./server";
 import { checkUpload } from "./upload-check";
 import { recordSubPostView } from "./visits";
@@ -86,7 +87,7 @@ function validCover(url: string | null | undefined): string | null | false {
   }
 }
 
-export async function createSubPost(creatorId: string, input: { caption?: string | null; coverUrl?: string | null; blurVideoUrl?: string | null; media: { key: string; kind: string; width?: number | null; height?: number | null; thumbKey?: string | null; blurVideoUrl?: string | null }[]; audience?: unknown; mature?: unknown }): Promise<{ ok: true; id: string; audience: SubAudience; mature: boolean } | Fail> {
+export async function createSubPost(creatorId: string, input: { caption?: string | null; coverUrl?: string | null; blurVideoUrl?: string | null; media: { key: string; kind: string; width?: number | null; height?: number | null; thumbKey?: string | null; blurVideoUrl?: string | null }[]; audience?: unknown; mature?: unknown; blurLevel?: unknown }): Promise<{ ok: true; id: string; audience: SubAudience; mature: boolean } | Fail> {
   if (!hasPrivateR2) return fail("Private storage isn't set up yet.", 503);
   const db = createAdminClient();
   const { data: s } = await db.from("creator_membership_settings").select("sub_price_cents").eq("creator_id", creatorId).maybeSingle();
@@ -123,6 +124,7 @@ export async function createSubPost(creatorId: string, input: { caption?: string
   if (input.mature !== undefined && typeof input.mature !== "boolean") return fail("Invalid request.");
   const mature = input.mature === true;
   if (mature && !(await isAdult(creatorId).catch(() => false))) return AGE_REQUIRED_TO_POST;
+  if (input.blurLevel !== undefined && !isBlurLevel(input.blurLevel)) return fail("Choose how blurry the preview is.");
   let ins = await db.from("sub_posts").insert({ creator_id: creatorId, caption, cover_url: cover, audience, ...(mature ? { mature } : {}) }).select("id").single();
   // 0261 not applied: a Mature post is NEVER published as an ordinary one
   if (ins.error && /mature/.test(ins.error.message)) return fail("Mature posts arrive with the next update. Nothing was posted.", 503);
@@ -133,6 +135,11 @@ export async function createSubPost(creatorId: string, input: { caption?: string
   const { data: post, error } = ins;
   if (error) return MISSING(error.message) ? fail("Subscriber posts arrive with the next update.", 503) : fail("Couldn't post that.", 500);
   const id = (post as Row).id as string;
+  // 0307: how blurry the creator wants the preview (owner, 2026-10-30). Written before the stills are made (they read
+  // it, below). Best effort: before 0307 the post is the default, never a failed post.
+  if (isBlurLevel(input.blurLevel) && input.blurLevel !== DEFAULT_BLUR_LEVEL) {
+    await db.from("sub_posts").update({ blur_level: input.blurLevel }).eq("id", id).then(() => undefined, () => undefined);
+  }
   // 0305: the blurred moving preview of a locked video — our own public media only, like the cover. Best effort: a
   // missing column or a refused URL leaves the still preview, never a failed post. Never on a hidden post (no public tile).
   const blurVideo = audience === "locked" ? validCover(input.blurVideoUrl) : null;
@@ -222,6 +229,8 @@ export interface SubPostCard {
   blurVideoUrl?: string;
   /** 0306: one blurred slide per item, for the same viewers (a locked album slides sideways) */
   slides?: BlurSlide[];
+  /** 0307: how blurry the creator wants the locked preview — for the viewers who see it, and the creator who sets it */
+  blurLevel?: BlurLevel;
   coverUrl: string | null;
   items: number;
   hasVideo: boolean;
@@ -332,6 +341,8 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
   const blurVideos = !access && !isCreator ? await readBlurVideos(ids).catch(() => new Map<string, string>()) : new Map<string, string>();
   // 0306: and one blurred slide per item, so a locked album slides sideways (owner, 2026-10-29)
   const slides = !access && !isCreator ? await readBlurSlides(ids).catch(() => new Map<string, BlurSlide[]>()) : new Map<string, BlurSlide[]>();
+  // 0307: each post's blur level — for a viewer without access (the look) and the creator (the setting); before 0307 none
+  const levels = (!access && !isCreator) || isCreator ? await readBlurLevels(ids).catch(() => new Map<string, BlurLevel>()) : new Map<string, BlurLevel>();
   // a locked video still without its blurred clip: the worker makes it (throttled, after the response — never awaited)
   if (!access && !isCreator && page.some((r) => postNeedsBlurWork(slides.get(r.id as string), counts.get(r.id as string)?.video ?? false, blurVideos.get(r.id as string)))) kickBlurClips();
   if (isCreator) {
@@ -370,7 +381,7 @@ export async function listSubPosts(creatorId: string, viewerId: string | null, b
     );
   }
   return {
-    posts: page.map((r) => ({ id: r.id as string, ...(access ? { audience: audienceOf(r.audience) } : {}), ...(r.mature === true ? { mature: true as const } : {}), ...(ageLocked(r) ? { ageLocked: true as const } : {}), ...(!access && !isCreator && blurs.has(r.id as string) ? { blurUrl: blurs.get(r.id as string)! } : {}), ...(!access && !isCreator && blurVideos.has(r.id as string) ? { blurVideoUrl: blurVideos.get(r.id as string)! } : {}), ...(!access && !isCreator && slides.has(r.id as string) ? { slides: slides.get(r.id as string)! } : {}), caption: access && !ageLocked(r) ? ((r.caption as string | null) ?? null) : null, coverUrl: ageLocked(r) ? null : ((r.cover_url as string | null) ?? null), items: counts.get(r.id as string)?.n ?? 0, hasVideo: counts.get(r.id as string)?.video ?? false, createdAt: r.created_at as string, ...(r.status === "archived" ? { removed: true } : {}), ...(opened.has(r.id as string) ? { open: opened.get(r.id as string) } : {}), ...(thumbs.has(r.id as string) ? { thumbUrl: thumbs.get(r.id as string) } : {}) })),
+    posts: page.map((r) => ({ id: r.id as string, ...(access ? { audience: audienceOf(r.audience) } : {}), ...(r.mature === true ? { mature: true as const } : {}), ...(ageLocked(r) ? { ageLocked: true as const } : {}), ...(!access && !isCreator && blurs.has(r.id as string) ? { blurUrl: blurs.get(r.id as string)! } : {}), ...(!access && !isCreator && blurVideos.has(r.id as string) ? { blurVideoUrl: blurVideos.get(r.id as string)! } : {}), ...(!access && !isCreator && slides.has(r.id as string) ? { slides: slides.get(r.id as string)! } : {}), ...(levels.has(r.id as string) ? { blurLevel: levels.get(r.id as string)! } : {}), caption: access && !ageLocked(r) ? ((r.caption as string | null) ?? null) : null, coverUrl: ageLocked(r) ? null : ((r.cover_url as string | null) ?? null), items: counts.get(r.id as string)?.n ?? 0, hasVideo: counts.get(r.id as string)?.video ?? false, createdAt: r.created_at as string, ...(r.status === "archived" ? { removed: true } : {}), ...(opened.has(r.id as string) ? { open: opened.get(r.id as string) } : {}), ...(thumbs.has(r.id as string) ? { thumbUrl: thumbs.get(r.id as string) } : {}) })),
     access,
     isCreator,
     next: rows.length > PAGE ? encodeSubCursor(page[page.length - 1]!.created_at as string, page[page.length - 1]!.id as string) : null,
@@ -447,6 +458,50 @@ export async function setSubPostMature(creatorId: string, postId: string, mature
   return (data ?? []).length ? { ok: true, mature } : fail("Not found.", 404);
 }
 
+/** A public media URL of ours → its key in the public bucket; anything else → null. */
+function publicKeyOf(url: unknown): string | null {
+  const base = r2PublicUrl("");
+  if (typeof url !== "string" || !url.startsWith(base) || url.length === base.length) return null;
+  try {
+    return url.slice(base.length).split("/").map(decodeURIComponent).join("/");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 0307: the creator chooses how blurry their locked post looks to non-subscribers (owner, 2026-10-30: "Make users be
+ * able to set how blurry they want the post to be"). Only their own, only while published.
+ *
+ * A change that needs a different stored size — to or from Light (lib/sub/blur-level.ts) — clears the post's blurred
+ * stills and clips and deletes the old clip files, so no preview of the old size outlives the choice: the stills are made
+ * again right after the response, the clips by the worker and by the creator's own browser on their next visit.
+ */
+export async function setSubPostBlurLevel(creatorId: string, postId: string, level: unknown): Promise<{ ok: true; blurLevel: BlurLevel; remaking: boolean } | Fail> {
+  if (!isUuid(creatorId) || !isUuid(postId) || !isBlurLevel(level)) return fail("Invalid request.");
+  const db = createAdminClient();
+  const { data: own, error: readError } = await db.from("sub_posts").select("blur_level, blur_video_url").eq("id", postId).eq("creator_id", creatorId).eq("status", "published").maybeSingle();
+  if (readError) return MISSING(readError.message) ? fail("Blur settings arrive with the next update.", 503) : fail("Couldn't save that.", 500);
+  if (!own) return fail("Not found.", 404);
+  const from = normalizeBlurLevel((own as Row).blur_level);
+  const { error } = await db.from("sub_posts").update({ blur_level: level, updated_at: new Date().toISOString() }).eq("id", postId).eq("creator_id", creatorId);
+  if (error) return MISSING(error.message) ? fail("Blur settings arrive with the next update.", 503) : fail("Couldn't save that.", 500);
+  const remaking = blurPreviewsChange(from, level);
+  if (remaking) {
+    const items = await db.from("sub_post_media").select("blur_video_url").eq("post_id", postId).then((r) => ((r.data ?? []) as Row[]), () => [] as Row[]);
+    const oldClips = [...new Set([(own as Row).blur_video_url, ...items.map((m) => m.blur_video_url)].map(publicKeyOf).filter((k): k is string => !!k))];
+    const noop = () => undefined;
+    await db.from("sub_posts").update({ blur_preview: null, blur_video_url: null }).eq("id", postId).then(noop, noop);
+    await db.from("sub_post_media").update({ blur_preview: null, blur_video_url: null }).eq("post_id", postId).then(noop, noop);
+    after(async () => {
+      await Promise.all(oldClips.map((k) => deleteR2(k).catch(() => false)));
+      await ensureBlurPreview(postId);
+    });
+    kickBlurClips();
+  }
+  return { ok: true, blurLevel: level, remaking };
+}
+
 /** The creator switches one of their posts between 'locked' and 'hidden' (0248). Only their own, only while published. */
 export async function setSubPostAudience(creatorId: string, postId: string, audience: unknown): Promise<{ ok: true } | Fail> {
   if (!isUuid(creatorId) || !isUuid(postId) || !isSubAudience(audience)) return fail("Invalid request.");
@@ -521,7 +576,7 @@ export async function setSubPostCaption(creatorId: string, postId: string, raw: 
  * file, never the caption. A HIDDEN post answers like one that does not exist; a Mature post withholds the pictures
  * from a viewer who hasn't confirmed they're 18+. A viewer WITH access opens the post through openSubPost instead.
  */
-export async function previewSubPost(postId: string, viewerId: string | null): Promise<{ ok: true; access: boolean; creator: { id: string; handle: string | null; name: string; avatarUrl: string | null }; coverUrl: string | null; blurUrl: string | null; blurVideoUrl: string | null; slides: BlurSlide[]; items: number; hasVideo: boolean; mature: boolean } | Fail> {
+export async function previewSubPost(postId: string, viewerId: string | null): Promise<{ ok: true; access: boolean; creator: { id: string; handle: string | null; name: string; avatarUrl: string | null }; coverUrl: string | null; blurUrl: string | null; blurVideoUrl: string | null; slides: BlurSlide[]; blurLevel: BlurLevel; items: number; hasVideo: boolean; mature: boolean } | Fail> {
   const gate = await readSubPostGate(postId);
   if (!gate) return fail("This post isn't available.", 404);
   const db = createAdminClient();
@@ -537,6 +592,7 @@ export async function previewSubPost(postId: string, viewerId: string | null): P
   ]);
   // blurred previews for every viewer without access, Mature included (2026-10-29) — the cover stays age-gated below
   const slides = access ? [] : ((await readBlurSlides([postId]).catch(() => new Map<string, BlurSlide[]>())).get(postId) ?? []);
+  const blurLevel = (await readBlurLevels([postId]).catch(() => new Map<string, BlurLevel>())).get(postId) ?? DEFAULT_BLUR_LEVEL;
   const p = prof as Row | null;
   const kinds = ((media ?? []) as Row[]).map((m) => m.media_kind);
   return {
@@ -547,6 +603,7 @@ export async function previewSubPost(postId: string, viewerId: string | null): P
     blurUrl: blurs.get(postId) ?? null,
     blurVideoUrl: clips.get(postId) ?? null,
     slides,
+    blurLevel,
     items: kinds.length,
     hasVideo: kinds.includes("video"),
     mature: gate.mature,
@@ -557,12 +614,13 @@ export async function previewSubPost(postId: string, viewerId: string | null): P
  * 0306 — the creator's older videos that still lack a blurred clip, each with a five-minute link to their OWN private
  * file, so their browser can make the clip (owner, 2026-10-29: every locked video plays blurred). Two per visit at most.
  */
-export async function blurClipsToMake(creatorId: string): Promise<{ postId: string; idx: number; url: string }[]> {
+export async function blurClipsToMake(creatorId: string): Promise<{ postId: string; idx: number; url: string; width: number }[]> {
   if (!hasPrivateR2) return [];
   const todo = await missingBlurClips(creatorId).catch(() => []);
   // only the creator's own folder, as every other private read
   const own = todo.filter((t) => t.key?.startsWith(`sub/${creatorId}/`));
-  return Promise.all(own.map(async (t) => ({ postId: t.postId, idx: t.idx, url: await presignPrivateGet(t.key, 300) })));
+  // `width`: the size the post's blur level stores (0307), so the creator's browser makes the clip at it
+  return Promise.all(own.map(async (t) => ({ postId: t.postId, idx: t.idx, url: await presignPrivateGet(t.key, 300), width: t.width })));
 }
 
 /** Stores a clip the creator's browser made for their own post: our public media host only, an empty slot only. */

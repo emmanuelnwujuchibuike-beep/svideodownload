@@ -87,6 +87,8 @@ interface Card {
   blurVideoUrl?: string;
   /** 0306: one blurred slide per item — the card slides sideways */
   slides?: BlurSlideView[];
+  /** 0307: how blurry the creator wants it (lib/sub/blur-level.ts) */
+  blurLevel?: string;
 }
 type DiscoverCreator = Creator & { priceCents: number; feeCents: number; feePercent: number; totalCents: number; periodDays: number; totalPosts?: number | null };
 export interface ExclusiveFeedPageView {
@@ -555,7 +557,7 @@ export function LockedPreviewCard({ card, creator }: { card: Card; creator: Disc
       <div className="relative aspect-[4/5] overflow-hidden bg-[#1A1430]">
         {/* 0305 + 0306: every item, blurred — a video plays (a 24 px clip, nothing to un-blur), an album slides sideways
             (owner, 2026-10-29). The overlay lets a swipe through to the slides. */}
-        <BlurredSlides slides={card.slides} cover={card.coverUrl} fallbackStill={card.blurUrl} fallbackClip={card.blurVideoUrl} />
+        <BlurredSlides slides={card.slides} cover={card.coverUrl} fallbackStill={card.blurUrl} fallbackClip={card.blurVideoUrl} level={card.blurLevel} />
         <span aria-hidden className="pointer-events-none absolute inset-0 bg-black/25" />
         <span className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2.5 px-6 text-center text-white">
           <span aria-hidden className="flex h-12 w-12 items-center justify-center rounded-full border border-white/30 bg-black/30">

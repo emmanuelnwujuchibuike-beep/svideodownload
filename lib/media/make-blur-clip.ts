@@ -26,7 +26,7 @@ function pickMime(): { mime: string; type: "video/mp4" | "video/webm"; ext: "mp4
  * `source` is the picked file, or (0306 — an older post's video, made on the creator's own visit) a short-lived link to
  * their private file: read with CORS, so the canvas stays readable, and only the first seconds are ever streamed.
  */
-export async function makeBlurClip(source: File | string): Promise<{ blob: Blob; ext: "mp4" | "webm"; type: string } | null> {
+export async function makeBlurClip(source: File | string, width: number = BLUR_CLIP_WIDTH): Promise<{ blob: Blob; ext: "mp4" | "webm"; type: string } | null> {
   if (typeof document === "undefined" || !("captureStream" in HTMLCanvasElement.prototype)) return null;
   const m = pickMime();
   if (!m) return null;
@@ -45,7 +45,8 @@ export async function makeBlurClip(source: File | string): Promise<{ blob: Blob;
       window.setTimeout(() => reject(new Error("timeout")), 15_000);
     });
     if (!v.videoWidth || !v.videoHeight) return null;
-    const w = BLUR_CLIP_WIDTH;
+    // the post's blur level decides the size (lib/sub/blur-level.ts) — 24 px unless it is Light; bounded either way
+    const w = Math.max(8, Math.min(64, Math.round(width) || BLUR_CLIP_WIDTH));
     // even dimensions: some encoders refuse odd ones
     const h = Math.max(2, Math.round((w * v.videoHeight) / v.videoWidth / 2) * 2);
     const canvas = document.createElement("canvas");

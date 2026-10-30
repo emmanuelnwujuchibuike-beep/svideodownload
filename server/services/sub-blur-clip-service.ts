@@ -65,7 +65,8 @@ export async function runSubBlurClips(): Promise<{ clips: number; stillsTried: n
       const dir = await mkdtemp(join(tmpdir(), "sub-blur-"));
       try {
         const out = join(dir, "clip.mp4");
-        await run(FFMPEG, buildBlurClipArgs(await presignPrivateGet(t.key, 300), out), CLIP_TIMEOUT_MS);
+        // at the size the post's blur level stores (0307 — 24 px unless the creator chose Light)
+        await run(FFMPEG, buildBlurClipArgs(await presignPrivateGet(t.key, 300), out, t.width), CLIP_TIMEOUT_MS);
         const bytes = await readFile(out);
         if (!bytes.byteLength || bytes.byteLength > BLUR_CLIP_MAX_BYTES) throw new Error("not a blur clip");
         const key = `sub-blur/${t.postId}/${t.idx}-${Date.now().toString(36)}.mp4`;

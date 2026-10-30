@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Eye, EyeOff, Film, Flag, Heart, Images, Loader2, Lock, MessageCircle, Pencil, Plus, Send, Trash2, X } from "lucide-react";
+import { Aperture, Eye, EyeOff, Film, Flag, Heart, Images, Loader2, Lock, MessageCircle, Pencil, Plus, Send, Trash2, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -18,8 +18,11 @@ import { CreatorSubscribeCard } from "./subscribe-card";
 import { profilePath } from "@/lib/social/profile-url";
 import type { SubOption } from "@/lib/sub/pricing";
 import { CommentGiftCard } from "@/features/gift/comment-gift-card";
+import { BLUR_COVER, ROUNDED_CLIP } from "@/features/sub/blur-frame";
 import { BlurredClip } from "@/features/sub/blurred-clip";
 import { SendSubPostSheet } from "@/features/sub/send-sub-post-sheet";
+import { BlurLevelPicker } from "@/features/sub/blur-level-picker";
+import { blurClass, normalizeBlurLevel, type BlurLevel } from "@/lib/sub/blur-level";
 import type { CommentGift } from "@/lib/gift/comment-gifts";
 import { PostGiftButton } from "@/features/gift/post-gift-button";
 import type { GiftRecipient } from "@/features/gift/gift-sheet";
@@ -70,6 +73,8 @@ interface Card {
   blurUrl?: string;
   /** 0305: a locked video's blurred clip, for a viewer without access */
   blurVideoUrl?: string;
+  /** 0307: how blurry the creator wants the locked preview (the look for visitors, the setting for the creator) */
+  blurLevel?: string;
 }
 
 // 0261: the age check loads only when a Mature post is tapped
@@ -246,12 +251,13 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
                 onClick={() => (state.access && p.ageLocked ? setAgeGate(true) : state.access && !p.removed ? setOpen(p.id) : void 0)}
                 disabled={!!p.removed}
                 aria-label={p.removed ? "Removed by Frenzsave. Under review." : state.access && p.ageLocked ? "Mature (18+). Confirm your age to open." : state.access ? `Open subscriber post${p.caption ? `: ${p.caption.slice(0, 60)}` : ""}` : p.mature ? "Mature (18+). Subscriber only." : "Subscriber only. Subscribe to unlock."}
-                className="relative block aspect-[3/4] w-full overflow-hidden bg-frenz-fill transition active:scale-[0.98] sm:rounded-lg motion-reduce:active:scale-100"
+                className={cn("relative block aspect-[3/4] w-full bg-frenz-fill transition active:scale-[0.98] sm:rounded-lg motion-reduce:active:scale-100", ROUNDED_CLIP)}
               >
                 {!state.access && p.blurVideoUrl ? (
                   /* a locked video PLAYS blurred to a non-subscriber, ahead of any still cover (owner, 2026-10-29: "auto
-                     play … like normal feed but blurred on unsubscriber") — a 24 px clip, no detail to recover */
-                  <BlurredClip src={p.blurVideoUrl} poster={p.coverUrl ?? p.blurUrl} className="h-full w-full scale-125" />
+                     play … like normal feed but blurred on unsubscriber") — a tiny clip, no detail to recover, at the
+                     creator's blur level (0307) */
+                  <BlurredClip src={p.blurVideoUrl} poster={p.coverUrl ?? p.blurUrl} level={p.blurLevel} className={BLUR_COVER} />
                 ) : p.coverUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- the creator's PUBLIC cover, never the private file
                   <img src={p.coverUrl} alt="" loading={idx < 9 ? "eager" : "lazy"} decoding="async" draggable={false} className="h-full w-full object-cover" />
@@ -259,13 +265,13 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
                   // eslint-disable-next-line @next/next/no-img-element -- a five-minute private link to the small preview
                   <img src={p.thumbUrl} alt="" loading={idx < 9 ? "eager" : "lazy"} decoding="async" draggable={false} onContextMenu={(e) => e.preventDefault()} className="pointer-events-none h-full w-full object-cover" />
                 ) : p.blurVideoUrl ? (
-                  /* 0305: a locked video plays blurred to a non-subscriber — a 24 px clip, no detail to recover */
-                  <BlurredClip src={p.blurVideoUrl} poster={p.blurUrl} className="h-full w-full scale-125" />
+                  /* 0305: a locked video plays blurred to a non-subscriber — a tiny clip, no detail to recover */
+                  <BlurredClip src={p.blurVideoUrl} poster={p.blurUrl} level={p.blurLevel} className={BLUR_COVER} />
                 ) : p.blurUrl ? (
-                  /* 0263 (owner, REQUIRED): a non-subscriber's tile is the server's 20 px blurred preview, scaled
-                     up and blurred again — the only picture of the post they ever receive */
+                  /* 0263 (owner, REQUIRED): a non-subscriber's tile is the server's tiny blurred preview, scaled
+                     up and blurred again at the creator's level — the only picture of the post they ever receive */
                   // eslint-disable-next-line @next/next/no-img-element -- an inline data URL, already blurred on the server
-                  <img src={p.blurUrl} alt="" aria-hidden draggable={false} className="pointer-events-none h-full w-full scale-125 object-cover blur-xl" />
+                  <img src={p.blurUrl} alt="" aria-hidden draggable={false} className={cn("pointer-events-none", BLUR_COVER, blurClass(p.blurLevel))} />
                 ) : null}
                 {/* 🔴 COVER FIRST (owner 2026-10-12: "not supposed to load the media when loading the cover"):
                     a tile shows the public cover or the small private preview and NEVER the original photo or
@@ -326,13 +332,13 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
           }}
         />
       ) : null}
-      {open ? <PrivateViewer postId={open} giftTo={{ userId: creatorId, name: creatorName, avatarUrl: null }} initial={state.posts.find((p) => p.id === open)?.open ?? null} isCreator={state.isCreator} onClose={() => setOpen(null)} onDeleted={(id) => { removed(id); setOpen(null); }} onEdited={(id, caption) => { forgetSubPosts(creatorId); setState((st) => (st ? { ...st, posts: st.posts.map((x) => (x.id === id ? { ...x, caption, ...(x.open ? { open: { ...x.open, caption } } : {}) } : x)) } : st)); }} /> : null}
+      {open ? <PrivateViewer postId={open} giftTo={{ userId: creatorId, name: creatorName, avatarUrl: null }} initial={state.posts.find((p) => p.id === open)?.open ?? null} isCreator={state.isCreator} blurLevel={state.posts.find((p) => p.id === open)?.blurLevel} onBlurLevel={(id, blurLevel) => { forgetSubPosts(creatorId); setState((st) => (st ? { ...st, posts: st.posts.map((x) => (x.id === id ? { ...x, blurLevel } : x)) } : st)); }} onClose={() => setOpen(null)} onDeleted={(id) => { removed(id); setOpen(null); }} onEdited={(id, caption) => { forgetSubPosts(creatorId); setState((st) => (st ? { ...st, posts: st.posts.map((x) => (x.id === id ? { ...x, caption, ...(x.open ? { open: { ...x.open, caption } } : {}) } : x)) } : st)); }} /> : null}
     </div>
   );
 }
 
 /** The private viewer: a portal with no URL, no share action, covered whenever the app is not in front. */
-export function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted, onEdited, giftTo = null }: { postId: string; initial: Opened | null; isCreator: boolean; onClose: () => void; onDeleted: (id: string) => void; onEdited?: (id: string, caption: string | null) => void; /** the creator, for a sticker gift from the comments (owner, 2026-10-28) */ giftTo?: GiftRecipient | null }) {
+export function PrivateViewer({ postId, initial, isCreator, blurLevel, onBlurLevel, onClose, onDeleted, onEdited, giftTo = null }: { postId: string; initial: Opened | null; isCreator: boolean; /** 0307: the post's current blur level, for the creator's setting */ blurLevel?: string; onBlurLevel?: (id: string, level: BlurLevel) => void; onClose: () => void; onDeleted: (id: string) => void; onEdited?: (id: string, caption: string | null) => void; /** the creator, for a sticker gift from the comments (owner, 2026-10-28) */ giftTo?: GiftRecipient | null }) {
   // already opened by the gallery (or earlier in this tab) and still valid: shown at once, no second check
   const [data, setData] = useState<Opened | null>(() => (fresh(openedCache.get(postId)) ? openedCache.get(postId)! : fresh(initial) ? initial : null));
   const [index, setIndex] = useState(0);
@@ -357,6 +363,24 @@ export function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted, 
   // Part 3 (0248): the creator switches who may know this post exists
   const [audience, setAudience] = useState<"locked" | "hidden" | null>(null);
   const [savingAudience, setSavingAudience] = useState(false);
+  // 0307: the creator sets how blurry visitors see this post (owner, 2026-10-30)
+  const [blurOpen, setBlurOpen] = useState(false);
+  const [level, setLevel] = useState<BlurLevel>(() => normalizeBlurLevel(blurLevel));
+  const [savingLevel, setSavingLevel] = useState(false);
+  const [levelNote, setLevelNote] = useState<string | null>(null);
+  const saveLevel = async (next: BlurLevel) => {
+    if (next === level || savingLevel) return;
+    setSavingLevel(true);
+    setLevelNote(null);
+    const res = await fetch(`/api/sub/posts/${postId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ blurLevel: next }) }).catch(() => null);
+    const j = (await res?.json().catch(() => null)) as { blurLevel?: string; remaking?: boolean; error?: string } | null;
+    setSavingLevel(false);
+    if (!res?.ok) return setLevelNote(j?.error ?? "Couldn't change the blur.");
+    setLevel(next);
+    onBlurLevel?.(postId, next);
+    haptic("selection");
+    setLevelNote(j?.remaking ? "Saved. Visitors' previews are being made again at the new size — a moment." : "Saved. Visitors see it this way now.");
+  };
   // Part 4: the creator edits the caption in place (server: own published post only, plain text)
   const [editing, setEditing] = useState<string | null>(null);
   const [savingCaption, setSavingCaption] = useState(false);
@@ -557,6 +581,11 @@ export function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted, 
                 {savingAudience ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : (audience ?? data.audience) === "hidden" ? <EyeOff className="h-5 w-5" aria-hidden /> : <Eye className="h-5 w-5" aria-hidden />}
               </button>
             ) : null}
+            {isCreator && data && (audience ?? data.audience) !== "hidden" ? (
+              <button type="button" aria-label="How blurry visitors see this post" onClick={() => (setLevelNote(null), setBlurOpen(true))} className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/35 transition active:bg-white/10">
+                <Aperture className="h-5 w-5" aria-hidden />
+              </button>
+            ) : null}
             {isCreator ? (
               <button type="button" aria-label="Send this post to chats" onClick={() => setSharing(true)} className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/35 transition active:bg-white/10">
                 <Send className="h-5 w-5" aria-hidden />
@@ -578,6 +607,17 @@ export function PrivateViewer({ postId, initial, isCreator, onClose, onDeleted, 
         </div>
         {reporting ? <ReportSheet targetType="sub_post" targetId={postId} open={reporting} onClose={() => setReporting(false)} /> : null}
         {sharing ? <SendSubPostSheet postId={postId} open={sharing} onClose={() => setSharing(false)} /> : null}
+        {blurOpen ? (
+          <div className="absolute inset-x-0 bottom-0 z-[9] rounded-t-[24px] bg-zinc-950/95 p-4 text-white ring-1 ring-white/10" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }} role="dialog" aria-label="How blurry visitors see this post">
+            <BlurLevelPicker value={level} onChange={(next) => void saveLevel(next)} disabled={savingLevel} tone="dark" />
+            {levelNote ? <p role="status" className="mt-2 text-[12.5px] text-white/85">{levelNote}</p> : null}
+            <div className="mt-2 flex justify-end">
+              <button type="button" onClick={() => setBlurOpen(false)} className="inline-flex min-h-[2.5rem] items-center gap-1.5 rounded-full bg-white px-4 text-[13.5px] font-semibold text-zinc-950">
+                {savingLevel ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null} Done
+              </button>
+            </div>
+          </div>
+        ) : null}
         {editing !== null ? (
           <div className="absolute inset-x-0 bottom-0 z-[9] rounded-t-[24px] bg-zinc-950/95 p-4 text-white ring-1 ring-white/10" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }} role="dialog" aria-label="Edit caption">
             <label htmlFor="sub-edit-caption" className="text-[13px] font-semibold">Caption</label>
@@ -940,13 +980,14 @@ function LockedGrid({ posts, more }: { posts: Card[]; more: boolean }) {
               href="#sub-offer"
               onClick={() => report("subscribe_tapped", [p.id])}
               aria-label={`Locked ${kind(p).toLowerCase()}${p.mature ? ", Mature (18+)" : ""} — subscribe to view`}
-              className="relative block h-[220px] overflow-hidden rounded-[20px] bg-[#1A1430]"
+              // rounded for real on an iPhone too (the playing, blurred clip used to show square corners — owner, 2026-10-30)
+              className={cn("relative block h-[220px] rounded-[20px] bg-[#1A1430]", ROUNDED_CLIP)}
             >
               {p.blurVideoUrl ? (
-                <BlurredClip src={p.blurVideoUrl} poster={p.coverUrl ?? p.blurUrl} className="absolute -inset-5 h-[calc(100%+2.5rem)] w-[calc(100%+2.5rem)]" />
+                <BlurredClip src={p.blurVideoUrl} poster={p.coverUrl ?? p.blurUrl} level={p.blurLevel} className={BLUR_COVER} />
               ) : p.coverUrl || p.blurUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element -- the creator's public cover or the server's blurred preview
-                <img src={p.coverUrl ?? p.blurUrl} alt="" aria-hidden draggable={false} className="pointer-events-none absolute -inset-5 h-[calc(100%+2.5rem)] w-[calc(100%+2.5rem)] object-cover blur-xl" />
+                <img src={p.coverUrl ?? p.blurUrl} alt="" aria-hidden draggable={false} className={cn("pointer-events-none", BLUR_COVER, blurClass(p.blurLevel))} />
               ) : null}
               <span aria-hidden className="absolute inset-0 bg-black/25" />
               <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white">

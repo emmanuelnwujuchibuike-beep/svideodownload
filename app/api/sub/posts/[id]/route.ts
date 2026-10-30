@@ -55,7 +55,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   const { success } = await trackLimiter.limit(`sub-post-edit:${user.id}`);
   if (!success) return NextResponse.json({ error: "Too many changes — try again in a moment." }, { status: 429 });
-  const body = (await request.json().catch(() => null)) as { idx?: unknown; thumbKey?: unknown; width?: unknown; height?: unknown; audience?: unknown; caption?: unknown; mature?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { idx?: unknown; thumbKey?: unknown; width?: unknown; height?: unknown; audience?: unknown; caption?: unknown; mature?: unknown; blurLevel?: unknown } | null;
+  // 0307: the creator chooses how blurry their locked post looks to non-subscribers (owner, 2026-10-30)
+  if (body && "blurLevel" in body) {
+    const { setSubPostBlurLevel } = await import("@/lib/sub/posts");
+    const out = await setSubPostBlurLevel(user.id, id, body.blurLevel);
+    return out.ok ? NextResponse.json(out) : NextResponse.json({ error: out.error }, { status: out.status });
+  }
   // 0261: the creator marks their own post Mature (18+) or not
   if (body && "mature" in body) {
     const { setSubPostMature } = await import("@/lib/sub/posts");

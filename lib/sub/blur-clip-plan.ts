@@ -16,7 +16,9 @@ export const BLUR_CLIP_FPS = 12;
 /** A real 24 px, 4 s clip is a few KB; anything near this is not one. */
 export const BLUR_CLIP_MAX_BYTES = 512 * 1024;
 
-export function buildBlurClipArgs(input: string, output: string): string[] {
+/** `width`: the post's blur level decides it (lib/sub/blur-level.ts BLUR_CLIP_WIDTH_FOR) — 24 px unless it is Light. */
+export function buildBlurClipArgs(input: string, output: string, width: number = BLUR_CLIP_WIDTH): string[] {
+  const w = Math.max(8, Math.min(64, Math.round(width)));
   return [
     "-hide_banner",
     "-loglevel",
@@ -32,7 +34,7 @@ export function buildBlurClipArgs(input: string, output: string): string[] {
     "-dn",
     // 24 px wide, even height (H.264 needs it), blurred at that size, the browser clip's frame rate
     "-vf",
-    `scale=${BLUR_CLIP_WIDTH}:-2:flags=area,boxblur=1:1,fps=${BLUR_CLIP_FPS},format=yuv420p`,
+    `scale=${w}:-2:flags=area,boxblur=1:1,fps=${BLUR_CLIP_FPS},format=yuv420p`,
     "-c:v",
     "libx264",
     "-preset",

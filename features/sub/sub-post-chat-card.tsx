@@ -20,7 +20,7 @@ import { BlurredSlides, type BlurSlideView } from "./blurred-slides";
   an old card, or a lapsed subscription all fall back to the blurred face.
 */
 
-type Preview = { access: boolean; creator: { handle: string | null; name: string; avatarUrl: string | null }; coverUrl: string | null; blurUrl: string | null; blurVideoUrl: string | null; slides?: BlurSlideView[]; items: number; hasVideo: boolean; mature: boolean };
+type Preview = { access: boolean; creator: { handle: string | null; name: string; avatarUrl: string | null }; coverUrl: string | null; blurUrl: string | null; blurVideoUrl: string | null; slides?: BlurSlideView[]; blurLevel?: string; items: number; hasVideo: boolean; mature: boolean };
 type Opened = { caption: string | null; media: { kind: "image" | "video"; url: string }[] };
 
 export function SubPostChatCard({ postId, mine }: { postId: string; mine: boolean }) {
@@ -67,7 +67,7 @@ export function SubPostChatCard({ postId, mine }: { postId: string; mine: boolea
         ) : (
           <>
             {/* every item blurred, sliding sideways (0306, owner 2026-10-29) */}
-            <BlurredSlides slides={preview.slides} cover={preview.coverUrl} fallbackStill={preview.blurUrl} fallbackClip={preview.blurVideoUrl} />
+            <BlurredSlides slides={preview.slides} cover={preview.coverUrl} fallbackStill={preview.blurUrl} fallbackClip={preview.blurVideoUrl} level={preview.blurLevel} />
             {preview.access ? null : (
               <span className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/25 px-4 text-center">
                 <span className="flex h-11 w-11 items-center justify-center rounded-full border border-white/30 bg-black/30">

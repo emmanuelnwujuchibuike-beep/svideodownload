@@ -4,6 +4,7 @@ import { presignPrivateGet } from "@/lib/storage/r2";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { CLIP_NEEDS_WORK_FILTER, lacksPlayableClip } from "./blur-clip-plan";
+import { BLUR_CLIP_WIDTH_FOR, BLUR_STILL_WIDTH_FOR, normalizeBlurLevel, type BlurLevel } from "./blur-level";
 
 /**
  * The blurred preview of a locked exclusive post (0263, owner 2026-10-18, REQUIRED): the ONLY picture a
@@ -23,16 +24,34 @@ type Row = Record<string, unknown>;
 const BLUR_WIDTH = 20;
 const MAX_SOURCE_BYTES = 25 * 1024 * 1024;
 
-/** A heavily blurred, 20 px wide WebP data URL — null if the bytes aren't an image sharp can read. */
-export async function makeBlurPreview(bytes: Uint8Array): Promise<string | null> {
+/**
+ * A heavily blurred WebP data URL, `width` pixels wide (20 by default; the post's blur level can ask for more —
+ * lib/sub/blur-level.ts) — null if the bytes aren't an image sharp can read.
+ */
+export async function makeBlurPreview(bytes: Uint8Array, width: number = BLUR_WIDTH): Promise<string | null> {
   try {
     const sharp = (await import("sharp")).default;
-    const out = await sharp(Buffer.from(bytes)).rotate().resize({ width: BLUR_WIDTH, withoutEnlargement: false }).blur(1.2).webp({ quality: 35 }).toBuffer();
+    const out = await sharp(Buffer.from(bytes)).rotate().resize({ width, withoutEnlargement: false }).blur(1.2).webp({ quality: 35 }).toBuffer();
     const url = `data:image/webp;base64,${out.toString("base64")}`;
-    return url.length <= 4000 ? url : null;
+    // a few hundred bytes at 20 px; the cap grows with the width, so a wider level is never refused for its size alone
+    return url.length <= 4000 * Math.max(1, Math.ceil((width / BLUR_WIDTH) ** 2)) ? url : null;
   } catch {
     return null;
   }
+}
+
+/** 0307: each post's blur level. A database before 0307, or a failed read, answers none — every post is then the default. */
+export async function readBlurLevels(postIds: string[]): Promise<Map<string, BlurLevel>> {
+  const out = new Map<string, BlurLevel>();
+  if (!postIds.length) return out;
+  const { data, error } = await createAdminClient().from("sub_posts").select("id, blur_level").in("id", [...new Set(postIds)]);
+  if (error) return out;
+  for (const r of (data ?? []) as Row[]) out.set(r.id as string, normalizeBlurLevel(r.blur_level));
+  return out;
+}
+
+async function blurLevelOf(postId: string): Promise<BlurLevel> {
+  return (await readBlurLevels([postId]).catch(() => new Map<string, BlurLevel>())).get(postId) ?? normalizeBlurLevel(null);
 }
 
 /** The private file a preview is made from: the first item's thumb, else the first item if it is a photo. */
@@ -44,6 +63,8 @@ function sourceKey(first: Row | undefined): string | null {
 
 /** Makes and stores one post's preview if it has none. Best effort: a failure leaves the plain locked tile. */
 export async function ensureBlurPreview(postId: string): Promise<void> {
+  // the size the post's blur level stores (0307 — 20 px unless the creator chose Light)
+  const width = BLUR_STILL_WIDTH_FOR[await blurLevelOf(postId)];
   try {
     const db = createAdminClient();
     const withThumb = await db.from("sub_post_media").select("idx, media_kind, object_key, thumb_key").eq("post_id", postId).order("idx").limit(1);
@@ -54,14 +75,14 @@ export async function ensureBlurPreview(postId: string): Promise<void> {
     if (!res.ok) return;
     const bytes = new Uint8Array(await res.arrayBuffer());
     if (bytes.byteLength > MAX_SOURCE_BYTES) return;
-    const preview = await makeBlurPreview(bytes);
+    const preview = await makeBlurPreview(bytes, width);
     if (!preview) return;
     // only an empty one is ever filled — a second run changes nothing
     await db.from("sub_posts").update({ blur_preview: preview }).eq("id", postId).is("blur_preview", null);
   } catch {
     /* the tile stays a plain locked tile */
   }
-  await ensureItemBlurPreviews(postId);
+  await ensureItemBlurPreviews(postId, width);
 }
 
 /**
@@ -69,7 +90,8 @@ export async function ensureBlurPreview(postId: string): Promise<void> {
  * Only items without one, each made from its own thumb (a video) or itself (a photo). Before 0306 the read fails and
  * nothing happens; any one failure leaves that slide plain and the rest still made.
  */
-export async function ensureItemBlurPreviews(postId: string): Promise<void> {
+export async function ensureItemBlurPreviews(postId: string, width?: number): Promise<void> {
+  const size = width ?? BLUR_STILL_WIDTH_FOR[await blurLevelOf(postId)];
   try {
     const db = createAdminClient();
     const { data, error } = await db.from("sub_post_media").select("id, idx, media_kind, object_key, thumb_key, blur_preview").eq("post_id", postId).is("blur_preview", null).order("idx");
@@ -82,7 +104,7 @@ export async function ensureItemBlurPreviews(postId: string): Promise<void> {
         if (!res.ok) continue;
         const bytes = new Uint8Array(await res.arrayBuffer());
         if (bytes.byteLength > MAX_SOURCE_BYTES) continue;
-        const preview = await makeBlurPreview(bytes);
+        const preview = await makeBlurPreview(bytes, size);
         if (preview) await db.from("sub_post_media").update({ blur_preview: preview }).eq("id", item.id as string).is("blur_preview", null);
       } catch {
         /* this slide stays plain */
@@ -133,7 +155,7 @@ export async function readBlurSlides(postIds: string[]): Promise<Map<string, Blu
  * The creator's own video items that still lack a blurred clip (older posts, made before every video got one): their
  * browser makes them on a visit (features/sub/blur-clip-backfill.ts). At most `limit`, newest posts first.
  */
-export async function missingBlurClips(creatorId: string, limit = 2): Promise<{ postId: string; idx: number; key: string }[]> {
+export async function missingBlurClips(creatorId: string, limit = 2): Promise<{ postId: string; idx: number; key: string; width: number }[]> {
   const db = createAdminClient();
   const { data, error } = await db
     .from("sub_post_media")
@@ -149,10 +171,10 @@ export async function missingBlurClips(creatorId: string, limit = 2): Promise<{ 
   if (error) return [];
   const rows = (data ?? []) as (Row & { sub_posts: Row | Row[] })[];
   const created = (r: (typeof rows)[number]) => String((Array.isArray(r.sub_posts) ? r.sub_posts[0] : r.sub_posts)?.created_at ?? "");
-  return rows
-    .sort((a, b) => created(b).localeCompare(created(a)) || Number(a.idx) - Number(b.idx))
-    .slice(0, limit)
-    .map((r) => ({ postId: r.post_id as string, idx: Number(r.idx), key: r.object_key as string }));
+  const picked = rows.sort((a, b) => created(b).localeCompare(created(a)) || Number(a.idx) - Number(b.idx)).slice(0, limit);
+  // 0307: each clip at the size its post's blur level stores
+  const levels = await readBlurLevels(picked.map((r) => r.post_id as string)).catch(() => new Map<string, BlurLevel>());
+  return picked.map((r) => ({ postId: r.post_id as string, idx: Number(r.idx), key: r.object_key as string, width: BLUR_CLIP_WIDTH_FOR[levels.get(r.post_id as string) ?? normalizeBlurLevel(null)] }));
 }
 
 /** Stores one item's clip (the creator's own browser made it). Only an empty one is filled; the first video's also on the post. */
@@ -213,7 +235,7 @@ export async function readBlurVideos(postIds: string[]): Promise<Map<string, str
  * larger backlog Postgres handed back whichever rows it liked and recent posts could stay black for many kicks. An
  * item is written together with its post, so its own created_at orders it like the post; the post time breaks ties.
  */
-export async function lockedVideosNeedingClips(limit: number): Promise<{ postId: string; idx: number; key: string }[]> {
+export async function lockedVideosNeedingClips(limit: number): Promise<{ postId: string; idx: number; key: string; width: number }[]> {
   const db = createAdminClient();
   const { data, error } = await db
     .from("sub_post_media")
@@ -227,11 +249,13 @@ export async function lockedVideosNeedingClips(limit: number): Promise<{ postId:
   if (error) return [];
   const rows = (data ?? []) as (Row & { sub_posts: Row | Row[] })[];
   const created = (r: (typeof rows)[number]) => String((Array.isArray(r.sub_posts) ? r.sub_posts[0] : r.sub_posts)?.created_at ?? "");
-  return rows
+  const picked = rows
     .filter((r) => typeof r.object_key === "string" && r.object_key && lacksPlayableClip([r.blur_video_url as string | null]))
     .sort((a, b) => created(b).localeCompare(created(a)) || Number(a.idx) - Number(b.idx))
-    .slice(0, limit)
-    .map((r) => ({ postId: r.post_id as string, idx: Number(r.idx), key: r.object_key as string }));
+    .slice(0, limit);
+  // 0307: each clip at the size its post's blur level stores (a read that fails leaves every post at the default)
+  const levels = await readBlurLevels(picked.map((r) => r.post_id as string)).catch(() => new Map<string, BlurLevel>());
+  return picked.map((r) => ({ postId: r.post_id as string, idx: Number(r.idx), key: r.object_key as string, width: BLUR_CLIP_WIDTH_FOR[levels.get(r.post_id as string) ?? normalizeBlurLevel(null)] }));
 }
 
 /**

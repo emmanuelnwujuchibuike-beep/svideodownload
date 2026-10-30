@@ -8,7 +8,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import { kickBlurClips } from "./blur-clip-kick";
 import { postNeedsBlurWork } from "./blur-clip-plan";
-import { readBlurPreviews, readBlurSlides, readBlurVideos, type BlurSlide } from "./blur-preview";
+import type { BlurLevel } from "./blur-level";
+import { readBlurLevels, readBlurPreviews, readBlurSlides, readBlurVideos, type BlurSlide } from "./blur-preview";
 import { afterCursorFilter, audienceOf, decodeSubCursor, encodeSubCursor, isUuid } from "./guards";
 import { subConfig } from "./server";
 
@@ -136,6 +137,8 @@ export interface DiscoverCard {
   blurVideoUrl?: string;
   /** 0306: one blurred slide per item (an album slides sideways); withheld like the cover */
   slides?: BlurSlide[];
+  /** 0307: how blurry the creator wants it (lib/sub/blur-level.ts); absent = the default */
+  blurLevel?: BlurLevel;
 }
 
 export interface DiscoverCreator extends FeedCreator {
@@ -427,12 +430,13 @@ export async function discover(viewerId: string | null, subscribed: Set<string>,
   if (postsR.error) return empty;
   // the newest locked posts across them — several per creator now, not one — of visible accounts only
   const latest = ((postsR.data ?? []) as unknown as Row[]).filter((r) => people.has(r.creator_id as string)).slice(0, DISCOVER_CARDS);
-  const [media, adult, blurs, blurVideos, slides] = await Promise.all([
+  const [media, adult, blurs, blurVideos, slides, levels] = await Promise.all([
     mediaOf(latest.map((r) => r.id as string), false),
     latest.some((r) => r.mature === true) ? (viewerId ? isAdult(viewerId).catch(() => false) : Promise.resolve(false)) : Promise.resolve(true),
     readBlurPreviews(latest.map((r) => r.id as string)).catch(() => new Map<string, string>()),
     readBlurVideos(latest.map((r) => r.id as string)).catch(() => new Map<string, string>()),
     readBlurSlides(latest.map((r) => r.id as string)).catch(() => new Map<string, BlurSlide[]>()),
+    readBlurLevels(latest.map((r) => r.id as string)).catch(() => new Map<string, BlurLevel>()),
   ]);
   const totals = new Map<string, number | null>(
     await Promise.all(
@@ -460,7 +464,7 @@ export async function discover(viewerId: string | null, subscribed: Set<string>,
       unsubscriber, nothing less than that, no optionals"): a 20 px still and a 24 px clip hold no detail to recover —
       the post itself, and its cover, stay behind the subscription and the age check.
     */
-    cards: latest.map((r) => ({ id: r.id as string, creatorId: r.creator_id as string, createdAt: r.created_at as string, coverUrl: r.mature === true && !adult ? null : ((r.cover_url as string | null) ?? null), items: media.get(r.id as string)?.n ?? 0, hasVideo: media.get(r.id as string)?.video ?? false, ...(r.mature === true ? { mature: true as const } : {}), ...(blurs.has(r.id as string) ? { blurUrl: blurs.get(r.id as string)! } : {}), ...(blurVideos.has(r.id as string) ? { blurVideoUrl: blurVideos.get(r.id as string)! } : {}), ...(slides.has(r.id as string) ? { slides: slides.get(r.id as string)! } : {}) })),
+    cards: latest.map((r) => ({ id: r.id as string, creatorId: r.creator_id as string, createdAt: r.created_at as string, coverUrl: r.mature === true && !adult ? null : ((r.cover_url as string | null) ?? null), items: media.get(r.id as string)?.n ?? 0, hasVideo: media.get(r.id as string)?.video ?? false, ...(r.mature === true ? { mature: true as const } : {}), ...(blurs.has(r.id as string) ? { blurUrl: blurs.get(r.id as string)! } : {}), ...(blurVideos.has(r.id as string) ? { blurVideoUrl: blurVideos.get(r.id as string)! } : {}), ...(slides.has(r.id as string) ? { slides: slides.get(r.id as string)! } : {}), ...(levels.has(r.id as string) ? { blurLevel: levels.get(r.id as string)! } : {}) })),
     creators,
   };
 }

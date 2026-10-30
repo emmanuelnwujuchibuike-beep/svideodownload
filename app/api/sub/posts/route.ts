@@ -48,6 +48,8 @@ const body = z
     mature: z.boolean().optional(),
     // 0305: the 24 px blurred clip a locked video plays to non-subscribers (made in the creator's browser)
     blurVideoUrl: z.string().max(600).optional(),
+    // 0307: how blurry the creator wants the locked preview (lib/sub/blur-level.ts)
+    blurLevel: z.enum(["light", "medium", "strong"]).optional(),
   })
   .strict();
 

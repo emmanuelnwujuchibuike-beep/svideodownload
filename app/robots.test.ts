@@ -35,10 +35,10 @@ describe("robots.txt never stands between a Google crawler and ads.txt", () => {
     const disallow = (Array.isArray(star?.disallow) ? star.disallow : [star?.disallow]).map(String);
     // Google's matching: a rule is a path prefix, unless it ends in `$`, which anchors it to the end of the path
     const blocked = (path: string) => disallow.some((d) => (d.endsWith("$") ? path === d.slice(0, -1) : path.startsWith(d)));
-    for (const path of ["/", "/about", "/blog/x", "/learn/x", "/wallpapers", "/tiktok-video-downloader", "/frenz-ai", "/unsubscribe", "/_next/static/chunks/main.js"]) {
+    for (const path of ["/", "/about", "/blog/x", "/learn/x", "/wallpapers", "/tiktok-video-downloader", "/frenz-ai", "/unsubscribe", "/_next/static/chunks/main.js", "/history", "/advertise/campaigns"]) {
       expect(blocked(path), path).toBe(false);
     }
-    for (const path of ["/home", "/reels", "/explore", "/u", "/u/chris", "/sounds", "/account/security", "/advertise/campaigns"]) {
+    for (const path of ["/home", "/reels", "/explore", "/u", "/u/chris", "/sounds", "/account/security"]) {
       expect(blocked(path), path).toBe(true);
     }
   });

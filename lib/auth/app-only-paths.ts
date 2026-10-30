@@ -5,8 +5,8 @@
  * render, so the server never builds a feed, post, reel, profile or sound for a guest. A client-side "Loading…"
  * check is not enough: the HTML a crawler or a reviewer reads must not carry the content at all.
  *
- * This list wins over `GUEST_OPEN_EXACT` (lib/auth/guest-login-paths.ts): `/friends` and `/exclusive` used to open
- * for guests, locked behind sign-in, and no longer do.
+ * This list wins over `GUEST_OPEN_EXACT` (lib/auth/guest-login-paths.ts): `/exclusive` used to open for guests,
+ * locked behind sign-in, and no longer does. `/friends` opens for guests again (2026-10-30 — see below).
  *
  * Profiles: `/chris` is REWRITTEN to `/u/chris` before the guard runs (lib/social/profile-url.ts), so `/u` covers
  * every top-level profile URL too. Every route here also carries `robots: { index: false, follow: false }`, and
@@ -19,18 +19,20 @@
  *
  * Exact segment match: `/sound` matches `/sound` and `/sound/…`, never `/sounds` (listed separately) or `/soundtrack`.
  */
+/*
+  🔴 NOT HERE, ON PURPOSE (owner, 2026-10-30: "bring back the bottom NAV and the ad button … don't send my users away"):
+  the guest bottom nav's own tabs — /friends, /history, /messages (Chats), /profile — and the header's Ad button
+  (/advertise/campaigns) open for a guest again exactly as before 2026-10-29: Friends shows its locked page, History
+  the visitor's own downloads, Chats an empty inbox with a sign-in prompt, Profile the guest page. Gating them sent
+  every guest who tapped the nav straight to /login. Everything else on this list stays gated.
+*/
 export const APP_ONLY_PREFIXES = [
   "/account",
-  "/advertise/campaigns",
   "/exclusive",
   "/explore",
   "/feed", // the guest copy of the /home feed — not on the owner's list, gated because it renders the feed to guests
-  "/friends",
-  "/history",
   "/home",
-  "/messages",
   "/notifications",
-  "/profile",
   "/quests",
   "/reels",
   "/saved",

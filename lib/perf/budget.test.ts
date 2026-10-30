@@ -868,8 +868,11 @@ const FULL_ENTRY_CEILINGS: Record<string, number> = {
   // 2026-10-29 (ratcheted down): the marketing bottom nav became members-only and lazy (components/landing/mobile-app-nav.tsx),
   // so a guest no longer downloads it — measured 233,478 B (landing). The platform pages then took the landing's own tool
   // (DownloadBox, shared chunks) — measured 223,963 B, ratcheted down again.
-  "/(marketing)/page": 238 * 1024,
-  "/(marketing)/[downloader]/page": 228 * 1024,
+  // 2026-10-30 — JUSTIFIED RAISE (owner: "bring back the bottom NAV … don't send my users away"): the nav is on every
+  // marketing page for every visitor again, server-rendered as before 10-29, so its weight is back in the first load —
+  // the 10-29 measurements put it at 10,159 B (243,637 → 233,478). Ceilings = those measurements + the nav + a few kB.
+  "/(marketing)/page": 248 * 1024,
+  "/(marketing)/[downloader]/page": 238 * 1024,
   "/(app)/downloads/page": 262 * 1024,
   "/(app)/home/page": 330 * 1024,
 };

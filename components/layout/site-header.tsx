@@ -496,9 +496,9 @@ export function SiteHeader({
             {landing ? <InstallHeaderCta label="Install" gradient /> : <SearchTriggerIcon />}
             {/* Promote, fixed beside Install (owner, 2026-10-09: "make it be close to
                 the install button in the landing page"). */}
-            {/* Members only (owner, 2026-10-29): /advertise/campaigns is a signed-in page, so a guest never gets the
-                door. The static HTML has no user, so the link is not in the document a crawler reads. */}
-            {landing && enabled && user ? <PromoteButton size="header" /> : null}
+            {/* For EVERY visitor again (owner, 2026-10-30: "bring back … the ad button"; the 2026-10-29 members-only
+                change is undone, and /advertise/campaigns opens for guests again — lib/auth/app-only-paths.ts). */}
+            {landing ? <PromoteButton size="header" /> : null}
             {/* Language selector — the top ~50 languages (owner, replaced the
                 downloads/history icon; History is in the bottom nav). On the
                 landing it lives in the menu drawer instead (owner, 2026-10-15). */}

@@ -84,8 +84,9 @@ describe("the floating glass bottom nav", () => {
     expect(css).toMatch(/--frenz-nav-gap: max\(0\.5rem, calc\(env\(safe-area-inset-bottom\) - 0\.75rem\)\);/);
     expect(code("features/app-shell/app-content.tsx")).toContain("pb-[calc(var(--frenz-nav-clearance)+1.5rem)]");
     expect(code("app/(app)/messages/layout.tsx")).toContain("h-[calc(100dvh-var(--frenz-nav-clearance))]");
-    // the marketing spacer moved in with the members-only nav (2026-10-29): it renders exactly when the nav does
-    expect(code("components/landing/mobile-app-nav.tsx")).toContain("h-[calc(var(--frenz-nav-clearance)+0.75rem)] lg:hidden");
+    // the nav is on every marketing page again, for every visitor (owner, 2026-10-30), so its spacer is back in the layout
+    expect(code("app/(marketing)/layout.tsx")).toContain("h-[calc(var(--frenz-nav-clearance)+0.75rem)] lg:hidden");
+    expect(code("components/landing/mobile-app-nav.tsx")).toContain("return <MobileNav marketing />;");
   });
 
   it("the reel scrubber still sits above the pill (they are a pair)", () => {

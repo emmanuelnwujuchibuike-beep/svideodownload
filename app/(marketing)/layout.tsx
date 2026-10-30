@@ -118,7 +118,10 @@ export default async function MarketingLayout({ children }: { children: React.Re
           header/nav/ad ignore this spacer — only the in-flow content shifts. */}
       {/* Same reasoning as the top spacer — reserved instantly, never eased. */}
       <div aria-hidden style={{ height: "var(--frenz-bottomad-h, 0px)" }} />
-      {/* The floating bottom nav (mobile only) and its clearance spacer — members only, absent from a guest's HTML. */}
+      {/* The floating bottom nav on every marketing page (mobile only), for EVERY visitor — guests included (owner,
+          2026-10-30: "bring back the bottom NAV"; the 2026-10-29 members-only change is undone). A spacer so a page's
+          last content clears the pill: its height + gap (`--frenz-nav-clearance`) and a little air. */}
+      <div aria-hidden className="h-[calc(var(--frenz-nav-clearance)+0.75rem)] lg:hidden" />
       <MobileAppNav />
       {/* Buffer the first reels ahead of a tap (after idle, good connections only). */}
       <ReelsWarmup urls={reelUrls} />

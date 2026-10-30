@@ -54,8 +54,8 @@ describe("app-only routes", () => {
   });
 
   it("sends a guest to /login with ?next= for every app-only route — no render", async () => {
-    const paths = ["/home", "/reels", "/explore", "/sounds", "/friends", "/history", "/messages", "/profile", "/saved",
-      "/notifications", "/search", "/quests", "/exclusive", "/feed", "/account/security", "/advertise/campaigns", "/sound/abc"];
+    const paths = ["/home", "/reels", "/explore", "/sounds", "/saved",
+      "/notifications", "/search", "/quests", "/exclusive", "/feed", "/account/security", "/sound/abc"];
     for (const path of paths) {
       const res = await guest(path);
       expect(res.status, path).toBe(307);
@@ -76,6 +76,21 @@ describe("app-only routes", () => {
   it("does not let a prefetch header slip a guest past the guard", async () => {
     const res = await guest("/home", { "next-router-prefetch": "1" });
     expect(res.status).toBe(307);
+  });
+
+  /*
+    Owner, 2026-10-30: "bring back the bottom NAV and the ad button … don't send my users away". A guest's nav tabs —
+    Friends, History, Chats, Profile — and the header's Ad button open their pages again; a guest is never bounced to
+    /login for tapping them.
+  */
+  it("the guest bottom nav's tabs and the Ad button open for a guest — never a sign-in redirect", async () => {
+    for (const path of ["/friends", "/history", "/messages", "/profile", "/advertise/campaigns"]) {
+      expect(isAppOnlyPath(path), path).toBe(false);
+      const res = await guest(path);
+      expect(res.headers.get("location"), path).toBeNull();
+    }
+    // teeth: the member-only areas below them still ask a guest to sign in (lib/auth/guest-login-paths.ts)
+    expect((await guest("/friends/manage")).status).toBe(307);
   });
 
   it("leaves public pages alone (teeth: an over-broad guard fails here)", async () => {

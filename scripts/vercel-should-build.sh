@@ -47,6 +47,19 @@
 
 set -uo pipefail
 
+# ── 🔴 ONLY main EVER BUILDS (owner, 2026-10-30) ───────────────────────────────
+#
+# "Any branch other than main never builds." Every push to another branch (ui-redesign, a feature branch) started its
+# own PREVIEW build at full price — and work pushed to a branch AND to main paid for two builds of the same commit.
+# Production is main; nothing else is deployed. A branch Vercel NAMES and that is not main is skipped. An UNKNOWN branch
+# (no VERCEL_GIT_COMMIT_REF, e.g. a manual redeploy) is not skipped here — it falls through to the rules below, which
+# fail toward building.
+branch="${VERCEL_GIT_COMMIT_REF:-}"
+if [ -n "$branch" ] && [ "$branch" != "main" ]; then
+  echo "Branch '${branch}' is not main — skipping: only main builds."
+  exit 0
+fi
+
 # ── 🔴 COMPARE WITH THE LAST DEPLOYED COMMIT, NOT JUST THE LAST COMMIT (2026-10-23) ──
 #
 # This diffed HEAD^..HEAD — only the push's LAST commit. A push of 13 commits whose last one

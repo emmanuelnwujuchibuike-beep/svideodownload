@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -169,6 +170,34 @@ describe("a build that cannot change the deployment does not run", () => {
     expect(gate).toContain('git diff --name-only "$base" HEAD');
     expect(gate).toContain("VERCEL_GIT_PREVIOUS_SHA");
     expect(gate).not.toMatch(/git diff --name-only HEAD\^ HEAD/);
+  });
+
+  describe("🔴 only main ever builds (owner, 2026-10-30: pushing a branch AND main paid for two builds)", () => {
+    // run the REAL script — the branch rule decides before any git command, so no repository state is involved
+    const hasBash = spawnSync("bash", ["--version"]).status === 0;
+    const runGate = (env: Record<string, string>) => {
+      const clean = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("VERCEL_")));
+      return spawnSync("bash", ["scripts/vercel-should-build.sh"], { env: { ...clean, ...env }, encoding: "utf8" });
+    };
+
+    it.skipIf(!hasBash)("a branch that is not main is skipped (exit 0)", () => {
+      for (const ref of ["ui-redesign", "feat/history-grid-ads", "mainline"]) {
+        const r = runGate({ VERCEL_GIT_COMMIT_REF: ref, VERCEL_GIT_PREVIOUS_SHA: "" });
+        expect(r.status, `${ref}: ${r.stdout}`).toBe(0);
+        expect(r.stdout).toContain("only main builds");
+      }
+    });
+
+    it.skipIf(!hasBash)("teeth: main is NOT skipped by the branch rule — it reaches the normal rules (here: no previous deployment → build)", () => {
+      const r = runGate({ VERCEL_GIT_COMMIT_REF: "main", VERCEL_GIT_PREVIOUS_SHA: "" });
+      expect(r.status, r.stdout).toBe(1);
+      expect(r.stdout).toContain("No previous deployment commit given — building.");
+    });
+
+    it.skipIf(!hasBash)("an UNKNOWN branch (a manual redeploy) is not skipped — it fails toward building", () => {
+      const r = runGate({ VERCEL_GIT_PREVIOUS_SHA: "" });
+      expect(r.status, r.stdout).toBe(1);
+    });
   });
 
   it("source, assets, scripts and migrations still build", () => {

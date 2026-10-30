@@ -427,6 +427,25 @@ describe("less aggressive (owner 2026-10-23) — fewer pop-unders, the ones that
     expect(thirdPartyOpen("https://pop.example/back-on")).not.toBeNull();
   });
 
+  /*
+    Code review, 2026-10-30: the page-wide pop-under was replaced only by a read from a spot still on its list — so with
+    ONE spot switched off (the pop-under left on elsewhere), that spot kept the old list and its tap still armed the
+    loaded tag: the X the admin had just switched off opened the pop-under anyway.
+  */
+  it("🔴 one spot switched off (the pop-under left on elsewhere): its tap no longer arms the loaded pop-under", async () => {
+    await readyOpener();
+    config = { monetagDirectLink: DIRECT, monetagSpotPopunder: { ...POP, spots: ["wallpaper"] } };
+    const m = await import("./direct-link-runtime");
+    // the refreshed read comes from the very spot that was switched off
+    await m.loadDirectLinkOpener("downloadAdClose");
+    press("downloadAdClose");
+    expect(thirdPartyOpen("https://pop.example/after-spot-off")).toBeNull();
+    expect(opened).toEqual([]);
+    // the spot still switched on keeps its pop-under
+    press("wallpaper");
+    expect(thirdPartyOpen("https://pop.example/spot-still-on")).not.toBeNull();
+  });
+
   it("a config that could not be read ({}) never disarms a working pop-under", async () => {
     await readyOpener();
     config = {};

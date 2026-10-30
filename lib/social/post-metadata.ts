@@ -25,6 +25,14 @@ export function postPageMetadata(post: PublicPost, canonicalPath: string): Metad
     one element that must stay short.
   */
   const title = titleFromCaption(post.title) || post.title;
+  const images = post.thumbnail_url ? [{ url: post.thumbnail_url }] : undefined;
+  /*
+    A shared post previews as the CONTENT (owner, 2026-10-30: like TikTok, Instagram and Facebook, "the content shows
+    only the image and not the profile preview unless it was the Profile link"): its own picture, large, and its own
+    caption. The Twitter card is set here explicitly — left out, Next keeps the ROOT layout's twitter title ("Frenzsave
+    — Download, Earn…"), so X showed the site's headline on every post instead of the post. og:url is the post's own
+    address, so a preview never points somewhere else.
+  */
   return {
     title,
     description: post.description ?? `Watch & save from ${post.platform} on FrenzSave.`,
@@ -32,9 +40,16 @@ export function postPageMetadata(post: PublicPost, canonicalPath: string): Metad
     robots: { index: post.indexable, follow: post.indexable },
     openGraph: {
       type: "video.other",
+      url: canonicalPath,
       title,
       description: post.description ?? undefined,
-      images: post.thumbnail_url ? [{ url: post.thumbnail_url }] : undefined,
+      images,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      ...(post.description ? { description: post.description } : {}),
+      ...(images ? { images } : {}),
     },
   };
 }

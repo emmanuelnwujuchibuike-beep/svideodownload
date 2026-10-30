@@ -59,6 +59,23 @@ export function lacksPlayableClip(clips: readonly (string | null | undefined)[])
 }
 
 /**
+ * The DATABASE side of lacksPlayableClip (code review, 2026-10-30): the rows the worker picks up, and the only rows its
+ * save may overwrite. The feed asks for the worker whenever a stored clip fails lacksPlayableClip; the worker used to
+ * select only `null` or a URL ENDING in .webm, so a clip that is not https, or a WebM one with a query
+ * (…/clip.webm?v=2), was asked for every ten minutes and never made. Now the two are the same rule:
+ *   none · not https:// (case-sensitive, like startsWith) · .webm at the end, or before a ? or # (like isWebmClip).
+ * PostgREST `or` syntax; the values are quoted because they carry `:`, `?` and `#`. blur-clip-plan.test.ts proves
+ * this filter and lacksPlayableClip agree on every case.
+ */
+export const CLIP_NEEDS_WORK_FILTER = [
+  "blur_video_url.is.null",
+  'blur_video_url.not.like."https://*"',
+  'blur_video_url.ilike."*.webm"',
+  'blur_video_url.ilike."*.webm?*"',
+  'blur_video_url.ilike."*.webm#*"',
+].join(",");
+
+/**
  * Does this locked post still need the worker? With per-item slides: any VIDEO slide without a playable clip, or any
  * PHOTO slide without its blurred still (an album's later items count too). Without slides (a database before 0306): a
  * video post whose post-level clip is missing.

@@ -3,6 +3,8 @@ import "server-only";
 import { presignPrivateGet } from "@/lib/storage/r2";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { CLIP_NEEDS_WORK_FILTER, lacksPlayableClip } from "./blur-clip-plan";
+
 /**
  * The blurred preview of a locked exclusive post (0263, owner 2026-10-18, REQUIRED): the ONLY picture a
  * non-subscriber ever receives for it.
@@ -141,6 +143,8 @@ export async function missingBlurClips(creatorId: string, limit = 2): Promise<{ 
     .eq("sub_posts.creator_id", creatorId)
     .eq("sub_posts.status", "published")
     .eq("sub_posts.audience", "locked")
+    // newest first IN THE DATABASE — a limit on an unordered read is an arbitrary set (code review, 2026-10-30)
+    .order("created_at", { ascending: false })
     .limit(40);
   if (error) return [];
   const rows = (data ?? []) as (Row & { sub_posts: Row | Row[] })[];
@@ -201,22 +205,30 @@ export async function readBlurVideos(postIds: string[]): Promise<Map<string, str
   the WebM clips some browsers recorded, which an iPhone may not play.
 */
 
-/** Locked, published video items with no clip, or a WebM one — newest posts first, any creator. */
+/**
+ * Locked, published video items without a clip an iPhone plays (none, a WebM one, or one that is not https — the same
+ * rule the feed asks with, CLIP_NEEDS_WORK_FILTER in lib/sub/blur-clip-plan.ts) — newest posts first, any creator.
+ *
+ * Newest first IN THE DATABASE (code review, 2026-10-30): the 400 were an unordered read sorted afterwards, so with a
+ * larger backlog Postgres handed back whichever rows it liked and recent posts could stay black for many kicks. An
+ * item is written together with its post, so its own created_at orders it like the post; the post time breaks ties.
+ */
 export async function lockedVideosNeedingClips(limit: number): Promise<{ postId: string; idx: number; key: string }[]> {
   const db = createAdminClient();
   const { data, error } = await db
     .from("sub_post_media")
     .select("post_id, idx, object_key, blur_video_url, sub_posts!inner(status, audience, created_at)")
     .eq("media_kind", "video")
-    .or("blur_video_url.is.null,blur_video_url.ilike.*.webm")
+    .or(CLIP_NEEDS_WORK_FILTER)
     .eq("sub_posts.status", "published")
     .eq("sub_posts.audience", "locked")
+    .order("created_at", { ascending: false })
     .limit(400);
   if (error) return [];
   const rows = (data ?? []) as (Row & { sub_posts: Row | Row[] })[];
   const created = (r: (typeof rows)[number]) => String((Array.isArray(r.sub_posts) ? r.sub_posts[0] : r.sub_posts)?.created_at ?? "");
   return rows
-    .filter((r) => typeof r.object_key === "string" && r.object_key)
+    .filter((r) => typeof r.object_key === "string" && r.object_key && lacksPlayableClip([r.blur_video_url as string | null]))
     .sort((a, b) => created(b).localeCompare(created(a)) || Number(a.idx) - Number(b.idx))
     .slice(0, limit)
     .map((r) => ({ postId: r.post_id as string, idx: Number(r.idx), key: r.object_key as string }));
@@ -237,6 +249,8 @@ export async function lockedPostsNeedingStills(limit: number): Promise<string[]>
       .is("blur_preview", null)
       .eq("sub_posts.status", "published")
       .eq("sub_posts.audience", "locked")
+      // newest first in the database, like the clips above (code review, 2026-10-30)
+      .order("created_at", { ascending: false })
       .limit(400),
   ]);
   const created = new Map<string, string>();
@@ -256,8 +270,26 @@ export async function lockedPostsNeedingStills(limit: number): Promise<string[]>
 }
 
 /**
- * Stores a clip the WORKER made: fills an empty slot or replaces a WebM one — never a good MP4 a browser already made.
- * The post-level clip (the first video's) follows the same rule.
+ * Is this item's clip slot still waiting for the worker (code review, 2026-10-30)? Asked right before ffmpeg runs: a
+ * creator's browser may have stored an MP4 since the run read its list, and then there is nothing to make or upload.
+ * A failed read answers true — the conditional save below still refuses a filled slot.
+ */
+export async function blurClipSlotOpen(postId: string, idx: number): Promise<boolean> {
+  const { data, error } = await createAdminClient()
+    .from("sub_post_media")
+    .select("idx")
+    .eq("post_id", postId)
+    .eq("idx", idx)
+    .eq("media_kind", "video")
+    .or(CLIP_NEEDS_WORK_FILTER)
+    .limit(1);
+  return error ? true : (data?.length ?? 0) > 0;
+}
+
+/**
+ * Stores a clip the WORKER made: fills a slot with no clip an iPhone plays (CLIP_NEEDS_WORK_FILTER — the same rule the
+ * worker selected it by) — never a good MP4 a browser already made. The post-level clip (the first video's) follows
+ * the same rule.
  */
 export async function saveServerBlurClip(postId: string, idx: number, url: string): Promise<boolean> {
   const db = createAdminClient();
@@ -267,14 +299,14 @@ export async function saveServerBlurClip(postId: string, idx: number, url: strin
     .eq("post_id", postId)
     .eq("idx", idx)
     .eq("media_kind", "video")
-    .or("blur_video_url.is.null,blur_video_url.ilike.*.webm")
+    .or(CLIP_NEEDS_WORK_FILTER)
     .select("idx");
   if (error || !data?.length) return false;
   await db
     .from("sub_posts")
     .update({ blur_video_url: url })
     .eq("id", postId)
-    .or("blur_video_url.is.null,blur_video_url.ilike.*.webm")
+    .or(CLIP_NEEDS_WORK_FILTER)
     .then(
       () => undefined,
       () => undefined,

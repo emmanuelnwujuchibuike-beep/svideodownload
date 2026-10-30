@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { APP_ONLY_PREFIXES } from "@/lib/auth/app-only-paths";
+import { LINK_PREVIEW_AGENTS } from "@/lib/seo/link-preview-bots";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
 /**
@@ -88,10 +89,20 @@ export default function robots(): MetadataRoute.Robots {
     "CCBot",
   ];
 
+  /*
+    ── LINK-PREVIEW FETCHERS MAY READ THE SHARED ROUTES (code review, 2026-10-30) ──────
+    X and LinkedIn draw no card for a URL robots.txt disallows, so a shared sound, reel or /u/ link showed a bare
+    address. Their own group (a named group replaces `*` for that fetcher) leaves the app-only routes open to them
+    ONLY: the middleware answers them with a share card — title, description, picture — never the page
+    (lib/seo/link-preview-bots.ts, app/api/share-card). Every search and ad crawler keeps the rules above.
+  */
+  const previewDisallow = ["/api/", "/admin/", "/ai", "/ai/"];
+
   return {
     rules: [
       { userAgent: "*", allow, disallow },
       ...aiAgents.map((userAgent) => ({ userAgent, allow, disallow })),
+      { userAgent: [...LINK_PREVIEW_AGENTS], allow, disallow: previewDisallow },
     ],
     /*
       The one sitemap: public content pages only (owner, 2026-10-29). posts-sitemap.xml and news-sitemap.xml (member

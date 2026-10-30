@@ -132,9 +132,14 @@ export function enabledSpotOnScreen(p: PublicSpotPopunder): boolean {
 }
 
 let watching = false;
-/** Load the tag the moment an enabled spot is on screen: checked now, then on DOM changes and scrolls until it loads. */
-function watchForVisibleSpot(p: PublicSpotPopunder): void {
-  if (tagState !== "idle" || watching) return;
+/**
+ * Load the tag the moment an enabled spot is on screen: checked now, then on DOM changes and scrolls until it loads.
+ * Always against the CURRENT config (`popunder`), never the one this watch began with: a spot the admin switched off
+ * meanwhile no longer loads it, and a pop-under switched off entirely ends the watch (code review, 2026-10-30).
+ */
+function watchForVisibleSpot(): void {
+  const p = popunder;
+  if (!p || tagState !== "idle" || watching) return;
   if (enabledSpotOnScreen(p)) {
     loadTag(p);
     return;
@@ -146,10 +151,11 @@ function watchForVisibleSpot(p: PublicSpotPopunder): void {
     if (timer) return;
     timer = setTimeout(() => {
       timer = null;
-      if (tagState !== "idle") return stop();
-      if (enabledSpotOnScreen(p)) {
+      const live = popunder;
+      if (tagState !== "idle" || !live) return stop();
+      if (enabledSpotOnScreen(live)) {
         stop();
-        loadTag(p);
+        loadTag(live);
       }
     }, 400);
   };
@@ -227,13 +233,19 @@ export async function loadDirectLinkOpener(spot: DirectLinkSpot): Promise<SpotOp
   const configRead = !!d && Object.keys(d).length > 0;
   if (configRead && !popunderOn) disarmLoadedPopunder();
   else if (popunderOn && tagState !== "idle") openGateFor(pu!);
+  /*
+    The page-wide pop-under follows EVERY fresh read, not only reads from a spot it is on (code review, 2026-10-30): it
+    was replaced only when this spot was in the new list, so a spot the admin took off (the pop-under itself left on)
+    kept the old list here — the press handler still armed it there, and the X the admin had just switched off opened
+    the pop-under anyway. A failed read ({}) changes nothing, as above.
+  */
+  if (popunderOn) popunder = pu!;
   const spotPopunder = popunderOn && pu!.spots.includes(spot) ? pu! : null;
   if (!links.length && !spotPopunder) return null;
   // the connections are ready before the tap — the link's host and the pop-under script's host (no request to either ad)
   for (const l of links) preconnect(l.url);
   preconnect(spotPopunder?.src);
   if (spotPopunder) {
-    popunder = spotPopunder;
     if (!pressListening) {
       pressListening = true;
       window.addEventListener("pointerdown", onPress, true);
@@ -241,7 +253,7 @@ export async function loadDirectLinkOpener(spot: DirectLinkSpot): Promise<SpotOp
     // ready BEFORE the first tap (a tag loaded by the tap itself arrives too late to open on it) — but only once an
     // enabled spot is really ON SCREEN: the ad close X lives in components mounted on most pages, and loading on mount
     // put Monetag everywhere (owner, 2026-10-23: "opens everywhere even in history")
-    window.setTimeout(() => watchForVisibleSpot(spotPopunder), POPUNDER_PRELOAD_MS);
+    window.setTimeout(watchForVisibleSpot, POPUNDER_PRELOAD_MS);
   }
 
   /**

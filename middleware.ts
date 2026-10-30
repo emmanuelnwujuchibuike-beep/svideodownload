@@ -7,8 +7,20 @@ import { isAppOnlyPath } from "@/lib/auth/app-only-paths";
 import { guestMustLogin } from "@/lib/auth/guest-login-paths";
 import { CORS_HEADERS } from "@/lib/api/cors";
 import { SUPABASE_COOKIE_OPTIONS } from "@/lib/supabase/cookie-options";
+import { isLinkPreviewBot } from "@/lib/seo/link-preview-bots";
 import { profileRoute } from "@/lib/social/profile-url";
 import { KEEP_MARKER, sessionCookiesToKeep, sessionIsComfortablyFresh } from "@/lib/supabase/session-cookie";
+
+/**
+ * The `next` a sign-in redirect carries: the address exactly as asked, query included (code review, 2026-10-30 — a
+ * guest opening /search?q=cats or a link with ?ref= came back to the bare path, the search or referral gone). The
+ * public form of the address (/chris, not /u/chris). The path alone when the whole would be too long for safeNext
+ * (lib/auth/safe-next.ts refuses anything over 512 characters and would fall back to /home).
+ */
+function signInNext(url: URL): string {
+  const asked = `${url.pathname}${url.search}`;
+  return asked.length <= 512 ? asked : url.pathname;
+}
 
 /**
  * Refreshes the Supabase auth session on each request (so access tokens stay
@@ -169,10 +181,23 @@ export async function middleware(request: NextRequest) {
     // landing, which IS the downloader for guests — never a login wall in front of a free download
     if (path === "/downloads") return NextResponse.redirect(new URL("/", request.url));
     // App-only routes (lib/auth/app-only-paths.ts): a guest is sent to sign in before any render — never a feed,
-    // post, reel, profile or sound in the HTML. `next` keeps the address the visitor asked for (/chris, not /u/chris).
+    // post, reel, profile or sound in the HTML. `next` keeps the address the visitor asked for (/chris, not /u/chris),
+    // its query included.
     if (needsGuard || appOnly || guestMustLogin(path)) {
+      /*
+        A LINK-PREVIEW fetcher (WhatsApp, X, iMessage, Telegram… — lib/seo/link-preview-bots.ts) gets the share card
+        instead (code review, 2026-10-30): a shared /chris, sound or reel link drew the LOGIN page's preview. The card
+        is the title, description and picture only (app/api/share-card) — never the page. Search and ad crawlers are
+        not preview fetchers: Googlebot and AdSense still get the redirect below.
+      */
+      if (appOnly && (request.method === "GET" || request.method === "HEAD") && isLinkPreviewBot(request.headers.get("user-agent"))) {
+        const card = new URL("/api/share-card", request.url);
+        card.searchParams.set("path", path);
+        card.searchParams.set("to", signInNext(request.nextUrl));
+        return NextResponse.rewrite(card);
+      }
       const redirectUrl = new URL("/login", request.url);
-      redirectUrl.searchParams.set("next", appOnly ? request.nextUrl.pathname : path);
+      redirectUrl.searchParams.set("next", signInNext(request.nextUrl));
       return NextResponse.redirect(redirectUrl);
     }
     return proceed({ request });
@@ -278,8 +303,12 @@ export async function middleware(request: NextRequest) {
       into the app instead — leaving them looking at the feed wondering why.
     */
     const redirectUrl = new URL(isProtectedAdmin ? "/admin/login" : "/login", request.url);
-    // the admin lock's emailed links carry their token in the query (/admin/unlock/new-pin?t=…): keep it through sign-in
-    redirectUrl.searchParams.set("next", isProtectedAdmin && pathname.startsWith("/admin/unlock/") ? pathname + request.nextUrl.search : pathname);
+    // the admin lock's emailed links carry their token in the query (/admin/unlock/new-pin?t=…): keep it through sign-in.
+    // A member route keeps its query too (/search?q=…, a ?ref= link — code review, 2026-10-30).
+    redirectUrl.searchParams.set(
+      "next",
+      isProtectedAdmin ? (pathname.startsWith("/admin/unlock/") ? pathname + request.nextUrl.search : pathname) : signInNext(request.nextUrl),
+    );
     return NextResponse.redirect(redirectUrl);
   }
 

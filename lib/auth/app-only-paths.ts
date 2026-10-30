@@ -12,6 +12,11 @@
  * every top-level profile URL too. Every route here also carries `robots: { index: false, follow: false }`, and
  * robots.ts disallows the same list (`APP_ONLY_PREFIXES` is the one source for both).
  *
+ * The one exception (code review, 2026-10-30): a LINK-PREVIEW fetcher (WhatsApp, X, iMessage… —
+ * lib/seo/link-preview-bots.ts) is answered with a share card — title, description, picture, never the page — so a
+ * shared profile, sound or reel link draws its own preview instead of the login page's. Search and ad crawlers are
+ * never on that list.
+ *
  * Exact segment match: `/sound` matches `/sound` and `/sound/…`, never `/sounds` (listed separately) or `/soundtrack`.
  */
 export const APP_ONLY_PREFIXES = [

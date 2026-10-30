@@ -2,7 +2,39 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { BLUR_CLIP_SECONDS, BLUR_CLIP_WIDTH, buildBlurClipArgs, isWebmClip, lacksPlayableClip, postNeedsBlurWork } from "@/lib/sub/blur-clip-plan";
+import { BLUR_CLIP_SECONDS, BLUR_CLIP_WIDTH, buildBlurClipArgs, CLIP_NEEDS_WORK_FILTER, isWebmClip, lacksPlayableClip, postNeedsBlurWork } from "@/lib/sub/blur-clip-plan";
+
+/**
+ * A PostgREST `or` filter of the shapes CLIP_NEEDS_WORK_FILTER uses (is.null · not.like · ilike, quoted or not), run on
+ * one value the way Postgres would: `*` is LIKE's `%`, ilike ignores case, NULL fails every comparison. Checked against
+ * the production database on 2026-10-30 (read-only): the real filter selected exactly the rows lacksPlayableClip flags.
+ */
+function filterSelects(filter: string, value: string | null): boolean {
+  return filter.split(/,(?=blur_video_url\.)/).some((clause) => {
+    const m = clause.match(/^blur_video_url\.(not\.)?(is|like|ilike)\.(.*)$/);
+    if (!m) throw new Error(`unknown clause ${clause}`);
+    const [, not, op, raw] = m;
+    if (op === "is") return (raw === "null") !== !!not && (raw === "null" ? value === null : false);
+    if (value === null) return false;
+    const pattern = raw!.replace(/^"(.*)"$/, "$1");
+    const re = new RegExp(`^${pattern.split("*").map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`, op === "ilike" ? "is" : "s");
+    return re.test(value) !== !!not;
+  });
+}
+const CLIP_CASES: (string | null)[] = [
+  null,
+  "",
+  "https://media.example/sub-blur/p/0-abc.mp4",
+  "https://media.example/sub-blur/p/0-abc.MP4?v=1",
+  "https://media.example/sub-blur/p/0-abc.webm",
+  "https://media.example/sub-blur/p/0-abc.WEBM",
+  "https://media.example/sub-blur/p/0-abc.webm?v=2",
+  "https://media.example/sub-blur/p/0-abc.webm#t=1",
+  "http://media.example/sub-blur/p/0-abc.mp4",
+  "HTTPS://media.example/sub-blur/p/0-abc.mp4",
+  "data:video/mp4;base64,AAAA",
+  "https://media.example/a.webmx/clip.mp4",
+];
 
 /**
  * The worker's blurred clip for a locked video (owner, 2026-10-29: every exclusive post autoplays blurred to a
@@ -46,6 +78,18 @@ describe("the server's blurred clip", () => {
     expect(lacksPlayableClip(["https://media.example/a.webm"])).toBe(true);
     expect(lacksPlayableClip(["https://media.example/a.webm", "https://media.example/b.mp4"])).toBe(false);
     expect(lacksPlayableClip(["https://media.example/b.mp4"])).toBe(false);
+  });
+
+  it("the worker's queue and the feed's ask are ONE rule (code review, 2026-10-30): the filter selects exactly what lacksPlayableClip flags", () => {
+    for (const v of CLIP_CASES) expect(filterSelects(CLIP_NEEDS_WORK_FILTER, v), JSON.stringify(v)).toBe(lacksPlayableClip([v]));
+  });
+
+  it("teeth: the old filter (null or ending .webm) misses clips the feed kept asking for — the endless kick", () => {
+    const old = "blur_video_url.is.null,blur_video_url.ilike.*.webm";
+    const missed = CLIP_CASES.filter((v) => lacksPlayableClip([v]) && !filterSelects(old, v));
+    expect(missed).toEqual(["", "https://media.example/sub-blur/p/0-abc.webm?v=2", "https://media.example/sub-blur/p/0-abc.webm#t=1", "http://media.example/sub-blur/p/0-abc.mp4", "HTTPS://media.example/sub-blur/p/0-abc.mp4", "data:video/mp4;base64,AAAA"]);
+    // and the emulator itself bites: a filter that selects nothing disagrees with the rule
+    expect(CLIP_CASES.every((v) => filterSelects("blur_video_url.is.null", v) === lacksPlayableClip([v]))).toBe(false);
   });
 
   it("checks every slide of an album, not just the first", () => {

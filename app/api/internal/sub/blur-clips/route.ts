@@ -16,14 +16,22 @@ export const maxDuration = 300;
  * non-subscriber. Kicked by the frontend when a feed read finds a locked video without a clip (lib/sub/blur-clip-kick.ts).
  *
  * The request carries NOTHING: the work list is read from the database, so a caller can neither choose what ffmpeg
- * reads nor where anything is written. Same secret posture as /api/internal/ads/transcode; it answers 202 at once and
- * keeps working on the long-lived worker process.
+ * reads nor where anything is written. It answers 202 at once and keeps working on the long-lived worker process.
+ *
+ * 🔴 FAILS CLOSED (code review, 2026-10-30): with no WORKER_SECRET on the worker it refuses every call instead of
+ * running unauthenticated — this job presigns private files, runs up to 40 ffmpeg jobs and writes to the public bucket,
+ * so an open endpoint was a free CPU and egress loop for anyone. The frontend always sends the secret (Vercel has it;
+ * fly.toml's deploy steps set it on the worker). Nothing is lost while it refuses: the creator's browser still makes
+ * clips on publish and on visits (features/sub/blur-clip-backfill.ts).
  */
 export async function POST(request: Request) {
-  if (WORKER_SECRET && request.headers.get("x-worker-secret") !== WORKER_SECRET) {
+  if (!WORKER_SECRET) {
+    console.error("[sub/blur-clips] WORKER_SECRET is not set on this worker — refusing (set it with `fly secrets set WORKER_SECRET=…`).");
+    return NextResponse.json({ ok: false, error: "Worker secret not configured" }, { status: 503 });
+  }
+  if (request.headers.get("x-worker-secret") !== WORKER_SECRET) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
-  if (!WORKER_SECRET) console.warn("[sub/blur-clips] WORKER_SECRET is not set on this worker — the endpoint is UNAUTHENTICATED.");
   void runSubBlurClips()
     .then((r) => console.info("[sub/blur-clips] done", r))
     .catch((e) => console.error("[sub/blur-clips] crashed", e instanceof Error ? e.message.slice(0, 200) : "error"));

@@ -177,7 +177,8 @@ describe("a build that cannot change the deployment does not run", () => {
     const hasBash = spawnSync("bash", ["--version"]).status === 0;
     const runGate = (env: Record<string, string>) => {
       const clean = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("VERCEL_")));
-      return spawnSync("bash", ["scripts/vercel-should-build.sh"], { env: { ...clean, ...env }, encoding: "utf8" });
+      // ProcessEnv is typed with a required NODE_ENV (Next's augmentation); the filtered copy is still a process env
+      return spawnSync("bash", ["scripts/vercel-should-build.sh"], { env: { ...clean, ...env } as NodeJS.ProcessEnv, encoding: "utf8" });
     };
 
     it.skipIf(!hasBash)("a branch that is not main is skipped (exit 0)", () => {

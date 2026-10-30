@@ -828,8 +828,8 @@ export async function requestSubWithdrawal(input: { userId: string; grossCents: 
   }
   if (r.duplicate) return { ok: true, id: r.id!, status: r.status ?? "pending", netCents: split.netCents, feeCents: split.feeCents, paidOut: false };
   /*
-    owner: "withdraw instantly" — through the admin's payout provider (Flutterwave by default, Paystack its backup;
-    lib/rewards/flutterwave-payouts.ts), no admin step — but ONLY past the fraud gates (2026-10-24, lib/sub/payout-risk.ts):
+    owner: "withdraw instantly" — through the admin's payout route (Flutterwave only by default; Paystack only on the
+    route that names it — lib/rewards/payout-rail.ts), no admin step — but ONLY past the fraud gates (2026-10-24, lib/sub/payout-risk.ts):
     a new bank account, a large or fast-repeating amount, a bank account shared with another creator or an unconfirmed
     email keeps it PENDING for an admin, with the reasons on the financial audit log. It is never refused for it.
   */
@@ -845,6 +845,17 @@ export async function requestSubWithdrawal(input: { userId: string; grossCents: 
       const out = await payWithdrawal(r.id!, null);
       paidOut = out.ok;
       status = out.ok ? (out.status === "success" || out.status === "successful" ? "completed" : "processing") : "pending";
+      // the chosen provider refused (no silent second rail since 2026-10-29): the money stays held for an admin, who sees why
+      if (!out.ok) {
+        await createAdminClient()
+          .from("financial_audit_log")
+          .insert({ actor_id: null, action: "withdrawal_payout_refused", target_type: "withdrawal", target_id: r.id!, reference: null, details: { error: out.error.slice(0, 300), gross_cents: split.grossCents } })
+          .then(
+            () => undefined,
+            () => undefined,
+          );
+        console.warn("[sub/withdraw] instant payout refused", { userId: input.userId, id: r.id, error: out.error });
+      }
     }
   }
   return { ok: true, id: r.id!, status, netCents: Number(r.net ?? split.netCents), feeCents: Number(r.fee ?? split.feeCents), paidOut };

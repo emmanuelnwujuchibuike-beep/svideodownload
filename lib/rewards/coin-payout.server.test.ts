@@ -14,7 +14,9 @@ let db: FakeDb;
 const W = "11111111-1111-4111-8111-111111111111";
 let source: "none" | "fixed" | "market" = "none";
 let fixedMinor: number | null = null;
-let coinRail: "flutterwave" | "paystack" | "by_country" = "by_country";
+let coinRail: "flutterwave" | "paystack" | "flutterwave_paystack_backup" | "by_country" = "by_country";
+// the account holder Flutterwave reads for the bank details (a different name = a DEFINITE refusal: nothing is sent)
+let fwName = "ADA OBI";
 let perUsd = 1500;
 const sent: number[] = [];
 
@@ -27,7 +29,7 @@ vi.mock("@/lib/landing/settings", () => ({
 vi.mock("@/lib/flutterwave/config", () => ({ getFlutterwaveConfig: async () => ({ secretKey: "FLWSECK_TEST-x" }) }));
 vi.mock("@/lib/flutterwave/client", async (orig) => ({
   ...(await orig<typeof import("@/lib/flutterwave/client")>()),
-  resolveFlutterwaveAccount: async () => "ADA OBI",
+  resolveFlutterwaveAccount: async () => fwName,
   createFlutterwaveTransfer: async (i: { amountMinor: number }) => (sent.push(i.amountMinor), { status: "NEW", id: "9" }),
 }));
 vi.mock("./paystack-payouts", () => ({ PAYSTACK_METHOD: "paystack", payWithdrawalViaPaystack: vi.fn(async () => ({ ok: false, error: "not used" })) }));
@@ -52,6 +54,7 @@ beforeEach(() => {
   source = "none";
   fixedMinor = null;
   perUsd = 1500;
+  fwName = "ADA OBI";
   sent.length = 0;
   // 0283 record_coin_payout_quote: written once; a second call answers what was recorded
   db.rpc.record_coin_payout_quote = vi.fn((a: Record<string, unknown>) => {
@@ -153,6 +156,35 @@ describe("which rail pays a Frenz Coin withdrawal", () => {
   it("the admin's Paystack rail pays even a bank beyond Paystack's countries through Paystack", async () => {
     coinRail = "paystack";
     db.tables.withdrawal_requests = [coinRow({ payout_details: { bankCode: "058", accountNumber: "0123456789", accountName: "ADA OBI", country: "US" } })];
+    await payWithdrawal(W, "admin-1");
+    expect(payWithdrawalViaPaystack).toHaveBeenCalledWith(W, "admin-1");
+    expect(sent).toEqual([]);
+  });
+  /*
+    🔴 ONE CLEAN PATH (owner, 2026-10-29: "Withdrawal must be clean path through the provider selected by admin not two or
+    any backup"). A definite Flutterwave refusal on "Flutterwave only" — or on the Flutterwave side of "by the bank's
+    country" — is returned, never re-sent through Paystack. Only the explicit backup route reaches Paystack.
+  */
+  it("Flutterwave only: a definite refusal stops there — Paystack is never asked", async () => {
+    coinRail = "flutterwave";
+    source = "market";
+    fwName = "SOMEONE ELSE";
+    expect((await payWithdrawal(W, "admin-1")).ok).toBe(false);
+    expect(payWithdrawalViaPaystack).not.toHaveBeenCalled();
+    expect(sent).toEqual([]);
+  });
+  it("by the bank's country: a Flutterwave-country refusal stops there too (one rail per withdrawal, no backup)", async () => {
+    coinRail = "by_country";
+    source = "market";
+    fwName = "SOMEONE ELSE";
+    db.tables.withdrawal_requests = [coinRow({ payout_details: { bankCode: "058", accountNumber: "0123456789", accountName: "ADA OBI", country: "US" } })];
+    expect((await payWithdrawal(W, "admin-1")).ok).toBe(false);
+    expect(payWithdrawalViaPaystack).not.toHaveBeenCalled();
+  });
+  it("Flutterwave with Paystack as backup: the same refusal is handed to Paystack", async () => {
+    coinRail = "flutterwave_paystack_backup";
+    source = "market";
+    fwName = "SOMEONE ELSE";
     await payWithdrawal(W, "admin-1");
     expect(payWithdrawalViaPaystack).toHaveBeenCalledWith(W, "admin-1");
     expect(sent).toEqual([]);

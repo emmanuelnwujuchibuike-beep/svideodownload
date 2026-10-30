@@ -1,3 +1,5 @@
+import { PAYOUT_ROUTES, type PayoutRoute } from "@/lib/rewards/payout-rail";
+
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  *  FRENZ COIN — CONFIGURATION AND FEE ARITHMETIC (Frenz Coin Part 3, migration 0279)
@@ -98,11 +100,11 @@ export interface FrenzCoinConfig {
    */
   adminAlerts: CoinAdminAlerts;
   /**
-   * Which rail pays a Frenz Coin withdrawal (owner, 2026-10-28: "Paystack is blocking withdrawal, let's use Flutterwave
-   * for the global withdrawal, and I can switch which for withdrawal"). `flutterwave` (the default): every coin payout
-   * goes through Flutterwave, with Paystack as the backup only when Flutterwave definitely sent nothing. `paystack`:
-   * Paystack only. `by_country`: the 2026-10-27 rule (Nigeria, Ghana, South Africa, Kenya by Paystack, beyond by
-   * Flutterwave — lib/rewards/payout-rail.ts). Prices nothing, so it does not bump the version.
+   * Which rail pays a Frenz Coin withdrawal — one clean path, the admin's (owner, 2026-10-29; lib/rewards/payout-rail.ts
+   * PAYOUT_ROUTES): `flutterwave` = Flutterwave ONLY (the default), `paystack` = Paystack only,
+   * `flutterwave_paystack_backup` = Flutterwave with Paystack as the backup, and `by_country` = the 2026-10-27 rule
+   * (Nigeria, Ghana, South Africa, Kenya by Paystack, beyond by Flutterwave) — each withdrawal on exactly one rail, no
+   * backup. Prices nothing, so it does not bump the version.
    */
   payoutProvider: CoinPayoutProvider;
   version: number;
@@ -112,8 +114,8 @@ export interface FrenzCoinConfig {
 export type CoinAdminAlerts = "both" | "push" | "email" | "off";
 export const COIN_ADMIN_ALERTS: readonly CoinAdminAlerts[] = ["both", "push", "email", "off"];
 
-export type CoinPayoutProvider = "flutterwave" | "paystack" | "by_country";
-export const COIN_PAYOUT_PROVIDERS: readonly CoinPayoutProvider[] = ["flutterwave", "paystack", "by_country"];
+export type CoinPayoutProvider = PayoutRoute | "by_country";
+export const COIN_PAYOUT_PROVIDERS: readonly CoinPayoutProvider[] = [...PAYOUT_ROUTES, "by_country"];
 
 export const COIN_DEFAULTS: FrenzCoinConfig = {
   enabled: false,

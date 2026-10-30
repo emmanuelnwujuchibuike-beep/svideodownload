@@ -1,3 +1,4 @@
+import { normalizePayoutRoute, type PayoutRoute } from "@/lib/rewards/payout-rail";
 import { normalizeQuests, QUESTS_DEFAULTS, type QuestsConfig } from "@/lib/rewards/quests";
 
 /**
@@ -180,10 +181,10 @@ export interface SubConfig {
    */
   flatFees: WithdrawalFlatFees;
   /**
-   * Which provider sends withdrawals to a Nigerian bank (owner, 2026-10-24: "they withdraw through Flutterwave or any I
-   * set by admin"). Flutterwave by default; Paystack is its backup only when Flutterwave definitely sent nothing.
+   * Which provider sends Exclusive withdrawals — one clean path, the admin's (owner, 2026-10-29; lib/rewards/payout-rail.ts
+   * PAYOUT_ROUTES): Flutterwave only (the default), Paystack only, or Flutterwave with Paystack as the backup.
    */
-  payoutProvider: "flutterwave" | "paystack";
+  payoutProvider: PayoutRoute;
   /**
    * Fraud gates on the INSTANT payout (owner, 2026-10-24: "make sure the withdrawal is fully secured and gated"). A
    * withdrawal that misses any of them is still accepted, but waits for an admin instead of leaving at once:
@@ -246,7 +247,7 @@ export function normalizeSubConfig(raw: unknown): SubConfig {
     requireQualification: bool(r.requireQualification, d.requireQualification),
     watermark: bool(r.watermark, d.watermark),
     flatFees: normalizeFlatFees(r.flatFees),
-    payoutProvider: r.payoutProvider === "paystack" ? "paystack" : "flutterwave",
+    payoutProvider: normalizePayoutRoute(r.payoutProvider),
     autoPayoutMaxCents: int(r.autoPayoutMaxCents, d.autoPayoutMaxCents, 0, 100_000_000),
     autoPayoutDailyMaxCents: int(r.autoPayoutDailyMaxCents, d.autoPayoutDailyMaxCents, 0, 100_000_000),
     newAccountHoldHours: int(r.newAccountHoldHours, d.newAccountHoldHours, 0, 720),

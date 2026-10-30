@@ -8,18 +8,19 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { FLUTTERWAVE_REF } from "./payout-refs";
 import { PAYSTACK_METHOD, payWithdrawalViaPaystack } from "./paystack-payouts";
 import { payoutQuote } from "./payout-quote";
-import { coinPayoutRail, payoutDestinationCountry } from "./payout-rail";
+import { coinPayoutRail, DEFAULT_PAYOUT_ROUTE, normalizePayoutRoute, payoutDestinationCountry, type PayoutRoute } from "./payout-rail";
 import { resolveWithdrawal } from "./withdrawals";
 
 /**
  * Flutterwave payouts — Exclusive withdrawals leave through Flutterwave (owner, 2026-10-24: "exclusive users don't
  * withdraw through paystack anymore, they withdraw through Flutterwave or any I set by admin").
  *
- *   rail       Admin → SUB → "Payout provider" (SubConfig.payoutProvider), Flutterwave by default. Paystack is the
- *              backup, used ONLY when Flutterwave definitely sent nothing: it is not configured, it refused the
- *              account lookup or the transfer with a 4xx, or the account holder it names doesn't match the one the
- *              member confirmed (the member picked their bank from Paystack's list; a code Flutterwave reads as a
- *              different bank must never receive the money).
+ *   rail       the admin's route (Admin → SUB / Frenz Coin → "Payout provider", lib/rewards/payout-rail.ts): Flutterwave
+ *              only by default. Paystack is a backup ONLY on the "Flutterwave, with Paystack as backup" route, and only
+ *              when Flutterwave definitely sent nothing: it is not configured, it refused the account lookup or the
+ *              transfer with a 4xx, or the account holder it names doesn't match the one the member confirmed (the
+ *              member picked their bank from Paystack's list; a code Flutterwave reads as a different bank must never
+ *              receive the money).
  *   reference  frenz_fwd_<withdrawal id> — fixed per withdrawal, so a retry can never pay twice, and distinct from
  *              Paystack's frenz_wd_ so every later step (reject, webhook, reconcile) asks the rail that sent it.
  *   unknown    a timeout / 5xx / non-JSON answer is NOT a failure: the withdrawal moves to processing with the
@@ -27,7 +28,8 @@ import { resolveWithdrawal } from "./withdrawals";
  *   amount     the withdrawal's USD value at the live NGN market rate (the same as the Paystack rail).
  *
  * Flutterwave account requirements: Transfers enabled, the server's IP whitelisted if IP whitelisting is on, and a
- * funded NGN balance. A Flutterwave refusal for any of these falls back to Paystack (definite, nothing was sent).
+ * funded NGN balance. A refusal for any of these is returned to the admin (Flutterwave only) — or, on the backup route,
+ * hands the withdrawal to Paystack (definite: nothing was sent).
  */
 
 
@@ -44,53 +46,51 @@ export function sameAccountHolder(a: string, b: string): boolean {
   return short.every((w) => long.has(w));
 }
 
-/** The admin's payout rail for withdrawals. */
-export async function payoutProvider(): Promise<"flutterwave" | "paystack"> {
+/** The admin's route for Exclusive withdrawals (Admin → SUB → Payout provider) — Flutterwave only when unreadable. */
+export async function subPayoutRoute(): Promise<PayoutRoute> {
   try {
-    return (await getLandingSettings()).frenzRewards.sub.payoutProvider === "paystack" ? "paystack" : "flutterwave";
+    return normalizePayoutRoute((await getLandingSettings()).frenzRewards.sub.payoutProvider);
   } catch {
-    return "flutterwave";
+    return DEFAULT_PAYOUT_ROUTE;
   }
-}
-
-/** The rail for a Frenz Coin withdrawal: the admin's choice (frenzCoin.payoutProvider), Flutterwave when unreadable. */
-async function coinPayoutChoice(w: Row): Promise<"flutterwave" | "paystack"> {
-  let choice: "flutterwave" | "paystack" | "by_country" = "flutterwave";
-  try {
-    choice = (await getLandingSettings()).frenzCoin.payoutProvider;
-  } catch {
-    /* the default rail */
-  }
-  return choice === "by_country" ? coinPayoutRail(payoutDestinationCountry(w)) : choice;
 }
 
 /**
- * Pay one withdrawal through the admin's rail. The only door every payout uses (the instant auto-payout and the
- * admin's Pay button). Flutterwave first by default; Paystack only after Flutterwave definitely sent nothing.
+ * The route for a Frenz Coin withdrawal (Admin → Frenz Coin → Payout provider) — Flutterwave only when unreadable.
+ * `by_country` resolves to the ONE rail of the bank's country (Nigeria, Ghana, South Africa, Kenya by Paystack, beyond by
+ * Flutterwave — the 2026-10-27 rule), never to a backup pair.
+ */
+async function coinPayoutRoute(w: Row): Promise<PayoutRoute> {
+  let choice: unknown = DEFAULT_PAYOUT_ROUTE;
+  try {
+    choice = (await getLandingSettings()).frenzCoin.payoutProvider;
+  } catch {
+    /* the default route */
+  }
+  return choice === "by_country" ? coinPayoutRail(payoutDestinationCountry(w)) : normalizePayoutRoute(choice);
+}
+
+/**
+ * Pay one withdrawal through the admin's route — the only door every payout uses (the instant auto-payout and the
+ * admin's Pay button).
+ *
+ * 🔴 ONE CLEAN PATH (owner, 2026-10-29: "Withdrawal must be clean path through the provider selected by admin not two or
+ * any backup"). Flutterwave only and Paystack only each use exactly that provider: a refusal is returned to the caller
+ * and the withdrawal stays approved with the money held — nothing is ever re-sent through the other rail. Paystack is a
+ * backup ONLY when the admin chose "Flutterwave, with Paystack as backup", and even then only after Flutterwave
+ * definitely sent nothing (lib/rewards/payout-rail.ts PAYOUT_ROUTES).
  */
 export async function payWithdrawal(withdrawalId: string, adminId: string | null): Promise<PayResult> {
-  /*
-    Frenz Coin (owner, 2026-10-27): the destination's country picks the rail — Nigeria, Ghana, South Africa, Kenya through
-    Paystack; beyond, Flutterwave (lib/rewards/payout-rail.ts). Exclusive withdrawals keep the admin's provider below.
-  */
   const { data: head } = await createAdminClient().from("withdrawal_requests").select("source, payout_method, payout_details").eq("id", withdrawalId).maybeSingle();
   const w = head as Row | null;
-  /*
-    2026-10-28 (owner: "Paystack is blocking withdrawal, let's use Flutterwave for the global withdrawal, and I can switch
-    which for withdrawal"): the admin's Frenz Coin payout rail — Flutterwave by default (Paystack only as the backup when
-    Flutterwave definitely sent nothing), Paystack only, or by the bank's country (the 2026-10-27 rule above).
-  */
-  if (w?.source === "coin" && (await coinPayoutChoice(w)) === "paystack") {
-    const p = await payWithdrawalViaPaystack(withdrawalId, adminId);
-    return p.ok ? { ...p, provider: "paystack" } : p;
-  }
-  if (w?.source !== "coin" && (await payoutProvider()) === "paystack") {
+  const route = w?.source === "coin" ? await coinPayoutRoute(w) : await subPayoutRoute();
+  if (route === "paystack") {
     const p = await payWithdrawalViaPaystack(withdrawalId, adminId);
     return p.ok ? { ...p, provider: "paystack" } : p;
   }
   const fw = await payWithdrawalViaFlutterwave(withdrawalId, adminId);
   if (fw.ok) return { ok: true, status: fw.status, provider: "flutterwave" };
-  if (!fw.fallback) return { ok: false, error: fw.error };
+  if (route !== "flutterwave_paystack_backup" || !fw.fallback) return { ok: false, error: fw.error };
   console.warn("[rewards/payout] fallback_triggered", { from: "flutterwave", to: "paystack", withdrawal: withdrawalId, why: fw.error });
   const p = await payWithdrawalViaPaystack(withdrawalId, adminId);
   return p.ok ? { ...p, provider: "paystack" } : p;

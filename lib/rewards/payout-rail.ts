@@ -12,6 +12,37 @@
  */
 export const PAYSTACK_PAYOUT_COUNTRIES: readonly string[] = ["NG", "GH", "ZA", "KE"];
 
+/**
+ * HOW A WITHDRAWAL LEAVES — the admin's choice, for Exclusive (Admin → SUB) and Frenz Coin (Admin → Frenz Coin) alike.
+ *
+ * Owner, 2026-10-29: "Withdrawal must be clean path through the provider selected by admin not two or any backup, I will
+ * choose if Flutterwave only, paystack only or Flutterwave and paystack as backup but default to Flutterwave only."
+ *
+ *   flutterwave                  Flutterwave ONLY. A refusal leaves the withdrawal approved with the money held, for a
+ *                                retry once Flutterwave is fixed — nothing is ever sent through Paystack.
+ *   paystack                     Paystack ONLY.
+ *   flutterwave_paystack_backup  Flutterwave first; Paystack only when Flutterwave DEFINITELY sent nothing (not set up, a
+ *                                4xx refusal, or an account-holder mismatch) — the old "Flutterwave" behaviour, now opt-in.
+ *
+ * Before 2026-10-29 "flutterwave" silently meant the third row, which is how a payout the admin routed to Flutterwave
+ * could leave through Paystack. A saved "flutterwave" now means exactly what it says.
+ */
+export const PAYOUT_ROUTES = ["flutterwave", "paystack", "flutterwave_paystack_backup"] as const;
+export type PayoutRoute = (typeof PAYOUT_ROUTES)[number];
+export const DEFAULT_PAYOUT_ROUTE: PayoutRoute = "flutterwave";
+
+/** What the admin reads for each route. */
+export const PAYOUT_ROUTE_LABELS: Record<PayoutRoute, string> = {
+  flutterwave: "Flutterwave only (default)",
+  paystack: "Paystack only",
+  flutterwave_paystack_backup: "Flutterwave, with Paystack as backup",
+};
+
+/** A stored value → a route; anything unknown is the default, Flutterwave only. */
+export function normalizePayoutRoute(v: unknown): PayoutRoute {
+  return (PAYOUT_ROUTES as readonly unknown[]).includes(v) ? (v as PayoutRoute) : DEFAULT_PAYOUT_ROUTE;
+}
+
 /** The rail for a coin payout into a bank in `country` (two letters). Unknown → Flutterwave, the rail that reaches most countries. */
 export function coinPayoutRail(country: string | null | undefined): "paystack" | "flutterwave" {
   return PAYSTACK_PAYOUT_COUNTRIES.includes((country ?? "").trim().toUpperCase()) ? "paystack" : "flutterwave";

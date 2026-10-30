@@ -45,8 +45,10 @@ vi.mock("@/lib/rate-limit", () => ({ trackLimiter: { limit: async () => ({ succe
 vi.mock("@/lib/security/audit-log", () => ({ writeAuditLog: vi.fn(async () => {}) }));
 vi.mock("@/lib/landing/settings", async () => {
   const { SUB_DEFAULTS } = await import("@/lib/rewards/config");
-  // autoPayout OFF here, so the admin review path is exercised; the auto path is covered in security-boundaries
-  return { getLandingSettings: async () => ({ frenzRewards: { sub: { ...SUB_DEFAULTS, autoPayout: false } }, frenzAiCharacterReplace: { recharge: { checkoutCurrency: "NGN", fxMarkupPercent: 0 } } }) };
+  // autoPayout OFF here, so the admin review path is exercised; the auto path is covered in security-boundaries.
+  // The journey pays through PAYSTACK (scripted below), so the admin's route says so — since 2026-10-29 the default,
+  // Flutterwave only, never falls back to Paystack (lib/rewards/payout-rail.ts).
+  return { getLandingSettings: async () => ({ frenzRewards: { sub: { ...SUB_DEFAULTS, autoPayout: false, payoutProvider: "paystack" } }, frenzAiCharacterReplace: { recharge: { checkoutCurrency: "NGN", fxMarkupPercent: 0 } } }) };
 });
 vi.mock("@/lib/ai/character-replace/fx-rate-server", () => ({ resolveCheckoutRate: async () => ({ minorPerUsd: 150_000, marketPerUsd: 1500, markupPercent: 0, source: "stored", fetchedAt: null, provider: "test" }), marketRate: async () => ({ rate: { perUsd: 1500 }, source: "stored" }) }));
 vi.mock("@/lib/paystack/config", () => ({ getPaystackConfig: async () => ({ secretKey: SECRET }) }));

@@ -8,11 +8,13 @@ import { COIN_ADMIN_ALERTS, COIN_PAYOUT_PROVIDERS, type CoinAdminAlerts, type Co
 import { buildCoinPatch, type CoinSettingsForm, formFromConfig, riskyChanges } from "./coin-admin-logic";
 import { postMoney } from "./coin-admin-data";
 import { BTN, Card, Field, INPUT, Message, Toggle, when } from "./coin-admin-ui";
+import { PAYOUT_ROUTE_LABELS } from "@/lib/rewards/payout-rail";
 
 type SensitiveFetch = (input: RequestInfo, init?: RequestInit) => Promise<Response>;
 
 const ALERT_LABEL: Record<CoinAdminAlerts, string> = { both: "Push and email", push: "Push only", email: "Email only", off: "Off" };
-const PAYOUT_LABEL: Record<CoinPayoutProvider, string> = { flutterwave: "Flutterwave (Paystack only as a backup)", paystack: "Paystack only", by_country: "By the bank's country (Paystack in NG, GH, ZA, KE)" };
+// one clean path per withdrawal (owner, 2026-10-29) — the three routes' wording lives with the routes themselves
+const PAYOUT_LABEL: Record<CoinPayoutProvider, string> = { ...PAYOUT_ROUTE_LABELS, by_country: "By the bank's country (Paystack in NG, GH, ZA, KE; Flutterwave beyond)" };
 
 /**
  * Admin → Frenz Coin → Settings (Part 6). Every switch, fee, limit and the payout rate source the backend supports —
@@ -75,7 +77,7 @@ export function CoinSettings({ config, sensitiveFetch }: { config: FrenzCoinConf
               ))}
             </select>
           </Field>
-          <Field htmlFor="fc-payout" label="Withdrawals are paid through" hint="Every coin withdrawal leaves through this rail. A payout already sent is always settled with the rail that sent it.">
+          <Field htmlFor="fc-payout" label="Withdrawals are paid through" hint="Every coin withdrawal leaves through this rail only — Paystack is used as a backup only if you pick that option. A payout already sent is always settled with the rail that sent it.">
             <select id="fc-payout" className={INPUT} value={form.payoutProvider} onChange={(e) => set("payoutProvider", e.target.value as CoinPayoutProvider)}>
               {COIN_PAYOUT_PROVIDERS.map((p) => (
                 <option key={p} value={p}>

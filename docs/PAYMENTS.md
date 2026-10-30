@@ -135,9 +135,14 @@ below **for Nigeria only**.
   `_fw_`) and the webhook purpose is `frenz_coin_deposit`. The same `settle_coin_deposit`, the same hold, and refunds
   are logged for an admin, as with Flutterwave. The second rail is tried only after a definite refusal, under its own
   idempotency key (`…-alt1`).
-- **Frenz Coin withdrawals:** the destination bank's country picks the rail (`lib/rewards/payout-rail.ts`): NG, GH, ZA
-  and KE go to Paystack, beyond them to Flutterwave. Today every coin withdrawal is to a Nigerian bank, so Paystack pays
-  it. Exclusive withdrawals keep Admin → SUB → Payout provider.
+- **Withdrawals — one clean path, the admin's (2026-10-29):** every payout leaves through exactly the provider the
+  admin picked (`lib/rewards/payout-rail.ts` PAYOUT_ROUTES; Admin → SUB → Payout provider for Exclusive, Admin → Frenz
+  Coin → "Withdrawals are paid through" for coin): **Flutterwave only** (the default), **Paystack only**, or
+  **Flutterwave, with Paystack as backup** (Paystack only after Flutterwave definitely sent nothing). Coin also offers
+  **by the bank's country** (NG, GH, ZA, KE by Paystack, beyond by Flutterwave) — one rail per withdrawal, no backup.
+  A refusal on a single-provider route is returned to the admin and the withdrawal stays approved with the money held,
+  for a retry; before 2026-10-29 "Flutterwave" silently fell back to Paystack. One door: `payWithdrawal`
+  (`lib/rewards/flutterwave-payouts.ts`).
 - **Not built, owner decisions:** paying a bank outside Nigeria in its own currency. That needs a bank-details form
   per country, an approved payout rate per currency (no rate is ever assumed), and, for Paystack in Ghana, Kenya or
   South Africa, a Paystack account registered in that country. Paystack pays out only inside its account's country,

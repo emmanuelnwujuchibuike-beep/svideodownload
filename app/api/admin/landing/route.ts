@@ -18,6 +18,7 @@ import {
   setLandingSettings,
 } from "@/lib/landing/settings";
 import { PAYMENT_PURPOSES, paymentRoutingProblem, type PaymentPurpose } from "@/lib/ai/credits/wallet-config";
+import { PAYOUT_ROUTES } from "@/lib/rewards/payout-rail";
 import { SITE_URL } from "@/lib/site";
 
 export const runtime = "nodejs";
@@ -456,8 +457,8 @@ const schema = z.object({
       pin: z.object({ maxAttempts: z.number().int().min(3).max(10).optional(), lockMinutes: z.number().int().min(5).max(1_440).optional(), resetTtlMinutes: z.number().int().min(5).max(30).optional(), resetMaxPerHour: z.number().int().min(1).max(10).optional(), resetCodeMaxAttempts: z.number().int().min(3).max(10).optional() }).strict().optional(),
       // Part 5: how admins hear about each coin transfer / withdrawal and its fee
       adminAlerts: z.enum(["both", "push", "email", "off"]).optional(),
-      // 2026-10-28: which rail pays a coin withdrawal (Flutterwave by default)
-      payoutProvider: z.enum(["flutterwave", "paystack", "by_country"]).optional(),
+      // which rail pays a coin withdrawal — one clean path (2026-10-29, lib/rewards/payout-rail.ts): Flutterwave only by default
+      payoutProvider: z.enum(["flutterwave", "paystack", "flutterwave_paystack_backup", "by_country"]).optional(),
     })
     .strict()
     .optional(),
@@ -508,8 +509,8 @@ const schema = z.object({
           holdDays: z.number().int().min(0).max(90).optional(),
           periodDays: z.number().int().min(1).max(366).optional(),
           autoPayout: z.boolean().optional(),
-          // 2026-10-24: the payout rail and the instant-payout fraud gates
-          payoutProvider: z.enum(["flutterwave", "paystack"]).optional(),
+          // the payout rail (one clean path, 2026-10-29 — lib/rewards/payout-rail.ts) and the instant-payout fraud gates
+          payoutProvider: z.enum(PAYOUT_ROUTES).optional(),
           autoPayoutMaxCents: z.number().int().min(0).max(100_000_000).optional(),
           autoPayoutDailyMaxCents: z.number().int().min(0).max(100_000_000).optional(),
           newAccountHoldHours: z.number().int().min(0).max(720).optional(),

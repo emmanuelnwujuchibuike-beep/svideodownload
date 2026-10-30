@@ -3,14 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeDb, type FakeDb } from "@/lib/testing/fake-supabase";
 
 /**
- * Flutterwave payouts (2026-10-24): the reference is recorded BEFORE the transfer is sent; Paystack backs it up ONLY
+ * Flutterwave payouts (2026-10-24): the reference is recorded BEFORE the transfer is sent; Paystack backs it up ONLY on
+ * the admin's "Flutterwave, with Paystack as backup" route (2026-10-29: "Flutterwave only" is the default) and ONLY
  * when Flutterwave definitely sent nothing (not configured, a 4xx, or a different account holder); an unknown outcome
  * holds the money and sends nothing else.
  */
 let db: FakeDb;
 const W = "11111111-1111-4111-8111-111111111111";
 const FREF = `frenz_fwd_${W.replace(/-/g, "")}`;
-let provider: "flutterwave" | "paystack" = "flutterwave";
+let provider: "flutterwave" | "paystack" | "flutterwave_paystack_backup" = "flutterwave";
 let secretKey = "FLWSECK_TEST-x";
 let resolveName: () => Promise<string> = async () => "AMAKA OBI";
 let transfer: () => Promise<{ status: string; id: string | null }> = async () => ({ status: "NEW", id: "9" });
@@ -65,17 +66,29 @@ describe("Flutterwave payouts", () => {
     expect(paystack).not.toHaveBeenCalled();
   });
 
-  it("a different account holder under the same bank code: nothing sent by Flutterwave, Paystack pays it", async () => {
+  /*
+    🔴 ONE CLEAN PATH (owner, 2026-10-29: "Withdrawal must be clean path through the provider selected by admin not two or
+    any backup … default to Flutterwave only"). On "Flutterwave only" a definite refusal is returned and the withdrawal
+    waits, money held — Paystack is NEVER called. Only the explicit backup route hands it to Paystack.
+  */
+  it("a different account holder: Flutterwave only stops (Paystack never called); the backup route hands it to Paystack", async () => {
     resolveName = async () => "SOMEONE ELSE";
-    expect(await payWithdrawal(W, null)).toMatchObject({ ok: true, provider: "paystack" });
+    expect(await payWithdrawal(W, null)).toMatchObject({ ok: false });
     expect(seenAtSend).toEqual([]);
+    expect(paystack).not.toHaveBeenCalled();
+    provider = "flutterwave_paystack_backup";
+    expect(await payWithdrawal(W, null)).toMatchObject({ ok: true, provider: "paystack" });
     expect(paystack).toHaveBeenCalledTimes(1);
   });
 
-  it("a 4xx on the transfer: definite — the reference is taken back off, then Paystack", async () => {
+  it("a 4xx on the transfer: definite — the reference is taken back off; Flutterwave only waits approved, the backup route pays by Paystack", async () => {
     transfer = async () => {
       throw new FlutterwaveHttpError("Insufficient balance", 400);
     };
+    expect(await payWithdrawal(W, null)).toMatchObject({ ok: false, error: expect.stringContaining("Insufficient balance") });
+    expect(row()).toMatchObject({ status: "approved", payout_reference: null });
+    expect(paystack).not.toHaveBeenCalled();
+    provider = "flutterwave_paystack_backup";
     expect(await payWithdrawal(W, null)).toMatchObject({ provider: "paystack" });
     expect(row().payout_reference).toBeNull();
     expect(paystack).toHaveBeenCalledTimes(1);
@@ -90,14 +103,24 @@ describe("Flutterwave payouts", () => {
     expect(paystack).not.toHaveBeenCalled();
   });
 
-  it("Flutterwave not configured → Paystack; the admin choosing Paystack → Paystack only", async () => {
+  it("Flutterwave not configured: Flutterwave only refuses (no Paystack); the backup route → Paystack; Paystack only → Paystack only", async () => {
     secretKey = "";
+    expect(await payWithdrawal(W, null)).toMatchObject({ ok: false, error: expect.stringContaining("Flutterwave isn't configured") });
+    expect(paystack).not.toHaveBeenCalled();
+    provider = "flutterwave_paystack_backup";
     expect(await payWithdrawal(W, null)).toMatchObject({ provider: "paystack" });
     secretKey = "FLWSECK_TEST-x";
     provider = "paystack";
     paystack.mockClear();
     expect(await payWithdrawal(W, null)).toMatchObject({ provider: "paystack" });
     expect(seenAtSend).toEqual([]);
+  });
+
+  it("an unknown or old stored value reads as Flutterwave only — never as the backup pair", async () => {
+    provider = "something-old" as typeof provider;
+    secretKey = "";
+    expect(await payWithdrawal(W, null)).toMatchObject({ ok: false });
+    expect(paystack).not.toHaveBeenCalled();
   });
 
   it("account holder names match by words, not order or case", () => {

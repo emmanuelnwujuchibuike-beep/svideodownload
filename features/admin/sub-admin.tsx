@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { SubAdminReviews } from "@/features/admin/sub-admin-reviews";
 import { usd } from "@/lib/creator/membership/engine";
 import type { LandingSettings } from "@/lib/landing/settings";
+import { normalizePayoutRoute, PAYOUT_ROUTE_LABELS, PAYOUT_ROUTES } from "@/lib/rewards/payout-rail";
 import { cn } from "@/lib/utils";
 import { useSensitiveAction } from "@/features/admin/use-sensitive-action";
 
@@ -212,10 +213,14 @@ export function SubAdmin({ settings }: { settings: LandingSettings }) {
         <label className="text-xs text-muted-foreground">Flat fee above the second limit ($)<input inputMode="decimal" value={f.feeOver} onChange={(e) => setF({ ...f, feeOver: e.target.value })} className={cn(input, "mt-1 block")} /></label>
         <label className="text-xs text-muted-foreground">Hold before withdrawable (days)<input inputMode="numeric" value={f.holdDays} onChange={(e) => setF({ ...f, holdDays: e.target.value })} className={cn(input, "mt-1 block")} /></label>
         <label className="text-xs text-muted-foreground">Access per payment (days)<input inputMode="numeric" value={f.periodDays} onChange={(e) => setF({ ...f, periodDays: e.target.value })} className={cn(input, "mt-1 block")} /></label>
+        {/* one clean path per withdrawal (owner, 2026-10-29): Flutterwave only by default; a backup only if picked */}
         <label className="text-xs text-muted-foreground">Payout provider (Nigerian banks)
-          <select value={f.payoutProvider} onChange={(e) => setF({ ...f, payoutProvider: e.target.value === "paystack" ? "paystack" : "flutterwave" })} className={cn(input, "mt-1 block w-full")}>
-            <option value="flutterwave">Flutterwave (Paystack as backup)</option>
-            <option value="paystack">Paystack</option>
+          <select value={f.payoutProvider} onChange={(e) => setF({ ...f, payoutProvider: normalizePayoutRoute(e.target.value) })} className={cn(input, "mt-1 block w-full")}>
+            {PAYOUT_ROUTES.map((r) => (
+              <option key={r} value={r}>
+                {PAYOUT_ROUTE_LABELS[r]}
+              </option>
+            ))}
           </select>
         </label>
         <label className="text-xs text-muted-foreground">Instant payout: most per withdrawal ($)<input inputMode="decimal" value={f.autoMax} onChange={(e) => setF({ ...f, autoMax: e.target.value })} className={cn(input, "mt-1 block")} /></label>

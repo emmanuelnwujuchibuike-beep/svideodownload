@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { PageShell } from "@/components/layout/page-shell";
+import { withSocial } from "@/lib/seo/page-metadata";
 
 /*
  * Static by contract, not by inference. Vercel was building `/` as DYNAMIC while
@@ -12,12 +13,12 @@ import { PageShell } from "@/components/layout/page-shell";
  */
 export const dynamic = "force-static";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSocial({
   title: "Contact",
   description:
     "Get in touch with the FrenzSave team — support, copyright, and business enquiries.",
   alternates: { canonical: "/contact" },
-};
+});
 
 export default function ContactPage() {
   return (

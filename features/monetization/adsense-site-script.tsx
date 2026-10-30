@@ -1,4 +1,4 @@
-import { getMonetizationSettings } from "@/lib/monetization/settings";
+import { builtInAdsensePublisherId, getMonetizationSettings } from "@/lib/monetization/settings";
 
 /**
  * The site-level AdSense loader, rendered into `<head>` on every page.
@@ -77,7 +77,14 @@ export async function VerificationTags() {
 
 export async function AdSenseSiteScript() {
   const settings = await getMonetizationSettings();
-  const client = settings.adsensePublisherId?.trim();
+  /*
+    The SAME chain /ads.txt uses (2026-10-29): settings → ADSENSE_PUBLISHER_ID → the id built into the release. A
+    blank admin field must not silently drop the loader while ads.txt still names the publisher — the script, the
+    meta tag and ads.txt always agree on one account.
+  */
+  const configured = settings.adsensePublisherId?.trim() || process.env.ADSENSE_PUBLISHER_ID?.trim() || builtInAdsensePublisherId();
+  // ads.txt and the env use the bare `pub-` form; the loader needs `ca-pub-`
+  const client = /^pub-\d+$/i.test(configured) ? `ca-${configured}` : configured;
 
   /*
     Shape-checked, not merely non-empty. A publisher id pasted without its

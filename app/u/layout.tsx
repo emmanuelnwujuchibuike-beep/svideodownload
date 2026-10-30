@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { AppOverlays } from "@/features/app-shell/app-overlays";
@@ -7,6 +8,9 @@ import { MobileNav } from "@/features/app-shell/mobile-nav";
 
 // this group's stylesheet — the root layout no longer imports one (see app/layout.tsx)
 import "../app.css";
+
+/** App-only (lib/auth/app-only-paths.ts): never indexed. Pages without their own `robots` inherit this. */
+export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 /**
  * Profile pages get the same shell as the rest of the app on desktop — the

@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { isAdmin } from "@/lib/admin";
 import { isGuardedAiPath } from "@/lib/auth/ai-public-paths";
+import { isAppOnlyPath } from "@/lib/auth/app-only-paths";
 import { guestMustLogin } from "@/lib/auth/guest-login-paths";
 import { CORS_HEADERS } from "@/lib/api/cors";
 import { SUPABASE_COOKIE_OPTIONS } from "@/lib/supabase/cookie-options";
@@ -47,11 +48,16 @@ export async function middleware(request: NextRequest) {
   // user content or navigate, so skip the Supabase auth round-trip. This makes
   // link prefetching (which drives instant navigation) return faster, while real
   // navigations still run the full session refresh + route guards below.
+  //
+  // App-only routes are the exception for a guest (owner, 2026-10-29): a prefetch header is something any client can
+  // send, so with no auth cookie it gets the same login redirect as a real navigation and never a rendered page.
+  const appOnly = isAppOnlyPath(path);
+  const guestByCookie = !request.cookies.getAll().some((c) => c.name.includes("-auth-token"));
   if (
     request.headers.get("next-router-prefetch") === "1" ||
     request.headers.get("purpose") === "prefetch"
   ) {
-    return proceed({ request });
+    if (!(appOnly && guestByCookie)) return proceed({ request });
   }
 
   /*
@@ -162,9 +168,11 @@ export async function middleware(request: NextRequest) {
     // owner, 2026-10-28: a guest asking for the member Home (/downloads — an old link, a bookmark, a nav tap) gets the
     // landing, which IS the downloader for guests — never a login wall in front of a free download
     if (path === "/downloads") return NextResponse.redirect(new URL("/", request.url));
-    if (needsGuard || guestMustLogin(path)) {
+    // App-only routes (lib/auth/app-only-paths.ts): a guest is sent to sign in before any render — never a feed,
+    // post, reel, profile or sound in the HTML. `next` keeps the address the visitor asked for (/chris, not /u/chris).
+    if (needsGuard || appOnly || guestMustLogin(path)) {
       const redirectUrl = new URL("/login", request.url);
-      redirectUrl.searchParams.set("next", path);
+      redirectUrl.searchParams.set("next", appOnly ? request.nextUrl.pathname : path);
       return NextResponse.redirect(redirectUrl);
     }
     return proceed({ request });
@@ -259,7 +267,8 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isProtectedAdmin = pathname.startsWith("/admin") && !isAdminPublic;
-  const isProtected = pathname.startsWith("/account") || isProtectedAdmin;
+  // a cookie that turned out to be dead is a guest too: app-only routes bounce to sign-in (owner, 2026-10-29)
+  const isProtected = pathname.startsWith("/account") || appOnly || isProtectedAdmin;
 
   if (!user && isProtected) {
     /*

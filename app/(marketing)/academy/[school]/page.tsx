@@ -12,6 +12,7 @@ import { courseLessons, courseMinutes, coursesForSchool } from "@/lib/academy/co
 import { SCHOOLS, getSchoolBySlug, isTeachable } from "@/lib/academy/schools";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { SITE_URL as siteUrl } from "@/lib/site";
+import { withSocial } from "@/lib/seo/page-metadata";
 
 export const dynamic = "force-static";
 
@@ -41,11 +42,11 @@ export async function generateMetadata({
   const school = getSchoolBySlug(slug);
   if (!school) return {};
 
-  return {
+  return withSocial({
     title: `${school.name} — Frenzsave Academy`,
     description: school.summary,
     alternates: { canonical: `/academy/${school.slug}` },
-  };
+  });
 }
 
 export default async function SchoolPage({

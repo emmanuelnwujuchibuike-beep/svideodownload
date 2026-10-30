@@ -8,6 +8,7 @@ import { LESSON_CATALOG } from "@/lib/learning/catalog";
 import type { LessonTopic } from "@/lib/learning/types";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { SITE_URL as siteUrl } from "@/lib/site";
+import { withSocial } from "@/lib/seo/page-metadata";
 
 /*
  * Static by contract, not by inference. Vercel was building `/` as DYNAMIC while
@@ -18,12 +19,12 @@ import { SITE_URL as siteUrl } from "@/lib/site";
  */
 export const dynamic = "force-static";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSocial({
   title: "Learning Academy — guides for saving, editing and publishing media",
   description:
     "Practical guides on downloading responsibly, editing without quality loss, writing captions, and building a creator workflow.",
   alternates: { canonical: "/learn" },
-};
+});
 
 /**
  * Learning Academy™ index. See `docs/DOWNLOAD_HUB_RFC.md` §4.

@@ -2,7 +2,6 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  Ban,
   BadgeCheck,
   Check,
   CheckCircle2,
@@ -844,7 +843,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         <div className="absolute right-4 top-4 flex items-center gap-2">
           {tab === "video" ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white backdrop-blur-md ring-1 ring-white/20">
-              <BadgeCheck className="h-3 w-3" /> No watermark
+              <BadgeCheck className="h-3 w-3" /> Original quality
             </span>
           ) : null}
           {tab === "video" && metadata.durationSeconds ? (
@@ -1266,7 +1265,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
             [
               { icon: Zap, label: "Lightning fast" },
               { icon: ShieldCheck, label: "Private & secure" },
-              { icon: Ban, label: "No watermark" },
+              { icon: BadgeCheck, label: "Original quality" },
             ] as const
           ).map(({ icon: Icon, label }) => (
             <span key={label} className="inline-flex items-center gap-1.5 text-[11px] font-medium">

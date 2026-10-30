@@ -17,6 +17,7 @@ import {
   topicHref,
 } from "@/lib/seo/topics";
 import { SITE_URL as siteUrl } from "@/lib/site";
+import { withSocial } from "@/lib/seo/page-metadata";
 
 export const dynamic = "force-static";
 
@@ -63,11 +64,11 @@ export async function generateMetadata({
   const topic = getTopicBySlug(slug);
   if (!topic) return {};
 
-  return {
+  return withSocial({
     title: `${topic.title} — Frenzsave`,
     description: topic.description,
     alternates: { canonical: topicHref(topic) },
-  };
+  });
 }
 
 function Group({

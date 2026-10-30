@@ -11,6 +11,7 @@ import { AUTOMATED_VALIDATION_NOTICE } from "@/lib/ads-platform/rules";
 import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { cn } from "@/lib/utils";
+import { withSocial } from "@/lib/seo/page-metadata";
 
 /*
   Static: the page reads no cookie and no price at build. The live part — the
@@ -19,13 +20,13 @@ import { cn } from "@/lib/utils";
 */
 export const dynamic = "force-static";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSocial({
   title: "Advertise on Frenzsave — create an ad in minutes",
   /* Owner 2026-10-09 asked for "reach millions of users globally". The global reach is
      said; the "millions" figure waits for a measured source (reality-ledger rule). */
   description: "Promote your business to Frenzsave users around the world. Choose a format and placement, upload your image or video, preview it and go live after payment.",
   alternates: { canonical: "/advertise" },
-};
+});
 
 const STEPS = [
   { icon: LayoutGrid, title: "Choose where", body: "Pick a format and where it appears — the top banner, the Feed, Reels, AI pages or downloads." },

@@ -62,7 +62,14 @@ describe("the floating glass bottom nav", () => {
     // reduced device / motion, no support, reduced transparency
     expect(css).toMatch(/html\[data-glass="reduced"\]\) \.frenz-nav-glass/);
     // Inside the SAME tier blocks as .ai-glass (one hierarchy, one source order).
-    expect(css).toMatch(/@supports not \(\(backdrop-filter: blur\(1px\)\) or \(-webkit-backdrop-filter: blur\(1px\)\)\) \{\n {4}\.ai-glass \{[^}]*\}\n {4}\.frenz-nav-glass \{\n {6}--nav-glass-fill: 0\.94;/);
+    expect(css).toMatch(/@supports not \(\(backdrop-filter: blur\(1px\)\) or \(-webkit-backdrop-filter: blur\(1px\)\)\) \{\n {4}\.ai-glass \{[^}]*\}\n {4}\.frenz-nav-glass \{\n {6}--nav-glass-fill: 0\.99;/);
+    // 2026-10-29 neumorphic skin: the surface starts near-opaque and every tier only raises it
+    expect(rule).toMatch(/--nav-glass-fill: 0\.96;/);
+    // light mode carries NO drop shadow (owner, 2026-10-29) — only the faint inner light; dark keeps its two-shadow lift
+    expect(rule).toMatch(/box-shadow: inset 1px 1px 0 rgb\(255 255 255 \/ 0\.85\);/);
+    expect(rule).not.toMatch(/rgb\(16 24 40/);
+    const darkRule = css.match(/\.dark \.frenz-nav-glass \{[\s\S]*?\}/)?.[0] ?? "";
+    expect(darkRule).toMatch(/-6px -6px 16px rgb\(255 255 255 \/ 0\.045\)/);
     expect(css).toMatch(/prefers-reduced-transparency: reduce\), \(prefers-contrast: more\) \{\n {4}\.ai-glass \{[^}]*\}\n {4}\.frenz-nav-glass \{\n {6}--nav-glass-fill: 1;/);
     // the base rule comes BEFORE every tier, so the tiers win by source order
     expect(css.indexOf(".frenz-nav-glass {")).toBeLessThan(css.indexOf('html[data-glass="reduced"]) .frenz-nav-glass'));
@@ -77,7 +84,8 @@ describe("the floating glass bottom nav", () => {
     expect(css).toMatch(/--frenz-nav-gap: max\(0\.5rem, calc\(env\(safe-area-inset-bottom\) - 0\.75rem\)\);/);
     expect(code("features/app-shell/app-content.tsx")).toContain("pb-[calc(var(--frenz-nav-clearance)+1.5rem)]");
     expect(code("app/(app)/messages/layout.tsx")).toContain("h-[calc(100dvh-var(--frenz-nav-clearance))]");
-    expect(code("app/(marketing)/layout.tsx")).toContain("h-[calc(var(--frenz-nav-clearance)+0.75rem)] lg:hidden");
+    // the marketing spacer moved in with the members-only nav (2026-10-29): it renders exactly when the nav does
+    expect(code("components/landing/mobile-app-nav.tsx")).toContain("h-[calc(var(--frenz-nav-clearance)+0.75rem)] lg:hidden");
   });
 
   it("the reel scrubber still sits above the pill (they are a pair)", () => {

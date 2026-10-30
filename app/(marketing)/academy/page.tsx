@@ -10,6 +10,7 @@ import { coursesForSchool, courseMinutes, schoolCurriculumState } from "@/lib/ac
 import { schoolViews } from "@/lib/academy/schools";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { SITE_URL as siteUrl } from "@/lib/site";
+import { withSocial } from "@/lib/seo/page-metadata";
 
 /*
  * Static by contract, not by inference — the same rule the rest of the marketing
@@ -23,12 +24,12 @@ import { SITE_URL as siteUrl } from "@/lib/site";
  */
 export const dynamic = "force-static";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSocial({
   title: "Frenzsave Academy — learn to save, create, share and build",
   description:
     "Structured schools covering downloading, editing craft, community, privacy and the developer API. Practical guides, written to be used.",
   alternates: { canonical: "/academy" },
-};
+});
 
 export default function AcademyPage() {
   const schools = schoolViews();

@@ -17,6 +17,7 @@ import { HilltopVideoSlider } from "@/features/monetization/hilltop-video-slider
 import { MonetagScript } from "@/features/monetization/monetag-script";
 import { DEFAULT_LOCALE, getLocale, isRtl } from "@/lib/i18n/locales";
 import { jsonLd } from "@/lib/seo/json-ld";
+import { SHARE_DESCRIPTION, SHARE_TITLE } from "@/lib/seo/share";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
 /*
@@ -137,11 +138,6 @@ const frenzDisplay = Bricolage_Grotesque({ subsets: ["latin"], weight: ["800"], 
  */
 export const revalidate = 86400;
 
-/** The one sentence every Frenzsave link preview carries (owner, 2026-10-07). */
-const SHARE_DESCRIPTION =
-  "Download, earn credits to cash, chat and meet up, make AI videos and download wallpapers — all for free on Frenzsave.";
-/** The one title every Frenzsave link preview and the browser tab carry (owner, 2026-10-07). */
-const SHARE_TITLE = "Frenzsave — Download, Earn Credits to Cash, Chat & Make AI Videos";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -181,7 +177,12 @@ export const metadata: Metadata = {
     template: "%s · Frenzsave",
   },
   description: SHARE_DESCRIPTION,
-  alternates: { canonical: "/" },
+  /*
+    🔴 No `alternates.canonical` and no `openGraph.url` here any more (owner, 2026-10-29: "/glossary, /topics,
+    /about and others currently point to the homepage"). A root default is inherited by EVERY page that does not set
+    its own, so "/" here made those pages declare the homepage as their canonical and share URL. Each public page
+    now sets its own (lib/seo/page-metadata.ts → withSocial); the landing sets "/" in app/(marketing)/page.tsx.
+  */
   /*
     THE SHARED-LINK PREVIEW (owner, 2026-10-07: "the Frenzsave link should
     change to: download, earn credits to cash, chat and meet up, make AI videos
@@ -193,7 +194,6 @@ export const metadata: Metadata = {
   */
   openGraph: {
     type: "website",
-    url: siteUrl,
     siteName: "Frenzsave",
     title: SHARE_TITLE,
     description: SHARE_DESCRIPTION,
@@ -376,7 +376,7 @@ const webApplicationLd = {
   operatingSystem: "Web",
   offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
   description:
-    "Watermark-free video downloader for TikTok, Instagram, LinkedIn and more.",
+    "Save public videos from TikTok, Instagram, LinkedIn and more in original quality — to back up your own posts or watch offline.",
 };
 
 export default function RootLayout({

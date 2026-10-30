@@ -13,6 +13,7 @@ export const dynamic = "force-static";
 export const metadata: Metadata = {
   title: "Sounds — FrenzSave",
   description: "Discover trending and new sounds, and use them in your own Reel.",
+  robots: { index: false, follow: false },
 };
 
 export default function SoundsPage() {

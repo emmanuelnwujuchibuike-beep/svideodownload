@@ -1,10 +1,12 @@
 import { Facebook, Instagram, Send } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { DEFAULT_LOCALE, type LocaleCode } from "@/lib/i18n/locales";
 import { translator } from "@/lib/i18n/messages";
 import { FooterTools } from "@/components/monetization/footer-tools";
+import { FooterMemberLinks } from "@/components/layout/footer-member-links";
 import { SecretAdminGesture } from "@/features/account/secret-admin";
 
 /**
@@ -136,13 +138,14 @@ export function SiteFooter({ locale = DEFAULT_LOCALE }: { locale?: LocaleCode } 
           links={[
             ["Download", "/downloads"],
             ["Frenz AI", "/ai"],
-            ["Reels", "/reels"],
             ["Wallpapers", "/wallpapers"],
-            ["Community", "/home"],
             ["Pricing", "/pricing"],
             ["Developers", "/developers"],
           ]}
-        />
+        >
+          {/* Reels and Community are signed-in pages: members only, absent from a guest's HTML (owner, 2026-10-29) */}
+          <FooterMemberLinks />
+        </FooterColumn>
         <FooterColumn
           title="Business"
           links={[
@@ -236,9 +239,11 @@ export function SiteFooter({ locale = DEFAULT_LOCALE }: { locale?: LocaleCode } 
 function FooterColumn({
   title,
   links,
+  children,
 }: {
   title: string;
   links: [string, string][];
+  children?: ReactNode;
 }) {
   return (
     <div>
@@ -251,6 +256,7 @@ function FooterColumn({
             </Link>
           </li>
         ))}
+        {children}
       </ul>
     </div>
   );

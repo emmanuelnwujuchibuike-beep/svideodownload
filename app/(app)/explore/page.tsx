@@ -25,7 +25,8 @@ export const metadata: Metadata = {
   title: "Explore — trending downloads",
   description: "Discover trending and recent downloads shared by the FrenzSave community.",
   alternates: { canonical: "/explore" },
-  robots: { index: true, follow: true },
+  // app-only since 2026-10-29 (lib/auth/app-only-paths.ts): guests are sent to sign in, so nothing here is indexed
+  robots: { index: false, follow: false },
 };
 
 const TYPES: SearchType[] = ["all", "people", "video", "image", "audio", "sound", "hashtag", "place"];

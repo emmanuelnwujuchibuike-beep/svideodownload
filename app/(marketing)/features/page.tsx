@@ -18,6 +18,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { getClaimableProfiles, isRealStage } from "@/lib/content/genome/queries";
 import { SHOWCASE_PLATFORMS } from "@/lib/platforms";
+import { withSocial } from "@/lib/seo/page-metadata";
 
 /*
  * Static by contract, not by inference. Vercel was building `/` as DYNAMIC while
@@ -44,12 +45,12 @@ export const dynamic = "force-static";
  * product, and that's exactly the kind of thin/aspirational content this pass is
  * removing site-wide. What Frenz does today is substantial enough to stand alone.
  */
-export const metadata: Metadata = {
+export const metadata: Metadata = withSocial({
   title: "Features — everything Frenz is built for",
   description:
     "The full list of what Frenz does today: downloading, community, messaging, creation and more.",
   alternates: { canonical: "/features" },
-};
+});
 
 /**
  * The pastel icon tiles on each capability row (the reference draws a different

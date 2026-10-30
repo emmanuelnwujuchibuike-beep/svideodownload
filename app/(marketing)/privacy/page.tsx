@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { PageShell } from "@/components/layout/page-shell";
+import { withSocial } from "@/lib/seo/page-metadata";
 
 /*
  * Static by contract, not by inference. Vercel was building `/` as DYNAMIC while
@@ -11,12 +12,12 @@ import { PageShell } from "@/components/layout/page-shell";
  */
 export const dynamic = "force-static";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSocial({
   title: "Privacy Policy",
   description:
     "How FrenzSave handles your data. We collect the minimum needed to run the service and never store your downloads.",
   alternates: { canonical: "/privacy" },
-};
+});
 
 export default function PrivacyPage() {
   return (

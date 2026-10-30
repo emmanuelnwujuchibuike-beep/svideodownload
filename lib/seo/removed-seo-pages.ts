@@ -126,8 +126,66 @@ const DEVICE_MERGED: { stem: string; primary: string; had: readonly string[] }[]
   { stem: "telegram", primary: "telegram-video-downloader", had: DEVICE_VARIANT_SLUGS },
 ];
 
+/**
+ * Round 4 (2026-10-29, AdSense review): ONE PAGE PER PLATFORM.
+ *
+ * Owner: "Delete them and add permanent (301) redirects to the matching main platform page … Keep only one page per
+ * platform." Every remaining keyword variant — the intent pages (no-watermark, 4k, story, photo, sound, idea-pin, …)
+ * and the shared `hd-downloader` / `mp3-downloader` generics — 301s to its platform's page. Listed from the real
+ * config at the moment of removal (39 URLs), not assumed: a missing entry is a 404 on an indexed page.
+ */
+const ROUND_4_MERGED: { primary: string; from: readonly string[] }[] = [
+  {
+    primary: "tiktok-video-downloader",
+    from: [
+      "tiktok-no-watermark-downloader",
+      "tiktok-photo-downloader",
+      "tiktok-slideshow-downloader",
+      "tiktok-sound-downloader",
+      "tiktok-story-downloader",
+      "tiktok-4k-downloader",
+      "tiktok-profile-video-downloader",
+    ],
+  },
+  {
+    primary: "instagram-reels-downloader",
+    from: [
+      "instagram-video-downloader",
+      "instagram-story-downloader",
+      "instagram-igtv-downloader",
+      "instagram-photo-downloader",
+      "instagram-carousel-downloader",
+      "instagram-profile-downloader",
+      "instagram-audio-downloader",
+      "instagram-hd-downloader",
+    ],
+  },
+  { primary: "twitter-video-downloader", from: ["twitter-gif-downloader", "twitter-hd-downloader", "twitter-mp3-downloader"] },
+  {
+    primary: "facebook-video-downloader",
+    from: [
+      "facebook-reels-downloader",
+      "facebook-story-downloader",
+      "facebook-watch-downloader",
+      "facebook-hd-downloader",
+      "facebook-mp3-downloader",
+    ],
+  },
+  {
+    primary: "pinterest-video-downloader",
+    from: ["pinterest-idea-pin-downloader", "pinterest-image-downloader", "pinterest-hd-downloader", "pinterest-mp3-downloader"],
+  },
+  { primary: "snapchat-story-downloader", from: ["snapchat-spotlight-downloader", "snapchat-video-downloader"] },
+  { primary: "reddit-video-downloader", from: ["reddit-hd-downloader", "reddit-mp3-downloader"] },
+  { primary: "vimeo-video-downloader", from: ["vimeo-hd-downloader", "vimeo-mp3-downloader"] },
+  { primary: "linkedin-video-downloader", from: ["linkedin-hd-downloader", "linkedin-mp3-downloader"] },
+  { primary: "threads-video-downloader", from: ["threads-hd-downloader", "threads-mp3-downloader"] },
+  { primary: "telegram-video-downloader", from: ["telegram-hd-downloader", "telegram-mp3-downloader"] },
+];
+
 export const REMOVED_SEO_PAGES: RemovedSeoPage[] = [
   ...CLUSTERS.flatMap(({ stem, primary, had }) => had.map((modifierSlug) => ({ from: `${stem}-${modifierSlug}`, to: primary }))),
   ...YOUTUBE_CLUSTER_REMOVED,
   ...DEVICE_MERGED.flatMap(({ stem, primary, had }) => had.map((modifierSlug) => ({ from: `${stem}-${modifierSlug}`, to: primary }))),
+  ...ROUND_4_MERGED.flatMap(({ primary, from }) => from.map((slug) => ({ from: slug, to: primary }))),
 ];

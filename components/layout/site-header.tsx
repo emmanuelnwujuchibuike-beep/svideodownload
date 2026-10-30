@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Crown, LayoutGrid, LogOut, UserCircle, X } from "lucide-react";
+import { ArrowRight, Crown, LogOut, UserCircle, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -496,7 +496,9 @@ export function SiteHeader({
             {landing ? <InstallHeaderCta label="Install" gradient /> : <SearchTriggerIcon />}
             {/* Promote, fixed beside Install (owner, 2026-10-09: "make it be close to
                 the install button in the landing page"). */}
-            {landing ? <PromoteButton size="header" /> : null}
+            {/* Members only (owner, 2026-10-29): /advertise/campaigns is a signed-in page, so a guest never gets the
+                door. The static HTML has no user, so the link is not in the document a crawler reads. */}
+            {landing && enabled && user ? <PromoteButton size="header" /> : null}
             {/* Language selector — the top ~50 languages (owner, replaced the
                 downloads/history icon; History is in the bottom nav). On the
                 landing it lives in the menu drawer instead (owner, 2026-10-15). */}
@@ -746,45 +748,8 @@ export function SiteHeader({
 
               {enabled && !user ? (
                 <>
-                  {/*
-                    A genuinely real destination now, unlike the "Launch app"
-                    button removed below for pointing at nothing (owner,
-                    2026-08-04) — /feed is guest-accessible on purpose
-                    (2026-08-18: "users who haven't signed in can click on it
-                    from the landing page and enter feed"). Plain text, not a
-                    catalogue key: NAV_LINKS' `MessageKey` convention is a
-                    50-language commitment (every catalogue must carry every
-                    key, enforced by catalogue-integrity.test.ts) that a single
-                    new row doesn't justify — falls back to English everywhere
-                    else in the interim, same as any other un-translated string
-                    in this file outside that one array.
-                  */}
-                  {/* Its icon carries the shared attract pulse (owner,
-                      2026-08-24: "the feed button icon should animate after
-                      2secs of landing... every 15secs"). Pure CSS — see
-                      globals.css — so it costs the landing page no JavaScript
-                      and no timer, which matters on a route held to a
-                      1.6-second budget. */}
-                  <Link
-                    href="/feed"
-                    onClick={closeMenu}
-                    className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-secondary/50 px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-secondary"
-                  >
-                    {/*
-                      🔴 THE BLUE HALO IS GONE (owner, 2026-08-30: "Remove this
-                      blue shadow from the feed button", with a screenshot of
-                      exactly this LayoutGrid glyph haloed in blue).
-
-                      It was a `from-blue-500/60 to-violet-500/60 blur-md` disc
-                      pulsing behind the icon. The `attract-loop` movement on the
-                      glyph is kept — that is the 15s attention pulse this link
-                      was given deliberately, and it is motion rather than colour.
-                    */}
-                    <span aria-hidden className="relative inline-flex">
-                      <LayoutGrid className="attract-loop h-4 w-4" />
-                    </span>
-                    Watch the feed
-                  </Link>
+                  {/* "Watch the feed" (/feed) removed (owner, 2026-10-29): the feed is a signed-in surface now
+                      (lib/auth/app-only-paths.ts), so a guest's menu offers sign-in, not a door to a login wall. */}
                   {/*
                     Mirrors UserMenu's desktop CTA exactly — same gradient, glow,
                     sheen and copy — differing only in being full-width.

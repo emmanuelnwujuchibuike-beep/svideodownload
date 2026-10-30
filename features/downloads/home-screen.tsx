@@ -13,9 +13,6 @@ import type { DownloadTask } from "@/features/downloads/manager";
 import {
   ChevronRightIcon,
   CloudIcon,
-  CoinIcon,
-  CompassIcon,
-  LockIcon,
   PauseIcon,
   PlayIcon,
 } from "@/features/frenz-ui/icons";
@@ -203,10 +200,9 @@ const SHOWCASE =
   "relative flex h-[150px] flex-col justify-end gap-0.5 overflow-hidden rounded-[22px] p-3.5 text-white no-underline transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2";
 
 /**
- * Where Recent used to be (owner, 2026-10-18: "use that section to put the earning, ai and exclusive
- * feature"): the two showcase cards the design draws — Frenz AI and Wallpapers, the only places the
- * gradient fills a card — then Earn and Exclusive as plain white cards, and Explore under them.
- * Every word is the app's existing copy for each door.
+ * Where Recent used to be: the two showcase cards the design draws — Frenz AI and Wallpapers. Earn, Exclusive and
+ * Explore were removed (owner, 2026-10-29, AdSense review: "remove unnecessary buttons except the wallpaper and AI
+ * button") — two doors, two cards, one full row of the grid, and less markup on the landing and the Download page.
  */
 export function HomeTools({ aiPromo, rotateUrls }: { aiPromo: AiPromo | null; rotateUrls: string[] }) {
   const playsPromo = !!aiPromo && promoStages(aiPromo).length > 1;
@@ -251,62 +247,11 @@ export function HomeTools({ aiPromo, rotateUrls }: { aiPromo: AiPromo | null; ro
           <span className="relative font-heading text-[17px] font-bold">Wallpapers</span>
           <span className="relative text-[13px] leading-snug text-white/85">HD wallpapers for your screen</span>
         </TapOnceLink>
-        <ToolCard href="/quests" warm icon={<CoinIcon size={18} />} title="Earn" sub="Turn activity into rewards" />
-        {/*
-          Exclusive (owner, 2026-10-22): open to signed-out visitors too, so its route is warmed once the page is
-          idle (a tap swaps straight to the feed's stripe + skeleton) and a slow network shows the stripe from the tap.
-        */}
-        <ToolCard href="/exclusive" warm stripe icon={<LockIcon size={18} />} title="Exclusive" sub="Posts from creators you subscribe to." />
       </div>
-      <RowCard href="/explore" icon={<CompassIcon size={22} />} title="Explore" sub="Discover trending content" className="mt-3" />
     </section>
   );
 }
 
-function ToolCard({ href, icon, title, sub, warm = false, stripe = false }: { href: string; icon: ReactNode; title: string; sub: string; warm?: boolean; stripe?: boolean }) {
-  return (
-    <TapOnceLink
-      href={href}
-      prefetch={false}
-      spinner={false}
-      warmOnIdle={warm}
-      stripe={stripe}
-      // the press shows on touch-down (active) with no double-tap-zoom wait (touch-manipulation): instant (owner, 2026-10-22)
-      className="flex min-h-[104px] touch-manipulation flex-col justify-between gap-2 rounded-[22px] border border-frenz-line bg-frenz-card p-3.5 text-frenz-ink no-underline shadow-frenz-card transition active:scale-[0.98] data-[pending]:opacity-70"
-    >
-      <span aria-hidden className="flex h-[34px] w-[34px] items-center justify-center rounded-[11px] bg-frenz-violet/10 text-frenz-violet">
-        {icon}
-      </span>
-      <span className="flex flex-col">
-        <span className="text-[15px] font-bold">{title}</span>
-        <span className="text-xs leading-snug text-frenz-muted">{sub}</span>
-      </span>
-    </TapOnceLink>
-  );
-}
-
-function RowCard({ href, icon, title, sub, className }: { href: string; icon: ReactNode; title: string; sub: string; className?: string }) {
-  return (
-    <TapOnceLink
-      href={href}
-      prefetch={false}
-      spinner={false}
-      className={cn(
-        "flex items-center gap-3 rounded-[22px] border border-frenz-line bg-frenz-card p-3.5 text-frenz-ink no-underline shadow-frenz-card transition active:scale-[0.99] data-[pending]:opacity-70",
-        className,
-      )}
-    >
-      <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-frenz-violet/10 text-frenz-violet">
-        {icon}
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-[15px] font-bold">{title}</span>
-        <span className="truncate text-[13px] text-frenz-muted">{sub}</span>
-      </span>
-      <ChevronRightIcon size={16} strokeWidth={2.4} className="shrink-0 text-frenz-muted" />
-    </TapOnceLink>
-  );
-}
 
 /* ───────────────────────────── Cloud storage ───────────────────────────── */
 

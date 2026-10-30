@@ -1,6 +1,7 @@
 "use client";
 
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
+import { RightsNotice } from "@/components/legal/rights-notice";
 import type { AiPromo } from "@/lib/ai/promo/config";
 import { HilltopSlot } from "@/features/monetization/hilltop-slot";
 import { LazyAdSurface } from "@/features/monetization/lazy-ad-surface";
@@ -123,6 +124,8 @@ export function DownloadPageCore({
         <DownloadBox surface="frenz" platformStatus={platformStatus} multiLink={multiLink} afterForm={installBanner ? <InstallHeroBanner /> : null} />
       </Card>
       <MultiLinkButton config={multiLink} surface="frenz" className="mt-3" />
+      {/* the rights notice, directly under the tool (owner, 2026-10-29) — static text, nothing loaded for it */}
+      <RightsNotice className="mt-3 px-2 text-frenz-muted" />
       <LiveDownloads />
       {showFrenzAi ? <HomeTools aiPromo={aiPromo} rotateUrls={rotateUrls ?? []} /> : null}
       {/*

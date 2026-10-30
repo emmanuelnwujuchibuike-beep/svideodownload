@@ -105,12 +105,12 @@ export async function generateMetadata({
   const { handle } = await params;
   const profile = await getPublicProfile(handle, null);
   if (!profile) return { title: "Profile not found", robots: { index: false, follow: false } };
-  const indexable = profile.visibility === "public";
   return {
     title: `${profile.displayName} (@${profile.handle})`,
     description: profile.bio ?? `${profile.displayName} on FrenzSave.`,
     alternates: { canonical: profilePath(profile.handle) },
-    robots: { index: indexable, follow: indexable },
+    // app-only since 2026-10-29 (lib/auth/app-only-paths.ts): profiles are signed-in surfaces and never indexed
+    robots: { index: false, follow: false },
     openGraph: {
       type: "profile",
       // the canonical /:handle (2026-10-17) — share previews and crawlers see the new form

@@ -5,8 +5,9 @@ export const FAQS: { q: string; a: string }[] = [
     a: "Yes — completely free and unlimited, with no account or login required. Just paste a link and save.",
   },
   {
-    q: "Do saved files have a watermark?",
-    a: "No. We fetch clean, watermark-free versions wherever the platform provides them — including TikTok — so your videos look professional.",
+    // reframed 2026-10-29 (owner, AdSense review): use cases are your own content, offline viewing, archiving, accessibility
+    q: "What is FrenzSave for?",
+    a: "Backing up videos you posted, keeping a clip to watch offline on a flight or a weak connection, archiving content you have permission to keep, and watching at your own pace in any player. Only save content you own or have permission to use, and respect the creator's rights and the platform's terms.",
   },
   {
     q: "Which platforms are supported?",

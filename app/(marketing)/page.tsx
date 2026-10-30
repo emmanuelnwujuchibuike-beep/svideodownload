@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { DeferredSection } from "@/components/landing/deferred-section";
@@ -10,6 +11,8 @@ import { RecommendedTools } from "@/components/monetization/recommended-tools";
 import { getPublicAdSummary } from "@/lib/ads-platform/public-summary";
 import { productJsonLd } from "@/lib/content/genome/queries";
 import { jsonLd } from "@/lib/seo/json-ld";
+import { withSocial } from "@/lib/seo/page-metadata";
+import { SHARE_DESCRIPTION, SHARE_TITLE } from "@/lib/seo/share";
 import { SITE_URL } from "@/lib/site";
 import { AppBand, CreatorBand } from "@/components/landing/creator-app-bands";
 import { AdSurface } from "@/features/monetization/ad-surface";
@@ -71,6 +74,16 @@ import { LazyAdSurface } from "@/features/monetization/lazy-ad-surface";
  * this file points at it.
  */
 export const dynamic = "force-static";
+
+/**
+ * The landing's own canonical and share URL — "/" — set here and nowhere else (2026-10-29): the root layout used to
+ * carry them, so every page without its own override pointed at the homepage. Static data: no request read.
+ */
+export const metadata: Metadata = withSocial({
+  title: { absolute: SHARE_TITLE },
+  description: SHARE_DESCRIPTION,
+  alternates: { canonical: "/" },
+});
 
 /**
  * One section break's ad slot.

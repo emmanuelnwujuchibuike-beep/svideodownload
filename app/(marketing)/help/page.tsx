@@ -10,15 +10,16 @@ import { HELP_SECTIONS } from "@/lib/support/types";
 import { localeAlternates } from "@/lib/i18n/alternates";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { SITE_URL as siteUrl } from "@/lib/site";
+import { withSocial } from "@/lib/seo/page-metadata";
 
 export const dynamic = "force-static";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSocial({
   title: "Help Center — getting started and troubleshooting",
   description:
     "How to save your first video, what an account adds, how to install Frenzsave on your phone, and what to do when a link will not download.",
   alternates: { canonical: "/help", ...localeAlternates("/help") },
-};
+});
 
 /**
  * Help Center.

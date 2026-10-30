@@ -5,9 +5,13 @@ import { notFound } from "next/navigation";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { AuthorByline } from "@/components/seo/author-byline";
+import { SITE_AUTHOR } from "@/config/author";
 import { LESSON_SLUGS, relatedLessons } from "@/lib/learning/catalog";
 import { pillarForLesson, topicHref } from "@/lib/seo/topics";
+import { lessonDates } from "@/lib/learning/dates";
 import { getLesson } from "@/lib/learning/lessons";
+import { articleJsonLd } from "@/lib/seo/article-ld";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { getPrimaryPages } from "@/lib/seo/seo-pages";
 import { PersonalItemControls } from "@/features/personal/item-controls";
@@ -43,11 +47,20 @@ export async function generateMetadata({
   const { slug } = await params;
   const lesson = getLesson(slug);
   if (!lesson) return {};
+  const dates = lessonDates(lesson.slug);
   return {
     title: lesson.title,
     description: lesson.description,
     alternates: { canonical: `/learn/${lesson.slug}` },
-    openGraph: { type: "article", title: lesson.title, description: lesson.description },
+    openGraph: {
+      type: "article",
+      url: `/learn/${lesson.slug}`,
+      title: lesson.title,
+      description: lesson.description,
+      publishedTime: dates?.published,
+      modifiedTime: dates?.updated,
+      authors: [SITE_AUTHOR.name],
+    },
     twitter: { card: "summary_large_image", title: lesson.title, description: lesson.description },
   };
 }
@@ -70,18 +83,21 @@ export default async function LessonPage({
   const tools = [primaries[offset], primaries[(offset + 1) % primaries.length]].filter(Boolean);
 
   const allSteps = lesson.sections.flatMap((s) => s.steps ?? []);
+  // real dates measured from git (lib/learning/dates.ts); a lesson missing there fails lib/seo/article-ld.test.ts
+  const dates = lessonDates(lesson.slug);
 
-  const graph: unknown[] = [
-    {
-      "@context": "https://schema.org",
-      "@type": "Article",
-      headline: lesson.title,
-      description: lesson.description,
-      author: { "@type": "Organization", name: "Frenz" },
-      publisher: { "@type": "Organization", name: "Frenz" },
-      mainEntityOfPage: `${siteUrl}/learn/${lesson.slug}`,
-    },
-  ];
+  const graph: unknown[] = dates
+    ? [
+        // Article JSON-LD with the real author and dates (owner, 2026-10-29) — see lib/seo/article-ld.ts
+        articleJsonLd({
+          path: `/learn/${lesson.slug}`,
+          headline: lesson.title,
+          description: lesson.description,
+          published: dates.published,
+          updated: dates.updated,
+        }),
+      ]
+    : [];
 
   // Only emit HowTo when the lesson genuinely has ordered steps — structured data
   // that misdescribes the page is a liability, not a bonus.
@@ -185,6 +201,7 @@ export default async function LessonPage({
             The personal layer, mounted as a client island so this page stays
             statically prerendered — see the component for why that matters.
           */}
+          {dates ? <AuthorByline published={dates.published} updated={dates.updated} className="mt-6" /> : null}
           <PersonalItemControls kind="lesson" slug={lesson.slug} className="mt-6" />
         </header>
 

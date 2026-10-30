@@ -95,7 +95,11 @@ describe("every page carries real platform-specific content", () => {
   it("has a written intro, features and FAQs", () => {
     for (const p of ALL_PAGES) {
       expect(p.about.length, `${p.slug} has no body`).toBeGreaterThan(0);
-      expect(p.benefits.length, `${p.slug} has no features`).toBeGreaterThanOrEqual(3);
+      // the page prints its feature cards ONCE, under "What the … downloader handles" (owner, 2026-10-29) — the
+      // benefit column holds only the page's own card, never a repeat of a feature
+      expect((p.features ?? p.benefits).length, `${p.slug} has no features`).toBeGreaterThanOrEqual(3);
+      const featureTitles = new Set((p.features ?? []).map((f) => f.title));
+      expect(p.benefits.filter((b) => featureTitles.has(b.title)).map((b) => b.title), `${p.slug} prints a feature card twice`).toEqual([]);
       expect(p.faqs.length, `${p.slug} has too few FAQs`).toBeGreaterThanOrEqual(3);
     }
   });

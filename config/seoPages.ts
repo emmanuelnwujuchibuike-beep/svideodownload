@@ -66,154 +66,26 @@ export interface SeoCluster {
   modifiers: SeoModifier[];
 }
 
-/* ------------------------------------------------------------------ *
- * Reusable, cross-platform modifiers (templated by {brand}/{thing}).
- * ------------------------------------------------------------------ */
-
-const mHd: SeoModifier = {
-  generic: true,
-  slug: "hd-downloader",
-  title: "{brand} HD Video Downloader (1080p)",
-  keyword: "{brand} HD downloader",
-  tagline: "Download {brand} {thing} in crisp Full HD — free and fast.",
-  angle:
-    "This {brand} HD downloader saves {thing} at the highest resolution the source provides — up to 1080p and beyond. Rather than a blurry re-encode, you get the original-quality file with sharp detail and full audio, perfect for re-editing, archiving, or watching on a big screen.",
-  benefit: { title: "Full-HD quality", text: "Always grabs the best available resolution, up to 1080p and 4K." },
-  faqs: [
-    { q: "What quality can I download?", a: "Up to the highest the source offers — Full HD and 4K where available. You choose the resolution before saving." },
-  ],
-  secondary: ["{brand} 1080p downloader", "{brand} full hd download", "download {brand} {thing} hd"],
-};
-
-const mMp3: SeoModifier = {
-  generic: true,
-  slug: "mp3-downloader",
-  title: "{brand} to MP3 — Audio Downloader",
-  keyword: "{brand} to MP3",
-  thing: "audio",
-  tagline: "Convert any {brand} video to a clean MP3 in seconds.",
-  angle:
-    "Want just the sound? This {brand} to MP3 converter extracts the audio from any {brand} video and saves it as a clean MP3 file. It's ideal for grabbing a song, a voiceover, a podcast clip or a trending sound to reuse — no video, no watermark, just the audio.",
-  benefit: { title: "Clean MP3 audio", text: "Extracts the soundtrack as a portable MP3 at good bitrate." },
-  faqs: [
-    { q: "How do I convert {brand} to MP3?", a: "Paste the link, tap Download, and choose the Audio (MP3) option — the MP3 saves straight to your device." },
-    { q: "Is the MP3 conversion free?", a: "Yes, MP3 extraction is free and unlimited with no account." },
-  ],
-  secondary: ["{brand} mp3 converter", "{brand} audio downloader", "{brand} song download"],
-};
-
-const mIphone: SeoModifier = {
-  generic: true,
-  slug: "downloader-for-iphone",
-  title: "{brand} Downloader for iPhone (iOS)",
-  keyword: "{brand} downloader for iPhone",
-  tagline: "Save {brand} {thing} on iPhone & iPad — no app needed.",
-  angle:
-    "Downloading {brand} {thing} on iPhone used to mean installing shady apps. Not anymore — this works right in Safari or Chrome on iOS. Paste the link, tap Download, and the file saves to your Files app or Photos. No App Store install, no jailbreak, and no account.",
-  benefit: { title: "Made for iOS", text: "Works in Safari & Chrome on iPhone and iPad — saves to Files or Photos." },
-  faqs: [
-    { q: "How do I save {brand} {thing} on iPhone?", a: "Open the link in Safari, paste it above, tap Download, then choose Save to Files or Photos. No app required." },
-    { q: "Do I need an app from the App Store?", a: "No. Everything runs in your mobile browser, so there's nothing to install." },
-  ],
-  secondary: ["save {brand} video on iphone", "{brand} downloader ios", "{brand} to camera roll"],
-};
-
-const mAndroid: SeoModifier = {
-  generic: true,
-  slug: "downloader-for-android",
-  title: "{brand} Downloader for Android",
-  keyword: "{brand} downloader for Android",
-  tagline: "Download {brand} {thing} on Android — straight to your gallery.",
-  angle:
-    "Save {brand} {thing} on any Android phone or tablet without installing an APK. Open the link in Chrome, paste it here, and the MP4 downloads directly to your device — ready in your gallery or Downloads folder. It's free, fast and works on Samsung, Pixel, Xiaomi and every other Android brand.",
-  benefit: { title: "Android-ready", text: "Downloads straight to your gallery — no APK or sideloading." },
-  faqs: [
-    { q: "How do I download {brand} {thing} on Android?", a: "Paste the link in Chrome, tap Download and pick your quality — the file saves to your Downloads or gallery." },
-    { q: "Do I need to install an APK?", a: "No. It runs entirely in your browser, so there's no APK to sideload." },
-  ],
-  secondary: ["save {brand} video on android", "{brand} downloader apk free", "{brand} to gallery"],
-};
-
-const mPc: SeoModifier = {
-  generic: true,
-  slug: "downloader-for-pc",
-  title: "{brand} Downloader for PC & Mac",
-  keyword: "{brand} downloader for PC",
-  tagline: "Download {brand} {thing} on Windows, Mac & Linux.",
-  angle:
-    "Use the {brand} downloader on any desktop — Windows, Mac or Linux — right in your browser. There's no software to install or update; paste the link, choose your quality, and the file saves to your Downloads folder. It's perfect for batch-saving clips, editing on a big screen, or archiving in full quality.",
-  benefit: { title: "Desktop-friendly", text: "Runs in any browser on Windows, macOS and Linux — no install." },
-  faqs: [
-    { q: "How do I download {brand} {thing} on a computer?", a: "Paste the link in your browser, tap Download and pick a quality — it saves to your Downloads folder." },
-    { q: "Do I need to install a program?", a: "No. It's a web tool, so nothing is installed on your PC or Mac." },
-  ],
-  secondary: ["{brand} downloader windows", "{brand} downloader mac", "{brand} download laptop"],
-};
-
-/*
-  🔴 SIX MODIFIERS REMOVED HERE 2026-08-23 (AdSense "Low value content"
-  rejection, twice — owner: "fix any duplicate pages and all that is likely to
-  cause the low value content, that's the main part").
-
-  This file generates CLUSTER × MODIFIER pages, and GENERIC modifiers below
-  are the ones attached to nearly every cluster — so each one is a template
-  whose `angle`/`benefit`/`faqs` text rendered close to word-for-word
-  identical (only {brand}/{thing} substituted) across 9-11 different platform
-  URLs. That is the textbook shape of what Google calls scaled content abuse:
-  many pages, one template, minimal variation, no added value per page. Two
-  AdSense "Low value content" rejections on a site whose largest content
-  surface is ~160 of these generated pages is not a coincidence worth
-  ignoring.
-
-  `mp4-downloader`, `online-downloader`, `free-downloader`, `fast-downloader`,
-  `video-saver` and `downloader-without-app` were removed because they added
-  NOTHING a visitor couldn't already get from the platform's own primary page:
-  every downloader page already states "Free · No watermark · No login" in
-  its hero and already shows full device compatibility — so a whole extra
-  page built around the word "free," or "fast," or "without an app" was a
-  synonym of the primary page wearing a different URL, not a different
-  answer. Redirected (301, permanent — see next.config.ts / lib/seo/removed-
-  seo-pages.ts) to each cluster's primary page rather than deleted outright,
-  so no indexed URL 404s and whatever ranking signal they'd earned
-  consolidates onto the page that actually earns it.
-
-  KEPT: `mHd` (quality-tier is a real distinct query), `mMp3` (audio-only is a
-  genuinely different output/use-case), `mIphone`/`mAndroid`/`mPc`
-  (device-targeted searches carry real, distinct volume and the content,
-  while still templated, contains actual per-device how-to steps — Files app
-  vs. Downloads folder vs. gallery — not just a restated tagline). These are
-  the more defensible generics; de-templating THEIR copy is the next pass,
-  not a same-day rewrite of unrelated original text (see the brief's own
-  warning against replacing genuine content with generic filler to chase a
-  word count).
-*/
 /*
   ═══════════════════════════════════════════════════════════════════════════
-   🔴 DEVICE VARIANTS REMOVED 2026-09-02 (AdSense readiness, round 3).
+   🔴 ONE PAGE PER PLATFORM (2026-10-29, AdSense review, round 4).
   ═══════════════════════════════════════════════════════════════════════════
 
-  Was `[mHd, mMp3, mIphone, mAndroid, mPc]`. The three device modifiers are gone
-  and each of the 32 pages they generated now 301s to its platform's primary
-  page — see `lib/seo/removed-seo-pages.ts`.
+  Owner: "Keep only one page per platform." Every cluster below now has exactly
+  ONE modifier — its primary page — and the shared generics are gone.
 
-  The note in `lib/seo/seo-pages.ts` had already identified these precisely and
-  left the call to the owner: after round 1, within-platform duplication measured
-  92%, and the device variants "remain the same tool with a device word swapped.
-  That is a page-count decision, not a copy decision."
+  History, so nobody rebuilds what was removed on purpose:
+    · 2026-08-23 — six synonym modifiers (mp4/online/free/fast/saver/without-app)
+    · 2026-08-25 — the whole YouTube cluster
+    · 2026-09-02 — the device variants (-for-iphone/-android/-pc)
+    · 2026-10-29 — everything else: the intent variants (no-watermark, 4k,
+      story, photo, sound, idea-pin, …) and the shared HD / MP3 generics.
 
-  It is. A downloader does not behave differently on an iPhone than on a PC — same
-  paste box, same extraction, same file. The genuinely per-device information is a
-  short "how saving works on iOS vs Android" explanation, which is real and useful
-  and belongs ON the platform page, not spread across three more URLs whose only
-  difference is a swapped noun.
-
-  `mHd` and `mMp3` STAY. Those are different OUTPUTS a visitor chooses between — a
-  1080p video file versus an audio file — not the same output on a different
-  screen. The modifier definitions for the removed three are kept below so the
-  device guidance can be reused as page SECTIONS; deleting them would throw away
-  copy that is still wanted, just not as standalone pages.
+  Each removed URL 301s to its platform's page (lib/seo/removed-seo-pages.ts →
+  next.config.ts redirects). A different OUTPUT (audio, photos, HD) is a section
+  or a format choice ON the platform page, never another URL. Adding a modifier
+  back re-creates a doorway page: don't.
 */
-const GENERIC: SeoModifier[] = [mHd, mMp3];
 
 /* ------------------------------------------------------------------ *
  * Clusters
@@ -227,23 +99,23 @@ export const CLUSTERS: SeoCluster[] = [
     thing: "videos",
     stem: "tiktok",
     intros: [
-      "Save any public TikTok as a clean file in seconds — no app, no account and no watermark added by us.",
-      "Paste a TikTok link and download the original, un-branded clip in full quality to your phone or computer.",
+      "Save any public TikTok as a file in seconds — no app and no account.",
+      "Paste a TikTok link and download the original clip in full quality to your phone or computer.",
       "The fastest way to keep TikToks offline: drop in a link and get the source file, sound intact.",
     ],
     facts: [
-      "TikTok's bouncing username watermark is fine for the app but gets in the way when you repost, edit or archive a clip. We fetch the clean source file wherever TikTok provides it, so there's no logo across the frame.",
+      "Keeping your own TikToks backed up means a lost phone or a deleted account doesn't take your videos with it. We fetch the source file TikTok provides, at its original resolution.",
       "Because everything runs server-side through an advanced extraction engine, even long or high-resolution TikToks process in a couple of seconds — far better quality than a screen recording.",
       "It works everywhere — iPhone, iPad, Android, Windows, Mac and Linux — directly in your browser, with the file saved straight to your device.",
     ],
     baseBenefits: [
-      { title: "No watermark", text: "Clean source MP4 with the TikTok logo removed where the platform allows." },
+      { title: "Original file", text: "The source MP4 TikTok serves, at its original resolution." },
       { title: "HD quality", text: "Download at the original resolution, up to 1080p and beyond." },
       { title: "Any device", text: "iPhone, Android, PC and Mac — right in the browser, no app." },
     ],
     baseFaqs: [
       { q: "Is the TikTok downloader free?", a: "Yes — completely free and unlimited, with no account or sign-up." },
-      { q: "Does it remove the TikTok watermark?", a: "Yes. We fetch the clean, watermark-free version wherever TikTok provides it." },
+      { q: "Can I back up my own TikToks?", a: "Yes — paste the link to any of your public posts and keep the original file on your device." },
       { q: "Do I need to install an app?", a: "No. Everything runs in your browser, so there's nothing to download." },
       { q: "Is it safe?", a: "Yes — no logins to compromise, no files stored, and encrypted transfers." },
       { q: "Can I download anyone's TikTok?", a: "You can download public TikToks. Only save content you have the right to use, and respect copyright." },
@@ -251,96 +123,16 @@ export const CLUSTERS: SeoCluster[] = [
     modifiers: [
       {
         slug: "video-downloader",
-        title: "TikTok Video Downloader (No Watermark, HD)",
+        title: "TikTok Video Downloader (Original Quality)",
         keyword: "TikTok video downloader",
-        h1: "TikTok Video Downloader — No Watermark, HD",
-        tagline: "Save any TikTok in clean HD — watermark-free — in seconds.",
+        h1: "TikTok Video Downloader — Save Public Videos in Original Quality",
+        tagline: "Back up your own TikToks and keep public videos for offline viewing, at the resolution they were uploaded.",
         angle:
-          "Our TikTok video downloader saves any public TikTok as a clean, watermark-free MP4 in full HD, or extracts the audio as MP3. There's nothing to install and no account — paste a link and the original file downloads straight to your device.",
-        benefit: { title: "Clean & complete", text: "Original file, full audio, no watermark — ready to repost or edit." },
+          "Our TikTok video downloader saves a public TikTok as an MP4 at its original resolution, or its audio as MP3. Use it to back up videos you posted, keep a clip to watch offline, or archive a post you have permission to keep. There's nothing to install and no account — paste a link and the file saves to your device.",
+        benefit: { title: "Your own backup", text: "The original file with full audio, kept on your device — so your videos outlive the app." },
         faqs: [{ q: "Can I download TikTok videos on iPhone?", a: "Yes — it works in Safari and Chrome on iPhone and iPad; the file saves to Files or Photos." }],
-        secondary: ["download tiktok video", "tiktok no watermark", "ssstik alternative"],
-      },
-      {
-        slug: "no-watermark-downloader",
-        title: "TikTok No Watermark Downloader",
-        keyword: "TikTok no watermark downloader",
-        tagline: "Download TikToks with the watermark removed — clean HD files.",
-        angle:
-          "This TikTok no-watermark downloader pulls the clean source video without the bouncing username or TikTok logo. It's the version creators use to repost across Instagram Reels and YouTube Shorts without a competing stamp — saved in full HD with the original sound.",
-        benefit: { title: "Watermark removed", text: "No bouncing username, no logo — a clean canvas for editing." },
-        faqs: [{ q: "How do I download a TikTok without the watermark?", a: "Paste the link and download — we automatically fetch the clean, no-watermark version when TikTok provides it." }],
-        secondary: ["tiktok watermark remover", "remove tiktok watermark", "tiktok clean download"],
-      },
-      {
-        slug: "photo-downloader",
-        title: "TikTok Photo Downloader (Image Posts)",
-        keyword: "TikTok photo downloader",
-        thing: "photos",
-        tagline: "Save TikTok photo posts and image slideshows in full quality.",
-        angle:
-          "TikTok photo posts (image carousels) can't be saved from the app in full quality — this downloader grabs the original images so you keep every photo crisp. Paste the photo-post link and download the pictures without the watermark or compression.",
-        benefit: { title: "Full-res images", text: "Saves every photo from an image post at original quality." },
-        faqs: [{ q: "Can I download TikTok photo posts?", a: "Yes. Paste the image-post link and the photos download in full resolution." }],
-        secondary: ["tiktok image downloader", "tiktok carousel download", "save tiktok photos"],
-      },
-      {
-        slug: "slideshow-downloader",
-        title: "TikTok Slideshow Downloader (Photo + Music)",
-        keyword: "TikTok slideshow downloader",
-        thing: "slideshows",
-        tagline: "Download TikTok photo slideshows with the music included.",
-        angle:
-          "TikTok slideshows pair photos with a sound. This downloader saves the slideshow so you keep both the images and the music, ready to re-share or remix. No watermark, no app, and the original quality intact.",
-        benefit: { title: "Photos + sound", text: "Keeps the slideshow images together with the music track." },
-        faqs: [{ q: "Does the slideshow keep its music?", a: "Yes — slideshow downloads include the original sound where TikTok provides it." }],
-        secondary: ["tiktok slideshow save", "tiktok photo slideshow download", "tiktok slideshow to video"],
-      },
-      {
-        slug: "sound-downloader",
-        title: "TikTok Sound Downloader (MP3)",
-        keyword: "TikTok sound downloader",
-        thing: "sounds",
-        tagline: "Save any TikTok sound or song as a clean MP3.",
-        angle:
-          "Grab the trending TikTok sound behind a video and save it as an MP3. Whether it's a song, a voice clip or an original audio, this downloader extracts just the sound so you can reuse it, set it as a ringtone, or keep it offline.",
-        benefit: { title: "Just the sound", text: "Extracts the TikTok audio as a clean, shareable MP3." },
-        faqs: [{ q: "How do I save a TikTok sound?", a: "Paste the video link and choose the Audio (MP3) option to download just the sound." }],
-        secondary: ["tiktok audio download", "tiktok song download", "tiktok mp3 sound"],
-      },
-      {
-        slug: "story-downloader",
-        title: "TikTok Story Downloader",
-        keyword: "TikTok story downloader",
-        thing: "Stories",
-        tagline: "Save public TikTok Stories before they disappear.",
-        angle:
-          "TikTok Stories vanish after 24 hours. This downloader saves a public TikTok Story as a video so you can keep it offline. Paste the Story link while it's still live and download the clip in full quality, watermark-free.",
-        benefit: { title: "Beat the 24h timer", text: "Save public Stories before they expire from the app." },
-        faqs: [{ q: "Can I download a TikTok Story?", a: "Yes, while it's public. Stories expire after 24 hours, so save them while they're still live." }],
-        secondary: ["save tiktok story", "tiktok story video download", "download tiktok story"],
-      },
-      {
-        slug: "4k-downloader",
-        title: "TikTok 4K Video Downloader",
-        keyword: "TikTok 4K downloader",
-        tagline: "Download TikToks in the highest quality the source allows.",
-        angle:
-          "For the sharpest possible copy, this downloader fetches TikToks at the maximum quality the upload provides — up to 4K where available. It's the best choice for editors and anyone who wants a pristine, full-resolution file rather than a compressed re-encode.",
-        benefit: { title: "Maximum quality", text: "Pulls the highest resolution the original upload offers." },
-        faqs: [{ q: "Can I download TikToks in 4K?", a: "When the original was uploaded in 4K, yes — we always fetch the highest resolution available." }],
-        secondary: ["tiktok hd download", "tiktok high quality download", "tiktok 2160p"],
-      },
-      {
-        slug: "profile-video-downloader",
-        title: "TikTok Profile Video Downloader",
-        keyword: "TikTok profile downloader",
-        tagline: "Download videos from any public TikTok profile.",
-        angle:
-          "Want a specific clip from a creator's page? Paste the video's link from any public TikTok profile and download it in clean HD. It's handy for saving a favourite creator's posts to watch offline or to study for your own content.",
-        benefit: { title: "From any profile", text: "Save individual videos from any public creator page." },
-        faqs: [{ q: "Can I download videos from a TikTok profile?", a: "Yes — open the specific video on the profile, copy its link, and paste it here to download." }],
-        secondary: ["download tiktok profile video", "tiktok creator video download", "save tiktok from profile"],
+        // no competitor names, no "no watermark" (owner, 2026-10-29: copyright-risky wording)
+        secondary: ["download tiktok video", "save tiktok video", "tiktok to mp4"],
       },
     ],
   },
@@ -381,92 +173,10 @@ export const CLUSTERS: SeoCluster[] = [
         h1: "Instagram Reels Downloader — HD Video & MP3",
         tagline: "Save Instagram Reels in crisp HD — fast and free.",
         angle:
-          "Use our Instagram Reels downloader to save Reels as high-quality MP4 files, or extract their audio as MP3. Paste the Reel link — no login, no app — and the original-quality file downloads straight to your device.",
+          "Use our Instagram Reels downloader to save Reels as high-quality MP4 files, or extract their audio as MP3. Paste the Reel link — no login, no app — and the original-quality file downloads straight to your device. Handy for backing up your own Reels or watching one offline.",
         benefit: { title: "Full-HD Reels", text: "Download Reels at the original resolution, not a blurry copy." },
         faqs: [{ q: "Can I download Instagram Reels on iPhone?", a: "Yes — paste the Reel link in Safari or Chrome and the MP4 saves to Files or Photos." }],
         secondary: ["download instagram reels", "reels to mp4", "save instagram reel"],
-      },
-      {
-        slug: "video-downloader",
-        title: "Instagram Video Downloader (HD MP4)",
-        keyword: "Instagram video downloader",
-        tagline: "Download Instagram feed videos in HD MP4.",
-        angle:
-          "Save any public Instagram feed video as an HD MP4, or pull the audio as MP3. From single-clip posts to longer videos, you get the original quality file without the app or a login — ideal for archiving and re-sharing.",
-        benefit: { title: "Feed & post videos", text: "Works for single videos and multi-clip posts alike." },
-        faqs: [{ q: "Can I download a video from an Instagram post?", a: "Yes — copy the post link and paste it here to save the video in HD." }],
-        secondary: ["download instagram video", "ig video download", "save instagram video"],
-      },
-      {
-        slug: "story-downloader",
-        title: "Instagram Story Downloader",
-        keyword: "Instagram story downloader",
-        thing: "Stories",
-        tagline: "Save public Instagram Stories before they vanish.",
-        angle:
-          "Instagram Stories disappear after 24 hours. This downloader saves a public Story's video or photo so you can keep it. Paste the Story link while it's live and download it in original quality — no login and no notification to the poster.",
-        benefit: { title: "24-hour rescue", text: "Save public Stories in full quality before they expire." },
-        faqs: [{ q: "Can I download Instagram Stories anonymously?", a: "You can download public Stories without logging in. Private Stories can't be accessed." }],
-        secondary: ["save instagram story", "ig story download", "instagram story video download"],
-      },
-      {
-        slug: "igtv-downloader",
-        title: "Instagram IGTV & Long Video Downloader",
-        keyword: "IGTV downloader",
-        thing: "IGTV videos",
-        tagline: "Download long-form Instagram videos and IGTV in HD.",
-        angle:
-          "Longer Instagram videos and legacy IGTV posts download here as HD MP4 files. Whether it's a tutorial, an interview or a vlog, you keep the full clip in original quality to watch offline or edit — no app and no sign-in.",
-        benefit: { title: "Long videos", text: "Handles full-length Instagram videos, not just short clips." },
-        faqs: [{ q: "Can I download long Instagram videos?", a: "Yes — paste the video or IGTV link and it downloads as an HD MP4." }],
-        secondary: ["download igtv video", "instagram long video download", "igtv to mp4"],
-      },
-      {
-        slug: "photo-downloader",
-        title: "Instagram Photo Downloader (Full Size)",
-        keyword: "Instagram photo downloader",
-        thing: "photos",
-        tagline: "Save Instagram photos in full resolution.",
-        angle:
-          "Download Instagram photos at full size, not the cropped thumbnail you get from a screenshot. Paste a photo-post link and the original image saves cleanly — perfect for moodboards, references or keeping a high-quality copy.",
-        benefit: { title: "Full-size photos", text: "Original-resolution images, not a screenshot crop." },
-        faqs: [{ q: "How do I save an Instagram photo?", a: "Copy the post link, paste it here, and the full-size photo downloads to your device." }],
-        secondary: ["download instagram photo", "ig photo save", "instagram picture download"],
-      },
-      {
-        slug: "carousel-downloader",
-        title: "Instagram Carousel Downloader (All Slides)",
-        keyword: "Instagram carousel downloader",
-        thing: "carousels",
-        tagline: "Download every photo and video from a carousel post.",
-        angle:
-          "Carousel posts pack several photos and videos into one post. This downloader saves every slide in the carousel at once, in full quality, so you don't have to screenshot each one. Paste the post link and grab the whole set.",
-        benefit: { title: "All slides", text: "Saves each photo and video from a multi-slide carousel." },
-        faqs: [{ q: "Can I download all images in a carousel?", a: "Yes — carousel posts download every slide at full quality." }],
-        secondary: ["instagram album download", "ig carousel save", "download instagram multiple photos"],
-      },
-      {
-        slug: "profile-downloader",
-        title: "Instagram Profile Video Downloader",
-        keyword: "Instagram profile downloader",
-        tagline: "Download videos and photos from any public profile.",
-        angle:
-          "Save individual posts from any public Instagram profile in original quality. Open the specific Reel, video or photo, copy its link, and download it here — great for keeping a creator's content offline or for research.",
-        benefit: { title: "From any profile", text: "Save specific posts from any public creator page." },
-        faqs: [{ q: "Can I download from a private profile?", a: "No — only public posts can be downloaded. Private accounts stay private." }],
-        secondary: ["download instagram profile video", "ig profile download", "save instagram from profile"],
-      },
-      {
-        slug: "audio-downloader",
-        title: "Instagram Audio Downloader (Reel to MP3)",
-        keyword: "Instagram audio downloader",
-        thing: "audio",
-        tagline: "Extract the song or sound from any Reel as MP3.",
-        angle:
-          "Love the audio behind a Reel? This Instagram audio downloader extracts the song or sound and saves it as an MP3. Paste the Reel or video link and choose audio to keep just the track — handy for reusing trending sounds.",
-        benefit: { title: "Reel audio as MP3", text: "Pulls the song or sound from a Reel into a clean MP3." },
-        faqs: [{ q: "How do I get the audio from an Instagram Reel?", a: "Paste the Reel link and choose the Audio (MP3) option to save just the sound." }],
-        secondary: ["instagram reel to mp3", "ig audio download", "instagram song download"],
       },
     ],
   },
@@ -493,21 +203,21 @@ export const CLUSTERS: SeoCluster[] = [
     intros: [
       "Save videos and GIFs from X (Twitter) in HD — paste a tweet link and download.",
       "Keep any public tweet's video offline in seconds, no X account needed.",
-      "The quick way to download X videos, including reposts and quote tweets.",
+      "The quick way to save X videos to watch offline.",
     ],
     facts: [
-      "Our extractor even handles reposted and quoted videos, pulling the original media at its best available quality — so a video buried in a quote tweet still downloads.",
+      "Our extractor reads the original media at its best available quality — so a video inside a quoted post still downloads.",
       "Twitter GIFs are technically short videos; we save them as MP4 so they play and share easily everywhere.",
       "Works in every browser on iPhone, Android, Windows and Mac, with quick server-side processing.",
     ],
     baseBenefits: [
       { title: "HD MP4", text: "Download X videos at the highest bitrate the tweet provides." },
-      { title: "Reposts & quotes", text: "Grabs video from reposted and quote tweets, not just originals." },
+      { title: "Quoted posts", text: "Reads the video inside a quoted post, not just originals." },
       { title: "No login", text: "Public tweets download without your X password." },
     ],
     baseFaqs: [
       { q: "Is the Twitter / X video downloader free?", a: "Yes — free and unlimited, no account needed." },
-      { q: "Can I download videos from reposts?", a: "Yes — we read the original media from reposted and quote tweets." },
+      { q: "Can I download a video from a quoted post?", a: "Yes — we read the original media from the quoted post." },
       { q: "Does it work on iPhone?", a: "Yes — paste the link in Safari or Chrome and the MP4 saves to your device." },
       { q: "Do I need the X app or login?", a: "No. Public videos download without installing anything or signing in." },
       { q: "Is it safe?", a: "Yes — encrypted, no stored files, and no account to compromise." },
@@ -520,22 +230,10 @@ export const CLUSTERS: SeoCluster[] = [
         h1: "Twitter / X Video Downloader — HD MP4",
         tagline: "Save videos from X (Twitter) in HD MP4 — fast and free.",
         angle:
-          "Our Twitter video downloader (now X) saves any public tweet's video as an HD MP4, or extracts the audio as MP3. Paste the tweet link and download instantly — no X account, no app and no watermark. It even handles reposted and quoted videos.",
+          "Our Twitter video downloader (now X) saves any public tweet's video as an HD MP4, or extracts the audio as MP3. Paste the post link and download instantly — no X account and no app. It also reads the video inside a quoted post, so a clip you were shown in a quote still saves for offline viewing.",
         benefit: { title: "Highest bitrate", text: "Downloads X videos at the best quality the tweet offers." },
         faqs: [{ q: "Can I save a Twitter GIF?", a: "Yes — Twitter GIFs are saved as MP4 video, which you can convert if needed." }],
         secondary: ["x video downloader", "download twitter video", "twitter to mp4"],
-      },
-      {
-        slug: "gif-downloader",
-        title: "Twitter GIF Downloader (X GIF to MP4)",
-        keyword: "Twitter GIF downloader",
-        thing: "GIFs",
-        tagline: "Download Twitter / X GIFs as MP4 video.",
-        angle:
-          "Twitter GIFs are actually short looping videos. This downloader saves them as MP4 so they play smoothly and share anywhere — paste the tweet link with the GIF and download it in seconds, no login required.",
-        benefit: { title: "GIF as MP4", text: "Saves looping X GIFs as compatible MP4 clips." },
-        faqs: [{ q: "How do I download a Twitter GIF?", a: "Paste the tweet containing the GIF and download — it saves as an MP4 video." }],
-        secondary: ["x gif download", "save twitter gif", "twitter gif to mp4"],
       },
     ],
   },
@@ -580,42 +278,6 @@ export const CLUSTERS: SeoCluster[] = [
         faqs: [{ q: "Can I download Facebook Reels?", a: "Yes — paste the Reel or video link and pick your quality." }],
         secondary: ["download facebook video", "fb video downloader", "facebook to mp4"],
       },
-      {
-        slug: "reels-downloader",
-        title: "Facebook Reels Downloader (HD)",
-        keyword: "Facebook Reels downloader",
-        thing: "Reels",
-        tagline: "Save Facebook Reels in HD MP4 — no login.",
-        angle:
-          "Download Facebook Reels as clean HD MP4 files. Paste the Reel link and save it in the quality you choose, ready to watch offline or re-share. There's no app to install and no Facebook login required.",
-        benefit: { title: "Reels in HD", text: "Saves Facebook Reels at the best available quality." },
-        faqs: [{ q: "How do I download a Facebook Reel?", a: "Open the Reel, copy its link, paste it here and tap Download." }],
-        secondary: ["download facebook reels", "fb reels save", "facebook reel to mp4"],
-      },
-      {
-        slug: "story-downloader",
-        title: "Facebook Story Downloader",
-        keyword: "Facebook story downloader",
-        thing: "Stories",
-        tagline: "Save public Facebook Stories before they expire.",
-        angle:
-          "Facebook Stories last 24 hours. This downloader saves a public Story's video so you can keep it offline. Paste the Story link while it's live and download it in original quality — no login and nothing installed.",
-        benefit: { title: "24-hour rescue", text: "Save public Facebook Stories before they expire." },
-        faqs: [{ q: "Can I download a Facebook Story?", a: "Yes, while it's public — Stories expire after 24 hours, so save them in time." }],
-        secondary: ["save facebook story", "fb story download", "facebook story video"],
-      },
-      {
-        slug: "watch-downloader",
-        title: "Facebook Watch Downloader (HD)",
-        keyword: "Facebook Watch downloader",
-        thing: "Watch videos",
-        tagline: "Download Facebook Watch videos in HD MP4.",
-        angle:
-          "Save longer videos from Facebook Watch as HD MP4 files to view offline. Paste the Watch link, choose HD or SD, and download — perfect for shows, highlights and longer uploads, with no app or login.",
-        benefit: { title: "Long-form Watch", text: "Handles longer Facebook Watch videos in HD." },
-        faqs: [{ q: "Can I download Facebook Watch videos?", a: "Yes — paste the Watch video link and choose your quality to download." }],
-        secondary: ["facebook watch video download", "download fb watch", "facebook watch to mp4"],
-      },
     ],
   },
   {
@@ -654,34 +316,10 @@ export const CLUSTERS: SeoCluster[] = [
         h1: "Pinterest Video Downloader — HD MP4 & GIF",
         tagline: "Save Pinterest videos and idea pins in HD — free and fast.",
         angle:
-          "Our Pinterest video downloader saves video pins and idea pins as HD MP4 files, or extracts their audio as MP3. Paste the pin link and download instantly — no Pinterest account, no app and no watermark.",
+          "Our Pinterest video downloader saves video pins and idea pins as HD MP4 files, or extracts their audio as MP3. Paste the pin link and download instantly — no Pinterest account and no app. Useful for keeping a how-to or recipe pin to follow offline.",
         benefit: { title: "Full-quality pins", text: "Download video pins at the original source quality." },
         faqs: [{ q: "Can I save the audio only?", a: "Yes — choose the Audio (MP3) option in the preview." }],
         secondary: ["download pinterest video", "pinterest to mp4", "save pinterest video"],
-      },
-      {
-        slug: "idea-pin-downloader",
-        title: "Pinterest Idea Pin Downloader",
-        keyword: "Pinterest idea pin downloader",
-        thing: "idea pins",
-        tagline: "Download Pinterest idea pins in full quality.",
-        angle:
-          "Idea pins are Pinterest's multi-page video stories, and they can't be saved from the app. This downloader grabs the idea pin video so you can keep tutorials, recipes and inspiration offline — paste the link and download in seconds.",
-        benefit: { title: "Idea pin video", text: "Saves multi-page idea pin videos that the app won't let you keep." },
-        faqs: [{ q: "Can I download Pinterest idea pins?", a: "Yes — paste the idea pin link and the video downloads in full quality." }],
-        secondary: ["download idea pin", "pinterest story pin download", "save pinterest idea pin"],
-      },
-      {
-        slug: "image-downloader",
-        title: "Pinterest Image Downloader (Full Size)",
-        keyword: "Pinterest image downloader",
-        thing: "images",
-        tagline: "Save Pinterest images in full resolution.",
-        angle:
-          "Download Pinterest images at original size rather than a compressed preview. Paste a pin link and the full-resolution image saves cleanly — perfect for moodboards, design references and inspiration folders.",
-        benefit: { title: "Full-size images", text: "Original-resolution pictures, not a small preview." },
-        faqs: [{ q: "How do I save a Pinterest image?", a: "Copy the pin link, paste it here, and the full-size image downloads." }],
-        secondary: ["download pinterest image", "save pinterest picture", "pinterest photo download"],
       },
     ],
   },
@@ -720,36 +358,12 @@ export const CLUSTERS: SeoCluster[] = [
         keyword: "Snapchat story downloader",
         thing: "Stories",
         h1: "Snapchat Story Downloader — Save Public Stories",
-        tagline: "Save public Snapchat Stories as clean MP4 video — no login.",
+        tagline: "Save public Snapchat Stories as MP4 video before they expire — no login.",
         angle:
           "Our Snapchat Story downloader saves video snaps from public Snapchat profiles and Story links as MP4 files. Paste a profile or Story URL (for example snapchat.com/@username) and download the video without installing the app or logging in.",
         benefit: { title: "Public Stories", text: "Save video snaps from public Snapchat profile Stories." },
         faqs: [{ q: "How do I download a Snapchat Story?", a: "Paste a public profile or Story link (like snapchat.com/@username) and tap Download to save the current video snap." }],
         secondary: ["download snapchat story", "save snapchat story", "snapchat story saver"],
-      },
-      {
-        slug: "spotlight-downloader",
-        title: "Snapchat Spotlight Downloader (HD MP4)",
-        keyword: "Snapchat Spotlight downloader",
-        thing: "Spotlight videos",
-        h1: "Snapchat Spotlight Downloader — HD MP4",
-        tagline: "Download Snapchat Spotlight videos in HD MP4 — free, no login.",
-        angle:
-          "Our Snapchat Spotlight downloader saves Spotlight videos as clean HD MP4 files. Paste a Spotlight link — including snapchat.com/t/ share links, which we resolve automatically — and download the clip without the app or an account.",
-        benefit: { title: "Share links work", text: "snapchat.com/t/ short links resolve automatically to the real video." },
-        faqs: [{ q: "Do Snapchat share links (snapchat.com/t/...) work?", a: "Yes — we automatically resolve /t/ short links to the underlying Spotlight video before downloading." }],
-        secondary: ["download snapchat spotlight", "spotlight to mp4", "save spotlight video"],
-      },
-      {
-        slug: "video-downloader",
-        title: "Snapchat Video Downloader (MP4)",
-        keyword: "Snapchat video downloader",
-        tagline: "Download public Snapchat videos as MP4 — no watermark.",
-        angle:
-          "Save public Snapchat videos — whether from a Story or Spotlight — as clean MP4 files. Paste the link and download in original quality, with no app, no login and no watermark added by us. It works the same on phone and desktop.",
-        benefit: { title: "Clean MP4", text: "Saves public Snapchat videos as universal MP4 files." },
-        faqs: [{ q: "What Snapchat videos can I download?", a: "Public Story snaps and Spotlight clips. Private snaps can't be accessed." }],
-        secondary: ["download snapchat video", "snapchat to mp4", "save snapchat video"],
       },
     ],
   },
@@ -832,7 +446,7 @@ export const CLUSTERS: SeoCluster[] = [
         h1: "Vimeo Video Downloader — HD & 4K",
         tagline: "Download Vimeo videos in HD or 4K — free and fast.",
         angle:
-          "Our Vimeo video downloader saves public Vimeo videos as HD MP4 files at the resolution you choose, up to 4K, or extracts the audio as MP3. Paste the video link and download — no app, no account and no watermark.",
+          "Our Vimeo video downloader saves public Vimeo videos as HD MP4 files at the resolution you choose, up to 4K, or extracts the audio as MP3. Paste the video link and download — no app and no account. Much of Vimeo is professional work, so keep what you save for offline viewing unless the creator has given you permission for more.",
         benefit: { title: "Pristine quality", text: "Preserves Vimeo's high quality up to 4K." },
         faqs: [{ q: "Can I download Vimeo videos in 4K?", a: "Yes, when the source offers it — we always fetch the highest available resolution." }],
         secondary: ["download vimeo video", "vimeo to mp4", "save vimeo video"],
@@ -851,8 +465,8 @@ export const CLUSTERS: SeoCluster[] = [
       "The professional way to save LinkedIn videos on any device.",
     ],
     facts: [
-      "Save native LinkedIn video posts as HD MP4 files — useful for keeping talks, demos, case studies and thought-leadership clips to reference or repurpose.",
-      "We fetch the original source file rather than a re-encode, so your saved video stays sharp for presentations or reposts.",
+      "Save native LinkedIn video posts as HD MP4 files — useful for keeping talks, demos, case studies and thought-leadership clips to reference offline.",
+      "We fetch the original source file rather than a re-encode, so your saved video stays sharp when you watch it back.",
       "Everything runs in your browser on iPhone, Android, Windows and Mac, with no LinkedIn login required for public posts.",
     ],
     baseBenefits: [
@@ -875,8 +489,8 @@ export const CLUSTERS: SeoCluster[] = [
         h1: "LinkedIn Video Downloader — HD MP4",
         tagline: "Download LinkedIn videos in HD — free, no login.",
         angle:
-          "Our LinkedIn video downloader saves public LinkedIn video posts as HD MP4 files, or extracts the audio as MP3. Paste the post link and download instantly — no app, no account and no watermark. Great for saving talks and demos to reference later.",
-        benefit: { title: "Reference offline", text: "Keep professional videos for offline viewing or reposting." },
+          "Our LinkedIn video downloader saves public LinkedIn video posts as HD MP4 files, or extracts the audio as MP3. Paste the post link and download instantly — no app and no account. Great for saving talks and demos to reference later.",
+        benefit: { title: "Reference offline", text: "Keep professional videos for offline viewing or later reference." },
         faqs: [{ q: "How do I download a LinkedIn video?", a: "Open the post, copy its link, paste it here and tap Download." }],
         secondary: ["download linkedin video", "linkedin to mp4", "save linkedin video"],
       },
@@ -894,7 +508,7 @@ export const CLUSTERS: SeoCluster[] = [
       "The simple way to save Threads video posts on any device.",
     ],
     facts: [
-      "Save native video posts from Threads as HD MP4 files, or extract the audio as MP3 — handy for archiving clips or reposting them elsewhere.",
+      "Save native video posts from Threads as HD MP4 files, or extract the audio as MP3 — handy for archiving your own clips or watching them offline.",
       "We fetch the original source file Threads serves, so your saved video keeps its full quality and sound.",
       "Everything runs in your browser on iPhone, Android, Windows and Mac, with no Threads login required for public posts.",
     ],
@@ -918,7 +532,7 @@ export const CLUSTERS: SeoCluster[] = [
         h1: "Threads Video Downloader — HD MP4",
         tagline: "Download Threads videos in HD — free, no login.",
         angle:
-          "Our Threads video downloader saves public Threads video posts as HD MP4 files, or extracts the audio as MP3. Paste the post link and download instantly — no app, no account and no watermark.",
+          "Our Threads video downloader saves public Threads video posts as HD MP4 files, or extracts the audio as MP3. Paste the post link and download instantly — no app and no account. Useful for backing up your own posts or watching later offline.",
         benefit: { title: "Original quality", text: "Saves Threads videos at full source quality with sound." },
         faqs: [{ q: "How do I download a Threads video?", a: "Open the post, copy its link, paste it here and tap Download." }],
         secondary: ["download threads video", "threads to mp4", "save threads video"],
@@ -961,7 +575,7 @@ export const CLUSTERS: SeoCluster[] = [
         h1: "Telegram Video Downloader — HD MP4",
         tagline: "Download Telegram videos in HD — free, no login.",
         angle:
-          "Our Telegram video downloader saves videos from public Telegram channels and posts as HD MP4 files, or extracts the audio as MP3. Paste the t.me post link and download instantly — no app, no account and no watermark.",
+          "Our Telegram video downloader saves videos from public Telegram channels and posts as HD MP4 files, or extracts the audio as MP3. Paste the t.me post link and download instantly — no app and no account. Handy for keeping a channel's lecture or tutorial to watch offline.",
         benefit: { title: "Original quality", text: "Saves Telegram videos at full source quality with sound." },
         faqs: [{ q: "How do I download a Telegram video?", a: "Open the public post in Telegram, copy its t.me link, paste it here and tap Download." }],
         secondary: ["download telegram video", "telegram to mp4", "save telegram video", "telegram channel video download"],
@@ -969,36 +583,3 @@ export const CLUSTERS: SeoCluster[] = [
     ],
   },
 ];
-
-/** Attach the shared generic modifiers to each cluster (after its specific ones). */
-const without = (...slugs: string[]) =>
-  GENERIC.filter((m) => !slugs.includes(m.slug));
-
-const GENERIC_BY_CLUSTER: Record<string, SeoModifier[]> = {
-  // Drop generics that would overlap a cluster's own specific intent.
-  tiktok: without("mp3-downloader", "hd-downloader"), // has sound + 4k pages
-  instagram: without("mp3-downloader"), // has audio page
-  // youtube entry removed 2026-08-25 alongside the whole cluster above.
-  twitter: GENERIC,
-  facebook: GENERIC,
-  pinterest: GENERIC,
-  // Trimmed alongside the GENERIC removal above (2026-08-23) — was
-  // [mMp4, mIphone, mAndroid, mOnline, mFree, mSave, mWithoutApp]; the five
-  // merged-away modifiers are gone with it.
-  // Was [mIphone, mAndroid]; both are device variants, merged away 2026-09-02.
-  // Snapchat therefore takes no generics at all now — its own specific pages
-  // (story/spotlight/etc.) are the whole cluster, which is the honest shape.
-  snapchat: [],
-  reddit: GENERIC,
-  vimeo: GENERIC,
-  linkedin: GENERIC,
-  threads: GENERIC,
-  telegram: GENERIC,
-};
-
-for (const cluster of CLUSTERS) {
-  cluster.modifiers = [
-    ...cluster.modifiers,
-    ...(GENERIC_BY_CLUSTER[cluster.id] ?? []),
-  ];
-}

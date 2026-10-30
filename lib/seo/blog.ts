@@ -9,6 +9,8 @@ export interface BlogPost {
   title: string;
   description: string;
   date: string; // ISO
+  /** ISO date of the last real edit (Article JSON-LD `dateModified`). Absent → never edited since `date`. */
+  updated?: string;
   readingMinutes: number;
   /** Related downloader slug for an internal CTA. */
   toolSlug?: string;
@@ -17,43 +19,57 @@ export interface BlogPost {
 
 export const BLOG_POSTS: BlogPost[] = [
   {
-    slug: "how-to-download-tiktok-videos-without-watermark",
-    title: "How to Download TikTok Videos Without a Watermark (2026)",
+    slug: "how-to-save-and-archive-your-own-tiktok-videos",
+    title: "How to Save and Archive Your Own TikTok Videos (2026)",
     description:
-      "Step-by-step guide to saving TikTok videos in HD without the watermark — free, on iPhone, Android and PC, with no app to install.",
+      "A step-by-step guide to backing up your own TikToks in original quality on iPhone, Android and PC — with no app to install — and keeping a tidy archive.",
     date: "2026-06-10",
+    updated: "2026-10-29",
     readingMinutes: 4,
     toolSlug: "tiktok-video-downloader",
     body: [
       {
         paragraphs: [
-          "TikTok's bouncing username watermark is fine for sharing inside the app, but it gets in the way when you want to repost a clip, edit it, or keep a clean copy. The good news: you can download TikTok videos without a watermark in seconds, for free, without installing anything.",
-          "This guide shows the fastest method on every device, explains why watermark-free matters, and answers the common questions people ask.",
+          "Your TikToks are your work, and the app is not a backup. Accounts get locked, phones get lost, and a reinstall can take drafts with it. Keeping your own copies means your videos outlive any of that.",
+          "This guide shows the fastest way to save your own TikToks in original quality on every device, how to keep an archive you can actually find things in, and what to keep in mind when a video isn't yours.",
         ],
       },
       {
         heading: "The fastest way (iPhone, Android & PC)",
         paragraphs: [
-          "You don't need a desktop program or a sketchy app from an app store. A browser-based downloader does everything online:",
+          "You don't need a desktop program or an app from an app store. A browser-based downloader does everything online:",
         ],
         bullets: [
-          "Open TikTok, tap Share on the video, then tap Copy link.",
+          "Open TikTok, find your video, tap Share, then tap Copy link.",
           "Open our TikTok video downloader and paste the link.",
           "Tap Download and choose HD video (or MP3 for just the audio).",
-          "The clean, watermark-free file saves straight to your device.",
+          "The original-quality file saves straight to your device.",
         ],
       },
       {
-        heading: "Why download without a watermark?",
+        heading: "TikTok's own data download",
         paragraphs: [
-          "A watermark-free copy looks professional and is far more useful. Creators repurpose clips across Instagram Reels, LinkedIn and X without a competing username stamped on top. Editors get a clean canvas. And anyone archiving favourite videos keeps the original framing intact.",
-          "Screen recording can't match this — it lowers quality, captures your notifications, and still includes the watermark. Downloading the real source file keeps full resolution and audio.",
+          "TikTok also lets you request a copy of your account data from its settings, under Account. It is a useful record of your account, but it arrives as a large archive after a wait — saving a video by its link is quicker when you want the file itself, today.",
+        ],
+      },
+      {
+        heading: "Keep an archive you can find things in",
+        bullets: [
+          "Name files by date and topic (for example 2026-06-10-pasta-recipe.mp4) so they sort in the order you posted them.",
+          "Keep two copies: one on your device and one in cloud storage or on an external drive.",
+          "Save the caption in a text file next to the video, so the context isn't lost.",
+        ],
+      },
+      {
+        heading: "Offline viewing and accessibility",
+        paragraphs: [
+          "A saved file plays in any video player, so you can watch it on a flight or a weak connection, slow it down, or turn on your phone's live captions — things the app doesn't always make easy.",
         ],
       },
       {
         heading: "Is it safe and legal?",
         paragraphs: [
-          "The tool itself is safe: there's no login to compromise, files aren't stored, and transfers are encrypted. Legally, you're responsible for only downloading content you own or have permission to use, and for respecting TikTok's terms and copyright. Don't re-upload someone else's work as your own.",
+          "The tool itself is safe: there's no login to compromise, files aren't stored, and transfers are encrypted. Legally, you're responsible for only saving content you own or have permission to use, and for respecting TikTok's terms and the creator's rights. If a video isn't yours, ask the creator before saving it, and never re-upload someone else's work as your own.",
         ],
       },
     ],
@@ -64,12 +80,13 @@ export const BLOG_POSTS: BlogPost[] = [
     description:
       "Compare the easiest ways to save Instagram Reels in HD — browser tools, mobile shortcuts and more — plus what to avoid.",
     date: "2026-06-12",
+    updated: "2026-10-29",
     readingMinutes: 5,
     toolSlug: "instagram-reels-downloader",
     body: [
       {
         paragraphs: [
-          "Instagram doesn't offer a built-in download button for other people's Reels, so saving one for inspiration, an edit, or an offline watch takes a third-party tool. Here are the methods that actually work in 2026 — and the ones to skip.",
+          "Instagram doesn't offer a download button for most Reels, so backing up your own or keeping one to watch offline takes a tool. Here are the methods that actually work in 2026 — and the ones to skip.",
         ],
       },
       {
@@ -95,7 +112,7 @@ export const BLOG_POSTS: BlogPost[] = [
       {
         heading: "Quality tips",
         paragraphs: [
-          "Always pick the highest available resolution so your saved Reel isn't a blurry re-encode. If you only need the audio (a trending sound, for example), choose the MP3 option to save space.",
+          "Always pick the highest available resolution so your saved Reel isn't a blurry re-encode. If you only need the audio (a talk or a tutorial you'd rather listen to, for example), choose the MP3 option to save space.",
         ],
       },
     ],
@@ -136,7 +153,7 @@ export const BLOG_POSTS: BlogPost[] = [
       {
         heading: "Our approach",
         paragraphs: [
-          "FrenzSave runs entirely in your browser, never asks for your social passwords, encrypts transfers, and doesn't store your files. You choose the quality, and the clean file saves directly to your device.",
+          "FrenzSave runs entirely in your browser, never asks for your social passwords, encrypts transfers, and doesn't store your files. You choose the quality, and the file saves directly to your device.",
         ],
       },
     ],
@@ -147,6 +164,7 @@ export const BLOG_POSTS: BlogPost[] = [
     description:
       "Save public LinkedIn video posts as HD MP4 or convert them to MP3 — free, on iPhone, Android and PC, with no app to install.",
     date: "2026-08-25",
+    updated: "2026-10-29",
     readingMinutes: 4,
     toolSlug: "linkedin-video-downloader",
     body: [
@@ -166,7 +184,7 @@ export const BLOG_POSTS: BlogPost[] = [
       {
         heading: "Video or MP3?",
         paragraphs: [
-          "Pick MP4 video to keep the full clip for reference or reposting, or MP3 if you only need the audio — handy for a talk or panel you'd rather listen back to. You get the original quality, no re-encoding.",
+          "Pick MP4 video to keep the full clip for reference or offline viewing, or MP3 if you only need the audio — handy for a talk or panel you'd rather listen back to. You get the original quality, no re-encoding.",
         ],
       },
       {
@@ -179,16 +197,17 @@ export const BLOG_POSTS: BlogPost[] = [
   },
   {
     slug: "how-to-download-twitter-x-videos",
-    title: "How to Download Twitter / X Videos (Including Reposts)",
+    title: "How to Save Twitter / X Videos to Watch Offline",
     description:
-      "Save videos and GIFs from X (Twitter) in HD — even from reposts and quote tweets — free and without an account.",
+      "Save videos and GIFs from X (Twitter) in HD to watch offline — including videos inside quoted posts — free and without an account.",
+    updated: "2026-10-29",
     date: "2026-06-17",
     readingMinutes: 4,
     toolSlug: "twitter-video-downloader",
     body: [
       {
         paragraphs: [
-          "X (formerly Twitter) doesn't let you save videos directly. This guide shows how to download any public tweet's video in HD — including videos inside reposts and quote tweets — for free.",
+          "X (formerly Twitter) doesn't let you save videos directly. This guide shows how to save a public post's video in HD to watch offline — including videos inside quoted posts — for free.",
         ],
       },
       {
@@ -200,9 +219,9 @@ export const BLOG_POSTS: BlogPost[] = [
         ],
       },
       {
-        heading: "Reposts and quote tweets",
+        heading: "Videos inside quoted posts",
         paragraphs: [
-          "When a video lives inside a reposted or quoted tweet, our extractor reads the original media so it still downloads. For private or age-restricted accounts, the video can't be accessed without being logged in.",
+          "When a video lives inside a quoted post, our extractor reads the original media so it still downloads. For private or age-restricted accounts, the video can't be accessed without being logged in.",
         ],
       },
       {
@@ -288,6 +307,14 @@ export const BLOG_POSTS: BlogPost[] = [
 ];
 
 export const BLOG_SLUGS = BLOG_POSTS.map((p) => p.slug);
+
+/**
+ * Renamed posts → their new slug, 301'd by next.config.ts so an indexed URL never 404s.
+ * 2026-10-29 (owner): the TikTok guide was retitled from "without a watermark" to saving and archiving your own videos.
+ */
+export const BLOG_REDIRECTS: readonly { from: string; to: string }[] = [
+  { from: "how-to-download-tiktok-videos-without-watermark", to: "how-to-save-and-archive-your-own-tiktok-videos" },
+];
 
 export function getPost(slug: string): BlogPost | undefined {
   return BLOG_POSTS.find((p) => p.slug === slug);

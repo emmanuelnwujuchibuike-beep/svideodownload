@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { withSocial } from "@/lib/seo/page-metadata";
 
 /*
  * Static by contract, not by inference. Vercel was building `/` as DYNAMIC while
@@ -13,12 +14,12 @@ import { SiteHeader } from "@/components/layout/site-header";
  */
 export const dynamic = "force-static";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSocial({
   title: "Developer API",
   description:
     "Programmatic access to FrenzSave: analyze and download media from every supported platform with a simple REST API.",
   alternates: { canonical: "/developers" },
-};
+});
 
 function Code({ children }: { children: string }) {
   return (

@@ -6,8 +6,11 @@ import { notFound } from "next/navigation";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { RecommendedTools } from "@/components/monetization/recommended-tools";
+import { AuthorByline } from "@/components/seo/author-byline";
+import { SITE_AUTHOR } from "@/config/author";
 import { AdSlot } from "@/features/monetization/ad-slot";
 import { BLOG_SLUGS, getPost } from "@/lib/seo/blog";
+import { articleJsonLd } from "@/lib/seo/article-ld";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { getSeoPage } from "@/lib/seo/seo-pages";
 import { SITE_URL as siteUrl } from "@/lib/site";
@@ -41,9 +44,12 @@ export async function generateMetadata({
     alternates: { canonical: `/blog/${post.slug}` },
     openGraph: {
       type: "article",
+      url: `/blog/${post.slug}`,
       title: post.title,
       description: post.description,
       publishedTime: post.date,
+      modifiedTime: post.updated ?? post.date,
+      authors: [SITE_AUTHOR.name],
     },
     twitter: { card: "summary_large_image", title: post.title, description: post.description },
   };
@@ -60,17 +66,14 @@ export default async function BlogPostPage({
 
   const tool = post.toolSlug ? getSeoPage(post.toolSlug) : undefined;
 
-  const articleLd = {
-    "@context": "https://schema.org",
-    "@type": "BlogPosting",
+  // Article JSON-LD with the real author and dates (owner, 2026-10-29) — see lib/seo/article-ld.ts
+  const articleLd = articleJsonLd({
+    path: `/blog/${post.slug}`,
     headline: post.title,
     description: post.description,
-    datePublished: post.date,
-    dateModified: post.date,
-    author: { "@type": "Organization", name: "FrenzSave" },
-    publisher: { "@type": "Organization", name: "FrenzSave" },
-    mainEntityOfPage: `${siteUrl}/blog/${post.slug}`,
-  };
+    published: post.date,
+    updated: post.updated,
+  });
   // 🔴 Added 2026-08-16 SEO audit — this template had neither visible
   // breadcrumbs nor BreadcrumbList JSON-LD at all.
   const breadcrumbLd = {
@@ -129,6 +132,8 @@ export default async function BlogPostPage({
           </div>
         </div>
 
+        <AuthorByline published={post.date} updated={post.updated} className="mt-6" />
+
         <article className="mt-10">
           <div className="space-y-8">
             {post.body.map((section, i) => (
@@ -173,7 +178,7 @@ export default async function BlogPostPage({
               <div className="relative">
                 <h2 className="text-xl font-bold text-white">Try it now</h2>
                 <p className="mt-2 text-sm text-white/85">
-                  Use our free {tool.primaryKeyword} — no app, no login, no watermark.
+                  Use our free {tool.primaryKeyword} — no app, no login.
                 </p>
                 <Link
                   href={`/${tool.slug}`}

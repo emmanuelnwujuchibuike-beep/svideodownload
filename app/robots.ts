@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 
+import { APP_ONLY_PREFIXES } from "@/lib/auth/app-only-paths";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
 /**
@@ -49,7 +50,19 @@ export default function robots(): MetadataRoute.Robots {
     (lib/seo/guides.ts) and are crawlable — "/ai" is a path prefix and never
     matches "/frenz-ai". The tools under /ai stay disallowed, as above.
   */
-  const disallow = ["/api/", "/admin/", "/ai", "/ai/"];
+  /*
+    ── THE APP-ONLY ROUTES ARE DISALLOWED (owner, 2026-10-29, AdSense review) ──────
+    Feeds, reels, profiles, sounds, messages and settings: every one sends a guest to /login before any render
+    (middleware.ts) and carries noindex, so a crawler has nothing to gain from them. Listed from the same array the
+    middleware reads (lib/auth/app-only-paths.ts), so the two can never disagree. Each route is given as the exact
+    path (`/u$` — `$` anchors the end, honoured by Google and Bing) plus everything under it (`/u/`): a bare `/u`
+    is a PREFIX rule and would also block `/unsubscribe`. Profiles at "/<handle>" cannot be listed here (a handle
+    is any word); they redirect guests to sign-in and are noindex, which is what keeps them out of results.
+
+    🔴 /_next/ is NOT disallowed and must never be: Google renders pages with their scripts and styles, and a page
+    it cannot render is a page it cannot judge.
+  */
+  const disallow = ["/api/", "/admin/", "/ai", "/ai/", ...APP_ONLY_PREFIXES.flatMap((p) => [`${p}$`, `${p}/`])];
   /*
     ── 🔴 ads.txt IS ALWAYS FETCHABLE, AND SAYS SO (2026-09-20) ────────────────
 
@@ -80,11 +93,12 @@ export default function robots(): MetadataRoute.Robots {
       { userAgent: "*", allow, disallow },
       ...aiAgents.map((userAgent) => ({ userAgent, allow, disallow })),
     ],
-    // posts-sitemap.xml (every public post) and news-sitemap.xml (category
-    // "news" posts from the last 48h, Google News format) are DB-backed
-    // route handlers, kept separate from the static sitemap.xml above — see
-    // either file's own top-of-file note for why.
-    sitemap: [`${siteUrl}/sitemap.xml`, `${siteUrl}/posts-sitemap.xml`, `${siteUrl}/news-sitemap.xml`],
+    /*
+      The one sitemap: public content pages only (owner, 2026-10-29). posts-sitemap.xml and news-sitemap.xml (member
+      posts) are no longer advertised — member content is not what this site asks Google to index. Both routes still
+      answer; remove them from Search Console if they were submitted there.
+    */
+    sitemap: `${siteUrl}/sitemap.xml`,
     host: siteUrl,
   };
 }

@@ -195,12 +195,17 @@ function buildPage(
     a device word swapped. That is a page-count decision, not a copy decision —
     see the note in the guard test.
   */
+  /*
+    🔴 The primary page takes ONLY its own benefit card (owner, 2026-10-29: "Each page currently repeats the same
+    feature cards twice"). The page already prints `pc.features` once, under "What the {brand} downloader handles";
+    adding them here printed the same six cards a second time further down.
+  */
   const benefits = pc
     ? sharedProse
       ? rotate(pc.features, seed, 4)
       : [
           { title: f(modifier.benefit.title), text: f(modifier.benefit.text) },
-          ...(index === 0 ? pc.features : rotate(pc.features, seed, 3)),
+          ...(index === 0 ? [] : rotate(pc.features, seed, 3)),
         ]
     : [
         { title: f(modifier.benefit.title), text: f(modifier.benefit.text) },

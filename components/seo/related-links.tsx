@@ -1,4 +1,4 @@
-import { ArrowUpRight, Compass, Home, Image as ImageIcon } from "lucide-react";
+import { ArrowUpRight, BookOpen, Home, Image as ImageIcon } from "lucide-react";
 import Link from "next/link";
 
 import { seoPageId } from "@/lib/content/graph/build";
@@ -96,26 +96,21 @@ function PageCard({ page }: { page: SeoPage }) {
 }
 
 /** Auto-generated internal links for a landing page (crawl-depth + authority). */
-export function RelatedLinks({ slug, brand }: { slug: string; brand: string }) {
-  const { sameCluster, crossCluster } = getRelatedPages(slug);
+export function RelatedLinks({ slug }: { slug: string }) {
+  /*
+    "More {brand} downloaders" is gone (owner, 2026-10-29): one page per platform, so there are no same-platform
+    variants left to link — the section only ever pointed at the doorway pages that now 301 here.
+  */
+  const { crossCluster } = getRelatedPages(slug);
 
   return (
     <section className="border-t border-border/60 py-16 sm:py-20">
       <div className="container max-w-5xl">
-        <h2 className="mb-8 text-2xl font-semibold tracking-[-0.02em] sm:text-3xl">
-          More {brand} downloaders
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {sameCluster.map((p) => (
-            <PageCard key={p.slug} page={p} />
-          ))}
-        </div>
-
         {crossCluster.length > 0 ? (
           <>
-            <h3 className="mb-4 mt-10 text-lg font-semibold">
+            <h2 className="mb-6 text-2xl font-semibold tracking-[-0.02em] sm:text-3xl">
               Save from other platforms
-            </h3>
+            </h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {crossCluster.map((p) => (
                 <PageCard key={p.slug} page={p} />
@@ -168,17 +163,18 @@ export function RelatedLinks({ slug, brand }: { slug: string; brand: string }) {
             </span>
             <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground transition group-hover:text-foreground" />
           </Link>
+          {/* /explore is a signed-in page now (lib/auth/app-only-paths.ts) — the public guides take its place */}
           <Link
-            href="/explore"
+            href="/learn"
             className="group flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft transition hover:border-foreground/20 hover:shadow-card"
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-cyan-400 text-white">
-              <Compass className="h-4 w-4" />
+              <BookOpen className="h-4 w-4" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-semibold">Trending downloads</span>
+              <span className="block truncate text-sm font-semibold">Guides</span>
               <span className="block truncate text-xs text-muted-foreground">
-                See what the community is saving
+                How saving, formats and archiving work
               </span>
             </span>
             <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground transition group-hover:text-foreground" />

@@ -8,15 +8,16 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { SupportChat } from "@/features/support/support-chat";
 import { localeAlternates } from "@/lib/i18n/alternates";
+import { withSocial } from "@/lib/seo/page-metadata";
 
 export const dynamic = "force-static";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSocial({
   title: "Support — chat with us, email support and answers",
   description:
     "Get help with FrenzSave. Start a 1:1 chat with our team, email us, or read answers to the most common questions about downloading, accounts and privacy.",
   alternates: { canonical: "/support", ...localeAlternates("/support") },
-};
+});
 
 const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "support@frenzsave.com";
 

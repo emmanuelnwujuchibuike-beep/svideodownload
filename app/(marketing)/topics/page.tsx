@@ -7,6 +7,7 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { publishableClusters, topicHref } from "@/lib/seo/topics";
 import { SITE_URL as siteUrl } from "@/lib/site";
+import { withSocial } from "@/lib/seo/page-metadata";
 
 export const dynamic = "force-static";
 
@@ -28,12 +29,12 @@ export const dynamic = "force-static";
  * campus — where a declared-but-planned school tells you where the product is
  * going — a thin topic says nothing about direction, only about our backlog.
  */
-export const metadata: Metadata = {
+export const metadata: Metadata = withSocial({
   title: "Topics — Frenzsave",
   description:
     "Everything we have written, grouped by subject: saving video, quality, editing, captions, audience, privacy and the API.",
   alternates: { canonical: "/topics" },
-};
+});
 
 export default function TopicsIndexPage() {
   const clusters = publishableClusters();

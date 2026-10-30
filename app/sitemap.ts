@@ -1,14 +1,13 @@
 import type { MetadataRoute } from "next";
 
-import { teachableSchools } from "@/lib/academy/schools";
-import { publishableClusters, topicHref } from "@/lib/seo/topics";
 import { LESSON_SLUGS } from "@/lib/learning/catalog";
-import { SUPPORT_ARTICLES, articleHref } from "@/lib/support/articles";
-import { BLOG_SLUGS, getPost } from "@/lib/seo/blog";
+import { lessonDates } from "@/lib/learning/dates";
+import { BLOG_POSTS } from "@/lib/seo/blog";
 import { GUIDES } from "@/lib/seo/guides";
-import { SEO_SLUGS } from "@/lib/seo/seo-pages";
+import { getPrimaryPages } from "@/lib/seo/seo-pages";
+import { publishableClusters, topicHref } from "@/lib/seo/topics";
 import { SITE_URL as siteUrl } from "@/lib/site";
-import { CATEGORIES } from "@/lib/social/categories";
+import { SUPPORT_ARTICLES, articleHref } from "@/lib/support/articles";
 
 /*
   ── No sitemap index, and no image/video sitemap. Both deliberate. ────────────
@@ -52,97 +51,59 @@ import { CATEGORIES } from "@/lib/social/categories";
   when one exists (a blog post's date, a guide's `updated`) and omits it
   otherwise. Never reintroduce a build-time date (app/sitemap.test.ts).
 */
+/*
+  ═══════════════════════════════════════════════════════════════════════════
+   🔴 ONLY PUBLIC CONTENT PAGES (owner, 2026-10-29, AdSense review)
+  ═══════════════════════════════════════════════════════════════════════════
+
+  The owner's list, exactly: the landing; About, Contact, Privacy, Terms, DMCA; the blog and its posts; /learn and its
+  guides; the glossary; /topics and its pillars; Help and Trust with their articles; pricing; the public Frenz AI
+  explainers (/frenz-ai — the TOOLS at /ai stay unlisted and noindex, lib/ai/ai-pages-not-indexed.test.ts);
+  wallpapers; developers; the advertising pages; and the 11 platform pages (one per platform — config/seoPages.ts).
+
+  Gone, on purpose — do not re-add:
+    · every app-only route (lib/auth/app-only-paths.ts): /explore, /home, /reels, profiles, sounds, …
+    · every merged downloader variant (lib/seo/removed-seo-pages.ts) — they 301, and a redirect is not a page;
+    · the category hubs (/sports, /news, …): feeds of member posts, not publisher content;
+    · /academy, /earn, /features and /support — not on the owner's list.
+  app/sitemap.test.ts enforces the exclusions against the real output.
+*/
 export default function sitemap(): MetadataRoute.Sitemap {
-
-  const downloaders: MetadataRoute.Sitemap = SEO_SLUGS.map((slug) => ({
-    url: `${siteUrl}/${slug}`,
-
+  // the 11 platform pages — primaries only, so a variant added back to the config can never be listed by accident
+  const downloaders: MetadataRoute.Sitemap = getPrimaryPages().map((page) => ({
+    url: `${siteUrl}/${page.slug}`,
     changeFrequency: "weekly",
     priority: 0.9,
   }));
 
-  /*
-    Category hubs (/sports, /news, …) — the pages a Google search for "news"
-    or "sports" actually lands on (owner, 2026-08-18). Statically generated
-    for the real 13-category taxonomy (lib/social/categories.ts) alongside
-    SEO_SLUGS in the SAME [downloader]/page.tsx — see that file's own note on
-    why a category and a downloader-tool page share one route slot. Priority
-    matches the downloader pages: both are hub-shaped entry points into
-    deeper content (posts here, the tool itself there).
-  */
-  const categories: MetadataRoute.Sitemap = CATEGORIES.map((category) => ({
-    url: `${siteUrl}/${category}`,
-
-    changeFrequency: "daily",
-    priority: 0.8,
-  }));
-
-  const blog: MetadataRoute.Sitemap = BLOG_SLUGS.map((slug) => ({
-    url: `${siteUrl}/blog/${slug}`,
-    // the post's own date — a build timestamp says nothing about when it changed
-    lastModified: getPost(slug)?.date,
+  const blog: MetadataRoute.Sitemap = BLOG_POSTS.map((post) => ({
+    url: `${siteUrl}/blog/${post.slug}`,
+    lastModified: post.updated ?? post.date,
     changeFrequency: "monthly",
     priority: 0.6,
   }));
 
-  // Learning Academy. Priority above the blog because these are the pages the
-  // ~100 generated downloader pages link INTO — they are the depth that turns
-  // that keyword cluster into topical authority rather than thin duplication.
+  // real dates measured from git (lib/learning/dates.ts)
   const lessons: MetadataRoute.Sitemap = LESSON_SLUGS.map((slug) => ({
     url: `${siteUrl}/learn/${slug}`,
-
+    lastModified: lessonDates(slug)?.updated,
     changeFrequency: "monthly",
     priority: 0.7,
   }));
 
   /*
-    Knowledge Campus. Only TEACHABLE schools are listed — a school whose product
-    does not exist has no page to point at, and listing one would be a 404 in the
-    sitemap. `teachableSchools()` derives that from the Product Genome, so this
-    stays correct with no maintenance when a product ships.
-
-    Priority sits alongside /learn: these are the hub pages the ~148 generated
-    downloader pages link into, which is what turns that keyword cluster into
-    topical depth rather than thin duplication.
-  */
-  const schools: MetadataRoute.Sitemap = teachableSchools().map((school) => ({
-    url: `${siteUrl}/academy/${school.slug}`,
-
-    changeFrequency: "monthly",
-    priority: 0.7,
-  }));
-
-  /*
-    Support articles — both centres.
-
-    The URL comes from `articleHref` rather than a prefix written here. One
-    corpus feeds /help and /trust, and a sitemap that assumed /trust for every
-    article would have advertised each Help Center page at a URL that 404s while
-    never listing the one that works.
-
-    High priority: these answer the questions people ask before trusting a
-    service with an account, and the ones that otherwise become support load.
+    Support articles — both centres. The URL comes from `articleHref` rather than a prefix written here: one corpus
+    feeds /help and /trust, and a sitemap that assumed /trust for every article would list Help pages at URLs that 404.
   */
   const support: MetadataRoute.Sitemap = SUPPORT_ARTICLES.map((article) => ({
     url: `${siteUrl}${articleHref(article)}`,
-
     changeFrequency: "monthly",
     priority: 0.6,
   }));
 
-  /*
-    Topic pillars — the subject axis.
-
-    Only PUBLISHABLE clusters, derived from the same gate `generateStaticParams`
-    reads, so this can never advertise a pillar that was not generated. The
-    lesson the schools above already taught, applied to a second corpus.
-
-    Priority above the individual keyword pages and alongside the schools: these
-    are hubs, and the whole point of a hub is that authority flows through it.
-  */
+  // only PUBLISHABLE pillars — the same gate generateStaticParams reads, so a pillar that was not generated never shows
   const topics: MetadataRoute.Sitemap = publishableClusters().map((cluster) => ({
     url: `${siteUrl}${topicHref(cluster.topic)}`,
-
     changeFrequency: "weekly",
     priority: 0.7,
   }));
@@ -150,65 +111,24 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return [
     { url: siteUrl, changeFrequency: "daily", priority: 1 },
     ...downloaders,
-    ...categories,
-    /*
-      Wallpapers — a product surface, not an article, which is why it sits up
-      here with the downloaders rather than down among the corpora.
-
-      Priority 0.8 alongside the other hubs. `daily` is honest rather than
-      aspirational: the library is operator-managed and gains wallpapers between
-      deploys, so the page's content really does change on that cadence even
-      though this file does not.
-    */
     { url: `${siteUrl}/wallpapers`, changeFrequency: "daily", priority: 0.8 },
-    /*
-      ── 🔴 NO FRENZ AI ROUTE APPEARS IN THIS FILE. DELIBERATELY. ────────────
-
-      Owner, 2026-09-09 (the permanent Frenz AI product rule): "Remove it from
-      public sitemap generation… Remove AI routes from any public sitemap
-      files… Treat Frenz AI as a private authenticated utility with a
-      controlled usage economy, not as a public landing-page product."
-
-      Earlier the same day I added `/ai` and four hand-written guides here, on
-      the previous rule that Frenz AI should be crawlable for the AdSense
-      review. That rule has been replaced. The guides and their route are gone
-      from the repository entirely — not merely unlisted — because "hide it
-      visually and leave indexable content behind it" is the exact failure the
-      new spec names.
-
-      ⚠️ DO NOT RE-ADD an AI entry here. If a future AI surface genuinely needs
-      to be public, that is a product decision the owner makes explicitly, and
-      it changes §1 of the standing rule rather than this file.
-    */
-    /*
-      ── 2026-10-09: THE PUBLIC FRENZ AI EXPLAINERS — /frenz-ai, not /ai ──────
-
-      The owner's SEO brief of 2026-10-09 asks for Frenz AI to be discoverable.
-      The note above still holds for the TOOLS: nothing under /ai is listed,
-      and /ai stays disallowed and noindex (lib/ai/ai-pages-not-indexed.test.ts).
-      What is listed is the separate, static, read-only explainer surface at
-      /frenz-ai (lib/seo/guides.ts), plus the advertising guides — each with its
-      content's real last-change date, not the build time.
-    */
+    // the public Frenz AI explainers and the advertising guides, each with its content's real last-change date
     ...GUIDES.map((g) => ({
       url: `${siteUrl}${g.path}`,
       lastModified: g.updated,
       changeFrequency: "monthly" as const,
       priority: g.path === "/frenz-ai" ? 0.8 : 0.7,
     })),
-    // the public advertising pages, never listed until now (2026-10-09 audit)
     { url: `${siteUrl}/advertise`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${siteUrl}/advertise/rules`, changeFrequency: "monthly", priority: 0.5 },
-    // the creator-monetization page (owner SEO brief 2026-10-11) — never /earn/start, which only redirects
-    { url: `${siteUrl}/earn`, changeFrequency: "monthly", priority: 0.8 },
+    { url: `${siteUrl}/pricing`, changeFrequency: "monthly", priority: 0.6 },
+    { url: `${siteUrl}/developers`, changeFrequency: "monthly", priority: 0.4 },
     { url: `${siteUrl}/help`, changeFrequency: "monthly", priority: 0.7 },
     { url: `${siteUrl}/trust`, changeFrequency: "monthly", priority: 0.7 },
-    { url: `${siteUrl}/glossary`, changeFrequency: "monthly", priority: 0.5 },
     ...support,
+    { url: `${siteUrl}/glossary`, changeFrequency: "monthly", priority: 0.5 },
     { url: `${siteUrl}/topics`, changeFrequency: "weekly", priority: 0.8 },
     ...topics,
-    { url: `${siteUrl}/academy`, changeFrequency: "weekly", priority: 0.8 },
-    ...schools,
     { url: `${siteUrl}/learn`, changeFrequency: "weekly", priority: 0.8 },
     ...lessons,
     { url: `${siteUrl}/blog`, changeFrequency: "weekly", priority: 0.7 },
@@ -218,19 +138,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${siteUrl}/terms`, priority: 0.3 },
     { url: `${siteUrl}/privacy`, priority: 0.3 },
     { url: `${siteUrl}/dmca`, priority: 0.3 },
-    /*
-      🔴 Five real, static, canonical, internally-linked pages that were simply
-      never added here (2026-08-16 SEO audit) — each has its own unique
-      metadata and canonical already; this file just never listed them.
-      /explore is the one judgment call: it's the sole (app)-group page with
-      real public, signed-out-accessible content, so it's declared here
-      deliberately rather than left to accidental discovery — see its own
-      `robots` fix in app/(app)/explore/page.tsx for the matching half of this.
-    */
-    { url: `${siteUrl}/pricing`, changeFrequency: "monthly", priority: 0.6 },
-    { url: `${siteUrl}/features`, changeFrequency: "monthly", priority: 0.6 },
-    { url: `${siteUrl}/developers`, changeFrequency: "monthly", priority: 0.4 },
-    { url: `${siteUrl}/support`, changeFrequency: "monthly", priority: 0.4 },
-    { url: `${siteUrl}/explore`, changeFrequency: "daily", priority: 0.6 },
   ];
 }

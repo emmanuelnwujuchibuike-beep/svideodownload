@@ -57,7 +57,8 @@ describe("the My ads button (was Promote) has fixed homes — no dragging, no fl
       topbar.includes('{pathname === "/downloads" && !searchActive ? <PromoteButton /> : null}') &&
       // 2026-10-28 (owner, "lean desktop header", 31573c6): the PHONE row keeps it beside Install; the desktop row lost it
       // and reaches advertising through the menu drawer's Advertise entry
-      (header.match(/\{landing \? <PromoteButton size="header" \/> : null\}/g) ?? []).length === 1 &&
+      // 2026-10-29 (owner, AdSense review): members only — a guest's landing HTML never carries /advertise/campaigns
+      (header.match(/\{landing && enabled && user \? <PromoteButton size="header" \/> : null\}/g) ?? []).length === 1 &&
       header.includes('{ href: "/advertise", labelKey: "nav.advertise" }') &&
       !/drag|createPortal|pointermove|position: fixed|\bfixed\b/.test(button) &&
       // 2026-10-25 (owner): "just the ad icon" — "My ads" is the accessible name, no longer visible text
@@ -75,7 +76,9 @@ describe("the My ads button (was Promote) has fixed homes — no dragging, no fl
   it("teeth: a draggable/fixed button, or losing a home, fails", () => {
     expect(fixedHomes(core, header, button + "\nconst drag = 1;")).toBe(false);
     expect(fixedHomes(core, header, button, TOPBAR.replace('{pathname === "/downloads" && !searchActive ? <PromoteButton /> : null}', ""))).toBe(false);
-    expect(fixedHomes(core, header.replace('{landing ? <PromoteButton size="header" /> : null}', ""), button)).toBe(false);
+    expect(fixedHomes(core, header.replace('{landing && enabled && user ? <PromoteButton size="header" /> : null}', ""), button)).toBe(false);
+    // shown to guests again → fails
+    expect(fixedHomes(core, header.replace('{landing && enabled && user ? <PromoteButton size="header" /> : null}', '{landing ? <PromoteButton size="header" /> : null}'), button)).toBe(false);
   });
   it("just the ad icon, set into the header like its other icons (owner, 2026-10-25), and the floating bubble is gone", () => {
     // the shared header icon tile and target — not a pill with words

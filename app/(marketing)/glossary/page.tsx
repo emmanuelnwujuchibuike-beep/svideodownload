@@ -7,15 +7,16 @@ import { definedTermLd } from "@/lib/discovery/schema";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { SITE_URL as siteUrl } from "@/lib/site";
 import { relatedTerms, sortedGlossary } from "@/lib/support/glossary";
+import { withSocial } from "@/lib/seo/page-metadata";
 
 export const dynamic = "force-static";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSocial({
   title: "Glossary — the words this site uses",
   description:
     "Plain definitions for rendition, bitrate, generation loss, sidecar captions, passkeys and the rest of the jargon around saving and publishing video.",
   alternates: { canonical: "/glossary" },
-};
+});
 
 /**
  * Glossary.

@@ -10,15 +10,16 @@ import { TRUST_SECTIONS } from "@/lib/support/types";
 import { localeAlternates } from "@/lib/i18n/alternates";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { SITE_URL as siteUrl } from "@/lib/site";
+import { withSocial } from "@/lib/seo/page-metadata";
 
 export const dynamic = "force-static";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSocial({
   title: "Trust Center — security, privacy, safety and transparency",
   description:
     "How Frenzsave protects your account, what is visible to whom, how reporting and appeals work, and what we will and will not claim.",
   alternates: { canonical: "/trust", ...localeAlternates("/trust") },
-};
+});
 
 /**
  * Trust Center™.

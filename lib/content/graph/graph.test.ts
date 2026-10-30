@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { CLUSTERS } from "@/config/seoPages";
+import { REMOVED_SEO_PAGES } from "@/lib/seo/removed-seo-pages";
+
 import { GRAPH, buildGraph, capabilityId, productId, seoPageId, topicId } from "./build";
 import { ancestors, auditGraph, graphStats, neighbours, relatedFor, siblingsOf } from "./traverse";
 
@@ -19,41 +22,32 @@ describe("Experience Graph — construction", () => {
      * `lib/content/genome` were disjoint: ~200 SEO pages linked only to each other,
      * 6 products linked only to themselves. This asserts the join exists.
      */
-    const mp3 = [...GRAPH.nodes.values()].find(
-      (n) => n.kind === "seoPage" && n.id.includes("mp3-downloader"),
-    );
-    expect(mp3, "no mp3 SEO page found").toBeDefined();
-
-    const targets = neighbours(mp3!.id).map((n) => n.node.id);
-    expect(targets, "SEO page does not document the Download product").toContain(
-      productId("download"),
-    );
-    expect(targets, "mp3 page does not illustrate audio extraction").toContain(
-      capabilityId("download", "audio-extract"),
-    );
+    // One page per platform since 2026-10-29 (the MP3 variants were merged away), so every page is checked.
+    const pages = [...GRAPH.nodes.values()].filter((n) => n.kind === "seoPage");
+    expect(pages.length, "no SEO pages found").toBeGreaterThan(0);
+    for (const page of pages) {
+      const targets = neighbours(page.id).map((n) => n.node.id);
+      expect(targets, `${page.id} does not document the Download product`).toContain(productId("download"));
+    }
   });
 
   it("derives capability edges only where the intent matches", () => {
-    const mp3 = [...GRAPH.nodes.values()].find(
-      (n) => n.kind === "seoPage" && n.id.includes("mp3-downloader"),
-    )!;
-    const targets = neighbours(mp3.id).map((n) => n.node.id);
-    // An MP3 page is about audio, not about watermark removal.
-    expect(targets).not.toContain(capabilityId("download", "watermark-free"));
+    const video = seoPageId("tiktok-video-downloader");
+    expect(GRAPH.nodes.has(video)).toBe(true);
+    const targets = neighbours(video).map((n) => n.node.id);
+    // A video page is about video, not about audio extraction.
+    expect(targets).not.toContain(capabilityId("download", "audio-extract"));
   });
 
   it("files every SEO page under its platform topic", () => {
     const pages = [...GRAPH.nodes.values()].filter((n) => n.kind === "seoPage");
     /*
-      Floor, not an exact count. The corpus was 82 and is 50: the 32 device
-      variants (-for-iphone/-android/-pc) were merged into their platform's
-      primary page on 2026-09-02 and 301'd, because they were the same tool with
-      a device word swapped. This guard exists to catch an accidental COLLAPSE of
-      the corpus, so it sits well below the real number rather than tracking it.
+      One page per platform since 2026-10-29 (82 → 50 → 11: device variants merged 2026-09-02, every other variant
+      2026-10-29 — see lib/seo/removed-seo-pages.ts). Every page is checked now that there are few enough.
     */
-    expect(pages.length).toBeGreaterThanOrEqual(40);
+    expect(pages.length).toBe(CLUSTERS.length);
 
-    for (const page of pages.slice(0, 25)) {
+    for (const page of pages) {
       const parents = neighbours(page.id, ["partOf"]).map((n) => n.node.kind);
       expect(parents, `${page.id} has no topic`).toContain("topic");
     }
@@ -150,19 +144,27 @@ describe("Experience Graph — recommendations", () => {
      * dominate the graph and stop it scaling (see build.ts). This pins both that
      * the relation still resolves, and that it is NOT in the edge list.
      */
-    const page = seoPageId("tiktok-video-downloader");
-    const sibs = siblingsOf(page, 5);
-    expect(sibs.length).toBeGreaterThan(0);
-    expect(sibs.every((s) => s.kind === "seoPage")).toBe(true);
-    expect(sibs.some((s) => s.id === page)).toBe(false);
+    // Since 2026-10-29 each platform topic holds ONE downloader page, so a page has no same-topic sibling; the
+    // relation is pinned on whichever node shares a parent with others (the campus, the support corpus, …).
+    const node = [...GRAPH.nodes.values()].find((n) => siblingsOf(n.id, 5).length > 0);
+    expect(node, "no node in the graph has a sibling").toBeDefined();
+    const sibs = siblingsOf(node!.id, 5);
+    const parents = new Set(neighbours(node!.id, ["partOf"]).map((n) => n.node.id));
+    for (const s of sibs) {
+      expect(s.id).not.toBe(node!.id);
+      // a sibling is reached through a shared parent — two hops, never a stored edge
+      expect(neighbours(s.id, ["partOf"]).some((n) => parents.has(n.node.id)), s.id).toBe(true);
+    }
+    expect(siblingsOf(seoPageId("tiktok-video-downloader"), 5)).toEqual([]);
     expect(GRAPH.edges.some((e) => e.kind === "sibling")).toBe(false);
   });
 
   it("keeps edge growth linear in the corpus", () => {
-    // Guards the O(n²) regression directly: ~148 pages must not imply ~1,600 edges.
+    // Guards the O(n²) regression directly: materialised sibling edges would grow with the square of the nodes.
     const stats = graphStats();
-    const pages = stats.byNodeKind.seoPage ?? 0;
-    expect(stats.edges).toBeLessThan(pages * 12);
+    const nodes = Object.values(stats.byNodeKind).reduce((a, b) => a + (b ?? 0), 0);
+    expect(nodes).toBeGreaterThan(0);
+    expect(stats.edges).toBeLessThan(nodes * 12);
   });
 
   it("returns a stable order across calls", () => {
@@ -191,28 +193,19 @@ describe("Experience Graph — recommendations", () => {
   it("covers the whole SEO corpus", () => {
     const stats = graphStats();
     const pageNodes = stats.byNodeKind.seoPage ?? 0;
-    /*
-      Floor, not an exact count. The corpus was 82 and is 50: the 32 device
-      variants (-for-iphone/-android/-pc) were merged into their platform's
-      primary page on 2026-09-02 and 301'd, because they were the same tool with
-      a device word swapped. This guard exists to catch an accidental COLLAPSE of
-      the corpus, so it sits well below the real number rather than tracking it.
-    */
-    expect(pageNodes).toBeGreaterThanOrEqual(40);
+    // exactly one page per platform (2026-10-29) — a collapse OR a doorway variant coming back both fail here
+    expect(pageNodes).toBe(CLUSTERS.length);
     expect(GRAPH.nodes.has(seoPageId("tiktok-video-downloader"))).toBe(true);
   });
 
-  it("matches audio intent across differing cluster vocabularies", () => {
+  it("holds only primary pages — no keyword variant is back in the graph", () => {
     /*
-     * Clusters don't share a vocabulary for the same intent: Facebook has
-     * `mp3-downloader`, TikTok has `sound-downloader`. Both are audio extraction.
-     * A slug-equality mapping would silently miss one, so `CAPABILITY_TERMS`
-     * matches on several terms per capability — this pins that it works.
+     * The audio variants this test used to pin (tiktok-sound-downloader, *-mp3-downloader) 301 to their platform's
+     * page since 2026-10-29. What must stay true now is the opposite: no variant node at all, and none of the
+     * removed URLs reachable as a page.
      */
-    const sound = seoPageId("tiktok-sound-downloader");
-    expect(GRAPH.nodes.has(sound)).toBe(true);
-    expect(neighbours(sound).map((n) => n.node.id)).toContain(
-      capabilityId("download", "audio-extract"),
-    );
+    const pages = [...GRAPH.nodes.values()].filter((n) => n.kind === "seoPage");
+    for (const page of pages) expect(page.meta?.primary, `${page.id} is not a primary page`).toBe(true);
+    for (const { from } of REMOVED_SEO_PAGES) expect(GRAPH.nodes.has(seoPageId(from)), `${from} is back`).toBe(false);
   });
 });

@@ -8,7 +8,6 @@ import { WallpaperExploreSkeleton } from "@/features/wallpapers/wallpaper-explor
 import { jsonLd } from "@/lib/seo/json-ld";
 import {
   WALLPAPERS_DESCRIPTION,
-  WALLPAPERS_KEYWORDS,
   WALLPAPERS_TITLE,
   wallpapersJsonLd,
 } from "@/lib/seo/wallpapers";
@@ -34,7 +33,6 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: WALLPAPERS_TITLE,
   description: WALLPAPERS_DESCRIPTION,
-  keywords: WALLPAPERS_KEYWORDS,
   alternates: { canonical: "/wallpapers" },
   robots: { index: true, follow: true },
   openGraph: {

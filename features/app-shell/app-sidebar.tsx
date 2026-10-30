@@ -19,9 +19,6 @@ import {
   IoNewspaperOutline,
   IoNotifications,
   IoNotificationsOutline,
-  IoPeople,
-  IoPeopleOutline,
-  IoAdd,
 } from "react-icons/io5";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -50,7 +47,6 @@ export interface NavItem {
   icon: IconType;
   activeIcon: IconType;
   badge?: string;
-  soon?: boolean;
 }
 
 // `_handle` kept for signature stability (mobile nav still passes it; profile
@@ -63,20 +59,12 @@ export function buildNav(_handle: string | null): NavItem[] {
     { label: "Reels", href: "/reels", icon: IoFilmOutline, activeIcon: IoFilm },
     { label: "Sounds", href: "/sounds", icon: IoMusicalNotesOutline, activeIcon: IoMusicalNotes },
     { label: "News", href: "/blog", icon: IoNewspaperOutline, activeIcon: IoNewspaper },
-    { label: "Communities", href: "/explore", icon: IoPeopleOutline, activeIcon: IoPeople, soon: true },
     { label: "Friends", href: "/friends", icon: FrenzFriendsOutline, activeIcon: FrenzFriendsSolid },
     { label: "Notifications", href: "/notifications", icon: IoNotificationsOutline, activeIcon: IoNotifications },
     { label: "Downloads", href: "/downloads", icon: IoDownloadOutline, activeIcon: IoDownload },
     { label: "Saved", href: "/saved", icon: IoBookmarkOutline, activeIcon: IoBookmark },
   ];
 }
-
-const SPACES = [
-  { label: "Photography Club", color: "from-rose-500 to-pink-600" },
-  { label: "Football Fans", color: "from-emerald-500 to-teal-600" },
-  { label: "Music Lovers", color: "from-violet-500 to-purple-600" },
-  { label: "Travel World", color: "from-sky-500 to-blue-600" },
-];
 
 export function AppSidebar({ handle: _handle }: { handle: string | null }) {
   const pathname = usePathname();
@@ -180,32 +168,13 @@ export function AppSidebar({ handle: _handle }: { handle: string | null }) {
               <span className="flex-1">{item.label}</span>
               {item.badge ? (
                 <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-foreground px-1.5 text-[10px] font-bold text-background shadow-sm shadow-foreground/30">{item.badge}</span>
-              ) : item.soon ? (
-                <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Soon</span>
               ) : null}
             </Link>
           );
         })}
       </nav>
 
-      {/* Spaces */}
-      <div className="mt-7">
-        <p className="px-3 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground/50">Your Spaces</p>
-        <div className="mt-2.5 flex flex-col gap-0.5">
-          {SPACES.map((s) => (
-            <Link key={s.label} href="/explore" className="group flex items-center gap-3 rounded-2xl px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-secondary/70 hover:text-foreground">
-              <span className={cn("h-7 w-7 rounded-xl bg-gradient-to-br shadow-sm ring-1 ring-inset ring-white/10 transition group-hover:scale-105", s.color)} />
-              <span className="truncate">{s.label}</span>
-            </Link>
-          ))}
-          <Link href="/explore" className="flex items-center gap-3 rounded-2xl px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-secondary/70">
-            <span className="flex h-7 w-7 items-center justify-center rounded-xl border border-dashed border-border text-muted-foreground">
-              <IoAdd className="h-4 w-4" />
-            </span>
-            Create New Space
-          </Link>
-        </div>
-      </div>
+      {/* "Your Spaces" placeholders and "Communities — Soon" removed (owner, 2026-10-29): no fake groups, no dead doors. */}
       </div>
       {/* End scrollable middle */}
 

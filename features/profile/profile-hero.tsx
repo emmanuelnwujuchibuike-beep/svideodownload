@@ -57,6 +57,12 @@ export function ProfileIdentity({
   website?: string | null;
   joined: string;
 }) {
+  /*
+    A long name never runs off the screen (owner, 2026-10-29, with a screenshot of "richmondodurokwarteng99" cut at the
+    edge): the size steps down with the length so most names still sit on one line, and `overflow-wrap: anywhere`
+    breaks a single unbroken word as the last resort. `min-w-0` lets the heading shrink inside the flex row.
+  */
+  const nameSize = name.length <= 14 ? "text-[30px] tracking-[-1px]" : name.length <= 20 ? "text-[25px] tracking-[-0.75px]" : "text-[21px] tracking-[-0.5px]";
   return (
     <section className="frenz-ui relative flex flex-col gap-3.5 px-5">
       <div className="-mt-[52px] flex items-end justify-between">
@@ -66,12 +72,12 @@ export function ProfileIdentity({
 
       <div className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="m-0 font-heading text-[30px] font-extrabold leading-tight tracking-[-1px] text-frenz-ink">{name}</h1>
+          <h1 className={cn("m-0 min-w-0 max-w-full font-heading font-extrabold leading-tight text-frenz-ink [overflow-wrap:anywhere]", nameSize)}>{name}</h1>
           {verified ? <VerifiedBadge size={22} /> : null}
           {badges}
         </div>
         <div className="flex flex-wrap items-center gap-2 text-[15px] text-frenz-muted">
-          <span>@{handle}</span>
+          <span className="min-w-0 max-w-full [overflow-wrap:anywhere]">@{handle}</span>
           {typeLabel ? (
             <>
               <span aria-hidden>·</span>

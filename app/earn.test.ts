@@ -39,9 +39,9 @@ describe("/earn fee examples", () => {
 });
 
 describe("/earn is indexable and static; /earn/start is neither", () => {
-  it("the sitemap lists /earn and never /earn/start", () => {
+  it("the sitemap never lists /earn/start (and, since 2026-10-29, not /earn either — it is off the owner's list)", () => {
     const urls = sitemap().map((e) => e.url);
-    expect(urls.some((u) => u.endsWith("/earn"))).toBe(true);
+    expect(urls.some((u) => u.endsWith("/earn"))).toBe(false);
     expect(urls.some((u) => u.includes("/earn/start"))).toBe(false);
   });
 

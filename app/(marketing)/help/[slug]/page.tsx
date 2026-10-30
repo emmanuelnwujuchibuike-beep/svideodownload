@@ -8,6 +8,7 @@ import { HELP_ARTICLES, articleHref, getArticle } from "@/lib/support/articles";
 import { centreOf } from "@/lib/support/sections";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { SITE_URL as siteUrl } from "@/lib/site";
+import { withSocial } from "@/lib/seo/page-metadata";
 
 export const dynamic = "force-static";
 
@@ -26,11 +27,11 @@ export async function generateMetadata({
   const article = getArticle(slug);
   if (!article || centreOf(article.section).id !== "help") return {};
 
-  return {
+  return withSocial({
     title: `${article.title} — Frenzsave Help Center`,
     description: article.description,
     alternates: { canonical: articleHref(article) },
-  };
+  });
 }
 
 /** A Help Center article — the help-side view of the shared corpus. */

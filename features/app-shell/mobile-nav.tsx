@@ -103,7 +103,10 @@ const GLYPH_INACTIVE = "nav-ink text-frenz-ink/80";
   /reels the same pill is dark glass, so the capsule turns to white there.
 */
 // The design's soft violet capsule (design/*.dc.html): a 20 px-radius tile inside the 26 px bar.
-const ACTIVE_CAPSULE = "bg-frenz-violet/10 [.frenz-nav-glass--immersive_&]:bg-white/20";
+/* The neumorphic PRESSED tile (owner, 2026-10-29): the active tab sinks into the pill — inner shade up-left, inner
+   light down-right — instead of a flat tint. The look lives in globals.css (.frenz-nav-pressed), not in long utility
+   strings: this file ships on every signed-in cold entry, where /home's JS budget is counted to the byte. */
+const ACTIVE_CAPSULE = "frenz-nav-pressed";
 
 /*
   Five equal columns across the pill, each the pill's full height — so every tab
@@ -431,7 +434,9 @@ export function MobileNav({
         aria-label="Profile"
         aria-current={profileActive ? "page" : undefined}
         className={cn(
-          "pointer-events-auto relative flex h-[var(--frenz-nav-height)] w-[var(--frenz-nav-height)] shrink-0 rounded-[26px] bg-frenz-gradient p-[3px] shadow-frenz-float focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2",
+          // no shadow in light mode (owner, 2026-10-29: "remove the shadow from the light mode"); dark keeps the pill's
+          // two-shadow lift — .frenz-nav-profile in globals.css
+          "frenz-nav-profile pointer-events-auto relative flex h-[var(--frenz-nav-height)] w-[var(--frenz-nav-height)] shrink-0 rounded-[26px] bg-frenz-gradient p-[3px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2",
           profileActive && "ring-[3px] ring-frenz-violet/25",
         )}
       >

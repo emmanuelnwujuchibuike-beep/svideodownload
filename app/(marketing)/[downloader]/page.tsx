@@ -16,6 +16,7 @@ import { NEU_RAISED } from "@/components/landing/landing-classes";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { SiteHeader } from "@/components/layout/site-header";
+import { RightsNotice } from "@/components/legal/rights-notice";
 import { RecommendedTools } from "@/components/monetization/recommended-tools";
 import { DownloaderLinks } from "@/components/seo/downloader-links";
 import { RelatedLinks } from "@/components/seo/related-links";
@@ -72,7 +73,6 @@ export async function generateMetadata({
   return {
     title: page.title,
     description: page.description,
-    keywords: [page.primaryKeyword, ...page.secondaryKeywords],
     alternates: { canonical: `/${page.slug}` },
     openGraph: {
       type: "website",
@@ -300,8 +300,10 @@ export default async function DownloaderPage({
                 </div>
 
                 <p className={`mt-5 text-sm ${onDark ? "text-white/75" : "text-black/70"}`}>
-                  Free · No watermark · No login · Works on iPhone, Android &amp; PC
+                  Free · No login · Works on iPhone, Android &amp; PC
                 </p>
+                {/* the rights notice under the tool (owner, 2026-10-29) */}
+                <RightsNotice className={`mt-2 max-w-xl ${onDark ? "text-white/85" : "text-black/75"}`} />
               </div>
             </div>
           </div>
@@ -508,7 +510,7 @@ export default async function DownloaderPage({
           className="container max-w-5xl border-t border-border/60 py-16 sm:py-20"
         />
 
-        <RelatedLinks slug={page.slug} brand={page.brand} />
+        <RelatedLinks slug={page.slug} />
         {/*
           The platform grid, and the `#platforms` anchor the "Browse all
           supported platforms" button under the Download button targets.

@@ -43,12 +43,14 @@ describe("no placeholder calls", () => {
 describe("the Frenzsave link preview", () => {
   it("says what Frenzsave is now — download, earn, chat and meet, AI videos, wallpapers", () => {
     const l = code("app/layout.tsx");
-    // the owner's own words, in the preview AND the page's title/description
-    expect(l).toContain("Download, earn credits to cash, chat and meet up, make AI videos and download wallpapers — all for free on Frenzsave.");
+    // the owner's words live in lib/seo/share.ts since 2026-10-29 (the landing reads them too, for its own og:url)
+    const share = code("lib/seo/share.ts");
+    expect(share).toContain("Download, earn credits to cash, chat and meet up, make AI videos and download wallpapers — all for free on Frenzsave.");
+    // …and the preview AND the page's title/description still use them
     expect(l).toContain("title: SHARE_TITLE,");
     expect(l).toContain("description: SHARE_DESCRIPTION,");
-    expect(l).not.toContain("Save, Organise and Reuse");
-    expect(l).not.toContain("stay updated with the latest news");
+    expect(l + share).not.toContain("Save, Organise and Reuse");
+    expect(l + share).not.toContain("stay updated with the latest news");
   });
 });
 

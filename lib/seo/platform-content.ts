@@ -90,19 +90,19 @@ export interface PlatformContent {
 export const PLATFORM_CONTENT: Partial<Record<PlatformId, PlatformContent>> = {
   /* ─────────────────────────────── TikTok ─────────────────────────────── */
   tiktok: {
-    title: "TikTok Video Downloader — Save Clips Without the Watermark",
+    title: "TikTok Video Downloader — Save Public Videos in Original Quality",
     description:
-      "Save public TikTok videos, photo slideshows and sounds. Watermark-free where TikTok serves a clean rendition, in the original resolution.",
+      "Save public TikTok videos and photo slideshows in their original resolution — to back up your own posts, watch offline or keep an archive.",
     heading: "TikTok Downloader",
     subtitle: "Videos, photo slideshows and sounds — saved at source quality.",
     intro: [
-      "TikTok serves the same post in several different renditions, and they are not equal. The one the app plays back has the creator's username and the bouncing TikTok logo burned into the pixels; the one behind the share sheet often does not. This downloader asks for the clean rendition first and only falls back to the stamped one when TikTok does not offer an alternative — which is why the same link can come back watermark-free here and stamped elsewhere.",
+      "TikTok serves the same post in several renditions, and they are not equal in quality. This downloader asks for the best file TikTok holds for that post and passes it through at its original resolution, without re-encoding — so a saved video looks like what was uploaded, not like a screen recording. It is built for backing up videos you made yourself, watching a clip offline on a flight or a weak connection, and keeping an archive of posts you have permission to keep.",
       "Photo posts behave differently again. A TikTok slideshow is not a video at all — it is a set of full-resolution JPEGs with a separate audio track, and TikTok stitches them together at playback time. Saving it as a video would re-encode stills into a blurry clip, so slideshows are offered as the original images plus the sound as its own file.",
     ],
     mobileSteps: [
       { title: "Open the post in the TikTok app", text: "Tap the video in your For You feed, a profile, or a search result so it is playing full-screen." },
-      { title: "Tap Share, then Copy link", text: "The arrow on the right-hand rail opens the share sheet. \"Copy link\" is in the top row of icons — this is the link that carries the clean rendition." },
-      { title: "Paste it here and choose a format", text: "Come back to this page and paste. You will see the watermark-free video where TikTok provides one, plus MP3 if you only want the sound." },
+      { title: "Tap Share, then Copy link", text: "The arrow on the right-hand rail opens the share sheet. \"Copy link\" is in the top row of icons — this link points at the post itself, which is what the downloader needs." },
+      { title: "Paste it here and choose a format", text: "Come back to this page and paste. You will see the video at the qualities TikTok offers for that post, plus MP3 if you only want the audio." },
     ],
     desktopSteps: [
       { title: "Open tiktok.com and find the video", text: "Click through to the post's own page so the URL in the address bar ends in /video/ and a long numeric id." },
@@ -110,15 +110,15 @@ export const PLATFORM_CONTENT: Partial<Record<PlatformId, PlatformContent>> = {
       { title: "Paste and download", text: "Pick the resolution you want. Slideshow posts list each photo separately alongside the audio track." },
     ],
     features: [
-      { title: "Watermark-free when available", text: "We request TikTok's clean rendition first. If only the stamped version exists for that post, the page says so rather than pretending." },
+      { title: "Original quality", text: "We ask for the best rendition TikTok holds for the post and hand it over as-is, so your backup is the real file rather than a lower-quality copy." },
       { title: "Slideshows stay photos", text: "Photo posts download as the original JPEGs plus the sound as a separate file — never re-encoded into a video." },
-      { title: "Sounds as MP3", text: "Pull just the audio from any public video, useful for identifying a track or reusing a trending sound." },
+      { title: "Audio for listening", text: "Save the audio track of a video as MP3 — handy for listening to a talk or tutorial offline, or identifying a track you heard." },
       { title: "Source resolution", text: "Whatever TikTok holds for that upload, commonly 1080x1920. We do not upscale, and we do not re-encode when a direct file is available." },
       { title: "Public posts only", text: "Anything you can open without logging in. Private accounts and friends-only posts are not accessible and are not attempted." },
       { title: "Nothing is stored", text: "The file streams through to your device. We do not keep a copy of what you download." },
     ],
     faqs: [
-      { q: "Why do some TikToks still come back with a watermark?", a: "Because for that particular post TikTok only serves the stamped rendition. The clean version is not something we can generate — it either exists on their servers for that upload or it does not. When it is missing, you get the watermarked file rather than a re-encode that would look worse." },
+      { q: "Can I back up my own TikTok videos?", a: "Yes — that is the main thing this is for. Paste the link to any of your public posts and you get the original file to keep on your phone or computer, so a deleted app or a lost account does not take your work with it. Only save other people's videos when you have their permission." },
       { q: "Can I download a TikTok photo slideshow?", a: "Yes, and it comes back as the individual photos rather than a video. A slideshow is stored as separate full-resolution images with an audio track laid over them, so saving it as one clip would mean re-encoding stills and losing quality." },
       { q: "How do I get just the sound from a TikTok?", a: "Paste the video link and choose the MP3 option. This extracts the audio track from that specific post. It is not a music library — it only gives you the sound attached to the link you pasted." },
       { q: "Does it work with a link from the TikTok app's share sheet?", a: "Yes, and that is the recommended route on mobile. The share-sheet link resolves to the post cleanly. Shortened vm.tiktok.com links work too — they are followed automatically." },

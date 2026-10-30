@@ -5,14 +5,15 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { ADVERTISING_RULES, ADVERTISING_RULES_VERSION, AUTOMATED_VALIDATION_NOTICE, TRAFFIC_QUALITY_NOTE, TRAFFIC_QUALITY_POLICY, VIEWS_DELIVERY_TERMS } from "@/lib/ads-platform/rules";
+import { withSocial } from "@/lib/seo/page-metadata";
 
 export const dynamic = "force-static";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSocial({
   title: "Frenzsave Advertising Rules",
   description: "What every ad on Frenzsave must follow: privacy, no scams or fraud, no malicious links, no misleading advertising, user safety and enforcement.",
   alternates: { canonical: "/advertise/rules" },
-};
+});
 
 /** The rules every advertiser agrees to before payment — the same text the application shows (lib/ads-platform/rules.ts). */
 export default function AdvertisingRulesPage() {

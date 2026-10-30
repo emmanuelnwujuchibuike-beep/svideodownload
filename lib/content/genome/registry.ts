@@ -43,7 +43,7 @@ const download: ProductGenome = {
     },
     {
       id: "watermark-free",
-      name: "Watermark-free saves",
+      name: "Original-quality saves",
       description:
         "Sources flagged `watermarkFree` in the platform registry return a clean file. This is per-platform, not universal — see `lib/platforms.ts`.",
       stage: "live",

@@ -1,8 +1,7 @@
 import { MobileAppNav } from "@/components/landing/mobile-app-nav";
 import { ReelsWarmup } from "@/components/landing/reels-warmup";
 import { AiJobAlertMount } from "@/features/ai/ai-job-alert-mount";
-// 🔴 AdSense is OFF (owner, 2026-10-23: "comment out all Adsense code, am not using Adsense and I won't use it")
-// import { AdSenseSiteScript } from "@/features/monetization/adsense-site-script";
+import { AdSenseSiteScript } from "@/features/monetization/adsense-site-script";
 import { DeferredAdFurniture } from "@/features/monetization/deferred-ad-furniture";
 import { PageRefresh } from "@/features/app-shell/page-refresh";
 import { getFeed } from "@/lib/social/feed";
@@ -87,7 +86,13 @@ export default async function MarketingLayout({ children }: { children: React.Re
         `lib/monetization/ad-policy.ts` states the same rule in a form that can
         be read and tested; this is where it is enforced for Google.
       */}
-      {/* <AdSenseSiteScript /> — off (owner, 2026-10-23: not using AdSense); nothing of Google's loads on these pages */}
+      {/*
+        🟢 BACK ON (owner, 2026-10-29: preparing the AdSense review — "verify AdSense code is working … make sure it doesn't
+        affect the landing or download page LCP"). Replaces the 2026-10-23 "off". What reaches the first byte is only the
+        <meta name="google-adsense-account"> and a ~400-byte inline bootstrap; adsbygoogle.js itself is appended after
+        the window `load` event AND an idle callback (4s cap), so it never competes with the LCP element or hydration.
+      */}
+      <AdSenseSiteScript />
       {/* Reserve room for the fixed TOP bars: the GLOBAL announcement bar
           (--frenz-announce-h) plus the content-page top ad stacked below it
           (--frenz-topbanner-h). Each is 0 when absent, so an unbannered page keeps
@@ -113,10 +118,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
           header/nav/ad ignore this spacer — only the in-flow content shifts. */}
       {/* Same reasoning as the top spacer — reserved instantly, never eased. */}
       <div aria-hidden style={{ height: "var(--frenz-bottomad-h, 0px)" }} />
-      {/* The floating bottom nav on every marketing page (mobile only), and a
-          spacer so a page's last content clears the pill: its height + gap
-          (`--frenz-nav-clearance`) and a little air. */}
-      <div aria-hidden className="h-[calc(var(--frenz-nav-clearance)+0.75rem)] lg:hidden" />
+      {/* The floating bottom nav (mobile only) and its clearance spacer — members only, absent from a guest's HTML. */}
       <MobileAppNav />
       {/* Buffer the first reels ahead of a tap (after idle, good connections only). */}
       <ReelsWarmup urls={reelUrls} />

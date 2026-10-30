@@ -2,6 +2,7 @@ import { scanMigrations, scanRoutes } from "./lib/content/sync/scan";
 import type { NextConfig } from "next";
 
 import { writeEntryContent } from "./lib/perf/css-entry";
+import { BLOG_REDIRECTS } from "./lib/seo/blog";
 import { REMOVED_SEO_PAGES } from "./lib/seo/removed-seo-pages";
 
 // the landing stylesheet's input, refreshed before anything compiles (lib/perf/css-entry.ts) — never fatal
@@ -500,11 +501,22 @@ const nextConfig: NextConfig = {
       the callback on the apex without them and the owner could not sign in.
       www pages already carry the apex canonical, which is all Google needs.
     */
+    /*
+      `statusCode: 301`, not `permanent: true` (owner, 2026-10-29: "permanent (301) redirects"): Next answers
+      `permanent: true` with a 308. Search engines treat the two alike, but 301 is what was asked for and what every
+      SEO tool reports as "moved permanently".
+    */
     return [
       ...REMOVED_SEO_PAGES.map(({ from, to }) => ({
         source: `/${from}`,
         destination: `/${to}`,
-        permanent: true,
+        statusCode: 301 as const,
+      })),
+      // renamed blog posts (2026-10-29: the TikTok guide's new slug) — the old URL was indexed, so it moves, never 404s
+      ...BLOG_REDIRECTS.map(({ from, to }) => ({
+        source: `/blog/${from}`,
+        destination: `/blog/${to}`,
+        statusCode: 301 as const,
       })),
     ];
   },

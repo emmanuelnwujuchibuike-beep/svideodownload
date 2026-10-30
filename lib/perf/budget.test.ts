@@ -864,9 +864,11 @@ describe.skipIf(!buildExists())("route weight budget", () => {
  * Ceilings sit a few kB above, the same ratchet rule: they only move down.
  */
 const FULL_ENTRY_CEILINGS: Record<string, number> = {
-  // the landing is React again (owner, 2026-10-28: "why didn't you use the existing React") — its measured 243,637 B
-  "/(marketing)/page": 248 * 1024,
-  "/(marketing)/[downloader]/page": 248 * 1024,
+  // the landing is React again (owner, 2026-10-28: "why didn't you use the existing React") — its measured 243,637 B.
+  // 2026-10-29 (ratcheted down): the marketing bottom nav became members-only and lazy (components/landing/mobile-app-nav.tsx),
+  // so a guest no longer downloads it — measured 233,478 B (landing) and 231,542 B (platform page).
+  "/(marketing)/page": 238 * 1024,
+  "/(marketing)/[downloader]/page": 238 * 1024,
   "/(app)/downloads/page": 262 * 1024,
   "/(app)/home/page": 330 * 1024,
 };

@@ -154,7 +154,8 @@ describe("Topics — the platform sample", () => {
      */
     const sample = seoPagesAcrossPlatforms(biggest, 12);
     const platforms = new Set(sample.map((p) => p.platformId));
-    expect(sample.length).toBe(12);
+    // one page per platform since 2026-10-29, so a cluster can hold fewer than 12 — it returns all it has
+    expect(sample.length).toBe(Math.min(12, biggest.seoPages.length));
     expect(
       platforms.size,
       `sample covers only ${[...platforms].join(", ")}`,

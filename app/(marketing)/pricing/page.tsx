@@ -9,6 +9,7 @@ import { ProBadge } from "@/features/monetization/pro-badge";
 import { BUSINESS_FEATURES, FREE_FEATURES, PRO_FEATURES } from "@/lib/monetization/plan-features";
 import { getPricing } from "@/lib/monetization/pricing";
 import { cn } from "@/lib/utils";
+import { withSocial } from "@/lib/seo/page-metadata";
 
 /*
  * Was `force-dynamic`, which made this public, header-linked page uncacheable on
@@ -19,12 +20,12 @@ import { cn } from "@/lib/utils";
  */
 export const dynamic = "force-static";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSocial({
   title: "Pricing — Go ad-free with Pro",
   description:
     "Free forever, or upgrade to Pro for an ad-free experience, faster and batch downloads. Business adds full API access.",
   alternates: { canonical: "/pricing" },
-};
+});
 
 interface Tier {
   id: string;

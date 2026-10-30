@@ -15,7 +15,7 @@ describe("a signed-out visitor lands on the landing, never a login wall", () => 
     const mw = read("middleware.ts");
     const home = mw.indexOf('if (path === "/downloads") return NextResponse.redirect(new URL("/", request.url));');
     expect(home).toBeGreaterThan(0);
-    expect(home).toBeLessThan(mw.indexOf("if (needsGuard || guestMustLogin(path)) {"));
+    expect(home).toBeLessThan(mw.indexOf("if (needsGuard || appOnly || guestMustLogin(path)) {"));
   });
 });
 

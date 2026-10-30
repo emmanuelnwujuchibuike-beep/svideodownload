@@ -6,6 +6,7 @@ import { DownloaderLinks } from "@/components/seo/downloader-links";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { BLOG_POSTS } from "@/lib/seo/blog";
+import { withSocial } from "@/lib/seo/page-metadata";
 
 /*
  * Static by contract, not by inference. Vercel was building `/` as DYNAMIC while
@@ -16,7 +17,7 @@ import { BLOG_POSTS } from "@/lib/seo/blog";
  */
 export const dynamic = "force-static";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSocial({
   title: "Blog — Video Saving Guides & Tips",
   description:
     "Guides on downloading videos from TikTok, Instagram, LinkedIn and more — safely, in HD, on any device.",
@@ -27,7 +28,7 @@ export const metadata: Metadata = {
     description:
       "How-to guides for downloading videos from TikTok, Instagram, LinkedIn and more.",
   },
-};
+});
 
 const COVER_GRADIENTS = [
   "from-blue-500 to-indigo-600",

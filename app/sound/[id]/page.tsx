@@ -40,7 +40,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     title: `${sound.title} · ${sound.artistLabel}`,
     description: `Use "${sound.title}" by ${sound.artistLabel} in your own Reel on FrenzSave.`,
     alternates: { canonical: `/sound/${sound.id}` },
-    robots: { index: true, follow: true },
+    // app-only since 2026-10-29 (lib/auth/app-only-paths.ts): never indexed
+    robots: { index: false, follow: false },
     openGraph: {
       type: "music.song",
       title: sound.title,

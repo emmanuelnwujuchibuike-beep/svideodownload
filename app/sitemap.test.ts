@@ -2,6 +2,11 @@ import { readFileSync } from "node:fs";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { isAppOnlyPath } from "@/lib/auth/app-only-paths";
+import { REMOVED_SEO_PAGES } from "@/lib/seo/removed-seo-pages";
+import { getPrimaryPages } from "@/lib/seo/seo-pages";
+import { CATEGORIES } from "@/lib/social/categories";
+
 import sitemap from "./sitemap";
 
 type Entry = ReturnType<typeof sitemap>[number];
@@ -46,5 +51,39 @@ describe("sitemap lastmod", () => {
     const src = readFileSync("app/sitemap.ts", "utf8");
     expect(src).not.toMatch(/new Date\(\)/);
     expect(src).not.toMatch(/lastModified:\s*now/);
+  });
+});
+
+/** Paths the sitemap must never list (owner, 2026-10-29): app-only routes, merged variants, category hubs, the AI tools. */
+function forbidden(paths: string[]): string[] {
+  const removed = new Set(REMOVED_SEO_PAGES.map((r) => `/${r.from}`));
+  const hubs = new Set(CATEGORIES.map((c) => `/${c}`));
+  return paths.filter((p) => isAppOnlyPath(p) || removed.has(p) || hubs.has(p) || p === "/ai" || p.startsWith("/ai/"));
+}
+
+describe("sitemap contents — public content only (owner, 2026-10-29)", () => {
+  const paths = sitemap().map((e) => new URL(e.url).pathname);
+
+  it("lists no gated route, no deleted variant, no category hub and no AI tool", () => {
+    expect(forbidden(paths)).toEqual([]);
+  });
+
+  it("the guard catches each kind (teeth)", () => {
+    const bad = ["/explore", "/u/chris", `/${REMOVED_SEO_PAGES[0]!.from}`, `/${CATEGORIES[0]}`, "/ai/text-to-video", "/about"];
+    expect(forbidden(bad)).toEqual(bad.slice(0, 5));
+  });
+
+  it("lists exactly the 11 platform pages, one per platform", () => {
+    const downloaders = paths.filter((p) => /-downloader$/.test(p));
+    expect(downloaders.sort()).toEqual(getPrimaryPages().map((p) => `/${p.slug}`).sort());
+    expect(downloaders).toHaveLength(11);
+  });
+
+  it("keeps the owner's public pages", () => {
+    for (const p of ["/", "/about", "/contact", "/privacy", "/terms", "/dmca", "/glossary", "/help", "/trust", "/pricing", "/frenz-ai", "/wallpapers", "/developers", "/advertise", "/blog", "/learn", "/topics"]) {
+      expect(paths, p).toContain(p);
+    }
+    expect(paths.some((p) => p.startsWith("/blog/"))).toBe(true);
+    expect(paths.some((p) => p.startsWith("/learn/"))).toBe(true);
   });
 });

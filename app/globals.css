@@ -994,25 +994,54 @@
      Nothing here animates: no blur radius, shadow or fill ever transitions, so
      the only per-frame cost is the browser re-sampling a ~360x64 strip of page
      under the blur while it scrolls. */
+  /* NEUMORPHIC (owner, 2026-10-29: "make the bottom Nav a neomorphic design but the existing shape and structure
+     should remain"). Same pill, same size, same tiers below — the skin changes: a soft near-opaque surface with a faint
+     inner top light, and the active tab as the pressed (inset) tile, set in mobile-nav.tsx (ACTIVE_CAPSULE).
+     🔴 NO DROP SHADOW IN LIGHT MODE (owner, 2026-10-29: "remove the shadow from the light mode"): the pill sits flat on
+     the page, defined by the design's hairline. Dark mode keeps its two-shadow lift (below). Static: nothing animates. */
   .frenz-nav-glass {
-    --nav-glass-rgb: 255 255 255;
-    --nav-glass-fill: 0.82;
+    --nav-glass-rgb: 243 242 247;
+    --nav-glass-fill: 0.96;
     --nav-glass-blur: 12px;
     background-color: rgb(var(--nav-glass-rgb) / var(--nav-glass-fill));
     -webkit-backdrop-filter: blur(var(--nav-glass-blur)) saturate(160%);
     backdrop-filter: blur(var(--nav-glass-blur)) saturate(160%);
-    /* the design's hairline and lift (design/*.dc.html, 2026-10-18) */
     border: 1px solid hsl(var(--frenz-line));
-    box-shadow: 0 16px 36px -12px hsl(var(--frenz-ink) / 0.32);
+    box-shadow: inset 1px 1px 0 rgb(255 255 255 / 0.85);
   }
   /* Theme and surface set the COLOUR only, never the fill: these selectors are
      more specific than the tiers below, so a fill here would defeat them. */
   .dark .frenz-nav-glass {
-    --nav-glass-rgb: 15 18 32;
-    border-color: rgb(255 255 255 / 0.1);
+    --nav-glass-rgb: 22 26 42;
+    border-color: rgb(255 255 255 / 0.06);
     box-shadow:
-      0 12px 32px -12px rgb(0 0 0 / 0.6),
-      inset 0 1px 0 rgb(255 255 255 / 0.06);
+      -6px -6px 16px rgb(255 255 255 / 0.045),
+      9px 11px 26px rgb(0 0 0 / 0.55),
+      inset 1px 1px 0 rgb(255 255 255 / 0.05);
+  }
+  /* The active tab: the neumorphic PRESSED tile (mobile-nav.tsx ACTIVE_CAPSULE) — inner shade up-left, inner light
+     down-right. Over Reels video (the immersive dark glass) it is a plain light wash. */
+  .frenz-nav-pressed {
+    background-color: rgb(236 235 242);
+    box-shadow:
+      inset 3px 3px 7px rgb(16 24 40 / 0.14),
+      inset -3px -3px 7px rgb(255 255 255 / 0.95);
+  }
+  .dark .frenz-nav-pressed {
+    background-color: rgb(18 21 35);
+    box-shadow:
+      inset 3px 3px 8px rgb(0 0 0 / 0.55),
+      inset -3px -3px 8px rgb(255 255 255 / 0.05);
+  }
+  .frenz-nav-glass--immersive .frenz-nav-pressed {
+    background-color: rgb(255 255 255 / 0.2);
+    box-shadow: none;
+  }
+  /* The Profile button beside the pill: flat in light mode (owner, 2026-10-29), the pill's two-shadow lift in dark. */
+  .dark .frenz-nav-profile {
+    box-shadow:
+      -5px -5px 12px rgb(255 255 255 / 0.045),
+      8px 10px 22px rgb(0 0 0 / 0.55);
   }
   /* The Frenz screens (design/*.dc.html, 2026-10-18): Hanken Grotesk body and the
      design's ink on whatever a screen's root grounds it with. Headings opt in
@@ -1098,7 +1127,7 @@
       --ai-glass-blur: 4px;
     }
     :where(html:not([data-a11y-motion="full"])) .frenz-nav-glass {
-      --nav-glass-fill: 0.9;
+      --nav-glass-fill: 0.98;
       --nav-glass-blur: 6px;
     }
   }
@@ -1107,7 +1136,7 @@
     --ai-glass-blur: 4px;
   }
   :where(html[data-a11y-motion="reduce"], html[data-glass="reduced"]) .frenz-nav-glass {
-    --nav-glass-fill: 0.9;
+    --nav-glass-fill: 0.98;
     --nav-glass-blur: 6px;
   }
 
@@ -1117,7 +1146,7 @@
       --ai-glass-fill: 0.9;
     }
     .frenz-nav-glass {
-      --nav-glass-fill: 0.94;
+      --nav-glass-fill: 0.99;
     }
   }
 

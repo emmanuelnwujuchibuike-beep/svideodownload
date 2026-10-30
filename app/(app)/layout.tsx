@@ -1,4 +1,5 @@
 import { MotionConfig } from "framer-motion";
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { AppOverlays } from "@/features/app-shell/app-overlays";
@@ -16,6 +17,9 @@ import { Toaster } from "@/features/ui/toast";
 
 // this group's stylesheet — the root layout no longer imports one (see app/layout.tsx)
 import "../app.css";
+
+/** App-only (lib/auth/app-only-paths.ts): never indexed. Pages without their own `robots` inherit this. */
+export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 /**
  * Persistent app shell for signed-in surfaces. Rendered ONCE and preserved across

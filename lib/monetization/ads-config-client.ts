@@ -48,6 +48,7 @@ import { cdnBucket } from "@/lib/net/cdn-bucket";
 export type AdsConfig = Record<string, unknown>;
 
 let adsConfigPromise: Promise<AdsConfig> | null = null;
+let adsConfigBucket = -1;
 
 /**
  * The public ad configuration, fetched at most once per page load.
@@ -56,8 +57,20 @@ let adsConfigPromise: Promise<AdsConfig> | null = null;
  * same resolved value, same never-throws contract.
  */
 export function loadAdsConfig(): Promise<AdsConfig> {
+  /*
+    🔴 NOT FOR THE PAGE'S WHOLE LIFE (owner, 2026-10-29: "I off the main switch but the reward video X button still
+    clicks the smart link"). An installed app stays open for hours: an answer kept for the page's life meant a switch
+    turned off in the admin never reached a member until they relaunched. The answer is now kept per CDN bucket (5 min):
+    a new bucket is a new URL and a fresh read, so the next ad that mounts sees the admin's current choice. Calls inside
+    one bucket still share one request.
+  */
+  const b = cdnBucket();
+  if (b !== adsConfigBucket) {
+    adsConfigBucket = b;
+    adsConfigPromise = null;
+  }
   // The 5-minute bucket lets the CDN answer (see lib/net/cdn-bucket.ts).
-  adsConfigPromise ??= fetch(`/api/ads/config?b=${cdnBucket()}`)
+  adsConfigPromise ??= fetch(`/api/ads/config?b=${b}`)
     .then((r) => (r.ok ? (r.json() as Promise<AdsConfig>) : ({} as AdsConfig)))
     .catch(() => {
       // Do not let one failed attempt poison the rest of the page.
@@ -71,8 +84,7 @@ export function loadAdsConfig(): Promise<AdsConfig> {
  * Forget the cached answer.
  *
  * For the admin, which can CHANGE this config and then needs the next read to
- * see it. Not called on a normal page; a visitor's config cannot change under
- * them within a single page load.
+ * see it at once. A visitor's copy refreshes by itself every 5 minutes (above).
  */
 export function resetAdsConfigCache(): void {
   adsConfigPromise = null;

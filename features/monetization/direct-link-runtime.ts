@@ -77,12 +77,28 @@ function arm(): void {
   allowWindowOpen();
 }
 
+/** A third-party window (the pop-under) only at a spot tap when "spots only" is on, and never inside the cooldown. */
+function openGateFor(p: PublicSpotPopunder): void {
+  setThirdPartyOpenGate({ allow: () => (!p.spotsOnly || spotTapNow()) && !coolingDown(p), onOpened: notePopunder });
+}
+
+/**
+ * The admin turned the pop-under OFF while its tag is already in this page (owner, 2026-10-29: "I off the main switch
+ * but the reward video X button still clicks the smart link"). A loaded script cannot be unloaded, so it is disarmed:
+ * no spot arms it any more and every window it tries to open is refused (lib/monetization/open-observer.ts). The member
+ * gets no ad and their tap's own action — the download, the close — runs as normal. Turned back on, the gate reopens.
+ */
+function disarmLoadedPopunder(): void {
+  popunder = null;
+  armed = null;
+  if (tagState !== "idle") setThirdPartyOpenGate({ allow: () => false, onOpened: () => {} });
+}
+
 function loadTag(p: PublicSpotPopunder): void {
   if (tagState !== "idle") return;
   tagState = "loading";
   installOpenObserver();
-  // a third-party window (Monetag's pop-under) only at a spot tap when "spots only" is on, and never inside the cooldown
-  setThirdPartyOpenGate({ allow: () => (!p.spotsOnly || spotTapNow()) && !coolingDown(p), onOpened: notePopunder });
+  openGateFor(p);
   window.addEventListener("blur", () => {
     if (armed) armed.lostFocus = true;
   });
@@ -205,7 +221,13 @@ export async function loadDirectLinkOpener(spot: DirectLinkSpot): Promise<SpotOp
   const smart = usableHere(d?.adsterraSmartlink as Link | null | undefined);
   const links = [direct, smart].filter((l): l is Link => !!l);
   const pu = d?.monetagSpotPopunder as PublicSpotPopunder | null | undefined;
-  const spotPopunder = pu && Array.isArray(pu.spots) && pu.spots.includes(spot) && typeof pu.src === "string" && /^https:\/\//.test(pu.src) ? pu : null;
+  const popunderOn = !!pu && Array.isArray(pu.spots) && typeof pu.src === "string" && /^https:\/\//.test(pu.src);
+  // switched off since its tag loaded (at any spot): disarm it everywhere; switched back on: the gate follows the config.
+  // A failed read answers {} — that is "unknown", never "off", so it changes nothing.
+  const configRead = !!d && Object.keys(d).length > 0;
+  if (configRead && !popunderOn) disarmLoadedPopunder();
+  else if (popunderOn && tagState !== "idle") openGateFor(pu!);
+  const spotPopunder = popunderOn && pu!.spots.includes(spot) ? pu! : null;
   if (!links.length && !spotPopunder) return null;
   // the connections are ready before the tap — the link's host and the pop-under script's host (no request to either ad)
   for (const l of links) preconnect(l.url);

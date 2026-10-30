@@ -2725,7 +2725,9 @@ function VastRow({
  */
 /**
  * Which network fills a spot format (owner, 2026-10-24: "I want to try adsterra out") — one pick per format, saved with
- * the form. The chosen network's own master switch must be on too (Monetag / Adsterra, above).
+ * the form. Monetag also needs its master switch; Adsterra runs on this format's own switch alone — the Adsterra
+ * master switch is the BANNER switch, and coupling the two would turn the retired banners back on (spot-popunder.test).
+ * A switch turned off reaches open sessions within 5 minutes (lib/monetization/ads-config-client.ts).
  */
 function SpotProviderPicker({ id, value, busy, onChange }: { id: string; value: SpotAdProvider; busy: boolean; onChange: (next: SpotAdProvider) => void }) {
   const options: { id: SpotAdProvider; label: string }[] = [

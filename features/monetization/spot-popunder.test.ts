@@ -407,6 +407,35 @@ describe("less aggressive (owner 2026-10-23) — fewer pop-unders, the ones that
     expect(opened).toEqual(["https://pop.example/spot"]);
   });
 
+  /*
+    Owner, 2026-10-29: "I off the main switch but the reward video X button still clicks the smart link". A tag already
+    in the page cannot be unloaded — once the refreshed config says the pop-under is OFF, the loaded script is disarmed:
+    a spot tap no longer opens its window, and switching it back on re-arms it. A failed config read ({}) changes nothing.
+  */
+  it("🔴 switched off after its tag loaded: the loaded pop-under can no longer open anything, even at a spot tap", async () => {
+    await readyOpener();
+    config = { monetagDirectLink: null, monetagSpotPopunder: null };
+    const m = await import("./direct-link-runtime");
+    await m.loadDirectLinkOpener("downloadAdClose");
+    press("downloadAdClose");
+    expect(thirdPartyOpen("https://pop.example/after-off")).toBeNull();
+    expect(opened).toEqual([]);
+    // back on: the same loaded tag opens again at a spot tap
+    config = { monetagDirectLink: DIRECT, monetagSpotPopunder: POP };
+    await m.loadDirectLinkOpener("downloadAdClose");
+    press("downloadAdClose");
+    expect(thirdPartyOpen("https://pop.example/back-on")).not.toBeNull();
+  });
+
+  it("a config that could not be read ({}) never disarms a working pop-under", async () => {
+    await readyOpener();
+    config = {};
+    const m = await import("./direct-link-runtime");
+    await m.loadDirectLinkOpener("downloadAdClose");
+    press("downloadAdClose");
+    expect(thirdPartyOpen("https://pop.example/still-on")).not.toBeNull();
+  });
+
   it("our own windows (downloads, viewers, notifications — called from our bundles) are never held back, spot or not", async () => {
     await readyOpener();
     expect(firstPartyOpen("https://frenzsave.com/download/1")).not.toBeNull();

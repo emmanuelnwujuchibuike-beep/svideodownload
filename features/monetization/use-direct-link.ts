@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import type { DirectLinkSpot } from "@/lib/monetization/direct-link";
+import { CDN_BUCKET_MS } from "@/lib/net/cdn-bucket";
 import type { SpotOutcome } from "@/lib/monetization/spot-popunder";
 
 type Opener = (onOutcome?: (o: SpotOutcome) => void) => boolean;
@@ -26,16 +27,25 @@ export function useDirectLink(spot: DirectLinkSpot | null): (onOutcome?: (o: Spo
   useEffect(() => {
     if (!spot || !ready || !showAds) return;
     let alive = true;
-    void import("./direct-link-runtime")
-      .then((m) => m.loadDirectLinkOpener(spot))
-      .then((open) => {
-        if (alive) opener.current = open;
-      })
-      .catch(() => {
-        /* No link is the safe direction. */
-      });
+    const load = () =>
+      void import("./direct-link-runtime")
+        .then((m) => m.loadDirectLinkOpener(spot))
+        .then((open) => {
+          if (alive) opener.current = open;
+        })
+        .catch(() => {
+          /* No link is the safe direction. */
+        });
+    load();
+    /*
+      A spot that stays on screen (the result card's Download button) re-reads the admin's choice as the shared config
+      refreshes (lib/monetization/ads-config-client.ts, every 5 min): a link or pop-under switched off stops opening
+      without a relaunch (owner, 2026-10-29). Still one shared request per window, however many spots are mounted.
+    */
+    const refresh = window.setInterval(load, CDN_BUCKET_MS);
     return () => {
       alive = false;
+      window.clearInterval(refresh);
       opener.current = null;
     };
   }, [ready, showAds, spot]);

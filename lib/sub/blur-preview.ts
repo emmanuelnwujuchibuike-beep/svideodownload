@@ -3,7 +3,7 @@ import "server-only";
 import { presignPrivateGet } from "@/lib/storage/r2";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { CLIP_NEEDS_WORK_FILTER, lacksPlayableClip } from "./blur-clip-plan";
+import { CLIP_NEEDS_WORK_FILTER, lacksCurrentClip } from "./blur-clip-plan";
 import { BLUR_CLIP_WIDTH_FOR, BLUR_STILL_WIDTH_FOR, normalizeBlurLevel, type BlurLevel } from "./blur-level";
 
 /**
@@ -235,7 +235,7 @@ export async function readBlurVideos(postIds: string[]): Promise<Map<string, str
  * larger backlog Postgres handed back whichever rows it liked and recent posts could stay black for many kicks. An
  * item is written together with its post, so its own created_at orders it like the post; the post time breaks ties.
  */
-export async function lockedVideosNeedingClips(limit: number): Promise<{ postId: string; idx: number; key: string; width: number }[]> {
+export async function lockedVideosNeedingClips(limit: number): Promise<{ postId: string; idx: number; key: string; width: number; oldClip: string | null }[]> {
   const db = createAdminClient();
   const { data, error } = await db
     .from("sub_post_media")
@@ -250,12 +250,13 @@ export async function lockedVideosNeedingClips(limit: number): Promise<{ postId:
   const rows = (data ?? []) as (Row & { sub_posts: Row | Row[] })[];
   const created = (r: (typeof rows)[number]) => String((Array.isArray(r.sub_posts) ? r.sub_posts[0] : r.sub_posts)?.created_at ?? "");
   const picked = rows
-    .filter((r) => typeof r.object_key === "string" && r.object_key && lacksPlayableClip([r.blur_video_url as string | null]))
+    .filter((r) => typeof r.object_key === "string" && r.object_key && lacksCurrentClip([r.blur_video_url as string | null]))
     .sort((a, b) => created(b).localeCompare(created(a)) || Number(a.idx) - Number(b.idx))
     .slice(0, limit);
   // 0307: each clip at the size its post's blur level stores (a read that fails leaves every post at the default)
   const levels = await readBlurLevels(picked.map((r) => r.post_id as string)).catch(() => new Map<string, BlurLevel>());
-  return picked.map((r) => ({ postId: r.post_id as string, idx: Number(r.idx), key: r.object_key as string, width: BLUR_CLIP_WIDTH_FOR[levels.get(r.post_id as string) ?? normalizeBlurLevel(null)] }));
+  // oldClip: an older recipe's clip the new one replaces — removed from the public bucket once replaced (recipe 2)
+  return picked.map((r) => ({ postId: r.post_id as string, idx: Number(r.idx), key: r.object_key as string, width: BLUR_CLIP_WIDTH_FOR[levels.get(r.post_id as string) ?? normalizeBlurLevel(null)], oldClip: typeof r.blur_video_url === "string" ? r.blur_video_url : null }));
 }
 
 /**

@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  *   · the retry map forgets expired entries, so the long-lived worker does not grow with the catalogue;
  *   · the endpoint refuses every call when the worker has no WORKER_SECRET (fails closed).
  */
-const ITEM = { postId: "p1", idx: 0, key: "sub/p1/0.mp4" };
+const ITEM = { postId: "p1", idx: 0, key: "sub/p1/0.mp4", oldClip: null as string | null };
 
 const storage = {
   hasR2: true,
@@ -18,6 +18,7 @@ const storage = {
   presignPrivateGet: vi.fn(async () => "https://private.example/sub/p1/0.mp4?sig=1"),
   putR2: vi.fn(async (key: string) => `https://media.example/${key}`),
   deleteR2: vi.fn(async () => true),
+  r2KeyOfPublicUrl: (url: unknown) => (typeof url === "string" && url.startsWith("https://media.example/") ? url.slice("https://media.example/".length) : null),
 };
 const rows = {
   lockedVideosNeedingClips: vi.fn(async () => [ITEM]),
@@ -60,6 +61,20 @@ describe("the blurred-clip job", () => {
     expect(storage.deleteR2).not.toHaveBeenCalled();
   });
 
+  it("recipe 2: replacing an older clip removes the old file from the public bucket — and only once the new one is saved", async () => {
+    rows.lockedVideosNeedingClips.mockImplementation(async () => [{ ...ITEM, oldClip: "https://media.example/uploads/old-clip.mp4" }]);
+    const { runSubBlurClips } = await freshService();
+    expect(await runSubBlurClips()).toMatchObject({ clips: 1 });
+    expect(storage.deleteR2).toHaveBeenCalledWith("uploads/old-clip.mp4");
+    // teeth: a refused save keeps the old clip (it is still what viewers play)
+    storage.deleteR2.mockClear();
+    rows.saveServerBlurClip.mockImplementation(async () => false);
+    rows.blurClipSlotOpen.mockImplementationOnce(async () => true).mockImplementationOnce(async () => false);
+    const again = await freshService();
+    await again.runSubBlurClips();
+    expect(storage.deleteR2).not.toHaveBeenCalledWith("uploads/old-clip.mp4");
+  });
+
   it("🔴 a slot the creator's browser filled since the list was read: skipped before ffmpeg — nothing made or uploaded", async () => {
     rows.blurClipSlotOpen.mockImplementation(async () => false);
     const { runSubBlurClips } = await freshService();
@@ -75,7 +90,7 @@ describe("the blurred-clip job", () => {
     const { runSubBlurClips } = await freshService();
     expect(await runSubBlurClips()).toMatchObject({ clips: 0, failed: 0, alreadyFilled: 1 });
     const uploadedKey = storage.putR2.mock.calls[0]![0];
-    expect(uploadedKey).toMatch(/^sub-blur\/p1\/0-[a-z0-9]+\.mp4$/);
+    expect(uploadedKey).toMatch(/^sub-blur\/v2\/p1\/0-[a-z0-9]+\.mp4$/);
     expect(storage.deleteR2).toHaveBeenCalledWith(uploadedKey);
     // not held back: the next run looks at it again (and finds it filled)
     rows.blurClipSlotOpen.mockImplementation(async () => false);

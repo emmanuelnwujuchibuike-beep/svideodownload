@@ -83,8 +83,8 @@ export function VisitorBlurPreview({ src, kind, level }: { src: string; kind: "i
     const tick = () => {
       if (stopped) return;
       draw(video, video.videoWidth, video.videoHeight);
-      // the clip's own frame rate (lib/sub/blur-clip-plan.ts, 12 fps)
-      timer = window.setTimeout(tick, 1000 / 12);
+      // the clip's own frame rate (lib/sub/blur-clip-plan.ts BLUR_CLIP_FPS, 24 fps)
+      timer = window.setTimeout(tick, 1000 / 24);
     };
     const start = () => {
       void video.play().catch(() => {});

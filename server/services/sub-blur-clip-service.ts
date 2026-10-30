@@ -5,8 +5,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { deleteR2, hasPrivateR2, hasR2, presignPrivateGet, putR2 } from "@/lib/storage/r2";
-import { BLUR_CLIP_MAX_BYTES, buildBlurClipArgs } from "@/lib/sub/blur-clip-plan";
+import { deleteR2, hasPrivateR2, hasR2, presignPrivateGet, putR2, r2KeyOfPublicUrl } from "@/lib/storage/r2";
+import { BLUR_CLIP_MAX_BYTES, blurClipKey, buildBlurClipArgs } from "@/lib/sub/blur-clip-plan";
 import { blurClipSlotOpen, ensureBlurPreview, lockedPostsNeedingStills, lockedVideosNeedingClips, saveServerBlurClip } from "@/lib/sub/blur-preview";
 
 const FFMPEG = process.env.FFMPEG_PATH || "ffmpeg";
@@ -69,10 +69,13 @@ export async function runSubBlurClips(): Promise<{ clips: number; stillsTried: n
         await run(FFMPEG, buildBlurClipArgs(await presignPrivateGet(t.key, 300), out, t.width), CLIP_TIMEOUT_MS);
         const bytes = await readFile(out);
         if (!bytes.byteLength || bytes.byteLength > BLUR_CLIP_MAX_BYTES) throw new Error("not a blur clip");
-        const key = `sub-blur/${t.postId}/${t.idx}-${Date.now().toString(36)}.mp4`;
+        const key = blurClipKey(t.postId, t.idx, Date.now().toString(36));
         const url = await putR2(key, new Uint8Array(bytes), "video/mp4");
         if (await saveServerBlurClip(t.postId, t.idx, url)) {
           clips++;
+          // the older recipe's clip it replaced is no longer referenced — never left in the public bucket
+          const oldKey = r2KeyOfPublicUrl(t.oldClip);
+          if (oldKey && oldKey !== key) await deleteR2(oldKey).catch(() => false);
         } else {
           // not stored, so our copy is removed — never orphaned in the public bucket (code review, 2026-10-30)
           await deleteR2(key).catch(() => false);

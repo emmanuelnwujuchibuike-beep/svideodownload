@@ -53,6 +53,17 @@ export function r2PublicUrl(key: string): string {
   return `${PUBLIC_BASE_URL}/${key.split("/").map(encodeURIComponent).join("/")}`;
 }
 
+/** The object key behind one of our public URLs — null for anything else (another host, a bad escape). */
+export function r2KeyOfPublicUrl(url: unknown): string | null {
+  const base = r2PublicUrl("");
+  if (typeof url !== "string" || !url.startsWith(base) || url.length === base.length) return null;
+  try {
+    return url.slice(base.length).split("/").map(decodeURIComponent).join("/");
+  } catch {
+    return null;
+  }
+}
+
 /** Upload bytes to R2 from server code. Returns the public URL. */
 export async function putR2(key: string, body: Uint8Array | ArrayBuffer | Blob, contentType: string): Promise<string> {
   const res = await r2().fetch(objectEndpoint(key), {

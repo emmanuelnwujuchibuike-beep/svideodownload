@@ -10,10 +10,16 @@
  *
  * Best effort: no MediaRecorder / canvas capture (an old browser), or a video that won't decode, gives null and the
  * post keeps its still preview.
+ *
+ * Recipe 2 (owner, 2026-10-30: "lagging low quality inside the blur"), like the worker's (lib/sub/blur-clip-plan.ts):
+ * the tiny frame is enlarged UPSCALE× onto a second canvas, smoothed and blurred, and THAT is recorded — no blocks for
+ * the phone to scale up — at 24 fps, each frame drawn when the video has a new one. The worker still remakes this clip
+ * with ffmpeg (it carries no BLUR_CLIP_MARK): a browser recording's frame timing is never as even.
  */
 export const BLUR_CLIP_WIDTH = 24;
 const BLUR_CLIP_SECONDS = 4;
-const FPS = 12;
+const FPS = 24;
+const UPSCALE = 4;
 
 function pickMime(): { mime: string; type: "video/mp4" | "video/webm"; ext: "mp4" | "webm" } | null {
   if (typeof MediaRecorder === "undefined") return null;
@@ -49,24 +55,40 @@ export async function makeBlurClip(source: File | string, width: number = BLUR_C
     const w = Math.max(8, Math.min(64, Math.round(width) || BLUR_CLIP_WIDTH));
     // even dimensions: some encoders refuse odd ones
     const h = Math.max(2, Math.round((w * v.videoHeight) / v.videoWidth / 2) * 2);
+    // the detail is destroyed here, at w px…
+    const tiny = document.createElement("canvas");
+    tiny.width = w;
+    tiny.height = h;
+    const tctx = tiny.getContext("2d", { alpha: false });
+    // …and this enlarged, smoothed copy of it is what gets recorded
     const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
+    canvas.width = w * UPSCALE;
+    canvas.height = h * UPSCALE;
     const ctx = canvas.getContext("2d", { alpha: false });
-    if (!ctx) return null;
-    ctx.filter = "blur(1.5px)";
+    if (!tctx || !ctx) return null;
+    tctx.filter = "blur(1.5px)";
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.filter = `blur(${(UPSCALE * 0.6).toFixed(1)}px)`;
+    const paint = () => {
+      tctx.drawImage(v, 0, 0, w, h);
+      ctx.drawImage(tiny, 0, 0, canvas.width, canvas.height);
+    };
     const stream = (canvas as HTMLCanvasElement & { captureStream(fps?: number): MediaStream }).captureStream(FPS);
-    const rec = new MediaRecorder(stream, { mimeType: m.mime, videoBitsPerSecond: 40_000 });
+    const rec = new MediaRecorder(stream, { mimeType: m.mime, videoBitsPerSecond: 160_000 });
     const chunks: Blob[] = [];
     rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
     const done = new Promise<void>((r) => (rec.onstop = () => r()));
     let drawing = true;
+    // a frame per decoded video frame where the browser says when (even motion), a steady timer elsewhere
+    const rvfc = (v as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number }).requestVideoFrameCallback?.bind(v);
     const draw = () => {
       if (!drawing) return;
-      ctx.drawImage(v, 0, 0, w, h);
-      window.setTimeout(draw, 1000 / FPS);
+      paint();
+      if (rvfc) rvfc(draw);
+      else window.setTimeout(draw, 1000 / FPS);
     };
-    ctx.drawImage(v, 0, 0, w, h);
+    paint();
     rec.start();
     await v.play();
     draw();

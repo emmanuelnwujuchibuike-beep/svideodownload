@@ -2,12 +2,12 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { BLUR_CLIP_SECONDS, BLUR_CLIP_WIDTH, buildBlurClipArgs, CLIP_NEEDS_WORK_FILTER, isWebmClip, lacksPlayableClip, postNeedsBlurWork } from "@/lib/sub/blur-clip-plan";
+import { BLUR_CLIP_FPS, BLUR_CLIP_MARK, BLUR_CLIP_SECONDS, BLUR_CLIP_UPSCALE, BLUR_CLIP_WIDTH, blurClipKey, buildBlurClipArgs, CLIP_NEEDS_WORK_FILTER, isWebmClip, lacksCurrentClip, postNeedsBlurWork } from "@/lib/sub/blur-clip-plan";
 
 /**
  * A PostgREST `or` filter of the shapes CLIP_NEEDS_WORK_FILTER uses (is.null · not.like · ilike, quoted or not), run on
  * one value the way Postgres would: `*` is LIKE's `%`, ilike ignores case, NULL fails every comparison. Checked against
- * the production database on 2026-10-30 (read-only): the real filter selected exactly the rows lacksPlayableClip flags.
+ * the production database on 2026-10-30 (read-only): the real filter selected exactly the rows lacksCurrentClip flags.
  */
 function filterSelects(filter: string, value: string | null): boolean {
   return filter.split(/,(?=blur_video_url\.)/).some((clause) => {
@@ -34,7 +34,14 @@ const CLIP_CASES: (string | null)[] = [
   "HTTPS://media.example/sub-blur/p/0-abc.mp4",
   "data:video/mp4;base64,AAAA",
   "https://media.example/a.webmx/clip.mp4",
+  // recipe 2 (2026-10-30): only a worker clip under the mark is current
+  "https://media.example/sub-blur/v2/p/0-abc.mp4",
+  "https://media.example/sub-blur/v2/p/0-abc.MP4?v=1",
+  "https://media.example/sub-blur/v2/p/0-abc.webm",
+  "http://media.example/sub-blur/v2/p/0-abc.mp4",
+  "https://media.example/SUB-BLUR/V2/p/0-abc.mp4",
 ];
+const V2 = "https://media.example/sub-blur/v2/p/0-abc.mp4";
 
 /**
  * The worker's blurred clip for a locked video (owner, 2026-10-29: every exclusive post autoplays blurred to a
@@ -57,6 +64,28 @@ describe("the server's blurred clip", () => {
     expect(BLUR_CLIP_WIDTH).toBeLessThanOrEqual(32);
   });
 
+  it("recipe 2 (owner, 2026-10-30: 'lagging low quality inside the blur'): the detail goes FIRST, then a smooth enlargement, at a fluid frame rate", () => {
+    const steps = vf.split(",");
+    const tiny = steps.indexOf(`scale=${BLUR_CLIP_WIDTH}:-2:flags=area`);
+    const big = steps.findIndex((s) => s.startsWith(`scale=${BLUR_CLIP_WIDTH * BLUR_CLIP_UPSCALE}:-2`));
+    const gauss = steps.findIndex((s) => s.startsWith("gblur="));
+    // teeth: enlarging before the tiny scale would keep the detail; no enlargement leaves the blocks
+    expect(tiny).toBeGreaterThan(-1);
+    expect(big).toBeGreaterThan(tiny);
+    expect(gauss).toBeGreaterThan(big);
+    expect(BLUR_CLIP_UPSCALE).toBeGreaterThanOrEqual(3);
+    expect(BLUR_CLIP_FPS).toBeGreaterThanOrEqual(24);
+    expect(vf).toContain(`fps=${BLUR_CLIP_FPS}`);
+    // Light's 48 px stays bounded at the enlarged size too
+    expect(buildBlurClipArgs("in", "out", 500)[buildBlurClipArgs("in", "out", 500).indexOf("-vf") + 1]).toContain(`scale=${64 * BLUR_CLIP_UPSCALE}:-2`);
+  });
+
+  it("the worker stores its clips under the recipe mark, which is what makes them current", () => {
+    const key = blurClipKey("p1", 0, "abc");
+    expect(`https://media.example/${key}`).toContain(BLUR_CLIP_MARK);
+    expect(lacksCurrentClip([`https://media.example/${key}`])).toBe(false);
+  });
+
   it("has no sound, and is H.264 baseline MP4 with faststart", () => {
     expect(args).toContain("-an");
     expect(args[args.indexOf("-c:v") + 1]).toBe("libx264");
@@ -72,28 +101,46 @@ describe("the server's blurred clip", () => {
     expect(isWebmClip(null)).toBe(false);
   });
 
-  it("asks the worker for a clip exactly when no iPhone-playable one exists", () => {
-    expect(lacksPlayableClip([])).toBe(true);
-    expect(lacksPlayableClip([undefined, null])).toBe(true);
-    expect(lacksPlayableClip(["https://media.example/a.webm"])).toBe(true);
-    expect(lacksPlayableClip(["https://media.example/a.webm", "https://media.example/b.mp4"])).toBe(false);
-    expect(lacksPlayableClip(["https://media.example/b.mp4"])).toBe(false);
+  it("asks the worker for a clip exactly when no current, iPhone-playable one exists", () => {
+    expect(lacksCurrentClip([])).toBe(true);
+    expect(lacksCurrentClip([undefined, null])).toBe(true);
+    expect(lacksCurrentClip(["https://media.example/a.webm"])).toBe(true);
+    expect(lacksCurrentClip(["https://media.example/a.webm", V2])).toBe(false);
+    expect(lacksCurrentClip([V2])).toBe(false);
+    // an older or browser-made MP4 plays meanwhile, but is remade (recipe 2)
+    expect(lacksCurrentClip(["https://media.example/b.mp4"])).toBe(true);
   });
 
-  it("the worker's queue and the feed's ask are ONE rule (code review, 2026-10-30): the filter selects exactly what lacksPlayableClip flags", () => {
-    for (const v of CLIP_CASES) expect(filterSelects(CLIP_NEEDS_WORK_FILTER, v), JSON.stringify(v)).toBe(lacksPlayableClip([v]));
+  it("the worker's queue and the feed's ask are ONE rule (code review, 2026-10-30): the filter selects exactly what lacksCurrentClip flags", () => {
+    for (const v of CLIP_CASES) expect(filterSelects(CLIP_NEEDS_WORK_FILTER, v), JSON.stringify(v)).toBe(lacksCurrentClip([v]));
   });
 
   it("teeth: the old filter (null or ending .webm) misses clips the feed kept asking for — the endless kick", () => {
     const old = "blur_video_url.is.null,blur_video_url.ilike.*.webm";
-    const missed = CLIP_CASES.filter((v) => lacksPlayableClip([v]) && !filterSelects(old, v));
-    expect(missed).toEqual(["", "https://media.example/sub-blur/p/0-abc.webm?v=2", "https://media.example/sub-blur/p/0-abc.webm#t=1", "http://media.example/sub-blur/p/0-abc.mp4", "HTTPS://media.example/sub-blur/p/0-abc.mp4", "data:video/mp4;base64,AAAA"]);
+    const missed = CLIP_CASES.filter((v) => lacksCurrentClip([v]) && !filterSelects(old, v));
+    expect(missed).toEqual([
+      "",
+      "https://media.example/sub-blur/p/0-abc.mp4",
+      "https://media.example/sub-blur/p/0-abc.MP4?v=1",
+      "https://media.example/sub-blur/p/0-abc.webm?v=2",
+      "https://media.example/sub-blur/p/0-abc.webm#t=1",
+      "http://media.example/sub-blur/p/0-abc.mp4",
+      "HTTPS://media.example/sub-blur/p/0-abc.mp4",
+      "data:video/mp4;base64,AAAA",
+      "https://media.example/a.webmx/clip.mp4",
+      "http://media.example/sub-blur/v2/p/0-abc.mp4",
+      "https://media.example/SUB-BLUR/V2/p/0-abc.mp4",
+    ]);
+    // and the filter without the recipe clause would never remake an old MP4 (teeth for recipe 2)
+    const withoutMark = CLIP_NEEDS_WORK_FILTER.split(/,(?=blur_video_url\.)/).filter((c) => !c.includes(BLUR_CLIP_MARK)).join(",");
+    expect(filterSelects(withoutMark, "https://media.example/sub-blur/p/0-abc.mp4")).toBe(false);
+    expect(filterSelects(CLIP_NEEDS_WORK_FILTER, "https://media.example/sub-blur/p/0-abc.mp4")).toBe(true);
     // and the emulator itself bites: a filter that selects nothing disagrees with the rule
-    expect(CLIP_CASES.every((v) => filterSelects("blur_video_url.is.null", v) === lacksPlayableClip([v]))).toBe(false);
+    expect(CLIP_CASES.every((v) => filterSelects("blur_video_url.is.null", v) === lacksCurrentClip([v]))).toBe(false);
   });
 
   it("checks every slide of an album, not just the first", () => {
-    const mp4 = "https://media.example/a.mp4";
+    const mp4 = V2;
     const still = "data:image/webp;base64,AAAA";
     expect(postNeedsBlurWork([{ kind: "video", blurVideoUrl: mp4 }, { kind: "video" }], true, mp4)).toBe(true);
     expect(postNeedsBlurWork([{ kind: "video", blurVideoUrl: mp4 }, { kind: "image" }], true, mp4)).toBe(true);

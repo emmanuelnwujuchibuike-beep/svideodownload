@@ -2494,7 +2494,9 @@ function ReelCard({
             <ShareGlyph />
           </RailAct>
         </div>
-        {/* the sound: its own page when the post carries one, else the creator (the same rule as the caption's sound chip) */}
+        {/* the sound: its own page when the post carries one, else the creator. The ONLY sound control — the caption's
+            "Original sound · @handle" chip was removed (owner, 2026-10-30: "it clustered the page, the spinning music ring is
+            enough") */}
         <Link
           href={item.sound ? `/sound/${item.sound.id}` : `${profilePath(item.publisher.handle)}`}
           aria-label={item.sound ? `Sound: ${item.sound.title}` : `Original sound by @${item.publisher.handle}`}
@@ -2655,38 +2657,6 @@ function ReelCard({
           </p>
         ) : null}
 
-        {/*
-          ── The sound row ─────────────────────────────────────────────────────
-          Feature 15 Part 7: this is the music system the row below was always
-          waiting for (see its history — a "Reality Ledger" comment used to sit
-          here explaining why the label was a link to the creator rather than
-          invented track data). `item.sound` is real, attached data when a post
-          carries one — the row links to its own page and shows its real title
-          and attribution. It is ABSENT on the vast majority of posts (attaching
-          a sound is opt-in, never retroactive), so the original fallback is
-          unchanged for those: "Original sound · @handle", linking to the
-          creator, exactly as it always has — still true by construction, still
-          never inventing a title or an artist for audio that has neither.
-        */}
-        <Link
-          href={item.sound ? `/sound/${item.sound.id}` : `${profilePath(item.publisher.handle)}`}
-          onClick={onClose}
-          // design/frenz-reels.html: a glass chip whose title scrolls while the reel plays (CSS only, stops when paused)
-          className="mt-2.5 inline-flex h-[30px] max-w-full items-center gap-[7px] overflow-hidden rounded-full border border-white/[0.16] bg-[rgba(20,20,28,0.38)] pl-1.5 pr-3 text-[13px] font-semibold text-white backdrop-blur-[20px]"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" aria-hidden className="shrink-0"><path d="M9 18V5l11-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="17" cy="16" r="3" /></svg>
-          <span className="max-w-[150px] overflow-hidden whitespace-nowrap [mask-image:linear-gradient(90deg,transparent,#000_8%,#000_92%,transparent)]">
-            <span
-              style={{ animationPlayState: isActive && !paused ? "running" : "paused" }}
-              className="inline-block pl-2 motion-safe:animate-[reel-marquee_9s_linear_infinite]"
-            >
-              {(() => {
-                const label = item.sound ? `${item.sound.title} · ${item.sound.artistLabel}` : `Original sound · @${item.publisher.handle}`;
-                return `${label}  ·  ${label}  ·  `;
-              })()}
-            </span>
-          </span>
-        </Link>
         {/*
           ── FRIEND ENERGY™ (Feature 15 Part 3) ────────────────────────────────
           The same dataset as Social Pulse™, in the shape that costs nothing.

@@ -13,7 +13,7 @@ import type { OfferMembership } from "@/lib/sub/offer";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 import { claimOpening, fresh, type Opened, openedCache } from "./opened-cache";
-import { forgetSubPosts, loadSubPosts } from "./sub-posts-cache";
+import { forgetSubPosts, loadSubPosts, SUB_POSTS_FRESH_MS, subPostsLoadedAt } from "./sub-posts-cache";
 import { CreatorSubscribeCard } from "./subscribe-card";
 import { profilePath } from "@/lib/social/profile-url";
 import type { SubOption } from "@/lib/sub/pricing";
@@ -104,16 +104,54 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
   const [ageGate, setAgeGate] = useState(false);
   const [reload, setReload] = useState(0);
 
+  /*
+    The tiles' private links last five minutes (lib/sub/posts.ts), but the page stays mounted: an iPhone that wakes, or
+    a tab brought back, redraws its images from links that have lapsed, R2 refuses them, and Safari paints "?" in every
+    tile (owner, 2026-10-30). So the page is read again on return once its links are near their end, and once when a
+    private tile fails to load; a tile that fails again right after shows its plain frame, never the broken icon.
+  */
+  const loadedAt = useRef(0);
+  const healedAt = useRef(0);
+  const [deadThumbs, setDeadThumbs] = useState<ReadonlySet<string>>(() => new Set());
+  const refreshLinks = useCallback(() => {
+    forgetSubPosts(creatorId);
+    setReload((n) => n + 1);
+  }, [creatorId]);
+
   // once per creator, shared with the tab warm-up and kept four minutes (sub-posts-cache.ts) — no polling
   useEffect(() => {
     let cancelled = false;
     void loadSubPosts(creatorId)
-      .then((j) => !cancelled && setState(j as NonNullable<typeof state>))
+      .then((j) => {
+        if (cancelled) return;
+        loadedAt.current = subPostsLoadedAt(creatorId) ?? Date.now();
+        setDeadThumbs(new Set());
+        setState(j as NonNullable<typeof state>);
+      })
       .catch(() => !cancelled && setState({ posts: [], access: false, isCreator: false, next: null, ready: false }));
     return () => {
       cancelled = true;
     };
   }, [creatorId, reload]);
+
+  useEffect(() => {
+    const back = () => {
+      if (document.visibilityState === "visible" && loadedAt.current && Date.now() - loadedAt.current > SUB_POSTS_FRESH_MS) refreshLinks();
+    };
+    document.addEventListener("visibilitychange", back);
+    window.addEventListener("pageshow", back);
+    return () => {
+      document.removeEventListener("visibilitychange", back);
+      window.removeEventListener("pageshow", back);
+    };
+  }, [refreshLinks]);
+
+  const thumbFailed = (id: string) => {
+    if (Date.now() - healedAt.current > 60_000) {
+      healedAt.current = Date.now();
+      refreshLinks();
+    } else setDeadThumbs((s) => new Set(s).add(id));
+  };
 
   /*
     Once the covers are on screen and the browser is idle, the FIRST post's first photo is fetched
@@ -261,9 +299,9 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
                 ) : p.coverUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- the creator's PUBLIC cover, never the private file
                   <img src={p.coverUrl} alt="" loading={idx < 9 ? "eager" : "lazy"} decoding="async" draggable={false} className="h-full w-full object-cover" />
-                ) : p.thumbUrl ? (
+                ) : p.thumbUrl && !deadThumbs.has(p.id) ? (
                   // eslint-disable-next-line @next/next/no-img-element -- a five-minute private link to the small preview
-                  <img src={p.thumbUrl} alt="" loading={idx < 9 ? "eager" : "lazy"} decoding="async" draggable={false} onContextMenu={(e) => e.preventDefault()} className="pointer-events-none h-full w-full object-cover" />
+                  <img src={p.thumbUrl} alt="" loading={idx < 9 ? "eager" : "lazy"} decoding="async" draggable={false} onError={() => thumbFailed(p.id)} onContextMenu={(e) => e.preventDefault()} className="pointer-events-none h-full w-full object-cover" />
                 ) : p.blurVideoUrl ? (
                   /* 0305: a locked video plays blurred to a non-subscriber — a tiny clip, no detail to recover */
                   <BlurredClip src={p.blurVideoUrl} poster={p.blurUrl} level={p.blurLevel} className={BLUR_COVER} />

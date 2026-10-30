@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import { VerifiedTick } from "@/components/badges/identity-badges";
 import dynamic from "next/dynamic";
+import { importWithRetry } from "@/lib/net/import-retry";
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -107,27 +108,27 @@ import { floatReaction } from "@/features/ui/reaction-float";
   Neither sheet renders anything until its `open` prop is true, so server-side
   rendering costs nothing and the default is the safe one.
 */
-const ReelMoreSheet = dynamic(() => import("@/features/feed/reel-sheets").then((m) => m.ReelMoreSheet));
+const ReelMoreSheet = dynamic(() => importWithRetry(() => import("@/features/feed/reel-sheets")).then((m) => m.ReelMoreSheet));
 
 import { WhyThisChip } from "@/features/social/repost/why-this";
 // Code-split, each gated behind its own "ready" flag (never mounted until
 // the corresponding action is actually tapped) — reels are the main video
 // feed, so static imports here put every one of these sheets' full weight
 // into every route that renders it.
-const ReelShareSheet = dynamic(() => import("@/features/reels/viewer/reel-share-sheet").then((m) => m.ReelShareSheet), { ssr: false });
-const ShareSheet = dynamic(() => import("@/features/social/share-sheet").then((m) => m.ShareSheet), { ssr: false });
-const ShareQrSheet = dynamic(() => import("@/features/social/share-qr-sheet").then((m) => m.ShareQrSheet), { ssr: false });
-const CollectionPicker = dynamic(() => import("@/features/social/collection-picker").then((m) => m.CollectionPicker), { ssr: false });
-const ReportSheet = dynamic(() => import("@/features/social/report-sheet").then((m) => m.ReportSheet), { ssr: false });
-const PostEditSheet = dynamic(() => import("@/features/social/post-edit-sheet").then((m) => m.PostEditSheet), { ssr: false });
+const ReelShareSheet = dynamic(() => importWithRetry(() => import("@/features/reels/viewer/reel-share-sheet")).then((m) => m.ReelShareSheet), { ssr: false });
+const ShareSheet = dynamic(() => importWithRetry(() => import("@/features/social/share-sheet")).then((m) => m.ShareSheet), { ssr: false });
+const ShareQrSheet = dynamic(() => importWithRetry(() => import("@/features/social/share-qr-sheet")).then((m) => m.ShareQrSheet), { ssr: false });
+const CollectionPicker = dynamic(() => importWithRetry(() => import("@/features/social/collection-picker")).then((m) => m.CollectionPicker), { ssr: false });
+const ReportSheet = dynamic(() => importWithRetry(() => import("@/features/social/report-sheet")).then((m) => m.ReportSheet), { ssr: false });
+const PostEditSheet = dynamic(() => importWithRetry(() => import("@/features/social/post-edit-sheet")).then((m) => m.PostEditSheet), { ssr: false });
 // No `ssr: false` on the four below — same reasoning as ReelMoreSheet/
 // ReelSendSheet above: none of them render anything until their own `open`
 // prop is true, so SSR costs nothing, and `ssr: false` has a standing history
 // of never resolving in this project (see the note above).
-const Comments = dynamic(() => import("@/features/social/comments").then((m) => m.Comments));
-const RepostComposer = dynamic(() => import("@/features/social/repost-composer").then((m) => m.RepostComposer));
-const RepostSheet = dynamic(() => import("@/features/social/repost/repost-sheet").then((m) => m.RepostSheet));
-const RepostersSheet = dynamic(() => import("@/features/social/reposters-sheet").then((m) => m.RepostersSheet));
+const Comments = dynamic(() => importWithRetry(() => import("@/features/social/comments")).then((m) => m.Comments));
+const RepostComposer = dynamic(() => importWithRetry(() => import("@/features/social/repost-composer")).then((m) => m.RepostComposer));
+const RepostSheet = dynamic(() => importWithRetry(() => import("@/features/social/repost/repost-sheet")).then((m) => m.RepostSheet));
+const RepostersSheet = dynamic(() => importWithRetry(() => import("@/features/social/reposters-sheet")).then((m) => m.RepostersSheet));
 import { useLongPress } from "@/lib/hooks/use-long-press";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { RepostBurst } from "@/features/social/repost-burst";

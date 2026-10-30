@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import dynamic from "next/dynamic";
+import { importWithRetry } from "@/lib/net/import-retry";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { lockTopbarVisible } from "@/features/app-shell/topbar-visibility";
@@ -30,7 +31,7 @@ import type { FeedItem, HomeFeedSort } from "@/lib/social/home-feed";
 // The full-screen overlays are interaction-only — code-split so the entire reels
 // engine, post viewer and image viewer stay OUT of the initial /home bundle and
 // load on first tap. `ssr: false` because they never render on the server.
-const ReelsFeed = dynamic(() => import("@/features/reels/reels-feed").then((m) => m.ReelsFeed), {
+const ReelsFeed = dynamic(() => importWithRetry(() => import("@/features/reels/reels-feed")).then((m) => m.ReelsFeed), {
   ssr: false,
   // Paint black instantly on first tap while the (cached-after) chunk loads.
   loading: () => <div className="fixed inset-0 z-[85] bg-black" aria-hidden />,
@@ -62,11 +63,11 @@ function preloadReelsFeed() {
 // posts) has no single dominant photo to preview ahead of time, so a plain
 // black frame (matching Reels, which nobody's complained about) is the right
 // minimal fix here; ImageViewer gets a richer one below.
-const PostViewer = dynamic(() => import("@/features/feed/post-viewer").then((m) => m.PostViewer), {
+const PostViewer = dynamic(() => importWithRetry(() => import("@/features/feed/post-viewer")).then((m) => m.PostViewer), {
   ssr: false,
   loading: () => <div className="fixed inset-0 z-[85] bg-black" aria-hidden />,
 });
-const ImageViewer = dynamic(() => import("@/features/feed/image-viewer").then((m) => m.ImageViewer), { ssr: false });
+const ImageViewer = dynamic(() => importWithRetry(() => import("@/features/feed/image-viewer")).then((m) => m.ImageViewer), { ssr: false });
 // Same warm-up as `preloadReelsFeed`, for the two other viewer chunks — an
 // image tap should open exactly as instantly as a video tap does, not stall
 // on a first-time chunk fetch. Returns the underlying promise so callers can

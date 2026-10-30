@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { ArrowLeft, Camera, EyeOff, ImagePlus, Images, Loader2, Lock, X } from "lucide-react";
+import { ArrowLeft, Camera, EyeOff, Images, Loader2, Lock, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -18,8 +18,10 @@ import { cn } from "@/lib/utils";
 
 /**
  * A new subscriber-only post (0227). The photos and videos go straight from the
- * device into the PRIVATE bucket through five-minute upload links; the optional
- * cover is an ordinary public image, because it is the teaser everyone sees.
+ * device into the PRIVATE bucket through five-minute upload links. Visitors see the
+ * post's OWN media blurred (0263/0305/0306) — there is no public cover any more
+ * (owner, 2026-10-30: "why am I still seeing this old pattern of using cover picture
+ * instead of the blur"); posts that already have one keep it, only as a last resort.
  */
 
 type Picked = { file: File; kind: "image" | "video"; preview: string; width: number | null; height: number | null };
@@ -43,7 +45,6 @@ const AgeGateSheet = dynamic(() => import("@/features/age/age-gate-sheet").then(
 
 export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPosted: () => void }) {
   const [items, setItems] = useState<Picked[]>([]);
-  const [cover, setCover] = useState<File | null>(null);
   const [caption, setCaption] = useState("");
   // Part 3 (0248): locked = non-subscribers see a locked tile; hidden = they don't know it exists
   const [audience, setAudience] = useState<"locked" | "hidden">("locked");
@@ -73,7 +74,7 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
   const [step, setStep] = useState<"compose" | "preview">("compose");
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
-  const dirty = items.length > 0 || caption.trim() !== "" || !!cover;
+  const dirty = items.length > 0 || caption.trim() !== "";
   const close = () => {
     if (busy) return;
     // an unpublished draft is never lost to a stray tap — and closing never publishes anything
@@ -84,7 +85,6 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
   const pick = useRef<HTMLInputElement>(null);
   // owner 2026-10-11: straight from the camera too, not only the gallery
   const shoot = useRef<HTMLInputElement>(null);
-  const pickCover = useRef<HTMLInputElement>(null);
 
   const add = async (files: FileList | null) => {
     if (!files) return;
@@ -125,12 +125,6 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
         media.push({ key: plan.key as string, kind: it.kind, width: it.width ?? thumb.width, height: it.height ?? thumb.height, ...(thumbKey ? { thumbKey } : {}) });
       }
       setProgress(1);
-      let coverUrl: string | null = null;
-      // a hidden post has no public tile, so its cover would never be shown: it is not uploaded
-      if (cover && audience === "locked") {
-        setBusy("Uploading the cover…");
-        coverUrl = await uploadWithPlan(await presignUpload("image", extOf(cover)), cover, cover.type || "image/jpeg");
-      }
       // a locked video plays BLURRED for non-subscribers (owner, 2026-10-28): a 24 px clip made here, the detail gone
       // before it leaves this device (lib/media/make-blur-clip.ts). EVERY video gets one (0306, owner 2026-10-29: an album
       // slides sideways, blurred, no cover needed). Best effort — without one, that slide shows its still preview.
@@ -149,7 +143,7 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
         }
       }
       setBusy("Publishing…");
-      const res = await fetch("/api/sub/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caption: caption.trim() || null, coverUrl, media, audience, mature, ...(blurVideoUrl ? { blurVideoUrl } : {}), ...(audience === "locked" ? { blurLevel } : {}) }) });
+      const res = await fetch("/api/sub/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caption: caption.trim() || null, media, audience, mature, ...(blurVideoUrl ? { blurVideoUrl } : {}), ...(audience === "locked" ? { blurLevel } : {}) }) });
       const j = (await res.json().catch(() => null)) as { error?: string; code?: string } | null;
       // the server checks the creator's age too: show the check rather than a dead end
       if (res.status === 403 && j?.code === "age_required") {
@@ -171,7 +165,7 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
 
   const first = items[0];
   const audiences = [
-    { v: "locked" as const, title: "Locked preview", sub: "Visitors see a locked tile — your cover if you add one, and how many items. Never the caption or the media." },
+    { v: "locked" as const, title: "Locked preview", sub: "Visitors see your photos and videos blurred — videos play, blurred — and how many items. Never the caption or a clear picture." },
     { v: "hidden" as const, title: "Hidden", sub: "Visitors don't see it at all — no tile, no count. You and your subscribers still do." },
   ];
 
@@ -211,7 +205,6 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
 
         <input ref={pick} type="file" accept="image/*,video/*" multiple hidden onChange={(e) => (void add(e.target.files), (e.target.value = ""))} />
         <input ref={shoot} type="file" accept="image/*,video/*" capture="environment" hidden onChange={(e) => (void add(e.target.files), (e.target.value = ""))} />
-        <input ref={pickCover} type="file" accept="image/*" hidden onChange={(e) => setCover(e.target.files?.[0] ?? null)} />
 
         {step === "compose" ? (
           <>
@@ -281,11 +274,6 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
                 <span className={cn("h-5 w-5 rounded-full bg-white shadow transition-transform motion-reduce:transition-none", mature ? "translate-x-4" : "translate-x-0")} />
               </span>
             </button>
-            {audience === "locked" ? (
-              <button type="button" onClick={() => pickCover.current?.click()} className={cn(exQuiet, "mt-2")}>
-                <ImagePlus className="h-4 w-4" aria-hidden /> {cover ? `Cover: ${cover.name.slice(0, 24)}` : "Add a public cover (optional)"}
-              </button>
-            ) : null}
             <p className="mt-2 text-[12px] text-muted-foreground">Photos and videos stay private and can&apos;t be shared, linked or downloaded.</p>
             {error ? (
               <p role="alert" className="mt-2 text-[13px] font-medium text-rose-600 dark:text-rose-400">

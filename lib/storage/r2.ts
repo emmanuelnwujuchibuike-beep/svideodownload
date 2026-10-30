@@ -64,15 +64,30 @@ export function r2KeyOfPublicUrl(url: unknown): string | null {
   }
 }
 
-/** Upload bytes to R2 from server code. Returns the public URL. */
+/** Attempts per upload — a 5xx or 429 from R2 is tried again, as aws4fetch's own fetch did. */
+const PUT_ATTEMPTS = 3;
+
+/**
+ * Upload bytes to R2 from server code. Returns the public URL.
+ *
+ * 🔴 THE BYTES GO AS BYTES, SO THE LENGTH IS ALWAYS STATED (2026-10-30). aws4fetch's own `fetch` wraps the body in a
+ * `Request` and hands THAT to fetch. On the worker (Node 22) a ~68 KB blurred clip then went out with no Content-Length
+ * and R2 refused it — "R2 upload failed: 411" (Length Required) on 8 of 11 clips, measured on production — while the
+ * same code passed on Node 24 here. aws4fetch now only SIGNS; the request is sent with a plain byte array, whose length
+ * fetch always declares. Every server upload goes through here (the blurred clips, the sound mix, lib/storage).
+ */
 export async function putR2(key: string, body: Uint8Array | ArrayBuffer | Blob, contentType: string): Promise<string> {
-  const res = await r2().fetch(objectEndpoint(key), {
-    method: "PUT",
-    body: body as BodyInit,
-    headers: { "Content-Type": contentType, "Cache-Control": MEDIA_CACHE_CONTROL },
-  });
-  if (!res.ok) {
-    throw new Error(`R2 upload failed: ${res.status}`);
+  const bytes = body instanceof Uint8Array ? body : new Uint8Array(body instanceof Blob ? await body.arrayBuffer() : body);
+  const headers = { "Content-Type": contentType, "Cache-Control": MEDIA_CACHE_CONTROL };
+  let res: Response | null = null;
+  for (let attempt = 1; attempt <= PUT_ATTEMPTS; attempt++) {
+    // signed again each attempt: the signature carries the time
+    const signed = await r2().sign(objectEndpoint(key), { method: "PUT", body: bytes as BodyInit, headers });
+    res = await fetch(signed.url, { method: "PUT", headers: signed.headers, body: bytes as BodyInit });
+    if (res.status < 500 && res.status !== 429) break;
+  }
+  if (!res?.ok) {
+    throw new Error(`R2 upload failed: ${res?.status ?? "no answer"}`);
   }
   return r2PublicUrl(key);
 }

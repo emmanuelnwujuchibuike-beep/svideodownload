@@ -140,12 +140,13 @@ export function BlurredSlides({ slides, cover, fallbackStill, fallbackClip, leve
         className={cn("flex h-full w-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", many ? "[touch-action:pan-x_pan-y]" : "overflow-hidden")}
       >
         {list.map((s, i) => {
-          // the first slide may wear the creator's public cover as its first frame; the rest their own still
+          // each slide shows its OWN blurred still; an old post's public cover is only the first slide's last resort (owner,
+          // 2026-10-30: the blur, not the "old pattern of using cover picture") — and it is blurred like everything else
           const still = s.blurUrl ?? (i === 0 ? (cover ?? undefined) : undefined);
           return (
             <div key={i} className={cn("relative h-full w-full shrink-0 snap-start snap-always overflow-hidden", BLUR_FRAME_CLASS)}>
               {s.blurVideoUrl ? (
-                <BlurredClip src={s.blurVideoUrl} poster={i === 0 && cover ? cover : still} level={level} className={BLUR_COVER} />
+                <BlurredClip src={s.blurVideoUrl} poster={still} level={level} className={BLUR_COVER} />
               ) : still ? (
                 // eslint-disable-next-line @next/next/no-img-element -- an inline data URL, or the public cover
                 <img src={still} alt="" aria-hidden decoding="async" className={cn(BLUR_COVER, look)} />

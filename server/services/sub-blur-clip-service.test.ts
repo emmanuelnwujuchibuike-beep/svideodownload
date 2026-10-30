@@ -94,7 +94,7 @@ describe("the blurred-clip job", () => {
     const { runSubBlurClips } = await freshService();
     expect(await runSubBlurClips()).toMatchObject({ clips: 0, failed: 0, alreadyFilled: 1 });
     const uploadedKey = storage.putR2.mock.calls[0]![0];
-    expect(uploadedKey).toMatch(/^sub-blur\/v2\/p1\/0-[a-z0-9]+\.mp4$/);
+    expect(uploadedKey).toMatch(/^sub-blur\/v3\/p1\/0-[a-z0-9]+\.mp4$/);
     expect(storage.deleteR2).toHaveBeenCalledWith(uploadedKey);
     // not held back: the next run looks at it again (and finds it filled)
     rows.blurClipSlotOpen.mockImplementation(async () => false);

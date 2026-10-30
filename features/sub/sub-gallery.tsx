@@ -295,8 +295,10 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
                   /* a locked video PLAYS blurred to a non-subscriber, ahead of any still cover (owner, 2026-10-29: "auto
                      play … like normal feed but blurred on unsubscriber") — a tiny clip, no detail to recover, at the
                      creator's blur level (0307) */
-                  <BlurredClip src={p.blurVideoUrl} poster={p.coverUrl ?? p.blurUrl} level={p.blurLevel} className={BLUR_COVER} />
-                ) : p.coverUrl ? (
+                  <BlurredClip src={p.blurVideoUrl} poster={p.blurUrl ?? p.coverUrl} level={p.blurLevel} className={BLUR_COVER} />
+                ) : state.access && p.coverUrl ? (
+                  /* an old post's cover, SHARP only for the creator and subscribers — a visitor sees the post's own blurred
+                     preview (owner, 2026-10-30: "the old pattern of using cover picture instead of the blur") */
                   // eslint-disable-next-line @next/next/no-img-element -- the creator's PUBLIC cover, never the private file
                   <img src={p.coverUrl} alt="" loading={idx < 9 ? "eager" : "lazy"} decoding="async" draggable={false} className="h-full w-full object-cover" />
                 ) : p.thumbUrl && !deadThumbs.has(p.id) ? (
@@ -305,11 +307,12 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
                 ) : p.blurVideoUrl ? (
                   /* 0305: a locked video plays blurred to a non-subscriber — a tiny clip, no detail to recover */
                   <BlurredClip src={p.blurVideoUrl} poster={p.blurUrl} level={p.blurLevel} className={BLUR_COVER} />
-                ) : p.blurUrl ? (
+                ) : p.blurUrl || p.coverUrl ? (
                   /* 0263 (owner, REQUIRED): a non-subscriber's tile is the server's tiny blurred preview, scaled
-                     up and blurred again at the creator's level — the only picture of the post they ever receive */
-                  // eslint-disable-next-line @next/next/no-img-element -- an inline data URL, already blurred on the server
-                  <img src={p.blurUrl} alt="" aria-hidden draggable={false} className={cn("pointer-events-none", BLUR_COVER, blurClass(p.blurLevel))} />
+                     up and blurred again at the creator's level — the only picture of the post they ever receive. An
+                     old post with only a cover shows that cover blurred the same way, never sharp. */
+                  // eslint-disable-next-line @next/next/no-img-element -- an inline data URL (already blurred on the server), or an old cover
+                  <img src={p.blurUrl ?? p.coverUrl ?? undefined} alt="" aria-hidden draggable={false} className={cn("pointer-events-none", BLUR_COVER, blurClass(p.blurLevel))} />
                 ) : null}
                 {/* 🔴 COVER FIRST (owner 2026-10-12: "not supposed to load the media when loading the cover"):
                     a tile shows the public cover or the small private preview and NEVER the original photo or
@@ -1022,10 +1025,10 @@ function LockedGrid({ posts, more }: { posts: Card[]; more: boolean }) {
               className={cn("relative block h-[220px] rounded-[20px] bg-[#1A1430]", ROUNDED_CLIP, BLUR_FRAME_CLASS)}
             >
               {p.blurVideoUrl ? (
-                <BlurredClip src={p.blurVideoUrl} poster={p.coverUrl ?? p.blurUrl} level={p.blurLevel} className={BLUR_COVER} />
-              ) : p.coverUrl || p.blurUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element -- the creator's public cover or the server's blurred preview
-                <img src={p.coverUrl ?? p.blurUrl} alt="" aria-hidden draggable={false} className={cn("pointer-events-none", BLUR_COVER, blurClass(p.blurLevel))} />
+                <BlurredClip src={p.blurVideoUrl} poster={p.blurUrl ?? p.coverUrl} level={p.blurLevel} className={BLUR_COVER} />
+              ) : p.blurUrl || p.coverUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- the server's blurred preview first; an old cover, blurred, only without one
+                <img src={p.blurUrl ?? p.coverUrl ?? undefined} alt="" aria-hidden draggable={false} className={cn("pointer-events-none", BLUR_COVER, blurClass(p.blurLevel))} />
               ) : null}
               <span aria-hidden className="absolute inset-0 bg-black/25" />
               <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white">

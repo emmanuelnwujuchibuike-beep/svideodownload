@@ -34,14 +34,16 @@ const CLIP_CASES: (string | null)[] = [
   "HTTPS://media.example/sub-blur/p/0-abc.mp4",
   "data:video/mp4;base64,AAAA",
   "https://media.example/a.webmx/clip.mp4",
-  // recipe 2 (2026-10-30): only a worker clip under the mark is current
+  // recipe 3 (2026-10-30): a recipe-2 clip (4 s, 24 fps) is remade too
   "https://media.example/sub-blur/v2/p/0-abc.mp4",
-  "https://media.example/sub-blur/v2/p/0-abc.MP4?v=1",
-  "https://media.example/sub-blur/v2/p/0-abc.webm",
-  "http://media.example/sub-blur/v2/p/0-abc.mp4",
-  "https://media.example/SUB-BLUR/V2/p/0-abc.mp4",
+  // only a worker clip under the current mark is current
+  "https://media.example/sub-blur/v3/p/0-abc.mp4",
+  "https://media.example/sub-blur/v3/p/0-abc.MP4?v=1",
+  "https://media.example/sub-blur/v3/p/0-abc.webm",
+  "http://media.example/sub-blur/v3/p/0-abc.mp4",
+  "https://media.example/SUB-BLUR/V3/p/0-abc.mp4",
 ];
-const V2 = "https://media.example/sub-blur/v2/p/0-abc.mp4";
+const CURRENT = "https://media.example/sub-blur/v3/p/0-abc.mp4";
 
 /**
  * The worker's blurred clip for a locked video (owner, 2026-10-29: every exclusive post autoplays blurred to a
@@ -105,10 +107,14 @@ describe("the server's blurred clip", () => {
     expect(lacksCurrentClip([])).toBe(true);
     expect(lacksCurrentClip([undefined, null])).toBe(true);
     expect(lacksCurrentClip(["https://media.example/a.webm"])).toBe(true);
-    expect(lacksCurrentClip(["https://media.example/a.webm", V2])).toBe(false);
-    expect(lacksCurrentClip([V2])).toBe(false);
+    expect(lacksCurrentClip(["https://media.example/a.webm", CURRENT])).toBe(false);
+    expect(lacksCurrentClip([CURRENT])).toBe(false);
     // an older or browser-made MP4 plays meanwhile, but is remade (recipe 2)
     expect(lacksCurrentClip(["https://media.example/b.mp4"])).toBe(true);
+    // teeth for recipe 3: a recipe-2 worker clip is no longer current — the stuttering 4 s loops are all remade
+    expect(lacksCurrentClip(["https://media.example/sub-blur/v2/p/0-abc.mp4"])).toBe(true);
+    expect(BLUR_CLIP_FPS).toBeGreaterThanOrEqual(30);
+    expect(BLUR_CLIP_SECONDS).toBeGreaterThanOrEqual(6);
   });
 
   it("the worker's queue and the feed's ask are ONE rule (code review, 2026-10-30): the filter selects exactly what lacksCurrentClip flags", () => {
@@ -128,8 +134,9 @@ describe("the server's blurred clip", () => {
       "HTTPS://media.example/sub-blur/p/0-abc.mp4",
       "data:video/mp4;base64,AAAA",
       "https://media.example/a.webmx/clip.mp4",
-      "http://media.example/sub-blur/v2/p/0-abc.mp4",
-      "https://media.example/SUB-BLUR/V2/p/0-abc.mp4",
+      "https://media.example/sub-blur/v2/p/0-abc.mp4",
+      "http://media.example/sub-blur/v3/p/0-abc.mp4",
+      "https://media.example/SUB-BLUR/V3/p/0-abc.mp4",
     ]);
     // and the filter without the recipe clause would never remake an old MP4 (teeth for recipe 2)
     const withoutMark = CLIP_NEEDS_WORK_FILTER.split(/,(?=blur_video_url\.)/).filter((c) => !c.includes(BLUR_CLIP_MARK)).join(",");
@@ -140,7 +147,7 @@ describe("the server's blurred clip", () => {
   });
 
   it("checks every slide of an album, not just the first", () => {
-    const mp4 = V2;
+    const mp4 = CURRENT;
     const still = "data:image/webp;base64,AAAA";
     expect(postNeedsBlurWork([{ kind: "video", blurVideoUrl: mp4 }, { kind: "video" }], true, mp4)).toBe(true);
     expect(postNeedsBlurWork([{ kind: "video", blurVideoUrl: mp4 }, { kind: "image" }], true, mp4)).toBe(true);

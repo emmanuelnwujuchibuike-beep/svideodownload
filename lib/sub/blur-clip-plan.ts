@@ -15,18 +15,24 @@
  *   · those frames are then enlarged BLUR_CLIP_UPSCALE× and Gaussian-blurred before encoding, so the stored clip is a
  *     smooth gradient (no detail is added: every output pixel comes from the tiny frame), and no block can show;
  *   · 24 fps, so the movement is fluid.
- * Worker clips are stored under BLUR_CLIP_MARK; a clip without it (recipe 1, or a browser recording) is remade by the
- * worker once (CLIP_NEEDS_WORK_FILTER).
+ * 🔴 RECIPE 3 (owner, 2026-10-30, later: "the main issue is the blurred auto is lagging on low quality"). Measured on
+ * production: the clips playing were browser recordings — 24×52 px, or 96×168 at a VARIABLE frame rate — and every
+ * clip was a 4-second loop, so the movement stuttered and visibly repeated. Recipe 3 keeps the gate exactly where it was
+ * (the detail is still destroyed at `width` px) and only makes the playback smooth: 30 fps at a constant rate, 6 s
+ * before it loops, and enlarged 8× (192 px wide at Medium) with the Gaussian baked in, so nothing is left for the phone
+ * to stretch. Recipe-2 clips are remade once like any other.
+ * Worker clips are stored under BLUR_CLIP_MARK; a clip without it (an older recipe, or a browser recording) is remade by
+ * the worker once (CLIP_NEEDS_WORK_FILTER).
  *
  * Pure: arguments only, so a test can read the exact command.
  */
 export const BLUR_CLIP_WIDTH = 24;
-export const BLUR_CLIP_SECONDS = 4;
-export const BLUR_CLIP_FPS = 24;
+export const BLUR_CLIP_SECONDS = 6;
+export const BLUR_CLIP_FPS = 30;
 /** The tiny frames are enlarged this much, smoothly, before encoding — the stored clip carries no blocks. */
-export const BLUR_CLIP_UPSCALE = 4;
-/** In the key of every clip the worker makes with the current recipe: `sub-blur/v2/<post>/<idx>-<t>.mp4`. */
-export const BLUR_CLIP_MARK = "/sub-blur/v2/";
+export const BLUR_CLIP_UPSCALE = 8;
+/** In the key of every clip the worker makes with the current recipe: `sub-blur/v3/<post>/<idx>-<t>.mp4`. */
+export const BLUR_CLIP_MARK = "/sub-blur/v3/";
 /** A real clip (≤ 256 px of smooth gradient, 4 s) is well under 200 KB; anything near this is not one. */
 export const BLUR_CLIP_MAX_BYTES = 512 * 1024;
 
@@ -66,12 +72,13 @@ export function buildBlurClipArgs(input: string, output: string, width: number =
     "baseline",
     "-level",
     "3.0",
+    // 30 fps at 8× (recipe 3): a smooth gradient still compresses well — ~150–250 KB for 6 s, far under BLUR_CLIP_MAX_BYTES
     "-b:v",
-    "160k",
+    "240k",
     "-maxrate",
-    "220k",
+    "320k",
     "-bufsize",
-    "440k",
+    "640k",
     "-movflags",
     "+faststart",
     output,

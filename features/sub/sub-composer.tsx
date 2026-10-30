@@ -13,7 +13,7 @@ import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
 import { makeBlurClip } from "@/lib/media/make-blur-clip";
 import { makeThumb } from "@/lib/media/make-thumb";
 import { presignUpload, uploadWithPlan } from "@/lib/storage/client-upload";
-import { BLUR_CLIP_WIDTH_FOR, DEFAULT_BLUR_LEVEL, type BlurLevel } from "@/lib/sub/blur-level";
+import { BLUR_CLIP_WIDTH_FOR, BLUR_FRAME_CLASS, DEFAULT_BLUR_LEVEL, type BlurLevel } from "@/lib/sub/blur-level";
 import { cn } from "@/lib/utils";
 
 /**
@@ -318,7 +318,7 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
               <figure>
                 <figcaption className="mb-1.5 text-[12px] font-semibold text-muted-foreground">What visitors see</figcaption>
                 {audience === "locked" ? (
-                  <div className={cn("relative aspect-[4/5] rounded-2xl bg-[#1A1430]", ROUNDED_CLIP)}>
+                  <div className={cn("relative aspect-[4/5] rounded-2xl bg-[#1A1430]", ROUNDED_CLIP, BLUR_FRAME_CLASS)}>
                     {/* EXACTLY as visitors get it at the chosen level (owner, 2026-10-30) — the first item drawn at the size
                         the level stores and blurred the same way, a video still playing. Local only: nothing is uploaded. */}
                     {first ? <VisitorBlurPreview src={first.preview} kind={first.kind} level={blurLevel} /> : null}

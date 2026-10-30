@@ -5384,3 +5384,28 @@ html.dark .streak-recover {
   .streak-fb-tongue { opacity: 0.9; }
   .streak-fb-ember { display: none; }
 }
+
+/*
+  ── The blurred exclusive preview, sized to its frame (owner, 2026-10-30) ──────────────
+  "The videos in exclusive are cracking, not only blur, they looking like low quality." The clip is tiny (24 px, 48 px
+  for Light — lib/sub/blur-level.ts) and a fixed 7 px CSS blur could not hide its pixels once stretched across a
+  full-width card (each clip pixel ≈ 16 CSS px there). The blur is now a share of the FRAME's width (container query
+  units, `cqw`), so it is always about the same fraction of one clip pixel: ~12 px on a full card, ~4 px on a small tile.
+  Each level's first declaration is the fallback for a browser without container units (Safari < 16).
+  .sub-blur-frame on the element the preview fills makes it the container those units measure.
+*/
+.sub-blur-frame {
+  container-type: inline-size;
+}
+.sub-blur-light {
+  filter: blur(5px);
+  filter: blur(1.25cqw);
+}
+.sub-blur-medium {
+  filter: blur(12px);
+  filter: blur(3.1cqw);
+}
+.sub-blur-strong {
+  filter: blur(22px);
+  filter: blur(5.8cqw);
+}

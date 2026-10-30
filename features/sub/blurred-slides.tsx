@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { BLUR_COVER } from "@/features/sub/blur-frame";
 import { BlurredClip } from "@/features/sub/blurred-clip";
-import { blurClass } from "@/lib/sub/blur-level";
+import { BLUR_FRAME_CLASS, blurClass } from "@/lib/sub/blur-level";
 import { cn } from "@/lib/utils";
 
 /** One slide of a locked post as the server sends it (lib/sub/blur-preview.ts BlurSlide) — never the file. */
@@ -143,7 +143,7 @@ export function BlurredSlides({ slides, cover, fallbackStill, fallbackClip, leve
           // the first slide may wear the creator's public cover as its first frame; the rest their own still
           const still = s.blurUrl ?? (i === 0 ? (cover ?? undefined) : undefined);
           return (
-            <div key={i} className="relative h-full w-full shrink-0 snap-start snap-always overflow-hidden">
+            <div key={i} className={cn("relative h-full w-full shrink-0 snap-start snap-always overflow-hidden", BLUR_FRAME_CLASS)}>
               {s.blurVideoUrl ? (
                 <BlurredClip src={s.blurVideoUrl} poster={i === 0 && cover ? cover : still} level={level} className={BLUR_COVER} />
               ) : still ? (

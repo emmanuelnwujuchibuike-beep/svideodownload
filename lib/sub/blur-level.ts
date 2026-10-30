@@ -37,8 +37,14 @@ export function blurPreviewsChange(from: BlurLevel, to: BlurLevel): boolean {
   return BLUR_CLIP_WIDTH_FOR[from] !== BLUR_CLIP_WIDTH_FOR[to] || BLUR_STILL_WIDTH_FOR[from] !== BLUR_STILL_WIDTH_FOR[to];
 }
 
-/** The CSS blur drawn on top of the preview — written out in full so Tailwind generates each class. */
-export const BLUR_CSS_CLASS: Record<BlurLevel, string> = { light: "blur-[3px]", medium: "blur-[7px]", strong: "blur-[16px]" };
+/**
+ * The CSS blur drawn on top of the preview, as a share of its frame's width (app/globals.css .sub-blur-*): about the
+ * same fraction of one clip pixel at any size, so the tiny clip never shows its pixels — "cracking" (owner, 2026-10-30)
+ * — whether it fills a full-width card or a small tile. The element the preview fills carries BLUR_FRAME_CLASS.
+ */
+export const BLUR_CSS_CLASS: Record<BlurLevel, string> = { light: "sub-blur-light", medium: "sub-blur-medium", strong: "sub-blur-strong" };
+/** The frame a blurred preview fills: the container its blur is measured against. */
+export const BLUR_FRAME_CLASS = "sub-blur-frame";
 
 export function blurClass(level: unknown): string {
   return BLUR_CSS_CLASS[normalizeBlurLevel(level)];

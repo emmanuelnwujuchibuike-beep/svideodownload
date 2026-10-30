@@ -14,13 +14,15 @@ import { cn } from "@/lib/utils";
 
   🔴 THE MOVEMENT MUST SHOW (owner, 2026-10-30: "the auto play should be obvious movement not too much thick blurred that
   the auto play doesn't even show"). The CSS blur used to be blur-xl (24 px) on top of the 24 px clip, which washed the
-  motion out. It is now the creator's level — light 3 px, medium (default) 7 px, strong 16 px.
+  motion out. It is now the creator's level, as a share of the frame's width (app/globals.css .sub-blur-*): enough to
+  smooth the clip's pixels at any size ("cracking", 2026-10-30), little enough that the movement shows.
 
   ── Why it used to sit black on an iPhone (2026-10-29) ──────────────────────────
   · iOS starts a video without a tap only if it is muted AND inline when play() runs. React writes `muted` as a DOM
     property on a client render but not when it hydrates server HTML, and never as an attribute — so play() could be
     refused, and with no poster and nothing played, the tile stayed black. All of it is now set here, every way Safari
-    reads it, before the first play(); `autoPlay` is on too, the path Safari honours without any script.
+    reads it, before the first play(). No `autoPlay` attribute: it would start every clip on the page at once, off-screen
+    slides included, and iOS decodes only so many videos at a time — the ones on screen must get them.
   · `preload="metadata"` and no poster left nothing on screen until playback: the clip is a few KB, so it preloads, and
     without a poster a `#t=0.001` fragment makes Safari paint the first frame.
   · Low Power Mode refuses every autoplay: the viewer's next touch anywhere starts the clips on screen.
@@ -76,7 +78,6 @@ export function BlurredClip({ src, poster, level, className }: { src: string; po
       src={poster ? src : `${src}#t=0.001`}
       poster={poster ?? undefined}
       muted
-      autoPlay
       loop
       playsInline
       preload="auto"

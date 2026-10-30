@@ -75,6 +75,24 @@ export async function VerificationTags() {
   );
 }
 
+/*
+  ── DECISION A (owner, 2026-10-30) ─────────────────────────────────────────────
+  The bottom nav "is not smooth and fast anymore, especially after idle it delays". Measured: once a page went idle this
+  loader pulled adsbygoogle.js and its ad chain (~380 ms of main thread on a mid-range phone — the block quoted below)
+  on every public page, for everyone, though AdSense serves no ad yet. The owner chose: AdSense only on the public
+  content pages Google reviews — never on History or Profile (the app-style pages a visitor taps between in the bottom
+  nav), and never for a signed-in member. The meta tag (verification) stays on every page.
+*/
+/** The public pages that never load AdSense (History and the guest Profile). */
+export const ADSENSE_SKIP_PATH_SOURCE = "^/(history|profile)(/|$)";
+/** A Supabase session cookie — a signed-in member (the same test as lib/auth/has-auth-cookie.ts). */
+export const MEMBER_COOKIE_SOURCE = "(^|;\\s*)sb-[^=]*-auth-token";
+
+/** Does this page view load AdSense? The same rule the inline bootstrap below runs. */
+export function adsenseLoadsFor(pathname: string, cookie: string): boolean {
+  return !new RegExp(MEMBER_COOKIE_SOURCE).test(cookie) && !new RegExp(ADSENSE_SKIP_PATH_SOURCE).test(pathname);
+}
+
 export async function AdSenseSiteScript() {
   const settings = await getMonetizationSettings();
   /*
@@ -193,7 +211,8 @@ export async function AdSenseSiteScript() {
       <script
         dangerouslySetInnerHTML={{
           __html:
-            `(function(){var s=${JSON.stringify(
+            // Decision A first: a signed-in member, or History/Profile, never loads it (adsenseLoadsFor above)
+            `(function(){try{if(new RegExp(${JSON.stringify(MEMBER_COOKIE_SOURCE)}).test(document.cookie)||new RegExp(${JSON.stringify(ADSENSE_SKIP_PATH_SOURCE)}).test(location.pathname))return}catch(e){}var s=${JSON.stringify(
               `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(id)}`,
             )};` +
             `function l(){if(window.__frenzAdsLoaded)return;window.__frenzAdsLoaded=1;` +

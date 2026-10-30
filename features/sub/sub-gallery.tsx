@@ -22,7 +22,7 @@ import { BLUR_COVER, ROUNDED_CLIP } from "@/features/sub/blur-frame";
 import { BlurredClip } from "@/features/sub/blurred-clip";
 import { SendSubPostSheet } from "@/features/sub/send-sub-post-sheet";
 import { BlurLevelPicker } from "@/features/sub/blur-level-picker";
-import { blurClass, normalizeBlurLevel, type BlurLevel } from "@/lib/sub/blur-level";
+import { BLUR_FRAME_CLASS, blurClass, normalizeBlurLevel, type BlurLevel } from "@/lib/sub/blur-level";
 import type { CommentGift } from "@/lib/gift/comment-gifts";
 import { PostGiftButton } from "@/features/gift/post-gift-button";
 import type { GiftRecipient } from "@/features/gift/gift-sheet";
@@ -251,7 +251,7 @@ export function SubGallery({ creatorId, creatorName, quote, signedIn, loginNext,
                 onClick={() => (state.access && p.ageLocked ? setAgeGate(true) : state.access && !p.removed ? setOpen(p.id) : void 0)}
                 disabled={!!p.removed}
                 aria-label={p.removed ? "Removed by Frenzsave. Under review." : state.access && p.ageLocked ? "Mature (18+). Confirm your age to open." : state.access ? `Open subscriber post${p.caption ? `: ${p.caption.slice(0, 60)}` : ""}` : p.mature ? "Mature (18+). Subscriber only." : "Subscriber only. Subscribe to unlock."}
-                className={cn("relative block aspect-[3/4] w-full bg-frenz-fill transition active:scale-[0.98] sm:rounded-lg motion-reduce:active:scale-100", ROUNDED_CLIP)}
+                className={cn("relative block aspect-[3/4] w-full bg-frenz-fill transition active:scale-[0.98] sm:rounded-lg motion-reduce:active:scale-100", ROUNDED_CLIP, BLUR_FRAME_CLASS)}
               >
                 {!state.access && p.blurVideoUrl ? (
                   /* a locked video PLAYS blurred to a non-subscriber, ahead of any still cover (owner, 2026-10-29: "auto
@@ -981,7 +981,7 @@ function LockedGrid({ posts, more }: { posts: Card[]; more: boolean }) {
               onClick={() => report("subscribe_tapped", [p.id])}
               aria-label={`Locked ${kind(p).toLowerCase()}${p.mature ? ", Mature (18+)" : ""} — subscribe to view`}
               // rounded for real on an iPhone too (the playing, blurred clip used to show square corners — owner, 2026-10-30)
-              className={cn("relative block h-[220px] rounded-[20px] bg-[#1A1430]", ROUNDED_CLIP)}
+              className={cn("relative block h-[220px] rounded-[20px] bg-[#1A1430]", ROUNDED_CLIP, BLUR_FRAME_CLASS)}
             >
               {p.blurVideoUrl ? (
                 <BlurredClip src={p.blurVideoUrl} poster={p.coverUrl ?? p.blurUrl} level={p.blurLevel} className={BLUR_COVER} />

@@ -5,6 +5,7 @@ import { isTooLarge } from "@/lib/downloads/size-cap";
 import { getCachedMetadata, getMetadata } from "@/server/extractors";
 import type { MediaFormat, MediaKind, VideoMetadata } from "@/types";
 
+import { audioDonorCandidates, audioMuxInputArgs, donorAudioArgs, isHevcCodec, MAX_DONOR_PROBES, muxVideoArgs } from "./audio-donor";
 import { getOrProduce, type DownloadResult } from "./download-cache";
 import { downloadTelegramMedia, downloadTelegramStream } from "./telegram-mtproto";
 import { prepareDownload, YtDlpError } from "./ytdlp-service";
@@ -306,6 +307,34 @@ async function probeUrlCodecs(format: MediaFormat): Promise<ProbedCodecs> {
 }
 
 
+/** A rendition of the same post that carries the sound the chosen file lacks (audio-donor.ts). */
+interface AudioDonor {
+  format: MediaFormat;
+  codecs: ProbedCodecs;
+}
+
+/**
+ * The first rendition of this post that HAS audio, probed in audioDonorCandidates' order (header reads, memoised) —
+ * null when none does (a genuinely silent post, or no sibling reachable): the caller then delivers the picture as before.
+ */
+async function findAudioDonor(formats: readonly MediaFormat[], chosen: MediaFormat): Promise<AudioDonor | null> {
+  for (const candidate of audioDonorCandidates(formats, chosen).slice(0, MAX_DONOR_PROBES)) {
+    const codecs = await probeUrlCodecs(candidate);
+    if (codecs.audio) return { format: candidate, codecs };
+  }
+  return null;
+}
+
+/**
+ * 🔴 A picture with NO sound (owner, 2026-10-30: "some tiktok video doesn't download with sound"): when the probe of the
+ * chosen file found a video stream and no audio stream, the donor that supplies the post's sound. A probe that learned
+ * nothing (no video either) is not "silent" — it is unknown, and is left to the paths that already handle it.
+ */
+async function audioDonorIfSilent(formats: readonly MediaFormat[], chosen: MediaFormat, probed: ProbedCodecs): Promise<AudioDonor | null> {
+  if (!probed.video || probed.audio) return null;
+  return findAudioDonor(formats, chosen);
+}
+
 function runCodecProbe(format: MediaFormat): Promise<ProbedCodecs> {
   return new Promise((resolve) => {
     let child;
@@ -357,9 +386,9 @@ function runCodecProbe(format: MediaFormat): Promise<ProbedCodecs> {
   });
 }
 
-async function transcodeToH264(format: MediaFormat, knownCodec?: string | null): Promise<DownloadResult> {
+async function transcodeToH264(format: MediaFormat, knownCodec?: string | null, opts: { donor?: AudioDonor; keepHevc?: boolean } = {}): Promise<DownloadResult> {
   const key = createHash("sha256")
-    .update(`vh264|${format.directUrl}`)
+    .update(`vh264|${format.directUrl}${opts.donor ? `|a:${opts.donor.format.directUrl}` : ""}${opts.keepHevc ? "|hevc" : ""}`)
     .digest("hex")
     .slice(0, 40);
 
@@ -451,17 +480,24 @@ async function transcodeToH264(format: MediaFormat, knownCodec?: string | null):
   return getOrProduce(key, "mp4", "video/mp4", (finalPath) =>
     new Promise<void>((resolve, reject) => {
       const args = [
-        ...headerArgFor(format),
-        "-threads", threads,
-        "-i",
-        format.directUrl!,
-        // A VIDEO stream is mandatory — without this, an audio-only source
-        // "succeeds" and ships an audio-only mp4 the user saved as a video.
-        // Requiring 0:v:0 makes that impossible; audio stays optional.
-        "-map", "0:v:0",
-        "-map", "0:a:0?",
-        ...videoArgs,
-        ...audioArgs,
+        ...(opts.donor
+          ? // the picture from this file, the sound from the donor (audio-donor.ts) — 0:v:0 still mandatory
+            audioMuxInputArgs({ url: format.directUrl!, headerArgs: headerArgFor(format) }, { url: opts.donor.format.directUrl!, headerArgs: headerArgFor(opts.donor.format) }, threads)
+          : [
+              ...headerArgFor(format),
+              "-threads", threads,
+              "-i",
+              format.directUrl!,
+              // A VIDEO stream is mandatory — without this, an audio-only source
+              // "succeeds" and ships an audio-only mp4 the user saved as a video.
+              // Requiring 0:v:0 makes that impossible; audio stays optional.
+              "-map", "0:v:0",
+              "-map", "0:a:0?",
+            ]),
+        // with a donor, an HEVC picture is copied untouched for a device that plays it (tagged hvc1)
+        ...(opts.donor ? muxVideoArgs(codec ?? null, !!opts.keepHevc, threads) : videoArgs),
+        // 2026-10-30: with a donor, the DONOR's audio codec decides (same rule as audioArgs — audio-donor.ts donorAudioArgs)
+        ...(opts.donor ? donorAudioArgs(opts.donor.codecs) : audioArgs),
         "-movflags",
         "+faststart",
         "-y",
@@ -520,9 +556,9 @@ async function transcodeToH264(format: MediaFormat, knownCodec?: string | null):
  * catchable error resolveDownload falls back from) instead of silently
  * producing an audio-only file, unlike a raw proxy passthrough.
  */
-async function downscaleTo(format: MediaFormat, maxHeight: number): Promise<DownloadResult> {
+async function downscaleTo(format: MediaFormat, maxHeight: number, donor?: AudioDonor): Promise<DownloadResult> {
   const key = createHash("sha256")
-    .update(`vh${maxHeight}|${format.directUrl}`)
+    .update(`vh${maxHeight}|${format.directUrl}${donor ? `|a:${donor.format.directUrl}` : ""}`)
     .digest("hex")
     .slice(0, 40);
 
@@ -532,13 +568,18 @@ async function downscaleTo(format: MediaFormat, maxHeight: number): Promise<Down
   return getOrProduce(key, "mp4", "video/mp4", (finalPath) =>
     new Promise<void>((resolve, reject) => {
       const args = [
-        ...headerArgFor(format),
-        "-threads", threads,
-        "-i",
-        format.directUrl!,
-        // Video stream required (see transcodeToH264) — audio-only can't pass.
-        "-map", "0:v:0",
-        "-map", "0:a:0?",
+        ...(donor
+          ? // a tier made from a SILENT rendition takes the post's sound from the donor (audio-donor.ts)
+            audioMuxInputArgs({ url: format.directUrl!, headerArgs: headerArgFor(format) }, { url: donor.format.directUrl!, headerArgs: headerArgFor(donor.format) }, threads)
+          : [
+              ...headerArgFor(format),
+              "-threads", threads,
+              "-i",
+              format.directUrl!,
+              // Video stream required (see transcodeToH264) — audio-only can't pass.
+              "-map", "0:v:0",
+              "-map", "0:a:0?",
+            ]),
         // Never scale UP — only clamps a source that's already taller than
         // maxHeight. NOTE: no shell is involved (spawn takes argv directly),
         // so this is ffmpeg's OWN filtergraph syntax, not shell quoting —
@@ -677,7 +718,9 @@ export async function resolveDownload(
   // of silently shipping an audio-only "video" the way a raw proxy would. No
   // fallback to the raw stream — that would defeat the entire point.
   if (hasDirect && format!.transcodeMaxHeight) {
-    return { ...(await downscaleTo(format!, format!.transcodeMaxHeight)), title };
+    // a tier made from a SILENT rendition (TikTok's adaptive tiers) takes the post's sound from a sibling (audio-donor.ts)
+    const donor = await audioDonorIfSilent(meta.formats, format!, await probeUrlCodecs(format!));
+    return { ...(await downscaleTo(format!, format!.transcodeMaxHeight, donor ?? undefined)), title };
   }
 
   // Platforms whose direct-URL video streams aren't reliably H.264 — the only
@@ -715,6 +758,21 @@ export async function resolveDownload(
     */
     const probedCodecs = await probeUrlCodecs(format!);
     const probed = probedCodecs.video?.toLowerCase() ?? null;
+    /*
+      🔴 A PICTURE WITH NO SOUND (owner, 2026-10-30: "some tiktok video doesn't download with sound").
+      TikTok's tallest tiers are now adaptive, video-only streams — our "Best quality" row — so every fast path below
+      would have shipped them silent (the raw proxy as-is, the transcode with its optional `0:a:0?`). The sound is taken
+      from another rendition of the same post and laid under the full-quality picture (audio-donor.ts); an iPhone keeps
+      the HEVC picture untouched. If that fails, the paths below still deliver the picture rather than nothing.
+    */
+    const donor = await audioDonorIfSilent(meta.formats, format!, probedCodecs);
+    if (donor) {
+      try {
+        return { ...(await transcodeToH264(format!, probed, { donor, keepHevc: !!caps.clientPlaysHevc && isHevcCodec(probed) })), title };
+      } catch {
+        // fall through — a picture without sound beats no file
+      }
+    }
     /*
       🔴 The raw fast path is for a file that plays as-is. H.264 video with
       HE-AAC audio is not one (see isHeAac): it takes the remux below instead,

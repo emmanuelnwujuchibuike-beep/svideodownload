@@ -237,6 +237,13 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   /*
+    <meta name="color-scheme" content="light dark"> (2026-10-29: "it should never show white screen"). The browser reads
+    it before any stylesheet, so the blank canvas shown while the CSS downloads follows the device's light/dark setting
+    instead of always being white. Once the CSS is in, globals.css sets color-scheme per theme (:root light, .dark dark),
+    so nothing after first paint changes.
+  */
+  colorScheme: "light dark",
+  /*
     🔴 ZOOM IS ALLOWED AGAIN (owner, 2026-08-10: accessibility is "the crucial
     part"; Lighthouse a11y sat at 82).
 

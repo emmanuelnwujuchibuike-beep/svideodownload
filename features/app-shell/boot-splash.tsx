@@ -87,7 +87,14 @@ html.frenz-boot-off #frenz-boot{display:none}
   out for its own reasons.
 */
 .frenz-boot__mark{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:22%;width:104px;height:104px;max-width:26vw;max-height:26vw}
-.frenz-boot__mark img{display:block;width:100%;height:100%}
+/*
+  🔴 THE LOGO PAINTS IN THE SAME FRAME AS THE LOADER (owner, 2026-10-29: "it should paint the brand logo first before
+  the brand loader"). It was a lazy <img>: lazy means its load starts only after the first layout, so the first frames
+  showed the wordmark and the sweeping bar around an EMPTY square. As a background it is requested the moment this rule
+  applies — only under html.frenz-boot-on, i.e. only in the installed app, never in a browser tab — and the layout's
+  high-priority preload (media display-mode:standalone) has already fetched it, so it is drawn with the very first frame.
+*/
+html.frenz-boot-on .frenz-boot__mark{background:url(/brand/frenz-logo-splash.png) center/cover no-repeat}
 .frenz-boot__shine{position:absolute;inset:0;background:linear-gradient(115deg,transparent 40%,rgba(255,255,255,.65) 50%,transparent 60%);transform:translateX(-130%);animation:frenz-boot-shimmer 1.4s ease-in-out infinite}
 /*
   The wordmark, ALREADY WRITTEN — no clip-path, no reveal. Same italic serif
@@ -101,7 +108,13 @@ html.frenz-boot-off #frenz-boot{display:none}
   children where that one has three, so the block was shorter and the mark sat
   16px LOWER — a visible vertical jump at the handoff. Same size, same colours.
 */
-.frenz-boot__track{position:relative;width:132px;height:3px;border-radius:999px;overflow:hidden;background:rgba(99,102,241,.16)}
+/*
+  The loader arrives a beat AFTER the logo (owner, 2026-10-29: "paint the brand logo first before the brand loader") —
+  the same order launch.html keeps, so its held frame (logo + wordmark) runs straight into this one and the bar fades
+  in rather than popping on at the hand-off.
+*/
+.frenz-boot__track{position:relative;width:132px;height:3px;border-radius:999px;overflow:hidden;background:rgba(99,102,241,.16);animation:frenz-boot-fade .4s ease .2s both}
+@keyframes frenz-boot-fade{from{opacity:0}to{opacity:1}}
 .frenz-boot__bar{position:absolute;top:0;bottom:0;left:0;width:42%;border-radius:999px;background:linear-gradient(90deg,#3b82f6,#8b5cf6,#d946ef);animation:frenz-boot-sweep 1.15s cubic-bezier(.65,0,.35,1) infinite}
 @keyframes frenz-boot-sweep{0%{transform:translateX(-115%)}100%{transform:translateX(255%)}}
 .frenz-boot__word{font:italic 700 30px/1.08 Georgia,"Times New Roman","Hoefler Text",Didot,"Palatino Linotype",serif;letter-spacing:.004em;color:#4338ca}
@@ -130,7 +143,7 @@ html.dark .frenz-boot__word{color:#a5b4fc}
 @supports ((-webkit-background-clip:text) or (background-clip:text)){.frenz-boot__word{background:linear-gradient(100deg,#3b82f6 0%,#8b5cf6 38%,#d946ef 74%,#f472b6 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}}
 @keyframes frenz-boot-shimmer{0%{transform:translateX(-130%)}100%{transform:translateX(130%)}}
 @keyframes frenz-boot-selfclear{to{visibility:hidden}}
-@media (prefers-reduced-motion:reduce){.frenz-boot__mark,.frenz-boot__shine,.frenz-boot__bar,.frenz-boot__word{animation:none}.frenz-boot__word{-webkit-clip-path:none;clip-path:none}.frenz-boot__bar{width:100%;opacity:.5}}
+@media (prefers-reduced-motion:reduce){.frenz-boot__mark,.frenz-boot__shine,.frenz-boot__track,.frenz-boot__bar,.frenz-boot__word{animation:none}.frenz-boot__word{-webkit-clip-path:none;clip-path:none}.frenz-boot__bar{width:100%;opacity:.5}}
 `;
 
 // WHEN THE F LOADER SHOWS — owner rule, REVISED 2026-07-16:
@@ -449,11 +462,8 @@ export function BootSplash() {
   return (
     <div id="frenz-boot" aria-hidden="true">
       <div className="frenz-boot__stack">
+        {/* the logo is this span's background (BOOT_CSS: html.frenz-boot-on .frenz-boot__mark) — drawn with the first frame */}
         <span className="frenz-boot__mark">
-          {/* lazy: stops React auto-preloading it in every browser tab; the layout preloads it for the installed app */}
-          {/* eslint-disable-next-line @next/next/no-img-element -- must render
-              before the JS bundle (next/image) is available */}
-          <img src="/brand/frenz-logo-splash.png" width={104} height={104} alt="" loading="lazy" />
           <span className="frenz-boot__shine" />
         </span>
         <span className="frenz-boot__word">FrenzSave</span>

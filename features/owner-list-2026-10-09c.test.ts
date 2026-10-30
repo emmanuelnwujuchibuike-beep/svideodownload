@@ -35,7 +35,11 @@ describe("landing speed test (LCP 4.3 s, TTI 9.2 s)", () => {
 
   it("a browser tab never preloads the installed-app splash", () => {
     expect(code("app/layout.tsx")).toContain('href="/brand/frenz-logo-splash.png" fetchPriority="high" media="(display-mode: standalone)"');
-    expect(code("features/app-shell/boot-splash.tsx")).toContain('alt="" loading="lazy" />');
+    // the boot logo is a background that applies ONLY under html.frenz-boot-on (installed app + boot route) — never an
+    // <img> a browser tab would fetch (2026-10-29: it now paints with the first frame)
+    const boot = code("features/app-shell/boot-splash.tsx");
+    expect(boot).toContain("html.frenz-boot-on .frenz-boot__mark{background:url(/brand/frenz-logo-splash.png)");
+    expect(boot).not.toMatch(/<img[^>]+frenz-logo-splash/);
   });
 });
 

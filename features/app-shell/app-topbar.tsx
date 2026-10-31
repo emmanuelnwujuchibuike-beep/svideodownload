@@ -199,6 +199,8 @@ export function AppTopbar() {
         // (zero in a normal browser tab, so nothing changes there).
         "sticky top-0 z-30 flex items-center gap-2 px-4 pt-[var(--frenz-safe-top)]",
         "h-[calc(4rem+var(--frenz-safe-top))]",
+        // owner, 2026-10-31: "too much space between the [buttons] and the [tabs]" — the glass bar is 56 px on phones, the 48 px circles 4 px from each edge
+        glassBar && "max-lg:h-[calc(3.5rem+var(--frenz-safe-top))]",
         // Owner correction (2026-07-13): the top nav must track the SYSTEM
         // theme like every other surface — white in light mode, blending
         // into the app's own dark background in dark mode ("the top edge
@@ -524,7 +526,7 @@ export function AppTopbar() {
           portals to <body>, so this header's own stacking can't trap it. */}
       {createUsed ? <CreateActionSheet open={createOpen} onClose={() => setCreateOpen(false)} /> : null}
     </header>
-    {glassBar ? <div aria-hidden className="h-[calc(4rem+var(--frenz-safe-top))] shrink-0 lg:hidden" /> : null}
+    {glassBar ? <div aria-hidden className="h-[calc(3.5rem+var(--frenz-safe-top))] shrink-0 lg:hidden" /> : null}
     </>
   );
 }

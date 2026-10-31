@@ -39,6 +39,7 @@ import { PeopleSheet } from "@/features/friends/people-sheet";
 import { SuggestionDeck } from "@/features/friends/suggestion-deck";
 import { afterPageLoad } from "@/features/app-shell/warm-routes";
 import { iconButton, PersonAvatar, primaryPill, quietPill } from "@/features/friends/ui";
+import { FROSTED_GLASS } from "@/features/ui/floating-glass";
 import { usePresence } from "@/features/friends/use-presence";
 import { ChevronRightIcon, UserPlusIcon } from "@/features/frenz-ui/icons";
 import { timeAgo } from "@/features/notifications/meta";
@@ -115,8 +116,8 @@ function Heading({ title, count, action, id }: { title: string; count?: number; 
 
 const DISCOVER = "/friends/discover";
 
-const ROUND =
-  "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-frenz-line bg-frenz-fill/60 text-frenz-ink";
+// owner, 2026-10-31: every floating button wears the feed header's frosted glass (features/ui/floating-glass.ts)
+const ROUND = `flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${FROSTED_GLASS}`;
 const HI_PILL =
   "flex h-[38px] shrink-0 items-center rounded-[19px] border border-frenz-line bg-frenz-card px-3.5 text-[13px] font-bold text-frenz-ink";
 

@@ -63,10 +63,16 @@ describe("the floating glass bottom nav", () => {
     expect(css).toMatch(/html\[data-glass="reduced"\]\) \.frenz-nav-glass/);
     // Inside the SAME tier blocks as .ai-glass (one hierarchy, one source order).
     expect(css).toMatch(/@supports not \(\(backdrop-filter: blur\(1px\)\) or \(-webkit-backdrop-filter: blur\(1px\)\)\) \{\n {4}\.ai-glass \{[^}]*\}\n {4}\.frenz-nav-glass \{\n {6}--nav-glass-fill: 0\.99;/);
-    // 2026-10-31 design (design/frenz-exclusive-feed.html): #F4F3F8 at 92 %, 20 px blur, a white hairline and the soft drop
-    expect(rule).toMatch(/--nav-glass-fill: 0\.92;/);
-    expect(rule).toMatch(/--nav-glass-blur: 20px;/);
-    expect(rule).toMatch(/box-shadow: 0 14px 30px -14px rgb\(14 14 18 \/ 0\.3\);/);
+    // 2026-10-31 (owner): the feed header's frosted glass — white .72 → .52, 26 px blur at 190 %, a white hairline
+    expect(rule).toMatch(/--nav-glass-rgb: 255 255 255;/);
+    expect(rule).toMatch(/--nav-glass-fill: 0\.52;/);
+    expect(rule).toMatch(/--nav-glass-blur: 26px;/);
+    expect(rule).toMatch(/background-image: linear-gradient\(180deg, rgb\(255 255 255 \/ 0\.42\), rgb\(255 255 255 \/ 0\)\);/);
+    expect(rule).toMatch(/saturate\(190%\)/);
+    expect(rule).toMatch(/border: 1px solid rgb\(255 255 255 \/ 0\.6\);/);
+    // dark and immersive (Reels) drop the white light — otherwise the dark glass turns grey
+    expect(css.match(/\.dark \.frenz-nav-glass \{[\s\S]*?\}/)?.[0] ?? "").toMatch(/background-image: none;/);
+    expect(css.match(/\.frenz-nav-glass\.frenz-nav-glass--immersive \{[\s\S]*?\}/)?.[0] ?? "").toMatch(/background-image: none;/);
     expect(rule).not.toMatch(/rgb\(16 24 40/);
     const darkRule = css.match(/\.dark \.frenz-nav-glass \{[\s\S]*?\}/)?.[0] ?? "";
     expect(darkRule).toMatch(/-6px -6px 16px rgb\(255 255 255 \/ 0\.045\)/);

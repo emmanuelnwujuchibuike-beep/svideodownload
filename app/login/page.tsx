@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { FollowLinks } from "@/components/social/follow-links";
 import { AuthPanel } from "@/features/auth/auth-panel";
+import { FROSTED_GLASS } from "@/features/ui/floating-glass";
 import { LoginCollage } from "@/features/auth/login-collage";
 import { createClient } from "@/lib/supabase/server";
 import { safeNext } from "@/lib/auth/safe-next";
@@ -42,7 +43,7 @@ export default async function LoginPage({
       <Link
         href="/"
         aria-label="Back to Frenz"
-        className="fixed left-4 top-[max(1rem,var(--frenz-safe-top))] z-20 flex h-11 w-11 items-center justify-center rounded-full border border-frenz-line bg-frenz-card text-frenz-ink shadow-frenz-card transition active:scale-95"
+        className={`fixed left-4 top-[max(1rem,var(--frenz-safe-top))] z-20 flex h-11 w-11 items-center justify-center rounded-full ${FROSTED_GLASS}`}
       >
         <ArrowLeft className="h-5 w-5" />
       </Link>

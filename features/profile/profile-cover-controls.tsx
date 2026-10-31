@@ -38,12 +38,12 @@ const ProfileMenuBottomSheet = dynamic(() => import("./profile-menu-bottom-sheet
  * of this, and the profile page docks its rail there instead.
  */
 /**
- * The floating glass the three cover controls share (owner, 2026-10-07: "more
- * premium and glassy like iOS Instagram"). Dark frosted glass — legible on a
- * bright cover AND on page content once the profile scrolls under them — with
- * a hairline light edge, a soft drop, and a spring press so a tap is felt.
+ * The floating glass the three cover controls share. Owner, 2026-10-31: the
+ * feed header's frosted white glass (superseding 2026-10-07's dark glass) —
+ * a white gradient, a white hairline, inner light, a violet-tinted drop and ink
+ * icons, the same recipe as every other floating button.
  */
-const GLASS = FLOATING_GLASS; // shared with the feed header (features/ui/floating-glass.ts)
+const GLASS = FLOATING_GLASS; // the feed header's frosted glass (features/ui/floating-glass.ts, owner 2026-10-31)
 
 export function ProfileCoverControls({ user }: { user: MenuUser }) {
   const [open, setOpen] = useState(false);
@@ -110,7 +110,7 @@ export function ProfileCoverControls({ user }: { user: MenuUser }) {
           aria-label="Search"
           className={`pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full ${GLASS}`}
         >
-          <Search className="h-[19px] w-[19px] drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]" strokeWidth={2.2} />
+          <Search className="h-[19px] w-[19px]" strokeWidth={2.2} />
         </Link>
 
         <div className="pointer-events-auto flex items-center gap-2">
@@ -118,7 +118,7 @@ export function ProfileCoverControls({ user }: { user: MenuUser }) {
             href="/account/identity"
             className={`inline-flex h-11 items-center gap-1.5 rounded-full px-3.5 text-[13.5px] font-semibold tracking-[-0.01em] ${GLASS}`}
           >
-            <Camera className="h-4 w-4 drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]" strokeWidth={2.2} /> Edit Cover
+            <Camera className="h-4 w-4" strokeWidth={2.2} /> Edit Cover
           </Link>
           <button
             type="button"
@@ -131,7 +131,7 @@ export function ProfileCoverControls({ user }: { user: MenuUser }) {
             className={`flex h-11 w-11 items-center justify-center rounded-full ${GLASS}`}
           >
             {/* the design's ⋯ (design/Profile.dc.html) — it opens the same profile menu */}
-            <DotsIcon size={20} className="drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]" />
+            <DotsIcon size={20} />
           </button>
         </div>
       </div>

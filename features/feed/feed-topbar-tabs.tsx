@@ -27,9 +27,9 @@ const TABS: { key: HomeFeedSort; label: string }[] = [
   { key: "following", label: "Following" },
 ];
 
-// design/frenz-exclusive-feed.html (owner, 2026-10-31): 17.5 px bold, muted until active, spread across the row
+// design/frenz-exclusive-feed.html (owner, 2026-10-31): 17.5 px bold, ink-2 until active (#4A4A55 — the design's #8A8A96 vanished over dark media under the glass, owner 2026-10-31), spread across the row
 const TAB =
-  "relative inline-flex min-h-11 shrink-0 items-center gap-1.5 pb-[15px] pt-[14px] text-[17.5px] font-bold tracking-[-0.01em] whitespace-nowrap no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2";
+  "relative inline-flex min-h-11 shrink-0 items-center gap-1.5 pb-[15px] pt-[8px] text-[17.5px] font-bold tracking-[-0.01em] whitespace-nowrap no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2";
 
 function Underline() {
   return <span aria-hidden className="absolute inset-x-0 -bottom-px h-1 rounded-t bg-[linear-gradient(90deg,#5B5BF0,#7B5CF0)]" />;
@@ -87,7 +87,7 @@ function ScrollUpTabs({ children }: { children: ReactNode }) {
               className={cn(
                 // from the very top, under the floating buttons (the header is z-30): the strip behind the buttons is the
                 // bar too, so a post never shows through between the clock, the buttons and the tabs (owner, 2026-10-29)
-                "fixed inset-x-0 top-0 z-[29] border-b border-white/60 bg-[linear-gradient(180deg,rgba(255,255,255,.72),rgba(255,255,255,.52))] pt-[calc(var(--frenz-safe-top)+4rem)] shadow-[0_1px_0_rgba(14,14,18,.04),0_10px_30px_-20px_rgba(40,30,90,.25)] backdrop-blur-[26px] backdrop-saturate-[1.9] dark:border-white/10 dark:bg-frenz-page/80 [&>nav]:!mx-0 transition-[transform,opacity] duration-300 ease-out motion-reduce:transition-none lg:hidden",
+                "fixed inset-x-0 top-0 z-[29] border-b border-white/60 bg-[linear-gradient(180deg,rgba(255,255,255,.72),rgba(255,255,255,.52))] pt-[calc(var(--frenz-safe-top)+3.5rem)] shadow-[0_1px_0_rgba(14,14,18,.04),0_10px_30px_-20px_rgba(40,30,90,.25)] backdrop-blur-[26px] backdrop-saturate-[1.9] dark:border-white/10 dark:bg-frenz-page/80 [&>nav]:!mx-0 transition-[transform,opacity] duration-300 ease-out motion-reduce:transition-none lg:hidden",
                 shown ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-full opacity-0",
               )}
             >
@@ -114,7 +114,7 @@ function FeedTabRow({ sort, onSegment, showReelsLink }: { sort: HomeFeedSort; on
               onSegment(t.key);
             }}
             aria-current={active ? "page" : undefined}
-            className={cn(TAB, active ? "text-frenz-ink" : "text-[#8A8A96] hover:text-frenz-ink")}
+            className={cn(TAB, active ? "text-frenz-ink" : "text-[#4A4A55] hover:text-frenz-ink dark:text-white/60")}
           >
             {t.label}
             {active ? <Underline /> : null}
@@ -122,7 +122,7 @@ function FeedTabRow({ sort, onSegment, showReelsLink }: { sort: HomeFeedSort; on
         );
       })}
       {showReelsLink ? (
-        <Link href="/reels" onClick={tap} className={cn(TAB, "text-[#8A8A96] hover:text-frenz-ink")}>
+        <Link href="/reels" onClick={tap} className={cn(TAB, "text-[#4A4A55] hover:text-frenz-ink dark:text-white/60")}>
           Reels
         </Link>
       ) : (
@@ -132,12 +132,12 @@ function FeedTabRow({ sort, onSegment, showReelsLink }: { sort: HomeFeedSort; on
             tap();
             onSegment("recent");
           }}
-          className={cn(TAB, "text-[#8A8A96] hover:text-frenz-ink")}
+          className={cn(TAB, "text-[#4A4A55] hover:text-frenz-ink dark:text-white/60")}
         >
           Reels
         </button>
       )}
-      <Link href="/exclusive" prefetch={false} onClick={tap} className={cn(TAB, "text-[#8A8A96] hover:text-frenz-ink")}>
+      <Link href="/exclusive" prefetch={false} onClick={tap} className={cn(TAB, "text-[#4A4A55] hover:text-frenz-ink dark:text-white/60")}>
         <LockIcon size={15} strokeWidth={2.4} />
         Exclusive
       </Link>
@@ -151,7 +151,7 @@ function FeedTabRow({ sort, onSegment, showReelsLink }: { sort: HomeFeedSort; on
  * smart-feed), Reels to Reels, and Exclusive is the active one.
  */
 export function FeedTabLinks() {
-  const link = cn(TAB, "text-[#8A8A96] hover:text-frenz-ink");
+  const link = cn(TAB, "text-[#4A4A55] hover:text-frenz-ink dark:text-white/60");
   // the same come-back-on-the-way-up row as the Feed (owner, 2026-10-28)
   return (
     <ScrollUpTabs>

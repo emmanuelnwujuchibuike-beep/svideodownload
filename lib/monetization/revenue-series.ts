@@ -111,7 +111,11 @@ export interface DayPoint {
 
 export interface RevenueSeries {
   days: DayPoint[];
-  /** True when either table hit ROW_CAP, so the UI can label the window partial. */
+  /**
+   * True when a scan hit ROW_CAP before reaching the first VISIBLE day, so the
+   * UI can label the window partial. A cap that only cut into the comparison
+   * half leaves this false (and `previousDays` empty).
+   */
   capped: boolean;
   /**
    * The window immediately BEFORE `days`, same length — the comparison
@@ -135,6 +139,26 @@ export interface RevenueSeries {
 
 function isoDay(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+
+/**
+ * The first ISO day (YYYY-MM-DD) that EVERY capped scan read completely, or
+ * null when no scan was capped. Scans are read newest-first, so a capped scan's
+ * last row is the oldest it reached; that day may itself be cut mid-way, so
+ * full coverage starts the day after.
+ */
+export function fullyReadFrom(scans: { rows: { created_at: string }[]; capped: boolean }[]): string | null {
+  let from: string | null = null;
+  for (const s of scans) {
+    if (!s.capped) continue;
+    const oldest = s.rows[s.rows.length - 1]?.created_at.slice(0, 10);
+    if (!oldest) continue;
+    const d = new Date(`${oldest}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 1);
+    const next = d.toISOString().slice(0, 10);
+    if (from === null || next > from) from = next;
+  }
+  return from;
 }
 
 /**
@@ -299,15 +323,18 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
     }
 
     const all = [...grid.values()];
-    const capped =
-        impr.capped ||
-        clicks.capped ||
-        dl.capped ||
-        inst.capped ||
-        rewardStart.capped ||
-        rewardGrant.capped ||
-        batchRun.capped ||
-        batchRefused.capped;
+    const scans = [impr, clicks, dl, inst, rewardStart, rewardGrant, batchRun, batchRefused];
+    const anyCapped = scans.some((s) => s.capped);
+    /*
+      🔴 `capped` MEANS THE VISIBLE WINDOW IS PARTIAL — not "some scan was full".
+      Owner, 2026-10-30: the panel said "This window hit the read limit" while
+      every visible day was complete. The scan spans TWICE the window, newest
+      first, so a cap usually only eats into the hidden comparison half. Flag
+      the window only when a capped scan stopped short of its first day.
+    */
+    const readFrom = fullyReadFrom(scans);
+    const visibleStart = all[span - days]?.date ?? "";
+    const capped = readFrom !== null && readFrom > visibleStart;
 
     return {
       days: all.slice(span - days),
@@ -318,7 +345,7 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
         sags for a reason that has nothing to do with the business, which is
         worse than drawing no baseline at all.
       */
-      previousDays: capped ? [] : all.slice(0, span - days),
+      previousDays: anyCapped ? [] : all.slice(0, span - days),
       capped,
       rangeDays: days,
     };

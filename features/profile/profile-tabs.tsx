@@ -2,7 +2,9 @@
 
 import { LayoutGrid, Lock } from "lucide-react";
 import dynamic from "next/dynamic";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+
+import { PressIcon } from "@/components/motion/press-icon";
 
 import { ListViewIcon } from "@/features/frenz-ui/icons";
 import { useTabSwipe } from "@/features/profile/use-tab-swipe";
@@ -10,6 +12,8 @@ import { ProfileMediaGrid } from "@/features/social/profile-media-grid";
 import { loadSubPosts } from "@/features/sub/sub-posts-cache";
 import { useStickyState } from "@/features/ui/use-sticky-state";
 import type { PostCard } from "@/lib/social/posts";
+import { haptic } from "@/lib/motion/haptics";
+import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
 import { profilePath } from "@/lib/social/profile-url";
 import type { BundlePrices, SubOption } from "@/lib/sub/pricing";
@@ -175,9 +179,41 @@ export function ProfileTabs({
     const row = tabRow.current;
     const btn = row?.querySelector<HTMLElement>('[aria-current="page"]');
     if (!row || !btn) return;
-    const l = btn.offsetLeft - row.offsetLeft;
+    const l = btn.offsetLeft; // the row is the buttons' offset parent (it holds the sliding underline)
     if (l < row.scrollLeft || l + btn.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollTo({ left: l - 16, behavior: "smooth" });
   }, [active]);
+
+  /*
+    Owner 2026-10-31: "this profile nav should also navigate like the bottom nav — spring press, smooth when moving".
+    ONE underline, measured to the chosen tab and springing to the next one on the bottom nav lens's own curve
+    (--ease-spring, 500 ms); each label springs on press (PressIcon) and a tap gives the nav's haptic + tap tone.
+    It lives inside the scrolling row, so it scrolls with the tabs. The first placement lands without a slide.
+  */
+  const tabBtns = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [bar, setBar] = useState<{ x: number; w: number } | null>(null);
+  const [springs, setSprings] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    setReducedMotion(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
+  }, []);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = tabBtns.current[active];
+      // inset 12px each side — the same span the old per-tab underline (inset-x-3) drew
+      setBar(el ? { x: el.offsetLeft + 12, w: Math.max(0, el.offsetWidth - 24) } : null);
+    };
+    measure();
+    const row = tabRow.current;
+    if (!row || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(row);
+    return () => ro.disconnect();
+  }, [active, sections]);
+  useEffect(() => {
+    if (!bar || springs) return;
+    const id = requestAnimationFrame(() => setSprings(true));
+    return () => cancelAnimationFrame(id);
+  }, [bar, springs]);
 
   const renderPanel = (active: string) => {
     if (active === SUB_TAB_KEY && sub) return <SubTab onLiveChange={setSubLive} creatorId={ownerId} creatorName={sub.creatorName} handle={handle} isOwner={isOwner} signedIn={sub.signedIn} quote={sub.quote} settings={sub.settings} bounds={sub.bounds} />;
@@ -232,14 +268,23 @@ export function ProfileTabs({
       */}
       <nav ref={tray} id="profile-sections" aria-label="Profile sections" className="frenz-ui relative -mx-4 mb-3 flex scroll-mt-24 items-center border-b border-frenz-line px-2 sm:-mx-6">
         {/* sideways only (owner, 2026-10-19: the row moved up and down) — nothing overflows vertically, and touch pans x only */}
-        <div ref={tabRow} className="flex min-w-0 flex-1 touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div ref={tabRow} className="relative flex min-w-0 flex-1 touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {sections.map((s) => {
             const isActive = active === s.key;
             return (
               <button
                 key={s.key}
+                ref={(el) => {
+                  tabBtns.current[s.key] = el;
+                }}
                 type="button"
-                onClick={() => select(s.key)}
+                onClick={() => {
+                  if (s.key !== active) {
+                    haptic("light");
+                    playSound("tap");
+                  }
+                  select(s.key);
+                }}
                 // SUB POSTS: start loading the moment a finger lands, so the gallery opens already filled
                 onPointerDown={s.key === SUB_TAB_KEY ? () => void loadSubPosts(ownerId).catch(() => {}) : undefined}
                 aria-current={isActive ? "page" : undefined}
@@ -248,12 +293,27 @@ export function ProfileTabs({
                   isActive ? "font-bold text-frenz-ink" : "font-semibold text-frenz-muted hover:text-frenz-ink",
                 )}
               >
-                {s.key === SUB_TAB_KEY ? <Lock className="h-[13px] w-[13px] shrink-0" strokeWidth={2.4} aria-hidden /> : null}
-                {s.label}
-                {isActive ? <span aria-hidden className="absolute inset-x-3 bottom-0 h-[3px] rounded-full bg-frenz-gradient-x" /> : null}
+                <PressIcon className="inline-flex items-center gap-1">
+                  {s.key === SUB_TAB_KEY ? <Lock className="h-[13px] w-[13px] shrink-0" strokeWidth={2.4} aria-hidden /> : null}
+                  {s.label}
+                </PressIcon>
+                {/* until the row has measured itself (server render), a static underline marks the tab */}
+                {isActive && !bar ? <span aria-hidden className="absolute inset-x-3 bottom-0 h-[3px] rounded-full bg-frenz-gradient-x" /> : null}
               </button>
             );
           })}
+          {bar ? (
+            <span
+              aria-hidden
+              data-profile-tab-underline
+              className="pointer-events-none absolute bottom-0 left-0 h-[3px] rounded-full bg-frenz-gradient-x"
+              style={{
+                width: bar.w,
+                transform: `translateX(${bar.x}px)`,
+                transition: springs && !reducedMotion ? "transform 500ms var(--ease-spring), width 500ms var(--ease-spring)" : "none",
+              }}
+            />
+          ) : null}
         </div>
 
         {/* Grid ⇄ list — one button that says what it will switch to */}

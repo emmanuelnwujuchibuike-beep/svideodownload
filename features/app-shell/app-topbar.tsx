@@ -8,7 +8,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
 import { IconTile } from "@/components/icons/icon-tile";
-import { FLOATING_GLASS_CIRCLE } from "@/features/ui/floating-glass";
+import { FEED_HEADER_CIRCLE } from "@/features/ui/floating-glass";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { InstallHeaderCta } from "@/features/pwa/install-button";
@@ -99,7 +99,8 @@ export function AppTopbar() {
   // 2026-10-27 (owner): "make all Friends pages' top header use this floating glass button like the feed top header" —
   // the Friends tab and every page under it get the same see-through strip of glass circles
   const onFriendsPages = pathname === "/friends" || pathname.startsWith("/friends/");
-  const glassBar = pathname === "/home" || onFriendsPages;
+  // 2026-10-31 (owner, design/frenz-exclusive-feed.html): every feed page — the Exclusive tab too — has the same header
+  const glassBar = pathname === "/home" || pathname === "/exclusive" || onFriendsPages;
   /*
     The full product name in the Downloads header (owner, 2026-08-23: "put the
     text frenzsave with the brand style like it is with the brand text frenz…
@@ -248,7 +249,7 @@ export function AppTopbar() {
               haptic("light");
               playSound("tap");
             }}
-            className={cn("flex h-11 items-center justify-center", onDownloads ? "w-10 sm:w-11" : "w-11", glassBar && FLOATING_GLASS_CIRCLE)}
+            className={cn("flex h-11 items-center justify-center", onDownloads ? "w-10 sm:w-11" : "w-11", glassBar && FEED_HEADER_CIRCLE)}
           >
             <IconTile>
               <IoSearchOutline className="h-[26px] w-[26px]" />
@@ -322,7 +323,7 @@ export function AppTopbar() {
                 outline one every other icon in this bar uses, so it reads as
                 visually heavier without a box around it.
               */
-              className={cn("flex h-11 w-11 items-center justify-center text-foreground transition active:scale-95", glassBar && FLOATING_GLASS_CIRCLE)}
+              className={cn("flex h-11 w-11 items-center justify-center text-foreground transition active:scale-95", glassBar && FEED_HEADER_CIRCLE)}
             >
               <IoAdd className="h-7 w-7 [filter:drop-shadow(0_3px_5px_rgba(2,6,23,0.35))]" />
             </button>
@@ -425,7 +426,7 @@ export function AppTopbar() {
         {/* members only: a guest's /friends is locked behind sign-in (owner, 2026-10-16) */}
         {/* 2026-10-27 (owner): also on the Feed, "a floating glass Add friends button next to the notification button" — the
             same glass circle as its neighbours there; on every Friends page but the one it opens */}
-        {(onFriendsPages || pathname === "/home") && pathname !== "/friends/discover" && !!handle ? (
+        {(onFriendsPages || pathname === "/home" || pathname === "/exclusive") && pathname !== "/friends/discover" && !!handle ? (
           <PressIcon className="lg:hidden">
             <Link
               href="/friends/discover"
@@ -440,7 +441,7 @@ export function AppTopbar() {
               }}
               aria-label="Add friends"
               title="Add friends"
-              className={cn("flex h-11 w-11 items-center justify-center text-foreground transition active:scale-95", glassBar && FLOATING_GLASS_CIRCLE)}
+              className={cn("flex h-11 w-11 items-center justify-center text-foreground transition active:scale-95", glassBar && FEED_HEADER_CIRCLE)}
             >
               <IconTile>
                 <TapPending size={18}>

@@ -28,10 +28,10 @@ function floats(src: string): boolean {
     !/\bw-full\b/.test(wrapper) &&
     // above the home indicator, by the shared gap
     /\bbottom-\[var\(--frenz-nav-gap\)\]/.test(wrapper) &&
-    // the bar: glass, the design's 26 px corners (design/*.dc.html, 2026-10-18), a fixed height every page can reserve
-    /"frenz-nav-glass frenz-ui pointer-events-auto relative flex h-\[var\(--frenz-nav-height\)\] min-w-0 flex-1[^"]*rounded-\[26px\]/.test(src) &&
-    // a SEPARATE gradient button (Profile) beside the bar, same height and corners, and a capsule on the active tab
-    /w-\[var\(--frenz-nav-height\)\][^"]*rounded-\[26px\][^"]*bg-frenz-gradient/.test(src) &&
+    // the bar: glass, fully round (design/frenz-exclusive-feed.html, owner 2026-10-31), a fixed height every page can reserve
+    /"frenz-nav-glass frenz-ui pointer-events-auto relative flex h-\[var\(--frenz-nav-height\)\] min-w-0 flex-1[^"]*rounded-full/.test(src) &&
+    // a SEPARATE round gradient button (Profile, 66 px) beside the bar, and a capsule on the active tab
+    /h-\[66px\] w-\[66px\][^"]*rounded-full bg-\[linear-gradient\(135deg,#5B5BF0,#7B5CF0,#B86CF2\)\]/.test(src) &&
     /ACTIVE_CAPSULE/.test(src) &&
     // no opaque full-width slab left behind
     !/border-t border-border bg-background/.test(src) &&
@@ -47,8 +47,8 @@ describe("the floating glass bottom nav", () => {
 
   it("teeth: a full-width bar, an opaque slab, or the pulse coming back fails", () => {
     expect(floats(nav.replace("w-[calc(100%-1.75rem)]", "w-full"))).toBe(false);
-    expect(floats(nav.replace("relative flex h-[var(--frenz-nav-height)] min-w-0 flex-1 items-center gap-0.5 rounded-[26px]", "relative flex h-[var(--frenz-nav-height)] min-w-0 flex-1 items-center gap-0.5 rounded-full"))).toBe(false);
-    expect(floats(nav.replace("rounded-[26px] bg-frenz-gradient", "rounded-full bg-frenz-gradient"))).toBe(false);
+    expect(floats(nav.replace("relative flex h-[var(--frenz-nav-height)] min-w-0 flex-1 items-center gap-0.5 rounded-full", "relative flex h-[var(--frenz-nav-height)] min-w-0 flex-1 items-center gap-0.5 rounded-none"))).toBe(false);
+    expect(floats(nav.replace("rounded-full bg-[linear-gradient(135deg,#5B5BF0,#7B5CF0,#B86CF2)]", "rounded-[26px] bg-frenz-gradient"))).toBe(false);
     expect(floats(nav.replaceAll("ACTIVE_CAPSULE", "NO_CAPSULE"))).toBe(false);
     expect(floats(nav.replace("frenz-nav-glass frenz-ui pointer-events-auto", "border-t border-border bg-background pointer-events-auto"))).toBe(false);
     expect(floats(nav.replace("active={pathname === \"/home\"", "attract={true}\n            active={pathname === \"/home\""))).toBe(false);
@@ -63,10 +63,10 @@ describe("the floating glass bottom nav", () => {
     expect(css).toMatch(/html\[data-glass="reduced"\]\) \.frenz-nav-glass/);
     // Inside the SAME tier blocks as .ai-glass (one hierarchy, one source order).
     expect(css).toMatch(/@supports not \(\(backdrop-filter: blur\(1px\)\) or \(-webkit-backdrop-filter: blur\(1px\)\)\) \{\n {4}\.ai-glass \{[^}]*\}\n {4}\.frenz-nav-glass \{\n {6}--nav-glass-fill: 0\.99;/);
-    // 2026-10-29 neumorphic skin: the surface starts near-opaque and every tier only raises it
-    expect(rule).toMatch(/--nav-glass-fill: 0\.96;/);
-    // light mode carries NO drop shadow (owner, 2026-10-29) — only the faint inner light; dark keeps its two-shadow lift
-    expect(rule).toMatch(/box-shadow: inset 1px 1px 0 rgb\(255 255 255 \/ 0\.85\);/);
+    // 2026-10-31 design (design/frenz-exclusive-feed.html): #F4F3F8 at 92 %, 20 px blur, a white hairline and the soft drop
+    expect(rule).toMatch(/--nav-glass-fill: 0\.92;/);
+    expect(rule).toMatch(/--nav-glass-blur: 20px;/);
+    expect(rule).toMatch(/box-shadow: 0 14px 30px -14px rgb\(14 14 18 \/ 0\.3\);/);
     expect(rule).not.toMatch(/rgb\(16 24 40/);
     const darkRule = css.match(/\.dark \.frenz-nav-glass \{[\s\S]*?\}/)?.[0] ?? "";
     expect(darkRule).toMatch(/-6px -6px 16px rgb\(255 255 255 \/ 0\.045\)/);

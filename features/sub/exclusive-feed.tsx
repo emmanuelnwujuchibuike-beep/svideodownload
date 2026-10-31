@@ -1,12 +1,12 @@
 "use client";
 
-import { Check, Clock, Compass, EyeOff, Film, ImageOff, Images, Loader2, Lock, RefreshCw } from "lucide-react";
+import { ArrowRight, Check, Clock, Compass, EyeOff, Film, ImageOff, Images, Loader2, Lock, RefreshCw } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { VerifiedTick } from "@/components/badges/identity-badges";
-import { itemsLabel, membershipChip, priceLine } from "@/features/sub/exclusive-labels";
+import { itemsLabel, membershipChip } from "@/features/sub/exclusive-labels";
 import { firstPageIsReplay, type LinkBirth, mayAutoRefresh, refreshPreview } from "@/features/sub/feed-previews";
 import { cancelOpening, startOpening } from "@/features/sub/opened-cache";
 import { exQuiet } from "@/features/sub/ui";
@@ -14,6 +14,7 @@ import { GuestLock } from "@/features/social/guest-chat";
 import { BlurredSlides, type BlurSlideView } from "@/features/sub/blurred-slides";
 import { PullToRefresh } from "@/features/ui/pull-to-refresh";
 import { newSeed } from "@/lib/sub/feed-order";
+import { usd } from "@/lib/creator/membership/engine";
 import { cn } from "@/lib/utils";
 import { profilePath } from "@/lib/social/profile-url";
 
@@ -368,8 +369,14 @@ export function ExclusiveFeed({ initial = null, guest = false }: { initial?: Exc
         <SubscriptionsRow creators={creators} posts={posts} hasDiscover={lockedCards.length > 0} />
       )}
       {stream.length ? (
+        <>
+        {/* design/frenz-exclusive-feed.html (2026-10-31): the section label the main feed uses */}
+        <p className="m-0 flex items-center gap-2.5 px-[6px] pb-0.5 pt-4 text-[12.5px] font-bold uppercase tracking-[0.18em] text-[#4A4A55] dark:text-frenz-muted">
+          <i aria-hidden className="h-[9px] w-[9px] rounded-full bg-[#7B5CF0]" />
+          Subscriber-only posts
+        </p>
         <ul className="-mx-3 sm:-mx-4">
-          {stream.map((entry) =>
+          {stream.map((entry, at) =>
             entry.kind === "post" ? (
               <li key={entry.post.id}>
                 {entry.post.ageLocked || !entry.post.mediaKind ? (
@@ -377,14 +384,18 @@ export function ExclusiveFeed({ initial = null, guest = false }: { initial?: Exc
                 ) : (
                   <ExclusivePost post={entry.post} creator={creators[entry.post.creatorId]} priority={entry.index < 2} onOpen={setOpen} />
                 )}
+                {at === 0 ? <CreatorsRail creators={discover?.creators} /> : null}
               </li>
             ) : (
               <li key={`locked-${entry.card.id}`} id={entry.card.id === lockedCards[0]?.id ? "exclusive-discover-first" : undefined} className="scroll-mt-20 border-t border-frenz-line">
                 <LockedPreviewCard card={entry.card} creator={discover?.creators[entry.card.creatorId]} />
+                {/* the creators rail, once, after the first entry (design/frenz-exclusive-feed.html) */}
+                {at === 0 ? <CreatorsRail creators={discover?.creators} /> : null}
               </li>
             ),
           )}
         </ul>
+        </>
       ) : null}
       {guest ? (
         lockedCards.length ? null : <p className="py-10 text-center text-[13.5px] text-frenz-muted">No exclusive posts to show yet.</p>
@@ -655,52 +666,90 @@ export function LockedPreviewCard({ card, creator }: { card: Card; creator: Disc
     }
     setState({ error: j?.error ?? "Couldn't open the payment. Try again." });
   };
-  const price = priceLine(creator);
-  const what = itemsLabel(card.items, card.hasVideo);
   const total = creator.totalPosts ?? null;
+  const kindChip = card.hasVideo ? (card.items > 1 ? `Video · ${card.items} items` : "Video") : card.items > 1 ? `Photo set · ${card.items}` : "Photo";
+  /*
+    design/frenz-exclusive-feed.html (owner, 2026-10-31): edge to edge, the creator above, a square of the post's own
+    BLURRED preview with the lock in the middle, the real price under it and a black Subscribe pill. The blur is still the
+    server's stored, pixel-blurred preview (0263/0305/0306) — never the file under a CSS blur.
+    The design's "Cancel anytime" is replaced by what is true: a subscription is one payment for its period and does not
+    renew (features/sub/exclusive-labels.ts membershipChip). Its "Direct chat" perk is left out — no subscription grants it.
+  */
   return (
-    <article className="frenz-ui overflow-hidden bg-frenz-card text-frenz-ink">
+    <article className="frenz-ui border-b-8 border-[#F4F3F8] bg-white pt-3 text-[#0E0E12] dark:border-white/[0.06] dark:bg-frenz-card dark:text-frenz-ink">
       {/* the creator, and their profile */}
-      <div className="flex items-center gap-3 px-3.5 py-3">
-        <Avatar c={creator} size={40} />
-        <CreatorName c={creator} link={false} className="min-w-0 flex-1 text-[15px] font-bold" />
-        <Link href={`${profilePath(creator.handle)}?tab=sub`} prefetch={false} className="flex min-h-9 shrink-0 items-center rounded-full bg-frenz-fill px-3 text-[13px] font-bold text-frenz-violet">
-          View profile
-        </Link>
-      </div>
-      {/* the server's blurred preview (0263) or the creator's public cover — never the file */}
-      <div className="relative aspect-[4/5] overflow-hidden bg-[#1A1430]">
-        {/* 0305 + 0306: every item, blurred — a video plays (a 24 px clip, nothing to un-blur), an album slides sideways
-            (owner, 2026-10-29). The overlay lets a swipe through to the slides. */}
-        <BlurredSlides slides={card.slides} cover={card.coverUrl} fallbackStill={card.blurUrl} fallbackClip={card.blurVideoUrl} level={card.blurLevel} />
-        <span aria-hidden className="pointer-events-none absolute inset-0 bg-black/25" />
-        <span className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2.5 px-6 text-center text-white">
-          <span aria-hidden className="flex h-12 w-12 items-center justify-center rounded-full border border-white/30 bg-black/30">
-            <Lock className="h-5 w-5" />
+      <div className="flex items-center gap-3 px-4 pb-2.5">
+        <span className="shrink-0 rounded-full bg-[linear-gradient(135deg,#5B5BF0,#7B5CF0,#C06BF0)] p-[2px]">
+          <span className="block rounded-full border-2 border-white dark:border-frenz-card">
+            <Avatar c={creator} size={38} />
           </span>
-          <span className="text-[14px] font-bold">
-            Subscribers only · {what}
-            {total ? ` · 1 of ${total.toLocaleString()} posts` : ""}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-1.5 text-[16.5px] font-bold tracking-[-0.01em]">
+            <CreatorName c={creator} link={false} className="min-w-0" />
+            <span className="shrink-0 text-[14px] font-medium text-[#8A8A96]">· {ago(card.createdAt)}</span>
+          </div>
+          <Link href={`${profilePath(creator.handle)}?tab=sub`} prefetch={false} className="mt-0.5 inline-flex min-h-6 items-center text-[13.5px] font-semibold text-[#7B5CF0] no-underline">
+            View profile
+          </Link>
+        </div>
+      </div>
+      {/* the server's blurred preview (0263) — every item, a video playing (0305/0306); never the file */}
+      <div className="relative isolate aspect-square w-full overflow-hidden bg-[#1A1430]">
+        <BlurredSlides slides={card.slides} cover={card.coverUrl} fallbackStill={card.blurUrl} fallbackClip={card.blurVideoUrl} level={card.blurLevel} />
+        <span aria-hidden className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(14,14,18,.08),rgba(14,14,18,0)_35%,rgba(14,14,18,.5))]" />
+        <span className="pointer-events-none absolute inset-x-3.5 top-3.5 flex justify-between gap-2">
+          <span className={LOCK_CHIP}>
+            {card.hasVideo ? <Film className="h-[13px] w-[13px]" aria-hidden /> : <Images className="h-[13px] w-[13px]" aria-hidden />}
+            {kindChip}
             {card.mature ? " · 18+" : ""}
           </span>
+          {total ? <span className={LOCK_CHIP}>1 / {total.toLocaleString()}</span> : null}
+        </span>
+        <span className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3.5 p-6 text-center text-white">
+          <span aria-hidden className="flex h-[66px] w-[66px] items-center justify-center rounded-full border border-white/45 bg-white/20 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.35)] backdrop-blur-[16px]">
+            <Lock className="h-[26px] w-[26px]" strokeWidth={2.2} />
+          </span>
+          <span className="text-[21px] font-extrabold tracking-[-0.02em]">Subscribers only</span>
+          <span className="-mt-2 text-[14px] opacity-90">{total && total > 1 ? `Subscribe to unlock all ${total.toLocaleString()} posts` : "Subscribe to unlock it"}</span>
         </span>
       </div>
       {/* the creator's real price and period, and the existing checkout */}
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3.5 py-3">
-        <p className="m-0 min-w-0 grow basis-[10rem] text-[15px] font-bold tabular-nums">{price} of access</p>
-        <button type="button" onClick={() => void subscribe()} disabled={state === "busy"} className="flex min-h-11 items-center gap-2 rounded-full bg-frenz-gradient px-5 text-[15px] font-bold text-white transition active:scale-[0.98] disabled:opacity-60">
+      <div className="flex items-center gap-3 px-4 pb-1.5 pt-4">
+        <div className="min-w-0 flex-1">
+          <p className="m-0 text-[23px] font-extrabold tracking-[-0.03em] tabular-nums">
+            {usd(creator.totalCents)} <small className="text-[14px] font-semibold tracking-normal text-[#8A8A96]">/ {creator.periodDays} days</small>
+          </p>
+          <p className="m-0 mt-0.5 text-[12.5px] text-[#8A8A96]">Doesn&apos;t renew automatically</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void subscribe()}
+          disabled={state === "busy"}
+          className="flex h-[52px] shrink-0 items-center gap-2 rounded-full bg-[#0E0E12] px-[26px] text-[16px] font-bold text-white shadow-[0_10px_24px_-10px_rgba(14,14,18,0.45)] transition-transform duration-150 active:scale-[0.97] disabled:opacity-60 dark:bg-white dark:text-[#0E0E12]"
+        >
           {state === "busy" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
           Subscribe
+          <ArrowRight className="h-4 w-4" strokeWidth={2.6} aria-hidden />
         </button>
       </div>
+      <div className="flex flex-wrap gap-2 px-4 pb-[18px] pt-2.5">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F4F3F8] px-[11px] py-[7px] text-[12.5px] font-semibold text-[#4A4A55] dark:bg-white/[0.06] dark:text-frenz-ink">
+          <Check className="h-3.5 w-3.5 text-[#7B5CF0]" strokeWidth={2.6} aria-hidden />
+          All exclusive posts
+        </span>
+      </div>
       {typeof state === "object" ? (
-        <p role="alert" className="px-3.5 pb-3 text-[12.5px] font-medium text-rose-600 dark:text-rose-400">
+        <p role="alert" className="px-4 pb-3 text-[12.5px] font-medium text-rose-600 dark:text-rose-400">
           {state.error}
         </p>
       ) : null}
     </article>
   );
 }
+
+/** The glass chips on a locked card's media (design/frenz-exclusive-feed.html .chip). */
+const LOCK_CHIP = "inline-flex h-[30px] items-center gap-1.5 rounded-full border border-white/35 bg-white/20 px-[11px] text-[12.5px] font-semibold text-white backdrop-blur-[14px]";
 
 /**
  * A subscribed post as the Feed's own post card (step 13). The card gets a FeedItem built from what the
@@ -833,5 +882,45 @@ export function FeedSkeleton() {
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * "Creators to try" (design/frenz-exclusive-feed.html, owner 2026-10-31): the creators the feed is already offering, as
+ * small cards — their picture, name, how many posts and the real price — each opening that creator's Exclusive tab.
+ */
+function CreatorsRail({ creators }: { creators: Record<string, DiscoverCreator> | undefined }) {
+  const list = Object.values(creators ?? {});
+  if (!list.length) return null;
+  return (
+    <section aria-labelledby="creators-to-try" className="frenz-ui border-b-8 border-[#F4F3F8] text-[#0E0E12] dark:border-white/[0.06] dark:text-frenz-ink">
+      <div className="flex items-baseline justify-between px-[18px] pb-3 pt-5">
+        <h2 id="creators-to-try" className="m-0 text-[22px] font-extrabold tracking-[-0.03em]">
+          Creators to try
+        </h2>
+        <Link href="/explore" prefetch={false} className="text-[14px] font-bold text-[#7B5CF0] no-underline">
+          See all
+        </Link>
+      </div>
+      <ul className="m-0 flex snap-x snap-mandatory list-none gap-3 overflow-x-auto px-4 pb-[22px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {list.map((c) => (
+          <li key={c.id} className="w-[148px] shrink-0 snap-start rounded-[22px] border border-[#ECEBF2] bg-white p-3.5 text-center dark:border-white/10 dark:bg-frenz-card">
+            <span className="mx-auto mb-2.5 block w-fit rounded-full bg-[linear-gradient(135deg,#5B5BF0,#7B5CF0,#C06BF0)] p-[2px]">
+              <span className="block rounded-full border-2 border-white dark:border-frenz-card">
+                <Avatar c={c} size={48} />
+              </span>
+            </span>
+            <b className="block truncate text-[14.5px] font-bold">{c.name}</b>
+            <span className="mb-2.5 mt-0.5 block text-[12px] text-[#8A8A96]">
+              {c.totalPosts ? `${c.totalPosts.toLocaleString()} ${c.totalPosts === 1 ? "post" : "posts"} · ` : ""}
+              {usd(c.totalCents)}
+            </span>
+            <Link href={`${profilePath(c.handle)}?tab=sub`} prefetch={false} className="flex h-[34px] w-full items-center justify-center rounded-full bg-[#F1EDFE] text-[13px] font-bold text-[#7B5CF0] no-underline dark:bg-[#7B5CF0]/20">
+              Preview
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

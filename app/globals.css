@@ -999,15 +999,16 @@
      inner top light, and the active tab as the pressed (inset) tile, set in mobile-nav.tsx (ACTIVE_CAPSULE).
      🔴 NO DROP SHADOW IN LIGHT MODE (owner, 2026-10-29: "remove the shadow from the light mode"): the pill sits flat on
      the page, defined by the design's hairline. Dark mode keeps its two-shadow lift (below). Static: nothing animates. */
+  /* design/frenz-exclusive-feed.html (owner, 2026-10-31): #F4F3F8 at 92 %, a white hairline, 20 px of blur, a soft drop */
   .frenz-nav-glass {
-    --nav-glass-rgb: 243 242 247;
-    --nav-glass-fill: 0.96;
-    --nav-glass-blur: 12px;
+    --nav-glass-rgb: 244 243 248;
+    --nav-glass-fill: 0.92;
+    --nav-glass-blur: 20px;
     background-color: rgb(var(--nav-glass-rgb) / var(--nav-glass-fill));
     -webkit-backdrop-filter: blur(var(--nav-glass-blur)) saturate(160%);
     backdrop-filter: blur(var(--nav-glass-blur)) saturate(160%);
-    border: 1px solid hsl(var(--frenz-line));
-    box-shadow: inset 1px 1px 0 rgb(255 255 255 / 0.85);
+    border: 1px solid rgb(255 255 255 / 0.8);
+    box-shadow: 0 14px 30px -14px rgb(14 14 18 / 0.3);
   }
   /* Theme and surface set the COLOUR only, never the fill: these selectors are
      more specific than the tiers below, so a fill here would defeat them. */
@@ -1021,11 +1022,10 @@
   }
   /* The active tab: the neumorphic PRESSED tile (mobile-nav.tsx ACTIVE_CAPSULE) — inner shade up-left, inner light
      down-right. Over Reels video (the immersive dark glass) it is a plain light wash. */
+  /* light: a plain white tile under the active tab (design/frenz-exclusive-feed.html, 2026-10-31) */
   .frenz-nav-pressed {
-    background-color: rgb(236 235 242);
-    box-shadow:
-      inset 3px 3px 7px rgb(16 24 40 / 0.14),
-      inset -3px -3px 7px rgb(255 255 255 / 0.95);
+    background-color: rgb(255 255 255);
+    box-shadow: none;
   }
   .dark .frenz-nav-pressed {
     background-color: rgb(18 21 35);
@@ -1037,7 +1037,11 @@
     background-color: rgb(255 255 255 / 0.2);
     box-shadow: none;
   }
-  /* The Profile button beside the pill: flat in light mode (owner, 2026-10-29), the pill's two-shadow lift in dark. */
+  /* The Profile button beside the pill: the design's violet drop in light mode (design/frenz-exclusive-feed.html, owner
+     2026-10-31 — it supersedes 2026-10-29's flat button), the pill's two-shadow lift in dark. */
+  .frenz-nav-profile {
+    box-shadow: 0 14px 28px -10px rgb(123 92 240 / 0.7);
+  }
   .dark .frenz-nav-profile {
     box-shadow:
       -5px -5px 12px rgb(255 255 255 / 0.045),

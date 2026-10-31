@@ -87,7 +87,7 @@ import { isProfilePath, profilePath } from "@/lib/social/profile-url";
   colour one it left behind.
 */
 // The design's active ink (design/*.dc.html, 2026-10-18): the violet stop, 4.95:1 on the active capsule.
-const GLYPH_ACTIVE = "text-frenz-violet";
+const GLYPH_ACTIVE = "text-[#7B5CF0]";
 // Inactive glyphs and labels are `text-foreground` (near-black, white in dark mode). The
 // immersive Reels variant re-tints them white via a selector keyed on that literal class
 // name (`[&_.nav-ink]:!text-white/85`) — rename the class and that selector stops
@@ -114,7 +114,7 @@ const ACTIVE_CAPSULE = "frenz-nav-pressed";
   ring inside the pill's curve.
 */
 const TAB_CLASS =
-  "relative flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-[3px] rounded-[20px] px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";
+  "relative flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-[3px] rounded-full px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";
 
 /**
  * `marketing` is still accepted from the marketing layout but no longer changes the
@@ -373,7 +373,7 @@ export function MobileNav({
           check the other.
         */
         className={cn(
-          "frenz-nav-glass frenz-ui pointer-events-auto relative flex h-[var(--frenz-nav-height)] min-w-0 flex-1 items-center gap-0.5 rounded-[26px] p-1.5",
+          "frenz-nav-glass frenz-ui pointer-events-auto relative flex h-[var(--frenz-nav-height)] min-w-0 flex-1 items-center gap-0.5 rounded-full p-1.5",
           immersive && "frenz-nav-glass--immersive [&_.nav-ink]:!text-white/85",
         )}
       >
@@ -436,17 +436,17 @@ export function MobileNav({
         className={cn(
           // no shadow in light mode (owner, 2026-10-29: "remove the shadow from the light mode"); dark keeps the pill's
           // two-shadow lift — .frenz-nav-profile in globals.css
-          "frenz-nav-profile pointer-events-auto relative flex h-[var(--frenz-nav-height)] w-[var(--frenz-nav-height)] shrink-0 rounded-[26px] bg-frenz-gradient p-[3px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2",
+          "frenz-nav-profile pointer-events-auto relative flex h-[66px] w-[66px] shrink-0 self-center rounded-full bg-[linear-gradient(135deg,#5B5BF0,#7B5CF0,#B86CF2)] p-[3px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2",
           profileActive && "ring-[3px] ring-frenz-violet/25",
         )}
       >
         <PressIcon active={profileActive} className="flex flex-1">
-          <span className="flex flex-1 items-center justify-center overflow-hidden rounded-[23px] border-2 border-white bg-frenz-card">
+          <span className="flex flex-1 items-center justify-center overflow-hidden rounded-full border-[3px] border-white bg-[linear-gradient(135deg,#334155,#0F172A)]">
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
             ) : (
-              <FrenzPersonSolid className={cn("h-[34px] w-[34px]", profileActive ? GLYPH_ACTIVE : "text-frenz-ink/80")} />
+              <FrenzPersonSolid className="h-[30px] w-[30px] text-white" />
             )}
           </span>
         </PressIcon>

@@ -27,11 +27,12 @@ const TABS: { key: HomeFeedSort; label: string }[] = [
   { key: "following", label: "Following" },
 ];
 
+// design/frenz-exclusive-feed.html (owner, 2026-10-31): 17.5 px bold, muted until active, spread across the row
 const TAB =
-  "relative inline-flex min-h-11 shrink-0 items-center gap-1.5 pb-3 pt-2.5 font-heading text-base no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2";
+  "relative inline-flex min-h-11 shrink-0 items-center gap-1.5 pb-[15px] pt-[14px] text-[17.5px] font-bold tracking-[-0.01em] whitespace-nowrap no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2";
 
 function Underline() {
-  return <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-frenz-gradient-x" />;
+  return <span aria-hidden className="absolute inset-x-0 -bottom-px h-1 rounded-t bg-[linear-gradient(90deg,#5B5BF0,#7B5CF0)]" />;
 }
 
 function tap() {
@@ -101,7 +102,7 @@ function ScrollUpTabs({ children }: { children: ReactNode }) {
 
 function FeedTabRow({ sort, onSegment, showReelsLink }: { sort: HomeFeedSort; onSegment: (key: HomeFeedSort) => void; showReelsLink?: boolean }) {
   return (
-    <nav aria-label="Feed type" className="frenz-ui flex gap-[22px] touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain border-b border-frenz-line px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <nav aria-label="Feed type" className="frenz-ui flex justify-between gap-4 touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain border-b border-frenz-line px-[18px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {TABS.map((t) => {
         const active = sort === t.key;
         return (
@@ -113,7 +114,7 @@ function FeedTabRow({ sort, onSegment, showReelsLink }: { sort: HomeFeedSort; on
               onSegment(t.key);
             }}
             aria-current={active ? "page" : undefined}
-            className={cn(TAB, active ? "font-bold text-frenz-ink" : "font-semibold text-frenz-muted hover:text-frenz-ink")}
+            className={cn(TAB, active ? "text-frenz-ink" : "text-[#8A8A96] hover:text-frenz-ink")}
           >
             {t.label}
             {active ? <Underline /> : null}
@@ -121,7 +122,7 @@ function FeedTabRow({ sort, onSegment, showReelsLink }: { sort: HomeFeedSort; on
         );
       })}
       {showReelsLink ? (
-        <Link href="/reels" onClick={tap} className={cn(TAB, "font-semibold text-frenz-muted hover:text-frenz-ink")}>
+        <Link href="/reels" onClick={tap} className={cn(TAB, "text-[#8A8A96] hover:text-frenz-ink")}>
           Reels
         </Link>
       ) : (
@@ -131,12 +132,12 @@ function FeedTabRow({ sort, onSegment, showReelsLink }: { sort: HomeFeedSort; on
             tap();
             onSegment("recent");
           }}
-          className={cn(TAB, "font-semibold text-frenz-muted hover:text-frenz-ink")}
+          className={cn(TAB, "text-[#8A8A96] hover:text-frenz-ink")}
         >
           Reels
         </button>
       )}
-      <Link href="/exclusive" prefetch={false} onClick={tap} className={cn(TAB, "font-semibold text-frenz-muted hover:text-frenz-ink")}>
+      <Link href="/exclusive" prefetch={false} onClick={tap} className={cn(TAB, "text-[#8A8A96] hover:text-frenz-ink")}>
         <LockIcon size={15} strokeWidth={2.4} />
         Exclusive
       </Link>
@@ -150,11 +151,11 @@ function FeedTabRow({ sort, onSegment, showReelsLink }: { sort: HomeFeedSort; on
  * smart-feed), Reels to Reels, and Exclusive is the active one.
  */
 export function FeedTabLinks() {
-  const link = cn(TAB, "font-semibold text-frenz-muted hover:text-frenz-ink");
+  const link = cn(TAB, "text-[#8A8A96] hover:text-frenz-ink");
   // the same come-back-on-the-way-up row as the Feed (owner, 2026-10-28)
   return (
     <ScrollUpTabs>
-    <nav aria-label="Feed type" className="frenz-ui -mx-3 flex gap-[22px] touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain border-b border-frenz-line px-5 [scrollbar-width:none] sm:-mx-4 [&::-webkit-scrollbar]:hidden">
+    <nav aria-label="Feed type" className="frenz-ui -mx-3 flex gap-[22px] touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain border-b border-frenz-line px-[18px] [scrollbar-width:none] sm:-mx-4 [&::-webkit-scrollbar]:hidden">
       <Link href="/home?tab=for_you" prefetch={false} onClick={tap} className={link}>
         For You
       </Link>
@@ -164,8 +165,8 @@ export function FeedTabLinks() {
       <Link href="/reels" prefetch={false} onClick={tap} className={link}>
         Reels
       </Link>
-      <span aria-current="page" className={cn(TAB, "font-bold text-frenz-ink")}>
-        <LockIcon size={15} strokeWidth={2.4} />
+      <span aria-current="page" className={cn(TAB, "text-frenz-ink")}>
+        <LockIcon size={16} strokeWidth={2.6} className="text-[#7B5CF0]" />
         Exclusive
         <Underline />
       </span>

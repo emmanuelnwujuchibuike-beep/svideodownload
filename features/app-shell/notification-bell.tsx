@@ -3,7 +3,7 @@
 import { IoNotifications, IoNotificationsOutline } from "react-icons/io5";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { FLOATING_GLASS_CIRCLE } from "@/features/ui/floating-glass";
+import { FEED_HEADER_CIRCLE } from "@/features/ui/floating-glass";
 
 import { IconTile } from "@/components/icons/icon-tile";
 import { mutate, revalidate, useQuery } from "@/features/data";
@@ -96,7 +96,7 @@ export function NotificationBell({ glass = false }: { glass?: boolean } = {}) {
         onClick={toggle}
         aria-label={`Notifications${unread > 0 ? ` (${unread} unread)` : ""}`}
         aria-expanded={open}
-        className={cn("relative inline-flex h-11 w-11 items-center justify-center", glass && FLOATING_GLASS_CIRCLE)}
+        className={cn("relative inline-flex h-11 w-11 items-center justify-center", glass && FEED_HEADER_CIRCLE)}
       >
         {/* Owner correction (2026-07-13): unread used to also swap this tile
             to the dark brand tint — the mockup's own unread state is just the
@@ -106,7 +106,7 @@ export function NotificationBell({ glass = false }: { glass?: boolean } = {}) {
         </IconTile>
         {unread > 0 ? (
           // keyed by the count: a new arrival re-mounts it, so it pops once (never on a timer; reduced motion skips it)
-          <span key={unread} className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-gradient-to-br from-rose-500 to-pink-600 px-1 text-[10px] font-bold text-white shadow-sm shadow-rose-500/40 ring-2 ring-background motion-safe:animate-scale-in">
+          <span key={unread} className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-[#E5484D] px-[5px] text-[11px] font-bold text-white motion-safe:animate-scale-in">
             {unread > 9 ? "9+" : unread}
           </span>
         ) : null}

@@ -126,11 +126,11 @@ describe("first page: discover alongside the feed, one block-list read", () => {
     expect(out.discover?.cards.length).toBe(1);
     expect(count("blocks")).toBe(1);
     expect(count("creator_memberships")).toBe(1);
-    // a later page reads no discover at all
+    // a later page reads no discover at all — and continues the SAME visit's order (lib/sub/feed-order.ts, 2026-10-31)
     reads = [];
-    const { encodeSubCursor } = await import("./guards");
-    const later = await feed.exclusiveFeed(VIEWER, encodeSubCursor("2026-10-14T10:00:00.000000+00:00", P.videoThumb));
-    expect(later.ok && later.posts.map((p) => p.id)).toEqual([P.videoBare]);
+    const { encodeShuffleCursor } = await import("./feed-order");
+    const later = await feed.exclusiveFeed(VIEWER, encodeShuffleCursor(out.seed!, 2, null));
+    expect(later.ok && later.posts.map((p) => p.id)).toEqual([out.posts[2]!.id]);
     expect(later.ok && later.discover).toBeUndefined();
     expect(count("follows")).toBe(0);
   });
@@ -326,7 +326,8 @@ describe("the server-rendered first page", () => {
     expect(page).not.toMatch(/redirect\("\/login\?next=\/exclusive"\)/);
     expect(page).toMatch(/\{user \? <FirstPage viewerId=\{user\.id\} \/> : <GuestPage \/>\}/);
     expect(page).toMatch(/<ExclusiveFeed initial=\{await publicExclusiveFeed\(\)\} guest \/>/);
-    expect(page).toMatch(/exclusiveFeed\(viewerId, null\)/);
+    // 2026-10-31: the first page also takes the viewer's last visit (new posts on top, lib/sub/feed-order.ts)
+    expect(page).toMatch(/exclusiveFeed\(viewerId, null, \{ since:/);
     expect(page).toMatch(/<Suspense fallback=\{<FeedSkeleton \/>\}>/);
     expect(cachesSomething(page)).toBe(false);
   });
@@ -334,7 +335,7 @@ describe("the server-rendered first page", () => {
   it("🔴 the signed-out page signs NO media link — locked cards only (public cover / 20 px blur)", () => {
     const lib = readFileSync(join(process.cwd(), "lib/sub/feed.ts"), "utf8");
     const fn = lib.slice(lib.indexOf("export async function publicExclusiveFeed"), lib.indexOf("export async function feedPreviews"));
-    expect(fn).toContain("discover(null, new Set())");
+    expect(fn).toContain("discover(null, new Set(), undefined, { seed: newSeed() })");
     expect(fn).toContain("posts: []");
     expect(fn).not.toMatch(/presign|mediaOf|exclusiveFeed\(/);
     // and a visitor (no viewer) is never shown a Mature cover
@@ -343,6 +344,8 @@ describe("the server-rendered first page", () => {
 
   it("teeth: a cached variant is caught", () => {
     expect(cachesSomething(`${page}\nexport const revalidate = 60;`)).toBe(true);
-    expect(cachesSomething(page.replace("exclusiveFeed(viewerId, null)", "unstable_cache(() => exclusiveFeed(viewerId, null))()"))).toBe(true);
+    // the replacement must really happen — a check that never changes the page proves nothing
+    expect(page).toContain("exclusiveFeed(viewerId, null,");
+    expect(cachesSomething(page.replace("exclusiveFeed(viewerId, null,", "unstable_cache(() => exclusiveFeed(viewerId, null,"))).toBe(true);
   });
 });

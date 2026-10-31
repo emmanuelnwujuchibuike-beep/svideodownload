@@ -10,7 +10,8 @@ import { kickBlurClips } from "./blur-clip-kick";
 import { postNeedsBlurWork } from "./blur-clip-plan";
 import type { BlurLevel } from "./blur-level";
 import { readBlurLevels, readBlurPreviews, readBlurSlides, readBlurVideos, type BlurSlide } from "./blur-preview";
-import { afterCursorFilter, audienceOf, decodeSubCursor, encodeSubCursor, isUuid } from "./guards";
+import { cleanSeed, decodeShuffleCursor, encodeShuffleCursor, exclusiveOrder, newSeed } from "./feed-order";
+import { audienceOf, decodeSubCursor, isUuid } from "./guards";
 import { subConfig } from "./server";
 
 /**
@@ -64,6 +65,8 @@ import { subConfig } from "./server";
 type Row = Record<string, unknown>;
 const MISSING = (m: string) => /schema cache|does not exist|column/i.test(m);
 export const FEED_PAGE = 12;
+/** how many of the newest subscribed posts one visit's order is made from (lib/sub/feed-order.ts) — far beyond any scroll */
+const FEED_CANDIDATES = 400;
 /** at most this many subscribed creators feed one page (an `in (…)` list must fit in a request URL) */
 export const FEED_MAX_CREATORS = 150;
 /*
@@ -165,6 +168,8 @@ export interface ExclusiveFeedPage {
   /** when this page's preview links were signed (server ms), and how long they last (seconds) */
   issuedAt: number;
   previewTtl: number;
+  /** the visit's shuffle (lib/sub/feed-order.ts): the client keeps it to resume the same order, and drops it to reshuffle */
+  seed?: string;
 }
 
 type Fail = { ok: false; error: string; status: number };
@@ -236,15 +241,24 @@ async function mediaOf(postIds: string[], withKeys: boolean): Promise<Map<string
   return out;
 }
 
-/** The feed page for a signed-in viewer. `cursor` is the previous page's `next`. */
-export async function exclusiveFeed(viewerId: string, cursor?: string | null): Promise<({ ok: true } & ExclusiveFeedPage) | Fail> {
+/**
+ * The feed page for a signed-in viewer. `cursor` is the previous page's `next`; a first page takes the visit's `seed` and
+ * `since` (the viewer's last visit, ms). Ordered by lib/sub/feed-order.ts (owner, 2026-10-31): new since the last visit
+ * first, then reshuffled per visit — it used to be newest-first, so it always opened on the same creator.
+ */
+export async function exclusiveFeed(viewerId: string, cursor?: string | null, visit: { seed?: string | null; since?: number | null } = {}): Promise<({ ok: true } & ExclusiveFeedPage) | Fail> {
   if (!isUuid(viewerId)) return { ok: false, error: "Sign in to see your exclusive feed.", status: 401 };
-  const c = decodeSubCursor(cursor);
-  if (c === "invalid") return { ok: false, error: "Bad cursor.", status: 400 };
+  const shuffle = decodeShuffleCursor(cursor);
+  // an older client's date cursor is still checked, then answered as a fresh shuffle (its seen-list drops repeats)
+  if (!shuffle && cursor && decodeSubCursor(cursor) === "invalid") return { ok: false, error: "Bad cursor.", status: 400 };
+  const seed = shuffle?.seed ?? cleanSeed(visit.seed) ?? newSeed();
+  const since = shuffle ? shuffle.sinceMs : typeof visit.since === "number" && Number.isFinite(visit.since) && visit.since > 0 ? visit.since : null;
+  const offset = shuffle?.offset ?? 0;
+  const c = offset > 0;
   const db = createAdminClient();
   const subs = await readAccess(viewerId);
   // first page: discover starts now, alongside the feed's reads (the no-op catch keeps an early return from leaving it unhandled)
-  const discovering = c ? null : discover(viewerId, new Set(subs.ids), subs.blocked);
+  const discovering = c ? null : discover(viewerId, new Set(subs.ids), subs.blocked, { seed, since });
   discovering?.catch(() => {});
   const creators = await creatorsById(subs.ids);
   for (const [id, cr] of creators) cr.accessUntil = subs.until.get(id) ?? null;
@@ -257,23 +271,27 @@ export async function exclusiveFeed(viewerId: string, cursor?: string | null): P
     // newest schema first: Mature (0261) + audience (0248), then audience only, then neither
     const read = (level: number) => {
       const extra = ["mature, audience", "audience", ""][level]!;
-      let q = db
+      return db
         .from("sub_posts")
         .select(`id, creator_id, caption, created_at${extra ? `, ${extra}` : ""}`)
         .in("creator_id", allowed)
         .eq("status", "published")
         .order("created_at", { ascending: false })
         .order("id", { ascending: false })
-        .limit(FEED_PAGE + 1);
-      if (c) q = c.id ? q.or(afterCursorFilter({ at: c.at, id: c.id })) : q.lt("created_at", c.at);
-      return q;
+        // the newest FEED_CANDIDATES, ordered here (new first, then the visit's shuffle) and paged by offset
+        .limit(FEED_CANDIDATES);
     };
     let res = await read(0);
     if (res.error && MISSING(res.error.message)) res = await read(1);
     if (res.error && MISSING(res.error.message)) res = await read(2);
     if (res.error) return { ok: true, posts: [], creators: {}, next: null, subscriptions: allowed.length, ready: false, issuedAt, previewTtl: SIGNED_TTL_SECONDS };
     const rows = (res.data ?? []) as unknown as Row[];
-    const page = rows.slice(0, FEED_PAGE);
+    const ordered = exclusiveOrder(
+      rows.map((r) => ({ id: r.id as string, creatorId: r.creator_id as string, createdAt: r.created_at as string, row: r })),
+      seed,
+      since,
+    ).map((o) => o.row);
+    const page = ordered.slice(offset, offset + FEED_PAGE);
     const adult = page.some((r) => r.mature === true) ? await isAdult(viewerId).catch(() => false) : true;
     const pageIds = page.map((r) => r.id as string);
     const [media, mine] = await Promise.all([
@@ -312,8 +330,7 @@ export async function exclusiveFeed(viewerId: string, cursor?: string | null): P
         };
       }),
     );
-    const last = page[page.length - 1];
-    next = rows.length > FEED_PAGE && last ? encodeSubCursor(last.created_at as string, last.id as string) : null;
+    next = offset + FEED_PAGE < ordered.length ? encodeShuffleCursor(seed, offset + FEED_PAGE, since) : null;
   }
 
   const used = new Set(posts.map((p) => p.creatorId));
@@ -327,6 +344,7 @@ export async function exclusiveFeed(viewerId: string, cursor?: string | null): P
     ready: subs.ready,
     issuedAt,
     previewTtl: SIGNED_TTL_SECONDS,
+    seed,
   };
   if (discovering) out.discover = await discovering;
   return { ok: true, ...out };
@@ -340,7 +358,8 @@ export async function exclusiveFeed(viewerId: string, cursor?: string | null): P
  */
 export async function publicExclusiveFeed(): Promise<ExclusiveFeedPage> {
   const issuedAt = Date.now();
-  const found = await discover(null, new Set()).catch(() => ({ cards: [], creators: {} }));
+  // a fresh shuffle on every visit, like a member's (lib/sub/feed-order.ts)
+  const found = await discover(null, new Set(), undefined, { seed: newSeed() }).catch(() => ({ cards: [], creators: {} }));
   return { posts: [], creators: {}, next: null, subscriptions: 0, ready: true, issuedAt, previewTtl: SIGNED_TTL_SECONDS, discover: found };
 }
 
@@ -391,7 +410,7 @@ export async function feedPreviews(viewerId: string, ids: unknown): Promise<({ o
  * the creator's public cover and the 20 px blur, never a file; a Mature cover is withheld (a visitor
  * has confirmed no age).
  */
-export async function discover(viewerId: string | null, subscribed: Set<string>, knownBlocked?: Set<string> | null): Promise<{ cards: DiscoverCard[]; creators: Record<string, DiscoverCreator> }> {
+export async function discover(viewerId: string | null, subscribed: Set<string>, knownBlocked?: Set<string> | null, visit: { seed?: string | null; since?: number | null } = {}): Promise<{ cards: DiscoverCard[]; creators: Record<string, DiscoverCreator> }> {
   const empty = { cards: [], creators: {} };
   // the feed already read the block list (null = that read failed → nothing to discover, as before)
   if (knownBlocked === null) return empty;
@@ -420,7 +439,7 @@ export async function discover(viewerId: string | null, subscribed: Set<string>,
     creatorsById(live),
     // LOCKED only: a hidden post of a creator the viewer does not subscribe to never leaves the database
     (async () => {
-      const q = (cols: string) => db.from("sub_posts").select(cols).in("creator_id", live).eq("status", "published").eq("audience", "locked").order("created_at", { ascending: false }).order("id", { ascending: false }).limit(DISCOVER_CARDS * 2);
+      const q = (cols: string) => db.from("sub_posts").select(cols).in("creator_id", live).eq("status", "published").eq("audience", "locked").order("created_at", { ascending: false }).order("id", { ascending: false }).limit(DISCOVER_CARDS * 4);
       const r = await q("id, creator_id, cover_url, created_at, mature");
       // before 0261 there is no Mature column — the same read without it (the audience filter stays)
       return r.error && MISSING(r.error.message) && /mature/.test(r.error.message) ? q("id, creator_id, cover_url, created_at") : r;
@@ -429,7 +448,15 @@ export async function discover(viewerId: string | null, subscribed: Set<string>,
   // before 0248 (no audience column) discover stays empty rather than risk anything
   if (postsR.error) return empty;
   // the newest locked posts across them — several per creator now, not one — of visible accounts only
-  const latest = ((postsR.data ?? []) as unknown as Row[]).filter((r) => people.has(r.creator_id as string)).slice(0, DISCOVER_CARDS);
+  // the same order as the feed (lib/sub/feed-order.ts, owner 2026-10-31): new since the last visit first, then this visit's
+  // shuffle — newest-first opened on the same creator every time
+  const latest = exclusiveOrder(
+    ((postsR.data ?? []) as unknown as Row[]).filter((r) => people.has(r.creator_id as string)).map((r) => ({ id: r.id as string, creatorId: r.creator_id as string, createdAt: r.created_at as string, row: r })),
+    cleanSeed(visit.seed) ?? newSeed(),
+    typeof visit.since === "number" && visit.since > 0 ? visit.since : null,
+  )
+    .map((o) => o.row)
+    .slice(0, DISCOVER_CARDS);
   const [media, adult, blurs, blurVideos, slides, levels] = await Promise.all([
     mediaOf(latest.map((r) => r.id as string), false),
     latest.some((r) => r.mature === true) ? (viewerId ? isAdult(viewerId).catch(() => false) : Promise.resolve(false)) : Promise.resolve(true),

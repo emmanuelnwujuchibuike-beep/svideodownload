@@ -105,11 +105,11 @@ beforeEach(() => {
   emailed.mockClear();
 });
 
-async function allPages(viewer = VIEWER) {
+async function allPages(viewer = VIEWER, seed: string | null = null) {
   const pages: Awaited<ReturnType<typeof feed.exclusiveFeed>>[] = [];
   let cursor: string | null = null;
   for (let guard = 0; guard < 10; guard++) {
-    const p = await feed.exclusiveFeed(viewer, cursor);
+    const p = await feed.exclusiveFeed(viewer, cursor, cursor ? {} : { seed });
     pages.push(p);
     if (!p.ok || !p.next) break;
     cursor = p.next;
@@ -157,26 +157,38 @@ describe("the Exclusive feed: who sees what", () => {
 });
 
 describe("paging", () => {
-  it("keyset order (created_at desc, id desc) with ties: deterministic, no duplicates, nothing skipped, bounded pages", async () => {
-    const pages = await allPages();
+  // 2026-10-31 (owner: "reshuffle so it doesn't always start with a particular person post"): one VISIT's order is a seeded
+  // shuffle (lib/sub/feed-order.ts) paged by offset — what keyset paging guaranteed still holds within a visit
+  it("one visit's order: the same for the same seed, no duplicates, nothing skipped, bounded pages", async () => {
+    const pages = await allPages(VIEWER, "visit-a");
     const all = pages.flatMap((p) => (p.ok ? p.posts : []));
     expect(pages.every((p) => p.ok && p.posts.length <= feed.FEED_PAGE)).toBe(true);
     expect(pages.length).toBe(3);
     expect(new Set(all.map((p) => p.id)).size).toBe(all.length);
-    const sorted = [...all].sort((a, b) => (a.createdAt === b.createdAt ? (a.id < b.id ? 1 : -1) : a.createdAt < b.createdAt ? 1 : -1));
-    expect(all.map((p) => p.id)).toEqual(sorted.map((p) => p.id));
+    // nothing skipped: every published post of the viewer's creators is served once
+    const expected = db.tables.sub_posts!.filter((r) => r.creator_id === C.active && r.status === "published").map((r) => r.id as string);
+    expect(all.map((p) => p.id).sort()).toEqual([...expected].sort());
+    const again = (await allPages(VIEWER, "visit-a")).flatMap((p) => (p.ok ? p.posts : []));
+    expect(again.map((p) => p.id)).toEqual(all.map((p) => p.id));
+    // teeth: another visit is another order (the old newest-first opened on the same post every time)
+    const other = (await allPages(VIEWER, "visit-b")).flatMap((p) => (p.ok ? p.posts : []));
+    expect(other.map((p) => p.id)).not.toEqual(all.map((p) => p.id));
     const last = pages.at(-1)!;
     expect(last.ok ? last.next : "failed").toBeNull();
   });
 
-  it("a post published while scrolling never shifts a page (the cursor is a position, not an offset)", async () => {
-    const first = await feed.exclusiveFeed(VIEWER);
-    db.tables.sub_posts!.push({ id: P(500), creator_id: C.active, caption: "brand new", status: "published", audience: "locked", created_at: "2026-10-30T00:00:00.000000+00:00" });
+  it("a post published while scrolling lands on TOP — the page in progress never skips a post (at most one repeat, which the client drops)", async () => {
+    const order = (await allPages(VIEWER, "visit-c")).flatMap((p) => (p.ok ? p.posts.map((x) => x.id) : []));
+    const first = await feed.exclusiveFeed(VIEWER, null, { seed: "visit-c" });
+    db.tables.sub_posts!.push({ id: P(500), creator_id: C.active, caption: "brand new", status: "published", audience: "locked", created_at: new Date().toISOString() });
     const second = await feed.exclusiveFeed(VIEWER, first.ok ? first.next : null);
-    const a = first.ok ? first.posts.map((p) => p.id) : [];
     const b = second.ok ? second.posts.map((p) => p.id) : [];
-    expect(a.filter((id) => b.includes(id))).toEqual([]);
     expect(b).not.toContain(P(500));
+    // everything that came next is still served (shifted by at most the one new post on top)
+    expect(order.slice(feed.FEED_PAGE, 2 * feed.FEED_PAGE - 1).every((id) => b.includes(id))).toBe(true);
+    // and the next visit opens on it: new since the last visit is pinned first
+    const next = await feed.exclusiveFeed(VIEWER, null, { seed: "visit-d", since: Date.now() - 60_000 });
+    expect(next.ok && next.posts[0]!.id).toBe(P(500));
   });
 
   it("a malformed or tampered cursor is refused, and a cursor can never widen access", async () => {

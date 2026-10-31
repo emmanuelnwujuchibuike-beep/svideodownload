@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { Suspense } from "react";
 
 import { FeedTabLinks } from "@/features/feed/feed-topbar-tabs";
@@ -49,7 +50,10 @@ async function GuestPage() {
 }
 
 async function FirstPage({ viewerId }: { viewerId: string }) {
-  const out = await exclusiveFeed(viewerId, null).catch(() => null);
+  // the viewer's last visit (set by the feed on the device — features/sub/exclusive-feed.tsx EXCLUSIVE_SEEN_COOKIE), so a
+  // post made since then is pinned on top from the first paint; a fresh seed reshuffles the rest (lib/sub/feed-order.ts)
+  const seen = Number((await cookies()).get("frenz_ex_seen")?.value ?? "");
+  const out = await exclusiveFeed(viewerId, null, { since: Number.isFinite(seen) && seen > 0 ? seen : null }).catch(() => null);
   if (!out?.ok) return <ExclusiveFeed />;
   const { ok: _ok, ...page } = out;
   return <ExclusiveFeed initial={page} />;

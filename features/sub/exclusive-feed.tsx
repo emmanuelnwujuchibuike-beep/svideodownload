@@ -12,6 +12,8 @@ import { cancelOpening, startOpening } from "@/features/sub/opened-cache";
 import { exQuiet } from "@/features/sub/ui";
 import { GuestLock } from "@/features/social/guest-chat";
 import { BlurredSlides, type BlurSlideView } from "@/features/sub/blurred-slides";
+import { PullToRefresh } from "@/features/ui/pull-to-refresh";
+import { newSeed } from "@/lib/sub/feed-order";
 import { cn } from "@/lib/utils";
 import { profilePath } from "@/lib/social/profile-url";
 
@@ -100,11 +102,62 @@ export interface ExclusiveFeedPageView {
   ready: boolean;
   issuedAt: number;
   previewTtl: number;
+  /** the visit's shuffle (lib/sub/feed-order.ts) */
+  seed?: string;
 }
 type Shown = Post & { birth: LinkBirth };
 
 /** first pages already shown in this tab — one replayed from the router cache is asked for again */
 const shownPages = new Set<number>();
+
+/*
+  The visit (owner, 2026-10-31: "the exclusive feed should behave like the main feed page in reshuffle … when a user made a
+  new post it shows at the top as new … resume from where user stop, never show a particular video first each time a user
+  enter the app"; "drag down should be able to reshuffle"). The server orders each visit (lib/sub/feed-order.ts): what was
+  posted since the LAST visit first, then a shuffle fixed by the visit's seed. Here:
+    · the last visit is read ONCE per page life, before this visit replaces it — and mirrored in a cookie, so the
+      server-rendered first page pins the new posts too (app/(app)/exclusive/page.tsx);
+    · within one session a return to the tab RESUMES: the same seed, the pages already seen, the scroll position;
+    · a new session (the app opened again) gets a fresh shuffle, and pulling down reshuffles on the spot.
+*/
+const EXCLUSIVE_SEEN_KEY = "frenz:exclusive:seen";
+export const EXCLUSIVE_SEEN_COOKIE = "frenz_ex_seen";
+let lastVisit: number | null | undefined;
+function previousVisit(): number | null {
+  if (lastVisit !== undefined) return lastVisit;
+  let last = 0;
+  try {
+    last = Number(localStorage.getItem(EXCLUSIVE_SEEN_KEY) ?? 0) || 0;
+    const now = Date.now();
+    localStorage.setItem(EXCLUSIVE_SEEN_KEY, String(now));
+    document.cookie = `${EXCLUSIVE_SEEN_COOKIE}=${now}; Path=/; Max-Age=31536000; SameSite=Lax`;
+  } catch {
+    /* storage blocked — no "new since your last visit", the shuffle still works */
+  }
+  lastVisit = last || null;
+  return lastVisit;
+}
+
+const RESUME_KEY = "frenz:exclusive:resume";
+/** a return within this long resumes; later it is a new visit (a fresh shuffle) */
+const RESUME_MS = 30 * 60 * 1000;
+type Resume = { seed: string; pages: number; y: number; at: number };
+function readResume(): Resume | null {
+  try {
+    const r = JSON.parse(sessionStorage.getItem(RESUME_KEY) ?? "null") as Resume | null;
+    return r && typeof r.seed === "string" && Date.now() - r.at < RESUME_MS ? r : null;
+  } catch {
+    return null;
+  }
+}
+function writeResume(r: Resume | null): void {
+  try {
+    if (r) sessionStorage.setItem(RESUME_KEY, JSON.stringify(r));
+    else sessionStorage.removeItem(RESUME_KEY);
+  } catch {
+    /* storage blocked — no resume, the feed still works */
+  }
+}
 
 const ago = (iso: string) => {
   const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
@@ -131,6 +184,10 @@ export function ExclusiveFeed({ initial = null, guest = false }: { initial?: Exc
   const [discover, setDiscover] = useState<ExclusiveFeedPageView["discover"]>(() => initial?.discover);
   const [subscriptions, setSubscriptions] = useState<number | null>(() => initial?.subscriptions ?? null);
   const [next, setNext] = useState<string | null>(() => initial?.next ?? null);
+  // the visit (see previousVisit / readResume above): its seed, the next page and how many pages are on screen
+  const seedRef = useRef<string | null>(initial?.seed ?? null);
+  const nextRef = useRef<string | null>(initial?.next ?? null);
+  const pagesRef = useRef(initial ? 1 : 0);
   const [status, setStatus] = useState<"loading" | "ready" | "error">(() => (initial ? "ready" : "loading"));
   const [more, setMore] = useState<"idle" | "loading" | "error">("idle");
   const [open, setOpen] = useState<string | null>(null);
@@ -153,7 +210,9 @@ export function ExclusiveFeed({ initial = null, guest = false }: { initial?: Exc
     abort.current = ctl;
     if (cursor) setMore("loading");
     try {
-      const res = await fetch(`/api/sub/feed${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { cache: "no-store", signal: ctl.signal });
+      // a first page asks for the visit's order: its seed (none = a fresh shuffle) and the last visit (new posts on top)
+      const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : `?seed=${encodeURIComponent(seedRef.current ?? "")}&since=${previousVisit() ?? ""}`;
+      const res = await fetch(`/api/sub/feed${query}`, { cache: "no-store", signal: ctl.signal });
       if (res.status === 401) {
         window.location.href = "/login?next=/exclusive";
         return;
@@ -171,6 +230,9 @@ export function ExclusiveFeed({ initial = null, guest = false }: { initial?: Exc
         setDiscover(page.discover);
         setSubscriptions(page.subscriptions);
       }
+      if (!cursor && page.seed) seedRef.current = page.seed;
+      pagesRef.current = cursor ? pagesRef.current + 1 : 1;
+      nextRef.current = page.next;
       setNext(page.next);
       setStatus("ready");
       setMore("idle");
@@ -188,6 +250,25 @@ export function ExclusiveFeed({ initial = null, guest = false }: { initial?: Exc
   useEffect(() => {
     // a guest's page is the server's public one, complete — there is no member feed to ask
     if (guest) return;
+    // the last visit is read now, before anything on this page replaces it (previousVisit)
+    previousVisit();
+    // a return within this session RESUMES: the same order, the pages already seen, then back to the same place
+    const resume = readResume();
+    if (resume) {
+      let alive = true;
+      seedRef.current = resume.seed;
+      void (async () => {
+        await load(null);
+        for (let i = 1; i < Math.min(resume.pages, 10) && nextRef.current && alive; i++) await load(nextRef.current);
+        // once the restored pages are on screen: back to the same place
+        if (alive) window.setTimeout(() => window.scrollTo(0, resume.y), 0);
+      })();
+      return () => {
+        alive = false;
+        abort.current?.abort();
+        busy.current = false;
+      };
+    }
     if (initial) {
       if (replayed.current === null) {
         replayed.current = firstPageIsReplay(initial.issuedAt, shownPages.has(initial.issuedAt));
@@ -202,6 +283,40 @@ export function ExclusiveFeed({ initial = null, guest = false }: { initial?: Exc
       busy.current = false;
     };
   }, [load, initial, guest]);
+
+  // where the viewer is, kept for a return within this session (readResume) — on scroll, on leaving and on unmount
+  useEffect(() => {
+    if (guest) return;
+    let timer = 0;
+    const save = () => {
+      if (seedRef.current && pagesRef.current > 0) writeResume({ seed: seedRef.current, pages: pagesRef.current, y: window.scrollY, at: Date.now() });
+    };
+    const onScroll = () => {
+      if (timer) return;
+      timer = window.setTimeout(() => {
+        timer = 0;
+        save();
+      }, 400);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("pagehide", save);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("pagehide", save);
+      window.clearTimeout(timer);
+      save();
+    };
+  }, [guest]);
+
+  // pull down: a fresh shuffle on the spot (owner, 2026-10-31: "drag down should be able to reshuffle the exclusive feed")
+  const reshuffle = useCallback(async () => {
+    writeResume(null);
+    seedRef.current = newSeed();
+    abort.current?.abort();
+    busy.current = false;
+    window.scrollTo({ top: 0 });
+    await load(null);
+  }, [load]);
 
   // the next page, a little before the end; never while one is loading or after an error (Retry asks again)
   useEffect(() => {
@@ -309,7 +424,7 @@ export function ExclusiveFeed({ initial = null, guest = false }: { initial?: Exc
       {feed}
     </GuestLock>
   ) : (
-    feed
+    <PullToRefresh onRefresh={reshuffle}>{feed}</PullToRefresh>
   );
 }
 
@@ -643,16 +758,8 @@ function ExclusivePost({ post, creator, priority, onOpen }: { post: Shown; creat
 function SubscriptionsRow({ creators, posts, hasDiscover }: { creators: Record<string, Creator>; posts: Shown[]; hasDiscover: boolean }) {
   const list = Object.values(creators);
   const [since, setSince] = useState<number | null>(null);
-  useEffect(() => {
-    let last = 0;
-    try {
-      last = Number(localStorage.getItem("frenz:exclusive:seen") ?? 0) || 0;
-      localStorage.setItem("frenz:exclusive:seen", String(Date.now()));
-    } catch {
-      /* storage blocked — no counts, nothing else changes */
-    }
-    setSince(last);
-  }, []);
+  // the same last visit the feed's order used (previousVisit — read once, so the two never disagree)
+  useEffect(() => setSince(previousVisit() ?? 0), []);
   if (!list.length) return null;
   const fresh = new Map<string, number>();
   if (since) for (const p of posts) if (Date.parse(p.createdAt) > since) fresh.set(p.creatorId, (fresh.get(p.creatorId) ?? 0) + 1);

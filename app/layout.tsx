@@ -582,7 +582,8 @@ export default function RootLayout({
             other two. */}
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          // light by default (owner, 2026-10-31) — the same as theme-mode-client readInitial and boot-splash THEME_JS mode()
+          defaultTheme="light"
           enableSystem
           disableTransitionOnChange
         >

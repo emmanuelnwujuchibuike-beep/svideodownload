@@ -3,6 +3,8 @@
 export type ThemeMode = "light" | "dark" | "system";
 
 const KEY = "frenz-theme-mode";
+/** Set only by a real choice (setThemeModeLocal) — see readInitial. Declared up here: `current` reads it at load. */
+const CHOSEN_KEY = "frenz-theme-chosen";
 
 /**
  * The user's actual theme INTENT (light/dark/"follow system"), separate from
@@ -58,15 +60,25 @@ const listeners = new Set<(mode: ThemeMode) => void>();
  *   2. boot-splash.tsx THEME_JS `mode()`   — the pre-paint <head> script
  *   3. app/layout.tsx `defaultTheme`       — next-themes' own fallback
  */
+/*
+  🔴 LIGHT IS THE DEFAULT AGAIN (owner, 2026-10-31: "when users sign in on pwa the theme should be set to default light
+  mode not auto"). The three layers (this file, boot-splash THEME_JS `mode()`, app/layout.tsx `defaultTheme`) all
+  default to "light" now.
+
+  A "system" already in storage was usually NOT a choice: every first visit wrote it automatically (the note above).
+  So a stored "system" counts only when the toggle wrote it — CHOSEN_KEY, set by setThemeModeLocal from now on; any
+  other "system" becomes "light" once. A stored light/dark is always kept (the default never wrote those).
+*/
 function readInitial(): ThemeMode {
   try {
     const v = localStorage.getItem(KEY);
-    if (v === "light" || v === "dark" || v === "system") return v;
-    localStorage.setItem(KEY, "system");
+    if (v === "light" || v === "dark") return v;
+    if (v === "system" && localStorage.getItem(CHOSEN_KEY) === "1") return "system";
+    localStorage.setItem(KEY, "light");
   } catch {
     /* storage blocked */
   }
-  return "system";
+  return "light";
 }
 
 export function getCachedThemeMode(): ThemeMode {
@@ -82,6 +94,8 @@ export function setThemeModeLocal(mode: ThemeMode): void {
   current = mode;
   try {
     localStorage.setItem(KEY, mode);
+    // a real choice — so a chosen "system" (Auto) is kept, unlike the old automatic one (readInitial)
+    localStorage.setItem(CHOSEN_KEY, "1");
   } catch {
     /* storage blocked — still updates in-memory/React state for this tab */
   }

@@ -33,6 +33,7 @@ import { haptic } from "@/lib/motion/haptics";
 import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
+import { FROSTED_GLASS } from "@/features/ui/floating-glass";
 import {
   popularity,
   resolutionBadge,
@@ -114,6 +115,9 @@ const WallpaperProSheet = dynamic(
 
 /** Glass over an image: translucent fill, hairline, blur. Never on a white surface. */
 const GLASS = "border border-white/30 bg-white/[0.16] shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_8px_24px_rgba(10,6,30,0.25)] backdrop-blur-xl backdrop-saturate-[1.8]";
+/* the fixed buttons over the picture: the same see-through white, WITHOUT the live blur (a fixed bar over a scrolling
+   page would re-blur it every frame); a touch more tint so the icons hold on a bright picture */
+const GLASS_OVER_IMAGE = "border border-white/35 bg-white/[0.22] shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_8px_24px_rgba(10,6,30,0.25)]";
 const GLASS_SOFT = "border border-white/30 bg-white/[0.16] backdrop-blur-xl";
 
 /** How many the Popular section shows before "View all" opens the rest. */
@@ -426,11 +430,23 @@ export function WallpaperExplore({
   }, []);
   const filterCount = (type !== "all" ? 1 : 0) + (category !== "all" ? 1 : 0);
 
+  // which glass the fixed buttons wear: the picture's, or — once the header has scrolled up past them — the sheet's
+  const headerRef = useRef<HTMLElement | null>(null);
+  const [onSheet, setOnSheet] = useState(false);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    // the buttons' band: safe area + 14 px + 44 px ≈ the top 120 px
+    const io = new IntersectionObserver(([e]) => setOnSheet(!!e && !e.isIntersecting), { rootMargin: "-120px 0px 0px 0px", threshold: 0 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   return (
     <>
       <main className="frenz-ui min-h-dvh bg-frenz-page pb-24 text-frenz-ink">
         {/* ── the featured header (glass only over the image) ─────────────────── */}
-        <section className="relative h-[470px] overflow-hidden bg-frenz-ink" aria-label="Featured wallpaper">
+        <section ref={headerRef} className="relative h-[470px] overflow-hidden bg-frenz-ink" aria-label="Featured wallpaper">
           {featured ? (
             // High quality, not the original (2026-10-28, owner: "the wallpaper itself shouldn't load unless clicked"): a
             // full-width, 470 px tall header needs ~1170 px of width on a phone — the renderer's 1170 px copy is that,
@@ -441,15 +457,22 @@ export function WallpaperExplore({
           <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/45 to-transparent" />
           <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[300px] bg-gradient-to-t from-[rgba(10,6,30,0.82)] to-transparent" />
 
-          <div className="absolute inset-x-4 flex items-center justify-between" style={{ top: "calc(var(--frenz-safe-top, 0px) + 14px)" }}>
-            <Link href="/" aria-label="Back to home" className={cn(GLASS, "flex h-11 w-11 items-center justify-center rounded-full text-white transition active:scale-95")}>
+          {/*
+            🔴 FIXED, like the Feed's floating buttons (owner, 2026-10-31: "this floating NAV in Wallpaper page sometimes
+            doesn't stay fixed when scrolling" — the Feed had the same report on 2026-10-28). They were `absolute` inside
+            this header, so they scrolled away with the picture. Over the picture: the see-through white glass; once the
+            white sheet is under them: the Feed's frosted glass with ink icons, or they would vanish white-on-white.
+            No live blur on either: a fixed bar over a scrolling page re-blurs every frame (no page may overheat).
+          */}
+          <div className="pointer-events-none fixed inset-x-4 z-40 flex items-center justify-between" style={{ top: "calc(var(--frenz-safe-top, 0px) + 14px)" }}>
+            <Link href="/" aria-label="Back to home" className={cn(onSheet ? FROSTED_GLASS : GLASS_OVER_IMAGE, "pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full transition active:scale-95", onSheet ? "text-frenz-ink" : "text-white")}>
               <ChevronLeft className="h-5 w-5" aria-hidden />
             </Link>
-            <div className={cn(GLASS, "flex h-11 items-center rounded-full")}>
-              <button type="button" onClick={openSearch} aria-label="Search wallpapers" className="flex h-11 w-11 items-center justify-center rounded-full text-white transition active:scale-95">
+            <div className={cn(onSheet ? FROSTED_GLASS : GLASS_OVER_IMAGE, "pointer-events-auto flex h-11 items-center rounded-full", onSheet ? "text-frenz-ink" : "text-white")}>
+              <button type="button" onClick={openSearch} aria-label="Search wallpapers" className="flex h-11 w-11 items-center justify-center rounded-full transition active:scale-95">
                 <Search className="h-[18px] w-[18px]" aria-hidden />
               </button>
-              <button type="button" onClick={startUpload} disabled={uploading} aria-label="Upload your own wallpapers" className="flex h-11 w-11 items-center justify-center rounded-full text-white transition active:scale-95 disabled:opacity-60">
+              <button type="button" onClick={startUpload} disabled={uploading} aria-label="Upload your own wallpapers" className="flex h-11 w-11 items-center justify-center rounded-full transition active:scale-95 disabled:opacity-60">
                 {uploading ? <Loader2 className="h-[18px] w-[18px] animate-spin" aria-hidden /> : <Upload className="h-[18px] w-[18px]" aria-hidden />}
               </button>
             </div>

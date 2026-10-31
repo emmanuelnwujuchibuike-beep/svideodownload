@@ -2,6 +2,7 @@
 
 import { Check, Plus, X } from "lucide-react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
@@ -18,8 +19,8 @@ export type OwnStory = { id: string; mediaUrl: string; mediaKind: "image" | "vid
 
 /**
  * Story highlights on a profile (Stories Part 5, 2026-10-27): a row of round covers with their names; a tap plays the
- * highlight. The owner also gets "New" — while they have a story up — to make one from their current stories. Shown
- * only when there is something to show (a visitor with no highlights to see gets nothing, not an empty row).
+ * highlight. The owner always gets "New" (owner, 2026-10-31: on every account) to make one from their current stories. A visitor sees the row
+ * only when there is something to show (no highlights to see → nothing, not an empty row).
  */
 export function ProfileHighlights({ profileId, initial, isOwner, ownStories }: { profileId: string; initial: Highlight[]; isOwner: boolean; ownStories: OwnStory[] }) {
   const router = useRouter();
@@ -50,7 +51,8 @@ export function ProfileHighlights({ profileId, initial, isOwner, ownStories }: {
     window.addEventListener(HIGHLIGHTS_CHANGED, on);
     return () => window.removeEventListener(HIGHLIGHTS_CHANGED, on);
   }, [reload]);
-  const canCreate = isOwner && ownStories.length > 0;
+  // owner, 2026-10-31: "the new highlight button … should show on all accounts" — the owner always gets "New", story up or not
+  const canCreate = isOwner;
   if (!list.length && !canCreate) return null;
 
   return (
@@ -148,7 +150,17 @@ function NewHighlightSheet({ stories, onClose, onCreated }: { stories: OwnStory[
           placeholder="Name this highlight"
           className="h-[52px] rounded-[26px] bg-frenz-fill px-5 text-base outline-none placeholder:text-frenz-muted focus:ring-2 focus:ring-frenz-violet/35"
         />
-        <p className="text-[13px] text-frenz-muted">Your stories up now — pick the ones to keep.</p>
+        {stories.length ? (
+          <p className="text-[13px] text-frenz-muted">Your stories up now — pick the ones to keep.</p>
+        ) : (
+          <p className="text-[13px] text-frenz-muted">
+            A highlight keeps your stories. You have none up right now —{" "}
+            <Link href="/create/story" className="font-semibold text-frenz-violet">
+              post a story
+            </Link>{" "}
+            and it can go straight in.
+          </p>
+        )}
         <ul className="grid min-h-0 grid-cols-3 gap-2 overflow-y-auto overscroll-contain">
           {stories.map((s) => {
             const on = picked.includes(s.id);

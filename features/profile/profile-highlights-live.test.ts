@@ -18,6 +18,18 @@ function showsAtOnce(rowSrc: string, pickerSrc: string): boolean {
   );
 }
 
+describe('"New" shows on every account (owner, 2026-10-31)', () => {
+  const loader = readFileSync("features/profile/profile-highlights-loader.tsx", "utf8");
+  const always = (rowSrc: string, loaderSrc: string) =>
+    /const canCreate = isOwner;/.test(rowSrc) && /if \(!isOwner && !highlights\.length\) return null;/.test(loaderSrc);
+  it("the owner gets the row and New with no story up and no highlights", () => {
+    expect(always(row, loader)).toBe(true);
+    // teeth: the old story-gated rules fail
+    expect(always(row.replace("const canCreate = isOwner;", "const canCreate = isOwner && ownStories.length > 0;"), loader)).toBe(false);
+    expect(always(row, loader.replace("if (!isOwner && !highlights.length) return null;", "if (!highlights.length && !ownStories.length) return null;"))).toBe(false);
+  });
+});
+
 describe("a new highlight shows on the profile at once", () => {
   it("holds for the real files", () => {
     expect(showsAtOnce(row, picker)).toBe(true);

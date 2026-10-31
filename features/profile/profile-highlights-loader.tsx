@@ -11,6 +11,7 @@ export async function ProfileHighlightsLoader({ profileId, viewerId }: { profile
   const isOwner = !!viewerId && viewerId === profileId;
   const [highlights, own] = await Promise.all([listHighlights(profileId, viewerId), isOwner ? getActiveStoryForUser(profileId, viewerId) : Promise.resolve(null)]);
   const ownStories: OwnStory[] = (own?.stories ?? []).map((s) => ({ id: s.id, mediaUrl: s.mediaUrl, mediaKind: s.mediaKind, thumbnailUrl: s.thumbnailUrl }));
-  if (!highlights.length && !ownStories.length) return null;
+  // the owner always sees the row (its "New" — owner, 2026-10-31); a visitor only when there is something to see
+  if (!isOwner && !highlights.length) return null;
   return <ProfileHighlights profileId={profileId} initial={highlights} isOwner={isOwner} ownStories={ownStories} />;
 }

@@ -784,6 +784,9 @@ export async function preferTikTokRoute(
   return first.m;
 }
 
+/** TikWM's real top-file bitrate (hd_size over duration), kept beside its answer for the story comparison. */
+const tikwmTopKbps = new WeakMap<VideoMetadata, number>();
+
 async function tikwmExtract(
   url: string,
   platform: ReturnType<typeof detectPlatform>,
@@ -823,7 +826,7 @@ async function tikwmExtract(
     const formats = buildTikWmFormats(d);
     if (formats.length === 0) return null;
 
-    return {
+    const meta: VideoMetadata = {
       id: d.id || crypto.randomUUID(),
       platform: platform.id,
       platformName: platform.name,
@@ -840,6 +843,9 @@ async function tikwmExtract(
       formats,
       extractor: "tiktok",
     };
+    const topBytes = d.hd_size || d.size || 0;
+    if (topBytes > 0 && d.duration && d.duration > 0) tikwmTopKbps.set(meta, Math.round((topBytes * 8) / d.duration / 1000));
+    return meta;
   } catch {
     // Includes the abort above: a TikWM that missed its deadline is simply
     // "no answer", and the caller falls through to the native parse.
@@ -856,6 +862,47 @@ async function tikwmExtract(
  * a /photo/ link → mobile, then mobile through the proxy; anything else → desktop, mobile, then mobile through the
  * proxy. The proxy step only exists when a proxy is configured for TikTok.
  */
+/**
+ * A TikTok STORY link (owner, 2026-10-31: "make the story download in high quality"): a /video/<id> watch URL that
+ * the share sheet marks with aweme_type=40 / story_type. Measured that day on production: the desktop page gave a
+ * story ONE stream (H.264 576x1024, ~306 kbps — the file is exactly that, byte for byte, before we touch it) and TikWM
+ * the same file, where a post usually also has an HEVC 720x1280 tier.
+ */
+export function isTikTokStoryUrl(url: string): boolean {
+  return /[?&](?:aweme_type=40|story_type=\d)/.test(url);
+}
+
+/** The same watch URL without the share sheet's query — the page TikTok renders for a plain visit. */
+export function cleanWatchUrl(url: string): string | null {
+  const m = /^(https:\/\/www\.tiktok\.com\/@[^/?#]+\/video\/\d+)/.exec(url);
+  return m ? m[1]! : null;
+}
+
+/** One stream a page offers, for the log and the comparison. */
+export interface GearSummary {
+  height: number;
+  width: number;
+  kbps: number | null;
+  codec: string;
+}
+
+export function gearsOf(item: TikTokItem): GearSummary[] {
+  const v = item.video;
+  if (!v) return [];
+  const list = (v.bitrateInfo ?? []).filter((b) => b.PlayAddr?.UrlList?.some((u) => u.startsWith("http")));
+  if (!list.length && v.playAddr) return [{ height: v.height ?? 0, width: v.width ?? 0, kbps: null, codec: "h264" }];
+  return list
+    .map((b) => ({ height: b.PlayAddr?.Height || v.height || 0, width: b.PlayAddr?.Width || v.width || 0, kbps: b.Bitrate ? Math.round(b.Bitrate / 1000) : null, codec: codecOf(b) }))
+    .sort((a, b) => b.height - a.height || (b.kbps ?? 0) - (a.kbps ?? 0));
+}
+
+/** Better = taller, then a higher bitrate. Positive when `a` beats `b`. */
+export function compareGears(a: GearSummary | undefined, b: GearSummary | undefined): number {
+  if (!a) return b ? -1 : 0;
+  if (!b) return 1;
+  return a.height - b.height || (a.kbps ?? 0) - (b.kbps ?? 0);
+}
+
 export function tiktokPageAttempts(resolvedUrl: string, proxyAvailable: boolean): Array<{ headers: Record<string, string>; proxy: boolean }> {
   const desktop = { headers: FETCH_HEADERS, proxy: false };
   const mobile = { headers: { ...FETCH_HEADERS, "User-Agent": MOBILE_UA }, proxy: false };
@@ -870,11 +917,12 @@ async function nativeExtract(
 ): Promise<VideoMetadata> {
   const resolved = await resolveUrl(url);
 
-  const fetchPage = async (headers: Record<string, string>): Promise<{ html: string; pageCookie: string | null }> => {
+  const fetchPage = (headers: Record<string, string>) => fetchPageAt(resolved, headers);
+  async function fetchPageAt(pageUrl: string, headers: Record<string, string>): Promise<{ html: string; pageCookie: string | null }> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIKTOK_TIMEOUT_MS);
     try {
-      const res = await extractorFetch(resolved, { headers, redirect: "follow", signal: controller.signal }, "tiktok");
+      const res = await extractorFetch(pageUrl, { headers, redirect: "follow", signal: controller.signal }, "tiktok");
       if (!res.ok) throw new ExtractionError(`TikTok responded ${res.status}`);
       return { html: await res.text(), pageCookie: cookieFromSetCookie(res.headers.getSetCookie?.() ?? []) };
     } catch (e) {
@@ -884,7 +932,7 @@ async function nativeExtract(
     } finally {
       clearTimeout(timer);
     }
-  };
+  }
 
   /*
     Where the post is (owner, 2026-10-27: "these tiktok multiple Download is failing again … and taking too much
@@ -900,7 +948,48 @@ async function nativeExtract(
   let item: TikTokItem | null = null;
   let pageCookie: string | null = null;
   let firstErr: unknown = null;
-  for (const a of tiktokPageAttempts(resolved, isProxyEligible("tiktok"))) {
+  /*
+    🔴 A STORY ASKS EVERY PAGE (owner, 2026-10-31: "make the story download in high quality … go through any path").
+    A post stops at the first page that has it; a story's first page gave one 576x1024 stream. So for a story every
+    page is asked at once — desktop, mobile, the plain watch URL without the share query, and the mobile page through
+    the proxy when there is one — each logs the streams it offers, and the page with the best top stream (taller, then
+    a higher bitrate) is used. Same pages the post path already uses, only all of them; nothing else is called.
+  */
+  if (isTikTokStoryUrl(resolved)) {
+    const clean = cleanWatchUrl(resolved);
+    const proxy = isProxyEligible("tiktok");
+    const desktop = FETCH_HEADERS;
+    const mobile = { ...FETCH_HEADERS, "User-Agent": MOBILE_UA };
+    const plan: { name: string; url: string; headers: Record<string, string>; proxy: boolean }[] = [
+      { name: "desktop", url: resolved, headers: desktop, proxy: false },
+      { name: "mobile", url: resolved, headers: mobile, proxy: false },
+      ...(clean ? [{ name: "desktop-clean", url: clean, headers: desktop, proxy: false }, { name: "mobile-clean", url: clean, headers: mobile, proxy: false }] : []),
+      ...(proxy ? [{ name: "mobile-proxy", url: clean ?? resolved, headers: mobile, proxy: true }] : []),
+    ];
+    const results = await Promise.all(
+      plan.map(async (p) => {
+        try {
+          const page = p.proxy ? await runWithForcedProxy(() => fetchPageAt(p.url, p.headers)) : await fetchPageAt(p.url, p.headers);
+          const it = findItemInPage(page.html);
+          return { name: p.name, item: it, pageCookie: page.pageCookie, gears: gearsOf(it), error: null as string | null };
+        } catch (e) {
+          firstErr ??= e;
+          return { name: p.name, item: null, pageCookie: null, gears: [] as GearSummary[], error: e instanceof Error ? e.message.slice(0, 120) : String(e) };
+        }
+      }),
+    );
+    console.info("[tiktok] story pages", {
+      url: resolved.slice(0, 120),
+      pages: results.map((r) => ({ page: r.name, error: r.error, gears: r.gears.map((g) => `${g.width}x${g.height} ${g.codec} ${g.kbps ?? "?"}kbps`) })),
+    });
+    const best = results.filter((r) => r.item).sort((a, b) => compareGears(b.gears[0], a.gears[0]))[0];
+    if (best?.item) {
+      item = best.item;
+      pageCookie = best.pageCookie;
+      console.info("[tiktok] story page chosen", { page: best.name, top: best.gears[0] ?? null });
+    }
+  }
+  for (const a of item ? [] : tiktokPageAttempts(resolved, isProxyEligible("tiktok"))) {
     try {
       const page = a.proxy ? await runWithForcedProxy(() => fetchPage(a.headers)) : await fetchPage(a.headers);
       item = findItemInPage(page.html);
@@ -1008,6 +1097,22 @@ export const tiktokExtractor: Extractor = {
     try {
       // The rule and its measurements: `preferTikTokRoute` above (2026-10-08; it
       // replaced 2026-09-28's "TikWM preferred", which predates the cookie fix).
+      /*
+        A STORY waits for both routes and keeps the better file (owner, 2026-10-31): the story's own pages were all asked
+        in nativeExtract; TikWM's file is compared by its real bitrate (hd_size over duration) against the native top
+        stream, and wins only when clearly higher (20 %) — native is the faster file host (preferTikTokRoute).
+      */
+      if (isTikTokStoryUrl(canonical)) {
+        const [api, native] = await Promise.allSettled([viaApi, viaNative]);
+        const n = native.status === "fulfilled" ? native.value : null;
+        const t = api.status === "fulfilled" ? api.value : null;
+        const nKbps = n?.formats.find((x) => x.kind === "video")?.tbr ?? null;
+        const tKbps = t ? (tikwmTopKbps.get(t) ?? null) : null;
+        const useTikwm = !!t && (!n || (tKbps !== null && nKbps !== null && tKbps > nKbps * 1.2));
+        console.info("[tiktok] story route", { native: n ? { top: n.formats[0]?.resolution ?? null, kbps: nKbps } : null, tikwm: t ? { kbps: tKbps } : null, chosen: useTikwm ? "tikwm" : n ? "native" : "none", ...tag });
+        if (useTikwm && t) return t;
+        if (n) return n;
+      }
       return await preferTikTokRoute(viaApi, viaNative, NATIVE_GRACE_MS, canonical);
     } catch (err) {
       /*

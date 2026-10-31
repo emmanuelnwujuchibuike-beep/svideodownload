@@ -152,7 +152,13 @@ html,body{height:100%;background:#fff;color:#0f172a}
   frame; the loader track still fades in after it.
 */
 .fx__shine{position:absolute;inset:0;background:linear-gradient(115deg,transparent 42%,rgba(255,255,255,.6) 50%,transparent 58%);transform:translateX(-130%);animation:fx-shine 1.5s ease-in-out .35s infinite}
-.fx__track{position:relative;width:132px;height:3px;border-radius:999px;overflow:hidden;background:rgba(99,102,241,.16);animation:fx-fade .5s ease .15s both}
+/*
+  🔴 THE LOGO FIRST, THEN THE LOADER (owner, 2026-10-31: "it suppose to show the brand logo first instantly when the pwa
+  opens and then show the brand loader in same spot, not skipping the first brand logo"). This screen now stays until
+  the app's stylesheet is warm (the hand-off below), so a 0.15 s fade put the loader on screen at once and the
+  logo-alone moment was gone. The track waits 0.6 s: the mark alone, then the loader under it, in the same spot.
+*/
+.fx__track{position:relative;width:132px;height:3px;border-radius:999px;overflow:hidden;background:rgba(99,102,241,.16);animation:fx-fade .45s ease .6s both}
 .fx__bar{position:absolute;top:0;bottom:0;left:0;width:42%;border-radius:999px;background:linear-gradient(90deg,#3b82f6,#8b5cf6,#d946ef);animation:fx-sweep 1.15s cubic-bezier(.65,0,.35,1) infinite}
 /*
   ── THE WORDMARK, WRITTEN (owner, 2026-10-04) ──────────────────────────────

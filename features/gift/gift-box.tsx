@@ -115,9 +115,9 @@ export function GiftBox({ wallet, initial, counts, conversion, fc = null, initia
     <WalletScreen label="Gift Box">
       <SubHeader title="Gift Box" />
       <div className="flex flex-col gap-4 px-4 pt-3">
-        <section aria-label={tab === "received" ? "Gifts received" : "Gifts sent"} className="flex items-center gap-3 rounded-[22px] bg-frenz-gradient-x p-[18px] text-white shadow-frenz-card">
+        <section aria-label={tab === "received" ? "Gifts received" : "Gifts sent"} className="frenz-nav-glass frenz-nav-glass--static flex items-center gap-3 rounded-[22px] p-[18px] text-frenz-ink">
           <div className="min-w-0 flex-1">
-            <p className="text-[13px] text-white/90">{tab === "received" ? "Gifts received" : "Gifts sent"}</p>
+            <p className="text-[13px] text-frenz-muted">{tab === "received" ? "Gifts received" : "Gifts sent"}</p>
             <p className="text-[30px] font-extrabold leading-tight tracking-tight">{count ?? "—"}</p>
             {wallet ? (
               <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold">

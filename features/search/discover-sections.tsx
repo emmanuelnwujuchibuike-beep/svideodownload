@@ -14,7 +14,7 @@ import { formatCompactNumber } from "@/lib/utils";
 
 /**
  * Discover (design/Frenz-Search-Discover-design.zip → Discover.dc.html, 2026-10-26): the creator circles,
- * Trending now (the gradient panel), Trending searches, Creators to follow and Explore videos. Used by
+ * Trending now (the floating glass panel), Trending searches, Creators to follow and Explore videos. Used by
  * /search before anything is typed, and by /explore (the owner: "use same design for the explore page too").
  *
  * ── 🔴 EVERY SECTION HERE IS A SERVER COMPONENT ───────────────────────────
@@ -118,24 +118,24 @@ function Circle({ href, label, badge = false, verified = false, children }: { hr
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
-   Trending now — the gradient panel: the top three, then the rest behind "See all".
+   Trending now — the floating glass panel: the top three, then the rest behind "See all".
    ──────────────────────────────────────────────────────────────────────── */
 
 function TrendingNow({ tags }: { tags: TrendingTag[] }) {
   if (tags.length === 0) return null;
   const more = tags.length > 3;
   return (
-    <section aria-labelledby="discover-trending" className="frenz-suggest-panel relative isolate mt-4 overflow-hidden rounded-[32px] px-4 pb-4 pt-4 text-white">
-      <span aria-hidden className="pointer-events-none absolute -right-10 -top-12 h-[180px] w-[180px] rounded-full bg-white/[0.12]" />
+    <section aria-labelledby="discover-trending" className="frenz-nav-glass frenz-nav-glass--static relative isolate mt-4 overflow-hidden rounded-[32px] px-4 pb-4 pt-4 text-frenz-ink">
+      {/* floating clear glass like the Friends suggestion card (owner, 2026-10-31) — not the purple gradient; no live blur */}
       {/* the "See all" toggle: a real (visually hidden) checkbox, so it works with no script and is keyboard-reachable */}
       {more ? <input id="discover-trending-all" type="checkbox" className="peer sr-only" aria-label="Show all trending hashtags" /> : null}
       <div className="relative mb-3 flex items-center justify-between gap-3">
         <h2 id="discover-trending" className="flex items-center gap-2 font-heading text-[18px] font-bold tracking-[-0.3px]">
-          <Flame className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden />
+          <Flame className="h-[18px] w-[18px] text-frenz-violet" strokeWidth={2.4} aria-hidden />
           Trending now
         </h2>
         {more ? (
-          <label htmlFor="discover-trending-all" className="frenz-glass-chip flex h-11 cursor-pointer items-center rounded-full px-3.5 text-[13px] font-bold transition-transform active:scale-[0.97]">
+          <label htmlFor="discover-trending-all" className="frenz-glass-pill flex h-11 cursor-pointer items-center rounded-full px-3.5 text-[13px] font-bold text-frenz-violet transition-transform active:scale-[0.97]">
             <span className="[.peer:checked~*_&]:hidden">See all</span>
             <span className="hidden [.peer:checked~*_&]:inline">See less</span>
           </label>
@@ -158,7 +158,7 @@ function TrendingRow({ tag, rank }: { tag: TrendingTag; rank: number }) {
       term={`#${tag.tag}`}
       type="hashtag"
       ariaLabel={`Search #${tag.tag}`}
-      className="frenz-glass-card flex h-[78px] w-full items-center gap-3.5 rounded-[22px] pl-4 pr-3 text-left text-frenz-ink transition-transform active:scale-[0.97] motion-reduce:active:scale-100"
+      className="frenz-glass-tile flex h-[78px] w-full items-center gap-3.5 rounded-[22px] pl-4 pr-3 text-left text-frenz-ink transition-transform active:scale-[0.97] motion-reduce:active:scale-100"
     >
       <span aria-hidden className="w-5 shrink-0 text-center font-heading text-[22px] font-bold tabular-nums text-frenz-violet">
         {rank}

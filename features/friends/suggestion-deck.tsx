@@ -170,7 +170,13 @@ export function SuggestionDeck({ initial, variant, seeAllHref, onWarmSeeAll }: {
             aria-hidden={i > 0 || undefined}
             inert={i > 0 || undefined}
           >
-            <Card person={p} variant={variant} front={i === 0} onAdd={() => answer(p, "add")} onSkip={() => answer(p, "skip")} />
+            {/* only the front card shows a person; the cards under it are blank tiles, so the next suggestion's avatar and
+                name never peek through (owner, 2026-10-31) */}
+            {i === 0 ? (
+              <Card person={p} variant={variant} front onAdd={() => answer(p, "add")} onSkip={() => answer(p, "skip")} />
+            ) : (
+              <div className={cn("frenz-glass-tile", variant === "hero" ? "h-[300px] rounded-[30px]" : "h-[172px] rounded-[26px]")} />
+            )}
           </div>
         ))
         .reverse()}

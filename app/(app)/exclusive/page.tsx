@@ -74,7 +74,7 @@ async function CreateFab({ viewerId }: { viewerId: string }) {
   ]);
   const handle = (prof.data as { handle?: string } | null)?.handle ?? null;
   const ready = !!settings?.ready && !!settings.setupCompleted;
-  return <ExclusiveFabSlot mode={ready ? "compose" : "setup"} viewerId={viewerId} setupHref={handle ? `${profilePath(handle)}?tab=sub` : "/account"} />;
+  return <ExclusiveFabSlot mode={ready ? "compose" : "setup"} viewerId={viewerId} setupHref={handle ? `${profilePath(handle)}?tab=sub#profile-sections` : "/account"} />;
 }
 
 async function GuestPage() {

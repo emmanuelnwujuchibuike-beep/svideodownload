@@ -230,7 +230,7 @@ export function ProfileTabs({
         (2026-10-16). Every section still swaps in place, and Exclusive still starts loading its
         posts the moment a finger lands. The Exclusive FEED is the Feed's own Exclusive tab now.
       */}
-      <nav ref={tray} aria-label="Profile sections" className="frenz-ui relative -mx-4 mb-3 flex scroll-mt-24 items-center border-b border-frenz-line px-2 sm:-mx-6">
+      <nav ref={tray} id="profile-sections" aria-label="Profile sections" className="frenz-ui relative -mx-4 mb-3 flex scroll-mt-24 items-center border-b border-frenz-line px-2 sm:-mx-6">
         {/* sideways only (owner, 2026-10-19: the row moved up and down) — nothing overflows vertically, and touch pans x only */}
         <div ref={tabRow} className="flex min-w-0 flex-1 touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {sections.map((s) => {

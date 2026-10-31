@@ -15,10 +15,10 @@ const block = (c: string, sel: string) => {
   return i < 0 ? "" : c.slice(i, c.indexOf("}", i));
 };
 function cool(c: string, f: string, d: string): boolean {
-  const noBlur = [".frenz-inbox-action", ".frenz-nav-profile-glass", ".frenz-install-glass", ".frenz-glass-tile", ".frenz-glass-pill"];
+  const noBlur = [".frenz-inbox-action", ".frenz-nav-profile-glass", ".frenz-install-glass", ".frenz-glass-tile", ".frenz-glass-pill", ".frenz-glass-card"];
   return (
     noBlur.every((s) => block(c, s) !== "" && !/backdrop-filter/.test(block(c, s))) &&
-    /\.frenz-nav-glass\.frenz-nav-glass--static \{\s*-webkit-backdrop-filter: none;\s*backdrop-filter: none;/.test(c) &&
+    /\n {2}\.frenz-nav-glass--static \{\s*-webkit-backdrop-filter: none;\s*backdrop-filter: none;/.test(c) &&
     !/backdrop-blur/.test(f.match(/export const FROSTED_GLASS =\s*"[^"]*"/)?.[0] ?? "backdrop-blur") &&
     /"frenz-nav-glass frenz-nav-glass--static relative isolate/.test(d)
   );

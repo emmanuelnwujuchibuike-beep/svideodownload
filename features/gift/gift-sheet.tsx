@@ -376,14 +376,14 @@ export function GiftSheet({ conversationId = null, place = null, recipients, req
               </div>
             ) : null}
             {featured && !category ? (
-              <button type="button" onClick={() => pick(featured)} className="flex items-center gap-3 rounded-[22px] bg-frenz-gradient-x p-4 text-left text-white shadow-frenz-card transition active:scale-[0.98]">
+              <button type="button" onClick={() => pick(featured)} className="frenz-nav-glass frenz-nav-glass--static flex items-center gap-3 rounded-[22px] p-4 text-left text-frenz-ink transition active:scale-[0.98]">
                 {/* eslint-disable-next-line @next/next/no-img-element -- uploaded sticker artwork */}
                 {featured.imageUrl ? <img src={featured.imageUrl} alt="" className="h-16 w-16 object-contain origin-bottom motion-safe:animate-sticker" /> : null}
                 <span className="min-w-0 flex-1">
-                  <span className="block text-xs opacity-80">Featured</span>
+                  <span className="block text-xs text-frenz-muted">Featured</span>
                   <span className="block truncate text-base font-bold">{featured.name}</span>
                 </span>
-                <span className="rounded-full bg-white/95 px-3 py-1 text-sm font-bold text-frenz-ink">{fgcText(featured.priceFgc)}</span>
+                <span className="rounded-full bg-frenz-gradient-x px-3 py-1 text-sm font-bold text-white">{fgcText(featured.priceFgc)}</span>
               </button>
             ) : null}
             {shown.length === 0 ? (

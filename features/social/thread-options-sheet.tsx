@@ -382,19 +382,19 @@ export function ThreadOptionsSheet({
                   // the design's one full-width gradient action — unless Send Frenz Coin holds that place (then a quiet row below it)
                   className={cn(
                     "flex w-full items-center gap-3 text-left transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2",
-                    coin ? "mt-2 min-h-[56px] rounded-[18px] border border-frenz-line bg-frenz-card px-3.5 py-2.5 text-frenz-ink" : "mt-4 rounded-[20px] bg-frenz-gradient-x p-3.5 text-white shadow-frenz-card",
+                    coin ? "mt-2 min-h-[56px] rounded-[18px] border border-frenz-line bg-frenz-card px-3.5 py-2.5 text-frenz-ink" : "frenz-glass-tile mt-4 rounded-[20px] p-3.5 text-frenz-ink",
                   )}
                 >
-                  <span aria-hidden className={cn("flex shrink-0 items-center justify-center rounded-xl", coin ? "h-9 w-9 bg-frenz-fill text-frenz-violet" : "h-10 w-10 bg-white/20")}>
+                  <span aria-hidden className={cn("flex shrink-0 items-center justify-center rounded-xl", coin ? "h-9 w-9 bg-frenz-fill text-frenz-violet" : "frenz-glass-pill h-10 w-10 text-frenz-violet")}>
                     <Coins className="h-5 w-5" />
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className={cn("font-heading font-bold", coin ? "text-[14px]" : "text-[15px]")}>Send AI credits</span>
-                    <span className={cn("truncate text-[13px]", coin ? "text-frenz-muted" : "text-white/85")}>Gift credits to {name}</span>
+                    <span className={cn("truncate text-[13px]", "text-frenz-muted")}>Gift credits to {name}</span>
                   </span>
-                  <span className={cn("shrink-0 text-right text-[12px] leading-tight", coin ? "text-frenz-muted" : "text-white/85")}>
+                  <span className={cn("shrink-0 text-right text-[12px] leading-tight", "text-frenz-muted")}>
                     Your balance
-                    <span className={cn("block text-[14px] font-bold tabular-nums", coin ? "text-frenz-ink" : "text-white")}>{balance === null ? "—" : formatCredits(balance)}</span>
+                    <span className={cn("block text-[14px] font-bold tabular-nums", "text-frenz-ink")}>{balance === null ? "—" : formatCredits(balance)}</span>
                   </span>
                 </button>
               ) : null}

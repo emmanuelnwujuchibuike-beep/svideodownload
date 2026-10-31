@@ -68,13 +68,13 @@ describe("the floating glass bottom nav", () => {
     expect(css).toMatch(/html\[data-glass="reduced"\]\) \.frenz-nav-glass/);
     // Inside the SAME tier blocks as .ai-glass (one hierarchy, one source order).
     expect(css).toMatch(/@supports not \(\(backdrop-filter: blur\(1px\)\) or \(-webkit-backdrop-filter: blur\(1px\)\)\) \{\n {4}\.ai-glass \{[^}]*\}\n {4}\.frenz-nav-glass \{\n {6}--nav-glass-fill: 0\.99;/);
-    // 2026-10-31 (owner, the glass bottom nav reference): white .78 → .58, 26 px blur at 200 %, a white edge
+    // 2026-10-31 (owner, "exactly like Safari transparent soft glass tab"): white .30 under 12 px blur at 190 %, a white edge
     expect(rule).toMatch(/--nav-glass-rgb: 255 255 255;/);
-    expect(rule).toMatch(/--nav-glass-fill: 0\.58;/);
-    expect(rule).toMatch(/--nav-glass-blur: 26px;/);
-    expect(rule).toMatch(/background-image: linear-gradient\(180deg, rgb\(255 255 255 \/ 0\.48\), rgb\(255 255 255 \/ 0\)\);/);
-    expect(rule).toMatch(/saturate\(200%\)/);
-    expect(rule).toMatch(/border: 1px solid rgb\(255 255 255 \/ 0\.85\);/);
+    expect(rule).toMatch(/--nav-glass-fill: 0\.3;/);
+    expect(rule).toMatch(/--nav-glass-blur: 12px;/);
+    expect(rule).toMatch(/background-image: linear-gradient\(180deg, rgb\(255 255 255 \/ 0\.16\), rgb\(255 255 255 \/ 0\.04\)\);/);
+    expect(rule).toMatch(/saturate\(190%\)/);
+    expect(rule).toMatch(/border: 1px solid rgb\(255 255 255 \/ 0\.55\);/);
     // the lens springs between tabs in CSS and magnifies on press
     const lens = css.match(/\.frenz-nav-lens \{[\s\S]*?\n {2}\}/)?.[0] ?? "";
     expect(lens).toMatch(/transform: translateX\(calc\(var\(--i, 0\) \* \(100% \+ 2px\)\)\);/);
@@ -84,8 +84,8 @@ describe("the floating glass bottom nav", () => {
     expect(css.match(/\.frenz-nav-glass\.frenz-nav-glass--immersive \{[\s\S]*?\}/)?.[0] ?? "").toMatch(/background-image: none;/);
     expect(rule).not.toMatch(/rgb\(16 24 40/);
     const darkRule = css.match(/\.dark \.frenz-nav-glass \{[\s\S]*?\}/)?.[0] ?? "";
-    expect(darkRule).toMatch(/--nav-glass-rgb: 28 28 34;/);
-    expect(darkRule).toMatch(/0 14px 36px rgb\(0 0 0 \/ 0\.5\)/);
+    expect(darkRule).toMatch(/--nav-glass-rgb: 18 18 22;/);
+    expect(darkRule).toMatch(/0 8px 28px rgb\(0 0 0 \/ 0\.4\)/);
     expect(css).toMatch(/prefers-reduced-transparency: reduce\), \(prefers-contrast: more\) \{\n {4}\.ai-glass \{[^}]*\}\n {4}\.frenz-nav-glass \{\n {6}--nav-glass-fill: 1;/);
     // the base rule comes BEFORE every tier, so the tiers win by source order
     expect(css.indexOf(".frenz-nav-glass {")).toBeLessThan(css.indexOf('html[data-glass="reduced"]) .frenz-nav-glass'));

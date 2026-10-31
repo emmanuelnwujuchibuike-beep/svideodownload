@@ -181,7 +181,7 @@
   /* Frosted glass — refined on light, luminous on dark.
      backdrop-blur-lg (16px) keeps GPU load low on mobile. */
   .glass {
-    @apply border border-border/60 bg-card/80 backdrop-blur-lg;
+    @apply border border-white/55 bg-card/[0.35] backdrop-blur-md backdrop-saturate-[1.9];
   }
   .dark .glass {
     @apply border-white/[0.07] bg-white/[0.04];
@@ -190,7 +190,7 @@
   /* Premium glass — deeper blur + luminous edge + soft inner light. For hero
      surfaces (sheets, docks, prestige cards). */
   .glass-strong {
-    @apply border border-border/50 bg-card/70 backdrop-blur-2xl;
+    @apply border border-white/55 bg-card/[0.32] backdrop-blur-md backdrop-saturate-[1.9];
     box-shadow:
       inset 0 1px 0 hsl(0 0% 100% / 0.08),
       0 24px 60px -24px hsl(229 55% 3% / 0.5);
@@ -968,7 +968,7 @@
      transparency" switch only removed the blur and left a 70%-see-through
      panel — tier 4 is what that switch always promised. */
   .ai-glass {
-    --ai-glass-fill: 0.7;
+    --ai-glass-fill: 0.34;
     --ai-glass-blur: 8px;
     background-color: rgb(var(--ai-glass-rgb, 255 255 255) / var(--ai-glass-fill));
     -webkit-backdrop-filter: blur(var(--ai-glass-blur));
@@ -976,10 +976,10 @@
   }
   /* Designed fills, by surface. Declared BEFORE the tiers so a tier overrides
      them by source order. */
-  .ai-glass--quiet { --ai-glass-fill: 0.55; }
-  .ai-glass--rail { --ai-glass-fill: 0.6; }
-  .ai-glass--pill { --ai-glass-fill: 0.75; }
-  .ai-glass--bar { --ai-glass-fill: 0.8; }
+  .ai-glass--quiet { --ai-glass-fill: 0.28; }
+  .ai-glass--rail { --ai-glass-fill: 0.3; }
+  .ai-glass--pill { --ai-glass-fill: 0.38; }
+  .ai-glass--bar { --ai-glass-fill: 0.4; }
   /* Over a photo or video (the Frenz AI welcome hero, 2026-10-19): a DARK tint, so white words stay readable
      when a tier raises the fill all the way to solid. */
   .ai-glass--media { --ai-glass-rgb: 14 12 30; --ai-glass-fill: 0.32; border: 1px solid rgb(255 255 255 / 0.28); }
@@ -1019,21 +1019,27 @@
      edge, a soft lift, and light falling across it (::before). The fill var carries the .58 floor so the tiers below
      can still raise it; the gradient image adds the top's light (.58 + .48 × .42 ≈ .78). Pure CSS — nothing here
      ships JS on a cold entry. */
+  /* 🔴 SAFARI CLEAR GLASS — EVERY glass surface (owner, 2026-10-31: "make all places that use glass and floating glass
+     to use the kind of clear glass as the safari tab"). A thin white tint under a light 12 px blur with high saturation,
+     so what's behind shows soft but recognisable; the edge does the work — a bright specular top line, a fainter bottom
+     rim, an inner edge glow and a soft lift. 12 px (was 26) is CHEAPER per frame: no page may overheat on a small device
+     (owner, same day) — the blur still lives only on fixed bars; --static surfaces never blur. */
   .frenz-nav-glass {
     --nav-glass-rgb: 255 255 255;
-    --nav-glass-fill: 0.58;
-    --nav-glass-blur: 26px;
+    --nav-glass-fill: 0.3;
+    --nav-glass-blur: 12px;
     isolation: isolate;
     background-color: rgb(var(--nav-glass-rgb) / var(--nav-glass-fill));
-    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.48), rgb(255 255 255 / 0));
-    -webkit-backdrop-filter: blur(var(--nav-glass-blur)) saturate(200%);
-    backdrop-filter: blur(var(--nav-glass-blur)) saturate(200%);
-    border: 1px solid rgb(255 255 255 / 0.85);
+    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.04));
+    -webkit-backdrop-filter: blur(var(--nav-glass-blur)) saturate(190%) brightness(1.04);
+    backdrop-filter: blur(var(--nav-glass-blur)) saturate(190%) brightness(1.04);
+    border: 1px solid rgb(255 255 255 / 0.55);
     box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.55),
-      inset 0 -1px 1px rgb(0 0 0 / 0.04),
-      0 14px 36px rgb(14 14 20 / 0.16),
-      0 2px 8px rgb(14 14 20 / 0.06);
+      inset 0 1px 0.5px rgb(255 255 255 / 0.9),
+      inset 0 -1px 0.5px rgb(255 255 255 / 0.4),
+      inset 0 0 14px rgb(255 255 255 / 0.22),
+      0 8px 28px rgb(14 14 20 / 0.12),
+      0 1px 4px rgb(14 14 20 / 0.06);
   }
   /* the light below is absolutely placed — every glass surface must be its containing block (some AI toolbars aren't positioned) */
   .frenz-nav-glass:not(.fixed, .absolute, .sticky) {
@@ -1044,10 +1050,12 @@
      so it re-blurred the whole time — over a plain page where the blur showed nothing. --static keeps the nav's glass
      look (gradient, edge, light, lift) with no backdrop-filter. Blur stays only on the few FIXED bars (the nav, the
      feed header, the chat composer), one layer each, and never on a control inside them. */
-  .frenz-nav-glass.frenz-nav-glass--static {
+  /* single class (same weight as the tiers below, declared before them) so reduced / translucent / solid still win */
+  .frenz-nav-glass--static {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
-    --nav-glass-fill: 0.82;
+    /* no blur over a plain page, so a touch more tint than the bar keeps it reading as a surface — still clear */
+    --nav-glass-fill: 0.42;
   }
   .frenz-nav-glass::before {
     content: "";
@@ -1056,6 +1064,7 @@
     z-index: -1;
     border-radius: inherit;
     pointer-events: none;
+    opacity: 0.45;
     background:
       radial-gradient(120% 90% at 12% -10%, rgb(255 255 255 / 0.45), rgb(255 255 255 / 0) 55%),
       linear-gradient(180deg, rgb(255 255 255 / 0.18), rgb(255 255 255 / 0) 40%);
@@ -1063,16 +1072,16 @@
   /* Theme and surface set the COLOUR only, never the fill: these selectors are
      more specific than the tiers below, so a fill here would defeat them. */
   .dark .frenz-nav-glass {
-    --nav-glass-rgb: 28 28 34;
-    background-image: linear-gradient(180deg, rgb(44 44 52 / 0.3), rgb(44 44 52 / 0));
-    border-color: rgb(255 255 255 / 0.16);
+    --nav-glass-rgb: 18 18 22;
+    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.06), rgb(255 255 255 / 0));
+    border-color: rgb(255 255 255 / 0.14);
     box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.08),
-      0 14px 36px rgb(0 0 0 / 0.5),
-      0 2px 8px rgb(0 0 0 / 0.3);
+      inset 0 1px 0.5px rgb(255 255 255 / 0.18),
+      inset 0 -1px 0.5px rgb(255 255 255 / 0.06),
+      0 8px 28px rgb(0 0 0 / 0.4);
   }
   .dark .frenz-nav-glass::before {
-    opacity: 0.25;
+    opacity: 0.12;
   }
 
   /* The LENS — one glass drop behind the active tab that springs between tabs (mobile-nav.tsx sets --i, the active
@@ -1152,8 +1161,8 @@
      independent `scale` property, so it never stacks with a transform or the global press. */
   /* the profile button's face: the liquid glass inside its violet ring (owner, 2026-10-31 — no black disc) */
   .frenz-nav-profile-glass {
-    background: linear-gradient(180deg, rgb(255 255 255 / 0.92), rgb(244 241 255 / 0.7));
-    border: 3px solid rgb(255 255 255 / 0.95);
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.42), rgb(244 241 255 / 0.18));
+    border: 3px solid rgb(255 255 255 / 0.7);
     box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.9), inset 0 -2px 4px rgb(91 63 230 / 0.1);
   }
   .dark .frenz-nav-profile-glass {
@@ -1183,6 +1192,24 @@
       0 0 0 2.5px #8f7bff,
       0 6px 18px rgb(143 123 255 / 0.35);
   }
+  /* the "+" face as transparent glass, not the dark disc (owner, 2026-10-31) — a thin white tint with the Safari glass's
+     specular edge, keeping the violet ring. No backdrop-filter of its own: the ring around it already blurs. */
+  .frenz-orb-face.frenz-orb-face--glass {
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.38), rgb(255 255 255 / 0.14));
+    box-shadow:
+      0 0 0 2.5px #5b3fe6,
+      inset 0 1px 0.5px rgb(255 255 255 / 0.9),
+      inset 0 -1px 0.5px rgb(255 255 255 / 0.4),
+      inset 0 0 10px rgb(255 255 255 / 0.25),
+      0 6px 18px rgb(91 63 230 / 0.25);
+  }
+  .dark .frenz-orb-face.frenz-orb-face--glass {
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.04));
+    box-shadow:
+      0 0 0 2.5px #8f7bff,
+      inset 0 1px 0.5px rgb(255 255 255 / 0.2),
+      0 6px 18px rgb(143 123 255 / 0.3);
+  }
   @media (prefers-reduced-motion: reduce) {
     .frenz-orb {
       transition: none;
@@ -1194,7 +1221,7 @@
      violet drop under the frosted white. CSS, not utilities: this ships on the landing's cold entry. */
   .frenz-install-glass {
     color: #5b3fe6;
-    background: linear-gradient(180deg, rgb(255 255 255 / 0.9), rgb(244 241 255 / 0.72));
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.45), rgb(244 241 255 / 0.22));
     border: 1px solid rgb(91 63 230 / 0.22);
     /* no drop shadow (owner, 2026-10-31: "remove the shadow from the install button") — the glass's inner light only */
     box-shadow:
@@ -1239,16 +1266,14 @@
      never on a sticky full-width bar; 20px blur at most. Where backdrop-filter
      is missing the same element gets a near-solid fill instead. */
   .frenz-glass-card {
-    background: hsl(var(--frenz-card) / 0.8);
-    border: 1px solid hsl(var(--frenz-card) / 0.8);
-    -webkit-backdrop-filter: blur(20px) saturate(170%);
-    backdrop-filter: blur(20px) saturate(170%);
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.4), rgb(255 255 255 / 0.2));
+    border: 1px solid rgb(255 255 255 / 0.6);
+    box-shadow: inset 0 1px 0.5px rgb(255 255 255 / 0.9), inset 0 -1px 0.5px rgb(255 255 255 / 0.35), inset 0 0 12px rgb(255 255 255 / 0.18);
+    /* no live blur: it sits on scrolling content (no page may overheat — owner, 2026-10-31) */
   }
   .frenz-glass-chip {
     background: rgb(255 255 255 / 0.16);
     border: 1px solid rgb(255 255 255 / 0.3);
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
   }
   .frenz-glass-toast {
     background: rgb(18 17 26 / 0.82);
@@ -1288,15 +1313,15 @@
      .frenz-nav-glass (it floats); the person card is a near-opaque glass tile — stacked cards sit behind it, so it must
      not show them through — with a white edge, inner light and only a hairline lift. */
   .frenz-glass-tile {
-    background: linear-gradient(180deg, rgb(255 255 255 / 0.95), rgb(255 255 255 / 0.82));
-    border: 1px solid rgb(255 255 255 / 0.9);
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.5), rgb(255 255 255 / 0.28));
+    border: 1px solid rgb(255 255 255 / 0.7);
     box-shadow:
       inset 0 1px 1px rgb(255 255 255 / 0.95),
       inset 0 -1px 2px rgb(14 14 18 / 0.05),
       0 2px 8px -4px rgb(40 30 90 / 0.18);
   }
   .dark .frenz-glass-tile {
-    background: linear-gradient(180deg, rgb(48 48 58 / 0.96), rgb(34 34 42 / 0.92));
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.04));
     border-color: rgb(255 255 255 / 0.12);
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
   }
@@ -1321,7 +1346,7 @@
   }
   /* small frosted controls on that glass (the count, See all, Skip) */
   .frenz-glass-pill {
-    background: linear-gradient(160deg, rgb(255 255 255 / 0.85), rgb(255 255 255 / 0.5));
+    background: linear-gradient(160deg, rgb(255 255 255 / 0.45), rgb(255 255 255 / 0.2));
     border: 1px solid rgb(255 255 255 / 0.9);
     box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.9), 0 2px 6px -3px rgb(40 30 90 / 0.2);
   }
@@ -1331,16 +1356,6 @@
     box-shadow: none;
   }
 
-  /* The Suggested-for-you panel: a STATIC gradient (no animation), the brand's three
-     colours over the design's deep violet. */
-  .frenz-suggest-panel {
-    background:
-      radial-gradient(70% 60% at 0% 0%, hsl(var(--frenz-blue)) 0%, hsl(var(--frenz-blue) / 0) 70%),
-      radial-gradient(70% 70% at 100% 20%, hsl(var(--frenz-magenta)) 0%, hsl(var(--frenz-magenta) / 0) 65%),
-      radial-gradient(90% 80% at 50% 100%, hsl(var(--frenz-violet)) 0%, hsl(var(--frenz-violet) / 0) 75%),
-      #2a1e78;
-    box-shadow: 0 24px 50px -26px rgb(61 42 140 / 0.8);
-  }
 
   /* Over full-bleed video (/reels): dark glass whatever the theme, so the white
      glyphs read on any frame. */
@@ -1489,7 +1504,7 @@
 
   .ex-glass {
     --ex-rgb: 255 255 255;
-    --ex-fill: 0.72;
+    --ex-fill: 0.32;
     --ex-blur: 8px;
     background-color: rgb(var(--ex-rgb) / var(--ex-fill));
     -webkit-backdrop-filter: blur(var(--ex-blur)) saturate(150%);
@@ -1547,8 +1562,8 @@
   }
   .ex-btn--glass {
     color: hsl(var(--foreground));
-    background-color: rgb(255 255 255 / 0.7);
-    border: 1px solid rgb(15 23 42 / 0.08);
+    background-color: rgb(255 255 255 / 0.34);
+    border: 1px solid rgb(255 255 255 / 0.6);
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 1px 2px rgb(15 23 42 / 0.05);
   }
   .dark .ex-btn--glass {
@@ -3657,11 +3672,12 @@ body:has(.frenz-canvas-page) {
    the cost of a plain background-color. Used only on small controls (the
    search field, the visual-search button, the video card's overlay chips). */
 .srch-glass {
-  background-color: hsl(var(--card) / 0.72);
-  border: 1px solid hsl(var(--border) / 0.9);
+  background-color: hsl(var(--card) / 0.38);
+  border: 1px solid rgb(255 255 255 / 0.6);
+  box-shadow: inset 0 1px 0.5px rgb(255 255 255 / 0.85);
 }
 .dark .srch-glass {
-  background-color: hsl(var(--card) / 0.82);
+  background-color: hsl(var(--card) / 0.4);
   /* A whisper of the purple accent in the edge, exactly as the reference has
      it. Static — never animated, never blurred. */
   border-color: hsl(var(--accent) / 0.22);

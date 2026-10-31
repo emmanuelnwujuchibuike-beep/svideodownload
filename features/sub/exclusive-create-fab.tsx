@@ -40,7 +40,8 @@ export function ExclusiveCreateFab({ mode, viewerId, setupHref }: ExclusiveCreat
   // exactly the reference's round glass button (.fme.fglass + .fme-photo): globals.css .frenz-orb — the bottom nav's
   // liquid glass, 66 px with 5 px padding, a dark disc with the violet ring inside, and its spring press (scale .92)
   const ring = "frenz-orb frenz-nav-glass fixed left-4 z-40 flex h-[66px] w-[66px] rounded-full p-[5px] lg:hidden";
-  const face = "frenz-orb-face flex flex-1 items-center justify-center rounded-full text-white";
+  // transparent glass face with a black plus (owner, 2026-10-31: "remove the Black background … change the plus color to black")
+  const face = "frenz-orb-face frenz-orb-face--glass flex flex-1 items-center justify-center rounded-full text-black dark:text-white";
   const style = { bottom: "calc(var(--frenz-nav-clearance, 5.5rem) + 0.75rem)" };
   const icon = <Plus className="h-[26px] w-[26px]" strokeWidth={2.6} aria-hidden />;
 

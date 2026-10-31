@@ -1062,9 +1062,9 @@ function LockedGrid({ posts, more }: { posts: Card[]; more: boolean }) {
           </li>
         ))}
         <li>
-          <a href="#sub-offer" className="flex h-[220px] flex-col items-center justify-center gap-1 rounded-[20px] bg-frenz-gradient px-4 text-center">
-            <span className="font-heading text-[17px] font-bold text-white">See everything</span>
-            <span className="text-[13px] text-white/85">Subscribe to unlock all posts</span>
+          <a href="#sub-offer" className="frenz-nav-glass frenz-nav-glass--static flex h-[220px] flex-col items-center justify-center gap-1 rounded-[20px] px-4 text-center">
+            <span className="font-heading text-[17px] font-bold text-frenz-ink">See everything</span>
+            <span className="text-[13px] text-frenz-muted">Subscribe to unlock all posts</span>
           </a>
         </li>
       </ul>

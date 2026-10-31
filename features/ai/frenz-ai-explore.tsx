@@ -282,18 +282,17 @@ export function FrenzAIExplore({
               key={t.id}
               href={t.href}
               className={cn(
-                "relative flex min-h-[176px] flex-col justify-between overflow-hidden rounded-[22px] p-3.5 text-white no-underline transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2",
-                i === 0
-                  ? "bg-[radial-gradient(circle_at_85%_10%,hsl(var(--frenz-magenta)),hsl(var(--frenz-violet))_45%,hsl(250_60%_24%))]"
-                  : "bg-[radial-gradient(circle_at_85%_10%,hsl(228_100%_71%),hsl(var(--frenz-blue))_45%,hsl(232_70%_25%))]",
+                "frenz-nav-glass frenz-nav-glass--static relative flex min-h-[176px] flex-col justify-between overflow-hidden rounded-[22px] p-3.5 text-frenz-ink no-underline transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2",
+                // floating clear glass, not a purple gradient (owner, 2026-10-31); the icon tile keeps the two colours apart
+                i === 0 ? "[&_.studio-ico]:text-frenz-violet" : "[&_.studio-ico]:text-frenz-blue",
               )}
             >
-              <span aria-hidden className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
+              <span aria-hidden className="studio-ico frenz-glass-pill flex h-10 w-10 items-center justify-center rounded-xl">
                 <t.icon className="h-5 w-5" />
               </span>
               <span>
                 <span className="block font-heading text-[17px] font-bold">{t.name}</span>
-                <span className="mt-0.5 block text-[12.5px] leading-snug text-white/85">{t.blurb}</span>
+                <span className="mt-0.5 block text-[12.5px] leading-snug text-frenz-muted">{t.blurb}</span>
               </span>
               <LinkPendingStripe />
             </Link>

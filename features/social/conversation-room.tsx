@@ -96,6 +96,7 @@ import { createClient } from "@/lib/supabase/client";
 import Image from "next/image";
 
 import { cn } from "@/lib/utils";
+import { FROSTED_GLASS } from "@/features/ui/floating-glass";
 import { SwipeToReply } from "@/features/social/swipe-to-reply";
 import { sameMessageGroup } from "@/lib/social/message-groups";
 import { CameraIcon, MicIcon, SendIcon as SendGlyph } from "@/features/frenz-ui/icons";
@@ -2824,13 +2825,10 @@ export function ConversationRoom({
         <form
           onSubmit={submit}
           className={cn(
-            "frenz-message-composer flex items-end gap-2 border-t border-frenz-line px-3 pt-2.5 backdrop-blur-xl lg:pb-3",
+            // 🔴 FLOATING GLASS (owner, 2026-10-31: "make the chat placeholder at the bottom to be floating glass") — the
+            // bottom nav's liquid glass (.frenz-nav-glass), so the thread and any wallpaper show through it
+            "frenz-message-composer frenz-nav-glass flex items-end gap-2 px-3 pt-2.5 lg:pb-3",
             composerBottomPad,
-            // Translucent (not solid) over a wallpaper — same "top 0 bottom 0"
-            // full-bleed ask as the message list above: the shared image
-            // painted behind the whole thread shows through here instead of
-            // being cropped off by a solid bar.
-            liveWallpaperUrl ? "bg-white/70" : useLightDefault ? "bg-white" : "bg-card/70",
           )}
         >
           <motion.button
@@ -2839,14 +2837,14 @@ export function ConversationRoom({
             aria-label="Attach"
             whileTap={{ scale: 0.85 }}
             transition={springs.press}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-frenz-fill text-frenz-ink transition hover:bg-frenz-line"
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${FROSTED_GLASS}`}
           >
             <Plus className="h-5 w-5" strokeWidth={2.4} />
           </motion.button>
           <div
             className={cn(
+              // the frosted pill inside the glass bar (globals.css form.frenz-message-composer > div)
               "flex min-h-[46px] min-w-0 flex-1 items-end rounded-[23px] pl-4 pr-1.5 transition focus-within:ring-2 focus-within:ring-frenz-violet/30",
-              useLightDefault || liveWallpaperUrl ? "border border-frenz-line bg-frenz-fill" : "glass",
             )}>
             <textarea
               ref={textareaRef}

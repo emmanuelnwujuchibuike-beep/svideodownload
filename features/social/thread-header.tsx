@@ -22,6 +22,7 @@ import { haptic } from "@/lib/motion/haptics";
 import { THEME_HEADER_CLASS } from "@/lib/social/message-meta";
 import type { ConversationMember, ConversationType, MemberRole, OtherUser } from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/client";
+import { FROSTED_GLASS } from "@/features/ui/floating-glass";
 import { cn } from "@/lib/utils";
 import { ChevronLeftIcon, DotsIcon } from "@/features/frenz-ui/icons";
 import { VerifiedBadge } from "@/features/frenz-ui/primitives";
@@ -175,15 +176,12 @@ export function ThreadHeader({
       )}
     >
       {/* (the decorative corner glow that sat here is gone — owner, 2026-10-18: no washes or glows) */}
-      {/* Owner mockup: a plain icon, no glass/circle chrome around it — was a
-          bordered translucent chip, reported "old low class chat top menu". */}
+      {/* Owner, 2026-10-31 ("all buttons in the message and chat page … same floating glass"): the feed header's frosted
+          glass circle — supersedes the plain icon of the earlier mockup. */}
       <Link
         href="/messages"
         aria-label="Back to messages"
-        className={cn(
-          "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition lg:hidden",
-          forceDarkText ? "text-neutral-900 hover:bg-neutral-100" : "text-foreground hover:bg-frenz-fill",
-        )}
+        className={cn("relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full lg:hidden", FROSTED_GLASS)}
       >
         <ChevronLeftIcon size={22} strokeWidth={2.4} />
       </Link>
@@ -257,7 +255,7 @@ export function ThreadHeader({
               haptic("light");
               setOptionsOpen(true);
             }}
-            className="flex h-11 w-11 items-center justify-center rounded-full text-neutral-900 transition hover:bg-neutral-100 active:scale-90"
+            className={cn("flex h-11 w-11 items-center justify-center rounded-full", FROSTED_GLASS)}
           >
             <DotsIcon size={20} />
           </button>

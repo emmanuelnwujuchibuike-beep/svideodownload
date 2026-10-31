@@ -131,7 +131,7 @@ export function InstallButton({ className }: { className?: string }) {
  */
 /** `label`: the Download page's bar and the landing header say just "Install" (owner 2026-10-12, 2026-10-16) */
 /** `gradient`: the top headers' Install is the blue → violet of the other header buttons (owner, 2026-10-28) */
-export function InstallHeaderCta({ className, label = "Install Frenz", gradient = false }: { className?: string; label?: string; gradient?: boolean }) {
+export function InstallHeaderCta({ className, label = "Install Frenz", gradient = false, glass = false }: { className?: string; label?: string; gradient?: boolean; glass?: boolean }) {
   const state = useSyncExternalStore(subscribeInstall, getInstallState, getServerInstallState);
   const [open, setOpen] = useState(false);
 
@@ -145,9 +145,12 @@ export function InstallHeaderCta({ className, label = "Install Frenz", gradient 
         aria-haspopup="dialog"
         className={cn(
           "hide-when-installed inline-flex h-10 shrink-0 items-center whitespace-nowrap rounded-xl px-4 text-sm font-bold transition active:scale-[0.97]",
-          gradient
-            ? "bg-frenz-gradient-x text-white shadow-[0_14px_28px_-14px_hsl(var(--frenz-violet)/0.7)]"
-            : "bg-frenz-ink text-frenz-page shadow-[0_14px_28px_-14px_rgb(18_17_26/0.6)]",
+          // the header's install: the glass nav's frosted glass, violet so it reads on a white bar (owner, 2026-10-31) — globals.css
+          glass
+            ? "frenz-install-glass rounded-full"
+            : gradient
+              ? "bg-frenz-gradient-x text-white shadow-[0_14px_28px_-14px_hsl(var(--frenz-violet)/0.7)]"
+              : "bg-frenz-ink text-frenz-page shadow-[0_14px_28px_-14px_rgb(18_17_26/0.6)]",
           className,
         )}
       >

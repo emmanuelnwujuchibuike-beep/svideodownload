@@ -492,7 +492,7 @@ export function AppTopbar() {
           control, and it hides while the search field has the row.
         */}
         {/* one row at every phone width (owner, 2026-10-25: "arrange and organise both buttons"): Install, then three equal 44 px icons — My ads, Wallet, the bell */}
-        {pathname === "/downloads" && !searchActive ? <InstallHeaderCta className="h-9 px-3 text-[13px] max-[374px]:hidden sm:px-3.5" label="Install" gradient /> : null}
+        {pathname === "/downloads" && !searchActive ? <InstallHeaderCta className="h-9 px-3 text-[13px] max-[374px]:hidden sm:px-3.5" label="Install" glass /> : null}
         {/* No Earn or Add friend in the top bar on /downloads (owner, 2026-10-16); Friends is in the bottom nav. */}
         {/*
           "My ads" — the megaphone and the words on a glass pill, set into this bar (owner 2026-10-15:

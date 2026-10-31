@@ -25,7 +25,7 @@ describe("returning to the feed", () => {
     expect(s).toContain("fallbackY: y,");
     expect(s).not.toMatch(/RESTORE_TRIES|requestAnimationFrame\(land\)/);
     // the reader's post is read when the scroll pauses and saved with the snapshot
-    expect(s).toContain("anchorPosRef.current[sortRef.current] = readAnchor(FEED_POST_ATTR, ANCHOR_PROBE_Y, tabScope(sortRef.current));");
+    expect(s).toContain("anchorPosRef.current[sortRef.current] = readReaderAnchor(FEED_POST_ATTR, ANCHOR_PROBE_Y, tabScope(sortRef.current));");
     expect(s).toContain("anchor: anchorPosRef.current[sort] ?? null,");
     expect(s).toContain("anchorPosRef.current[snap.sort] = snap.anchor ?? null;");
   });

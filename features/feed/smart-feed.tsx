@@ -82,7 +82,7 @@ import {
   buildSparkDeck,
   summarizeAway,
 } from "@/lib/social/smart-feed";
-import { readAnchor, type ScrollAnchor } from "@/lib/dom/scroll-anchor";
+import { readReaderAnchor, type ScrollAnchor } from "@/lib/dom/scroll-anchor";
 import { loadFeedContinuity, saveFeedContinuity } from "@/lib/social/feed-continuity";
 import { getApi } from "@/lib/sdk/browser";
 import { cn } from "@/lib/utils";
@@ -341,7 +341,7 @@ export function SmartFeed({
       // which post the reader is on — read once the scroll pauses, never per scroll tick
       window.clearTimeout(anchorTimer);
       anchorTimer = window.setTimeout(() => {
-        anchorPosRef.current[sortRef.current] = readAnchor(FEED_POST_ATTR, ANCHOR_PROBE_Y, tabScope(sortRef.current));
+        anchorPosRef.current[sortRef.current] = readReaderAnchor(FEED_POST_ATTR, ANCHOR_PROBE_Y, tabScope(sortRef.current));
       }, 120);
       const now = Date.now();
       if (now - lastAt < 1500) return;
@@ -586,7 +586,7 @@ export function SmartFeed({
     // Remember exactly where we're leaving so returning here resumes at the
     // same scroll position instead of jumping to the top.
     scrollPosRef.current[sort] = window.scrollY;
-    anchorPosRef.current[sort] = readAnchor(FEED_POST_ATTR, ANCHOR_PROBE_Y, tabScope(sort));
+    anchorPosRef.current[sort] = readReaderAnchor(FEED_POST_ATTR, ANCHOR_PROBE_Y, tabScope(sort));
     restoreScrollFor.current = s;
     setDirection(SWIPE_ORDER.indexOf(s) > SWIPE_ORDER.indexOf(sort) ? 1 : -1);
     setSort(s);
@@ -595,6 +595,12 @@ export function SmartFeed({
     // the idle prefetch above warms it ahead of time).
     const cached = cacheRef.current![s];
     if (cached) {
+      /*
+        A visited tab comes back IN PLACE (owner, 2026-10-31: "going back to for you from following reloads the whole
+        feed page"): no per-card fade-in, the same as a return to the Feed (the continuity restore above). The
+        restore effect turns it off again after RESTORE_HOLD_MS, so new pages loading in still fade.
+      */
+      setInstant(true);
       setItems(cached.items);
       setNextOffset(cached.nextOffset);
       setError(false);

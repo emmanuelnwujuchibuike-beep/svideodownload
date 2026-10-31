@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { readAnchor } from "./scroll-anchor";
+import { readAnchor, readReaderAnchor } from "./scroll-anchor";
 import { anchorTarget, restoreToAnchor } from "./scroll-anchor-restore";
 
 /**
@@ -28,6 +28,27 @@ function page(cards: { id: string; h: number }[], scrollY: () => number, top = 6
     querySelector: (sel: string) => els().find((e) => sel.includes(`"${e.getAttribute()}"`)) ?? null,
   } as unknown as ParentNode;
 }
+
+/*
+  Owner, 2026-10-31: "going back to for you from following … take the feed page down even if I didn't scroll". At
+  the top, the first card crossing the probe is still below it (under the stories); holding THAT card scrolled the
+  page down as the pictures above it loaded. A reader anchor exists only once they are in a post.
+*/
+describe("readReaderAnchor", () => {
+  it("at the top of the page — the first card still below the probe line — there is no anchor", () => {
+    const root = page([{ id: "a", h: 500 }, { id: "b", h: 400 }], () => 0, 600); // a sits at 600..1100
+    expect(readAnchor(ATTR, 72, root)).toEqual({ id: "a", offset: 600 }); // what used to be held
+    expect(readReaderAnchor(ATTR, 72, root)).toBeNull();
+  });
+  it("once the reader is in a post, it is the same anchor as before", () => {
+    const root = page([{ id: "a", h: 500 }, { id: "b", h: 400 }, { id: "c", h: 600 }], () => 700);
+    expect(readReaderAnchor(ATTR, 72, root)).toEqual({ id: "b", offset: -140 });
+  });
+  it("teeth: a card exactly at the probe line still counts as reached", () => {
+    const root = page([{ id: "a", h: 500 }], () => 0, 72);
+    expect(readReaderAnchor(ATTR, 72, root)).toEqual({ id: "a", offset: 72 });
+  });
+});
 
 describe("readAnchor / anchorTarget", () => {
   it("the reader's place is the first card crossing the probe line, and how far into it they are", () => {

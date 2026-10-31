@@ -109,10 +109,12 @@ function StoryRing({
                 width={68}
                 height={68}
                 unoptimized={false}
+                // same-frame decode: a ring already downloaded paints WITH the page on a return, never a blank frame first (owner, 2026-10-31)
+                decoding="sync"
                 className={cn(av, "rounded-full bg-secondary object-cover")}
               />
             ) : group.avatarUrl ? (
-              <Image src={group.avatarUrl} alt="" width={68} height={68} className={cn(av, "rounded-full bg-secondary object-cover")} />
+              <Image src={group.avatarUrl} alt="" width={68} height={68} decoding="sync" className={cn(av, "rounded-full bg-secondary object-cover")} />
             ) : (
               <span className={cn(av, "flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white")}>
                 {group.displayName.charAt(0).toUpperCase()}
@@ -227,7 +229,7 @@ export function StoriesRow({
           <span className="relative rounded-full border-2 border-dashed border-frenz-violet/30 p-[1.5px]">
             <span className="block rounded-full bg-frenz-page p-[1.5px]">
               {viewerAvatarUrl ? (
-                <Image src={viewerAvatarUrl} alt="" width={68} height={68} className={cn(av, "rounded-full object-cover")} />
+                <Image src={viewerAvatarUrl} alt="" width={68} height={68} decoding="sync" className={cn(av, "rounded-full object-cover")} />
               ) : (
                 <span className={cn(av, "flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white")}>
                   {initial}

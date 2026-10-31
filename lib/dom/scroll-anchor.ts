@@ -26,6 +26,18 @@ export interface ScrollAnchor {
 }
 
 /** The first card still visible below `probeY` (px from the viewport top), or null. */
+/**
+ * The reader's place, but only once they are IN a post (owner, 2026-10-31: "going back to for you from following …
+ * take the feed page down even if I didn't scroll"). At the top of the Feed the first card crossing the probe is
+ * still BELOW it — under the stories and Continue Watching — and the return held that card at its saved height for
+ * two seconds while the pictures above it loaded, scrolling the page down to keep it there. A card whose top is
+ * below the probe is not where anyone is reading: no anchor, so the return lands on the exact saved scroll (the top).
+ */
+export function readReaderAnchor(attr: string, probeY: number, root: ParentNode = document): ScrollAnchor | null {
+  const a = readAnchor(attr, probeY, root);
+  return a && a.offset <= probeY ? a : null;
+}
+
 export function readAnchor(attr: string, probeY: number, root: ParentNode = document): ScrollAnchor | null {
   for (const el of root.querySelectorAll<HTMLElement>(`[${attr}]`)) {
     const r = el.getBoundingClientRect();

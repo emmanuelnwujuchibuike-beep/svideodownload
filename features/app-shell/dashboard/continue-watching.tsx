@@ -29,6 +29,10 @@ import type { DownloadRecord } from "@/types";
  * frame, and restoring is equally instant (see home-modules-store.tsx). One tap
  * out, one tap back.
  */
+/*
+  The thumbnails decode in the same frame (owner, 2026-10-31: the section "reloads on every navigation" back to the Feed):
+  an <img> already downloaded paints WITH the page instead of a blank card first.
+*/
 export function ContinueWatching() {
   const { tasks } = useDownloadManager();
   const { items } = useHistory();
@@ -108,7 +112,7 @@ export function ContinueWatching() {
               <div className="relative aspect-video bg-neutral-800">
                 {t.thumbnail ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={t.thumbnail} alt="" className="h-full w-full object-cover" />
+                  <img src={t.thumbnail} alt="" decoding="sync" className="h-full w-full object-cover" />
                 ) : null}
                 <span className="absolute inset-0 flex items-center justify-center"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/25 backdrop-blur"><Play className="h-4 w-4 fill-white text-white" /></span></span>
               </div>
@@ -131,7 +135,7 @@ export function ContinueWatching() {
               <div className="relative aspect-video bg-neutral-800">
                 {r.thumbnail ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={r.thumbnail} alt="" className="h-full w-full object-cover" />
+                  <img src={r.thumbnail} alt="" decoding="sync" className="h-full w-full object-cover" />
                 ) : null}
                 <span className="absolute inset-0 flex items-center justify-center"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/25 backdrop-blur transition group-hover:bg-white/40"><Play className="h-4 w-4 fill-white text-white" /></span></span>
                 {Brand ? <span className="absolute bottom-1.5 left-1.5 text-white/90"><Brand className="h-3.5 w-3.5" /></span> : null}

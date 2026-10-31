@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleUserRound, Users } from "lucide-react";
+import { Users } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -491,7 +491,8 @@ export function MobileNav({
         )}
       >
         <PressIcon active={profileActive} className="flex flex-1">
-          <span className="flex flex-1 items-center justify-center overflow-hidden rounded-full border-[3px] border-white bg-[linear-gradient(135deg,#334155,#0F172A)]">
+          {/* glass inside the ring, not a black disc (owner, 2026-10-31: "it should be glass background like the other buttons") — globals.css .frenz-nav-profile-glass */}
+          <span className="frenz-nav-profile-glass flex flex-1 items-center justify-center overflow-hidden rounded-full">
             {/*
               🔴 NO PROFILE PICTURE HERE (owner, 2026-10-31: "remove users profile picture from the profile button … so
               it makes the pages lighter" — on every page with the bar). The photo was a network image on every page
@@ -499,15 +500,36 @@ export function MobileNav({
               landing's guest figure); a guest keeps the solid person.
             */}
             {handle ? (
-              <CircleUserRound className="h-[30px] w-[30px] text-white" strokeWidth={1.9} aria-hidden />
+              <MemberGlyph />
             ) : (
-              <FrenzPersonSolid className="h-[30px] w-[30px] text-white" />
+              <FrenzPersonSolid className="h-[30px] w-[30px] text-[#5B3FE6] dark:text-white" />
             )}
           </span>
         </PressIcon>
       </Link>
     </div>
     </>
+  );
+}
+
+/**
+ * The signed-in member's profile glyph (owner, 2026-10-31: "don't use persons icon that has a white circle, use
+ * something more better"): a filled head and shoulders in the brand gradient — no ring around it, and not the guest's
+ * plain solid figure. Inline SVG: no icon library, nothing fetched.
+ */
+function MemberGlyph() {
+  return (
+    <svg width="30" height="30" viewBox="0 0 24 24" aria-hidden className="frenz-member-glyph">
+      <defs>
+        <linearGradient id="frenz-member-g" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#5B5BF0" />
+          <stop offset="0.55" stopColor="#7B5CF0" />
+          <stop offset="1" stopColor="#B86CF2" />
+        </linearGradient>
+      </defs>
+      <circle cx="12" cy="7.6" r="4.1" fill="url(#frenz-member-g)" />
+      <path d="M3.6 20.2c.5-4.3 4-7 8.4-7s7.9 2.7 8.4 7a.9.9 0 0 1-.9 1H4.5a.9.9 0 0 1-.9-1Z" fill="url(#frenz-member-g)" />
+    </svg>
   );
 }
 

@@ -9,7 +9,9 @@ import type { Transition } from "framer-motion";
  */
 export const springs = {
   /** Icon/button press feedback — snappy compression on tap. */
-  press: { type: "spring", stiffness: 500, damping: 30, mass: 0.5 } satisfies Transition,
+  // owner, 2026-10-31: every press is the glass nav reference's spring — cubic-bezier(.28, 1.4, .46, 1) over 250 ms,
+  // the same curve as globals.css --ease-spring, so framer and CSS presses feel identical
+  press: { type: "tween", duration: 0.25, ease: [0.28, 1.4, 0.46, 1] } satisfies Transition,
   /** State-change emphasis — a small overshoot when a tab becomes active. */
   bounce: { type: "spring", stiffness: 380, damping: 15, mass: 0.6 } satisfies Transition,
   /** Celebratory/elastic moments — pronounced overshoot, used sparingly. */

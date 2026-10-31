@@ -3,8 +3,12 @@ import { cookies } from "next/headers";
 import { Suspense } from "react";
 
 import { FeedTabLinks } from "@/features/feed/feed-topbar-tabs";
+import { ExclusiveFabSlot } from "@/features/sub/exclusive-fab-slot";
 import { ExclusiveFeed, FeedSkeleton } from "@/features/sub/exclusive-feed";
+import { profilePath } from "@/lib/social/profile-url";
 import { exclusiveFeed, publicExclusiveFeed } from "@/lib/sub/feed";
+import { getSubSettings } from "@/lib/sub/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -41,8 +45,36 @@ export default async function ExclusiveRoute() {
           {user ? <FirstPage viewerId={user.id} /> : <GuestPage />}
         </Suspense>
       </div>
+      {/* The floating "+" (owner, 2026-10-31) — its own boundary, so its one settings read never holds up the feed */}
+      {user ? (
+        <Suspense fallback={null}>
+          <CreateFab viewerId={user.id} />
+        </Suspense>
+      ) : null}
     </div>
   );
+}
+
+/**
+ * Where the "+" goes: a member who has set up Exclusive makes a post right here; anyone else lands on the setup on
+ * their profile's Exclusive tab. A failed read sends them to setup — that page decides again for itself.
+ */
+async function CreateFab({ viewerId }: { viewerId: string }) {
+  const [settings, prof] = await Promise.all([
+    getSubSettings(viewerId).catch(() => null),
+    createAdminClient()
+      .from("profiles")
+      .select("handle")
+      .eq("id", viewerId)
+      .maybeSingle()
+      .then(
+        (r) => r,
+        () => ({ data: null }),
+      ),
+  ]);
+  const handle = (prof.data as { handle?: string } | null)?.handle ?? null;
+  const ready = !!settings?.ready && !!settings.setupCompleted;
+  return <ExclusiveFabSlot mode={ready ? "compose" : "setup"} viewerId={viewerId} setupHref={handle ? `${profilePath(handle)}?tab=sub` : "/account"} />;
 }
 
 async function GuestPage() {

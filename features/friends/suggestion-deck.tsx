@@ -186,37 +186,37 @@ export function SuggestionDeck({ initial, variant, seeAllHref, onWarmSeeAll }: {
         </div>
       ) : null}
       {done ? (
-        <div className={cn("frenz-glass-chip absolute inset-x-0 top-0 flex flex-col items-center justify-center gap-2.5 rounded-[26px] px-6 text-center text-white", variant === "hero" ? "h-[300px]" : "h-[172px]")}>
+        <div className={cn("frenz-glass-tile absolute inset-x-0 top-0 flex flex-col items-center justify-center gap-2.5 rounded-[26px] px-6 text-center text-frenz-ink", variant === "hero" ? "h-[300px]" : "h-[172px]")}>
           <span className="font-heading text-[18px] font-bold">You&apos;re all caught up</span>
-          {variant === "hero" ? <span className="text-[14px] text-white/85">New suggestions show up as your network grows.</span> : null}
-          <PendingButton pending={refilling} onClick={startOver} className="h-11 rounded-full bg-white px-4 text-[14px] font-extrabold text-frenz-violet">
+          {variant === "hero" ? <span className="text-[14px] text-frenz-muted">New suggestions show up as your network grows.</span> : null}
+          <PendingButton pending={refilling} onClick={startOver} className="h-11 rounded-full bg-frenz-gradient-x px-4 text-[14px] font-extrabold text-white">
             Show suggestions again
           </PendingButton>
         </div>
       ) : deck.length === 0 ? (
-        <div className={cn("frenz-glass-chip absolute inset-x-0 top-0 rounded-[26px]", variant === "hero" ? "h-[300px]" : "h-[172px]")} aria-label="Loading suggestions" role="status" />
+        <div className={cn("frenz-glass-tile absolute inset-x-0 top-0 rounded-[26px]", variant === "hero" ? "h-[300px]" : "h-[172px]")} aria-label="Loading suggestions" role="status" />
       ) : null}
       {variant === "panel" && total > 0 ? <Dots pos={answered} total={total} /> : null}
     </div>
   );
 
   return (
-    <section aria-labelledby={`deck-${variant}`} className={cn("frenz-suggest-panel relative isolate overflow-hidden text-white", variant === "hero" ? "rounded-[34px] px-[18px] pb-5 pt-[18px]" : "rounded-[32px] px-4 pb-3.5 pt-4")}>
-      <span aria-hidden className="pointer-events-none absolute -right-10 -top-12 h-[180px] w-[180px] rounded-full bg-white/[0.12]" />
-      {variant === "hero" ? <span aria-hidden className="pointer-events-none absolute -bottom-[90px] -left-[70px] h-[220px] w-[220px] rounded-full bg-white/[0.07]" /> : null}
+    <section aria-labelledby={`deck-${variant}`} className={cn("frenz-nav-glass relative isolate overflow-hidden text-frenz-ink", variant === "hero" ? "rounded-[34px] px-[18px] pb-5 pt-[18px]" : "rounded-[32px] px-4 pb-3.5 pt-4")}>
+      {/* owner, 2026-10-31: the panel floats as the bottom nav's glass (not the purple gradient); the card on it is glass that
+          barely lifts, since the panel already floats; every tap is the nav's spring press */}
       <div className={cn("relative flex items-center justify-between gap-3", variant === "hero" ? "mb-4" : "mb-3.5")}>
         <h2 id={`deck-${variant}`} className="font-heading text-[18px] font-bold tracking-[-0.3px]">
           {variant === "hero" ? "Suggestions" : "Suggested for you"}
         </h2>
         {variant === "hero" ? (
           total > 0 ? (
-            <span className="frenz-glass-chip flex h-[30px] items-center rounded-[15px] px-3 text-[13px] font-bold tabular-nums">
+            <span className="frenz-glass-pill flex h-[30px] items-center rounded-[15px] px-3 text-[13px] font-bold tabular-nums text-frenz-violet">
               {Math.min(answered + 1, total)} of {total}
               {!exhausted ? "+" : ""}
             </span>
           ) : null
         ) : seeAllHref ? (
-          <PendingLink href={seeAllHref} prefetch={false} onPointerDown={onWarmSeeAll} className="frenz-glass-chip flex h-11 items-center rounded-full px-3.5 text-[13px] font-bold text-white" spinnerSize={15}>
+          <PendingLink href={seeAllHref} prefetch={false} onPointerDown={onWarmSeeAll} className="frenz-glass-pill flex h-11 items-center rounded-full px-3.5 text-[13px] font-bold text-frenz-violet" spinnerSize={15}>
             See all
           </PendingLink>
         ) : null}
@@ -234,7 +234,7 @@ function Dots({ pos, total }: { pos: number; total: number }) {
   return (
     <div className="absolute inset-x-0 bottom-0 flex justify-center gap-[5px]" role="img" aria-label={`${Math.min(pos + 1, total)} of ${total}`}>
       {Array.from({ length: n }, (_, i) => (
-        <span key={i} className={cn("h-1.5 rounded-[3px] transition-[width] duration-200", i === active ? "w-[22px] bg-white" : "w-1.5 bg-white/45")} />
+        <span key={i} className={cn("h-1.5 rounded-[3px] transition-[width] duration-200", i === active ? "w-[22px] bg-frenz-violet" : "w-1.5 bg-frenz-ink/20")} />
       ))}
     </div>
   );
@@ -282,7 +282,7 @@ function Card({
 }) {
   if (variant === "hero") {
     return (
-      <div className="frenz-glass-card flex h-[300px] flex-col items-center gap-1.5 rounded-[30px] px-[18px] pb-[18px] pt-[22px] text-center text-frenz-ink shadow-[0_22px_48px_-20px_rgb(18_12_60/0.6),inset_0_1px_0_rgb(255_255_255/0.95)]">
+      <div className="frenz-glass-tile flex h-[300px] flex-col items-center gap-1.5 rounded-[30px] px-[18px] pb-[18px] pt-[22px] text-center text-frenz-ink">
         <Face person={person} size={108} eager={front} />
         <span className="mt-2 flex max-w-full items-center gap-1">
           <span className="truncate font-heading text-[22px] font-bold tracking-[-0.5px]">{person.displayName}</span>
@@ -296,7 +296,7 @@ function Card({
     );
   }
   return (
-    <div className="frenz-glass-card flex h-[172px] flex-col gap-3 rounded-[26px] p-3.5 text-frenz-ink shadow-[0_18px_40px_-18px_rgb(18_12_60/0.55),inset_0_1px_0_rgb(255_255_255/0.9)]">
+    <div className="frenz-glass-tile flex h-[172px] flex-col gap-3 rounded-[26px] p-3.5 text-frenz-ink">
       <PendingLink href={profilePath(person.handle)} prefetch={false} inner="flex min-w-0 items-center gap-3" className="block rounded-2xl" tabIndex={front ? 0 : -1}>
         <Face person={person} size={60} eager={front} />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
@@ -315,7 +315,7 @@ function Card({
           spinnerSize={16}
           aria-label={`Skip ${person.displayName}`}
           tabIndex={front ? 0 : -1}
-          className="flex h-[46px] w-12 shrink-0 items-center justify-center rounded-[23px] border border-frenz-line bg-white/90 text-frenz-muted"
+          className="frenz-glass-pill flex h-[46px] w-12 shrink-0 items-center justify-center rounded-[23px] text-frenz-muted"
         >
           <X className="h-[17px] w-[17px]" strokeWidth={2.6} aria-hidden />
         </PendingButton>
@@ -338,13 +338,13 @@ function Card({
 function HeroControls({ person, onAdd, onSkip }: { person: PersonSuggestion; onAdd: () => void; onSkip: () => void }) {
   return (
     <div className="relative flex items-center justify-center gap-[22px]">
-      <PendingButton onClick={onSkip} aria-label={`Skip ${person.displayName}`} className="frenz-glass-chip flex h-[60px] w-[60px] items-center justify-center rounded-full text-white">
+      <PendingButton onClick={onSkip} aria-label={`Skip ${person.displayName}`} className="frenz-glass-pill flex h-[60px] w-[60px] items-center justify-center rounded-full text-frenz-ink">
         <X className="h-[22px] w-[22px]" strokeWidth={2.6} aria-hidden />
       </PendingButton>
       <PendingButton
         onClick={onAdd}
         aria-label={`Add ${person.displayName} as a friend`}
-        className="flex h-[76px] w-[76px] items-center justify-center rounded-full bg-white text-frenz-violet shadow-[0_16px_34px_-12px_rgb(10_6_40/0.7)]"
+        className="flex h-[76px] w-[76px] items-center justify-center rounded-full bg-frenz-gradient-x text-white shadow-[0_12px_26px_-12px_rgb(91_63_240/0.6)]"
       >
         <UserPlus className="h-[30px] w-[30px]" strokeWidth={2.3} aria-hidden />
       </PendingButton>
@@ -352,7 +352,7 @@ function HeroControls({ person, onAdd, onSkip }: { person: PersonSuggestion; onA
         href={profilePath(person.handle)}
         prefetch={false}
         aria-label={`View ${person.displayName}'s profile`}
-        className="frenz-glass-chip flex h-[60px] w-[60px] items-center justify-center rounded-full text-white"
+        className="frenz-glass-pill flex h-[60px] w-[60px] items-center justify-center rounded-full text-frenz-ink"
       >
         <UserRound className="h-[22px] w-[22px]" strokeWidth={2.2} aria-hidden />
       </PendingLink>

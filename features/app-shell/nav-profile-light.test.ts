@@ -10,7 +10,7 @@ function light(src: string): boolean {
     button.length > 0 &&
     !/<img\b/.test(button) &&
     !/avatarUrl/.test(src.match(/const \{[^}]*\} = useEntitlements\(\);/)?.[0] ?? "avatarUrl") &&
-    /<CircleUserRound /.test(button)
+    /<MemberGlyph \/>/.test(button)
   );
 }
 
@@ -20,6 +20,6 @@ describe("the nav's profile button carries no photo", () => {
   });
   it("has teeth", () => {
     expect(light(nav.replace("const { handle } = useEntitlements();", "const { handle, avatarUrl } = useEntitlements();"))).toBe(false);
-    expect(light(nav.replace("<CircleUserRound ", '<img src={x} alt="" /><CircleUserRound '))).toBe(false);
+    expect(light(nav.replace("<MemberGlyph ", '<img src={x} alt="" /><MemberGlyph '))).toBe(false);
   });
 });

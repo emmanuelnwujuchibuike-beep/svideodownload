@@ -13,7 +13,7 @@ import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
 import { makeBlurClip } from "@/lib/media/make-blur-clip";
 import { makeThumb } from "@/lib/media/make-thumb";
 import { presignUpload, uploadWithPlan } from "@/lib/storage/client-upload";
-import { BLUR_CLIP_WIDTH_FOR, BLUR_FRAME_CLASS, DEFAULT_BLUR_LEVEL, type BlurLevel } from "@/lib/sub/blur-level";
+import { BLUR_FRAME_CLASS, blurClipWidth, DEFAULT_BLUR_LEVEL, type BlurLevel } from "@/lib/sub/blur-level";
 import { cn } from "@/lib/utils";
 
 /**
@@ -108,9 +108,21 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
         const it = items[i]!;
         setBusy(`Uploading ${i + 1} of ${items.length}…`);
         setProgress(i / items.length);
-        const plan = await fetch("/api/sub/posts/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: it.kind, ext: extOf(it.file) }) }).then((r) => r.json());
+        const plan = await fetch("/api/sub/posts/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: it.kind, ext: extOf(it.file) }) })
+          .then((r) => r.json())
+          .catch(() => {
+            throw new Error("Couldn't reach Frenzsave. Check your connection and try again.");
+          });
         if (!plan?.ok) throw new Error(plan?.error ?? "Couldn't upload.");
-        const put = await fetch(plan.uploadUrl as string, { method: "PUT", body: it.file, headers: { "Content-Type": it.file.type || "application/octet-stream", "Cache-Control": "private, no-store" } });
+        /*
+          A network-level failure here is Safari's bare "Load failed" (owner, 2026-10-30: "is showing load fail when I want
+          to make an upload" — right away). On an iPhone the commonest cause is the PICKED FILE itself: Safari keeps only a
+          temporary copy of a photo or video from the library, and iOS may clear it while the app sits in the background —
+          the preview still shows, but the file can no longer be read. Say so, instead of the browser's two words.
+        */
+        const put = await fetch(plan.uploadUrl as string, { method: "PUT", body: it.file, headers: { "Content-Type": it.file.type || "application/octet-stream", "Cache-Control": "private, no-store" } }).catch(() => {
+          throw new Error(`Couldn't send ${items.length > 1 ? `item ${i + 1}` : "your file"}. If you left the app after picking it, remove it and pick it again — your phone may have cleared it. Otherwise check your connection and try again.`);
+        });
         if (!put.ok) throw new Error("The upload didn't finish. Try again.");
         // a ~480 px preview beside it, so the gallery tile loads instantly (best-effort: never blocks the post)
         let thumbKey: string | undefined;
@@ -134,7 +146,7 @@ export function SubComposer({ onClose, onPosted }: { onClose: () => void; onPost
         for (const [n, { it, i }] of videos.entries()) {
           setBusy(videos.length > 1 ? `Making the blurred previews… ${n + 1} of ${videos.length}` : "Making the blurred preview…");
           // at the size the chosen blur level stores (lib/sub/blur-level.ts — 24 px unless Light)
-          const clip = await makeBlurClip(it.file, BLUR_CLIP_WIDTH_FOR[blurLevel]).catch(() => null);
+          const clip = await makeBlurClip(it.file, blurClipWidth(blurLevel)).catch(() => null);
           const url = clip ? await uploadWithPlan(await presignUpload("video", clip.ext), clip.blob, clip.type).catch(() => null) : null;
           if (!url) continue;
           media[i]!.blurVideoUrl = url;

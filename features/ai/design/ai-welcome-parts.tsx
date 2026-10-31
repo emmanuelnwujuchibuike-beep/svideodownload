@@ -42,7 +42,7 @@ export function AiCreditsCard({ base, className }: { base: string; className?: s
   return (
     <div className={cn("flex min-h-[64px] items-center gap-3 rounded-[20px] border border-frenz-line bg-frenz-card py-3 pl-3.5 pr-3 shadow-frenz-card", className)}>
       {/* a small identity badge — one of the places the gradient may go */}
-      <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-frenz-gradient text-white">
+      <span aria-hidden className="frenz-icon-glass text-frenz-violet flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
         <Coins className="h-5 w-5" />
       </span>
       {who === "guest" ? (

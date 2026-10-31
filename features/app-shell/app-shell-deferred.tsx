@@ -30,6 +30,10 @@ const ReferralClaim = dynamic(() => import("@/features/app-shell/referral-claim"
 const DeviceCheck = dynamic(() => import("@/features/app-shell/device-check").then((m) => m.DeviceCheck), { ssr: false });
 // the global top banner on the signed-in tree too — it shows only where lib/ads-platform/top-banner-pages.ts allows (Quests, Earn, Support; 2026-10-22)
 const TopPageBannerAd = dynamic(() => import("@/features/monetization/top-page-banner-ad").then((m) => m.TopPageBannerAd), { ssr: false });
+// a video tile opens the Reels deck in place instead of reloading /reels (owner, 2026-10-31) — features/reels/reel-open-store.ts
+// coming back to the app settles a page iOS froze mid-bounce (owner, 2026-10-31)
+const ResumeSettle = dynamic(() => import("@/features/app-shell/resume-settle").then((m) => m.ResumeSettle), { ssr: false });
+const InPlaceReelHost = dynamic(() => import("@/features/reels/in-place-reel-host").then((m) => m.InPlaceReelHost), { ssr: false });
 const VastInterstitialTriggers = dynamic(() => import("@/features/monetization/vast-interstitial/triggers").then((m) => m.VastInterstitialTriggers), { ssr: false });
 
 export function AppShellDeferred() {
@@ -50,6 +54,8 @@ export function AppShellDeferred() {
       <OfflineQueueSync />
       <ReferralClaim />
       <DeviceCheck />
+      <InPlaceReelHost />
+      <ResumeSettle />
     </>
   );
 }

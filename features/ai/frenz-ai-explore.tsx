@@ -287,7 +287,7 @@ export function FrenzAIExplore({
                 i === 0 ? "[&_.studio-ico]:text-frenz-violet" : "[&_.studio-ico]:text-frenz-blue",
               )}
             >
-              <span aria-hidden className="studio-ico frenz-glass-pill flex h-10 w-10 items-center justify-center rounded-xl">
+              <span aria-hidden className="studio-ico frenz-icon-glass flex h-10 w-10 items-center justify-center rounded-xl">
                 <t.icon className="h-5 w-5" />
               </span>
               <span>
@@ -315,10 +315,11 @@ export function FrenzAIExplore({
         <ul className="-mx-3 m-0 flex list-none gap-3 overflow-x-auto px-3 pb-1 [scrollbar-width:none] sm:-mx-4 sm:px-4 [&::-webkit-scrollbar]:hidden">
           {AI_MODELS.map((m) => (
             <li key={m.id} className="w-[148px] shrink-0">
-              <div className="flex h-[118px] flex-col justify-between rounded-[20px] bg-[linear-gradient(150deg,hsl(var(--frenz-blue)),hsl(var(--frenz-violet))_60%,hsl(var(--frenz-magenta)))] p-3 text-white">
-                <span className="self-start rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-bold">{m.tag}</span>
+              {/* floating clear glass, not a purple gradient (owner, 2026-10-31) */}
+              <div className="frenz-nav-glass frenz-nav-glass--static flex h-[118px] flex-col justify-between rounded-[20px] p-3 text-frenz-ink">
+                <span className="frenz-icon-glass text-frenz-violet self-start rounded-full px-2 py-0.5 text-[11px] font-bold">{m.tag}</span>
                 <span>
-                  <span className="block text-[12px] font-semibold text-white/80">Kling</span>
+                  <span className="block text-[12px] font-semibold text-frenz-muted">Kling</span>
                   <span className="block font-heading text-[19px] font-bold leading-tight">{m.version}</span>
                 </span>
               </div>
@@ -376,8 +377,8 @@ function ToolList({ tools }: { tools: AiToolCard[] }) {
       {tools.map((t) => (
         <li key={t.id}>
           <Link href={t.href} className="relative flex min-h-[68px] items-center gap-3 px-3.5 py-3 text-frenz-ink no-underline transition-colors active:bg-frenz-fill">
-            {/* a small identity tile — one of the places the gradient may go */}
-            <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-frenz-gradient text-white">
+            {/* a small glass icon tile (owner, 2026-10-31: no purple gradient behind icons — the global glass) */}
+            <span aria-hidden className="frenz-icon-glass text-frenz-violet flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
               <t.icon className="h-5 w-5" />
             </span>
             <span className="min-w-0 flex-1">
@@ -402,7 +403,7 @@ function StudioCredits({ usageHref, business, free }: { usageHref: string; busin
   return (
     <section aria-label="Your AI balance" className="mt-7 rounded-[22px] border border-frenz-line bg-frenz-card p-4 shadow-frenz-card">
       <div className="flex items-center gap-3">
-        <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-frenz-gradient text-white">
+        <span aria-hidden className="frenz-icon-glass text-frenz-violet flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
           <Coins className="h-5 w-5" />
         </span>
         <span className="min-w-0 flex-1">

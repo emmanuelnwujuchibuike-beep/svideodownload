@@ -211,7 +211,7 @@ function InviteTile() {
   };
   return (
     <PendingButton onClick={() => void invite()} pending={state === "busy"} className={TILE} inner="flex flex-col items-start gap-2">
-      <span aria-hidden className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-frenz-gradient-x text-white shadow-[0_8px_18px_-10px_rgb(91_63_240/0.9)]">
+      <span aria-hidden className="frenz-icon-glass text-frenz-violet flex h-11 w-11 items-center justify-center rounded-[14px]">
         {state === "copied" ? <Check className="h-[20px] w-[20px]" strokeWidth={2.4} /> : <Send className="h-[20px] w-[20px]" strokeWidth={2.2} />}
       </span>
       <span className="mt-1 font-heading text-[16px] font-bold tracking-[-0.2px] text-frenz-ink">Invite friends</span>

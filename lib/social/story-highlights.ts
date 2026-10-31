@@ -302,3 +302,78 @@ export const HIGHLIGHT_ERRORS: Record<HighlightFailure, { msg: string; status: n
   full: { msg: `A highlight holds up to ${MAX_HIGHLIGHT_ITEMS} stories.`, status: 409 },
   unavailable: { msg: "Couldn't update your highlights right now. Try again.", status: 503 },
 };
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   WHO VIEWED IT (owner, 2026-10-31: "I want users to see who views their highlight"; migration 0312)
+   A view is somebody ELSE opening the highlight, recorded once — the first time — and only when they may see the
+   owner's stories right now (the same rule that let them open it). The list is the owner's alone.
+   ───────────────────────────────────────────────────────────────────────── */
+
+export interface HighlightViewer {
+  id: string;
+  handle: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  viewedAt: string;
+}
+
+/** recorded: the row exists after this call. A failed write is false and never surfaces to the person watching. */
+export async function recordHighlightView(highlightId: string, viewerId: string): Promise<{ recorded: boolean }> {
+  if (!hasSupabase) return { recorded: false };
+  try {
+    const db = createAdminClient();
+    const { data: h } = await db.from("story_highlights").select("id, user_id").eq("id", highlightId).maybeSingle();
+    if (!h || (h.user_id as string) === viewerId) return { recorded: false };
+    if (!(await canSeeStoriesOf(h.user_id as string, viewerId))) return { recorded: false };
+    // ignoreDuplicates: a re-open never moves viewed_at — the owner sees when somebody FIRST saw it
+    const { error } = await db
+      .from("story_highlight_views")
+      .upsert({ highlight_id: highlightId, viewer_id: viewerId }, { onConflict: "highlight_id,viewer_id", ignoreDuplicates: true });
+    return { recorded: !error };
+  } catch {
+    return { recorded: false };
+  }
+}
+
+/** The owner's viewer list, newest first (200 at most) with the REAL total. `null` total = not countable (0312 not applied). */
+export async function listHighlightViewers(
+  ownerId: string,
+  highlightId: string,
+): Promise<HighlightResult<{ total: number | null; viewers: HighlightViewer[] }>> {
+  if (!hasSupabase) return { ok: false, reason: "unavailable" };
+  try {
+    const db = createAdminClient();
+    const own = await ownHighlight(db, ownerId, highlightId);
+    if (own === "not_found" || own === "not_yours") return { ok: false, reason: own };
+    const { data, error, count } = await db
+      .from("story_highlight_views")
+      .select("viewer_id, viewed_at", { count: "exact" })
+      .eq("highlight_id", highlightId)
+      .order("viewed_at", { ascending: false })
+      .limit(200);
+    // the table not there yet: an honest "not countable", never a made-up 0
+    if (error) return { ok: true, value: { total: null, viewers: [] } };
+    const rows = (data ?? []) as { viewer_id: string; viewed_at: string }[];
+    const ids = rows.map((r) => r.viewer_id);
+    const { data: profiles } = ids.length ? await db.from("profiles").select("id, handle, display_name, avatar_url").in("id", ids) : { data: [] as Record<string, unknown>[] };
+    const byId = new Map((profiles ?? []).map((p) => [p.id as string, p as Record<string, unknown>]));
+    return {
+      ok: true,
+      value: {
+        total: count ?? rows.length,
+        viewers: rows.map((r) => {
+          const p = byId.get(r.viewer_id);
+          return {
+            id: r.viewer_id,
+            handle: (p?.handle as string | null) ?? null,
+            displayName: (p?.display_name as string | null) ?? null,
+            avatarUrl: (p?.avatar_url as string | null) ?? null,
+            viewedAt: r.viewed_at,
+          };
+        }),
+      },
+    };
+  } catch {
+    return { ok: false, reason: "unavailable" };
+  }
+}

@@ -1,21 +1,25 @@
 "use client";
 
-import { MoreHorizontal, X } from "lucide-react";
+import { Eye, MoreHorizontal, X } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { PendingButton } from "@/features/frenz-ui/pending";
+import { Avatar } from "@/features/frenz-ui/primitives";
 import { HighlightCover } from "@/features/social/highlight-picker";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
+import { profilePath } from "@/lib/social/profile-url";
 import { HIGHLIGHT_TITLE_MAX, type Highlight, type HighlightWithItems } from "@/lib/social/story-highlights-shared";
 import { cn } from "@/lib/utils";
 
 /**
  * A highlight, full screen (Stories Part 5, 2026-10-27). The story viewer's controls, kept: a bar per story, a photo for
  * 5 s and a video to its end, tap the left third to go back and the rest to go on, hold to pause, Escape or × to close.
- * No views, replies or reshares are recorded here: a highlight is the owner's keepsake on their profile, and those
- * belong to the live story.
+ * Views ARE recorded (owner, 2026-10-31: "I want users to see who views their highlight"; 0312): somebody else
+ * opening it is one view, the first time only; the owner gets "Seen by" at the foot and the list behind it. Replies and
+ * reshares still belong to the live story.
  *
  * The owner's ••• : remove this story, make it the cover, rename the highlight, delete the highlight (asks twice — the
  * app has no confirm dialog). Each change is the server's and the screen follows its answer.
@@ -25,6 +29,16 @@ import { cn } from "@/lib/utils";
  */
 
 const IMAGE_MS = 5000;
+/* the header's × and ••• (owner, 2026-10-31: "not clear visible") — a darker disc with a light rim and a lift, so they read
+   on any frame, bright or dark. No backdrop blur: it would re-blur a playing video every frame. */
+const CONTROL =
+  "flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white shadow-[0_2px_10px_rgba(0,0,0,0.45)] ring-1 ring-inset ring-white/30 transition active:scale-95 [&_svg]:drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]";
+
+interface ViewersData {
+  total: number | null;
+  viewers: { id: string; handle: string | null; displayName: string | null; avatarUrl: string | null; viewedAt: string }[];
+}
+type ViewersState = { status: "loading" } | { status: "ready"; data: ViewersData } | { status: "error" };
 const HOLD_MS = 220;
 
 export function HighlightViewer({
@@ -49,6 +63,8 @@ export function HighlightViewer({
   const [held, setHeld] = useState(false);
   const [menu, setMenu] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [seenBy, setSeenBy] = useState<ViewersState>({ status: "loading" });
+  const [viewersOpen, setViewersOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wasHold = useRef(false);
@@ -66,9 +82,29 @@ export function HighlightViewer({
     };
   }, [highlightId]);
 
+  // a view: somebody else opened it — recorded once it has really opened (the server ignores the owner and repeats)
+  const opened = !!data;
+  useEffect(() => {
+    if (!opened || isOwner) return;
+    void fetch(`/api/stories/highlights/${encodeURIComponent(highlightId)}/views`, { method: "POST" }).catch(() => {});
+  }, [opened, isOwner, highlightId]);
+
+  // the owner's "Seen by": one read when it opens, and a fresh one each time the list is opened
+  useEffect(() => {
+    if (!isOwner) return;
+    let live = true;
+    fetch(`/api/stories/highlights/${encodeURIComponent(highlightId)}/views`, { cache: "no-store" })
+      .then((r) => (r.ok ? (r.json() as Promise<ViewersData>) : Promise.reject(new Error(String(r.status)))))
+      .then((d) => live && setSeenBy({ status: "ready", data: d }))
+      .catch(() => live && setSeenBy({ status: "error" }));
+    return () => {
+      live = false;
+    };
+  }, [isOwner, highlightId, viewersOpen]);
+
   const items = data?.items ?? [];
   const item = items[i];
-  const paused = held || menu;
+  const paused = held || menu || viewersOpen;
 
   const next = useCallback(() => {
     setPct(0);
@@ -137,13 +173,17 @@ export function HighlightViewer({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (menu) return;
+      if (viewersOpen) {
+        if (e.key === "Escape") setViewersOpen(false);
+        return;
+      }
       if (e.key === "Escape") onClose();
       else if (e.key === "ArrowRight") next();
       else if (e.key === "ArrowLeft") prev();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [menu, next, prev, onClose]);
+  }, [menu, viewersOpen, next, prev, onClose]);
 
   // the page behind stays still while the viewer is open
   useEffect(() => {
@@ -257,22 +297,33 @@ export function HighlightViewer({
               {when ? <span className="text-[12px] font-semibold text-white/70">{when}</span> : null}
             </span>
             {isOwner && item ? (
-              <button type="button" onClick={() => setMenu(true)} aria-label="Highlight options" className="flex h-11 w-11 items-center justify-center rounded-full bg-black/30 transition active:scale-95">
-                <MoreHorizontal className="h-5 w-5" aria-hidden />
+              <button type="button" onClick={() => setMenu(true)} aria-label="Highlight options" className={CONTROL}>
+                <MoreHorizontal className="h-[22px] w-[22px]" strokeWidth={2.6} aria-hidden />
               </button>
             ) : null}
-            <button type="button" onClick={onClose} aria-label="Close" className="flex h-11 w-11 items-center justify-center rounded-full bg-black/30 transition active:scale-95">
-              <X className="h-5 w-5" aria-hidden />
+            <button type="button" onClick={onClose} aria-label="Close" className={CONTROL}>
+              <X className="h-[22px] w-[22px]" strokeWidth={2.6} aria-hidden />
             </button>
           </div>
         </header>
 
         {item?.caption ? (
-          <p className={cn("absolute inset-x-0 bottom-0 z-[3] px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-10 text-[15px] font-semibold leading-snug [text-shadow:0_1px_8px_rgba(0,0,0,0.6)] bg-[linear-gradient(0deg,rgba(8,6,20,0.55)_0%,rgba(8,6,20,0)_100%)]", held && "opacity-0")}>
+          <p className={cn("absolute inset-x-0 bottom-0 z-[3] px-5 pt-10 text-[15px]", isOwner ? "pb-[calc(5rem+env(safe-area-inset-bottom))]" : "pb-[calc(1.25rem+env(safe-area-inset-bottom))]", " font-semibold leading-snug [text-shadow:0_1px_8px_rgba(0,0,0,0.6)] bg-[linear-gradient(0deg,rgba(8,6,20,0.55)_0%,rgba(8,6,20,0)_100%)]", held && "opacity-0")}>
             {item.caption}
           </p>
         ) : null}
+
+        {isOwner && item ? (
+          <div className={cn("absolute inset-x-0 bottom-0 z-[4] flex justify-center px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] transition-opacity duration-150", held && "pointer-events-none opacity-0")}>
+            <button type="button" onClick={() => setViewersOpen(true)} aria-label="See who viewed this highlight" className="flex h-11 items-center gap-2 rounded-full bg-black/55 px-4 text-[14px] font-bold text-white shadow-[0_2px_10px_rgba(0,0,0,0.45)] ring-1 ring-inset ring-white/30 transition active:scale-95">
+              <Eye className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden />
+              {seenBy.status === "ready" && seenBy.data.total !== null ? `${seenBy.data.total.toLocaleString()} ${seenBy.data.total === 1 ? "viewer" : "viewers"}` : "Seen by"}
+            </button>
+          </div>
+        ) : null}
       </section>
+
+      {viewersOpen ? <ViewersSheet state={seenBy} onClose={() => setViewersOpen(false)} /> : null}
 
       {menu && item && data ? <OwnerMenu highlight={data} itemId={item.id} onClose={() => setMenu(false)} onDone={(gone) => void refresh(gone)} /> : null}
     </div>,
@@ -369,6 +420,65 @@ function OwnerMenu({ highlight, itemId, onClose, onDone }: { highlight: Highligh
       </section>
     </div>
   );
+}
+
+/** The owner's list of who viewed the highlight — newest first, the real total, each person a link to their profile. */
+function ViewersSheet({ state, onClose }: { state: ViewersState; onClose: () => void }) {
+  const data = state.status === "ready" ? state.data : null;
+  return (
+    <div className="fixed inset-0 z-[110] text-[#12111A]" role="presentation">
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-[rgba(5,4,15,0.5)]" />
+      <section role="dialog" aria-modal="true" aria-label="Viewers" className="absolute inset-x-0 bottom-0 mx-auto flex max-h-[70vh] max-w-lg flex-col rounded-t-[32px] bg-[rgb(246,245,251)] px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4 animate-in slide-in-from-bottom duration-300 motion-reduce:animate-none">
+        <div className="mb-3 flex items-center justify-between gap-3 px-1">
+          <h2 className="font-heading text-[18px] font-bold">
+            {data && data.total !== null ? `${data.total.toLocaleString()} ${data.total === 1 ? "viewer" : "viewers"}` : "Viewers"}
+          </h2>
+          <button type="button" onClick={onClose} aria-label="Close viewers" className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#12111A] shadow-[0_1px_2px_rgba(30,20,80,0.08)] transition active:scale-95">
+            <X className="h-5 w-5" strokeWidth={2.4} aria-hidden />
+          </button>
+        </div>
+        <div className="-mx-1 min-h-[120px] overflow-y-auto overscroll-contain px-1">
+          {state.status === "loading" ? (
+            <div className="flex h-[120px] items-center justify-center" role="status" aria-label="Loading viewers">
+              <span className="h-7 w-7 animate-spin rounded-full border-[3px] border-[#12111A]/15 border-t-[#5B3FD8] motion-reduce:animate-none" />
+            </div>
+          ) : state.status === "error" ? (
+            <p className="py-8 text-center text-[14px] font-semibold text-[#5A5770]">Couldn&apos;t load who viewed it. Try again in a moment.</p>
+          ) : data && data.viewers.length > 0 ? (
+            <ul className="flex flex-col gap-1">
+              {data.viewers.map((v) => (
+                <li key={v.id}>
+                  <Link href={profilePath(v.handle)} prefetch={false} className="flex min-h-[60px] items-center gap-3 rounded-[18px] px-2 py-2 transition active:bg-white">
+                    <Avatar src={v.avatarUrl} name={v.displayName ?? v.handle} size={44} />
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate text-[15px] font-bold">{v.displayName ?? v.handle ?? "Frenz member"}</span>
+                      {v.handle ? <span className="truncate text-[13px] text-[#5A5770]">@{v.handle}</span> : null}
+                    </span>
+                    <span className="shrink-0 text-[12px] font-semibold text-[#5A5770]">{agoLabel(v.viewedAt)}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="py-8 text-center text-[14px] font-semibold text-[#5A5770]">No one has viewed this highlight yet.</p>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/** "now", "5m", "3h", "2d", then the date — when they first saw it. */
+function agoLabel(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "";
+  const m = Math.floor((Date.now() - t) / 60_000);
+  if (m < 1) return "now";
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  return d < 7 ? `${d}d` : timeLabel(iso);
 }
 
 /** "3 Oct", or "3 Oct 2025" from another year — when the story was first posted. */

@@ -17,6 +17,9 @@
  * away every device's cached stylesheet, causing the very white launch this fixes. This line changes this file's bytes,
  * which is what makes installed workers update.
  *
+ * rev 2026-10-31 (v31 kept, same reason): lifecycle.js answers "warm" on the port /launch.html sends, so the launch
+ * screen stays up until the app's stylesheet is cached instead of leaving the app blank while it downloads.
+ *
  *   config.js          cache names, versioning, limits, allowlists
  *   log.js              dev-only diagnostics
  *   cache-utils.js       trim / quota-safe write / cacheable-response checks

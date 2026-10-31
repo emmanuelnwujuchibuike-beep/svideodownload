@@ -470,8 +470,8 @@ export function MobileNav({
         <NavTab label="Chats" href="/messages" icon={ChatsIcon} activeIcon={ChatsIcon} active={chatsActive} badge={handle ? unread : 0} prefetch={false} onWarm={router.prefetch} onGo={go} />
 
       </nav>
-      {/* Profile — the design's gradient button beside the bar (design/*.dc.html, 2026-10-18): a
-          3 px brand-gradient frame, a white hairline, the visitor's own picture inside. */}
+      {/* Profile — the round button beside the bar, in the SAME clear glass as the bar (owner, 2026-10-31: "remove the
+          purple background from the profile button on the bottom NAV") — no gradient frame, no violet drop. */}
       <Link
         href={profileHref}
         prefetch={false}
@@ -484,15 +484,13 @@ export function MobileNav({
         aria-label="Profile"
         aria-current={profileActive ? "page" : undefined}
         className={cn(
-          // no shadow in light mode (owner, 2026-10-29: "remove the shadow from the light mode"); dark keeps the pill's
-          // two-shadow lift — .frenz-nav-profile in globals.css
-          "frenz-nav-profile pointer-events-auto relative flex h-[66px] w-[66px] shrink-0 self-center rounded-full bg-[linear-gradient(135deg,#5B5BF0,#7B5CF0,#B86CF2)] p-[3px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2",
+          "frenz-nav-glass pointer-events-auto relative flex h-[66px] w-[66px] shrink-0 self-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet focus-visible:ring-offset-2",
           profileActive && "ring-[3px] ring-frenz-violet/25",
         )}
       >
         <PressIcon active={profileActive} className="flex flex-1">
-          {/* glass inside the ring, not a black disc (owner, 2026-10-31: "it should be glass background like the other buttons") — globals.css .frenz-nav-profile-glass */}
-          <span className="frenz-nav-profile-glass flex flex-1 items-center justify-center overflow-hidden rounded-full">
+          {/* the glass is the button itself — the face inside is clear (owner, 2026-10-31) */}
+          <span className="flex flex-1 items-center justify-center overflow-hidden rounded-full">
             {/*
               🔴 NO PROFILE PICTURE HERE (owner, 2026-10-31: "remove users profile picture from the profile button … so
               it makes the pages lighter" — on every page with the bar). The photo was a network image on every page

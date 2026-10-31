@@ -45,8 +45,16 @@ self.addEventListener("message", (event) => {
   }
   // /launch.html opening: fetch the app's stylesheet now, so the app paints its loader the moment it arrives
   // (strategies.js warmAppShellCss). waitUntil keeps it going after /launch.html has navigated away.
+  // 2026-10-31: it ANSWERS on the port /launch.html hands over once the stylesheet is cached, so the launch screen can
+  // stay up until the app can paint (no white between them on the first launch after a deploy).
   if (event.data && event.data.type === "frenz-warm-app-shell" && typeof SWX.warmAppShellCss === "function") {
-    event.waitUntil(SWX.warmAppShellCss());
+    event.waitUntil(SWX.warmAppShellCss().then(() => {
+      try {
+        if (event.ports && event.ports[0]) event.ports[0].postMessage("warm");
+      } catch {
+        // the launch page has gone already — nothing to tell
+      }
+    }));
   }
 });
 

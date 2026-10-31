@@ -340,6 +340,8 @@ export const OWNER_COLUMN: Record<string, string> = {
   // 0289: the member's own highlights and the stories kept in them
   story_highlights: "user_id",
   story_highlight_items: "user_id",
+  // 0312: the highlights THIS member opened — never who opened theirs (the story_views reasoning above)
+  story_highlight_views: "viewer_id",
   // follower_id = accounts you chose to follow. The other side is exported
   // separately as `followers`, see FOLLOW_MIRROR.
   follows: "follower_id",

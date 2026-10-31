@@ -89,7 +89,7 @@ export function WalletSecurity({ pin }: { pin: PinState }) {
     <WalletScreen label="PIN and security">
       <SubHeader title="Security" />
       <div className="mx-4 mt-5 flex items-center gap-3 rounded-[22px] bg-frenz-fill/70 px-4 py-3.5">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-frenz-gradient text-white">{pin.set ? <ShieldCheckIcon size={20} /> : <KeyIcon size={20} />}</span>
+        <span className="frenz-icon-glass text-frenz-violet flex h-11 w-11 shrink-0 items-center justify-center rounded-full">{pin.set ? <ShieldCheckIcon size={20} /> : <KeyIcon size={20} />}</span>
         <span className="flex flex-col">
           <span className="font-heading text-[15px] font-bold text-frenz-ink">Transaction PIN</span>
           <span className="text-[12.5px] text-frenz-muted">{locked ? "Locked after too many wrong tries" : pin.set ? "On — confirms every transfer and withdrawal" : "Not set — needed to send or withdraw"}</span>

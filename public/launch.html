@@ -298,9 +298,38 @@ html,body{height:100%;background:#fff;color:#0f172a}
     // owner, 2026-10-28: "fix the white screen on the PWA". The app paints nothing — its loader included — until its
     // stylesheet has loaded; ask the worker to start that download NOW, in parallel with the navigation below
     // (public/sw/strategies.js warmAppShellCss). Members only: a guest goes to the landing, which needs none of it.
+    /*
+      🔴 2026-10-31 (owner: "the pwa now shows white screen before the brand logo and loader"). Starting the download
+      was not enough: this page handed off one frame later, and on the first launch after each deploy (a new stylesheet
+      address, ~52 kB) the app then sat blank until the download finished — six deploys in a day meant six white
+      launches. Now this branded screen STAYS until the worker answers that the stylesheet is cached ("warm" on the
+      port), so the app paints its own loader the moment it commits. Capped at WARM_CAP_MS: a slow network still
+      hands off, never hangs here. No worker, a guest, or an older worker that never answers: the cap or no wait at all.
+    */
+    var WARM_CAP_MS = 2500;
+    var warmed = true;
+    var painted = false;
+    var go;
+    var tryGo = function () {
+      if (painted && warmed && go) go();
+    };
     try {
-      if (next !== "/" && navigator.serviceWorker && navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage({ type: "frenz-warm-app-shell" });
-    } catch (e) {}
+      if (next !== "/" && navigator.serviceWorker && navigator.serviceWorker.controller && typeof MessageChannel === "function") {
+        var ch = new MessageChannel();
+        warmed = false;
+        ch.port1.onmessage = function () {
+          warmed = true;
+          tryGo();
+        };
+        navigator.serviceWorker.controller.postMessage({ type: "frenz-warm-app-shell" }, [ch.port2]);
+        setTimeout(function () {
+          warmed = true;
+          tryGo();
+        }, WARM_CAP_MS);
+      }
+    } catch (e) {
+      warmed = true;
+    }
     /*
       🔴 NAVIGATE AFTER THE LOADER HAS PAINTED, NOT BEFORE IT.
 
@@ -354,17 +383,22 @@ html,body{height:100%;background:#fff;color:#0f172a}
       }
     } catch (e) {}
     var went = false;
-    var go = function () {
+    go = function () {
       if (went) return;
       went = true;
       location.replace(next);
     };
+    // painted (the frame after the first paint, or the 250 ms belt) AND warm (above) — whichever comes last hands off
+    var onPainted = function () {
+      painted = true;
+      tryGo();
+    };
     if (typeof requestAnimationFrame === "function") {
       requestAnimationFrame(function () {
-        requestAnimationFrame(go);
+        requestAnimationFrame(onPainted);
       });
     }
-    setTimeout(go, 250);
+    setTimeout(onPainted, 250);
     // still here after 12 s (the 2026-10-23 resume hang): offer a way out — the same hand-off, again
     setTimeout(function () {
       var slow = document.getElementById("fx-slow");

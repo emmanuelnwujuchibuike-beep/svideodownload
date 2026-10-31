@@ -19,10 +19,16 @@ import { cn, formatCompactNumber } from "@/lib/utils";
 /** The cover: the member's banner (or the Living Profile light), a soft scrim at its foot for the avatar. */
 export function ProfileCover({ bannerUrl, joinedAt, children }: { bannerUrl: string | null; joinedAt: string; children?: ReactNode }) {
   return (
-    <div className="frenz-profile-wash relative h-[calc(210px+var(--frenz-safe-top))] w-full overflow-hidden sm:h-60 sm:rounded-3xl">
-      {bannerUrl ? <Image src={bannerUrl} alt="" fill priority sizes="(max-width: 1024px) 100vw, 900px" className="object-cover" /> : null}
-      <LivingGlow joinedAt={joinedAt} />
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[90px] bg-gradient-to-t from-black/55 to-transparent" />
+    // no cover picture: the plain app white (owner, 2026-10-31: "should show [no] purple or blue background, rather a plain
+    // app white") — no theme wash, no glow, no dark scrim; the scrim only exists to seat the avatar on a photo
+    <div className={cn("relative h-[calc(210px+var(--frenz-safe-top))] w-full overflow-hidden sm:h-60 sm:rounded-3xl", bannerUrl ? "frenz-profile-wash" : "bg-frenz-page")}>
+      {bannerUrl ? (
+        <>
+          <Image src={bannerUrl} alt="" fill priority sizes="(max-width: 1024px) 100vw, 900px" className="object-cover" />
+          <LivingGlow joinedAt={joinedAt} />
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[90px] bg-gradient-to-t from-black/55 to-transparent" />
+        </>
+      ) : null}
       {children}
     </div>
   );

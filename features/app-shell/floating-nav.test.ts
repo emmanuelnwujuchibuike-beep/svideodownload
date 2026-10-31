@@ -30,8 +30,10 @@ function floats(src: string): boolean {
     /\bbottom-\[var\(--frenz-nav-gap\)\]/.test(wrapper) &&
     // the bar: glass, fully round (design/frenz-exclusive-feed.html, owner 2026-10-31), a fixed height every page can reserve
     /"frenz-nav-glass frenz-ui pointer-events-auto relative flex h-\[var\(--frenz-nav-height\)\] min-w-0 flex-1[^"]*rounded-full/.test(src) &&
-    // a SEPARATE round gradient button (Profile, 66 px) beside the bar, and ONE glass lens under the active tab (2026-10-31)
-    /h-\[66px\] w-\[66px\][^"]*rounded-full bg-\[linear-gradient\(135deg,#5B5BF0,#7B5CF0,#B86CF2\)\]/.test(src) &&
+    // a SEPARATE round CLEAR-GLASS button (Profile, 66 px) beside the bar — no purple gradient (owner, 2026-10-31) — and
+    // ONE glass lens under the active tab
+    /"frenz-nav-glass pointer-events-auto relative flex h-\[66px\] w-\[66px\][^"]*rounded-full/.test(src) &&
+    !/#5B5BF0,#7B5CF0,#B86CF2/.test(src) &&
     /<span aria-hidden className="frenz-nav-lens" data-off=\{lensAt < 0 \|\| undefined\} \/>/.test(src) &&
     /\["--i" as string\]: Math\.max\(lensAt, 0\)/.test(src) &&
     // the lens moves on the tap, not when the page arrives
@@ -51,7 +53,8 @@ describe("the floating glass bottom nav", () => {
   it("teeth: a full-width bar, an opaque slab, or the pulse coming back fails", () => {
     expect(floats(nav.replace("w-[calc(100%-1.75rem)]", "w-full"))).toBe(false);
     expect(floats(nav.replace("relative flex h-[var(--frenz-nav-height)] min-w-0 flex-1 items-center gap-0.5 rounded-full", "relative flex h-[var(--frenz-nav-height)] min-w-0 flex-1 items-center gap-0.5 rounded-none"))).toBe(false);
-    expect(floats(nav.replace("rounded-full bg-[linear-gradient(135deg,#5B5BF0,#7B5CF0,#B86CF2)]", "rounded-[26px] bg-frenz-gradient"))).toBe(false);
+    expect(floats(nav.replace("frenz-nav-glass pointer-events-auto relative flex h-[66px] w-[66px]", "pointer-events-auto relative flex h-[66px] w-[66px]"))).toBe(false);
+    expect(floats(nav.replace("self-center rounded-full", "self-center rounded-full bg-[linear-gradient(135deg,#5B5BF0,#7B5CF0,#B86CF2)]"))).toBe(false);
     expect(floats(nav.replace('className="frenz-nav-lens"', 'className="frenz-nav-tile"'))).toBe(false);
     expect(floats(nav.replace('["--i" as string]: Math.max(lensAt, 0)', '["--i" as string]: 0'))).toBe(false);
     expect(floats(nav.replace("const lensAt = pendingTab >= 0 ? pendingTab : routeActive.indexOf(true);", "const lensAt = routeActive.indexOf(true);"))).toBe(false);

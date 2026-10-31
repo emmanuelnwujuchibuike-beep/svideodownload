@@ -88,11 +88,14 @@ describe("a limit is explained, not thrown", () => {
 
   it("names the limit in plain words even with no body", () => {
     expect(manager).toMatch(/res\.status === 429/);
-    expect(manager).toMatch(/Daily download limit reached/i);
+    expect(manager).toMatch(/Daily limit reached\. Upgrade to Pro to continue\./);
   });
 
   it("the server still sends a real explanation", () => {
-    expect(route).toMatch(/Daily download limit reached \(\$\{quota\.limit\}\/day\)/);
+    // owner, 2026-10-31: the free plan's sentence is straight — no sign-up line
+    expect(route).toMatch(/`Daily limit reached\. Upgrade to Pro to continue\.`/);
+    expect(route).not.toMatch(/Sign up or upgrade/);
+    expect(route).toMatch(/Daily limit reached \(\$\{quota\.limit\}\/day on the \$\{quota\.plan\} plan\)/);
     expect(route).toMatch(/RATE_LIMITED/);
   });
 

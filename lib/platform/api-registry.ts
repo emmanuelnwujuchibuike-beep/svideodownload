@@ -225,6 +225,8 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   { method: "DELETE", path: "/api/stories/highlights/[id]", auth: "session", category: "feed", description: "Delete a highlight; files nothing else uses are deleted after (owner only)." },
   { method: "POST", path: "/api/stories/highlights/[id]/items", auth: "session", category: "feed", description: "Add one of the caller's own stories to their highlight." },
   { method: "DELETE", path: "/api/stories/highlights/[id]/items", auth: "session", category: "feed", description: "Take a story out of a highlight; the last one out deletes the highlight." },
+  { method: "POST", path: "/api/stories/highlights/[id]/views", auth: "session-optional", category: "feed", description: "Record that the caller opened someone else's highlight (first view only; never the owner; only if they may see it)." },
+  { method: "GET", path: "/api/stories/highlights/[id]/views", auth: "session", category: "feed", description: "The highlight owner's own list of who viewed it, newest first, with the real total." },
   { method: "GET", path: "/api/sounds/library", auth: "session-optional", category: "feed", description: "0308: the Sounds page list — trending, new, For you (creators the caller follows) or Saved — by tag chip or search. Trending and New are cached at the CDN for a minute; the personal tabs never are." },
   { method: "GET", path: "/api/sounds/saves", auth: "session-optional", category: "feed", description: "0308: the caller's saved sound ids (none when signed out)." },
   { method: "POST", path: "/api/sounds/saves", auth: "session", category: "feed", description: "0308: save or unsave one public sound." },

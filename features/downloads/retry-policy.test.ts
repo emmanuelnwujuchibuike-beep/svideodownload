@@ -12,6 +12,8 @@ describe("isRetryable", () => {
     // runs away and every download on the site fails until the UTC day rolls.
     expect(isRetryable("HTTP 429")).toBe(false);
     expect(isRetryable("Daily download limit reached (150/day). Sign up or upgrade for more.")).toBe(false);
+    expect(isRetryable("Daily limit reached. Upgrade to Pro to continue.")).toBe(false);
+    expect(isRetryable("Daily limit reached (2000/day on the pro plan).")).toBe(false);
     expect(isRetryable("Too many downloads. Please wait a moment.")).toBe(false);
     expect(isRetryable("Too many requests. Please slow down.")).toBe(false);
   });

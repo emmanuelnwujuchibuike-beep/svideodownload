@@ -9,6 +9,7 @@ import { limitForPlan, totalUsedBytes } from "@/features/history/usage";
 import { STORAGE_FULL_EVENT, type StorageFullDetail } from "@/lib/downloads/storage-full-event";
 import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
 import { toast } from "@/features/ui/toast";
+import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
 import { isIosDevice, saveBlob, saveFilesToDevice, saveToDevice } from "@/lib/client-download";
 import { DOWNLOAD_COMPLETED_EVENT, DOWNLOAD_PREPARING_EVENT } from "@/lib/downloads/completion-event";
 import { DOWNLOAD_502_MESSAGE, DOWNLOAD_FAILED_MESSAGE, downloadFailureMessage } from "@/lib/downloads/failure-copy";
@@ -479,7 +480,7 @@ async function failureMessage(res: Response): Promise<string> {
   // is a limit, not a fault, and "HTTP 429" reads like something broke. It also
   // deliberately does NOT get the Pro "restricted videos" line — see the note on
   // DOWNLOAD_FAILED_MESSAGE: a quota is not a restriction.
-  if (res.status === 429) return "Daily download limit reached. Try again tomorrow or upgrade.";
+  if (res.status === 429) return "Daily limit reached. Upgrade to Pro to continue.";
   /*
     Owner, 2026-10-04: "make all download errors message, says upgrade to pro".
     This was `HTTP ${res.status}` — which reads as the site being broken, when a
@@ -720,11 +721,18 @@ async function run(id: string) {
       offering them an upgrade they already bought would be wrong, so they get
       the same honest message with no action button.
     */
-    if (reason.startsWith("Daily download limit reached")) {
-      const isFree = reason.includes("Sign up or upgrade for more.");
-      toast(reason, "error", {
+    /*
+      Owner, 2026-10-31: "Daily limit reached. Upgrade to Pro to continue." and an Upgrade to Pro button — the plan page
+      for a signed-in member, the sign-in page (back to the plans after) for a guest. The older server wording is still
+      read, so a stale deploy's message gets the same button.
+    */
+    if (/^Daily (download )?limit reached/.test(reason)) {
+      const isFree = /Upgrade to Pro to continue|Sign up or upgrade/.test(reason);
+      toast(isFree ? "Daily limit reached. Upgrade to Pro to continue." : reason, "error", {
         duration: 8000,
-        action: isFree ? { label: "Go Pro", onClick: () => window.location.assign("/pricing") } : undefined,
+        action: isFree
+          ? { label: "Upgrade to Pro", onClick: () => window.location.assign(hasAuthCookie() ? "/plan" : `/login?next=${encodeURIComponent("/plan")}`) }
+          : undefined,
       });
     } else {
       /*

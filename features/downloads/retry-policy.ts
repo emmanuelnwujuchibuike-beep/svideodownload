@@ -36,7 +36,7 @@ export const RETRY_DELAY_MS = [800, 2500];
 export function isRetryable(reason: string): boolean {
   // 429 means "stop sending". Retrying it is what turns a momentary limit into
   // an outage, and on a quota-metered endpoint it also deepens the hole.
-  if (/\b429\b|too many|rate limit|daily download limit/i.test(reason)) return false;
+  if (/\b429\b|too many|rate limit|daily (?:download )?limit/i.test(reason)) return false;
   // A definitive "not there" or "not allowed" says the same thing every time.
   if (/\b(?:404|403|401|410)\b/.test(reason)) return false;
   if (/private|removed|expired|not found|unavailable in your/i.test(reason)) return false;

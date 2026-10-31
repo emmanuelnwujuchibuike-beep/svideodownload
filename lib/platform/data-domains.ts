@@ -124,6 +124,8 @@ export const DATA_DOMAINS: DataDomain[] = [
       // Story highlights (0289): a member's named collections of their own stories, kept past 24 hours on the profile.
       "story_highlights",
       "story_highlight_items",
+      // 0312: who opened a highlight (first view per person) — read by the highlight's owner only, gone with it.
+      "story_highlight_views",
       "user_stickers",
       // 0303: a member's 3-second video stickers (vs:<uuid> in post_comments.sticker / user_stickers.sticker)
       "video_stickers",

@@ -64,8 +64,9 @@ async function enforceDailyCap(
     {
       error:
         quota.plan === "free"
-          ? `Daily download limit reached (${quota.limit}/day). Sign up or upgrade for more.`
-          : `Daily download limit reached (${quota.limit}/day on the ${quota.plan} plan).`,
+          ? // owner, 2026-10-31: straight — no "sign up or upgrade". The client adds the Upgrade to Pro button (manager.ts)
+            `Daily limit reached. Upgrade to Pro to continue.`
+          : `Daily limit reached (${quota.limit}/day on the ${quota.plan} plan).`,
       code: "RATE_LIMITED",
     },
     { status: 429, headers: { "Retry-After": "3600" } },

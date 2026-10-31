@@ -130,7 +130,7 @@ export function SubsDashboard({ creatorId, handle, settings: initial, bounds }: 
       </section>
 
       <Link href="/exclusive/earnings" prefetch={false} className="mt-3 flex min-h-[56px] items-center gap-3 rounded-[20px] border border-frenz-line bg-frenz-card px-3.5 text-frenz-ink no-underline shadow-frenz-card">
-        <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-frenz-gradient text-white">
+        <span aria-hidden className="frenz-icon-glass text-frenz-violet flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]">
           <BarChart3 className="h-[18px] w-[18px]" />
         </span>
         <span className="flex-1 text-[15px] font-bold">Earnings &amp; analytics</span>

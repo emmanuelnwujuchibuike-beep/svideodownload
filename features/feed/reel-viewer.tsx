@@ -961,6 +961,10 @@ function ReelCard({
   const [cur, setCur] = useState(0);
   const [dur, setDur] = useState(0);
   const [buffering, setBuffering] = useState(false);
+  // a clip scrolled away from never carries a spinner back with it
+  useEffect(() => {
+    if (!isActive) setBuffering(false);
+  }, [isActive]);
   /*
     🔴 REPLACES `fullBleed`/`posterBleed` (owner, 2026-08-17 — never crop).
     The clip's TRUE aspect ratio, measured from either the poster image's own
@@ -2252,9 +2256,20 @@ function ReelCard({
                   overlay they just hid.
                 */
                 if (isActive) setImmersive(false);
+                setBuffering(false);
               }}
-              onWaiting={() => setBuffering(true)}
+              /*
+                🔴 THE SPINNER NEVER STICKS (owner, 2026-10-31: "the spinner is still happening"). It used to clear only on
+                play/playing, so a clip that stalled and then got its data back WITHOUT a fresh "playing" (a quality
+                switch, a seek, a neighbour that buffered while paused) kept the spinner forever over a frame that was
+                fine. It now clears on every sign the data is there or the stall is over: canplay, a pause, an error,
+                and time actually moving — and a "waiting" only counts while the clip is meant to be playing.
+              */
+              onWaiting={(e) => {
+                if (!e.currentTarget.paused) setBuffering(true);
+              }}
               onPlaying={() => setBuffering(false)}
+              onSeeked={() => setBuffering(false)}
               // Clears the crossfade once the new slide has enough data to show
               // (fires regardless of whether autoplay actually starts — unlike
               // `onPlaying`, which wouldn't fire at all if autoplay is blocked,
@@ -2262,10 +2277,12 @@ function ReelCard({
               onCanPlay={() => {
                 onReady?.(item.id);
                 setSlideFade(false);
+                setBuffering(false);
               }}
               onError={() => {
                 onReady?.(item.id);
                 setSlideFade(false);
+                setBuffering(false);
               }}
               onLoadedMetadata={(e) => {
                 const v = e.currentTarget;
@@ -2283,6 +2300,8 @@ function ReelCard({
               }}
               onTimeUpdate={(e) => {
                 const v = e.currentTarget;
+                // time moving is proof it isn't stalled
+                if (!v.paused && v.readyState >= 3) setBuffering(false);
                 setCur(v.currentTime);
                 if (v.duration) setProgress((v.currentTime / v.duration) * 100);
                 /*

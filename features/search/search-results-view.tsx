@@ -261,7 +261,7 @@ function TagRow({ tag }: { tag: TrendingTag }) {
         ariaLabel={`Search #${tag.tag}`}
         className="flex h-[76px] w-full items-center gap-3.5 rounded-[24px] bg-frenz-fill px-4 text-left transition-transform active:scale-[0.97] motion-reduce:active:scale-100"
       >
-        <span aria-hidden className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[14px] bg-frenz-gradient-x text-white">
+        <span aria-hidden className="frenz-icon-glass text-frenz-violet flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[14px]">
           <Hash className="h-5 w-5" strokeWidth={2.6} />
         </span>
         <span className="min-w-0 flex-1">

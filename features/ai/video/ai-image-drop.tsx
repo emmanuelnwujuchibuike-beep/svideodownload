@@ -202,7 +202,7 @@ export function AiImageDrop({ value, onChange, upload, label, hint, accept = ["i
             onClick={() => inputRef.current?.click()}
             className={cn("flex w-full flex-col items-center justify-center gap-1.5 px-4 text-center transition active:scale-[0.99] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-frenz-violet", large ? "min-h-[13rem] py-8" : "min-h-[10rem] py-6")}
           >
-            <span className={cn("mb-1 inline-flex items-center justify-center text-white", large ? "h-14 w-14 rounded-2xl bg-frenz-gradient" : "h-10 w-10 rounded-xl bg-frenz-violet")}>
+            <span className={cn("mb-1 inline-flex items-center justify-center text-white", large ? "frenz-icon-glass h-14 w-14 rounded-2xl text-frenz-violet" : "frenz-icon-glass h-10 w-10 rounded-xl text-frenz-violet")}>
               <ImagePlus className={large ? "h-6 w-6" : "h-[18px] w-[18px]"} aria-hidden />
             </span>
             <span className={cn("font-bold text-frenz-ink", large ? "font-heading text-[18px]" : "text-[14.5px]")}>Choose a photo</span>

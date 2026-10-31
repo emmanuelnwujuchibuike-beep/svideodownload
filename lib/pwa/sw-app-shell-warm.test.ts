@@ -93,10 +93,31 @@ describe("the app-shell stylesheet warm-up for the PWA launch", () => {
     expect(fetches).toEqual(["/history"]);
   });
   it("wired end to end: the worker answers the message, launch.html sends it for a member before navigating", () => {
-    expect(readFileSync(path.join(SW_DIR, "lifecycle.js"), "utf8")).toMatch(/event\.data\.type === "frenz-warm-app-shell"[\s\S]{0,120}event\.waitUntil\(SWX\.warmAppShellCss\(\)\)/);
+    expect(readFileSync(path.join(SW_DIR, "lifecycle.js"), "utf8")).toMatch(/event\.data\.type === "frenz-warm-app-shell"[\s\S]{0,120}event\.waitUntil\(SWX\.warmAppShellCss\(\)[.)]/);
     const launch = readFileSync(path.resolve(process.cwd(), "public/launch.html"), "utf8");
-    const post = launch.indexOf('postMessage({ type: "frenz-warm-app-shell" })');
+    const post = launch.indexOf('postMessage({ type: "frenz-warm-app-shell" }, [ch.port2])');
     expect(post).toBeGreaterThan(0);
     expect(post).toBeLessThan(launch.indexOf("location.replace(next)"));
+  });
+
+  /*
+    2026-10-31 (owner: "the pwa now shows white screen before the brand logo and loader"): starting the download was
+    not enough — the launch screen left one frame later and the app sat blank while a new deploy's stylesheet arrived.
+    The worker now answers on the port when it's cached, and launch.html hands off only once painted AND warm (capped).
+  */
+  const waitsForWarm = (launch: string, lifecycle: string) =>
+    /event\.ports\[0\]\.postMessage\("warm"\)/.test(lifecycle) &&
+    /ch\.port1\.onmessage = function \(\) \{\s*warmed = true;\s*tryGo\(\);/.test(launch) &&
+    /if \(painted && warmed && go\) go\(\);/.test(launch) &&
+    /var WARM_CAP_MS = \d{3,4};/.test(launch) &&
+    !/requestAnimationFrame\(go\)/.test(launch);
+  it("the launch screen stays until the stylesheet is warm, capped so it never hangs", () => {
+    const launch = readFileSync(path.resolve(process.cwd(), "public/launch.html"), "utf8");
+    const lifecycle = readFileSync(path.join(SW_DIR, "lifecycle.js"), "utf8");
+    expect(waitsForWarm(launch, lifecycle)).toBe(true);
+    // teeth: handing off on the paint alone again, or a worker that never answers, fails
+    expect(waitsForWarm(launch.replace("if (painted && warmed && go) go();", "if (painted && go) go();"), lifecycle)).toBe(false);
+    expect(waitsForWarm(launch, lifecycle.replace('event.ports[0].postMessage("warm")', "void 0"))).toBe(false);
+    expect(waitsForWarm(launch.replace(/var WARM_CAP_MS = \d+;/, ""), lifecycle)).toBe(false);
   });
 });

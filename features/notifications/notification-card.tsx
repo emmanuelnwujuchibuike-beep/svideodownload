@@ -1,13 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Archive, ArchiveRestore, Check, CircleDot, Info, Loader2, MoreHorizontal, Pin, PinOff, Send, Tag, Trash2, UserPlus, UserRound, UserX, X } from "lucide-react";
+import { Archive, ArchiveRestore, Check, CircleDot, Info, Loader2, Pin, PinOff, Send, Tag, Trash2, UserPlus, UserRound, UserX, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { memo, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { iconFor, isActorType, tintFor, timeAgo, verbFor } from "@/features/notifications/meta";
+import { useLongPress } from "@/lib/dom/use-long-press";
 import { haptic } from "@/lib/motion/haptics";
 import { actionsFor } from "@/lib/notifications/actions";
 import { explainDelivery } from "@/lib/notifications/explain";
@@ -111,12 +112,13 @@ function NotificationCardImpl({
   // class of bug as conversation-list.tsx's row menu.
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const MENU_WIDTH = 184;
-  const toggleMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (menu) {
-      setMenu(false);
-      return;
-    }
-    const rect = e.currentTarget.getBoundingClientRect();
+  /*
+    Owner 2026-10-31: "make the dotted option a press and hold, like the chat option — remove the dotted option".
+    No "⋯" on any card: holding a card opens its menu (the chat's own hold — lib/dom/use-long-press: 450 ms, a
+    scroll cancels it, the tap that follows is swallowed, right-click on a mouse). The menu opens against the card.
+  */
+  const openMenuAt = (anchor: HTMLElement) => {
+    const rect = anchor.getBoundingClientRect();
     const margin = 8;
     const menuHeight = (3 + (onOrganize ? 3 : 0) + (labelsEnabled ? 1 : 0)) * 44 + 8;
     const left = Math.min(Math.max(rect.right - MENU_WIDTH, margin), window.innerWidth - MENU_WIDTH - margin);
@@ -124,6 +126,14 @@ function NotificationCardImpl({
     const top = spaceBelow >= menuHeight + margin ? rect.bottom + 4 : Math.max(margin, rect.top - menuHeight - 4);
     setMenuPos({ top, left });
     setMenu(true);
+  };
+  const hold = useLongPress((anchor) => {
+    if (!selecting) openMenuAt(anchor);
+  });
+  // a hold on the card's own controls (Accept, Follow back, the reply field…) stays theirs
+  const onHoldStart = (e: React.PointerEvent<HTMLElement>) => {
+    if ((e.target as HTMLElement).closest?.("button, input, textarea")) return;
+    hold.onPointerDown(e);
   };
   const Icon = iconFor(group.type);
   const actor = group.actors[0] ?? null;
@@ -240,7 +250,7 @@ function NotificationCardImpl({
       </div>
 
       {/* Text */}
-      <div className={cn("min-w-0 flex-1 pr-7 [@media(hover:hover)]:pr-1", compact && "[&>p]:line-clamp-1")}>
+      <div className={cn("min-w-0 flex-1 pt-0.5", compact && "[&>p]:line-clamp-1")}>
         {group.broadcast ? (
           /* An admin broadcast / AD shows its OWN content + a clear "Ad" label,
              never a generic "Frenz announcement" that reads like a message. */
@@ -288,6 +298,8 @@ function NotificationCardImpl({
           ) : null}
           {group.delivery === "held" ? <span className="font-semibold text-amber-700 dark:text-amber-400">Held ·</span> : null}
           {timeAgo(group.createdAt)} ago
+          {/* unread: a dot after the time (it used to hang in its own column, pushed down under the options button) */}
+          {!group.read ? <span className="ml-0.5 h-2 w-2 shrink-0 rounded-full bg-frenz-gradient" role="img" aria-label="Unread" /> : null}
         </p>
         {group.labels.length ? (
           <span className="mt-1.5 flex flex-wrap gap-1" aria-label="Labels">
@@ -464,11 +476,7 @@ function NotificationCardImpl({
       {/* A small picture of what it's about — the poster, never the full media; fixed size, so nothing shifts as it loads */}
       {group.thumbUrl && !compact ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={group.thumbUrl} alt="" width={48} height={48} loading="lazy" decoding="async" className="mr-6 h-12 w-12 shrink-0 rounded-xl bg-secondary object-cover ring-1 ring-border/60 [@media(hover:hover)]:mr-0" />
-      ) : null}
-      {/* Unread dot */}
-      {!group.read ? (
-        <span className="mt-11 h-2.5 w-2.5 shrink-0 rounded-full bg-frenz-gradient [@media(hover:hover)]:mt-1.5" aria-label="Unread" />
+        <img src={group.thumbUrl} alt="" width={48} height={48} loading="lazy" decoding="async" className="h-12 w-12 shrink-0 rounded-xl bg-secondary object-cover ring-1 ring-border/60" />
       ) : null}
     </div>
   );
@@ -480,10 +488,26 @@ function NotificationCardImpl({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, x: -24, transition: { duration: 0.18 } }}
       transition={{ type: "spring", stiffness: 380, damping: 30 }}
+      onPointerDown={onHoldStart}
+      onPointerMove={hold.onPointerMove}
+      onPointerUp={hold.onPointerUp}
+      onPointerCancel={hold.onPointerCancel}
+      onPointerLeave={hold.onPointerLeave}
+      onContextMenu={selecting ? undefined : hold.onContextMenu}
+      onClickCapture={hold.onClickCapture}
+      onKeyDown={(e) => {
+        // the keyboard's way in: the Menu key or Shift+F10, as a desktop context menu
+        if (selecting || !(e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))) return;
+        e.preventDefault();
+        openMenuAt(e.currentTarget);
+      }}
+      data-notification-hold
       className={cn(
         // the Frenz white card (2026-10-19): unread shows by its violet hairline, the left accent and the dot — never a wash
-        "group relative overflow-hidden rounded-[22px] border bg-frenz-card text-frenz-ink shadow-frenz-card transition-colors",
+        // no iOS link preview / text selection under a hold — the hold is ours
+        "group relative select-none overflow-hidden rounded-[22px] border bg-frenz-card text-frenz-ink shadow-frenz-card transition-colors [-webkit-touch-callout:none]",
         compact ? "p-2.5" : "p-3.5",
+        menu && "ring-2 ring-frenz-violet/40",
         selected && "ring-2 ring-frenz-violet",
         group.read ? "border-frenz-line" : "border-frenz-violet/30",
       )}
@@ -522,24 +546,6 @@ function NotificationCardImpl({
           {body}
         </Link>
       )}
-
-      {/* Quick actions (hover / focus) */}
-      {/* Always reachable on touch (there is no hover on a phone — it used to be invisible there);
-          on a mouse it appears on hover or keyboard focus. */}
-      <div className={selecting ? "hidden" : undefined}>
-      <div className="absolute right-2 top-2 flex items-center gap-1 transition [@media(hover:hover)]:pointer-events-none [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:focus-within:pointer-events-auto [@media(hover:hover)]:focus-within:opacity-100 [@media(hover:hover)]:group-hover:pointer-events-auto [@media(hover:hover)]:group-hover:opacity-100">
-        <button
-          type="button"
-          aria-label="More options"
-          aria-haspopup="menu"
-          aria-expanded={menu}
-          onClick={toggleMenu}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-frenz-fill text-frenz-muted transition hover:text-frenz-ink"
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </button>
-      </div>
-      </div>
 
       {menu && menuPos
         ? createPortal(

@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Clapperboard } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { BrandLoader } from "@/features/app-shell/brand-loader";
 import { useEntitlements } from "@/features/auth/use-entitlements";
@@ -64,6 +64,36 @@ let lastRenderedSeed: string | null = null;
  * Resets only on a real page reload, same lifetime as `lastRenderedSeed`.
  */
 let resumeDeck: { items: FeedItem[]; offset: number | null; activeIndex: number; seen: Set<string> } | null = null;
+
+const noSubscribe = () => () => {};
+
+/**
+ * This open's deck: drop what this device has watched or hidden, and reshuffle when the Router Cache replayed last
+ * open's payload. Pure apart from minting a seed into `seedRef` on a replay.
+ */
+function arrangeOpen(
+  initialItems: FeedItem[],
+  initialSeed: string | undefined,
+  startId: string | undefined,
+  seedRef: { current: string },
+): { next: FeedItem[]; exhausted: boolean; replayed: boolean } {
+  const replayed = initialSeed != null && initialSeed === lastRenderedSeed;
+  if (replayed) seedRef.current = newReelsSeed();
+  // A deep link is an explicit request for ONE clip and outranks both the
+  // shuffle and the watched ledger — "open this reel" must open that reel even
+  // if it was watched a minute ago.
+  const pinned = startId ? initialItems.find((i) => i.id === startId) ?? null : null;
+  const pool = pinned ? initialItems.filter((i) => i.id !== pinned.id) : initialItems;
+  const { items: ordered, exhausted } = freshDeck(pool, {
+    seed: seedRef.current,
+    watched: watchedReels(),
+    suppressed: suppressedReels(),
+    // A fresh server render is already arranged by the ranker; re-sorting it
+    // by a hash here would trade a real ranking for an arbitrary one.
+    shuffle: replayed,
+  });
+  return { next: pinned ? [pinned, ...ordered] : ordered, exhausted, replayed };
+}
 
 /**
  * Full-screen /reels with a For You / Following toggle. "For You" is the
@@ -153,8 +183,22 @@ export function ReelsFeed({
     index `ReelDeck` locks onto is the right one from the start.
   */
   const resumingFromCache = !collection && !startId && !!resumeDeck;
+  /*
+    Owner 2026-10-31: the Reels tab "reloads twice, a black page twice". The second one was this deck re-arranging
+    itself (watched clips dropped, a replayed payload reshuffled) one frame AFTER it painted — the first clip swapped
+    and its video started over. An in-app open (no server HTML to match — `useSyncExternalStore` reports the
+    server snapshot only while hydrating) now arranges the deck in its FIRST render; only a cold page load, which
+    must match the server's HTML, still does it after hydration.
+  */
+  const clientOpen = useSyncExternalStore(noSubscribe, () => true, () => false);
+  const seedRef = useRef<string>(initialSeed ?? newReelsSeed());
+  const firstDeck = useRef<ReturnType<typeof arrangeOpen> | null | undefined>(undefined);
+  if (firstDeck.current === undefined) {
+    firstDeck.current = clientOpen && !collection && !resumingFromCache ? arrangeOpen(initialItems, initialSeed, startId, seedRef) : null;
+  }
   const [items, setItems] = useState<FeedItem[]>(() => {
     if (resumingFromCache) return resumeDeck!.items;
+    if (firstDeck.current) return firstDeck.current.next;
     if (!startId) return initialItems;
     const idx = initialItems.findIndex((i) => i.id === startId);
     if (idx <= 0) return initialItems; // already first, or not present — nothing to move
@@ -167,10 +211,9 @@ export function ReelsFeed({
     This open's reshuffle token. A ref, not state: changing it must never
     re-render on its own — it only decides what the NEXT request asks for.
   */
-  const seedRef = useRef<string>(initialSeed ?? newReelsSeed());
   // Slide direction for the tab transition (For You ↔ Following).
   const [direction, setDirection] = useState(1);
-  const seen = useRef<Set<string>>(resumingFromCache ? new Set(resumeDeck!.seen) : new Set(initialItems.map((i) => i.id)));
+  const seen = useRef<Set<string>>(resumingFromCache ? new Set(resumeDeck!.seen) : new Set((firstDeck.current?.next ?? initialItems).map((i) => i.id)));
   const loading = useRef(false);
 
   // Per-tab cache so switching is instant and never reloads/flashes a loader
@@ -355,35 +398,15 @@ export function ReelsFeed({
       return;
     }
 
-    const replayed = initialSeed != null && initialSeed === lastRenderedSeed;
+    // an in-app open arranged its deck in the first render (above); a cold load does it here, after hydration
+    const { next, exhausted, replayed } = firstDeck.current ?? arrangeOpen(initialItems, initialSeed, startId, seedRef);
     lastRenderedSeed = initialSeed ?? null;
-
-    if (replayed) seedRef.current = newReelsSeed();
-
-    const watched = watchedReels();
-    const suppressed = suppressedReels();
-
-    // A deep link is an explicit request for ONE clip and outranks both the
-    // shuffle and the watched ledger — "open this reel" must open that reel even
-    // if it was watched a minute ago.
-    const pinned = startId ? initialItems.find((i) => i.id === startId) ?? null : null;
-    const pool = pinned ? initialItems.filter((i) => i.id !== pinned.id) : initialItems;
-
-    const { items: ordered, exhausted } = freshDeck(pool, {
-      seed: seedRef.current,
-      watched,
-      suppressed,
-      // A fresh server render is already arranged by the ranker; re-sorting it
-      // by a hash here would trade a real ranking for an arbitrary one.
-      shuffle: replayed,
-    });
-    const next = pinned ? [pinned, ...ordered] : ordered;
 
     // Watched history that can no longer be honoured is history worth dropping —
     // otherwise every subsequent open pays to compute the same fallback.
     if (exhausted) clearWatchedReels();
 
-    if (next.length !== initialItems.length || next.some((it, i) => it.id !== initialItems[i]?.id)) {
+    if (!firstDeck.current && (next.length !== initialItems.length || next.some((it, i) => it.id !== initialItems[i]?.id))) {
       seen.current = new Set(next.map((i) => i.id));
       setItems(next);
     }

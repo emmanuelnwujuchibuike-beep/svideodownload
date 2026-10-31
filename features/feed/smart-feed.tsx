@@ -18,7 +18,8 @@ import { useHilltopFeedSlots } from "@/features/feed/use-hilltop-feed-slots";
 import { FeedPostCard } from "@/features/feed/feed-post-card";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
 import { ImageOpenFallback } from "@/features/feed/image-open-fallback";
-import { FeedTopbarTabs, takeRequestedFeedTab } from "@/features/feed/feed-topbar-tabs";
+import { FeedTopbarTabs, takeRequestedFeedTab, warmReelsFully } from "@/features/feed/feed-topbar-tabs";
+import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { FEED_TABS_SLOT_ID } from "@/features/feed/feed-tabs-slot";
 import { FEED_AD_INTERVAL } from "@/lib/feed/ad-slots";
 import { haptic } from "@/lib/motion/haptics";
@@ -404,9 +405,19 @@ export function SmartFeed({
     const id = ric(() => {
       preloadReelsFeed();
       void preloadPostViewers().then(() => setViewerChunksReady(true));
-      router.prefetch("/reels");
+      // in full, except on a slow connection (there the plain prefetch it always had)
+      if (isSlowConnection()) router.prefetch("/reels");
+      else warmReelsFully(router);
     });
-    return () => cic(id);
+    // the first feed video that plays warms Reels too (owner 2026-10-31: "warm up while a video in feed is playing")
+    const onPlay = (e: Event) => {
+      if (e.target instanceof HTMLVideoElement && !isSlowConnection()) warmReelsFully(router);
+    };
+    document.addEventListener("play", onPlay, true);
+    return () => {
+      cic(id);
+      document.removeEventListener("play", onPlay, true);
+    };
   }, [router]);
 
   // Videos open the full-screen reel INSTANTLY (client-side, no navigation/server

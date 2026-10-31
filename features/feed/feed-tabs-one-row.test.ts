@@ -45,15 +45,20 @@ describe("one Feed tab row, navigating like the bottom nav", () => {
       /setPending\(t\.key as TabKey\)/.test(src) &&
       // the nav's own press
       (src.match(/<PressIcon /g) ?? []).length >= 4 &&
-      // Exclusive in FULL after the Feed has loaded, and again on touch
-      /return afterPageLoad\(\(\) => warmExclusiveFully\(router\)\);/.test(src) &&
+      // Exclusive AND Reels in FULL after the Feed has loaded, and again on touch (owner 2026-10-31: Reels showed a
+      // black loading screen first — /reels is dynamic, so a plain Link prefetch only reached its loading.tsx)
+      /return afterPageLoad\(\(\) => \{\s*warmReelsFully\(router\);\s*warmExclusiveFully\(router\);/.test(src) &&
       /router\.prefetch\("\/exclusive", \{ kind: "full" \}/.test(src) &&
-      /onPointerDown=\{\(\) => warmExclusiveFully\(router\)\}/.test(src);
+      /router\.prefetch\("\/reels", \{ kind: "full" \}/.test(src) &&
+      /onPointerDown=\{\(\) => warmExclusiveFully\(router\)\}/.test(src) &&
+      /href="\/reels"\s*prefetch=\{false\}\s*onPointerDown=\{\(\) => warmReelsFully\(router\)\}/.test(src);
     expect(likeTheBottomNav(tabs)).toBe(true);
     // teeth: an underline that jumps, a tap that waits for the page, or a cold Exclusive each fail
     expect(likeTheBottomNav(tabs.replace("transform 500ms var(--ease-spring), width 500ms var(--ease-spring)", "transform 500ms linear"))).toBe(false);
     expect(likeTheBottomNav(tabs.replace('setPending("exclusive")', "void 0"))).toBe(false);
-    expect(likeTheBottomNav(tabs.replace("return afterPageLoad(() => warmExclusiveFully(router));", "return;"))).toBe(false);
+    expect(likeTheBottomNav(tabs.replace("warmReelsFully(router);\n      warmExclusiveFully(router);", ""))).toBe(false);
+    expect(likeTheBottomNav(tabs.replace('router.prefetch("/reels", { kind: "full" }', 'router.prefetch("/reels", {}'))).toBe(false);
+    expect(likeTheBottomNav(tabs.replace("onPointerDown={() => warmReelsFully(router)}", ""))).toBe(false);
   });
 
   it("the wanted tab is handed over in memory, once", () => {

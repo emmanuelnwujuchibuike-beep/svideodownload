@@ -88,6 +88,32 @@ const send = (ids: string[], action: OrganizeAction, labels?: string[]) =>
     announceNotificationSync();
   });
 
+/*
+  The list in sections (owner 2026-10-31: "the notification page looks cramped and unorganised — organise it
+  properly"): Pinned, then by how long ago — Today, This week, This month, Earlier (as Instagram's activity).
+  Elapsed time, not calendar days, so the server's render and the phone's agree whatever the time zone.
+*/
+const DAY_MS = 86_400_000;
+const SECTIONS = ["Pinned", "Today", "This week", "This month", "Earlier"] as const;
+export function sectionOf(g: { pinned?: boolean; createdAt: string }, now: number): (typeof SECTIONS)[number] {
+  if (g.pinned) return "Pinned";
+  const age = now - new Date(g.createdAt).getTime();
+  if (!(age >= 0) || age < DAY_MS) return "Today";
+  if (age < 7 * DAY_MS) return "This week";
+  if (age < 30 * DAY_MS) return "This month";
+  return "Earlier";
+}
+export function inSections<T extends { pinned?: boolean; createdAt: string }>(list: T[], now: number): [string, T[]][] {
+  const by = new Map<string, T[]>();
+  for (const g of list) {
+    const k = sectionOf(g, now);
+    const arr = by.get(k);
+    if (arr) arr.push(g);
+    else by.set(k, [g]);
+  }
+  return SECTIONS.filter((k) => by.has(k)).map((k) => [k, by.get(k)!]);
+}
+
 function dayLabel(iso: string): string {
   const d = new Date(iso);
   const today = new Date();
@@ -496,6 +522,10 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
       />
     ));
 
+  // "now" for the sections, refreshed when the list changes (a minute's drift never moves anything across a section)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const now = useMemo(() => Date.now(), [visible]);
+
   return (
     <PullToRefresh onRefresh={async () => { await (tab === "archived" ? revalidate(ARCHIVED_KEY, loadArchived, 0) : revalidate(KEY, loadGrouped, 0)); }}>
       {/* The Frenz system (2026-10-19, no design file): a large Sora title like Settings, plain white controls,
@@ -510,12 +540,22 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
               </span>
             ) : null}
           </h1>
-          <div className="relative shrink-0">
+          <div className="relative flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={markAllRead}
+              disabled={unread === 0}
+              aria-label="Mark all read"
+              title="Mark all read"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-frenz-line bg-frenz-card text-frenz-ink shadow-frenz-card transition active:scale-95 disabled:opacity-40"
+            >
+              <CheckCheck className="h-[18px] w-[18px]" />
+            </button>
             <button
               type="button"
               onClick={() => setMoreOpen((v) => !v)}
               aria-label="Notification center options"
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-frenz-line bg-frenz-card text-frenz-ink shadow-frenz-card transition active:scale-95"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-frenz-line bg-frenz-card text-frenz-ink shadow-frenz-card transition active:scale-95"
             >
               <MoreHorizontal className="h-5 w-5" />
             </button>
@@ -539,22 +579,14 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
             ) : null}
           </div>
         </div>
-        <p className="m-0 mt-1 text-sm text-frenz-muted">Everything that happened, in one place. Search it, pin it, label it, archive it.</p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        {/* turn on push — only when this device can and hasn't (the toggle renders nothing otherwise) */}
+        <div className="mt-3 flex flex-wrap items-center gap-2 empty:hidden">
           <PushToggle />
-          <button
-            type="button"
-            onClick={markAllRead}
-            disabled={unread === 0}
-            className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full border border-frenz-line bg-frenz-card px-3.5 text-sm font-bold text-frenz-ink transition active:scale-[0.98] disabled:opacity-40"
-          >
-            <CheckCheck className="h-4 w-4" /> Mark all read
-          </button>
         </div>
       </div>
 
       {/* Universal Inbox search — plain language, read back as chips */}
-      <div className="mb-2 flex h-12 items-center gap-2 rounded-2xl bg-frenz-fill px-4 focus-within:ring-2 focus-within:ring-frenz-violet/40">
+      <div className="mb-2 flex h-11 items-center gap-2 rounded-full bg-frenz-fill px-4 focus-within:ring-2 focus-within:ring-frenz-violet/40">
         <Search className="h-[18px] w-[18px] shrink-0 text-frenz-muted" />
         <input
           value={query}
@@ -715,8 +747,17 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
           ))}
         </div>
       ) : (
-        <div className={layout === "compact" ? "space-y-1.5" : "space-y-2.5"}>
-          <AnimatePresence initial={false}>{cards(visible)}</AnimatePresence>
+        <div className="space-y-5">
+          {inSections(visible, now).map(([name, list]) => (
+            <section key={name} aria-label={name}>
+              <h2 className="mb-2 px-1 text-[15px] font-bold text-frenz-ink" suppressHydrationWarning>
+                {name}
+              </h2>
+              <div className={layout === "compact" ? "space-y-1.5" : "space-y-2.5"}>
+                <AnimatePresence initial={false}>{cards(list)}</AnimatePresence>
+              </div>
+            </section>
+          ))}
         </div>
       )}
 

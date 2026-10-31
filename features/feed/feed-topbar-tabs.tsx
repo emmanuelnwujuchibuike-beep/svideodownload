@@ -155,6 +155,20 @@ function warmExclusiveFully(router: ReturnType<typeof useRouter>) {
   router.prefetch("/exclusive", { kind: "full" } as unknown as Parameters<typeof router.prefetch>[1]);
 }
 
+/*
+  Reels, IN FULL (owner 2026-10-31: the Reels tab "reloads twice showing a black page twice and stuck at spinner" —
+  "the reels should warm up while a video in feed is playing and on the reels button and open instant like the other
+  buttons"). /reels is a dynamic page, so a plain Link prefetch stopped at its loading.tsx: every tap painted that black
+  skeleton first and fetched the page after. A full prefetch caches the whole page, so the tap opens it at once.
+  Once per session — after the Feed has loaded, the first time a feed video plays, or when a finger lands on the tab.
+*/
+let reelsWarmed = false;
+export function warmReelsFully(router: { prefetch: ReturnType<typeof useRouter>["prefetch"] }) {
+  if (reelsWarmed) return;
+  reelsWarmed = true;
+  router.prefetch("/reels", { kind: "full" } as unknown as Parameters<ReturnType<typeof useRouter>["prefetch"]>[1]);
+}
+
 function FeedTabRow({
   active,
   onSegment,
@@ -182,8 +196,11 @@ function FeedTabRow({
 
   // Exclusive, in full, before anyone taps it — once per session, after the Feed itself has loaded
   useEffect(() => {
-    if (!onFeed || exclusiveWarmed || isSlowConnection()) return;
-    return afterPageLoad(() => warmExclusiveFully(router));
+    if (!onFeed || isSlowConnection()) return;
+    return afterPageLoad(() => {
+      warmReelsFully(router);
+      warmExclusiveFully(router);
+    });
   }, [onFeed, router]);
 
   // one underline, measured to the active tab, springing between tabs
@@ -276,10 +293,12 @@ function FeedTabRow({
           {staticUnderline("recent")}
         </button>
       ) : (
-        // Reels keeps its viewport prefetch (as the Feed always had it) — Reels must not open slower
+        // Reels is prefetched IN FULL (warmReelsFully) — a viewport prefetch only reached its black loading screen
         <Link
           ref={ref("recent")}
           href="/reels"
+          prefetch={false}
+          onPointerDown={() => warmReelsFully(router)}
           onClick={() => {
             tap();
             setPending("recent");

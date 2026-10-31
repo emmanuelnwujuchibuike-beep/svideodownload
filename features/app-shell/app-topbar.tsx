@@ -227,7 +227,16 @@ export function AppTopbar() {
         /* The glass bar is FIXED on phones (owner, 2026-10-28: "the floating buttons on the feed page sometimes swipe away
            instead of sticking"). Sticky rides the document, so iOS's elastic overscroll and momentum dragged the floating
            circles with the page; fixed holds them to the screen. The spacer after this header keeps the layout's 4rem. */
-        glassBar ? "pointer-events-none border-b border-transparent bg-transparent max-lg:fixed max-lg:inset-x-0 lg:pointer-events-auto lg:border-border/20 lg:bg-background" : "border-b border-border/20 bg-background",
+        /*
+          🔴 `max-lg:!fixed`, NOT `max-lg:fixed` (owner, 2026-10-31: "the feed and friends page now shows the gap on every
+          navigation"). The app loads TWO stylesheets: the full one (app.css) and, after any visit to a marketing-group
+          page — History in the bottom nav, the AI pages, support — the entry sheet (entry.css). The entry sheet has
+          `.sticky` but no `max-lg:` rules at all, and both rules weigh the same, so when it arrived AFTER app.css its
+          `.sticky` beat `max-lg:fixed`: the header fell back into the page on top of its own spacer — a header-tall
+          white gap above the feed / Friends. Reproduced locally: Friends → History → Friends turned the header sticky.
+          `!important` makes the phone position independent of which sheet loads last.
+        */
+        glassBar ? "pointer-events-none border-b border-transparent bg-transparent max-lg:!fixed max-lg:inset-x-0 lg:pointer-events-auto lg:border-border/20 lg:bg-background" : "border-b border-border/20 bg-background",
         // the Download page's slide-away (see above): transform only — no layout shift, GPU-cheap
         "transition-transform duration-300 ease-out motion-reduce:transition-none lg:translate-y-0",
         slideAway && "-translate-y-full",

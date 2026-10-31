@@ -1,14 +1,13 @@
 import { scanMigrations, scanRoutes } from "./lib/content/sync/scan";
 import type { NextConfig } from "next";
 
-import { writeEntryContent, writeLandingContent } from "./lib/perf/css-entry";
+import { writeEntryContent } from "./lib/perf/css-entry";
 import { BLOG_REDIRECTS } from "./lib/seo/blog";
 import { REMOVED_SEO_PAGES } from "./lib/seo/removed-seo-pages";
 
 // the landing stylesheet's input, refreshed before anything compiles (lib/perf/css-entry.ts) — never fatal
 try {
   writeEntryContent(process.cwd());
-  writeLandingContent(process.cwd());
 } catch {
   /* tailwind.entry.config.ts writes it again itself */
 }

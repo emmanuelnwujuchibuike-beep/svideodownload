@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { LANDING_CSS_ROOTS, reachableFiles, writeEntryContent } from "./css-entry";
+import { reachableFiles, writeEntryContent } from "./css-entry";
 
 /**
  * The cold-entry stylesheet split (2026-10-27). Pins:
@@ -26,21 +26,6 @@ describe("reachableFiles", () => {
     for (const f of ["a", "b", "c", "t", "unused"]) writeFileSync(path.join(dir, `lib/${f}.ts`), "export const x = 1;\n");
     const got = reachableFiles(dir, ["app/page.tsx"]).map((f) => path.relative(dir, f).split(path.sep).join("/"));
     expect(got).toEqual(["app/page.tsx", "lib/a.ts", "lib/b.ts", "lib/c.ts"]);
-    // the landing's walk is STATIC only: a lazy import() is not on screen at first paint (2026-10-31)
-    const still = reachableFiles(dir, ["app/page.tsx"], { staticOnly: true }).map((f) => path.relative(dir, f).split(path.sep).join("/"));
-    expect(still).toEqual(["app/page.tsx", "lib/a.ts", "lib/c.ts"]);
-  });
-
-  it("the landing's sheet holds what the landing and downloader pages show at first paint — and not their lazy parts", () => {
-    const got = new Set(reachableFiles(ROOT, LANDING_CSS_ROOTS, { staticOnly: true }).map(rel));
-    expect(got.has("app/(marketing)/page.tsx")).toBe(true);
-    expect(got.has("app/(marketing)/[downloader]/page.tsx")).toBe(true);
-    expect(got.has("components/layout/site-header.tsx")).toBe(true);
-    // the after-paint loader's sheet is reached only through import() — never into the landing's own sheet
-    expect(got.has("features/perf/later-styles.tsx")).toBe(true);
-    expect(got.has("features/perf/later-styles-sheet.ts")).toBe(false);
-    const all = new Set(reachableFiles(ROOT, LANDING_CSS_ROOTS).map(rel));
-    expect(all.size).toBeGreaterThan(got.size * 1.3);
   });
 
   it("reaches the landing, its downloader and the root chrome; leaves app-only screens out", () => {
@@ -69,7 +54,7 @@ function pagesWithoutStylesheet(appDir: string): string[] {
     }
   };
   walk(appDir);
-  const importsCss = (file: string) => existsSync(file) && /^import\s+"[./]+(?:app|entry|landing)\.css";/m.test(readFileSync(file, "utf8"));
+  const importsCss = (file: string) => existsSync(file) && /^import\s+"[./]+(?:app|entry)\.css";/m.test(readFileSync(file, "utf8"));
   return pages
     .filter((page) => {
       let d = path.dirname(page);
@@ -85,14 +70,9 @@ function pagesWithoutStylesheet(appDir: string): string[] {
 
 describe("every page gets a stylesheet", () => {
   const app = path.join(ROOT, "app");
-  it("the root and marketing layouts carry none; the landing and downloader carry landing.css; the full sheet goes everywhere else", () => {
-    expect(readFileSync(path.join(app, "layout.tsx"), "utf8")).not.toMatch(/^import\s+"\.\/(globals|entry|landing)\.css";/m);
-    // 2026-10-31: the marketing layout carries NO sheet — or the landing would wait on the entry sheet again
-    expect(readFileSync(path.join(app, "(marketing)/layout.tsx"), "utf8")).not.toMatch(/^import\s+"[./]+(?:app|entry|landing)\.css";/m);
-    expect(readFileSync(path.join(app, "(marketing)/page.tsx"), "utf8")).toMatch(/^import "\.\.\/landing\.css";/m);
-    expect(readFileSync(path.join(app, "(marketing)/[downloader]/layout.tsx"), "utf8")).toMatch(/^import "\.\.\/\.\.\/landing\.css";/m);
-    expect(readFileSync(path.join(app, "(marketing)/pricing/layout.tsx"), "utf8")).toMatch(/^import "\.\.\/\.\.\/entry\.css";/m);
-    expect(readFileSync(path.join(app, "landing.css"), "utf8")).toMatch(/@import "\.\/globals\.css";[\s\S]*@config "\.\.\/tailwind\.landing\.config\.ts";/);
+  it("the root layout carries none; (marketing) carries entry.css; the full sheet goes everywhere else", () => {
+    expect(readFileSync(path.join(app, "layout.tsx"), "utf8")).not.toMatch(/^import\s+"\.\/(globals|entry)\.css";/m);
+    expect(readFileSync(path.join(app, "(marketing)/layout.tsx"), "utf8")).toMatch(/^import "\.\.\/entry\.css";/m);
     expect(readFileSync(path.join(app, "(app)/layout.tsx"), "utf8")).toMatch(/^import "\.\.\/app\.css";/m);
     expect(readFileSync(path.join(app, "app.css"), "utf8")).toMatch(/@import "\.\/globals\.css";[\s\S]*@config "\.\.\/tailwind\.config\.ts";/);
     expect(readFileSync(path.join(app, "entry.css"), "utf8")).toMatch(/@import "\.\/globals\.css";[\s\S]*@config "\.\.\/tailwind\.entry\.config\.ts";/);
@@ -132,14 +112,10 @@ describe.skipIf(!existsSync(path.join(ROOT, ".next/app-build-manifest.json")))("
   const manifest = () => JSON.parse(readFileSync(path.join(ROOT, ".next/app-build-manifest.json"), "utf8")).pages as Record<string, string[]>;
   const cssOf = (key: string) => (manifest()[key] ?? []).filter((f) => f.endsWith(".css")).map((f) => readFileSync(path.join(ROOT, ".next", f), "utf8")).join("");
   it("the marketing sheet is smaller than the full one", () => {
-    const entry = cssOf("/(marketing)/pricing/layout");
+    const entry = cssOf("/(marketing)/layout");
     const full = cssOf("/(app)/layout");
-    const landing = cssOf("/(marketing)/page");
     expect(entry.length).toBeGreaterThan(50_000);
     expect(full.length).toBeGreaterThan(entry.length * 1.1);
-    // the landing paints with its own sheet, clearly smaller than the entry one (2026-10-31)
-    expect(landing.length).toBeGreaterThan(50_000);
-    expect(entry.length).toBeGreaterThan(landing.length * 1.25);
     expect(cssOf("/layout").length).toBeLessThan(20_000);
   });
 });

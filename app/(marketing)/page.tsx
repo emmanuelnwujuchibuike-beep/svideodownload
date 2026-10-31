@@ -1,6 +1,4 @@
 import type { Metadata } from "next";
-
-import "../landing.css";
 import { Suspense } from "react";
 
 import { DeferredSection } from "@/components/landing/deferred-section";
@@ -18,7 +16,6 @@ import { SHARE_DESCRIPTION, SHARE_TITLE } from "@/lib/seo/share";
 import { SITE_URL } from "@/lib/site";
 import { AppBand, CreatorBand } from "@/components/landing/creator-app-bands";
 import { AdSurface } from "@/features/monetization/ad-surface";
-import { LaterStyles } from "@/features/perf/later-styles";
 import { LazyAdSurface } from "@/features/monetization/lazy-ad-surface";
 
 /**
@@ -333,8 +330,6 @@ export default async function HomePage() {
         </div>
         </main>
         <SiteFooter />
-        {/* the entry sheet, after the first paint — for what the landing opens later */}
-        <LaterStyles />
       </div>
       {/*
         The bottom banner, the idle interstitial and the page-level script tag

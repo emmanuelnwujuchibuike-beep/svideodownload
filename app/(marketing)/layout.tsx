@@ -6,11 +6,8 @@ import { DeferredAdFurniture } from "@/features/monetization/deferred-ad-furnitu
 import { PageRefresh } from "@/features/app-shell/page-refresh";
 import { getFeed } from "@/lib/social/feed";
 
-/*
-  NO stylesheet here (2026-10-31). The landing and the downloader pages paint with their own small sheet
-  (app/landing.css, imported by app/(marketing)/page.tsx and [downloader]/layout.tsx); every other section of this
-  group imports the entry sheet from its own layout. lib/perf/css-entry.test.ts fails if a page is left with neither.
-*/
+// the cold-entry stylesheet: globals.css compiled for only what this group reaches — see app/entry.css
+import "../entry.css";
 
 /**
  * The first couple of reel VIDEO urls, so `ReelsWarmup` can buffer them ahead of a

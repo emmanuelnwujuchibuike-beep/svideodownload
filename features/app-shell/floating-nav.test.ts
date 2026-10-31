@@ -30,9 +30,12 @@ function floats(src: string): boolean {
     /\bbottom-\[var\(--frenz-nav-gap\)\]/.test(wrapper) &&
     // the bar: glass, fully round (design/frenz-exclusive-feed.html, owner 2026-10-31), a fixed height every page can reserve
     /"frenz-nav-glass frenz-ui pointer-events-auto relative flex h-\[var\(--frenz-nav-height\)\] min-w-0 flex-1[^"]*rounded-full/.test(src) &&
-    // a SEPARATE round gradient button (Profile, 66 px) beside the bar, and a capsule on the active tab
+    // a SEPARATE round gradient button (Profile, 66 px) beside the bar, and ONE glass lens under the active tab (2026-10-31)
     /h-\[66px\] w-\[66px\][^"]*rounded-full bg-\[linear-gradient\(135deg,#5B5BF0,#7B5CF0,#B86CF2\)\]/.test(src) &&
-    /ACTIVE_CAPSULE/.test(src) &&
+    /<span aria-hidden className="frenz-nav-lens" data-off=\{lensAt < 0 \|\| undefined\} \/>/.test(src) &&
+    /\["--i" as string\]: Math\.max\(lensAt, 0\)/.test(src) &&
+    // the lens moves on the tap, not when the page arrives
+    /const lensAt = pendingTab >= 0 \? pendingTab : routeActive\.indexOf\(true\);/.test(src) &&
     // no opaque full-width slab left behind
     !/border-t border-border bg-background/.test(src) &&
     // nothing loops on the bar
@@ -49,9 +52,11 @@ describe("the floating glass bottom nav", () => {
     expect(floats(nav.replace("w-[calc(100%-1.75rem)]", "w-full"))).toBe(false);
     expect(floats(nav.replace("relative flex h-[var(--frenz-nav-height)] min-w-0 flex-1 items-center gap-0.5 rounded-full", "relative flex h-[var(--frenz-nav-height)] min-w-0 flex-1 items-center gap-0.5 rounded-none"))).toBe(false);
     expect(floats(nav.replace("rounded-full bg-[linear-gradient(135deg,#5B5BF0,#7B5CF0,#B86CF2)]", "rounded-[26px] bg-frenz-gradient"))).toBe(false);
-    expect(floats(nav.replaceAll("ACTIVE_CAPSULE", "NO_CAPSULE"))).toBe(false);
+    expect(floats(nav.replace('className="frenz-nav-lens"', 'className="frenz-nav-tile"'))).toBe(false);
+    expect(floats(nav.replace('["--i" as string]: Math.max(lensAt, 0)', '["--i" as string]: 0'))).toBe(false);
+    expect(floats(nav.replace("const lensAt = pendingTab >= 0 ? pendingTab : routeActive.indexOf(true);", "const lensAt = routeActive.indexOf(true);"))).toBe(false);
     expect(floats(nav.replace("frenz-nav-glass frenz-ui pointer-events-auto", "border-t border-border bg-background pointer-events-auto"))).toBe(false);
-    expect(floats(nav.replace("active={pathname === \"/home\"", "attract={true}\n            active={pathname === \"/home\""))).toBe(false);
+    expect(floats(nav.replace("active={secondActive}", "attract={true}\n            active={secondActive}"))).toBe(false);
   });
 
   it("is real glass with the .ai-glass fallback tiers, and nothing on it transitions", () => {
@@ -63,19 +68,24 @@ describe("the floating glass bottom nav", () => {
     expect(css).toMatch(/html\[data-glass="reduced"\]\) \.frenz-nav-glass/);
     // Inside the SAME tier blocks as .ai-glass (one hierarchy, one source order).
     expect(css).toMatch(/@supports not \(\(backdrop-filter: blur\(1px\)\) or \(-webkit-backdrop-filter: blur\(1px\)\)\) \{\n {4}\.ai-glass \{[^}]*\}\n {4}\.frenz-nav-glass \{\n {6}--nav-glass-fill: 0\.99;/);
-    // 2026-10-31 (owner): the feed header's frosted glass — white .72 → .52, 26 px blur at 190 %, a white hairline
+    // 2026-10-31 (owner, the glass bottom nav reference): white .78 → .58, 26 px blur at 200 %, a white edge
     expect(rule).toMatch(/--nav-glass-rgb: 255 255 255;/);
-    expect(rule).toMatch(/--nav-glass-fill: 0\.52;/);
+    expect(rule).toMatch(/--nav-glass-fill: 0\.58;/);
     expect(rule).toMatch(/--nav-glass-blur: 26px;/);
-    expect(rule).toMatch(/background-image: linear-gradient\(180deg, rgb\(255 255 255 \/ 0\.42\), rgb\(255 255 255 \/ 0\)\);/);
-    expect(rule).toMatch(/saturate\(190%\)/);
-    expect(rule).toMatch(/border: 1px solid rgb\(255 255 255 \/ 0\.6\);/);
-    // dark and immersive (Reels) drop the white light — otherwise the dark glass turns grey
-    expect(css.match(/\.dark \.frenz-nav-glass \{[\s\S]*?\}/)?.[0] ?? "").toMatch(/background-image: none;/);
+    expect(rule).toMatch(/background-image: linear-gradient\(180deg, rgb\(255 255 255 \/ 0\.48\), rgb\(255 255 255 \/ 0\)\);/);
+    expect(rule).toMatch(/saturate\(200%\)/);
+    expect(rule).toMatch(/border: 1px solid rgb\(255 255 255 \/ 0\.85\);/);
+    // the lens springs between tabs in CSS and magnifies on press
+    const lens = css.match(/\.frenz-nav-lens \{[\s\S]*?\n {2}\}/)?.[0] ?? "";
+    expect(lens).toMatch(/transform: translateX\(calc\(var\(--i, 0\) \* \(100% \+ 2px\)\)\);/);
+    expect(lens).toMatch(/width: calc\(\(100% - 18px\) \/ 4\);/);
+    expect(css).toMatch(/\.frenz-nav-pressing \.frenz-nav-lens \{[^}]*scale\(1\.14, 1\.2\)/);
+    // immersive (Reels) keeps its dark glass — no white light over video
     expect(css.match(/\.frenz-nav-glass\.frenz-nav-glass--immersive \{[\s\S]*?\}/)?.[0] ?? "").toMatch(/background-image: none;/);
     expect(rule).not.toMatch(/rgb\(16 24 40/);
     const darkRule = css.match(/\.dark \.frenz-nav-glass \{[\s\S]*?\}/)?.[0] ?? "";
-    expect(darkRule).toMatch(/-6px -6px 16px rgb\(255 255 255 \/ 0\.045\)/);
+    expect(darkRule).toMatch(/--nav-glass-rgb: 28 28 34;/);
+    expect(darkRule).toMatch(/0 14px 36px rgb\(0 0 0 \/ 0\.5\)/);
     expect(css).toMatch(/prefers-reduced-transparency: reduce\), \(prefers-contrast: more\) \{\n {4}\.ai-glass \{[^}]*\}\n {4}\.frenz-nav-glass \{\n {6}--nav-glass-fill: 1;/);
     // the base rule comes BEFORE every tier, so the tiers win by source order
     expect(css.indexOf(".frenz-nav-glass {")).toBeLessThan(css.indexOf('html[data-glass="reduced"]) .frenz-nav-glass'));

@@ -453,25 +453,25 @@
     position: relative;
     box-shadow: 0 -10px 28px -28px hsl(230 30% 10% / 0.3);
   }
+  /* the "Send a chat" pill: frosted glass inside the glass bar (owner, 2026-10-31) */
   .frenz-message-composer > div {
-    border: 1px solid hsl(var(--border) / 0.55);
-    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.3), 0 5px 14px -12px hsl(230 30% 12% / 0.2);
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.75), rgb(255 255 255 / 0.45));
+    border: 1px solid rgb(255 255 255 / 0.85);
+    box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.9), inset 0 -1px 2px rgb(14 14 18 / 0.06);
   }
   .dark .frenz-message-composer > div {
-    border-color: hsl(0 0% 100% / 0.08);
+    background: rgb(255 255 255 / 0.06);
+    border-color: hsl(0 0% 100% / 0.1);
     box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.06);
   }
   /* The inbox page is plain white (owner, 2026-10-18: no decorative washes) — the blue corner glow that sat here is gone. */
   /* chat redesign (2026-10-18), style only: the composer floats as a glass bar inset from the
      edges (form.x outranks the single-class utilities on the element), bubbles get a softer shadow */
+  /* 2026-10-31: the bar's surface, edge and shadow are the bottom nav's liquid glass (.frenz-nav-glass on the form) —
+     only the inset and the radius stay here */
   form.frenz-message-composer {
     margin-inline: 0.5rem;
-    border: 1px solid hsl(var(--border) / 0.6);
     border-radius: 1.75rem;
-    box-shadow: 0 12px 32px -18px hsl(230 40% 8% / 0.5), inset 0 1px 0 hsl(0 0% 100% / 0.14);
-  }
-  .dark form.frenz-message-composer {
-    border-color: hsl(0 0% 100% / 0.1);
   }
   form.frenz-message-composer > div {
     border-radius: 1.5rem;
@@ -580,14 +580,25 @@
   /* The design's header circle (design/Messages.dc.html, 2026-10-18): solid white with the
      hairline on the white page — no gradient, no glow (owner: gradient only on primary actions).
      `--primary` is New message, the one gradient circle. */
+  /* 2026-10-31 (owner: "all buttons in the message and chat page … same floating glass"): the feed header's frosted
+     glass circle (features/ui/floating-glass.ts FROSTED_GLASS), and the glass nav's spring on release. */
   .frenz-inbox-action {
     position: relative;
-    border: 1px solid hsl(var(--frenz-line));
-    background: hsl(var(--frenz-card));
-    box-shadow: 0 1px 2px hsl(var(--frenz-ink) / 0.05);
+    border: 1px solid rgb(255 255 255 / 0.85);
+    background: linear-gradient(160deg, rgb(255 255 255 / 0.75), rgb(255 255 255 / 0.35));
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    box-shadow:
+      inset 0 1px 1px rgb(255 255 255 / 0.9),
+      inset 0 -1px 2px rgb(14 14 18 / 0.06),
+      0 8px 20px -10px rgb(40 30 90 / 0.35);
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
-    transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 160ms ease, color 160ms ease;
+    transition: transform 250ms cubic-bezier(0.28, 1.4, 0.46, 1), box-shadow 160ms ease, color 160ms ease;
+  }
+  .dark .frenz-inbox-action:not(.frenz-inbox-action--primary) {
+    border-color: rgb(255 255 255 / 0.12);
+    background: rgb(255 255 255 / 0.07);
   }
   .frenz-inbox-action.frenz-inbox-action--primary {
     border-color: transparent;
@@ -1004,45 +1015,158 @@
      fill var carries the .52 floor so the tiers below can still raise it; the gradient image adds the top's extra
      light (.52 + .42 × .48 ≈ .72). It floats, so it takes the header circles' inner light and violet drop, not the
      bar's flat underline. */
+  /* 🔴 LIQUID GLASS (owner, 2026-10-31, the "Frenz · Glass Bottom Nav" reference — its glass and lens only: the app's
+     own icons stay, the reference's page background is ignored). White .78 → .58 under 26 px of blur at 200 %, a white
+     edge, a soft lift, and light falling across it (::before). The fill var carries the .58 floor so the tiers below
+     can still raise it; the gradient image adds the top's light (.58 + .48 × .42 ≈ .78). Pure CSS — nothing here
+     ships JS on a cold entry. */
   .frenz-nav-glass {
     --nav-glass-rgb: 255 255 255;
-    --nav-glass-fill: 0.52;
+    --nav-glass-fill: 0.58;
     --nav-glass-blur: 26px;
+    isolation: isolate;
     background-color: rgb(var(--nav-glass-rgb) / var(--nav-glass-fill));
-    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.42), rgb(255 255 255 / 0));
-    -webkit-backdrop-filter: blur(var(--nav-glass-blur)) saturate(190%);
-    backdrop-filter: blur(var(--nav-glass-blur)) saturate(190%);
-    border: 1px solid rgb(255 255 255 / 0.6);
-    box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.9), inset 0 -1px 2px rgb(14 14 18 / 0.06), 0 14px 30px -14px rgb(40 30 90 / 0.35);
+    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.48), rgb(255 255 255 / 0));
+    -webkit-backdrop-filter: blur(var(--nav-glass-blur)) saturate(200%);
+    backdrop-filter: blur(var(--nav-glass-blur)) saturate(200%);
+    border: 1px solid rgb(255 255 255 / 0.85);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.55),
+      inset 0 -1px 1px rgb(0 0 0 / 0.04),
+      0 14px 36px rgb(14 14 20 / 0.16),
+      0 2px 8px rgb(14 14 20 / 0.06);
+  }
+  /* the light below is absolutely placed — every glass surface must be its containing block (some AI toolbars aren't positioned) */
+  .frenz-nav-glass:not(.fixed, .absolute, .sticky) {
+    position: relative;
+  }
+  .frenz-nav-glass::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background:
+      radial-gradient(120% 90% at 12% -10%, rgb(255 255 255 / 0.45), rgb(255 255 255 / 0) 55%),
+      linear-gradient(180deg, rgb(255 255 255 / 0.18), rgb(255 255 255 / 0) 40%);
   }
   /* Theme and surface set the COLOUR only, never the fill: these selectors are
      more specific than the tiers below, so a fill here would defeat them. */
   .dark .frenz-nav-glass {
-    --nav-glass-rgb: 22 26 42;
-    background-image: none;
-    border-color: rgb(255 255 255 / 0.06);
+    --nav-glass-rgb: 28 28 34;
+    background-image: linear-gradient(180deg, rgb(44 44 52 / 0.3), rgb(44 44 52 / 0));
+    border-color: rgb(255 255 255 / 0.16);
     box-shadow:
-      -6px -6px 16px rgb(255 255 255 / 0.045),
-      9px 11px 26px rgb(0 0 0 / 0.55),
-      inset 1px 1px 0 rgb(255 255 255 / 0.05);
+      inset 0 1px 0 rgb(255 255 255 / 0.08),
+      0 14px 36px rgb(0 0 0 / 0.5),
+      0 2px 8px rgb(0 0 0 / 0.3);
   }
-  /* The active tab: the neumorphic PRESSED tile (mobile-nav.tsx ACTIVE_CAPSULE) — inner shade up-left, inner light
-     down-right. Over Reels video (the immersive dark glass) it is a plain light wash. */
-  /* light: a plain white tile under the active tab (design/frenz-exclusive-feed.html, 2026-10-31) */
-  .frenz-nav-pressed {
-    background-color: rgb(255 255 255);
-    /* a white tile on white glass needs a lift to read (2026-10-31) */
-    box-shadow: 0 1px 2px rgb(14 14 18 / 0.08), 0 6px 14px -8px rgb(40 30 90 / 0.3);
+  .dark .frenz-nav-glass::before {
+    opacity: 0.25;
   }
-  .dark .frenz-nav-pressed {
-    background-color: rgb(18 21 35);
+
+  /* The LENS — one glass drop behind the active tab that springs between tabs (mobile-nav.tsx sets --i, the active
+     tab's index, -1 for none). Geometry from the pill: 6 px padding, 2 px gaps, four equal tabs. Press magnifies it;
+     a drag (features/app-shell/nav-drag.ts, loaded when the page is idle) moves it with the finger via --x. */
+  .frenz-nav-lens {
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    left: 6px;
+    z-index: 0;
+    width: calc((100% - 18px) / 4);
+    border-radius: 9999px;
+    background: rgb(20 20 30 / 0.065);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.55), inset 0 -1px 0 rgb(0 0 0 / 0.03);
+    transform: translateX(calc(var(--i, 0) * (100% + 2px)));
+    opacity: 1;
+    pointer-events: none;
+    transition:
+      transform 0.5s cubic-bezier(0.28, 1.4, 0.46, 1),
+      opacity 0.2s ease,
+      background-color 0.25s ease,
+      box-shadow 0.25s ease;
+  }
+  .frenz-nav-lens[data-off] {
+    opacity: 0;
+  }
+  /* the thin iridescent rim, like iOS glass */
+  .frenz-nav-lens::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.25px;
+    pointer-events: none;
+    background: conic-gradient(
+      from 210deg,
+      rgb(255 255 255 / 0.95),
+      rgb(170 205 255 / 0.75),
+      rgb(255 190 235 / 0.6),
+      rgb(255 255 255 / 0.95),
+      rgb(185 255 230 / 0.6),
+      rgb(255 255 255 / 0.95)
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0.9;
+  }
+  .frenz-nav-pressing .frenz-nav-lens {
+    transform: translateX(calc(var(--i, 0) * (100% + 2px))) scale(1.14, 1.2);
+    background: rgb(255 255 255 / 0.28);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.8), 0 10px 24px rgb(14 14 20 / 0.16);
+  }
+  .frenz-nav-dragging .frenz-nav-lens {
+    opacity: 1;
+    transform: translateX(var(--x, 0px)) scale(1.14, 1.2);
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .dark .frenz-nav-lens {
+    background: rgb(255 255 255 / 0.1);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
+  }
+  .dark .frenz-nav-lens::after {
+    opacity: 0.35;
+  }
+  .dark .frenz-nav-pressing .frenz-nav-lens {
+    background: rgb(255 255 255 / 0.16);
+  }
+  .frenz-nav-glass--immersive .frenz-nav-lens {
+    background: rgb(255 255 255 / 0.2);
+  }
+
+  /* The header's Install button (landing, /downloads): the same liquid glass as the bottom nav, made VISIBLE on a white
+     bar (owner, 2026-10-31: "same type of glass but it should be visible") — violet type, a faint violet edge and a
+     violet drop under the frosted white. CSS, not utilities: this ships on the landing's cold entry. */
+  .frenz-install-glass {
+    color: #5b3fe6;
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.9), rgb(244 241 255 / 0.72));
+    -webkit-backdrop-filter: blur(20px) saturate(200%);
+    backdrop-filter: blur(20px) saturate(200%);
+    border: 1px solid rgb(91 63 230 / 0.22);
     box-shadow:
-      inset 3px 3px 8px rgb(0 0 0 / 0.55),
-      inset -3px -3px 8px rgb(255 255 255 / 0.05);
+      inset 0 1px 0 rgb(255 255 255 / 0.9),
+      inset 0 -1px 1px rgb(91 63 230 / 0.06),
+      0 8px 20px -8px rgb(91 63 230 / 0.45);
   }
-  .frenz-nav-glass--immersive .frenz-nav-pressed {
-    background-color: rgb(255 255 255 / 0.2);
-    box-shadow: none;
+  .dark .frenz-install-glass {
+    color: #c9bfff;
+    background: linear-gradient(180deg, rgb(44 44 52 / 0.72), rgb(28 28 34 / 0.6));
+    border-color: rgb(143 123 255 / 0.35);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.1),
+      0 8px 20px -8px rgb(143 123 255 / 0.5);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .frenz-nav-lens {
+      transition: none;
+    }
+    .frenz-nav-pressing .frenz-nav-lens,
+    .frenz-nav-dragging .frenz-nav-lens {
+      transform: translateX(calc(var(--i, 0) * (100% + 2px)));
+    }
   }
   /* The Profile button beside the pill: the design's violet drop in light mode (design/frenz-exclusive-feed.html, owner
      2026-10-31 — it supersedes 2026-10-29's flat button), the pill's two-shadow lift in dark. */
@@ -1124,6 +1248,9 @@
 
   /* Over full-bleed video (/reels): dark glass whatever the theme, so the white
      glyphs read on any frame. */
+  .frenz-nav-glass.frenz-nav-glass--immersive::before {
+    opacity: 0.2;
+  }
   .frenz-nav-glass.frenz-nav-glass--immersive {
     --nav-glass-rgb: 8 8 12;
     background-image: none;
@@ -5312,9 +5439,15 @@ html.dark .streak-recover {
   own transitions always win. A disabled button never moves — it did not take
   the tap. Reduced motion keeps the colour change of :active and drops the
   movement.
+
+  🔴 THE GLASS NAV'S SPRING, EVERYWHERE (owner, 2026-10-31: "all global click and navigation must use the smooth
+  spring press the reference NAV use"). Links joined (a[href] — navigation is mostly links), and the release uses the
+  reference's spring, cubic-bezier(.28, 1.4, .46, 1) over 250 ms. An inline text link is not transformable, so `scale`
+  never moves a word inside a sentence; block links, cards and tabs get the press. Still CSS only — no listener, so
+  it can never slow a navigation down.
 */
-:where(button, [role="button"], a.ai-btn, a.ai-strip-cta, summary):not(:disabled):not([aria-disabled="true"]) {
-  transition: scale 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+:where(button, [role="button"], a[href], a.ai-btn, a.ai-strip-cta, summary):not(:disabled):not([aria-disabled="true"]) {
+  transition: scale 250ms cubic-bezier(0.28, 1.4, 0.46, 1);
   -webkit-tap-highlight-color: transparent;
 }
 /*
@@ -5333,16 +5466,16 @@ html.dark .streak-recover {
   media (tap to pause). Anything stretched over its parent with `inset-0` is excluded; ordinary
   buttons keep the bounce.
 */
-:where(button, [role="button"], a.ai-btn, a.ai-strip-cta, summary):not(:disabled):not([aria-disabled="true"]):not(:has(img, video, picture, canvas)):not([class~="inset-0"]):active {
+:where(button, [role="button"], a[href], a.ai-btn, a.ai-strip-cta, summary):not(:disabled):not([aria-disabled="true"]):not(:has(img, video, picture, canvas)):not([class~="inset-0"]):active {
   scale: 0.95;
   transition-duration: 70ms;
 }
 @media (prefers-reduced-motion: reduce) {
-  :where(html:not([data-a11y-motion="full"])) :where(button, [role="button"], a.ai-btn, a.ai-strip-cta, summary):active {
+  :where(html:not([data-a11y-motion="full"])) :where(button, [role="button"], a[href], a.ai-btn, a.ai-strip-cta, summary):active {
     scale: none;
   }
 }
-:where(html[data-a11y-motion="reduce"]) :where(button, [role="button"], a.ai-btn, a.ai-strip-cta, summary):active {
+:where(html[data-a11y-motion="reduce"]) :where(button, [role="button"], a[href], a.ai-btn, a.ai-strip-cta, summary):active {
   scale: none;
 }
 

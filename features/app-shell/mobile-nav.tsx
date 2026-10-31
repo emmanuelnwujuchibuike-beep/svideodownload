@@ -1,6 +1,6 @@
 "use client";
 
-import { Users } from "lucide-react";
+import { CircleUserRound, Users } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -103,10 +103,9 @@ const GLYPH_INACTIVE = "nav-ink text-frenz-ink/80";
   /reels the same pill is dark glass, so the capsule turns to white there.
 */
 // The design's soft violet capsule (design/*.dc.html): a 20 px-radius tile inside the 26 px bar.
-/* The neumorphic PRESSED tile (owner, 2026-10-29): the active tab sinks into the pill — inner shade up-left, inner
-   light down-right — instead of a flat tint. The look lives in globals.css (.frenz-nav-pressed), not in long utility
-   strings: this file ships on every signed-in cold entry, where /home's JS budget is counted to the byte. */
-const ACTIVE_CAPSULE = "frenz-nav-pressed";
+/* The active tab is marked by ONE glass LENS that springs between tabs (owner, 2026-10-31, the "Frenz · Glass Bottom
+   Nav" reference) — not a tile per tab. The look and the slide are pure CSS (globals.css .frenz-nav-lens), driven by
+   the active index (--i): this file ships on every cold entry, where the JS budget is counted to the byte. */
 
 /*
   Five equal columns across the pill, each the pill's full height — so every tab
@@ -148,7 +147,7 @@ export function MobileNav({
   /* Whether a real, filled ad bar is docked below — see bottom-ad-bar.ts. */
   const bottomAdBarPresent = useBottomAdBarPresent();
   const router = useRouter();
-  const { handle, avatarUrl } = useEntitlements();
+  const { handle } = useEntitlements();
   // Cached-first: shows the last-known unread count instantly, updates live via
   // the realtime inbox subscription (InboxRealtimeTracker). `revalidateOnFocus:
   // false` so an iOS back-swipe / app resume never refetches the inbox just to
@@ -331,6 +330,55 @@ export function MobileNav({
     if (href.split("?")[0] !== pathname) setPendingHref(href);
   };
 
+  /*
+    🔴 THE TAP MOVES THE LENS AT ONCE (owner, 2026-10-31: "navigation should feel smooth and fast like it is in the
+    reference design"). The URL changes only when the next page is ready; waiting for it would leave the lens behind
+    the finger. While a tab's page is on its way (`pendingHref`), that tab is already the active one — the lens springs
+    to it and its colour turns on the tap. The pending state clears on arrival (or its timeout), so it can never stick.
+  */
+  const tabHrefs = [handle ? "/downloads" : "/", handle ? "/home" : "/friends", "/history", "/messages"];
+  const pendingTab = pendingHref ? tabHrefs.indexOf(pendingHref.split("?")[0] ?? "") : -1;
+  const routeActive = [
+    pathname === "/downloads" || (!handle && pathname === "/"),
+    handle ? pathname === "/home" || pathname.startsWith("/feed") || pathname.startsWith("/reels") : pathname.startsWith("/friends"),
+    pathname.startsWith("/history"),
+    pathname.startsWith("/messages"),
+  ];
+  const tabActive = (i: number) => (pendingTab >= 0 ? i === pendingTab : routeActive[i] === true);
+  const homeActive = tabActive(0);
+  const secondActive = tabActive(1);
+  const historyActive = tabActive(2);
+  const chatsActive = tabActive(3);
+  // the lens sits under the current tab; -1 (Profile, any other page) hides it
+  const lensAt = pendingTab >= 0 ? pendingTab : routeActive.indexOf(true);
+
+  /*
+    Press & drag on the glass (nav-drag.ts) — imported only when the browser is idle after load, so it never weighs on
+    a cold entry or the LCP. Until then (and without it) a tap is the tab's own link, exactly as before.
+  */
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    let off: (() => void) | undefined;
+    let dead = false;
+    const load = () =>
+      void import("@/features/app-shell/nav-drag").then(
+        (m) => {
+          if (!dead) off = m.attachNavDrag(el);
+        },
+        () => undefined,
+      );
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    const start = () => (idle ? idle(load, { timeout: 4000 }) : window.setTimeout(load, 1500));
+    if (document.readyState === "complete") start();
+    else window.addEventListener("load", start, { once: true });
+    return () => {
+      dead = true;
+      window.removeEventListener("load", start);
+      off?.();
+    };
+  }, []);
+
   return (
     <>
     {pendingHref ? <NavPendingStripe /> : null}
@@ -376,7 +424,9 @@ export function MobileNav({
           "frenz-nav-glass frenz-ui pointer-events-auto relative flex h-[var(--frenz-nav-height)] min-w-0 flex-1 items-center gap-0.5 rounded-full p-1.5",
           immersive && "frenz-nav-glass--immersive [&_.nav-ink]:!text-white/85",
         )}
+        style={{ touchAction: "pan-y", ["--i" as string]: Math.max(lensAt, 0) }}
       >
+        <span aria-hidden className="frenz-nav-lens" data-off={lensAt < 0 || undefined} />
         {/*
           🔴 ONE EXPERIENCE (owner, 2026-10-09: "remove the full bleed features … let
           there be only one experience which is the Download experience … the former
@@ -396,7 +446,7 @@ export function MobileNav({
           prefetch={handle || !hasAuthCookie() ? undefined : false}
           icon={HomeIcon}
           activeIcon={HomeIcon}
-          active={pathname === "/downloads" || (!handle && pathname === "/")}
+          active={homeActive}
           onWarm={router.prefetch} onGo={go}
         />
         {handle ? (
@@ -406,18 +456,18 @@ export function MobileNav({
             href="/home"
             icon={FeedIcon}
             activeIcon={FeedIcon}
-            active={pathname === "/home" || pathname.startsWith("/feed") || pathname.startsWith("/reels")}
+            active={secondActive}
             prefetch={false}
             onWarm={router.prefetch} onGo={go}
           />
         ) : (
           /* Friends in Earn's place on the landing (owner, 2026-10-16) — a guest sees the page locked behind sign-in. */
-          <NavTab label="Friends" href="/friends" icon={Users} activeIcon={Users} active={pathname.startsWith("/friends")} prefetch={false} onWarm={router.prefetch} onGo={go} />
+          <NavTab label="Friends" href="/friends" icon={Users} activeIcon={Users} active={secondActive} prefetch={false} onWarm={router.prefetch} onGo={go} />
         )}
-        <NavTab label="History" href="/history" icon={HistoryIcon} activeIcon={HistoryIcon} active={pathname.startsWith("/history")} prefetch={false} onWarm={router.prefetch} onGo={go} />
+        <NavTab label="History" href="/history" icon={HistoryIcon} activeIcon={HistoryIcon} active={historyActive} prefetch={false} onWarm={router.prefetch} onGo={go} />
         {/* Chats for everyone (owner, 2026-10-16: Support → Chats on the landing too). A guest sees an empty
             inbox and a sign-in modal (features/social/guest-chat.tsx); Support stays in the menu. */}
-        <NavTab label="Chats" href="/messages" icon={ChatsIcon} activeIcon={ChatsIcon} active={pathname.startsWith("/messages")} badge={handle ? unread : 0} prefetch={false} onWarm={router.prefetch} onGo={go} />
+        <NavTab label="Chats" href="/messages" icon={ChatsIcon} activeIcon={ChatsIcon} active={chatsActive} badge={handle ? unread : 0} prefetch={false} onWarm={router.prefetch} onGo={go} />
 
       </nav>
       {/* Profile — the design's gradient button beside the bar (design/*.dc.html, 2026-10-18): a
@@ -442,9 +492,14 @@ export function MobileNav({
       >
         <PressIcon active={profileActive} className="flex flex-1">
           <span className="flex flex-1 items-center justify-center overflow-hidden rounded-full border-[3px] border-white bg-[linear-gradient(135deg,#334155,#0F172A)]">
-            {avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+            {/*
+              🔴 NO PROFILE PICTURE HERE (owner, 2026-10-31: "remove users profile picture from the profile button … so
+              it makes the pages lighter" — on every page with the bar). The photo was a network image on every page
+              and waited on /api/me. A member gets the profile glyph (a person in a ring — their profile, not the
+              landing's guest figure); a guest keeps the solid person.
+            */}
+            {handle ? (
+              <CircleUserRound className="h-[30px] w-[30px] text-white" strokeWidth={1.9} aria-hidden />
             ) : (
               <FrenzPersonSolid className="h-[30px] w-[30px] text-white" />
             )}
@@ -539,7 +594,7 @@ function NavTab({
         playSound("tap");
         if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) onGo?.(href);
       }}
-      className={cn(TAB_CLASS, active && ACTIVE_CAPSULE)}
+      className={TAB_CLASS}
     >
       <NavLift active={active}>
         <PressIcon active={active} className="relative">

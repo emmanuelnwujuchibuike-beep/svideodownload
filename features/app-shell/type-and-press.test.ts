@@ -23,7 +23,9 @@ describe("🔴 an undefined font variable can never fall back to Times", () => {
 describe("every button answers a tap", () => {
   const css = code("app/globals.css");
   it("press feedback through the independent scale property (never transform — positioned buttons stay put)", () => {
-    expect(css).toMatch(/:where\(button, \[role="button"\], a\.ai-btn, a\.ai-strip-cta, summary\):not\(:disabled\):not\(\[aria-disabled="true"\]\):not\(:has\(img, video, picture, canvas\)\):not\(\[class~="inset-0"\]\):active \{\n  scale: 0\.95;/);
+    expect(css).toMatch(/:where\(button, \[role="button"\], a\[href\], a\.ai-btn, a\.ai-strip-cta, summary\):not\(:disabled\):not\(\[aria-disabled="true"\]\):not\(:has\(img, video, picture, canvas\)\):not\(\[class~="inset-0"\]\):active \{\n  scale: 0\.95;/);
+    // 2026-10-31 (owner): links press too, and the release is the glass nav reference's spring
+    expect(css).toMatch(/a\[href\], a\.ai-btn, a\.ai-strip-cta, summary\):not\(:disabled\):not\(\[aria-disabled="true"\]\) \{\n  transition: scale 250ms cubic-bezier\(0\.28, 1\.4, 0\.46, 1\);/);
     // 2026-10-12: anything holding a photo or video never scales (media never moves under a finger)
     const pressRules = css.match(/[^{}]*:active \{\n  scale: 0\.95;/g) ?? [];
     for (const r of pressRules) expect(r).toContain(":not(:has(img, video, picture, canvas))");
@@ -37,7 +39,7 @@ describe("every button answers a tap", () => {
     expect(code("features/social/guest-chat.tsx")).toMatch(/<button type="button" aria-label="Close" onClick=\{onClose\} className="absolute inset-0 /);
   });
   it("a disabled button does not move, and reduced motion drops the movement", () => {
-    expect(css).toContain(':where(html[data-a11y-motion="reduce"]) :where(button, [role="button"], a.ai-btn, a.ai-strip-cta, summary):active {\n  scale: none;');
+    expect(css).toContain(':where(html[data-a11y-motion="reduce"]) :where(button, [role="button"], a[href], a.ai-btn, a.ai-strip-cta, summary):active {\n  scale: none;');
   });
   it("the profile cover's floating controls share one glass recipe", () => {
     const c = code("features/profile/profile-cover-controls.tsx");

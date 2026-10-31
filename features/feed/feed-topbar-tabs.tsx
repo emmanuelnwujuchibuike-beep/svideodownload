@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
@@ -49,7 +50,7 @@ export function FeedTopbarTabs({
   onSegment: (key: HomeFeedSort) => void;
   showReelsLink?: boolean;
 }) {
-  const row = <FeedTabRow sort={sort} onSegment={onSegment} showReelsLink={showReelsLink} />;
+  const row = <FeedTabRow active={sort} onSegment={onSegment} showReelsLink={showReelsLink} />;
   return <ScrollUpTabs>{row}</ScrollUpTabs>;
 }
 
@@ -100,77 +101,132 @@ function ScrollUpTabs({ children }: { children: ReactNode }) {
   );
 }
 
-function FeedTabRow({ sort, onSegment, showReelsLink }: { sort: HomeFeedSort; onSegment: (key: HomeFeedSort) => void; showReelsLink?: boolean }) {
+/*
+  🔴 ONE ROW, BOTH PAGES, NAVIGATING LIKE THE BOTTOM NAV (owner, 2026-10-31: "navigation with the top nav in feed page
+  reload on going back, from exclusive page to for you and following and the top nav structure changes when I enter
+  the exclusive feed page … the top nav in feed page is supposed to navigate like the bottom NAV").
+
+  · The Exclusive page drew its OWN copy of this row — left-packed (gap-[22px]) where the Feed's is spread
+    (justify-between), a bigger lock — so every switch moved the tabs. Both pages now render this one row.
+  · Its For You / Following went to /home?tab=…: a different ADDRESS from the bottom nav's /home, and the router keeps
+    pages per address, so every tap was a fresh server load (the loading strip). They now go to plain /home — the same
+    cached page the bottom nav's Feed tab opens — and hand the wanted tab over in memory (requestFeedTab; smart-feed
+    takes it on mount). /home?tab=… still works for an old link.
+  · Like the bottom nav: no viewport prefetch, the page is warmed the moment a finger touches the tab.
+*/
+let requestedFeedTab: HomeFeedSort | null = null;
+
+/** The Feed tab the next /home mount should open on (set by this row on the Exclusive page). */
+export function requestFeedTab(key: HomeFeedSort) {
+  requestedFeedTab = key;
+}
+
+/** Read once by smart-feed on mount; cleared so a later visit isn't re-steered. */
+export function takeRequestedFeedTab(): HomeFeedSort | null {
+  const k = requestedFeedTab;
+  requestedFeedTab = null;
+  return k;
+}
+
+const IDLE = "text-[#4A4A55] hover:text-frenz-ink dark:text-white/60";
+
+function FeedTabRow({
+  active,
+  onSegment,
+  showReelsLink,
+}: {
+  /** the Feed's current segment, or "exclusive" on the Exclusive page */
+  active: HomeFeedSort | "exclusive";
+  /** on the Feed: switch in place. Absent (the Exclusive page): go to /home on that tab. */
+  onSegment?: (key: HomeFeedSort) => void;
+  showReelsLink?: boolean;
+}) {
+  const router = useRouter();
+  const onFeed = !!onSegment;
   return (
     <nav aria-label="Feed type" className="frenz-ui flex justify-between gap-4 touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain px-[18px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {TABS.map((t) => {
-        const active = sort === t.key;
-        return (
+        const isActive = active === t.key;
+        const cls = cn(TAB, isActive ? "text-frenz-ink" : IDLE);
+        const body = (
+          <>
+            {t.label}
+            {isActive ? <Underline /> : null}
+          </>
+        );
+        return onFeed ? (
           <button
             key={t.key}
             type="button"
             onClick={() => {
               tap();
-              onSegment(t.key);
+              onSegment!(t.key);
             }}
-            aria-current={active ? "page" : undefined}
-            className={cn(TAB, active ? "text-frenz-ink" : "text-[#4A4A55] hover:text-frenz-ink dark:text-white/60")}
+            aria-current={isActive ? "page" : undefined}
+            className={cls}
           >
-            {t.label}
-            {active ? <Underline /> : null}
+            {body}
           </button>
+        ) : (
+          <Link
+            key={t.key}
+            href="/home"
+            prefetch={false}
+            onPointerDown={() => router.prefetch("/home")}
+            onClick={() => {
+              tap();
+              requestFeedTab(t.key);
+            }}
+            className={cls}
+          >
+            {body}
+          </Link>
         );
       })}
-      {showReelsLink ? (
-        <Link href="/reels" onClick={tap} className={cn(TAB, "text-[#4A4A55] hover:text-frenz-ink dark:text-white/60")}>
-          Reels
-        </Link>
-      ) : (
+      {onFeed && !showReelsLink ? (
         <button
           type="button"
           onClick={() => {
             tap();
-            onSegment("recent");
+            onSegment!("recent");
           }}
-          className={cn(TAB, "text-[#4A4A55] hover:text-frenz-ink dark:text-white/60")}
+          className={cn(TAB, IDLE)}
         >
           Reels
         </button>
+      ) : (
+        // Reels keeps its viewport prefetch (as the Feed always had it) — Reels must not open slower
+        <Link href="/reels" onClick={tap} className={cn(TAB, IDLE)}>
+          Reels
+        </Link>
       )}
-      <Link href="/exclusive" prefetch={false} onClick={tap} className={cn(TAB, "text-[#4A4A55] hover:text-frenz-ink dark:text-white/60")}>
-        <LockIcon size={15} strokeWidth={2.4} />
-        Exclusive
-      </Link>
+      {active === "exclusive" ? (
+        <span aria-current="page" className={cn(TAB, "text-frenz-ink")}>
+          <LockIcon size={15} strokeWidth={2.4} className="text-[#7B5CF0]" />
+          Exclusive
+          <Underline />
+        </span>
+      ) : (
+        <Link href="/exclusive" prefetch={false} onPointerDown={() => router.prefetch("/exclusive")} onClick={tap} className={cn(TAB, IDLE)}>
+          <LockIcon size={15} strokeWidth={2.4} />
+          Exclusive
+        </Link>
+      )}
     </nav>
   );
 }
 
 /**
- * The same tab row on the Exclusive page (design/ExclusiveFeed.dc.html, owner 2026-10-18: Exclusive is the
- * Feed's fourth tab): For You and Following go back to the Feed on that tab (`/home?tab=…`, read once by
- * smart-feed), Reels to Reels, and Exclusive is the active one.
+ * The same tab row on the Exclusive page (design/ExclusiveFeed.dc.html, owner 2026-10-18: Exclusive is the Feed's
+ * fourth tab) — the SAME component and placement as the Feed's (FEED_TABS_SLOT's wrapper: -mx-3 mb-1 sm:-mx-4), so
+ * nothing moves when switching; Exclusive is the active one.
  */
 export function FeedTabLinks() {
-  const link = cn(TAB, "text-[#4A4A55] hover:text-frenz-ink dark:text-white/60");
-  // the same come-back-on-the-way-up row as the Feed (owner, 2026-10-28)
   return (
-    <ScrollUpTabs>
-    <nav aria-label="Feed type" className="frenz-ui -mx-3 flex gap-[22px] touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain px-[18px] [scrollbar-width:none] sm:-mx-4 [&::-webkit-scrollbar]:hidden">
-      <Link href="/home?tab=for_you" prefetch={false} onClick={tap} className={link}>
-        For You
-      </Link>
-      <Link href="/home?tab=following" prefetch={false} onClick={tap} className={link}>
-        Following
-      </Link>
-      <Link href="/reels" prefetch={false} onClick={tap} className={link}>
-        Reels
-      </Link>
-      <span aria-current="page" className={cn(TAB, "text-frenz-ink")}>
-        <LockIcon size={16} strokeWidth={2.6} className="text-[#7B5CF0]" />
-        Exclusive
-        <Underline />
-      </span>
-    </nav>
-    </ScrollUpTabs>
+    <div className="-mx-3 mb-1 sm:-mx-4">
+      <ScrollUpTabs>
+        <FeedTabRow active="exclusive" />
+      </ScrollUpTabs>
+    </div>
   );
 }

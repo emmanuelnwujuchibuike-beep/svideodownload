@@ -19,7 +19,7 @@ import { useHilltopFeedSlots } from "@/features/feed/use-hilltop-feed-slots";
 import { FeedPostCard } from "@/features/feed/feed-post-card";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
 import { ImageOpenFallback } from "@/features/feed/image-open-fallback";
-import { FeedTopbarTabs } from "@/features/feed/feed-topbar-tabs";
+import { FeedTopbarTabs, takeRequestedFeedTab } from "@/features/feed/feed-topbar-tabs";
 import { FEED_TABS_SLOT_ID } from "@/features/feed/feed-tabs-slot";
 import { SparkCard } from "@/features/feed/spark-card";
 import { FEED_AD_INTERVAL } from "@/lib/feed/ad-slots";
@@ -563,11 +563,19 @@ export function SmartFeed({
     the continuity restore, then stripped from the address so a reload or a back-swipe isn't re-steered.
   */
   useEffect(() => {
-    const want = new URLSearchParams(window.location.search).get("tab");
+    /*
+      2026-10-31: the Exclusive page's row now goes to plain /home (the bottom nav's cached page — no reload) and hands
+      the tab over in memory; ?tab= is still honoured for an old link. Taken once, so a later visit isn't re-steered.
+    */
+    const requested = takeRequestedFeedTab();
+    const fromUrl = new URLSearchParams(window.location.search).get("tab");
+    if (fromUrl === "for_you" || fromUrl === "following") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("tab");
+      window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    }
+    const want = requested ?? (fromUrl === "for_you" || fromUrl === "following" ? fromUrl : null);
     if (want !== "for_you" && want !== "following") return;
-    const url = new URL(window.location.href);
-    url.searchParams.delete("tab");
-    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
     const id = window.setTimeout(() => changeSegmentRef.current?.(want), 0);
     return () => window.clearTimeout(id);
   }, []);

@@ -16,4 +16,5 @@ export const FLOATING_GLASS_CIRCLE = `pointer-events-auto rounded-full ${FLOATIN
  * above stays for the profile cover, where the circles sit on an image.
  */
 export const FEED_HEADER_CIRCLE =
-  "pointer-events-auto !h-12 !w-12 rounded-full border border-[#ECEBF2] bg-white text-[#0E0E12] shadow-[0_6px_16px_-10px_rgba(14,14,18,0.35)] transition-transform duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7B5CF0] motion-reduce:active:scale-100 [&_svg]:h-[22px] [&_svg]:w-[22px] [&_svg]:text-[#0E0E12]";
+  // 2026-10-31, second pass: frosted glass — a white gradient, a white hairline, 20 px blur, inner light and a violet-tinted drop
+  "pointer-events-auto !h-12 !w-12 rounded-full border border-white/85 bg-[linear-gradient(160deg,rgba(255,255,255,.75),rgba(255,255,255,.35))] text-[#0E0E12] shadow-[inset_0_1px_1px_rgba(255,255,255,.9),inset_0_-1px_2px_rgba(14,14,18,.06),0_8px_20px_-10px_rgba(40,30,90,.35)] backdrop-blur-[20px] backdrop-saturate-[1.8] transition-transform duration-150 active:scale-[0.94] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7B5CF0] motion-reduce:active:scale-100 [&_svg]:h-[22px] [&_svg]:w-[22px] [&_svg]:text-[#0E0E12]";

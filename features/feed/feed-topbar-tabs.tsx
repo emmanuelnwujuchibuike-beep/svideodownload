@@ -87,7 +87,7 @@ function ScrollUpTabs({ children }: { children: ReactNode }) {
               className={cn(
                 // from the very top, under the floating buttons (the header is z-30): the strip behind the buttons is the
                 // bar too, so a post never shows through between the clock, the buttons and the tabs (owner, 2026-10-29)
-                "fixed inset-x-0 top-0 z-[29] bg-frenz-page/95 pt-[calc(var(--frenz-safe-top)+4rem)] shadow-[0_1px_0_rgb(0_0_0/0.04)] backdrop-blur-xl [&>nav]:!mx-0 transition-[transform,opacity] duration-300 ease-out motion-reduce:transition-none lg:hidden",
+                "fixed inset-x-0 top-0 z-[29] border-b border-white/60 bg-[linear-gradient(180deg,rgba(255,255,255,.72),rgba(255,255,255,.52))] pt-[calc(var(--frenz-safe-top)+4rem)] shadow-[0_1px_0_rgba(14,14,18,.04),0_10px_30px_-20px_rgba(40,30,90,.25)] backdrop-blur-[26px] backdrop-saturate-[1.9] dark:border-white/10 dark:bg-frenz-page/80 [&>nav]:!mx-0 transition-[transform,opacity] duration-300 ease-out motion-reduce:transition-none lg:hidden",
                 shown ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-full opacity-0",
               )}
             >
@@ -102,7 +102,7 @@ function ScrollUpTabs({ children }: { children: ReactNode }) {
 
 function FeedTabRow({ sort, onSegment, showReelsLink }: { sort: HomeFeedSort; onSegment: (key: HomeFeedSort) => void; showReelsLink?: boolean }) {
   return (
-    <nav aria-label="Feed type" className="frenz-ui flex justify-between gap-4 touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain border-b border-frenz-line px-[18px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <nav aria-label="Feed type" className="frenz-ui flex justify-between gap-4 touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain px-[18px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {TABS.map((t) => {
         const active = sort === t.key;
         return (
@@ -155,7 +155,7 @@ export function FeedTabLinks() {
   // the same come-back-on-the-way-up row as the Feed (owner, 2026-10-28)
   return (
     <ScrollUpTabs>
-    <nav aria-label="Feed type" className="frenz-ui -mx-3 flex gap-[22px] touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain border-b border-frenz-line px-[18px] [scrollbar-width:none] sm:-mx-4 [&::-webkit-scrollbar]:hidden">
+    <nav aria-label="Feed type" className="frenz-ui -mx-3 flex gap-[22px] touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain px-[18px] [scrollbar-width:none] sm:-mx-4 [&::-webkit-scrollbar]:hidden">
       <Link href="/home?tab=for_you" prefetch={false} onClick={tap} className={link}>
         For You
       </Link>

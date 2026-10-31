@@ -126,7 +126,7 @@ export function WallpaperLimitSheet({ limit, onClose }: { limit: number; onClose
 
 /** Shown when a Free visitor taps Download on an admin-uploaded (Pro-only) wallpaper. */
 export function WallpaperProSheet({ onClose }: { onClose: () => void }) {
-  return <WallpaperUpgradeSheet title="A Pro wallpaper" body={WALLPAPER_PRO_ONLY_MESSAGE} onClose={onClose} />;
+  return <WallpaperUpgradeSheet title="4K wallpapers are Pro" body={WALLPAPER_PRO_ONLY_MESSAGE} onClose={onClose} />;
 }
 
 function WallpaperUpgradeSheet({ title, body, onClose }: { title: string; body: string; onClose: () => void }) {

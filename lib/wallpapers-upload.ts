@@ -12,7 +12,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * Owner: "Wallpapers are refusing to upload from admin dashboard … and also from users, it was refusing double
  * uploading and then stopped." The library itself was fine (579 rows, 272 MB, the last upload that morning). The
  * uploads carried every picked photo in ONE request through a Vercel function, and Vercel refuses a request body over
- * ~4.5 MB before our code runs — two phone photos already pass it, and the 20 MB per-file limit could never be reached.
+ * ~4.5 MB before our code runs — two phone photos already pass it, and the per-file limit could never be reached.
  *
  * Now the bytes never pass through Vercel:
  *   1. sign    the server checks type, size and count and hands out one signed upload URL per file, for a key in the
@@ -25,7 +25,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  */
 
 export const WALLPAPER_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
-export const WALLPAPER_MAX_BYTES = 20 * 1024 * 1024;
+// 50 MB (owner, 2026-10-31: "if is 4k it stays 4K") — a lossless 4K PNG can pass 20 MB; never ask for a smaller file
+export const WALLPAPER_MAX_BYTES = 50 * 1024 * 1024;
 const EXT: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/avif": "avif" };
 
 export type WallpaperOwner = { kind: "member"; userId: string } | { kind: "admin"; adminId: string };
@@ -47,7 +48,7 @@ export async function signWallpaperUploads(owner: WallpaperOwner, files: unknown
     const type = typeof f?.type === "string" ? f.type : "";
     const size = typeof f?.size === "number" ? f.size : NaN;
     if (!WALLPAPER_TYPES.has(type)) return { ok: false, error: "Wallpapers can be JPG, PNG, WebP or AVIF." };
-    if (!(size > 0) || size > WALLPAPER_MAX_BYTES) return { ok: false, error: "Each image must be under 20 MB." };
+    if (!(size > 0) || size > WALLPAPER_MAX_BYTES) return { ok: false, error: "Each image must be under 50 MB." };
     const key = `${folderOf(owner)}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${EXT[type]}`;
     const { data, error } = await db.storage.from("wallpapers").createSignedUploadUrl(key);
     if (error || !data?.token) return { ok: false, error: "Couldn't prepare the upload. Try again." };
@@ -75,7 +76,7 @@ export async function commitWallpaperUpload(owner: WallpaperOwner, key: unknown,
     await bucket.remove([key]).catch(() => undefined);
     return { ok: false, error };
   };
-  if (blob.size > WALLPAPER_MAX_BYTES) return refuse("Each image must be under 20 MB.");
+  if (blob.size > WALLPAPER_MAX_BYTES) return refuse("Each image must be under 50 MB.");
   const bytes = new Uint8Array(await blob.arrayBuffer());
   const size = imageSize(bytes);
   // the bytes decide what it is: a renamed or broken file is not a wallpaper

@@ -81,7 +81,7 @@ export function useWallpaperDownload() {
 
   const download = useCallback(
     (wallpaper: Wallpaper) => {
-      // An admin-uploaded wallpaper is a Pro download (owner, 2026-10-18). Say so
+      // A 4K wallpaper is a Pro download (owner, 2026-10-31 — lib/wallpapers-limits wallpaperIsProOnly). Say so
       // before the ad and the transfer; the server refuses it regardless. Plan
       // not known yet ⇒ let the server decide rather than turn a member away.
       if (

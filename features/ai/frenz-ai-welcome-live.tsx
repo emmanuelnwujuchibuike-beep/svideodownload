@@ -156,7 +156,7 @@ export function FrenzAIWelcomeLive({
               warmOnIdle={hasAuthCookie()}
               data-ai-members=""
               aria-label="Your creations"
-              className="frenz-nav-glass flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full text-frenz-ink transition active:scale-95 data-[pending]:scale-95"
+              className="frenz-nav-glass frenz-nav-glass--static flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full text-frenz-ink transition active:scale-95 data-[pending]:scale-95"
             >
               <History className="h-[22px] w-[22px] [[data-pending]>&]:animate-spin [[data-pending]>&]:text-frenz-violet motion-reduce:animate-none" aria-hidden />
             </TapOnceLink>

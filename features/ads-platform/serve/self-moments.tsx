@@ -202,7 +202,15 @@ export function SelfMoments() {
       const now = Date.now();
       // the AI save already had its moment, and a batch is one moment
       if (now - aiSaveAt.current < 60_000 || now - lastMomentAt.current < SAME_MOMENT_MS) return;
-      const s = pick("download_completed_interstitial", "download-complete");
+      /*
+        🔴 SHARED WITH WALLPAPERS (owner, 2026-10-31: "let free wallpapers download complete show the download complete
+        self ad like how Download does, a full screen ad — it should be shared"). A wallpaper download runs through the
+        same manager and sends the same completion, but /wallpapers is no ad "page" (pageForPath → null), so a campaign
+        aimed at the Download page's completion never matched there. The moment is the same moment: on the wallpaper
+        pages it is served as the Download page's. Pro / Business never get here (SelfAdsGate stops ad-free plans).
+      */
+      const onWallpapers = /^\/wallpapers(\/|$)/.test(where.current.pathname);
+      const s = pick("download_completed_interstitial", "download-complete", onWallpapers ? { page: "download" } : {});
       if (!s) return;
       lastMomentAt.current = now;
       if (!isPlayerOpen()) {

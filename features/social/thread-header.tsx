@@ -9,6 +9,8 @@ import { VerifiedTick } from "@/components/badges/identity-badges";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { CHAT_OPTIONS_EVENT } from "@/features/social/chat-options-event";
+
 import { useQuery } from "@/features/data";
 import { usePresence } from "@/features/friends/use-presence";
 import { ChatStreakBadge } from "@/features/social/chat-streak";
@@ -36,6 +38,7 @@ import { profilePath } from "@/lib/social/profile-url";
  * status, is already handled by PresenceBadge) — this component only opens
  * its own realtime subscription for `type === "group"`.
  */
+
 export function ThreadHeader({
   conversationId,
   viewerId,
@@ -65,6 +68,15 @@ export function ThreadHeader({
   const [members, setMembers] = useState(initialMembers);
   const otherOnline = usePresence().has(other?.id ?? "");
   const [optionsOpen, setOptionsOpen] = useState(false);
+  // a press and hold on the thread's empty background opens these same options (conversation-room.tsx)
+  useEffect(() => {
+    const open = () => {
+      haptic("light");
+      setOptionsOpen(true);
+    };
+    window.addEventListener(CHAT_OPTIONS_EVENT, open);
+    return () => window.removeEventListener(CHAT_OPTIONS_EVENT, open);
+  }, []);
   // the chat streak from the inbox the app already holds (the bottom nav keeps it loaded) — no request of its own
   const { data: inbox } = useQuery<Inbox>(INBOX_KEY, loadInbox, { revalidateOnFocus: false });
   const streakDays = inbox?.conversations.find((c) => c.id === conversationId)?.streakDays ?? 0;

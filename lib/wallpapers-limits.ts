@@ -38,13 +38,17 @@ export function wallpaperDailyLimit(plan: BillingPlan): number {
   return WALLPAPER_DAILY_LIMITS[plan] ?? WALLPAPER_DAILY_LIMITS.free;
 }
 
+/** 4K = a long edge of 3840 px or more — the same threshold as the "4K" chip (lib/wallpapers.ts resolutionBadge). */
+export const WALLPAPER_4K_LONG_EDGE = 3840;
+
 /**
- * Admin-uploaded wallpapers are a Pro perk (owner, 2026-10-18: "wallpapers
- * uploaded from admin dashboard to be only downloaded by pro users upward").
- * A null `source` is the column default, 'admin'.
+ * 🔴 PRO IS DECIDED BY RESOLUTION (owner, 2026-10-31: "4k only pro with pro button, update to pro for free users, while
+ * below 4k resolution are free"). Supersedes 2026-10-18's "admin uploads are Pro" — an admin upload below 4K is now
+ * free, a 4K one from anyone is Pro. Measured dimensions only: an unmeasured wallpaper (null) is never called 4K, the
+ * same truth rule the chip follows, so it is free rather than wrongly locked.
  */
-export function wallpaperIsProOnly(source: string | null | undefined): boolean {
-  return (source ?? "admin") === "admin";
+export function wallpaperIsProOnly(width: number | null | undefined, height: number | null | undefined): boolean {
+  return Math.max(width ?? 0, height ?? 0) >= WALLPAPER_4K_LONG_EDGE;
 }
 
 /** May this plan download a Pro-only wallpaper? Pro and Business — not Free. */
@@ -53,7 +57,7 @@ export function planCanDownloadProWallpaper(plan: BillingPlan): boolean {
 }
 
 export const WALLPAPER_PRO_ONLY_MESSAGE =
-  "This wallpaper is part of the Pro collection. Go Pro to download it in full quality, with no ads and no daily limit.";
+  "4K wallpapers are not free. Upgrade to Pro for 4K wallpapers — full quality, no ads and no daily limit. Wallpapers below 4K stay free.";
 
 /** Does this plan watch an ad to download a wallpaper? */
 export function wallpaperNeedsReward(plan: BillingPlan): boolean {

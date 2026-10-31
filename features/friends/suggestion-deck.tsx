@@ -201,7 +201,7 @@ export function SuggestionDeck({ initial, variant, seeAllHref, onWarmSeeAll }: {
   );
 
   return (
-    <section aria-labelledby={`deck-${variant}`} className={cn("frenz-nav-glass relative isolate overflow-hidden text-frenz-ink", variant === "hero" ? "rounded-[34px] px-[18px] pb-5 pt-[18px]" : "rounded-[32px] px-4 pb-3.5 pt-4")}>
+    <section aria-labelledby={`deck-${variant}`} className={cn("frenz-nav-glass frenz-nav-glass--static relative isolate overflow-hidden text-frenz-ink", variant === "hero" ? "rounded-[34px] px-[18px] pb-5 pt-[18px]" : "rounded-[32px] px-4 pb-3.5 pt-4")}>
       {/* owner, 2026-10-31: the panel floats as the bottom nav's glass (not the purple gradient); the card on it is glass that
           barely lifts, since the panel already floats; every tap is the nav's spring press */}
       <div className={cn("relative flex items-center justify-between gap-3", variant === "hero" ? "mb-4" : "mb-3.5")}>

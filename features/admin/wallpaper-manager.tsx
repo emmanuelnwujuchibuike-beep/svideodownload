@@ -167,7 +167,7 @@ export function WallpaperManager({ wallpapers }: { wallpapers: AdminWallpaper[] 
           className="mt-2 h-10 w-full rounded-xl bg-background px-3 text-sm outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
         />
         <p className="mt-1.5 text-xs text-muted-foreground">
-          JPEG, PNG, WebP or AVIF · up to 20 MB each · multiple at once. Uploading several with a name numbers them
+          JPEG, PNG, WebP or AVIF · up to 50 MB each — the file is kept as uploaded, 4K stays 4K · multiple at once. Uploading several with a name numbers them
           (&ldquo;Neon Canyon 1&rdquo;, &ldquo;Neon Canyon 2&rdquo;). You can rename any of them below.
         </p>
         {msg ? (

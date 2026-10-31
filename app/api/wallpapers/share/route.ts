@@ -34,7 +34,7 @@ export const maxDuration = 60;
  */
 
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
-const MAX_BYTES = 20 * 1024 * 1024;
+const MAX_BYTES = 50 * 1024 * 1024; // matches lib/wallpapers-upload WALLPAPER_MAX_BYTES (4K stays 4K)
 const MAX_FILES = 20;
 
 export async function POST(request: Request) {
@@ -76,7 +76,7 @@ export async function POST(request: Request) {
       continue;
     }
     if (file.size > MAX_BYTES) {
-      failed.push(`${file.name}: over 20 MB`);
+      failed.push(`${file.name}: over 50 MB`);
       continue;
     }
 

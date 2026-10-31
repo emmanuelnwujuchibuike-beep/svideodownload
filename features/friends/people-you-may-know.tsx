@@ -1,14 +1,15 @@
 "use client";
 
-import { Check, Loader2, MoreHorizontal, Plus, RotateCw, Users } from "lucide-react";
+import { Check, Loader2, Plus, RotateCw, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 
 import { VerifiedTick } from "@/components/badges/identity-badges";
 import { FollowChip } from "@/features/friends/follow-chip";
-import { GLASS, iconButton, PersonAvatar, primaryPill, quietPill } from "@/features/friends/ui";
+import { GLASS, PersonAvatar, primaryPill, quietPill } from "@/features/friends/ui";
 import { usePresence } from "@/features/friends/use-presence";
+import { useLongPress } from "@/lib/dom/use-long-press";
 import { haptic } from "@/lib/motion/haptics";
 import type { SuggestionFilter } from "@/lib/social/graph/suggestions";
 import type { PersonSuggestion } from "@/lib/social/people/engine";
@@ -233,7 +234,8 @@ export function PeopleYouMayKnow({ initial }: { initial: PersonSuggestion[] }) {
           </p>
         </div>
       ) : (
-        <ul aria-label="Suggested people" className="divide-y divide-frenz-line/70 overflow-hidden rounded-[24px] border border-frenz-line">
+        // edge to edge (owner, 2026-10-31) — the page's own side padding is cancelled, no rounded frame
+        <ul aria-label="Suggested people" className="-mx-3 divide-y divide-frenz-line/70 border-y border-frenz-line sm:-mx-4">
           {list.map((p) => (
             <SuggestionRow key={p.id} person={p} onAnswer={onAnswer} />
           ))}
@@ -268,8 +270,10 @@ const SuggestionRow = memo(function SuggestionRow({ person, onAnswer }: { person
   const isOnline = online.has(person.id);
   const [menu, setMenu] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
+  // the options on press and hold (lib/dom/use-long-press: never hijacks a scroll, swallows the click after a hold)
+  const hold = useLongPress(() => setMenu(true));
   return (
-    <li className="px-3.5 py-2.5">
+    <li className="px-3.5 py-2.5 select-none [-webkit-touch-callout:none]" {...hold} aria-description="Press and hold for options">
       <div className="flex items-center gap-2.5">
         <Link href={`${profilePath(person.handle)}`} prefetch={false} aria-label={isOnline ? `${person.displayName}, online` : person.displayName} className="shrink-0">
           <PersonAvatar user={person} size={52} online={isOnline} />
@@ -285,15 +289,8 @@ const SuggestionRow = memo(function SuggestionRow({ person, onAnswer }: { person
         {/* Add friends: every suggestion offers a friend request (design/friends, 2026-10-26). If they
             refuse requests from people like this, the row says so and offers Follow — the way still open. */}
         {refused && !person.isFollowing ? <FollowChip id={person.id} name={person.displayName} initial={false} /> : <AddFriendChip id={person.id} name={person.displayName} onRefused={setRefused} />}
-        <button
-          type="button"
-          onClick={() => setMenu((v) => !v)}
-          aria-expanded={menu}
-          aria-label={`Options for ${person.displayName}`}
-          className={cn(iconButton, "-mr-2 h-10 w-9")}
-        >
-          <MoreHorizontal className="h-[18px] w-[18px]" aria-hidden />
-        </button>
+        {/* no ⋯ (owner, 2026-10-31): the options open on press and hold; a small glass Follow takes its place */}
+        {refused && !person.isFollowing ? null : <FollowChip id={person.id} name={person.displayName} initial={!!person.isFollowing} iconOnly />}
       </div>
       {refused ? (
         <p role="status" className="mt-1.5 pl-[62px] text-[12.5px] leading-snug text-frenz-muted">
@@ -349,7 +346,7 @@ function AddFriendChip({ id, name, onRefused }: { id: string; name: string; onRe
       aria-label={state === "sent" ? `Friend request sent to ${name}` : `Add ${name} as a friend`}
       className={cn(
 "inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-[18px] px-3.5 text-[13px] font-bold transition-transform active:scale-[0.97] motion-reduce:active:scale-100 max-[359px]:px-2.5",
-        state === "sent" ? "border border-frenz-line bg-frenz-card text-frenz-ink/80" : "bg-frenz-gradient-x text-white shadow-[0_10px_22px_-12px_rgb(91_63_240/0.8)]",
+        state === "sent" ? "border border-frenz-line bg-frenz-card text-frenz-ink/80" : "frenz-dark-glass text-white",
       )}
     >
       {state === "busy" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : state === "sent" ? <Check className="h-4 w-4" aria-hidden /> : <Plus className="h-4 w-4" strokeWidth={2.8} aria-hidden />}

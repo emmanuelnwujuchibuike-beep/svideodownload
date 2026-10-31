@@ -90,7 +90,7 @@ function toWallpaper(row: Row): Wallpaper {
     */
     createdAt: row.created_at ?? null,
     builtIn: false,
-    proOnly: wallpaperIsProOnly(row.source),
+    proOnly: wallpaperIsProOnly(row.width, row.height),
   };
 }
 
@@ -245,7 +245,7 @@ export async function wallpaperImageUrl(
   try {
     const { data } = await createAdminClient()
       .from("wallpapers")
-      .select("title, image_url, source")
+      .select("title, image_url, width, height")
       .eq("id", id)
       .eq("status", "published")
       .maybeSingle();
@@ -253,7 +253,7 @@ export async function wallpaperImageUrl(
     return {
       url: data.image_url as string,
       name: data.title as string,
-      proOnly: wallpaperIsProOnly(data.source as string | null),
+      proOnly: wallpaperIsProOnly(data.width as number | null, data.height as number | null),
     };
   } catch {
     return null;

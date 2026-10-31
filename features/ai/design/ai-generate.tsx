@@ -161,7 +161,7 @@ export function AiActionBar({ children, className, docked = false }: { children:
         className={cn(
           "flex items-center gap-3",
           docked
-            ? "frenz-nav-glass rounded-[26px] py-2 pl-4 pr-2"
+            ? "frenz-nav-glass frenz-nav-glass--static rounded-[26px] py-2 pl-4 pr-2"
             : "ai-glass ai-glass--bar rounded-[1.75rem] py-2.5 pl-4 pr-2.5 ring-1 ring-inset ring-black/[0.07] shadow-[0_10px_28px_-18px_rgba(30,40,90,0.4)]",
         )}
       >

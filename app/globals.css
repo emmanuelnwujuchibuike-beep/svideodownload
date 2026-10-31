@@ -587,8 +587,6 @@
     position: relative;
     border: 1px solid rgb(255 255 255 / 0.85);
     background: linear-gradient(160deg, rgb(255 255 255 / 0.75), rgb(255 255 255 / 0.35));
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    backdrop-filter: blur(20px) saturate(180%);
     box-shadow:
       inset 0 1px 1px rgb(255 255 255 / 0.9),
       inset 0 -1px 2px rgb(14 14 18 / 0.06),
@@ -1041,6 +1039,16 @@
   .frenz-nav-glass:not(.fixed, .absolute, .sticky) {
     position: relative;
   }
+  /* 🔴 NO LIVE BLUR ON A SCROLLING SURFACE (owner, 2026-10-31: the glass was heating the phone). A backdrop-filter
+     re-blurs everything behind it on every frame that anything behind it moves; an in-flow panel scrolls with the page,
+     so it re-blurred the whole time — over a plain page where the blur showed nothing. --static keeps the nav's glass
+     look (gradient, edge, light, lift) with no backdrop-filter. Blur stays only on the few FIXED bars (the nav, the
+     feed header, the chat composer), one layer each, and never on a control inside them. */
+  .frenz-nav-glass.frenz-nav-glass--static {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    --nav-glass-fill: 0.82;
+  }
   .frenz-nav-glass::before {
     content: "";
     position: absolute;
@@ -1145,8 +1153,6 @@
   /* the profile button's face: the liquid glass inside its violet ring (owner, 2026-10-31 — no black disc) */
   .frenz-nav-profile-glass {
     background: linear-gradient(180deg, rgb(255 255 255 / 0.92), rgb(244 241 255 / 0.7));
-    -webkit-backdrop-filter: blur(20px) saturate(200%);
-    backdrop-filter: blur(20px) saturate(200%);
     border: 3px solid rgb(255 255 255 / 0.95);
     box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.9), inset 0 -2px 4px rgb(91 63 230 / 0.1);
   }
@@ -1189,8 +1195,6 @@
   .frenz-install-glass {
     color: #5b3fe6;
     background: linear-gradient(180deg, rgb(255 255 255 / 0.9), rgb(244 241 255 / 0.72));
-    -webkit-backdrop-filter: blur(20px) saturate(200%);
-    backdrop-filter: blur(20px) saturate(200%);
     border: 1px solid rgb(91 63 230 / 0.22);
     /* no drop shadow (owner, 2026-10-31: "remove the shadow from the install button") — the glass's inner light only */
     box-shadow:
@@ -1285,8 +1289,6 @@
      not show them through — with a white edge, inner light and only a hairline lift. */
   .frenz-glass-tile {
     background: linear-gradient(180deg, rgb(255 255 255 / 0.95), rgb(255 255 255 / 0.82));
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    backdrop-filter: blur(20px) saturate(180%);
     border: 1px solid rgb(255 255 255 / 0.9);
     box-shadow:
       inset 0 1px 1px rgb(255 255 255 / 0.95),
@@ -1297,6 +1299,25 @@
     background: linear-gradient(180deg, rgb(48 48 58 / 0.96), rgb(34 34 42 / 0.92));
     border-color: rgb(255 255 255 / 0.12);
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
+  }
+  /* DARK GLASS — the suggestion rows' Add (owner, 2026-10-31: "dark glass of that other kind but darker so it [is]
+     visible on the light mode white background and also visible on the dark mode dark background"). Near-black glass
+     with a light edge and inner light on white; on a dark page it lifts to a brighter smoked glass with a stronger edge
+     so it never sinks into the background. No backdrop-filter (it sits on a plain page — see the heat note). */
+  .frenz-dark-glass {
+    background: linear-gradient(180deg, rgb(40 40 52 / 0.94), rgb(14 14 20 / 0.92));
+    border: 1px solid rgb(255 255 255 / 0.14);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.22),
+      inset 0 -1px 1px rgb(0 0 0 / 0.3),
+      0 4px 12px -6px rgb(14 14 20 / 0.45);
+  }
+  .dark .frenz-dark-glass {
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.2), rgb(255 255 255 / 0.1));
+    border-color: rgb(255 255 255 / 0.28);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.3),
+      0 4px 12px -6px rgb(0 0 0 / 0.6);
   }
   /* small frosted controls on that glass (the count, See all, Skip) */
   .frenz-glass-pill {

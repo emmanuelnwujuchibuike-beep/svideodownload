@@ -17,6 +17,7 @@ import { resolutionBadge, wallpaperCredit, type Wallpaper, type WallpaperComment
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { upgradeCta } from "@/lib/monetization/upgrade-cta";
+import { WALLPAPER_PRO_ONLY_MESSAGE } from "@/lib/wallpapers-limits";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 /**
@@ -209,6 +210,8 @@ export function WallpaperReels({
   const [comments, setComments] = useState<string | null>(null);
   const [signInPrompt, setSignInPrompt] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  // the Pro download button's own offer, worded for 4K (owner, 2026-10-31)
+  const [upgrade4k, setUpgrade4k] = useState(false);
   /*
     Drag down to dismiss (owner: "users can drag down to close wallpaper in
     wallpaper reels").
@@ -776,8 +779,8 @@ export function WallpaperReels({
           ) : null}
         </div>
 
-        {/* One full-width primary action, as in the reference. An admin-uploaded
-            wallpaper is a Pro download (owner, 2026-10-18): its button is the
+        {/* One full-width primary action, as in the reference. A 4K wallpaper is a Pro download (owner, 2026-10-31;
+            before that, admin uploads — 2026-10-18): its button is the
             prestige one — black and gold with a crown — and its chip says
             "Pro" where a free wallpaper's says "Free". A Free member's tap opens
             the Pro sheet (useWallpaperDownload); the server refuses it anyway. */}
@@ -786,7 +789,7 @@ export function WallpaperReels({
             type="button"
             // A Free member goes straight to the offer — never through a reward
             // ad for a download the server would then refuse.
-            onClick={() => (planReady && !isPremium ? setUpgradeOpen(true) : setPendingDownload(current))}
+            onClick={() => (planReady && !isPremium ? setUpgrade4k(true) : setPendingDownload(current))}
             className="group pointer-events-auto relative mt-3 flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-2xl bg-gradient-to-b from-neutral-900 to-black px-5 py-3.5 text-base font-bold text-amber-100 shadow-[0_10px_34px_-10px_rgba(245,158,11,0.85)] ring-1 ring-inset ring-amber-300/60 transition active:scale-[0.98]"
           >
             {/* a slow gold sheen across the face */}
@@ -829,6 +832,7 @@ export function WallpaperReels({
 
       {/* The offer itself — only ever on screen because someone tapped for it. */}
       {upgradeOpen ? <UpgradeSheet onClose={() => setUpgradeOpen(false)} /> : null}
+      {upgrade4k ? <UpgradeSheet fourK onClose={() => setUpgrade4k(false)} /> : null}
       </div>
 
       {/* Outside the chrome wrapper: a sheet is a MODE, not chrome. Fading it
@@ -887,7 +891,7 @@ function RailButton({
  * on its own terms, since an offer nobody asked for is also the one nobody
  * reads. This says the same three things to the people who tapped a crown.
  */
-function UpgradeSheet({ onClose }: { onClose: () => void }) {
+function UpgradeSheet({ onClose, fourK = false }: { onClose: () => void; fourK?: boolean }) {
   return (
     <div
       className="absolute inset-0 z-30 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center"
@@ -902,12 +906,12 @@ function UpgradeSheet({ onClose }: { onClose: () => void }) {
             <Crown className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <p className="font-bold">Upgrade to Pro</p>
+            <p className="font-bold">{fourK ? "4K wallpapers are Pro" : "Upgrade to Pro"}</p>
             {/* 🔴 Was "unlimited downloads and exclusive premium wallpapers"
                 (2026-10-04). Pro is 1,000 downloads a day, not unlimited, and
                 nothing in the library is gated to Pro — both halves were false.
                 The shared helper is the one place this wording lives. */}
-            <p className="mt-0.5 text-sm text-muted-foreground">{upgradeCta("free")?.blurb}</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">{fourK ? WALLPAPER_PRO_ONLY_MESSAGE : upgradeCta("free")?.blurb}</p>
           </div>
         </div>
         <div className="mt-4 flex gap-2">

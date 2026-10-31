@@ -71,6 +71,7 @@ import { readImageDimensions, readVideoMetadata } from "@/lib/media/message-atta
 import { captureVideoPoster } from "@/lib/media/video-poster";
 import { haptic } from "@/lib/motion/haptics";
 import { useLongPress } from "@/lib/dom/use-long-press";
+import { CHAT_OPTIONS_EVENT } from "@/features/social/chat-options-event";
 import { springs } from "@/lib/motion/springs";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { useNetworkStatus } from "@/lib/pwa/use-network-status";
@@ -1262,6 +1263,14 @@ export function ConversationRoom({
   // element carries its own message id (`data-message-id`) and this reads it
   // back at fire time. The bubble is also the anchor the menu positions
   // against, which is why the hook hands the element back.
+  /*
+    Press and hold on the thread's EMPTY background opens the conversation options — the same sheet as the ⋯ at the top,
+    which stays (owner, 2026-10-31: "holding on chat page background, not on a chat but just the background where there
+    is no chat … should open the chat option, like the menu at the top"). Anything that has its own meaning — a bubble
+    (its own hold), a button, a link, media, a field — is left alone.
+  */
+  const holdBackground = useLongPress(() => window.dispatchEvent(new Event(CHAT_OPTIONS_EVENT)));
+  const onBackground = (t: EventTarget) => !(t as HTMLElement).closest?.("[data-message-id], button, a, input, textarea, img, video, [role='button'], [role='menu'], [role='dialog']");
   const holdBubble = useLongPress((anchor) => {
     const id = anchor.dataset.messageId;
     if (id) toggleMessageMenu(id, anchor);
@@ -1910,6 +1919,13 @@ export function ConversationRoom({
           embed width can never force the whole thread to scroll sideways. */}
       <div
         ref={scrollRef}
+        {...holdBackground}
+        onPointerDown={(e) => {
+          if (onBackground(e.target)) holdBackground.onPointerDown(e);
+        }}
+        onContextMenu={(e) => {
+          if (onBackground(e.target)) holdBackground.onContextMenu(e);
+        }}
         onScroll={() => {
           // Records whether the viewer is at the newest message, so late-loading
           // media can re-pin without fighting someone reading history.
@@ -2827,7 +2843,7 @@ export function ConversationRoom({
           className={cn(
             // 🔴 FLOATING GLASS (owner, 2026-10-31: "make the chat placeholder at the bottom to be floating glass") — the
             // bottom nav's liquid glass (.frenz-nav-glass), so the thread and any wallpaper show through it
-            "frenz-message-composer frenz-nav-glass flex items-end gap-2 px-3 pt-2.5 lg:pb-3",
+            "frenz-message-composer frenz-nav-glass frenz-nav-glass--static flex items-end gap-2 px-3 pt-2.5 lg:pb-3",
             composerBottomPad,
           )}
         >

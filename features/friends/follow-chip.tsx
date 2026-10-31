@@ -13,8 +13,22 @@ import { cn } from "@/lib/utils";
  * The accessible name carries the person and the state ("Follow Chris" becomes
  * "Following Chris"), because a screen reader cannot see a colour change.
  */
-export function FollowChip({ id, name, initial, source = "suggestion" }: { id: string; name: string; initial: boolean; source?: FollowSource }) {
+export function FollowChip({ id, name, initial, source = "suggestion", iconOnly = false }: { id: string; name: string; initial: boolean; source?: FollowSource; iconOnly?: boolean }) {
   const following = useFollowState(id, initial);
+  if (iconOnly) {
+    // a small glass Follow with just its icon (owner, 2026-10-31: where the suggestion row's ⋯ was)
+    return (
+      <button
+        type="button"
+        onClick={() => void toggleFollow(id, !following, source)}
+        aria-pressed={following}
+        aria-label={following ? `Following ${name}. Tap to unfollow.` : `Follow ${name}`}
+        className={cn("frenz-glass-pill inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full", following ? "text-frenz-violet" : "text-frenz-ink")}
+      >
+        {following ? <UserCheck className="h-[17px] w-[17px]" strokeWidth={2.3} aria-hidden /> : <UserPlus className="h-[17px] w-[17px]" strokeWidth={2.3} aria-hidden />}
+      </button>
+    );
+  }
   return (
     <button
       type="button"

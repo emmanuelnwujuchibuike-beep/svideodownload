@@ -42,9 +42,11 @@ describe("sign", () => {
     const out = await signWallpaperUploads(member, [{ type: "image/jpeg", size: 6_000_000 }, { type: "image/png", size: 9_000_000 }], 20);
     expect(out.ok && out.uploads.map((u) => u.key.startsWith(`members/${UID}/`))).toEqual([true, true]);
   });
-  it("🔴 a type, a size over 20 MB, or too many files: refused before anything is signed", async () => {
+  it("🔴 a type, a size over 50 MB, or too many files: refused before anything is signed", async () => {
     expect(await signWallpaperUploads(member, [{ type: "image/gif", size: 10 }], 20)).toMatchObject({ ok: false });
-    expect(await signWallpaperUploads(member, [{ type: "image/jpeg", size: 21 * 1024 * 1024 }], 20)).toMatchObject({ ok: false });
+    expect(await signWallpaperUploads(member, [{ type: "image/jpeg", size: 51 * 1024 * 1024 }], 20)).toMatchObject({ ok: false });
+    // a 4K PNG between 20 and 50 MB is accepted (owner, 2026-10-31: 4K stays 4K)
+    expect((await signWallpaperUploads(member, [{ type: "image/png", size: 35 * 1024 * 1024 }], 20)).ok).toBe(true);
     expect(await signWallpaperUploads(member, Array.from({ length: 21 }, () => ({ type: "image/jpeg", size: 10 })), 20)).toMatchObject({ ok: false });
   });
 });

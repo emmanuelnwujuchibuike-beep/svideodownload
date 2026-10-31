@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Space_Grotesk } from "next/font/google";
+import localFont from "next/font/local";
 import { useEffect, useState } from "react";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
@@ -11,7 +11,12 @@ import { readCookieJar, writeCookie } from "@/lib/dom/cookie";
 // font stays Plus Jakarta Sans everywhere else (see app/layout.tsx). Scoped
 // this tightly (a single splash moment) rather than adopting a second font
 // app-wide.
-const wordmarkFont = Space_Grotesk({ subsets: ["latin"], weight: ["500", "600"] });
+//
+// 🔴 SELF-HOSTED (2026-10-31): GitHub CI's build failed on every push — next/font/google fetched Space Grotesk from the
+// runner, Google answered with font addresses that carry no file extension after its retries, and the loader crashed
+// ("Cannot read properties of null (reading '1')", features/app-shell/brand-splash.tsx). Vercel and local builds passed.
+// The same Latin file (variable, 500–600; SIL Open Font License) ships in the repo, so the build fetches nothing.
+const wordmarkFont = localFont({ src: "./fonts/space-grotesk-latin.woff2", weight: "500 600", display: "swap" });
 
 /**
  * The premium full-screen "F" welcome overlay (TikTok/Twitter-style splash) —

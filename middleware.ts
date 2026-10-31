@@ -180,6 +180,9 @@ export async function middleware(request: NextRequest) {
     // owner, 2026-10-28: a guest asking for the member Home (/downloads — an old link, a bookmark, a nav tap) gets the
     // landing, which IS the downloader for guests — never a login wall in front of a free download
     if (path === "/downloads") return NextResponse.redirect(new URL("/", request.url));
+    // owner, 2026-10-31: a guest's Friends is the locked, empty hub — served from the static build (app/(app)/guest/
+    // friends), not a per-request render; the address stays /friends
+    if (path === "/friends") return NextResponse.rewrite(new URL("/guest/friends", request.url), { request });
     // App-only routes (lib/auth/app-only-paths.ts): a guest is sent to sign in before any render — never a feed,
     // post, reel, profile or sound in the HTML. `next` keeps the address the visitor asked for (/chris, not /u/chris),
     // its query included.

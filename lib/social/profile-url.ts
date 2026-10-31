@@ -36,7 +36,7 @@ export const RESERVED_HANDLES: ReadonlySet<string> = new Set([
   // app/ and its route groups
   "about", "academy", "account", "admin", "advertise", "ai", "api", "auth", "blog", "contact", "create",
   "developers", "dmca", "downloads", "earn", "exclusive", "explore", "features", "feed", "friends",
-  "glossary", "help", "history", "home", "learn", "library", "login", "members", "memories", "messages",
+  "glossary", "guest", "help", "history", "home", "learn", "library", "login", "members", "memories", "messages",
   "network", "notifications", "p", "pricing", "privacy", "profile", "quests", "r", "reels", "rewards",
   "saved", "search", "sound", "sounds", "studio", "sub", "support", "terms", "topics", "trust", "u",
   "unsubscribe", "wallet", "wallpapers", "welcome",

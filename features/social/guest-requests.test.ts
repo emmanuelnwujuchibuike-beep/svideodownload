@@ -79,11 +79,23 @@ describe("nav idle warm-up — a guest warms only public tabs", () => {
     expect(header).toContain("<Link href={homeHref} prefetch={homePrefetch}");
   });
 
-  const MEMBER_ONLY = ["/home", "/friends", "/messages", "/account", "/studio/ai/history"];
+  const MEMBER_ONLY = ["/home", "/account", "/studio/ai/history"];
 
   it("the guest lists hold no member-only route", () => {
     for (const r of [...GUEST_WARM_ROUTES, ...SIDEBAR_GUEST_WARM_ROUTES]) expect(MEMBER_ONLY, r).not.toContain(r);
     expect(GUEST_WARM_ROUTES.length).toBeGreaterThan(0);
+  });
+
+  // 2026-10-31 (owner: a guest's Chats and Friends showed the stripe loader): they are warmed for a guest ONLY while a
+  // guest is served them statically — warming a per-request render would cost the server on every landing visit.
+  it("a guest warms /friends and /messages only because a guest gets them static", () => {
+    const mw = readFileSync(join(process.cwd(), "middleware.ts"), "utf8");
+    const guestBranch = mw.slice(mw.indexOf("if (!hasAuthCookie) {"), mw.indexOf("return proceed({ request });", mw.indexOf("if (!hasAuthCookie) {")));
+    const staticFriends = guestBranch.includes('if (path === "/friends") return NextResponse.rewrite(new URL("/guest/friends", request.url), { request });') && /export const dynamic = "force-static";/.test(readFileSync(join(process.cwd(), "app/(app)/guest/friends/page.tsx"), "utf8"));
+    const staticMessages = !/export const dynamic|cookies\(\)|getUser\(/.test(readFileSync(join(process.cwd(), "app/(app)/messages/page.tsx"), "utf8"));
+    expect((GUEST_WARM_ROUTES as readonly string[]).includes("/friends")).toBe(staticFriends);
+    expect((GUEST_WARM_ROUTES as readonly string[]).includes("/messages")).toBe(staticMessages);
+    expect(staticFriends && staticMessages).toBe(true);
   });
 
   it("the warm-up picks the guest list when there is no handle and no session cookie", () => {

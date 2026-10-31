@@ -12,6 +12,7 @@ import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { cn } from "@/lib/utils";
 
 import { Chip } from "./advertise-ui";
+import { GuestAdsIntro } from "./guest-ads-intro";
 import {
   byCampaign,
   byDay,
@@ -73,16 +74,8 @@ export function MyCampaigns() {
     router.replace(`/advertise/campaigns${next.size ? `?${next}` : ""}`, { scroll: false });
   };
 
-  if (!loading && !user) {
-    return (
-      <AiPanel className="text-center">
-        <p className="text-[15px] font-semibold">Sign in to see your campaigns</p>
-        <TapOnceLink href={`/login?next=${encodeURIComponent("/advertise/campaigns")}`} className="ai-btn ai-btn--primary mt-4 inline-flex">
-          Sign in
-        </TapOnceLink>
-      </AiPanel>
-    );
-  }
+  // signed out: what advertising on Frenz is, in floating glass, with a glass sign-in (owner, 2026-10-31)
+  if (!loading && !user) return <GuestAdsIntro />;
   if (!user) return <Skeleton />;
   if (openId) return <CampaignDetail id={openId} onBack={() => go({ c: null })} />;
 

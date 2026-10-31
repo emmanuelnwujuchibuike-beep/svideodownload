@@ -4,7 +4,9 @@
  * Members keep the owner's list in mobile-nav.tsx. Plain .ts so tests can
  * import it without a JSX transform.
  */
-export const GUEST_WARM_ROUTES = ["/history", "/profile"] as const;
+// /messages (static) and /friends (static for a guest — middleware rewrites it to app/(app)/guest/friends) joined
+// 2026-10-31: the owner saw the stripe loader on a guest's Chats and Friends taps; warmed after load, they open at once
+export const GUEST_WARM_ROUTES = ["/history", "/profile", "/messages", "/friends"] as const;
 
 /**
  * Warmed FIRST once the page has loaded (afterPageLoad) — ahead of every other tab.

@@ -31,7 +31,14 @@ const AMOUNT = /^[\d.,\s]+\s?(?:[KMGT]?B|[KMB]|%)$/i;
 
 const BATCH = 100;
 const FLUSH_MS = 40;
-const STORE_PREFIX = "frenz:mt:";
+/*
+  v2 (2026-10-31): the server answered every string in ENGLISH while its engine had no key (lib/i18n/machine-translate.ts),
+  and each answer was kept here as that language's "translation" — so a phone that had tried a language kept showing
+  English after the fix, without even asking. The old store is dropped, and an answer identical to the source is no longer
+  kept on the device (the shared server cache still answers it at once).
+*/
+const STORE_PREFIX = "frenz:mt2:";
+const OLD_STORE_PREFIX = "frenz:mt:";
 const STORE_MAX = 4000;
 
 /** Would this text be translated at all? (exported for tests) */
@@ -90,6 +97,8 @@ function skipped(el: Element | null): boolean {
 
 function loadStore(lang: string): Map<string, string> {
   try {
+    // the v1 store may hold English as the "translation" (see STORE_PREFIX) — never read, removed
+    localStorage.removeItem(OLD_STORE_PREFIX + lang);
     const raw = localStorage.getItem(STORE_PREFIX + lang);
     if (raw) return new Map(Object.entries(JSON.parse(raw) as Record<string, string>));
   } catch {
@@ -104,7 +113,8 @@ function saveStore(s: State): void {
   window.setTimeout(() => {
     s.stored = false;
     try {
-      const entries = [...s.cache.entries()].slice(-STORE_MAX);
+      // only real translations: an answer equal to its source is a failure or untranslatable — asked again next time
+      const entries = [...s.cache.entries()].filter(([src, t]) => t !== src).slice(-STORE_MAX);
       localStorage.setItem(STORE_PREFIX + s.lang, JSON.stringify(Object.fromEntries(entries)));
     } catch {
       /* quota — the shared server cache still answers quickly */

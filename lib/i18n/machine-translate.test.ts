@@ -1,75 +1,90 @@
+import { readFileSync } from "node:fs";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-/** The server half: one model call per new string per language, then the shared cache; never a broken page. */
 const store = new Map<string, unknown>();
 vi.mock("@/lib/cache", () => ({
-  cacheGet: async (k: string) => store.get(k) ?? null,
-  cacheSet: async (k: string, v: unknown) => void store.set(k, v),
+  cacheGet: vi.fn(async (k: string) => store.get(k) ?? null),
+  cacheSet: vi.fn(async (k: string, v: unknown) => void store.set(k, v)),
 }));
+vi.mock("server-only", () => ({}));
 
-const parse = vi.fn();
-vi.mock("@anthropic-ai/sdk", () => {
-  class APIError extends Error {
-    status = 500;
-  }
-  class RateLimitError extends APIError {}
-  class Anthropic {
-    static APIError = APIError;
-    static RateLimitError = RateLimitError;
-    beta = { messages: { parse } };
-  }
-  return { default: Anthropic };
+import { googleLang, protectForGoogle, restoreFromGoogle, translateTexts } from "./machine-translate";
+
+/**
+ * The page translator's server, on Google's free web endpoint — no API key (owner, 2026-10-31: "Don't use anthropic … I
+ * made translator on my other app project without any API key"). The model it replaced needed a key production never
+ * had, so every language answered in English.
+ */
+const fetchMock = vi.fn();
+const answer = (arr: unknown, status = 200) => new Response(JSON.stringify(arr), { status, headers: { "content-type": "application/json" } });
+/** Google's echo for the requests below: "FR:" + the protected HTML it was sent, so the test sees what was asked */
+const echo = async (_url: string, init: RequestInit) => answer(new URLSearchParams(String(init.body)).getAll("q").map((q) => `FR:${q}`));
+
+beforeEach(() => {
+  store.clear();
+  fetchMock.mockReset();
+  vi.stubGlobal("fetch", fetchMock);
 });
 
-const { translateTexts } = await import("./machine-translate");
-
-const answer = (translations: string[], stop_reason = "end_turn") => ({ stop_reason, parsed_output: { translations } });
-
-describe("translateTexts", () => {
-  beforeEach(() => {
-    store.clear();
-    parse.mockReset();
-    process.env.ANTHROPIC_API_KEY = "test";
+describe("translateTexts (Google, no key)", () => {
+  it("translates once, then serves everyone from the cache — one request for the whole screen", async () => {
+    fetchMock.mockImplementation(echo);
+    expect(await translateTexts("fr", "French", ["Download", "Upgrade to Pro", "Download"])).toEqual(["FR:Download", "FR:Upgrade to Pro", "FR:Download"]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toContain("translate.googleapis.com/translate_a/t?client=gtx&sl=en&tl=fr&format=html");
+    expect(new URLSearchParams(String(init.body)).getAll("q")).toEqual(["Download", "Upgrade to Pro"]);
+    fetchMock.mockClear();
+    expect(await translateTexts("fr", "French", ["Upgrade to Pro"])).toEqual(["FR:Upgrade to Pro"]);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("translates once, then serves everyone from the cache", async () => {
-    parse.mockResolvedValueOnce(answer(["Télécharger", "Enregistrer"]));
-    expect(await translateTexts("fr", "French", ["Download", "Save", "Download"])).toEqual(["Télécharger", "Enregistrer", "Télécharger"]);
-    expect(parse).toHaveBeenCalledTimes(1);
-    expect(parse.mock.calls[0]![0].messages[0].content).toContain('["Download","Save"]'); // duplicates sent once
-    expect(await translateTexts("fr", "French", ["Save"])).toEqual(["Enregistrer"]);
-    expect(parse).toHaveBeenCalledTimes(1);
+  it("🔴 brand names, {placeholders}, @handles and links are sent as translate=no and come back untouched", async () => {
+    fetchMock.mockImplementation(echo);
+    const sent = protectForGoogle("Share your Frenz link with {name} & @peace_ejike — https://frenzsave.com/x <b>");
+    expect(sent).toBe(
+      'Share your <span translate="no">Frenz</span> link with <span translate="no">{name}</span> &amp; <span translate="no">@peace_ejike</span> — <span translate="no">https://frenzsave.com/x</span> &lt;b&gt;',
+    );
+    // what Google really answered into Chinese on 2026-10-31, entities and all
+    expect(restoreFromGoogle('分享您的<span translate="no">Frenz</span>链接 &amp; <span translate="no">{name}</span>')).toBe("分享您的Frenz链接 & {name}");
+    const [out] = await translateTexts("zh", "Chinese", ["Hello {name}"]);
+    expect(out).toBe("FR:Hello {name}");
   });
 
-  it("asks with the default model, low effort, structured output and the refusal fallback on", async () => {
-    parse.mockResolvedValueOnce(answer(["Hola"]));
-    await translateTexts("es", "Spanish", ["Hello"]);
-    const req = parse.mock.calls[0]![0];
-    expect(req.model).toBe("claude-opus-5-5");
-    expect(req.output_config.effort).toBe("low");
-    expect(req.output_config.format).toBeTruthy();
-    expect(req.fallbacks).toBe("default");
-    expect(req.betas).toEqual(["server-side-fallback-2026-07-01"]);
+  it("asks Google with ITS code where ours differs", async () => {
+    expect([googleLang("zh"), googleLang("he"), googleLang("fil"), googleLang("yo")]).toEqual(["zh-CN", "iw", "tl", "yo"]);
+    fetchMock.mockImplementation(echo);
+    await translateTexts("he", "Hebrew", ["Search"]);
+    expect(fetchMock.mock.calls[0]![0]).toContain("&tl=iw&");
   });
 
-  it("teeth: a wrong count, a refusal or an error leaves the English and caches nothing", async () => {
-    parse.mockResolvedValueOnce(answer(["Uno"])); // 1 for 2
-    expect(await translateTexts("es", "Spanish", ["One", "Two"])).toEqual(["One", "Two"]);
-    parse.mockResolvedValueOnce(answer(["Uno", "Dos"], "refusal"));
-    expect(await translateTexts("es", "Spanish", ["One", "Two"])).toEqual(["One", "Two"]);
-    parse.mockRejectedValueOnce(new Error("network"));
-    expect(await translateTexts("es", "Spanish", ["One", "Two"])).toEqual(["One", "Two"]);
+  it("teeth: a wrong count, an error status or a network failure leaves the English and caches nothing", async () => {
+    fetchMock.mockResolvedValueOnce(answer(["only one"]));
+    expect(await translateTexts("fr", "French", ["A b", "C d"])).toEqual(["A b", "C d"]);
+    fetchMock.mockResolvedValueOnce(answer({ error: 1 }, 429));
+    expect(await translateTexts("fr", "French", ["A b"])).toEqual(["A b"]);
+    fetchMock.mockRejectedValueOnce(new TypeError("fetch failed"));
+    expect(await translateTexts("fr", "French", ["A b"])).toEqual(["A b"]);
     expect(store.size).toBe(0);
   });
 
-  it("an empty translation keeps the original for that string", async () => {
-    parse.mockResolvedValueOnce(answer(["", "Dos"]));
-    expect(await translateTexts("es", "Spanish", ["One", "Two"])).toEqual(["One", "Dos"]);
+  it("an empty translation keeps the original for that string; a [translation, source] pair is read too", async () => {
+    fetchMock.mockResolvedValueOnce(answer(["", ["Rechercher", "en"]]));
+    expect(await translateTexts("fr", "French", ["Keep me", "Search"])).toEqual(["Keep me", "Rechercher"]);
   });
 
-  it("no API key: English, and no call", async () => {
-    delete process.env.ANTHROPIC_API_KEY;
-    expect(await translateTexts("es", "Spanish", ["One"])).toEqual(["One"]);
-    expect(parse).not.toHaveBeenCalled();
+  it("long screens are split by characters as well as by count", async () => {
+    fetchMock.mockImplementation(echo);
+    const long = Array.from({ length: 10 }, (_, i) => `${"word ".repeat(150)}${i}`);
+    await translateTexts("fr", "French", long);
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it("no Anthropic anywhere in the translator (owner: 'Don't use anthropic')", () => {
+    // the code, not the comments that tell the history
+    const src = readFileSync("lib/i18n/machine-translate.ts", "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(src).not.toMatch(/@anthropic-ai|ANTHROPIC_API_KEY|claude-/i);
+    expect(src).toContain("translate.googleapis.com/translate_a/t");
   });
 });

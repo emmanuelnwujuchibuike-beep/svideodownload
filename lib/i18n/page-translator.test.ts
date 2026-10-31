@@ -42,3 +42,17 @@ describe("what it leaves alone, and where it runs", () => {
     expect(readFileSync("features/app-shell/deferred-shell.tsx", "utf8")).toContain("<PageTranslation />");
   });
 });
+
+/**
+ * 2026-10-31: while the server's engine had no key it answered in English, and the phone kept each answer as the
+ * "translation" — so a phone that had tried a language stayed English after the fix, without asking again.
+ */
+describe("the device store never keeps English as a translation", () => {
+  const src = readFileSync("lib/i18n/page-translator.ts", "utf8");
+  it("drops the poisoned v1 store and keeps only answers that differ from their source", () => {
+    expect(src).toContain('const STORE_PREFIX = "frenz:mt2:";');
+    expect(src).toContain("localStorage.removeItem(OLD_STORE_PREFIX + lang);");
+    // teeth: without this filter an English echo would be saved and reused forever
+    expect(src).toContain(".filter(([src, t]) => t !== src)");
+  });
+});

@@ -92,7 +92,12 @@ export function routeWeights(): RouteWeight[] {
 
   return Object.entries(manifest.pages)
     .map(([route, files]) => {
-      const unique = [...new Set(files)];
+      /*
+        JavaScript only, like entryWeight below (2026-10-31): every ceiling here is "gzipped JS". Until then no PAGE
+        imported a stylesheet (only layouts did), so the CSS in this sum never showed; the landing now imports its own
+        small sheet (app/landing.css) and its 31 kB of CSS read as JS. Stylesheets are guarded in css-entry.test.ts.
+      */
+      const unique = [...new Set(files)].filter((f) => f.endsWith(".js"));
       // Manifest paths are relative to .next/.
       const bytes = unique.reduce((sum, file) => sum + gzippedSize(path.join(NEXT_DIR, file)), 0);
 

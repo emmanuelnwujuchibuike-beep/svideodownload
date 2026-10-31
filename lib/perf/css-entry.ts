@@ -27,7 +27,30 @@ export const ENTRY_CSS_ROOTS = [
   "app/landing-sections",
 ];
 
+/**
+ * 🔴 THE LANDING'S OWN SHEET (owner, 2026-10-31: "the landing and Download page still doesn't open fast … should be
+ * below 1.6"). Measured on production that day: `/` and the downloader pages painted at 2.4–2.7 s on fast 4G, and before
+ * the paint the main thread was mostly idle — waiting on the 333 kB entry sheet — then busy styling the page against it
+ * (UpdateLayoutTree up to 600 ms). The entry sheet had grown to the whole app's size because the marketing tree reaches
+ * almost every feature through lazy imports. Compiled against what the landing and downloader pages import STATICALLY
+ * (what can be on screen at first paint) it is ~173 kB, about half. Their lazy parts — sheets, dialogs, a result card —
+ * are styled by the entry sheet, loaded right after the first paint (features/perf/later-styles.tsx).
+ */
+export const LANDING_CSS_ROOTS = [
+  "app/layout.tsx",
+  "app/error.tsx",
+  "app/global-error.tsx",
+  "app/(marketing)/layout.tsx",
+  "app/(marketing)/template.tsx",
+  "app/(marketing)/page.tsx",
+  "app/(marketing)/[downloader]",
+  // the landing's below-the-fold sections arrive from this handler after the paint; +1 kB, so no unstyled flash
+  "app/landing-sections",
+];
+
 const SOURCE = /\.(tsx?|jsx?|mjs)$/;
+/** Static imports and re-exports only — no `import()` / next/dynamic: what can be on screen at first paint. */
+const STATIC_IMPORT = /(?:^|[^.\w$])(?:import|export)\s+(?!type\b)(?:[^'";]*?from\s*)?["']([^"']+)["']/gm;
 const IMPORT = /(?:^|[^.\w$])(?:import|export)\s+(?!type\b)(?:[^'";]*?from\s*)?["']([^"']+)["']|import\(\s*["']([^"']+)["']\s*\)/gm;
 
 function resolveFile(p: string): string | null {
@@ -47,7 +70,8 @@ function listDir(dir: string, out: string[]) {
 }
 
 /** Absolute paths of every file reachable from `roots` (relative to `rootDir`). Exported for the guard test. */
-export function reachableFiles(rootDir: string, roots: readonly string[] = ENTRY_CSS_ROOTS): string[] {
+export function reachableFiles(rootDir: string, roots: readonly string[] = ENTRY_CSS_ROOTS, opts: { staticOnly?: boolean } = {}): string[] {
+  const pattern = opts.staticOnly ? STATIC_IMPORT : IMPORT;
   const seen = new Set<string>();
   const queue: string[] = [];
   for (const r of roots) {
@@ -70,7 +94,7 @@ export function reachableFiles(rootDir: string, roots: readonly string[] = ENTRY
     } catch {
       continue;
     }
-    for (const m of src.matchAll(IMPORT)) {
+    for (const m of src.matchAll(pattern)) {
       const spec = m[1] ?? m[2] ?? "";
       const target = spec.startsWith("@/") ? path.join(rootDir, spec.slice(2)) : spec.startsWith(".") ? path.resolve(path.dirname(file), spec) : null;
       const hit = target && resolveFile(target);
@@ -96,8 +120,19 @@ export const ENTRY_CONTENT_FILE = ".cache/entry-css-content.txt";
  * its cache). Called at the start of every build (next.config.ts) and by the Tailwind config. Returns the absolute path.
  */
 export function writeEntryContent(rootDir: string): string {
-  const out = path.join(rootDir, ENTRY_CONTENT_FILE);
-  const body = reachableFiles(rootDir)
+  return writeContent(rootDir, ENTRY_CONTENT_FILE, reachableFiles(rootDir));
+}
+
+/** The landing sheet's Tailwind input (git-ignored), the same way: what LANDING_CSS_ROOTS reach statically. */
+export const LANDING_CONTENT_FILE = ".cache/landing-css-content.txt";
+
+export function writeLandingContent(rootDir: string): string {
+  return writeContent(rootDir, LANDING_CONTENT_FILE, reachableFiles(rootDir, LANDING_CSS_ROOTS, { staticOnly: true }));
+}
+
+function writeContent(rootDir: string, file: string, files: readonly string[]): string {
+  const out = path.join(rootDir, file);
+  const body = files
     .map((f) => `/* @@file ${path.relative(rootDir, f).replace(/\\/g, "/")} */\n${readFileSync(f, "utf8")}`)
     .join("\n");
   let current: string | null = null;

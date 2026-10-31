@@ -226,10 +226,17 @@ export const metadata: Metadata = {
   // profile/comment text that isn't actually contact info.
   formatDetection: { telephone: false, date: false, address: false, email: false },
   other: {
-    // Chromium's non-Apple-prefixed equivalent of `appleWebApp.capable` above
-    // — `appleWebApp` only emits the `apple-mobile-web-app-*` tags, Next has
-    // no first-class field for this one yet.
+    // Chromium's non-Apple-prefixed equivalent of `appleWebApp.capable` above.
     "mobile-web-app-capable": "yes",
+    /*
+      🔴 THE iOS LAUNCH IMAGE NEEDS THIS EXACT TAG (owner, 2026-10-31: "the pwa white shows before any logo appears").
+      Next 15 renders `appleWebApp.capable` as `mobile-web-app-capable` only — the page had no
+      `apple-mobile-web-app-capable` at all (checked on production). Without it iOS ignores every
+      apple-touch-startup-image below and draws a plain WHITE launch screen before the app's own loader — the
+      owner's phone (1290x2796) has its image, it was simply never used. iOS stores the launch image when the app
+      is ADDED to the Home Screen, so an installed app picks this up after it is removed and added again.
+    */
+    "apple-mobile-web-app-capable": "yes",
   },
 };
 

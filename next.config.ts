@@ -2,6 +2,7 @@ import { scanMigrations, scanRoutes } from "./lib/content/sync/scan";
 import type { NextConfig } from "next";
 
 import { writeEntryContent } from "./lib/perf/css-entry";
+import { EDGE_CACHE_HEADER, EDGE_CACHED_SOURCES } from "./lib/perf/edge-cache";
 import { BLOG_REDIRECTS } from "./lib/seo/blog";
 import { REMOVED_SEO_PAGES } from "./lib/seo/removed-seo-pages";
 
@@ -296,6 +297,8 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
+      // the landing + downloader pages: Cloudflare serves its copy instead of revalidating every visit (lib/perf/edge-cache.ts)
+      ...EDGE_CACHED_SOURCES.map((source) => ({ source, headers: [{ ...EDGE_CACHE_HEADER }] })),
       {
         // The service worker itself must never be HTTP-cached, or clients keep
         // running an old worker (and old assets) after a deploy — the "my laptop

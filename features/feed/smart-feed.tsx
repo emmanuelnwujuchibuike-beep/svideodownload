@@ -12,7 +12,6 @@ import { importWithRetry } from "@/lib/net/import-retry";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { lockTopbarVisible } from "@/features/app-shell/topbar-visibility";
-import { ContinueInReels } from "@/features/feed/continue-in-reels";
 import { FeedAdSlot } from "@/features/feed/feed-ad-slot";
 import { HilltopFeedAd } from "@/features/feed/hilltop-feed-ad";
 import { useHilltopFeedSlots } from "@/features/feed/use-hilltop-feed-slots";
@@ -21,7 +20,6 @@ import { FeedSkeleton } from "@/features/feed/feed-skeleton";
 import { ImageOpenFallback } from "@/features/feed/image-open-fallback";
 import { FeedTopbarTabs, takeRequestedFeedTab } from "@/features/feed/feed-topbar-tabs";
 import { FEED_TABS_SLOT_ID } from "@/features/feed/feed-tabs-slot";
-import { SparkCard } from "@/features/feed/spark-card";
 import { FEED_AD_INTERVAL } from "@/lib/feed/ad-slots";
 import { haptic } from "@/lib/motion/haptics";
 import { acceptFeedItems, dedupeFeedItems, mediaIdentity, seenFromItems } from "@/lib/social/feed-dedupe";
@@ -88,6 +86,10 @@ import { getApi } from "@/lib/sdk/browser";
 import { cn } from "@/lib/utils";
 
 
+/* Shown only at the end of the feed, or between some posts: their code comes when one is on the page (2026-10-31, the
+   Feed's first load stays under its ceiling). Server-rendered as before. */
+const ContinueInReels = dynamic(() => importWithRetry(() => import("@/features/feed/continue-in-reels")).then((m) => m.ContinueInReels));
+const SparkCard = dynamic(() => importWithRetry(() => import("@/features/feed/spark-card")).then((m) => m.SparkCard));
 const PAGE = 8;
 const SEEN_KEY = "frenz:feed-seen-at";
 const PULL_THRESHOLD = 72;

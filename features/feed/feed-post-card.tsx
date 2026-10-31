@@ -34,18 +34,14 @@ import { useEntitlements } from "@/features/auth/use-entitlements";
 import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { RichText } from "@/components/social/rich-text";
 import { FeedCaption } from "@/features/feed/feed-caption";
-import { PostPollInline } from "@/features/social/post-poll-inline";
 import { AnimatedCount } from "@/features/ui/animated-count";
-import { fireWowFeedback } from "@/features/ui/wow-burst";
 import { FeedImage } from "@/features/media/feed-image";
 import { FeedVideo } from "@/features/media/feed-video";
 import { MediaGrid } from "@/features/media/media-grid";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 
-import { makeEmotionIcon, reactionGlyph, ReactionPicker, type ReactionEmotion } from "@/features/social/reaction-picker";
-import { RepostBurst } from "@/features/social/repost-burst";
-import { WhyThisChip } from "@/features/social/repost/why-this";
+import { makeEmotionIcon, reactionGlyph, type ReactionEmotion } from "@/features/social/reaction-glyphs";
 import { rememberedReaction, rememberReaction } from "@/lib/social/reaction-memory";
 import { attributeRepost } from "@/lib/social/repost/attribution-client";
 import { toast } from "@/features/ui/toast";
@@ -67,7 +63,31 @@ const ContentPreferencesSheet = dynamic(() => import("@/features/social/content-
 const CreatorNotificationsSheet = dynamic(() => import("@/features/social/creator-notifications-sheet").then((m) => m.CreatorNotificationsSheet), { ssr: false });
 const ReportSheet = dynamic(() => import("@/features/social/report-sheet").then((m) => m.ReportSheet), { ssr: false });
 const CommentsSheet = dynamic(() => import("@/features/social/comments-sheet").then((m) => m.CommentsSheet), { ssr: false });
-import { floatReaction } from "@/features/ui/reaction-float";
+/*
+  🔴 TAP-ONLY PARTS LOAD ON DEMAND (owner, 2026-10-31: "look for a way to split the feed page" — the Feed had grown 1.9 kB
+  over its first-load ceiling, which stays). The long-press reaction picker and the repost burst bring framer-motion
+  code, and the Wow burst / floating reaction only ever run after a tap; none of it is needed to PAINT a card. They
+  load on first use and are warmed once the Feed has loaded (warmTapFx), so the first tap is as quick as before.
+*/
+// only SOME posts carry a poll or a "why this" chip: their code comes with the first post that has one (still server-rendered)
+const PostPollInline = dynamic(() => import("@/features/social/post-poll-inline").then((m) => m.PostPollInline));
+const WhyThisChip = dynamic(() => import("@/features/social/repost/why-this").then((m) => m.WhyThisChip));
+const ReactionPicker = dynamic(() => import("@/features/social/reaction-picker").then((m) => m.ReactionPicker), { ssr: false });
+const RepostBurst = dynamic(() => import("@/features/social/repost-burst").then((m) => m.RepostBurst), { ssr: false });
+const loadWow = () => import("@/features/ui/wow-burst");
+const loadFloat = () => import("@/features/ui/reaction-float");
+let tapFxWarm = false;
+function warmTapFx() {
+  if (tapFxWarm) return;
+  tapFxWarm = true;
+  void loadWow().catch(() => (tapFxWarm = false));
+  void loadFloat().catch(() => {});
+  void import("@/features/social/reaction-picker").catch(() => {});
+  void import("@/features/social/repost-burst").catch(() => {});
+}
+const fireWowFeedback = () => void loadWow().then((m) => m.fireWowFeedback()).catch(() => {});
+const floatReaction = (x: number, y: number) => void loadFloat().then((m) => m.floatReaction(x, y)).catch(() => {});
+import { afterPageLoad } from "@/features/app-shell/warm-routes";
 import { useLongPress } from "@/lib/hooks/use-long-press";
 import { enqueueOfflineAction } from "@/lib/offline/action-queue";
 import { isCategory } from "@/lib/social/categories";
@@ -145,6 +165,8 @@ function FeedPostCardImpl({
    *  see `FeedVideo`'s `nextSrc`. */
   nextVideoSrc?: string | null;
 }) {
+  // the tap-only parts (picker, bursts) are fetched once the page has loaded — once per session, not per card
+  useEffect(() => (tapFxWarm ? undefined : afterPageLoad(warmTapFx)), []);
   // the viewer's own reaction this session beats a cached page's stale one (lib/social/reaction-memory.ts, 2026-10-28)
   const mem = rememberedReaction(item.id);
   const [liked, setLiked] = useState(mem?.liked ?? item.viewerLiked);

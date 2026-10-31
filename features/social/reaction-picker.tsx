@@ -1,53 +1,20 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import type { Heart } from "lucide-react";
-import { forwardRef, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 
+import { REACTIONS, type ReactionEmotion } from "@/features/social/reaction-glyphs";
 import { cn } from "@/lib/utils";
 
 /**
  * Wow reaction picker — long-press the Wow button and a strip of flavors pops
  * up (owner spec). Selecting one still counts as a Wow (one row, one count);
- * the flavor rides along as `emotion`. Emoji here are USER REACTIONS —
- * content, not UI chrome — the approved exception to the no-emoji rule.
+ * the flavor rides along as `emotion`.
+ *
+ * The flavors and glyph helpers live in reaction-glyphs.tsx (2026-10-31: the feed card loads this picker only when
+ * it is needed); re-exported here so every existing import keeps working.
  */
-
-export const REACTIONS = [
-  { id: "love", glyph: "❤️", label: "Love" },
-  { id: "fire", glyph: "🔥", label: "Fire" },
-  { id: "funny", glyph: "😂", label: "Funny" },
-  { id: "applause", glyph: "👏", label: "Applause" },
-  { id: "surprised", glyph: "😮", label: "Surprised" },
-  { id: "celebrate", glyph: "🎉", label: "Celebrate" },
-  { id: "insightful", glyph: "💡", label: "Insightful" },
-  { id: "support", glyph: "🤝", label: "Support" },
-] as const;
-
-export type ReactionEmotion = (typeof REACTIONS)[number]["id"];
-
-export function reactionGlyph(emotion: string | null | undefined): string | null {
-  return REACTIONS.find((r) => r.id === emotion)?.glyph ?? null;
-}
-
-/**
- * Wraps a picked glyph so it can sit in any `typeof Heart` icon slot
- * (ActionButton/RailButton require a forwardRef component — a plain FC
- * isn't assignable to lucide's icon type).
- */
-export function makeEmotionIcon(glyph: string): typeof Heart {
-  const EmotionGlyph = forwardRef<SVGSVGElement, { className?: string }>(function EmotionGlyph(
-    { className },
-    _ref,
-  ) {
-    return (
-      <span aria-hidden className={cn("flex items-center justify-center leading-none", className)} style={{ fontSize: "1.05em" }}>
-        {glyph}
-      </span>
-    );
-  });
-  return EmotionGlyph as unknown as typeof Heart;
-}
+export { makeEmotionIcon, REACTIONS, reactionGlyph, type ReactionEmotion } from "@/features/social/reaction-glyphs";
 
 export function ReactionPicker({
   open,

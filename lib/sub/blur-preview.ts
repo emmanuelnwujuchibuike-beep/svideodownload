@@ -4,7 +4,7 @@ import { presignPrivateGet } from "@/lib/storage/r2";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { CLIP_NEEDS_WORK_FILTER, lacksCurrentClip } from "./blur-clip-plan";
-import { BLUR_CLIP_WIDTH_FOR, BLUR_STILL_WIDTH_FOR, normalizeBlurLevel, type BlurLevel } from "./blur-level";
+import { blurClipWidth, blurStillWidth, normalizeBlurLevel, type BlurLevel } from "./blur-level";
 
 /**
  * The blurred preview of a locked exclusive post (0263, owner 2026-10-18, REQUIRED): the ONLY picture a
@@ -64,7 +64,7 @@ function sourceKey(first: Row | undefined): string | null {
 /** Makes and stores one post's preview if it has none. Best effort: a failure leaves the plain locked tile. */
 export async function ensureBlurPreview(postId: string): Promise<void> {
   // the size the post's blur level stores (0307 — 20 px unless the creator chose Light)
-  const width = BLUR_STILL_WIDTH_FOR[await blurLevelOf(postId)];
+  const width = blurStillWidth(await blurLevelOf(postId));
   try {
     const db = createAdminClient();
     const withThumb = await db.from("sub_post_media").select("idx, media_kind, object_key, thumb_key").eq("post_id", postId).order("idx").limit(1);
@@ -91,7 +91,7 @@ export async function ensureBlurPreview(postId: string): Promise<void> {
  * nothing happens; any one failure leaves that slide plain and the rest still made.
  */
 export async function ensureItemBlurPreviews(postId: string, width?: number): Promise<void> {
-  const size = width ?? BLUR_STILL_WIDTH_FOR[await blurLevelOf(postId)];
+  const size = width ?? blurStillWidth(await blurLevelOf(postId));
   try {
     const db = createAdminClient();
     const { data, error } = await db.from("sub_post_media").select("id, idx, media_kind, object_key, thumb_key, blur_preview").eq("post_id", postId).is("blur_preview", null).order("idx");
@@ -174,7 +174,7 @@ export async function missingBlurClips(creatorId: string, limit = 2): Promise<{ 
   const picked = rows.sort((a, b) => created(b).localeCompare(created(a)) || Number(a.idx) - Number(b.idx)).slice(0, limit);
   // 0307: each clip at the size its post's blur level stores
   const levels = await readBlurLevels(picked.map((r) => r.post_id as string)).catch(() => new Map<string, BlurLevel>());
-  return picked.map((r) => ({ postId: r.post_id as string, idx: Number(r.idx), key: r.object_key as string, width: BLUR_CLIP_WIDTH_FOR[levels.get(r.post_id as string) ?? normalizeBlurLevel(null)] }));
+  return picked.map((r) => ({ postId: r.post_id as string, idx: Number(r.idx), key: r.object_key as string, width: blurClipWidth(levels.get(r.post_id as string) ?? normalizeBlurLevel(null)) }));
 }
 
 /** Stores one item's clip (the creator's own browser made it). Only an empty one is filled; the first video's also on the post. */
@@ -256,7 +256,7 @@ export async function lockedVideosNeedingClips(limit: number): Promise<{ postId:
   // 0307: each clip at the size its post's blur level stores (a read that fails leaves every post at the default)
   const levels = await readBlurLevels(picked.map((r) => r.post_id as string)).catch(() => new Map<string, BlurLevel>());
   // oldClip: an older recipe's clip the new one replaces — removed from the public bucket once replaced (recipe 2)
-  return picked.map((r) => ({ postId: r.post_id as string, idx: Number(r.idx), key: r.object_key as string, width: BLUR_CLIP_WIDTH_FOR[levels.get(r.post_id as string) ?? normalizeBlurLevel(null)], oldClip: typeof r.blur_video_url === "string" ? r.blur_video_url : null }));
+  return picked.map((r) => ({ postId: r.post_id as string, idx: Number(r.idx), key: r.object_key as string, width: blurClipWidth(levels.get(r.post_id as string) ?? normalizeBlurLevel(null)), oldClip: typeof r.blur_video_url === "string" ? r.blur_video_url : null }));
 }
 
 /**

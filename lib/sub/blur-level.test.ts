@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { buildBlurClipArgs } from "@/lib/sub/blur-clip-plan";
-import { BLUR_CLIP_WIDTH_FOR, BLUR_CSS_CLASS, BLUR_LEVELS, BLUR_STILL_WIDTH_FOR, blurPreviewsChange, DEFAULT_BLUR_LEVEL, normalizeBlurLevel } from "@/lib/sub/blur-level";
+import { BLUR_CLIP_WIDTH_FOR, BLUR_CSS_CLASS, BLUR_LEVELS, BLUR_STILL_WIDTH_FOR, blurAmountOf, blurBand, blurClass, blurClipWidth, blurLevelForAmount, blurPreviewsChange, blurStillWidth, DEFAULT_BLUR_LEVEL, isBlurLevel, normalizeBlurLevel } from "@/lib/sub/blur-level";
 
 /**
  * How blurry a locked exclusive post looks — the creator's choice (owner, 2026-10-30: "Make users be able to set how
@@ -88,9 +88,9 @@ describe("blur levels", () => {
   it("the creator sets it: at publish (with the clip made at its size) and later from the post", () => {
     const composer = code("features/sub/sub-composer.tsx");
     expect(composer).toContain("<BlurLevelPicker value={blurLevel} onChange={setBlurLevel}");
-    expect(composer).toContain("makeBlurClip(it.file, BLUR_CLIP_WIDTH_FOR[blurLevel])");
+    expect(composer).toContain("makeBlurClip(it.file, blurClipWidth(blurLevel))");
     expect(composer).toMatch(/audience === "locked" \? \{ blurLevel \} : \{\}/);
-    expect(code("app/api/sub/posts/route.ts")).toContain('blurLevel: z.enum(["light", "medium", "strong"]).optional()');
+    expect(code("app/api/sub/posts/route.ts")).toContain("blurLevel: z.string().max(8).refine(isBlurLevel).optional()");
     expect(code("app/api/sub/posts/[id]/route.ts")).toContain("setSubPostBlurLevel(user.id, id, body.blurLevel)");
     const viewer = code("features/sub/sub-gallery.tsx");
     expect(viewer).toContain('aria-label="How blurry visitors see this post"');
@@ -136,5 +136,67 @@ describe("the blurred slideshow and tiles (owner, 2026-10-30)", () => {
     expect(clip).toMatch(/\n\s+muted\n\s+loop\n\s+playsInline/);
     expect(clip).toContain("if (inView) tryPlay();");
     expect(clip).toContain("else v.pause();");
+  });
+});
+
+/**
+ * The blur SLIDER (0310 — owner, 2026-10-30: "drag it to the right to increase and drag to left to reduce like reducing
+ * volume"). A position falls in a band; the BAND sets what the stored preview holds, so no position shows more than Light.
+ */
+describe("the blur slider", () => {
+  it("stores b0…b100 and refuses anything else", () => {
+    for (const v of ["b0", "b5", "b35", "b99", "b100", "light", "medium", "strong"]) expect(isBlurLevel(v), v).toBe(true);
+    for (const v of ["b101", "b-1", "b05", "b", "b1.5", "B50", "50", "", null]) expect(isBlurLevel(v), String(v)).toBe(false);
+    expect(blurLevelForAmount(42)).toBe("b42");
+    expect(blurLevelForAmount(-20)).toBe("b0");
+    expect(blurLevelForAmount(250)).toBe("b100");
+    expect(blurAmountOf("b42")).toBe(42);
+    expect(blurAmountOf("medium")).toBe(50);
+  });
+
+  it("🔴 the far left is exactly Light — no position ever stores more detail than Light", () => {
+    expect(blurBand("b0")).toBe("light");
+    for (let n = 0; n <= 100; n++) {
+      expect(blurClipWidth(`b${n}`)).toBeLessThanOrEqual(BLUR_CLIP_WIDTH_FOR.light);
+      expect(blurStillWidth(`b${n}`)).toBeLessThanOrEqual(BLUR_STILL_WIDTH_FOR.light);
+    }
+    // the bands split at 35 and 70; named levels are their own band
+    expect([34, 35, 69, 70].map((n) => blurBand(`b${n}`))).toEqual(["light", "medium", "medium", "strong"]);
+    expect(BLUR_LEVELS.map((l) => blurBand(l))).toEqual(["light", "medium", "strong"]);
+    // teeth: a position stores what its band stores, not the default's size
+    expect(blurClipWidth("b10")).toBe(BLUR_CLIP_WIDTH_FOR.light);
+    expect(blurClipWidth("b90")).toBe(BLUR_CLIP_WIDTH_FOR.strong);
+    expect(blurPreviewsChange("b10", "b60")).toBe(true);
+    expect(blurPreviewsChange("b40", "b95")).toBe(false);
+  });
+
+  it("every step's CSS blur exists, with a px fallback, and smooths its clip at least as much as Light smooths its own", () => {
+    const css = readFileSync("app/globals.css", "utf8");
+    const step = (n: number) => new RegExp(`\\.sub-blur-s${n} \\{\\s*filter: blur\\((\\d+(?:\\.\\d+)?)px\\);\\s*filter: blur\\((\\d+(?:\\.\\d+)?)cqw\\);\\s*\\}`).exec(css);
+    const lightCover = (1.25 * BLUR_CLIP_WIDTH_FOR.light) / 100;
+    let last = 0;
+    for (let n = 0; n <= 10; n++) {
+      const m = step(n);
+      expect(m, `sub-blur-s${n}`).not.toBeNull();
+      const cqw = Number(m![2]);
+      expect(cqw).toBeGreaterThanOrEqual(last); // rises left to right, like a volume
+      last = cqw;
+      // the clip a position at this step stores (its band), covered at least as well as Light covers its 48 px clip
+      const amount = n * 10;
+      expect((cqw * blurClipWidth(`b${amount}`)) / 100, `s${n}`).toBeGreaterThanOrEqual(lightCover - 1e-9);
+    }
+    expect(blurClass("b0")).toBe("sub-blur-s0");
+    expect(blurClass("b100")).toBe("sub-blur-s10");
+    expect(blurClass("b47")).toBe("sub-blur-s5");
+    expect(blurClass("light")).toBe(BLUR_CSS_CLASS.light);
+  });
+
+  it("0310 widens 0307's check to the slider, and a database before it stores the band (never a failed save)", () => {
+    const sql = readFileSync("supabase/migrations/0310_sub_blur_slider.sql", "utf8");
+    expect(sql).toMatch(/drop constraint if exists sub_posts_blur_level_check/);
+    expect(sql).toContain("blur_level ~ '^b([0-9]|[1-9][0-9]|100)$'");
+    const posts = readFileSync("lib/sub/posts.ts", "utf8");
+    expect(posts).toMatch(/blur_level_check\|check constraint\|23514/);
+    expect(posts).toContain("const band = blurBand(level);");
   });
 });

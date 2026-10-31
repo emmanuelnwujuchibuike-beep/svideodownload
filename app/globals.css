@@ -5409,3 +5409,52 @@ html.dark .streak-recover {
   filter: blur(22px);
   filter: blur(5.8cqw);
 }
+/*
+  The creator's blur SLIDER (0310 — owner, 2026-10-30: "drag it to the right to increase and drag to left to reduce like
+  reducing volume"): eleven steps, lib/sub/blur-level.ts blurClass. s0 is exactly Light — the slider never goes below
+  it — and the Medium/Strong steps (s4 on) cover their 24 px clip as well as the named levels do.
+*/
+.sub-blur-s0 {
+  filter: blur(5px);
+  filter: blur(1.25cqw);
+}
+.sub-blur-s1 {
+  filter: blur(5px);
+  filter: blur(1.25cqw);
+}
+.sub-blur-s2 {
+  filter: blur(6px);
+  filter: blur(1.5cqw);
+}
+.sub-blur-s3 {
+  filter: blur(8px);
+  filter: blur(2cqw);
+}
+.sub-blur-s4 {
+  filter: blur(10px);
+  filter: blur(2.6cqw);
+}
+.sub-blur-s5 {
+  filter: blur(12px);
+  filter: blur(3.1cqw);
+}
+.sub-blur-s6 {
+  filter: blur(15px);
+  filter: blur(3.9cqw);
+}
+.sub-blur-s7 {
+  filter: blur(19px);
+  filter: blur(4.6cqw);
+}
+.sub-blur-s8 {
+  filter: blur(22px);
+  filter: blur(5.4cqw);
+}
+.sub-blur-s9 {
+  filter: blur(25px);
+  filter: blur(6.4cqw);
+}
+.sub-blur-s10 {
+  filter: blur(30px);
+  filter: blur(7.5cqw);
+}

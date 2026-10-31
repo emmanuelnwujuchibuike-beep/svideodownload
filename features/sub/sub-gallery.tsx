@@ -417,11 +417,29 @@ export function PrivateViewer({ postId, initial, isCreator, blurLevel, onBlurLev
     const j = (await res?.json().catch(() => null)) as { blurLevel?: string; remaking?: boolean; error?: string } | null;
     setSavingLevel(false);
     if (!res?.ok) return setLevelNote(j?.error ?? "Couldn't change the blur.");
-    setLevel(next);
-    onBlurLevel?.(postId, next);
+    // what the server stored — before 0310 a slider position is kept as its band
+    const stored = normalizeBlurLevel(j?.blurLevel ?? next);
+    setLevel(stored);
+    setDraftLevel(stored);
+    onBlurLevel?.(postId, stored);
     haptic("selection");
     setLevelNote(j?.remaking ? "Saved. Visitors' previews are being made again at the new size — a moment." : "Saved. Visitors see it this way now.");
   };
+  /*
+    The slider moves freely and saves ONCE, when the finger has rested (0310 — owner, 2026-10-30: "drag it to the right
+    to increase and drag to left to reduce"): saving every step would send a request per pixel and freeze the slider
+    while each one ran.
+  */
+  const [draftLevel, setDraftLevel] = useState<BlurLevel>(() => normalizeBlurLevel(blurLevel));
+  const saveTimer = useRef<number | null>(null);
+  const dragLevel = (next: BlurLevel) => {
+    setDraftLevel(next);
+    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => void saveLevel(next), 600);
+  };
+  useEffect(() => () => {
+    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+  }, []);
   // Part 4: the creator edits the caption in place (server: own published post only, plain text)
   const [editing, setEditing] = useState<string | null>(null);
   const [savingCaption, setSavingCaption] = useState(false);
@@ -650,7 +668,7 @@ export function PrivateViewer({ postId, initial, isCreator, blurLevel, onBlurLev
         {sharing ? <SendSubPostSheet postId={postId} open={sharing} onClose={() => setSharing(false)} /> : null}
         {blurOpen ? (
           <div className="absolute inset-x-0 bottom-0 z-[9] rounded-t-[24px] bg-zinc-950/95 p-4 text-white ring-1 ring-white/10" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }} role="dialog" aria-label="How blurry visitors see this post">
-            <BlurLevelPicker value={level} onChange={(next) => void saveLevel(next)} disabled={savingLevel} tone="dark" />
+            <BlurLevelPicker value={draftLevel} onChange={dragLevel} tone="dark" />
             {levelNote ? <p role="status" className="mt-2 text-[12.5px] text-white/85">{levelNote}</p> : null}
             <div className="mt-2 flex justify-end">
               <button type="button" onClick={() => setBlurOpen(false)} className="inline-flex min-h-[2.5rem] items-center gap-1.5 rounded-full bg-white px-4 text-[13.5px] font-semibold text-zinc-950">

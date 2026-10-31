@@ -10,7 +10,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { afterCursorFilter, audienceOf, decodeSubCursor, encodeSubCursor, isSubAudience, isUuid, type SubAudience, visibleTo } from "./guards";
 import { kickBlurClips } from "./blur-clip-kick";
 import { postNeedsBlurWork } from "./blur-clip-plan";
-import { blurPreviewsChange, DEFAULT_BLUR_LEVEL, isBlurLevel, normalizeBlurLevel, type BlurLevel } from "./blur-level";
+import { blurBand, blurPreviewsChange, DEFAULT_BLUR_LEVEL, isBlurLevel, normalizeBlurLevel, type BlurLevel } from "./blur-level";
 import { ensureBlurPreview, missingBlurClips, readBlurLevels, readBlurPreviews, readBlurSlides, readBlurVideos, saveItemBlurClip, type BlurSlide } from "./blur-preview";
 import { hasActiveSub, subConfig } from "./server";
 import { checkUpload } from "./upload-check";
@@ -45,6 +45,25 @@ import { recordSubPostView } from "./visits";
 
 type Row = Record<string, unknown>;
 const MISSING = (m: string) => /schema cache|does not exist|column/i.test(m);
+
+/**
+ * Writes a post's blur. A SLIDER position ("b42") needs 0310; a database before it refuses one (0307's check allows
+ * only light | medium | strong), so the position's BAND is stored instead — the same stored preview, a coarser look —
+ * never a failed save. Answers what was stored.
+ */
+async function writeBlurLevel(db: ReturnType<typeof createAdminClient>, postId: string, level: BlurLevel, extra: Record<string, unknown> = {}, creatorId?: string): Promise<{ error: { message: string } | null; stored: BlurLevel }> {
+  // the creator's own post only, when one is named (a second guard behind the caller's ownership read)
+  const write = (value: BlurLevel) => {
+    const q = db.from("sub_posts").update({ blur_level: value, ...extra }).eq("id", postId);
+    return creatorId ? q.eq("creator_id", creatorId) : q;
+  };
+  const first = await write(level);
+  const refused = first.error ? `${first.error.message} ${(first.error as { code?: string }).code ?? ""}` : "";
+  if (!first.error || !/blur_level_check|check constraint|23514/i.test(refused)) return { error: first.error, stored: level };
+  const band = blurBand(level);
+  const second = await write(band);
+  return { error: second.error, stored: band };
+}
 const SIGNED_TTL_SECONDS = 300;
 const MAX_MEDIA = 10;
 const PAGE = 24;
@@ -138,7 +157,7 @@ export async function createSubPost(creatorId: string, input: { caption?: string
   // 0307: how blurry the creator wants the preview (owner, 2026-10-30). Written before the stills are made (they read
   // it, below). Best effort: before 0307 the post is the default, never a failed post.
   if (isBlurLevel(input.blurLevel) && input.blurLevel !== DEFAULT_BLUR_LEVEL) {
-    await db.from("sub_posts").update({ blur_level: input.blurLevel }).eq("id", id).then(() => undefined, () => undefined);
+    await writeBlurLevel(db, id, input.blurLevel).then(() => undefined, () => undefined);
   }
   // 0305: the blurred moving preview of a locked video — our own public media only, like the cover. Best effort: a
   // missing column or a refused URL leaves the still preview, never a failed post. Never on a hidden post (no public tile).
@@ -484,9 +503,10 @@ export async function setSubPostBlurLevel(creatorId: string, postId: string, lev
   if (readError) return MISSING(readError.message) ? fail("Blur settings arrive with the next update.", 503) : fail("Couldn't save that.", 500);
   if (!own) return fail("Not found.", 404);
   const from = normalizeBlurLevel((own as Row).blur_level);
-  const { error } = await db.from("sub_posts").update({ blur_level: level, updated_at: new Date().toISOString() }).eq("id", postId).eq("creator_id", creatorId);
+  // the creator was checked above (own published post); 0310 not applied yet → the band is stored (writeBlurLevel)
+  const { error, stored } = await writeBlurLevel(db, postId, level, { updated_at: new Date().toISOString() }, creatorId);
   if (error) return MISSING(error.message) ? fail("Blur settings arrive with the next update.", 503) : fail("Couldn't save that.", 500);
-  const remaking = blurPreviewsChange(from, level);
+  const remaking = blurPreviewsChange(from, stored);
   if (remaking) {
     const items = await db.from("sub_post_media").select("blur_video_url").eq("post_id", postId).then((r) => ((r.data ?? []) as Row[]), () => [] as Row[]);
     const oldClips = [...new Set([(own as Row).blur_video_url, ...items.map((m) => m.blur_video_url)].map(publicKeyOf).filter((k): k is string => !!k))];
@@ -499,7 +519,7 @@ export async function setSubPostBlurLevel(creatorId: string, postId: string, lev
     });
     kickBlurClips();
   }
-  return { ok: true, blurLevel: level, remaking };
+  return { ok: true, blurLevel: stored, remaking };
 }
 
 /** The creator switches one of their posts between 'locked' and 'hidden' (0248). Only their own, only while published. */

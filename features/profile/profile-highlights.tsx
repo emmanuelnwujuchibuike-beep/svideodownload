@@ -3,10 +3,10 @@
 import { Check, Plus, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { PendingButton } from "@/features/frenz-ui/pending";
-import { HighlightCover } from "@/features/social/highlight-picker";
+import { HIGHLIGHTS_CHANGED, HighlightCover } from "@/features/social/highlight-picker";
 import { toast } from "@/features/ui/toast";
 import { HIGHLIGHT_TITLE_MAX, type Highlight } from "@/lib/social/story-highlights-shared";
 import { cn } from "@/lib/utils";
@@ -21,11 +21,35 @@ export type OwnStory = { id: string; mediaUrl: string; mediaKind: "image" | "vid
  * highlight. The owner also gets "New" — while they have a story up — to make one from their current stories. Shown
  * only when there is something to show (a visitor with no highlights to see gets nothing, not an empty row).
  */
-export function ProfileHighlights({ initial, isOwner, ownStories }: { initial: Highlight[]; isOwner: boolean; ownStories: OwnStory[] }) {
+export function ProfileHighlights({ profileId, initial, isOwner, ownStories }: { profileId: string; initial: Highlight[]; isOwner: boolean; ownStories: OwnStory[] }) {
   const router = useRouter();
   const [list, setList] = useState(initial);
   const [open, setOpen] = useState<Highlight | null>(null);
   const [creating, setCreating] = useState(false);
+
+  /*
+    🔴 A NEW HIGHLIGHT SHOWS AT ONCE (owner, 2026-10-31: "when I add a highlight in profile, it doesn't show unless I go
+    out of the page and come back"). `useState(initial)` kept the first list, so `router.refresh()`'s fresh props never
+    reached the row, and the story viewer's "Add to highlight" (highlight-picker.tsx) told the profile nothing. The row
+    now re-reads its own list after any change — its own sheet, or HIGHLIGHTS_CHANGED from the picker — and follows a
+    refreshed `initial` too.
+  */
+  useEffect(() => setList(initial), [initial]);
+  const reload = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/stories/highlights?user=${encodeURIComponent(profileId)}`, { cache: "no-store" });
+      if (!r.ok) return;
+      const j = (await r.json()) as { highlights?: Highlight[] };
+      if (Array.isArray(j.highlights)) setList(j.highlights);
+    } catch {
+      /* fail open: the list on screen stays; a revisit reads it fresh */
+    }
+  }, [profileId]);
+  useEffect(() => {
+    const on = () => void reload();
+    window.addEventListener(HIGHLIGHTS_CHANGED, on);
+    return () => window.removeEventListener(HIGHLIGHTS_CHANGED, on);
+  }, [reload]);
   const canCreate = isOwner && ownStories.length > 0;
   if (!list.length && !canCreate) return null;
 
@@ -69,7 +93,8 @@ export function ProfileHighlights({ initial, isOwner, ownStories }: { initial: H
           onClose={() => setCreating(false)}
           onCreated={() => {
             setCreating(false);
-            // the new circle comes from the server's own answer
+            // the new circle comes from the server's own answer — read now, not on the next visit
+            void reload();
             router.refresh();
           }}
         />

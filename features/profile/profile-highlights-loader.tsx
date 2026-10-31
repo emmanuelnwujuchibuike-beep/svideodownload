@@ -12,5 +12,5 @@ export async function ProfileHighlightsLoader({ profileId, viewerId }: { profile
   const [highlights, own] = await Promise.all([listHighlights(profileId, viewerId), isOwner ? getActiveStoryForUser(profileId, viewerId) : Promise.resolve(null)]);
   const ownStories: OwnStory[] = (own?.stories ?? []).map((s) => ({ id: s.id, mediaUrl: s.mediaUrl, mediaKind: s.mediaKind, thumbnailUrl: s.thumbnailUrl }));
   if (!highlights.length && !ownStories.length) return null;
-  return <ProfileHighlights initial={highlights} isOwner={isOwner} ownStories={ownStories} />;
+  return <ProfileHighlights profileId={profileId} initial={highlights} isOwner={isOwner} ownStories={ownStories} />;
 }

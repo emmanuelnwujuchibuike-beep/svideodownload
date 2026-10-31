@@ -17,6 +17,10 @@ import { cn } from "@/lib/utils";
  *
  * Drawn on the Story options sheet's surface (the light glass over the story's picture — glass only over media).
  */
+/** Fired on `window` after any highlight change here, so a profile row on screen re-reads its list (profile-highlights.tsx). */
+export const HIGHLIGHTS_CHANGED = "frenz:highlights-changed";
+const announceChange = () => window.dispatchEvent(new Event(HIGHLIGHTS_CHANGED));
+
 export function HighlightPicker({ open, onClose, userId, storyId }: { open: boolean; onClose: () => void; userId: string; storyId: string }) {
   const [list, setList] = useState<Highlight[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -68,6 +72,7 @@ export function HighlightPicker({ open, onClose, userId, storyId }: { open: bool
         : await fetch(`/api/stories/highlights/${h.id}/items`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ storyId }) });
       const j = (await r.json().catch(() => ({}))) as { error?: string; highlightDeleted?: boolean };
       if (!r.ok) throw new Error(j.error || "Couldn't update that highlight.");
+      announceChange();
       if (h.containsStory) {
         toast(j.highlightDeleted ? `Removed — "${h.title}" was empty, so it's gone` : `Removed from ${h.title}`, "success");
         setList((l) => (l ?? []).flatMap((x) => (x.id !== h.id ? [x] : j.highlightDeleted ? [] : [{ ...x, containsStory: false, itemCount: x.itemCount - 1 }])));
@@ -91,6 +96,7 @@ export function HighlightPicker({ open, onClose, userId, storyId }: { open: bool
       const j = (await r.json().catch(() => ({}))) as { error?: string };
       if (!r.ok) throw new Error(j.error || "Couldn't make that highlight.");
       toast(`Saved to ${t}`, "success");
+      announceChange();
       onClose();
     } catch (e) {
       toast(e instanceof Error ? e.message : "Couldn't make that highlight.", "error");

@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { PressIcon } from "@/components/motion/press-icon";
+import { afterPageLoad } from "@/features/app-shell/warm-routes";
 import { LockIcon } from "@/features/frenz-ui/icons";
+import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { useScrollDirection } from "@/lib/dom/use-scroll-direction";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
@@ -130,6 +133,28 @@ export function takeRequestedFeedTab(): HomeFeedSort | null {
 
 const IDLE = "text-[#4A4A55] hover:text-frenz-ink dark:text-white/60";
 
+/*
+  🔴 THE BOTTOM NAV'S FEEL, ON THIS ROW (owner, 2026-10-31: "the exclusive button should prefetch so it doesn't load,
+  they should all navigate like the bottom NAV exactly even with the spring press movement to the next like the bottom
+  NAV does to feel smooth and native app like"). The same three things mobile-nav.tsx does:
+    · the tap moves the indicator AT ONCE — one underline that springs to the tapped tab on the bottom nav lens's own
+      curve (globals.css .frenz-nav-lens: 0.5 s cubic-bezier(0.28, 1.4, 0.46, 1)), while the next page is still on its
+      way (`pending`, cleared on arrival or after NAV_PENDING_MAX_MS, so it can never stick);
+    · the spring press on the tab itself (.frenz-press-icon, PressIcon — the nav's own press);
+    · the page is warm before the tap: Exclusive is prefetched IN FULL once the Feed has loaded (afterPageLoad, once
+      per session, never on a slow connection), and every link warms again the moment a finger touches it.
+*/
+const TAB_ORDER = ["for_you", "following", "recent", "exclusive"] as const;
+type TabKey = (typeof TAB_ORDER)[number];
+const NAV_PENDING_MAX_MS = 4000;
+let exclusiveWarmed = false;
+
+function warmExclusiveFully(router: ReturnType<typeof useRouter>) {
+  if (exclusiveWarmed) return;
+  exclusiveWarmed = true;
+  router.prefetch("/exclusive", { kind: "full" } as unknown as Parameters<typeof router.prefetch>[1]);
+}
+
 function FeedTabRow({
   active,
   onSegment,
@@ -142,76 +167,169 @@ function FeedTabRow({
   showReelsLink?: boolean;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const onFeed = !!onSegment;
+
+  // the tap is the answer: the tapped tab is active until the next page is live (as mobile-nav's pendingHref)
+  const [pending, setPending] = useState<TabKey | null>(null);
+  useEffect(() => setPending(null), [pathname, active]);
+  useEffect(() => {
+    if (!pending) return;
+    const t = window.setTimeout(() => setPending(null), NAV_PENDING_MAX_MS);
+    return () => window.clearTimeout(t);
+  }, [pending]);
+  const current: TabKey | null = pending ?? ((TAB_ORDER as readonly string[]).includes(active) ? (active as TabKey) : null);
+
+  // Exclusive, in full, before anyone taps it — once per session, after the Feed itself has loaded
+  useEffect(() => {
+    if (!onFeed || exclusiveWarmed || isSlowConnection()) return;
+    return afterPageLoad(() => warmExclusiveFully(router));
+  }, [onFeed, router]);
+
+  // one underline, measured to the active tab, springing between tabs
+  const navRef = useRef<HTMLElement | null>(null);
+  const tabRefs = useRef<Partial<Record<TabKey, HTMLElement | null>>>({});
+  const [bar, setBar] = useState<{ x: number; w: number } | null>(null);
+  const [springs, setSprings] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    setReducedMotion(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
+  }, []);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = current ? tabRefs.current[current] : null;
+      setBar(el ? { x: el.offsetLeft, w: el.offsetWidth } : null);
+    };
+    measure();
+    const nav = navRef.current;
+    if (!nav || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(nav);
+    return () => ro.disconnect();
+  }, [current]);
+  // the first placement lands without a slide; every move after it springs
+  useEffect(() => {
+    if (!bar || springs) return;
+    const id = requestAnimationFrame(() => setSprings(true));
+    return () => cancelAnimationFrame(id);
+  }, [bar, springs]);
+
+  const ref = (k: TabKey) => (el: HTMLElement | null) => {
+    tabRefs.current[k] = el;
+  };
+  const cls = (k: TabKey) => cn(TAB, current === k ? "text-frenz-ink" : IDLE);
+  // until the row has measured itself (a server-rendered Exclusive page), the static underline marks the tab
+  const staticUnderline = (k: TabKey) => (!bar && current === k ? <Underline /> : null);
+
   return (
-    <nav aria-label="Feed type" className="frenz-ui flex justify-between gap-4 touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain px-[18px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <nav ref={navRef} aria-label="Feed type" className="frenz-ui relative flex justify-between gap-4 touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain px-[18px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {TABS.map((t) => {
-        const isActive = active === t.key;
-        const cls = cn(TAB, isActive ? "text-frenz-ink" : IDLE);
-        const body = (
+        const label = (
           <>
-            {t.label}
-            {isActive ? <Underline /> : null}
+            <PressIcon className="inline-flex items-center gap-1.5">{t.label}</PressIcon>
+            {staticUnderline(t.key as TabKey)}
           </>
         );
         return onFeed ? (
           <button
             key={t.key}
+            ref={ref(t.key as TabKey)}
             type="button"
             onClick={() => {
               tap();
               onSegment!(t.key);
             }}
-            aria-current={isActive ? "page" : undefined}
-            className={cls}
+            aria-current={current === t.key ? "page" : undefined}
+            className={cls(t.key as TabKey)}
           >
-            {body}
+            {label}
           </button>
         ) : (
           <Link
             key={t.key}
+            ref={ref(t.key as TabKey)}
             href="/home"
             prefetch={false}
             onPointerDown={() => router.prefetch("/home")}
             onClick={() => {
               tap();
+              setPending(t.key as TabKey);
               requestFeedTab(t.key);
             }}
-            className={cls}
+            className={cls(t.key as TabKey)}
           >
-            {body}
+            {label}
           </Link>
         );
       })}
       {onFeed && !showReelsLink ? (
         <button
+          ref={ref("recent")}
           type="button"
           onClick={() => {
             tap();
             onSegment!("recent");
           }}
-          className={cn(TAB, IDLE)}
+          className={cls("recent")}
         >
-          Reels
+          <PressIcon className="inline-flex items-center gap-1.5">Reels</PressIcon>
+          {staticUnderline("recent")}
         </button>
       ) : (
         // Reels keeps its viewport prefetch (as the Feed always had it) — Reels must not open slower
-        <Link href="/reels" onClick={tap} className={cn(TAB, IDLE)}>
-          Reels
+        <Link
+          ref={ref("recent")}
+          href="/reels"
+          onClick={() => {
+            tap();
+            setPending("recent");
+          }}
+          className={cls("recent")}
+        >
+          <PressIcon className="inline-flex items-center gap-1.5">Reels</PressIcon>
+          {staticUnderline("recent")}
         </Link>
       )}
       {active === "exclusive" ? (
-        <span aria-current="page" className={cn(TAB, "text-frenz-ink")}>
-          <LockIcon size={15} strokeWidth={2.4} className="text-[#7B5CF0]" />
-          Exclusive
-          <Underline />
+        <span ref={ref("exclusive")} aria-current="page" className={cls("exclusive")}>
+          <PressIcon className="inline-flex items-center gap-1.5">
+            <LockIcon size={15} strokeWidth={2.4} className="text-[#7B5CF0]" />
+            Exclusive
+          </PressIcon>
+          {staticUnderline("exclusive")}
         </span>
       ) : (
-        <Link href="/exclusive" prefetch={false} onPointerDown={() => router.prefetch("/exclusive")} onClick={tap} className={cn(TAB, IDLE)}>
-          <LockIcon size={15} strokeWidth={2.4} />
-          Exclusive
+        <Link
+          ref={ref("exclusive")}
+          href="/exclusive"
+          prefetch={false}
+          onPointerDown={() => warmExclusiveFully(router)}
+          onClick={() => {
+            tap();
+            setPending("exclusive");
+          }}
+          className={cls("exclusive")}
+        >
+          <PressIcon className="inline-flex items-center gap-1.5">
+            <LockIcon size={15} strokeWidth={2.4} className={current === "exclusive" ? "text-[#7B5CF0]" : undefined} />
+            Exclusive
+          </PressIcon>
+          {staticUnderline("exclusive")}
         </Link>
       )}
+      {bar ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -bottom-px left-0 h-1 rounded-t bg-[linear-gradient(90deg,#5B5BF0,#7B5CF0)]"
+          // the bottom nav lens's own spring (--ease-spring = cubic-bezier(0.28, 1.4, 0.46, 1), 0.5 s); none before the
+          // first placement or under reduced motion. Inline: a Tailwind arbitrary ease measured as NOT applied (2026-10-31).
+          style={{
+            width: bar.w,
+            transform: `translateX(${bar.x}px)`,
+            transition: springs && !reducedMotion ? "transform 500ms var(--ease-spring), width 500ms var(--ease-spring)" : "none",
+          }}
+        />
+      ) : null}
     </nav>
   );
 }

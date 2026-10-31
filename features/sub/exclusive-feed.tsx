@@ -382,7 +382,16 @@ export function ExclusiveFeed({ initial = null, guest = false }: { initial?: Exc
                 {entry.post.ageLocked || !entry.post.mediaKind ? (
                   <FeedCard post={entry.post} creator={creators[entry.post.creatorId]} eager={entry.index < 2} onOpen={() => (entry.post.ageLocked ? setAgeGate(true) : setOpen(entry.post.id))} />
                 ) : (
-                  <ExclusivePost post={entry.post} creator={creators[entry.post.creatorId]} priority={entry.index < 2} onOpen={setOpen} />
+                  /*
+                    🔴 ONE full-bleed, not two (owner, 2026-10-31: the watermark "should not hide at the edge"). This
+                    list is already pulled to the screen edges (-mx-3), and the Feed's post card pulls ITSELF out
+                    again on phones (feed-post-card.tsx `max-sm:-mx-3`), so every Exclusive post was 12 px wider than
+                    the screen on each side: the avatar on the edge, the "Exclusive" tag and the @handle watermark cut
+                    off. The padding gives back exactly the card's own pull, on phones only.
+                  */
+                  <div className="max-sm:px-3">
+                    <ExclusivePost post={entry.post} creator={creators[entry.post.creatorId]} priority={entry.index < 2} onOpen={setOpen} />
+                  </div>
                 )}
                 {at === 0 ? <CreatorsRail creators={discover?.creators} /> : null}
               </li>

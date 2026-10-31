@@ -31,6 +31,31 @@ describe("one Feed tab row, navigating like the bottom nav", () => {
     expect(oneRow(tabs.replace('<FeedTabRow active="exclusive" />', '<nav className="flex gap-[22px]" />'))).toBe(false);
     expect(oneRow(tabs.replace('href="/home"', 'href="/home?tab=for_you"'))).toBe(false);
   });
+  /*
+    Owner, 2026-10-31: "the exclusive button should prefetch so it doesn't load, they should all navigate like the bottom
+    NAV exactly even with the spring press movement to the next".
+  */
+  it("navigates like the bottom nav: the indicator springs on the tap, the press springs, Exclusive is warm before the tap", () => {
+    const likeTheBottomNav = (src: string) =>
+      // one underline on the lens's own spring curve (globals.css .frenz-nav-lens)
+      /transform 500ms var\(--ease-spring\), width 500ms var\(--ease-spring\)/.test(src) &&
+      /width: bar\.w,\s*transform: `translateX\(\$\{bar\.x\}px\)`,/.test(src) &&
+      // the tap makes the tab active before the next page is live (mobile-nav's pendingHref)
+      /setPending\("exclusive"\)/.test(src) &&
+      /setPending\(t\.key as TabKey\)/.test(src) &&
+      // the nav's own press
+      (src.match(/<PressIcon /g) ?? []).length >= 4 &&
+      // Exclusive in FULL after the Feed has loaded, and again on touch
+      /return afterPageLoad\(\(\) => warmExclusiveFully\(router\)\);/.test(src) &&
+      /router\.prefetch\("\/exclusive", \{ kind: "full" \}/.test(src) &&
+      /onPointerDown=\{\(\) => warmExclusiveFully\(router\)\}/.test(src);
+    expect(likeTheBottomNav(tabs)).toBe(true);
+    // teeth: an underline that jumps, a tap that waits for the page, or a cold Exclusive each fail
+    expect(likeTheBottomNav(tabs.replace("transform 500ms var(--ease-spring), width 500ms var(--ease-spring)", "transform 500ms linear"))).toBe(false);
+    expect(likeTheBottomNav(tabs.replace('setPending("exclusive")', "void 0"))).toBe(false);
+    expect(likeTheBottomNav(tabs.replace("return afterPageLoad(() => warmExclusiveFully(router));", "return;"))).toBe(false);
+  });
+
   it("the wanted tab is handed over in memory, once", () => {
     expect(takeRequestedFeedTab()).toBeNull();
     requestFeedTab("following");

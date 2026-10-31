@@ -1175,7 +1175,12 @@ function ExclusiveMarks({ handle, items }: { handle: string | null; items: numbe
         Exclusive{items > 1 ? ` · ${items}` : ""}
       </span>
       {handle ? (
-        <span aria-hidden className="pointer-events-none absolute bottom-3 right-3 z-10 select-none text-[12px] font-bold text-white/45 [text-shadow:0_1px_2px_rgba(0,0,0,0.5)]">
+        /*
+          Bottom-LEFT, inside the frame (owner, 2026-10-31: "it should be at the left side visible at the very bottom
+          corner but not covered by the edges"). Bottom-right sat under the video's own pause / sound buttons; the
+          left corner is free. `max-w` + truncate keep a long handle inside the frame.
+        */
+        <span aria-hidden className="pointer-events-none absolute bottom-2.5 left-3 z-10 max-w-[60%] select-none truncate text-[12px] font-bold text-white/55 [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]">
           @{handle}
         </span>
       ) : null}

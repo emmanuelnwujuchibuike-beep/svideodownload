@@ -49,7 +49,8 @@ describe("Exclusive in the profile tray, alerts behind a button", () => {
     expect(code("features/profile/profile-sections.tsx")).toContain('["downloads", "reels", "posts"]');
     expect(tabs).toContain("{s.key === SUB_TAB_KEY ? <Lock ");
     expect(tabs).not.toContain('aria-label="Exclusive posts feed"');
-    expect(code("features/feed/feed-topbar-tabs.tsx")).toMatch(/<Link href="\/exclusive"[\s\S]{0,200}Exclusive/);
+    // 2026-10-31: the link carries a ref and the bottom-nav press now, so its attributes are no longer first in line
+    expect(code("features/feed/feed-topbar-tabs.tsx")).toMatch(/<Link[^>]*?href="\/exclusive"[\s\S]{0,700}Exclusive/);
   });
 
   it("the Stay-close card is mounted behind a Notifications button that toggles it with no fetch on the tap", () => {

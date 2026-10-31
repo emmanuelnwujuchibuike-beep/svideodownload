@@ -143,7 +143,7 @@ html,body{height:100%;background:#fff;color:#0f172a}
 .fx{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:26px}
 @media (display-mode:standalone),(display-mode:fullscreen),(display-mode:minimal-ui){.fx{display:flex}}
 /* 2026-10-31: iOS often does NOT match (display-mode:standalone) in the installed app (app/layout.tsx says the same and
-   reads navigator.standalone) — the script just below </style> sets html.fx-on from either signal, before the first paint. */
+   reads navigator.standalone) — the inline script right after this style block sets html.fx-on from either signal, before the first paint. */
 .fx-on .fx{display:flex}
 .fx__mark{position:relative;width:104px;height:104px;max-width:26vw;max-height:26vw;border-radius:24%;overflow:hidden}
 .fx__mark img{display:block;width:100%;height:100%}

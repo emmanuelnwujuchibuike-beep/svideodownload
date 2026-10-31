@@ -25,10 +25,27 @@ describe("the iOS launch image can be used", () => {
   it("launch.html reveals its logo from navigator.standalone, in <head>, before the first paint", () => {
     const launch = readFileSync("public/launch.html", "utf8");
     const head = launch.slice(0, launch.indexOf("</head>"));
-    const reveals = (h: string) => /navigator\.standalone[^<]*fx-on/.test(h) && /\.fx-on \.fx\{display:flex\}/.test(h);
+    // the SCRIPT line itself (not a comment that mentions it)
+    const reveals = (h: string) => /if\(navigator\.standalone\|\|matchMedia[^<]*fx-on/.test(h) && /\.fx-on \.fx\{display:flex\}/.test(h);
     expect(reveals(head)).toBe(true);
     // teeth: the media query alone (what shipped) fails
-    expect(reveals(head.replace(/navigator\.standalone\|\|/, ""))).toBe(false);
+    expect(reveals(head.replace("if(navigator.standalone||", "if("))).toBe(false);
+  });
+  /*
+    2026-10-31 (owner's screen recording: the launch screen "shows a writing … like news paper"): a CSS comment in
+    launch.html contained the text `</style>`, which ENDS the style element even inside a comment — the rest of the
+    stylesheet and its comments were drawn on screen as text. One closing tag per element, at the very end.
+  */
+  it("launch.html closes its <style> exactly once, after every rule — no closing tag hiding in a comment", () => {
+    const launch = readFileSync("public/launch.html", "utf8");
+    const ok = (h: string) => {
+      const closes = h.match(/<\/style/gi) ?? [];
+      const end = h.indexOf("</style>");
+      return closes.length === 1 && end > h.indexOf(".fx__slow.on{") && end < h.indexOf("</head>");
+    };
+    expect(ok(launch)).toBe(true);
+    // teeth: the comment that shipped breaks it
+    expect(ok(launch.replace("the inline script right after this style block", "the script just below </style>"))).toBe(false);
   });
   it("teeth: relying on appleWebApp.capable alone fails", () => {
     expect(declaresIt(layout.replace(/\s*["']apple-mobile-web-app-capable["']\s*:\s*["']yes["'],?/, ""))).toBe(false);

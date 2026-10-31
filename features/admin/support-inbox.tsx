@@ -2,6 +2,7 @@
 
 import { Headset, Mail, Send, Trash2 } from "lucide-react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -174,9 +175,9 @@ export function SupportInbox() {
         <div role="alert" className="rounded-2xl border border-amber-300/70 bg-amber-50 px-4 py-3 text-sm text-amber-900 md:col-span-2 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
           <p className="font-semibold">The dashboard locked itself — new support messages can&apos;t load.</p>
           <p className="mt-0.5">The admin unlock lasts 8 hours. Unlock again to see what&apos;s come in since.</p>
-          <a href="/admin/unlock" className="mt-2 inline-flex min-h-11 items-center rounded-full bg-amber-600 px-4 font-semibold text-white">
+          <Link href="/admin/unlock" prefetch={false} className="mt-2 inline-flex min-h-11 items-center rounded-full bg-amber-600 px-4 font-semibold text-white">
             Unlock the dashboard
-          </a>
+          </Link>
         </div>
       ) : null}
       {/* Thread list */}

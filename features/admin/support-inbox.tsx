@@ -65,18 +65,31 @@ export function SupportInbox() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
+  // the 8-hour dashboard lock ran out (lib/admin/lock.ts): say so instead of an inbox that silently stops updating
+  const [locked, setLocked] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
 
   const refreshThreads = useCallback(async () => {
-    const list = await adminLoadThreads();
+    const res = await adminLoadThreads();
+    if (res.locked) {
+      setLocked(true);
+      setLoaded(true);
+      return;
+    }
+    setLocked(false);
+    const list = res.data;
     setThreads(list);
     setLoaded(true);
     setActiveId((cur) => cur ?? list[0]?.id ?? null);
   }, []);
 
   const refreshMessages = useCallback(async (threadId: string) => {
-    const list = await adminLoadMessages(threadId);
-    setMessages(list);
+    const res = await adminLoadMessages(threadId);
+    if (res.locked) {
+      setLocked(true);
+      return;
+    }
+    setMessages(res.data);
   }, []);
 
   /*
@@ -157,6 +170,15 @@ export function SupportInbox() {
     // minmax(0, …): a grid track is as wide as its widest unbreakable line by default — a long subject in a
     // conversation preview stretched the whole inbox past the phone's edge (owner, 2026-10-26, with a screenshot)
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[300px_minmax(0,1fr)]">
+      {locked ? (
+        <div role="alert" className="rounded-2xl border border-amber-300/70 bg-amber-50 px-4 py-3 text-sm text-amber-900 md:col-span-2 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+          <p className="font-semibold">The dashboard locked itself — new support messages can&apos;t load.</p>
+          <p className="mt-0.5">The admin unlock lasts 8 hours. Unlock again to see what&apos;s come in since.</p>
+          <a href="/admin/unlock" className="mt-2 inline-flex min-h-11 items-center rounded-full bg-amber-600 px-4 font-semibold text-white">
+            Unlock the dashboard
+          </a>
+        </div>
+      ) : null}
       {/* Thread list */}
       <div className="min-w-0 rounded-2xl border border-border/60 bg-card">
         <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">

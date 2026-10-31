@@ -72,19 +72,27 @@ export async function clearMyThread(): Promise<{ ok: boolean }> {
   return { ok: true };
 }
 
+/*
+  🔴 A LOCKED DASHBOARD SAYS SO (owner, 2026-10-31: "why can't I see new support message in admin support?"). The admin
+  lock (lib/admin/lock.ts, 0301) lasts 8 hours; after that getAdminUser() is null and these answered an empty list —
+  a dashboard left open showed no new messages and no reason. They now answer `locked`, and the inbox shows it with a
+  way back in. Still nothing is read for a locked or non-admin caller.
+*/
+export type AdminRead<T> = { locked: false; data: T } | { locked: true };
+
 /** Admin: every support thread, newest first. */
-export async function adminLoadThreads(): Promise<AdminSupportThread[]> {
+export async function adminLoadThreads(): Promise<AdminRead<AdminSupportThread[]>> {
   const admin = await getAdminUser();
-  if (!admin) return [];
-  return adminListThreads();
+  if (!admin) return { locked: true };
+  return { locked: false, data: await adminListThreads() };
 }
 
 /** Admin: a thread's messages (marks it read on open). */
-export async function adminLoadMessages(threadId: string): Promise<SupportMessage[]> {
+export async function adminLoadMessages(threadId: string): Promise<AdminRead<SupportMessage[]>> {
   const admin = await getAdminUser();
-  if (!admin) return [];
+  if (!admin) return { locked: true };
   await markThreadReadByAdmin(threadId);
-  return adminGetMessages(threadId);
+  return { locked: false, data: await adminGetMessages(threadId) };
 }
 
 /** Admin: delete a finished support thread and its messages. */

@@ -17,6 +17,19 @@ describe("the iOS launch image can be used", () => {
     // and the launch images it unlocks are still declared
     expect(layout).toMatch(/apple-touch-startup-image/);
   });
+  /*
+    2026-10-31 (owner: "white on every entry before the brand logo, before today it wasn't like this"): launch.html showed
+    its logo only through @media (display-mode:standalone), which the installed iOS app often does not match. Once the
+    page started waiting for the app stylesheet, that blank page was a long white screen. iOS's own signal reveals it.
+  */
+  it("launch.html reveals its logo from navigator.standalone, in <head>, before the first paint", () => {
+    const launch = readFileSync("public/launch.html", "utf8");
+    const head = launch.slice(0, launch.indexOf("</head>"));
+    const reveals = (h: string) => /navigator\.standalone[^<]*fx-on/.test(h) && /\.fx-on \.fx\{display:flex\}/.test(h);
+    expect(reveals(head)).toBe(true);
+    // teeth: the media query alone (what shipped) fails
+    expect(reveals(head.replace(/navigator\.standalone\|\|/, ""))).toBe(false);
+  });
   it("teeth: relying on appleWebApp.capable alone fails", () => {
     expect(declaresIt(layout.replace(/\s*["']apple-mobile-web-app-capable["']\s*:\s*["']yes["'],?/, ""))).toBe(false);
   });

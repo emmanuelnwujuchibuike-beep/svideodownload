@@ -40,7 +40,7 @@ describe("browser-direct calls to the worker", () => {
     expect(fn).toContain("await redeemRewardItem({");
     expect(fn).toContain("await enforceDailyCap(request, clientIp, idParam(body.t), idParam(body.b), data, userId);");
     // processDownload runs the per-IP limiter first
-    expect(fn).toContain("return processDownload(data, clientIp, body.hevc === true, false, maxBytes, cors);");
+    expect(fn).toContain("return processDownload(data, clientIp, body.hevc === true, false, maxBytes, cors, { internal: false, downloadId: idParam(body.t) });");
   });
 
   it("the metadata route keys its limiter on the trusted IP for a secret-less call", () => {

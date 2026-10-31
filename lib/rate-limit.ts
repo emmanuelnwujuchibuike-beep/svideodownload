@@ -305,6 +305,22 @@ export async function alreadyCounted(receiptKey: string, maxRides = Number.POSIT
   }
 }
 
+/**
+ * True the FIRST time `key` is seen within `ttlSeconds` (one SET NX). Used so a
+ * download's retries and fallbacks — the same client id reaching the worker and
+ * then Vercel — are written to the activity log once, not once per attempt.
+ * Fail-open: no Redis, or Redis down, answers "first" — a duplicate row is
+ * better than a lost one.
+ */
+export async function firstSighting(key: string, ttlSeconds: number): Promise<boolean> {
+  if (!dailyRedis) return true;
+  try {
+    return (await dailyRedis.set(`svd:once:${key}`, 1, { nx: true, ex: ttlSeconds })) === "OK";
+  } catch {
+    return true;
+  }
+}
+
 export async function consumeDaily(
   key: string,
   limit: number,

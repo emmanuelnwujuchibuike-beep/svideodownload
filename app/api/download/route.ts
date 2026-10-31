@@ -14,6 +14,8 @@ import {
   rejectIfUnauthorizedWorker,
   WORKER_SECRET,
 } from "@/lib/worker";
+import { downloadRecordKey, RECORD_ONCE_TTL_SECONDS } from "@/lib/downloads/record-once";
+import { firstSighting } from "@/lib/rate-limit";
 import { recordDownloadEvent } from "@/server/services/analytics";
 import { streamResolvedDownload } from "@/server/services/download-response";
 import type { ApiError } from "@/types";
@@ -92,6 +94,12 @@ async function processDownload(
   maxBytes: number = maxDownloadBytes(),
   /** CORS headers for a browser-direct call (lib/downloads/browser-direct.ts). */
   extraHeaders: Record<string, string> = {},
+  /*
+    How this call is logged (owner, 2026-10-31: one anonymous download showed several rows). `internal` = Vercel
+    proxying to the worker, which Vercel already logged; `downloadId` = the client's stable id, so a retry or a
+    fallback of the same download is not logged again (lib/downloads/record-once.ts).
+  */
+  recordAs: { internal: boolean; downloadId: string | null } = { internal: false, downloadId: null },
 ): Promise<Response> {
   const { success, reset } = await downloadLimiter.limit(clientIp);
   if (!success) {
@@ -101,8 +109,13 @@ async function processDownload(
     );
   }
 
-  // Record the download for admin stats (best-effort, fire-and-forget).
-  recordDownloadEvent(data.url, data.kind, data.title);
+  // Record the download for admin stats (best-effort, fire-and-forget) — once per download, not once per attempt.
+  if (!recordAs.internal) {
+    const key = downloadRecordKey(recordAs.downloadId, data);
+    void (async () => {
+      if (!key || (await firstSighting(key, RECORD_ONCE_TTL_SECONDS))) recordDownloadEvent(data.url, data.kind, data.title);
+    })();
+  }
 
   // Frontend role: forward the heavy work to the worker (which has yt-dlp/ffmpeg).
   if (hasWorker) {
@@ -179,7 +192,7 @@ async function browserDirectDownload(request: Request): Promise<Response> {
     for (const [k, v] of Object.entries(cors)) denied.headers.set(k, v);
     return denied;
   }
-  return processDownload(data, clientIp, body.hevc === true, false, maxBytes, cors);
+  return processDownload(data, clientIp, body.hevc === true, false, maxBytes, cors, { internal: false, downloadId: idParam(body.t) });
 }
 
 /** Only a non-simple request would preflight; answered anyway, cheaply. */
@@ -209,7 +222,10 @@ export async function POST(request: Request) {
   const { denied, maxBytes } = await enforceDailyCap(request, clientIp, null, null, parsed.data);
   if (denied) return denied;
 
-  return processDownload(parsed.data, clientIp, new URL(request.url).searchParams.get("hevc") === "1", false, maxBytes);
+  return processDownload(parsed.data, clientIp, new URL(request.url).searchParams.get("hevc") === "1", false, maxBytes, {}, {
+    internal: isInternalWorkerCall(request),
+    downloadId: null,
+  });
 }
 
 /**
@@ -298,5 +314,8 @@ export async function GET(request: Request) {
   const { denied, maxBytes } = await enforceDailyCap(request, clientIp, downloadId, batchId, data);
   if (denied) return denied;
 
-  return processDownload(data, clientIp, sp.get("hevc") === "1", wantsDirect, maxBytes);
+  return processDownload(data, clientIp, sp.get("hevc") === "1", wantsDirect, maxBytes, {}, {
+    internal: isInternalWorkerCall(request),
+    downloadId,
+  });
 }
